@@ -39,7 +39,7 @@ jobs:
   coherence:
     name: ReqSys 360 coherence audit
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -95,6 +95,32 @@ jobs:
         working-directory: frontend
         run: npm run quality:design-system
 
+      - name: Install Chromium for focused E2E
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start frontend for focused E2E
+        working-directory: frontend
+        env:
+          VITE_API_URL: /api
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/reqsys-360-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              echo "Vite disponível"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/reqsys-360-vite.log || true
+          exit 1
+
+      - name: Execute focused ReqSys 360 E2E
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://127.0.0.1:5173
+        run: npx playwright test tests/e2e/reqsys-360-navigation.spec.js --reporter=line
+
       - name: Upload ReqSys 360 evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,5 +129,7 @@ jobs:
           path: |
             frontend/artifacts/reqsys-360/
             artifacts/reqsys-360/
-          if-no-files-found: error
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: warn
           retention-days: 90
