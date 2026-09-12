@@ -18,6 +18,23 @@ POWER_PLATFORM = "https://api.powerplatform.com"
 PROFILE = Path("docs/integrations/integration-generator/excel-sql-sharepoint.profile.json")
 TIMEOUT = 30.0
 MAX_DRIVE_ITEMS = 3000
+SAFE_DISCOVERY_ERROR_PREFIXES = (
+    "perfil_incompleto",
+    "credencial_graph_incompleta",
+    "graph_access_token_ausente",
+    "msal_bundle_invalido",
+    "msal_session_storage_invalido",
+    "msal_refresh_token_candidatos:",
+    "msal_refresh_token_expirado",
+    "power_token_http_",
+    "power_access_token_ausente",
+    "paginacao_excedida",
+    "drive_itens_excedidos",
+    "sharepoint_excel_alvo_ambiguo:",
+    "power_platform_ambiente_ambiguo:",
+    "power_platform_conexao_",
+    "valor_multilinha:",
+)
 
 
 class DiscoveryError(RuntimeError):
@@ -49,6 +66,11 @@ def digest(value: str) -> str:
 def safe_error(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         return f"http_{exc.response.status_code}"
+    if isinstance(exc, DiscoveryError):
+        code = text(exc)
+        if any(code.startswith(prefix) for prefix in SAFE_DISCOVERY_ERROR_PREFIXES):
+            return code
+        return "DiscoveryError"
     return exc.__class__.__name__
 
 
@@ -89,11 +111,25 @@ def app_graph_token(client: httpx.Client) -> str:
 
 def refresh_state(path: Path) -> dict[str, str]:
     bundle = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(bundle, dict):
+        raise DiscoveryError("msal_bundle_invalido")
+
+    entries = bundle.get("sessionStorage") or []
+    if not isinstance(entries, list):
+        raise DiscoveryError("msal_session_storage_invalido")
+
     found = {}
-    for entry in bundle.get("sessionStorage") or []:
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        raw_value = text(entry.get("value"))
+        if not raw_value:
+            continue
         try:
-            item = json.loads(text(entry.get("value")))
+            item = json.loads(raw_value)
         except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(item, dict):
             continue
         kind = text(item.get("credentialType")).casefold()
         key = text(entry.get("name")).casefold()
