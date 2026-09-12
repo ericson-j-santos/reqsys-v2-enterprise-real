@@ -1,9 +1,10 @@
 const { test, expect } = require('@playwright/test')
-const { login } = require('./helpers/auth')
+const { mockResponsiveApis, loginDemo } = require('./helpers/responsiveMocks')
 
 test.describe('integridade de navegação', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
+    await mockResponsiveApis(page)
+    await loginDemo(page)
   })
 
   test('rotas de compatibilidade preservam a intenção funcional', async ({ page }) => {
