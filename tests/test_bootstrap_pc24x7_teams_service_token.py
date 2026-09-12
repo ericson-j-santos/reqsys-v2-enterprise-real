@@ -82,6 +82,30 @@ def test_validation_only_blocks_when_secret_missing(monkeypatch):
     assert client.set_calls == []
 
 
+def test_validation_only_main_does_not_require_vault_api_token(monkeypatch, capsys):
+    monkeypatch.setenv('PC24X7_TEAMS_ALLOW_PROVISION', 'false')
+    monkeypatch.setenv('REQSYS_KEY_VAULT_NAME', 'kv')
+    monkeypatch.delenv('VAULT_API_TOKEN', raising=False)
+    monkeypatch.setattr(
+        module,
+        'bootstrap',
+        lambda **kwargs: module.BootstrapResult(
+            status='ready',
+            environment='dev',
+            secret_name=kwargs['secret_name'],
+            scope=module.SCOPE,
+            token_created=False,
+            existing_token_reused=True,
+            readiness_http_status=200,
+        ),
+    )
+    assert module.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload['status'] == 'ready'
+    assert payload['token_created'] is False
+    assert payload['existing_token_reused'] is True
+
+
 def test_mints_and_stores_when_secret_missing(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
