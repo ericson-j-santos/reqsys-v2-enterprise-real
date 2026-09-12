@@ -9,7 +9,7 @@ function prepararProjeto({ brokenLink = false, brokenRedirect = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reqsys-navigation-gate-'))
   fs.mkdirSync(path.join(root, 'src/router'), { recursive: true })
   fs.mkdirSync(path.join(root, 'src/constants'), { recursive: true })
-  fs.mkdirSync(path.join(root, 'src/views'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src/views/__tests__'), { recursive: true })
   fs.mkdirSync(path.join(root, 'scripts'), { recursive: true })
 
   const script = fs.readFileSync(new URL('./navigation-integrity-gate.mjs', import.meta.url), 'utf8')
@@ -22,6 +22,7 @@ export const routes = [
   { path: '/painel-integracao', component: PainelIntegracaoView, meta: {} },
   { path: '/requisitos/coleta', redirect: '/requisitos' },
   { path: '/notificacoes', redirect: '${brokenRedirect ? '/destino-inexistente' : '/painel-integracao'}' },
+  { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { public: true } },
 ]
 `)
 
@@ -37,8 +38,14 @@ export const NAV_TEMAS = [{ items: [{ to: '/requisitos' }, { to: '/painel-integr
 </template>
 <script setup>
 const rota = { path: '/requisitos' }
+const hubEndpoints = [{ rota: '/status' }, { rota: '/flows' }]
 function abrir() { router.push('/painel-integracao') }
 </script>
+`)
+
+  fs.writeFileSync(path.join(root, 'src/views/__tests__/Fixture.test.js'), `
+const fixture = '<a to="/fixture-inexistente">Somente teste</a>'
+const wildcard = { path: '/:pathMatch(.*)*' }
 `)
 
   return root
@@ -55,12 +62,13 @@ function lerRelatorio(root) {
   return JSON.parse(fs.readFileSync(path.join(root, 'artifacts/navigation-integrity/navigation-integrity.json'), 'utf8'))
 }
 
-test('aprova quando todos os destinos internos possuem rota ou redirecionamento válido', () => {
+test('aprova destinos válidos e ignora fixtures, wildcard e campos de endpoint que não são navegação SPA', () => {
   const root = prepararProjeto()
   const result = executar(root)
   assert.equal(result.status, 0, result.stderr || result.stdout)
   const report = lerRelatorio(root)
   assert.equal(report.summary.missing, 0)
+  assert.ok(!report.missing_destinations.some((item) => ['/status', '/flows', '/fixture-inexistente', '/:pathMatch(.*)*'].includes(item.destination)))
 })
 
 test('falha quando um link interno aponta para rota inexistente', () => {

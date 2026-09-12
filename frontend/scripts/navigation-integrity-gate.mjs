@@ -28,10 +28,18 @@ function stripQueryHash(value) {
 
 function isSpaCandidate(value) {
   if (!value || !value.startsWith('/')) return false
-  if (value.includes('${')) return false
+  if (value.includes('${') || value.includes(':pathMatch')) return false
   if (STATIC_PATH_ALLOWLIST.has(stripQueryHash(value))) return false
   if (value === '/api' || value === '/v1') return false
   return !NON_SPA_PREFIXES.some((prefix) => value.startsWith(prefix))
+}
+
+function isProductionSource(file) {
+  if (!/\.(vue|js|ts|mjs|cjs)$/.test(file) || file === routerFile) return false
+  const relative = path.relative(srcDir, file).replaceAll(path.sep, '/')
+  if (relative.includes('/__tests__/') || relative.startsWith('__tests__/')) return false
+  if (/\.(?:test|spec)\.[cm]?[jt]s$/.test(relative)) return false
+  return true
 }
 
 function extractStringLiterals(fragment) {
@@ -76,7 +84,7 @@ function collectDestinationsFromSource(source, relativePath) {
   const found = []
   const patterns = [
     { kind: 'template-to', regex: /\bto\s*=\s*["'](\/[^"']+)["']/g },
-    { kind: 'property', regex: /\b(?:to|path|route|rota|redirect)\s*:\s*['"`](\/[^'"`]+)['"`]/g },
+    { kind: 'property', regex: /\b(?:to|path|route|redirect)\s*:\s*['"`](\/[^'"`]+)['"`]/g },
     { kind: 'call', regex: /\b(?:router\.(?:push|replace)|goTo|irPara|navegarPara|abrirRota)\s*\(\s*['"`](\/[^'"`]+)['"`]/g },
   ]
 
@@ -145,7 +153,7 @@ function main() {
 
   const routerSource = read(routerFile)
   const routes = parseRouterPaths(routerSource)
-  const sourceFiles = walk(srcDir).filter((file) => /\.(vue|js|ts|mjs|cjs)$/.test(file) && file !== routerFile)
+  const sourceFiles = walk(srcDir).filter(isProductionSource)
 
   const destinations = sourceFiles.flatMap((file) => {
     const relative = path.relative(root, file).replaceAll(path.sep, '/')
