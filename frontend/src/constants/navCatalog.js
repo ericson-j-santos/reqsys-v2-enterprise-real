@@ -30,14 +30,19 @@ export const NAV_TEMAS = [
     icon: 'mdi-file-document-edit',
     subgroups: [
       { id: 'entrada', title: 'Entrada', topic: 'Captura, triagem e cadastro', paths: ['/requisitos'] },
-      { id: 'pipeline', title: 'Refinamento e fluxo', topic: 'Qualidade, IA, histórias e aprovação', paths: ['/pipeline', '/agile-runtime'] },
+      {
+        id: 'pipeline',
+        title: 'Refinamento e fluxo',
+        topic: 'Qualidade, IA, histórias e aprovação',
+        paths: ['/qualidade-ia', '/recomendacoes-ia', '/task-console', '/pipeline', '/agile-runtime'],
+      },
       { id: 'publicacao', title: 'Publicação', topic: 'Rastreio e entrega', paths: ['/rastreabilidade'] },
     ],
     items: [
       { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Requisitos', tip: 'Cadastro, listagem e acompanhamento dos requisitos.', subgroupId: 'entrada' },
-      { to: '/qualidade-ia', icon: 'mdi-brain', title: 'Qualidade IA', tip: 'Nota de completude, clareza e possibilidade de validação dos requisitos.' },
-      { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Sugestões controladas para melhorar requisitos e histórias.' },
-      { to: '/task-console', icon: 'mdi-clipboard-check-outline', title: 'Preparar tarefas', tip: 'Revisar tarefas antes de enviar para Planner ou outra ferramenta de entrega.' },
+      { to: '/qualidade-ia', icon: 'mdi-brain', title: 'Qualidade IA', tip: 'Nota de completude, clareza e possibilidade de validação dos requisitos.', subgroupId: 'pipeline' },
+      { to: '/recomendacoes-ia', icon: 'mdi-robot-outline', title: 'Recomendações IA', tip: 'Sugestões controladas para melhorar requisitos e histórias.', subgroupId: 'pipeline' },
+      { to: '/task-console', icon: 'mdi-clipboard-check-outline', title: 'Preparar tarefas', tip: 'Revisar tarefas antes de enviar para Planner ou outra ferramenta de entrega.', subgroupId: 'pipeline' },
       { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo', tip: 'Fluxo do requisito até a aprovação e publicação.', subgroupId: 'pipeline' },
       { to: '/agile-runtime', icon: 'mdi-source-branch', title: 'Acompanhamento da entrega', tip: 'Itens de trabalho com versão de código, solicitação de integração e ambiente corretos.', subgroupId: 'pipeline' },
       { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Matriz requisito → história → entrega → evidência.', subgroupId: 'publicacao' },

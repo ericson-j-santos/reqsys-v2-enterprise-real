@@ -1,0 +1,70 @@
+name: ReqSys 360 Coherence Gate
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/reqsys-360-coherence-gate.yml'
+      - 'docs/roadmaps/reqsys-360.md'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/reqsys-360-coherence-gate.yml'
+      - 'docs/roadmaps/reqsys-360.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reqsys-360-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: ReqSys 360 coherence audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Test ReqSys 360 audit contract
+        working-directory: frontend
+        run: npm run test:reqsys-360
+
+      - name: Validate navigation catalog unit contract
+        working-directory: frontend
+        run: npx vitest run src/constants/navCatalog.test.js
+
+      - name: Generate ReqSys 360 evidence
+        id: audit
+        working-directory: frontend
+        run: |
+          set +e
+          npm run audit:reqsys-360
+          code=$?
+          cat artifacts/reqsys-360/reqsys-360.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
+      - name: Upload ReqSys 360 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-360-${{ github.run_id }}-${{ github.sha }}
+          path: frontend/artifacts/reqsys-360/
+          if-no-files-found: error
+          retention-days: 30
