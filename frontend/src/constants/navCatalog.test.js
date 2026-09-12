@@ -83,20 +83,3 @@ describe('navCatalog subgrupos', () => {
     }
   })
 })
-
-describe('navCatalog Administração', () => {
-  it('define subgrupos operacionais sem ocultar funções', () => {
-    const administracao = NAV_TEMAS.find((t) => t.id === 'administracao')
-    expect(administracao.subgroups?.map((s) => s.id)).toEqual(['operacao', 'seguranca-governanca', 'engenharia-ia'])
-    for (const subgrupo of administracao.subgroups) {
-      expect(itensDoSubgrupo('administracao', subgrupo.id).length).toBeLessThanOrEqual(5)
-    }
-  })
-
-  it('resolve rotas administrativas para o subgrupo e tema corretos', () => {
-    expect(subgrupoIdPorRota('/monitoramento-operacional')).toBe('operacao')
-    expect(subgrupoIdPorRota('/admin/session-management')).toBe('seguranca-governanca')
-    expect(subgrupoIdPorRota('/orquestrador-ia')).toBe('engenharia-ia')
-    expect(temaIdPorRota('/admin/github-merge')).toBe('administracao')
-  })
-})

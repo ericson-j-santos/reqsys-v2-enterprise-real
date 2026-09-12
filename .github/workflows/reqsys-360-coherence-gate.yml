@@ -63,11 +63,11 @@ jobs:
 
       - name: Test navigation audit contract
         working-directory: frontend
-        run: npm run test:reqsys-360
+        run: node --test scripts/reqsys-360-audit.test.mjs
 
-      - name: Validate navigation catalog unit contract
+      - name: Validate navigation catalog contracts
         working-directory: frontend
-        run: npx vitest run src/constants/navCatalog.test.js
+        run: npx vitest run src/constants/navCatalog.test.js src/constants/navCatalog.reqsys360.test.js
 
       - name: Test repository and regression audit contracts
         run: python -m unittest tests/test_reqsys_360_repository_audit.py tests/test_reqsys_360_regression_guard.py -v
@@ -75,7 +75,7 @@ jobs:
       - name: Generate navigation evidence
         working-directory: frontend
         run: |
-          npm run audit:reqsys-360
+          node scripts/reqsys-360-audit.mjs
           cat artifacts/reqsys-360/reqsys-360.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate repository evidence
