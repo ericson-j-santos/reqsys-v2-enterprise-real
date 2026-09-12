@@ -1,0 +1,88 @@
+name: PC24x7 Teams Ephemeral E2E — DEV
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/pc24x7-teams-ephemeral-e2e.yml'
+      - 'scripts/pc24x7_teams_ephemeral_e2e.py'
+      - 'scripts/pc24x7_teams_queue.py'
+      - 'tests/test_pc24x7_teams_ephemeral_e2e.py'
+      - 'tests/test_pc24x7_teams_ephemeral_e2e_workflow.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/pc24x7-teams-ephemeral-e2e.yml'
+      - 'scripts/pc24x7_teams_ephemeral_e2e.py'
+      - 'scripts/pc24x7_teams_queue.py'
+      - 'tests/test_pc24x7_teams_ephemeral_e2e.py'
+      - 'tests/test_pc24x7_teams_ephemeral_e2e_workflow.py'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Contrato do E2E efêmero
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Executar testes focados
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q \
+            tests/test_pc24x7_teams_ephemeral_e2e.py \
+            tests/test_pc24x7_teams_ephemeral_e2e_workflow.py \
+            tests/test_pc24x7_teams_queue.py
+
+  e2e-dev:
+    name: Readiness + Teams real + revogação — DEV
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: development
+    env:
+      REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+      PC24X7_TEAMS_E2E_CORRELATION_ID: pc24x7-ephemeral-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validar credencial administrativa disponível
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${COFRE_ADMIN_JWT:-}" ]; then
+            echo '::error::COFRE_ADMIN_JWT não está disponível no Environment development.'
+            exit 2
+          fi
+
+      - name: Executar E2E DEV com token efêmero
+        run: |
+          python scripts/pc24x7_teams_ephemeral_e2e.py \
+            --evidence-path artifacts/pc24x7-teams-ephemeral-e2e/evidence.json
+
+      - name: Publicar somente evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-teams-ephemeral-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/pc24x7-teams-ephemeral-e2e/evidence.json
+          if-no-files-found: warn
+          retention-days: 30
