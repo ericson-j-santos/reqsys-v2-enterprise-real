@@ -2,11 +2,10 @@
   <section class="analytics-hub" data-testid="route-analytics" aria-labelledby="titulo-analytics">
     <div class="analytics-header">
       <div>
-        <p class="eyebrow">Trilha C · UX Operacional</p>
-        <h1 id="titulo-analytics">Indicadores Navegável</h1>
+        <p class="eyebrow">Análise e indicadores</p>
+        <h1 id="titulo-analytics">Indicadores</h1>
         <p class="muted">
-          Hub executivo com semáforo operacional, cards clicáveis e detalhamento filtrado para monitoramento,
-          estatísticas e execução.
+          Síntese executiva e atalhos para indicadores auditáveis. Saúde de runtime, topologia e incidentes ficam concentrados em Monitoramento.
         </p>
       </div>
       <div class="header-actions">
@@ -17,7 +16,16 @@
       </div>
     </div>
 
-    <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
+    <v-alert
+      v-if="erro"
+      type="error"
+      variant="tonal"
+      density="compact"
+      role="alert"
+      data-testid="analytics-error"
+    >
+      {{ erro }}
+    </v-alert>
 
     <v-row dense class="mt-2">
       <v-col v-for="card in cardsResumo" :key="card.id" cols="12" sm="6" lg="3">
@@ -33,134 +41,38 @@
       </v-col>
     </v-row>
 
-    <v-card class="panel mt-4" elevation="0">
-      <v-card-title>Execução operacional</v-card-title>
-      <v-card-subtitle>Cards orientados por schema com detalhamento para o analítico filtrado.</v-card-subtitle>
-      <v-card-text>
-        <v-row dense>
-          <v-col v-for="card in runtimeCards" :key="card.id" cols="12" sm="6" md="4" xl="3">
-            <OperationalMetricCard
-              :label="card.title"
-              :value="formatarValor(card)"
-              :semaforo="semaforoCard(card)"
-              icon="mdi-chart-timeline-variant"
-              :hint="card.drilldown ? 'Detalhamento conectado' : ''"
-              :test-id="`analytics-runtime-${card.id}`"
-              @drilldown="irPara(card.rotaSpa)"
-            />
-          </v-col>
-        </v-row>
-      </v-card-text>
+    <v-card class="panel mt-4" elevation="0" data-testid="analytics-destinations">
+      <v-card-title>Detalhamento</v-card-title>
+      <v-card-subtitle>
+        Cada assunto possui uma fonte canônica. O hub apenas direciona para a área responsável, evitando repetir o mesmo painel em várias telas.
+      </v-card-subtitle>
+      <v-list density="comfortable" role="presentation">
+        <v-list-item
+          v-for="destino in destinosAnaliticos"
+          :key="destino.path + JSON.stringify(destino.query || {})"
+          :prepend-icon="destino.icon"
+          :title="destino.title"
+          :subtitle="destino.subtitle"
+          role="button"
+          tabindex="0"
+          @click="irPara({ path: destino.path, query: destino.query })"
+          @keyup.enter="irPara({ path: destino.path, query: destino.query })"
+        />
+      </v-list>
     </v-card>
-
-    <v-row class="mt-2" dense>
-      <v-col cols="12" lg="7">
-        <v-card class="panel" elevation="0">
-          <v-card-title>Malha operacional unificada</v-card-title>
-          <v-card-subtitle>P1 — consumo de unified-operational-signal.json via /api/execução/painel</v-card-subtitle>
-          <v-card-text>
-            <v-alert v-if="!meshResumo.hydrated" type="info" variant="tonal" density="compact" class="mb-3">
-              Malha parcial — aguardando artifact do Signal Consolidator no verificações automáticas.
-            </v-alert>
-            <v-row dense>
-              <v-col v-for="card in meshCards" :key="card.id" cols="12" sm="6">
-                <OperationalMetricCard
-                  :label="card.title"
-                  :value="formatarValor(card)"
-                  :semaforo="semaforoCard(card)"
-                  icon="mdi-graph-outline"
-                  :test-id="`analytics-mesh-${card.id}`"
-                  @drilldown="irPara(card.rotaSpa)"
-                />
-              </v-col>
-            </v-row>
-            <v-timeline density="compact" side="end" class="mt-4">
-              <v-timeline-item
-                v-for="item in meshTimeline"
-                :key="item.step"
-                :dot-color="corTimeline(item.status)"
-              >
-                <strong>{{ item.label }}</strong>
-                <div class="muted">{{ item.detail || item.state }}</div>
-              </v-timeline-item>
-            </v-timeline>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" lg="5">
-        <v-card class="panel" elevation="0">
-          <v-card-title>Topologia operacional</v-card-title>
-          <v-card-text>
-            <v-timeline density="compact" side="end">
-              <v-timeline-item
-                v-for="item in workflowTopology"
-                :key="item.step"
-                :dot-color="corTimeline(item.status)"
-              >
-                <div class="timeline-row">
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <div class="muted">{{ item.status }}</div>
-                  </div>
-                  <div class="timeline-actions">
-                    <SemaforoChip :value="item.status" size="x-small" />
-                    <v-btn size="small" variant="tonal" color="amber" @click="abrirTopologia(item)">
-                      Detalhar
-                    </v-btn>
-                  </div>
-                </div>
-              </v-timeline-item>
-            </v-timeline>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" lg="12">
-        <v-card class="panel" elevation="0">
-          <v-card-title>Destinos analíticos</v-card-title>
-          <v-list density="comfortable" role="presentation">
-            <v-list-item
-              v-for="destino in destinosAnaliticos"
-              :key="destino.path"
-              :prepend-icon="destino.icon"
-              :title="destino.title"
-              :subtitle="destino.subtitle"
-              role="button"
-              tabindex="0"
-              @click="irPara({ path: destino.path, query: destino.query })"
-              @keyup.enter="irPara({ path: destino.path, query: destino.query })"
-            />
-          </v-list>
-        </v-card>
-      </v-col>
-    </v-row>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import OperationalMetricCard from '../components/OperationalMetricCard.vue'
 import SemaforoChip from '../components/SemaforoChip.vue'
 import { useMonitoramentoOperacional } from '../composables/useMonitoramentoOperacional'
 import { semaforoGeral } from '../utils/filtrosMonitoramento'
-import { resolverDrilldownSpa } from '../utils/runtimeDrilldown'
-import { carregarRuntimeDashboard, formatarValorRuntimeCard, semaforoRuntimeCard } from '../services/runtimeDashboard'
 
 const router = useRouter()
-const runtimeDashboard = ref(null)
 const { carregarMonitoramento, resumoSemaforo, carregando, erro } = useMonitoramentoOperacional()
-
-const runtimeCards = computed(() => runtimeDashboard.value?.cards || [])
-const workflowTopology = computed(() => runtimeDashboard.value?.sections?.find((s) => s.id === 'workflow-topology')?.items || [])
-const meshTimeline = computed(() => runtimeDashboard.value?.sections?.find((s) => s.id === 'operational-mesh-chain')?.items?.timeline || [])
-const meshCards = computed(() => (runtimeDashboard.value?.cards || []).filter((card) => ['operational-mesh-integrated', 'operational-mesh-maturity', 'evidence-gate-consolidated', 'cross-runtime-score'].includes(card.id)))
-const meshResumo = computed(() => ({
-  hydrated: Boolean(runtimeDashboard.value?.operational_mesh?.hydrated),
-  integrated: runtimeDashboard.value?.operational_mesh?.mesh_integrated ?? false,
-  maturity: runtimeDashboard.value?.operational_mesh?.maturity_percent ?? 'n/a',
-}))
 
 const semaforoGeralValor = computed(() => {
   const resumo = resumoSemaforo()
@@ -184,87 +96,62 @@ const resumoMonitoramento = computed(() => {
 
 const cardsResumo = computed(() => [
   {
-    id: 'monitoramento',
-    label: 'Monitoramento',
-    value: resumoMonitoramento.value.verde + resumoMonitoramento.value.amarelo + resumoMonitoramento.value.vermelho,
-    semaforo: semaforoGeralValor.value,
-    icon: 'mdi-monitor-dashboard',
-    hint: 'Itens operacionais monitorados',
-    rota: { path: '/monitoramento-operacional' },
-  },
-  {
     id: 'estatisticas',
     label: 'Estatísticas',
-    value: 'Analítico',
+    value: 'Indicadores',
     semaforo: 'verde',
     icon: 'mdi-chart-box-outline',
     hint: 'Indicadores auditáveis com fonte e fórmula',
     rota: { path: '/estatisticas' },
   },
   {
-    id: 'integracoes',
-    label: 'Integrações',
-    value: 'Detalhamento',
-    semaforo: 'amarelo',
-    icon: 'mdi-connection',
-    hint: 'Falhas recentes em Planner e Teams',
-    rota: { path: '/painel-integracao', query: { status: 'erro' } },
+    id: 'financeiro',
+    label: 'Financeiro',
+    value: 'CDI',
+    semaforo: 'verde',
+    icon: 'mdi-cash-multiple',
+    hint: 'Indicadores financeiros com fonte declarada',
+    rota: { path: '/financeiro' },
   },
   {
-    id: 'dashboard',
-    label: 'Painel',
-    value: 'Métricas',
+    id: 'relatorios',
+    label: 'Relatórios',
+    value: 'Catálogo',
     semaforo: 'verde',
-    icon: 'mdi-view-dashboard',
-    hint: 'Visão consolidada de requisitos e fluxo',
-    rota: { path: '/' },
+    icon: 'mdi-file-chart-outline',
+    hint: 'Relatórios e evidências consolidadas',
+    rota: { path: '/relatorios' },
+  },
+  {
+    id: 'operacao',
+    label: 'Saúde operacional',
+    value: resumoMonitoramento.value.verde + resumoMonitoramento.value.amarelo + resumoMonitoramento.value.vermelho + resumoMonitoramento.value.bloqueados,
+    semaforo: semaforoGeralValor.value,
+    icon: 'mdi-monitor-dashboard',
+    hint: 'Resumo; detalhes ficam no Monitoramento',
+    rota: { path: '/monitoramento-operacional' },
   },
 ])
 
 const destinosAnaliticos = [
-  { path: '/monitoramento-operacional', query: { secao: 'malha-operacional' }, icon: 'mdi-graph-outline', title: 'Malha operacional', subtitle: 'Mesh hub, alert intelligence e event bus' },
-  { path: '/monitoramento-operacional', query: { estado: 'vermelho' }, icon: 'mdi-alert-circle-outline', title: 'Incidentes críticos', subtitle: 'Itens em vermelho ou bloqueados' },
-  { path: '/monitoramento-operacional', query: { secao: 'conectores' }, icon: 'mdi-lan-connect', title: 'Connection Broker', subtitle: 'Health-check de conectores' },
-  { path: '/estatisticas', query: { estado: 'critico' }, icon: 'mdi-chart-line', title: 'Indicadores críticos', subtitle: 'Estatísticas com estado crítico' },
-  { path: '/painel-integracao', query: { status: 'erro' }, icon: 'mdi-connection', title: 'Erros de integração', subtitle: 'Eventos com falha e correlation_id' },
+  { path: '/estatisticas', icon: 'mdi-chart-box-outline', title: 'Estatísticas', subtitle: 'Fonte, fórmula, tendência e detalhamento dos indicadores' },
+  { path: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', subtitle: 'Indicadores financeiros e respectiva fonte' },
+  { path: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', subtitle: 'Catálogo de relatórios e evidências' },
+  { path: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', subtitle: 'Consultas analíticas em linguagem natural com controles' },
+  { path: '/monitoramento-operacional', query: { estado: 'vermelho' }, icon: 'mdi-monitor-dashboard', title: 'Monitoramento operacional', subtitle: 'Runtime, malha, topologia, filas e incidentes — fonte canônica operacional' },
+  { path: '/painel-integracao', query: { status: 'erro' }, icon: 'mdi-connection', title: 'Integrações', subtitle: 'Eventos e falhas de conectores na área canônica de integrações' },
 ]
-
-function formatarValor(card) {
-  return formatarValorRuntimeCard(card)
-}
-
-function semaforoCard(card) {
-  return semaforoRuntimeCard(card)
-}
-
-function corTimeline(status) {
-  const map = { healthy: 'green', attention: 'amber', degraded: 'red', verde: 'green', amarelo: 'amber', vermelho: 'red' }
-  return map[String(status).toLowerCase()] || 'grey'
-}
 
 function irPara(rota) {
   if (!rota?.path) return
   router.push(rota)
 }
 
-function abrirTopologia(item) {
-  const rota = resolverDrilldownSpa(item.href || item.spa_drilldown?.path || '/monitoramento-operacional', item)
-  irPara(rota)
-}
-
 async function carregarTudo() {
-  carregando.value = true
-  erro.value = ''
   try {
-    const [dashboard] = await Promise.all([
-      carregarRuntimeDashboard(),
-      carregarMonitoramento(),
-    ])
-    runtimeDashboard.value = dashboard
-  } catch (e) {
-    erro.value = e?.message || 'Erro ao carregar indicadores operacional'
-  } finally {
-    carregando.value = false
+    await carregarMonitoramento()
+  } catch {
+    // O composable mantém o estado de erro utilizado pela interface.
   }
 }
 
@@ -279,9 +166,6 @@ onMounted(carregarTudo)
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .muted { color: var(--text-muted, #6b7280); }
 .panel { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 16px; }
-.erro { border: 1px solid #d1242f; border-radius: 8px; color: #d1242f; padding: 0.75rem; }
-.timeline-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.timeline-actions { display: flex; align-items: center; gap: 8px; }
 @media (max-width: 700px) {
   .analytics-header { flex-direction: column; }
   .header-actions { width: 100%; }

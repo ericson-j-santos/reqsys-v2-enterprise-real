@@ -28,6 +28,10 @@ def test_mapear_cards_operational_mesh_integrado() -> None:
     cards = mesh_service.mapear_cards_operational_mesh(signal)
     ids = {card['id'] for card in cards}
     assert {'operational-mesh-integrated', 'operational-mesh-maturity', 'evidence-gate-consolidated', 'cross-runtime-score'} <= ids
+    assert all(card['spa_drilldown']['path'] == '/monitoramento-operacional' for card in cards)
+    by_id = {card['id']: card for card in cards}
+    assert by_id['operational-mesh-maturity']['spa_drilldown']['query']['foco'] == 'maturidade'
+    assert by_id['cross-runtime-score']['spa_drilldown']['query']['foco'] == 'cross-runtime'
 
 
 def test_mapear_secao_operational_mesh_timeline() -> None:
@@ -46,6 +50,7 @@ def test_mapear_secao_operational_mesh_timeline() -> None:
     section = mesh_service.mapear_secao_operational_mesh(signal)
     assert section['id'] == 'operational-mesh-chain'
     assert len(section['items']['timeline']) == 4
+    assert all(item['spa_drilldown']['path'] == '/monitoramento-operacional' for item in section['items']['timeline'])
 
 
 def test_runtime_operational_mesh_endpoint() -> None:
@@ -57,6 +62,7 @@ def test_runtime_operational_mesh_endpoint() -> None:
     assert 'signal' in body['data']
     assert 'cards' in body['data']
     assert body['data']['section']['id'] == 'operational-mesh-chain'
+    assert all(card['spa_drilldown']['path'] == '/monitoramento-operacional' for card in body['data']['cards'])
 
 
 def test_runtime_dashboard_inclui_malha_operacional(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,3 +97,6 @@ def test_runtime_dashboard_inclui_malha_operacional(tmp_path: Path, monkeypatch:
     card_ids = {card['id'] for card in data['cards']}
     assert 'operational-mesh-integrated' in card_ids
     assert 'cross-runtime-score' in card_ids
+    mesh_cards = [card for card in data['cards'] if card['id'] in {'operational-mesh-integrated', 'operational-mesh-maturity', 'evidence-gate-consolidated', 'cross-runtime-score'}]
+    assert mesh_cards
+    assert all(card['spa_drilldown']['path'] == '/monitoramento-operacional' for card in mesh_cards)
