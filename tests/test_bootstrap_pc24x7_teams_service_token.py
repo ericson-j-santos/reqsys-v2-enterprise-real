@@ -49,6 +49,39 @@ def test_reuses_existing_valid_token_without_admin_jwt(monkeypatch):
     assert client.set_calls == []
 
 
+def test_validation_only_blocks_before_mint_when_existing_token_invalid(monkeypatch):
+    client = FakeClient('stale-token')
+    monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
+    monkeypatch.setattr(module, 'validate_service_token', lambda *_: 401)
+    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
+    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
+    try:
+        module.bootstrap(
+            api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault',
+            vault_name='kv', secret_name='pc24x7-token', allow_provision=False,
+        )
+        assert False, 'expected BootstrapError'
+    except module.BootstrapError as exc:
+        assert str(exc) == 'existing_service_token_readiness_failed:http_401'
+    assert client.set_calls == []
+
+
+def test_validation_only_blocks_when_secret_missing(monkeypatch):
+    client = FakeClient()
+    monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
+    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
+    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
+    try:
+        module.bootstrap(
+            api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault',
+            vault_name='kv', secret_name='pc24x7-token', allow_provision=False,
+        )
+        assert False, 'expected BootstrapError'
+    except module.BootstrapError as exc:
+        assert str(exc) == 'service_token_missing_provisioning_disabled'
+    assert client.set_calls == []
+
+
 def test_mints_and_stores_when_secret_missing(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)

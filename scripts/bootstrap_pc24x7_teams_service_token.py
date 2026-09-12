@@ -103,7 +103,15 @@ def keyvault_client(vault_name: str):
     return SecretClient(vault_url=f'https://{vault_name}.vault.azure.net', credential=AzureCliCredential())
 
 
-def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: str, secret_name: str) -> BootstrapResult:
+def bootstrap(
+    *,
+    api_base: str,
+    cofre_base: str,
+    vault_token: str,
+    vault_name: str,
+    secret_name: str,
+    allow_provision: bool = True,
+) -> BootstrapResult:
     client = keyvault_client(vault_name)
     existing = None
     try:
@@ -119,6 +127,10 @@ def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: s
                 status='ready', environment='dev', secret_name=secret_name, scope=SCOPE,
                 token_created=False, existing_token_reused=True, readiness_http_status=200,
             )
+        if not allow_provision:
+            raise BootstrapError(f'existing_service_token_readiness_failed:http_{readiness}')
+    elif not allow_provision:
+        raise BootstrapError('service_token_missing_provisioning_disabled')
 
     admin_jwt = read_admin_jwt(cofre_base, vault_token, environment='dev')
     new_token = mint_service_token(api_base, admin_jwt)
@@ -142,6 +154,7 @@ def main() -> int:
     vault_token = os.getenv('VAULT_API_TOKEN', '').strip()
     vault_name = os.getenv('REQSYS_KEY_VAULT_NAME', '').strip()
     secret_name = os.getenv('PC24X7_TEAMS_SERVICE_TOKEN_SECRET', DEFAULT_SECRET_NAME).strip() or DEFAULT_SECRET_NAME
+    allow_provision = os.getenv('PC24X7_TEAMS_ALLOW_PROVISION', 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
     if not vault_token:
         print(json.dumps({'status': 'blocked', 'reason': 'VAULT_API_TOKEN_missing', 'secret_value_exposed': False}))
         return 4
@@ -151,7 +164,7 @@ def main() -> int:
     try:
         result = bootstrap(
             api_base=api_base, cofre_base=cofre_base, vault_token=vault_token,
-            vault_name=vault_name, secret_name=secret_name,
+            vault_name=vault_name, secret_name=secret_name, allow_provision=allow_provision,
         )
     except BootstrapError as exc:
         print(json.dumps({'status': 'blocked', 'reason': str(exc), 'secret_value_exposed': False}))
