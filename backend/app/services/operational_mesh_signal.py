@@ -141,7 +141,7 @@ def mapear_cards_operational_mesh(signal: dict[str, Any]) -> list[dict[str, Any]
             'max': 100,
             'severity': estado_mesh_para_severidade(signal.get('overall_state')),
             'drilldown': '/api/runtime/operational-mesh',
-            'spa_drilldown': _spa_drilldown('/analytics', {'secao': 'malha-operacional'}),
+            'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'malha-operacional', 'foco': 'maturidade'}),
         },
         {
             'id': 'evidence-gate-consolidated',
@@ -164,7 +164,7 @@ def mapear_cards_operational_mesh(signal: dict[str, Any]) -> list[dict[str, Any]
             'severity': 'healthy' if unified_score >= 85 else 'attention' if unified_score >= 60 else 'degraded',
             'sources_hydrated': analytics.get('sources_hydrated', 0),
             'drilldown': '/api/runtime/analytics',
-            'spa_drilldown': _spa_drilldown('/analytics', {'secao': 'malha-operacional'}),
+            'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'malha-operacional', 'foco': 'cross-runtime'}),
         },
     ]
 
