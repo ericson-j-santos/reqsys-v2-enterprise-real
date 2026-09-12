@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "version": "reqsys-360-v1",
+  "purpose": "Limites determinísticos para impedir regressão silenciosa sem transformar heurísticas em bloqueios.",
+  "frontend": {
+    "critical": { "max": 0 },
+    "hygiene_markers": { "max": 0 },
+    "nav_max_effective_group": { "max": 8 },
+    "e2e_unreferenced_routes": { "max": 0 }
+  },
+  "repository": {
+    "critical": { "max": 0 },
+    "unresolved_frontend_consumers": { "max": 1 },
+    "service_orphan_candidates": { "max": 0 },
+    "unclassified_architectural_variants": { "max": 0 },
+    "journey_contract_violations": { "max": 0 }
+  }
+}

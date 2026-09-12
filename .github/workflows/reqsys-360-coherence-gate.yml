@@ -9,8 +9,8 @@ on:
       - 'runtime/**'
       - 'services/**'
       - 'governance/reqsys-360/**'
-      - 'scripts/reqsys_360_repository_audit.py'
-      - 'tests/test_reqsys_360_repository_audit.py'
+      - 'scripts/reqsys_360_*.py'
+      - 'tests/test_reqsys_360_*.py'
       - '.github/workflows/reqsys-360-coherence-gate.yml'
       - 'docs/roadmaps/reqsys-360.md'
   push:
@@ -22,8 +22,8 @@ on:
       - 'runtime/**'
       - 'services/**'
       - 'governance/reqsys-360/**'
-      - 'scripts/reqsys_360_repository_audit.py'
-      - 'tests/test_reqsys_360_repository_audit.py'
+      - 'scripts/reqsys_360_*.py'
+      - 'tests/test_reqsys_360_*.py'
       - '.github/workflows/reqsys-360-coherence-gate.yml'
       - 'docs/roadmaps/reqsys-360.md'
   workflow_dispatch:
@@ -69,8 +69,8 @@ jobs:
         working-directory: frontend
         run: npx vitest run src/constants/navCatalog.test.js
 
-      - name: Test repository audit contract
-        run: python -m unittest tests/test_reqsys_360_repository_audit.py -v
+      - name: Test repository and regression audit contracts
+        run: python -m unittest tests/test_reqsys_360_repository_audit.py tests/test_reqsys_360_regression_guard.py -v
 
       - name: Generate navigation evidence
         working-directory: frontend
@@ -82,6 +82,11 @@ jobs:
         run: |
           python scripts/reqsys_360_repository_audit.py
           cat artifacts/reqsys-360/repository-audit.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce ReqSys 360 regression baseline
+        run: |
+          python scripts/reqsys_360_regression_guard.py
+          cat artifacts/reqsys-360/regression.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate linguagem simples
         working-directory: frontend
