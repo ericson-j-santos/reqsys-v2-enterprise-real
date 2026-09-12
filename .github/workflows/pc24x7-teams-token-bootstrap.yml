@@ -49,8 +49,7 @@ jobs:
     timeout-minutes: 10
     env:
       REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
-      COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
-      VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       PC24X7_TEAMS_SERVICE_TOKEN_SECRET: reqsys-pc24x7-teams-service-token
       PC24X7_TEAMS_ALLOW_PROVISION: 'true'
@@ -74,7 +73,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID VAULT_API_TOKEN; do
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID COFRE_ADMIN_JWT; do
             if [ -z "${!name:-}" ]; then
               printf '%s\n' '{"status":"blocked","reason":"GOVERNED_CONFIGURATION_MISSING","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}' > pc24x7-teams-token-bootstrap.json
               echo "::error::$name não configurado. Bootstrap permanece fail-closed."
