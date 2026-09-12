@@ -36,7 +36,7 @@ def request_json(method: str, url: str, *, headers: dict[str, str], body: dict |
     if data is not None:
         req.add_header('Content-Type', 'application/json')
     try:
-        with urlopen(req, timeout=30) as response:  # noqa: S310 - URLs are controlled configuration.
+        with urlopen(req, timeout=30) as response:  # noqa: S310
             raw = response.read().decode('utf-8')
             return response.status, json.loads(raw) if raw else {}
     except HTTPError as exc:
@@ -46,20 +46,12 @@ def request_json(method: str, url: str, *, headers: dict[str, str], body: dict |
 
 
 def validate_service_token(api_base: str, token: str) -> int:
-    status, _ = request_json(
-        'GET',
-        api_base.rstrip('/') + '/v1/teams-gateway/ai-conversations/readiness',
-        headers={'X-Service-Token': token, 'X-Correlation-Id': 'pc24x7-token-bootstrap-readiness'},
-    )
+    status, _ = request_json('GET', api_base.rstrip('/') + '/v1/teams-gateway/ai-conversations/readiness', headers={'X-Service-Token': token, 'X-Correlation-Id': 'pc24x7-token-bootstrap-readiness'})
     return status
 
 
 def read_admin_jwt(cofre_base: str, vault_token: str, *, environment: str = 'dev') -> str:
-    status, payload = request_json(
-        'GET',
-        cofre_base.rstrip('/') + f'/v1/cofre/segredos/human_admin_jwt:{environment}',
-        headers={'X-Vault-Token': vault_token},
-    )
+    status, payload = request_json('GET', cofre_base.rstrip('/') + f'/v1/cofre/segredos/human_admin_jwt:{environment}', headers={'X-Vault-Token': vault_token})
     if status != 200:
         raise BootstrapError(f'admin_jwt_unavailable:http_{status}')
     try:
@@ -74,15 +66,7 @@ def read_admin_jwt(cofre_base: str, vault_token: str, *, environment: str = 'dev
 
 
 def mint_service_token(api_base: str, admin_jwt: str, *, expires_in_days: int = 90) -> str:
-    status, payload = request_json(
-        'POST',
-        api_base.rstrip('/') + '/v1/admin/service-tokens',
-        headers={
-            'Authorization': f'Bearer {admin_jwt}',
-            'X-Correlation-Id': 'pc24x7-token-bootstrap-mint',
-        },
-        body={'label': LABEL, 'scopes': [SCOPE], 'expires_in_days': expires_in_days},
-    )
+    status, payload = request_json('POST', api_base.rstrip('/') + '/v1/admin/service-tokens', headers={'Authorization': f'Bearer {admin_jwt}', 'X-Correlation-Id': 'pc24x7-token-bootstrap-mint'}, body={'label': LABEL, 'scopes': [SCOPE], 'expires_in_days': expires_in_days})
     if status not in (200, 201):
         raise BootstrapError(f'service_token_mint_failed:http_{status}')
     try:
@@ -103,69 +87,49 @@ def keyvault_client(vault_name: str):
     return SecretClient(vault_url=f'https://{vault_name}.vault.azure.net', credential=AzureCliCredential())
 
 
-def bootstrap(
-    *,
-    api_base: str,
-    cofre_base: str,
-    vault_token: str,
-    vault_name: str,
-    secret_name: str,
-    allow_provision: bool = True,
-) -> BootstrapResult:
+def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: str, secret_name: str, allow_provision: bool = True, admin_jwt: str = '') -> BootstrapResult:
     client = keyvault_client(vault_name)
     existing = None
     try:
         existing = client.get_secret(secret_name).value
-    except Exception as exc:  # Azure SDK raises typed exceptions; absence is handled by mint path.
+    except Exception as exc:
         if exc.__class__.__name__ not in {'ResourceNotFoundError', 'SecretNotFound'}:
             raise BootstrapError(f'keyvault_read_failed:{exc.__class__.__name__}') from None
 
     if existing:
         readiness = validate_service_token(api_base, str(existing))
         if readiness == 200:
-            return BootstrapResult(
-                status='ready', environment='dev', secret_name=secret_name, scope=SCOPE,
-                token_created=False, existing_token_reused=True, readiness_http_status=200,
-            )
+            return BootstrapResult(status='ready', environment='dev', secret_name=secret_name, scope=SCOPE, token_created=False, existing_token_reused=True, readiness_http_status=200)
         if not allow_provision:
             raise BootstrapError(f'existing_service_token_readiness_failed:http_{readiness}')
     elif not allow_provision:
         raise BootstrapError('service_token_missing_provisioning_disabled')
 
-    admin_jwt = read_admin_jwt(cofre_base, vault_token, environment='dev')
-    new_token = mint_service_token(api_base, admin_jwt)
-    client.set_secret(
-        secret_name,
-        new_token,
-        tags={'environment': 'dev', 'consumer': 'pc24x7-teams-worker', 'scope': SCOPE, 'source': 'reqsys-service-token'},
-    )
+    effective_admin_jwt = admin_jwt.strip() or read_admin_jwt(cofre_base, vault_token, environment='dev')
+    new_token = mint_service_token(api_base, effective_admin_jwt)
+    client.set_secret(secret_name, new_token, tags={'environment': 'dev', 'consumer': 'pc24x7-teams-worker', 'scope': SCOPE, 'source': 'reqsys-service-token'})
     readiness = validate_service_token(api_base, new_token)
     if readiness != 200:
         raise BootstrapError(f'new_service_token_readiness_failed:http_{readiness}')
-    return BootstrapResult(
-        status='ready', environment='dev', secret_name=secret_name, scope=SCOPE,
-        token_created=True, existing_token_reused=False, readiness_http_status=readiness,
-    )
+    return BootstrapResult(status='ready', environment='dev', secret_name=secret_name, scope=SCOPE, token_created=True, existing_token_reused=False, readiness_http_status=readiness)
 
 
 def main() -> int:
     api_base = os.getenv('REQSYS_API_BASE_URL', DEFAULT_API).strip() or DEFAULT_API
     cofre_base = os.getenv('COFRE_API_URL', api_base).strip() or api_base
     vault_token = os.getenv('VAULT_API_TOKEN', '').strip()
+    admin_jwt = os.getenv('COFRE_ADMIN_JWT', '').strip()
     vault_name = os.getenv('REQSYS_KEY_VAULT_NAME', '').strip()
     secret_name = os.getenv('PC24X7_TEAMS_SERVICE_TOKEN_SECRET', DEFAULT_SECRET_NAME).strip() or DEFAULT_SECRET_NAME
     allow_provision = os.getenv('PC24X7_TEAMS_ALLOW_PROVISION', 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
-    if allow_provision and not vault_token:
-        print(json.dumps({'status': 'blocked', 'reason': 'VAULT_API_TOKEN_missing', 'secret_value_exposed': False}))
+    if allow_provision and not admin_jwt and not vault_token:
+        print(json.dumps({'status': 'blocked', 'reason': 'ADMIN_CREDENTIAL_missing', 'secret_value_exposed': False}))
         return 4
     if not vault_name:
         print(json.dumps({'status': 'blocked', 'reason': 'REQSYS_KEY_VAULT_NAME_missing', 'secret_value_exposed': False}))
         return 4
     try:
-        result = bootstrap(
-            api_base=api_base, cofre_base=cofre_base, vault_token=vault_token,
-            vault_name=vault_name, secret_name=secret_name, allow_provision=allow_provision,
-        )
+        result = bootstrap(api_base=api_base, cofre_base=cofre_base, vault_token=vault_token, vault_name=vault_name, secret_name=secret_name, allow_provision=allow_provision, admin_jwt=admin_jwt)
     except BootstrapError as exc:
         print(json.dumps({'status': 'blocked', 'reason': str(exc), 'secret_value_exposed': False}))
         return 4
