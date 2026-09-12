@@ -36,10 +36,49 @@ def test_process_success_moves_to_done_and_writes_sanitized_evidence(tmp_path, m
     assert result['status'] == 'done'
     assert result['conversation_id'] == 'conv-1'
     assert result['teams_delivered'] is True
+    assert result['teams_channel'] == 'bot'
     assert list((tmp_path / 'done').glob('*.json'))
     evidence = json.loads(next((tmp_path / 'evidence').glob('*.json')).read_text(encoding='utf-8'))
     assert evidence['secret_value_exposed'] is False
     assert 'segredo-nao-vazar' not in json.dumps(evidence)
+
+
+def test_http_200_without_direct_bot_delivery_retries(tmp_path, monkeypatch):
+    token_file = tmp_path / 'token.txt'
+    token_file.write_text('x', encoding='utf-8')
+    job = module.build_job(provider='gemini', model='gemini-2.5-flash', mensagem='teste-sem-entrega', titulo='t')
+    module.enqueue(tmp_path, job)
+    monkeypatch.setattr(module.time, 'time', lambda: 1000)
+    monkeypatch.setattr(module, 'call_reqsys', lambda *args, **kwargs: {
+        'data': {
+            'duplicate': False,
+            'conversation': {'id': 'conv-2'},
+            'teams': {'modo': 'fila_gateway', 'entrega': None},
+        }
+    })
+    result = module.process_one(tmp_path, 'https://dev.invalid', token_file)
+    assert result['status'] == 'retry'
+    assert result['conversation_id'] == 'conv-2'
+    assert result['teams_delivered'] is False
+    assert result['error'] == 'DeliveryNotConfirmed'
+    assert not list((tmp_path / 'done').glob('*.json'))
+    assert list((tmp_path / 'pending').glob('*.json'))
+
+
+def test_http_200_without_conversation_id_retries(tmp_path, monkeypatch):
+    token_file = tmp_path / 'token.txt'
+    token_file.write_text('x', encoding='utf-8')
+    job = module.build_job(provider='gemini', model='gemini-2.5-flash', mensagem='teste-sem-conversa', titulo='t')
+    module.enqueue(tmp_path, job)
+    monkeypatch.setattr(module.time, 'time', lambda: 1000)
+    monkeypatch.setattr(module, 'call_reqsys', lambda *args, **kwargs: {
+        'data': {'teams': {'entrega': {'entregue': True, 'canal_usado': 'bot'}}}
+    })
+    result = module.process_one(tmp_path, 'https://dev.invalid', token_file)
+    assert result['status'] == 'retry'
+    assert result['conversation_id'] is None
+    assert result['error'] == 'DeliveryNotConfirmed'
+    assert not list((tmp_path / 'done').glob('*.json'))
 
 
 def test_failure_retries_then_quarantines(tmp_path, monkeypatch):
