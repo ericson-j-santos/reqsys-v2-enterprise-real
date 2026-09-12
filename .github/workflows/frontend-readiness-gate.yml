@@ -44,21 +44,39 @@ jobs:
         working-directory: frontend
         run: npm run test:readiness
 
-      - name: Generate frontend readiness matrix
+      - name: Test navigation integrity gate contract
+        working-directory: frontend
+        run: npm run test:navigation-integrity
+
+      - name: Test navigation catalog reachability
+        working-directory: frontend
+        run: npx vitest run src/constants/navCatalog.test.js
+
+      - name: Generate frontend readiness and navigation integrity evidence
         id: readiness
         working-directory: frontend
         run: |
           set +e
           npm run readiness:frontend
-          code=$?
+          readiness_code=$?
+          npm run navigation:integrity
+          navigation_code=$?
+
           cat artifacts/frontend-readiness/frontend-readiness.md >> "$GITHUB_STEP_SUMMARY"
-          exit "$code"
+          printf '\n---\n\n' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/navigation-integrity/navigation-integrity.md >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$readiness_code" -ne 0 ] || [ "$navigation_code" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Upload readiness evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-readiness-${{ github.run_id }}
-          path: frontend/artifacts/frontend-readiness/
+          path: |
+            frontend/artifacts/frontend-readiness/
+            frontend/artifacts/navigation-integrity/
           if-no-files-found: error
           retention-days: 30

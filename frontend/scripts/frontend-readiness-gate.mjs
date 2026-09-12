@@ -28,13 +28,71 @@ function parseImports(source) {
   return imports
 }
 
+function extractRouteObjects(source) {
+  const marker = source.indexOf('export const routes')
+  if (marker < 0) return []
+  const arrayStart = source.indexOf('[', marker)
+  if (arrayStart < 0) return []
+
+  const objects = []
+  let objectStart = -1
+  let braceDepth = 0
+  let quote = null
+  let escaped = false
+
+  for (let i = arrayStart + 1; i < source.length; i += 1) {
+    const char = source[i]
+
+    if (quote) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === quote) quote = null
+      continue
+    }
+
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char
+      continue
+    }
+
+    if (char === '{') {
+      if (braceDepth === 0) objectStart = i
+      braceDepth += 1
+      continue
+    }
+
+    if (char === '}') {
+      braceDepth -= 1
+      if (braceDepth === 0 && objectStart >= 0) {
+        objects.push(source.slice(objectStart, i + 1))
+        objectStart = -1
+      }
+      continue
+    }
+
+    if (char === ']' && braceDepth === 0) break
+  }
+
+  return objects
+}
+
 function parseRoutes(source) {
   const routes = []
-  const regex = /\{\s*path:\s*['"]([^'"]+)['"][\s\S]*?component:\s*([A-Za-z0-9_]+)[\s\S]*?meta:\s*\{([^}]*)\}[\s\S]*?\}/g
-  for (const match of source.matchAll(regex)) {
-    routes.push({ path: match[1], component: match[2], meta: match[3] })
+  for (const routeObject of extractRouteObjects(source)) {
+    const pathMatch = routeObject.match(/\bpath:\s*['"]([^'"]+)['"]/) 
+    const componentMatch = routeObject.match(/\bcomponent:\s*([A-Za-z0-9_]+)/)
+    const metaMatch = routeObject.match(/\bmeta:\s*\{([\s\S]*?)\}/)
+    if (!pathMatch || !componentMatch || !metaMatch) continue
+    if (pathMatch[1].includes(':pathMatch')) continue
+    routes.push({ path: pathMatch[1], component: componentMatch[1], meta: metaMatch[1] })
   }
-  return routes.filter((route) => !route.path.includes(':pathMatch'))
+  return routes
 }
 
 function routeCovered(routePath, e2eText) {

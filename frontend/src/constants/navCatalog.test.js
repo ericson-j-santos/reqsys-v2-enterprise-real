@@ -53,14 +53,33 @@ describe('navCatalog subgrupos', () => {
     expect(subgrupoIdPorRota('/pipeline')).toBe('pipeline')
     expect(subgrupoIdPorRota('/requisitos')).toBe('entrada')
     expect(subgrupoIdPorRota('/rastreabilidade')).toBe('publicacao')
+    expect(subgrupoIdPorRota('/qualidade-ia')).toBe('pipeline')
+    expect(subgrupoIdPorRota('/recomendacoes-ia')).toBe('pipeline')
+    expect(subgrupoIdPorRota('/task-console')).toBe('pipeline')
   })
 
-  it('lista itens filtrados do subgrupo', () => {
+  it('lista todos os itens de refinamento e fluxo', () => {
     const itens = itensDoSubgrupo('requisitos', 'pipeline')
-    expect(itens.map((i) => i.to)).toEqual(['/pipeline', '/agile-runtime'])
+    expect(itens.map((i) => i.to)).toEqual([
+      '/qualidade-ia',
+      '/recomendacoes-ia',
+      '/task-console',
+      '/pipeline',
+      '/agile-runtime',
+    ])
   })
 
   it('mantém tema requisitos para rotas do subgrupo', () => {
     expect(temaIdPorRota('/agile-runtime')).toBe('requisitos')
+    expect(temaIdPorRota('/qualidade-ia')).toBe('requisitos')
+  })
+
+  it('garante que todo item de tema com subgrupos seja alcançável em pelo menos um subgrupo', () => {
+    for (const tema of NAV_TEMAS.filter((item) => item.subgroups?.length)) {
+      const rotasVisiveis = new Set(
+        tema.subgroups.flatMap((subgrupo) => itensDoSubgrupo(tema.id, subgrupo.id).map((item) => item.to)),
+      )
+      expect([...tema.items.map((item) => item.to).filter((rota) => !rotasVisiveis.has(rota))]).toEqual([])
+    }
   })
 })

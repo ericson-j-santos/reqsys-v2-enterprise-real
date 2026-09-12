@@ -15,6 +15,8 @@
         "test:msal-state": "node --test scripts/check-msal-state.test.mjs scripts/msal-storage-state-sanitizer.test.cjs",
         "test:readiness": "node --test scripts/frontend-readiness-gate.test.mjs",
         "readiness:frontend": "node scripts/frontend-readiness-gate.mjs",
+        "test:navigation-integrity": "node --test scripts/navigation-integrity-gate.test.mjs",
+        "navigation:integrity": "node scripts/navigation-integrity-gate.mjs",
         "validate:design-tokens": "node scripts/validate-design-tokens.mjs",
         "test:design-token-usage": "node --test scripts/validate-design-token-usage.test.mjs",
         "validate:design-token-usage": "node scripts/validate-design-token-usage.mjs",

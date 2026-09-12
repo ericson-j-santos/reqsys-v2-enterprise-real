@@ -18,6 +18,7 @@ describe('rotasResponsivas', () => {
   it('cobre todas as rotas operacionais registradas no roteador', () => {
     const pathsCatalogo = new Set(ROTAS_RESPONSIVAS.map((rota) => rota.path))
     const pathsRoteador = routes
+      .filter((rota) => !rota.redirect)
       .map((rota) => rota.path)
       .filter((path) => !ROTAS_PUBLICAS_NAO_OPERACIONAIS.has(path))
 
