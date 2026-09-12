@@ -5,7 +5,6 @@ import argparse
 import hashlib
 import json
 import os
-import shutil
 import time
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +14,10 @@ from urllib.request import Request, urlopen
 
 DEFAULT_ROOT = Path(os.getenv("PC24X7_TEAMS_QUEUE_ROOT", "/var/lib/reqsys-24x7/teams"))
 MAX_ATTEMPTS = int(os.getenv("PC24X7_TEAMS_MAX_ATTEMPTS", "5"))
+
+
+class DeliveryNotConfirmed(RuntimeError):
+    pass
 
 
 def utcnow() -> str:
@@ -98,11 +101,25 @@ def call_reqsys(base_url: str, token: str, job: dict) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def sanitize_result(job: dict, response: dict | None, *, status: str, error: str | None = None) -> dict:
+def _delivery_fields(response: dict | None) -> tuple[str | None, bool, str | None]:
     data = (response or {}).get("data") or {}
     conversation = data.get("conversation") or {}
     teams = data.get("teams") or {}
     delivery = teams.get("entrega") or {}
+    return conversation.get("id"), delivery.get("entregue") is True, delivery.get("canal_usado")
+
+
+def assert_direct_teams_delivery(response: dict | None) -> None:
+    conversation_id, delivered, channel = _delivery_fields(response)
+    if not conversation_id:
+        raise DeliveryNotConfirmed("conversation_id_missing")
+    if not delivered or channel != "bot":
+        raise DeliveryNotConfirmed("direct_teams_delivery_not_confirmed")
+
+
+def sanitize_result(job: dict, response: dict | None, *, status: str, error: str | None = None) -> dict:
+    data = (response or {}).get("data") or {}
+    conversation_id, delivered, channel = _delivery_fields(response)
     return {
         "schema_version": "1.0.0",
         "job_id": job["job_id"],
@@ -110,10 +127,10 @@ def sanitize_result(job: dict, response: dict | None, *, status: str, error: str
         "correlation_id": job["correlation_id"],
         "payload_sha256": job["payload_sha256"],
         "attempts": job["attempts"],
-        "conversation_id": conversation.get("id"),
+        "conversation_id": conversation_id,
         "duplicate": data.get("duplicate"),
-        "teams_delivered": bool(delivery.get("entregue")),
-        "teams_channel": delivery.get("canal_usado"),
+        "teams_delivered": delivered,
+        "teams_channel": channel,
         "error": error,
         "finished_at": utcnow(),
         "secret_value_exposed": False,
@@ -140,6 +157,7 @@ def process_one(root: Path, base_url: str, token_file: Path) -> dict | None:
     response = None
     try:
         response = call_reqsys(base_url, read_token(token_file), job)
+        assert_direct_teams_delivery(response)
         evidence = sanitize_result(job, response, status="done")
         target = root / "done" / processing.name
         processing.write_text(json.dumps(job, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
