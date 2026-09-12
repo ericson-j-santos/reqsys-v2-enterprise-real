@@ -44,7 +44,6 @@ jobs:
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: development
     env:
       REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
