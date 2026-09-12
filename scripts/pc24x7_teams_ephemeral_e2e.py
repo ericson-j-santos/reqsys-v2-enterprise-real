@@ -195,12 +195,16 @@ def select_runtime_provider(
 ) -> tuple[str, str, bool]:
     requested = requested_provider.strip().lower()
     configured = {item.strip().lower() for item in providers_configured if item.strip()}
+    # Compatibilidade fail-safe com versões antigas do readiness que ainda não
+    # publicavam a lista: conserva a escolha explícita do operador.
+    if not configured:
+        return requested, requested_model, False
     if requested in configured:
         return requested, requested_model, False
     for candidate in PROVIDER_PRIORITY:
         if candidate in configured:
             return candidate, PROVIDER_DEFAULT_MODELS[candidate], True
-    raise EphemeralE2EError('provider_selection_failed:no_configured_provider')
+    raise EphemeralE2EError('provider_selection_failed:no_supported_configured_provider')
 
 
 def execute_e2e(
