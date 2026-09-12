@@ -155,7 +155,7 @@ def main() -> int:
     vault_name = os.getenv('REQSYS_KEY_VAULT_NAME', '').strip()
     secret_name = os.getenv('PC24X7_TEAMS_SERVICE_TOKEN_SECRET', DEFAULT_SECRET_NAME).strip() or DEFAULT_SECRET_NAME
     allow_provision = os.getenv('PC24X7_TEAMS_ALLOW_PROVISION', 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
-    if not vault_token:
+    if allow_provision and not vault_token:
         print(json.dumps({'status': 'blocked', 'reason': 'VAULT_API_TOKEN_missing', 'secret_value_exposed': False}))
         return 4
     if not vault_name:
