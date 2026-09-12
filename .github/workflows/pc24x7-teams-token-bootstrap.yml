@@ -44,12 +44,14 @@ jobs:
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: development
     env:
       REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       PC24X7_TEAMS_SERVICE_TOKEN_SECRET: reqsys-pc24x7-teams-service-token
-      PC24X7_TEAMS_ALLOW_PROVISION: 'false'
-      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      PC24X7_TEAMS_ALLOW_PROVISION: 'true'
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
     steps:
@@ -62,22 +64,22 @@ jobs:
         shell: bash
         run: |
           cat > pc24x7-teams-token-bootstrap.json <<'JSON'
-          {"status":"blocked","reason":"READINESS_NOT_EXECUTED","environment":"dev","mode":"validation_only","token_created":false,"secret_value_exposed":false}
+          {"status":"blocked","reason":"READINESS_NOT_EXECUTED","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}
           JSON
 
-      - name: Validar configuração OIDC canônica
+      - name: Validar configuração governada
         shell: bash
         run: |
           set -euo pipefail
-          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID COFRE_ADMIN_JWT; do
             if [ -z "${!name:-}" ]; then
-              printf '%s\n' '{"status":"blocked","reason":"OIDC_CONFIGURATION_MISSING","environment":"dev","mode":"validation_only","token_created":false,"secret_value_exposed":false}' > pc24x7-teams-token-bootstrap.json
-              echo "::error::$name não configurado. Validação permanece fail-closed."
+              printf '%s\n' '{"status":"blocked","reason":"GOVERNED_CONFIGURATION_MISSING","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}' > pc24x7-teams-token-bootstrap.json
+              echo "::error::$name não configurado. Bootstrap permanece fail-closed."
               exit 2
             fi
           done
 
-      - name: Login Azure por OIDC
+      - name: Login Azure por OIDC DEV
         uses: azure/login@v2
         with:
           client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
@@ -87,7 +89,7 @@ jobs:
       - name: Instalar cliente Key Vault
         run: python -m pip install --disable-pip-version-check azure-identity azure-keyvault-secrets
 
-      - name: Validar token S2S DEV sem provisionamento
+      - name: Validar ou provisionar token S2S DEV
         id: bootstrap
         shell: bash
         run: |
@@ -117,31 +119,22 @@ jobs:
         uses: actions/github-script@v7
         env:
           READY: ${{ steps.bootstrap.outputs.ready }}
-          BOOTSTRAP_RC: ${{ steps.bootstrap.outputs.rc }}
         with:
           script: |
             const marker = '<!-- reqsys-pc24x7-teams-token-bootstrap -->';
             const ready = process.env.READY === 'true';
-            const body = `${marker}\n## PC24x7 Teams — validação do token S2S DEV\n\n` +
+            const body = `${marker}\n## PC24x7 Teams — token S2S DEV\n\n` +
               `- estado: \`${ready ? 'READY' : 'BLOCKED'}\`;\n` +
-              `- modo: \`validation_only\`;\n` +
-              `- provisionamento/rotação: \`desabilitados\`;\n` +
+              `- modo: \`provision_if_missing\`;\n` +
               `- escopo: \`teams_gateway:ai_conversations\`;\n` +
               `- armazenamento: \`Azure Key Vault / reqsys-pc24x7-teams-service-token\`;\n` +
               `- valor do segredo exposto: \`não\`;\n` +
               `- execução: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}.\n\n` +
-              (ready
-                ? 'Token existente foi reutilizado e validado pela rota readiness; nenhum token foi emitido ou rotacionado.'
-                : 'Validação falhou fechada. Verifique a evidência sanitizada; nenhum token foi emitido, rotacionado ou publicado.');
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner, repo: context.repo.repo, issue_number: 1532, per_page: 100
-            });
+              (ready ? 'Token existente foi reutilizado ou um novo token escopado foi emitido, armazenado e validado pela rota readiness.' : 'Bootstrap falhou fechado; nenhum valor sensível foi publicado.');
+            const comments = await github.paginate(github.rest.issues.listComments, {owner: context.repo.owner, repo: context.repo.repo, issue_number: 1532, per_page: 100});
             const previous = comments.find(c => c.body && c.body.includes(marker));
-            if (previous) {
-              await github.rest.issues.updateComment({owner: context.repo.owner, repo: context.repo.repo, comment_id: previous.id, body});
-            } else {
-              await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1532, body});
-            }
+            if (previous) await github.rest.issues.updateComment({owner: context.repo.owner, repo: context.repo.repo, comment_id: previous.id, body});
+            else await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1532, body});
 
       - name: Falhar fechado se token não estiver pronto
         if: steps.bootstrap.outputs.ready != 'true'
