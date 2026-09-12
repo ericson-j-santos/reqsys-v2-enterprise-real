@@ -18,6 +18,18 @@ def test_enqueue_is_idempotent_and_contains_no_secret(tmp_path):
     payload = first.read_text(encoding='utf-8')
     assert 'token' not in payload.lower()
     assert job['payload_sha256'] in first.name
+    assert job['payload']['data_classification'] == 'internal'
+
+
+def test_build_job_accepts_explicit_public_classification_without_changing_default():
+    job = module.build_job(
+        provider='gemini',
+        model='gemini-2.5-flash',
+        mensagem='teste sintético',
+        titulo='e2e',
+        data_classification='public',
+    )
+    assert job['payload']['data_classification'] == 'public'
 
 
 def test_process_success_moves_to_done_and_writes_sanitized_evidence(tmp_path, monkeypatch):
@@ -79,6 +91,25 @@ def test_http_200_without_conversation_id_retries(tmp_path, monkeypatch):
     assert result['conversation_id'] is None
     assert result['error'] == 'DeliveryNotConfirmed'
     assert not list((tmp_path / 'done').glob('*.json'))
+
+
+def test_reqsys_http_status_is_preserved_without_response_body(tmp_path, monkeypatch):
+    token_file = tmp_path / 'token.txt'
+    token_file.write_text('x', encoding='utf-8')
+    job = module.build_job(provider='gemini', model='gemini-2.5-flash', mensagem='teste-http', titulo='t')
+    module.enqueue(tmp_path, job)
+    monkeypatch.setattr(module.time, 'time', lambda: 1000)
+    monkeypatch.setattr(
+        module,
+        'call_reqsys',
+        lambda *args, **kwargs: (_ for _ in ()).throw(module.ReqSysHTTPError(503)),
+    )
+    result = module.process_one(tmp_path, 'https://dev.invalid', token_file)
+    assert result['status'] == 'retry'
+    assert result['error'] == 'http_503'
+    serialized = json.dumps(result)
+    assert 'response' not in serialized.lower()
+    assert result['secret_value_exposed'] is False
 
 
 def test_failure_retries_then_quarantines(tmp_path, monkeypatch):

@@ -8,7 +8,9 @@ on:
       - 'scripts/pc24x7_teams_ephemeral_e2e.py'
       - 'scripts/pc24x7_teams_queue.py'
       - 'tests/test_pc24x7_teams_ephemeral_e2e.py'
+      - 'tests/test_pc24x7_teams_ephemeral_provider_selection.py'
       - 'tests/test_pc24x7_teams_ephemeral_e2e_workflow.py'
+      - 'tests/test_pc24x7_teams_queue.py'
   push:
     branches:
       - main
@@ -17,7 +19,9 @@ on:
       - 'scripts/pc24x7_teams_ephemeral_e2e.py'
       - 'scripts/pc24x7_teams_queue.py'
       - 'tests/test_pc24x7_teams_ephemeral_e2e.py'
+      - 'tests/test_pc24x7_teams_ephemeral_provider_selection.py'
       - 'tests/test_pc24x7_teams_ephemeral_e2e_workflow.py'
+      - 'tests/test_pc24x7_teams_queue.py'
 
 permissions:
   contents: read
@@ -41,6 +45,7 @@ jobs:
           python -m pip install --disable-pip-version-check pytest
           python -m pytest -q \
             tests/test_pc24x7_teams_ephemeral_e2e.py \
+            tests/test_pc24x7_teams_ephemeral_provider_selection.py \
             tests/test_pc24x7_teams_ephemeral_e2e_workflow.py \
             tests/test_pc24x7_teams_queue.py
 
