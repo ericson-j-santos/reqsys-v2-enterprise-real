@@ -6,7 +6,7 @@ WORKFLOW = Path('.github/workflows/pc24x7-teams-token-bootstrap.yml')
 
 def test_bootstrap_usa_identidade_mutadora_e_leitor_do_cofre() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
-    assert 'environment: development' not in text
+    assert 'environment: development' in text
     assert 'CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}' in text
     assert 'CCP_AZURE_CLIENT_ID_DEV' not in text
     assert 'VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}' in text
