@@ -46,9 +46,11 @@ permissions:
   actions: read
   contents: read
 
+# Eventos workflow_run da mesma branch representam o mesmo fluxo operacional.
+# Manter o run_id apenas para dispatch manual preserva notificações independentes.
 concurrency:
-  group: notify-teams-reqsys-logs-${{ github.event.workflow_run.id || github.run_id }}
-  cancel-in-progress: false
+  group: notify-teams-reqsys-logs-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   notify:
