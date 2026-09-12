@@ -64,16 +64,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validar credencial administrativa disponível
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${COFRE_ADMIN_JWT:-}" ]; then
-            echo '::error::COFRE_ADMIN_JWT não está disponível no Environment development.'
-            exit 2
-          fi
-
-      - name: Executar E2E DEV com token efêmero
+      - name: Executar E2E DEV com autenticação administrativa efêmera
         run: |
           python scripts/pc24x7_teams_ephemeral_e2e.py \
             --evidence-path artifacts/pc24x7-teams-ephemeral-e2e/evidence.json
