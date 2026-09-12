@@ -1,100 +1,105 @@
-name: Teams Flow Bot Promotion
+name: AI Conversations DEV Readiness Probe
 
 on:
   workflow_dispatch:
-    inputs:
-      ambiente_logico:
-        required: true
-        default: 'test'
-        type: choice
-        options: [test, prod]
-      environment_url_destino:
-        required: true
-        type: string
-      connection_id_destino:
-        required: true
-        type: string
-      connection_reference_logical_name:
-        required: true
-        type: string
-      solution_name:
-        required: true
-        default: 'robo_envia_teamsv2'
-        type: string
-      novo_flow_display_name:
-        required: true
-        default: 'robo_envia_teamsv2'
-        type: string
-      managed:
-        required: true
-        default: true
-        type: boolean
-      confirmation:
-        required: true
-        type: string
-      approve_producao:
-        required: false
-        default: ''
-        type: string
-      issue_number:
-        required: false
-        default: ''
-        type: string
 
 permissions:
   contents: read
-  actions: read
+  id-token: write
 
 concurrency:
-  group: ai-conversation-readiness-probe-${{ github.ref }}
+  group: ai-conversation-readiness-probe-dev
   cancel-in-progress: false
 
 jobs:
   readiness-probe:
-    name: AI Conversations readiness DEV — somente leitura
+    name: AI Conversations readiness DEV — token efemero
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     environment: reqsys-power-platform-dev
     env:
-      REQSYS_API_BASE_URL: ${{ secrets.REQSYS_API_BASE_URL }}
-      REQSYS_API_SERVICE_TOKEN: ${{ secrets.REQSYS_API_SERVICE_TOKEN }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      FLY_TRUST_ANCHOR_SECRET_NAME: reqsys-fly-control-plane-org-token
+      FLY_APP: reqsys-api-dev
+      REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
+      TOKEN_LABEL: ai-readiness-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Validar secrets sem expor valores
-        shell: pwsh
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Validar configuracao
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Stop'
-          if ([string]::IsNullOrWhiteSpace($env:REQSYS_API_BASE_URL)) { throw 'REQSYS_API_BASE_URL_MISSING' }
-          if ([string]::IsNullOrWhiteSpace($env:REQSYS_API_SERVICE_TOKEN)) { throw 'REQSYS_API_SERVICE_TOKEN_MISSING' }
-          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          set -euo pipefail
+          mkdir -p artifacts
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            test -n "${!name:-}"
+          done
+
+      - name: Autenticar no Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Obter trust anchor Fly e criar token efemero no runtime DEV
+        id: mint
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLY_ADMIN_TOKEN="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$FLY_TRUST_ANCHOR_SECRET_NAME" --query value --output tsv --only-show-errors)"
+          test -n "$FLY_ADMIN_TOKEN"
+          echo "::add-mask::$FLY_ADMIN_TOKEN"
+
+          PY_CODE='import json,secrets; from datetime import datetime,timedelta,timezone; from app.db import SessionLocal; from app.models.service_token import ServiceToken; from app.core.service_tokens import hash_token; token=secrets.token_urlsafe(48); db=SessionLocal(); obj=ServiceToken(label="'"$TOKEN_LABEL"'", token_hash=hash_token(token), scopes=json.dumps(["teams_gateway:ai_conversations"]), expires_at=datetime.now(timezone.utc)+timedelta(minutes=10)); db.add(obj); db.commit(); print(token)'
+          TOKEN="$(FLY_API_TOKEN="$FLY_ADMIN_TOKEN" flyctl ssh console --app "$FLY_APP" --command "python -c '$PY_CODE'" 2>/dev/null | tail -n1 | tr -d '\r')"
+          test -n "$TOKEN"
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          unset FLY_ADMIN_TOKEN TOKEN
 
       - name: Consultar readiness autenticado
-        id: probe
-        shell: pwsh
+        shell: bash
+        env:
+          SERVICE_TOKEN: ${{ steps.mint.outputs.token }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          $headers = @{ 'X-Service-Token' = $env:REQSYS_API_SERVICE_TOKEN }
-          $url = $env:REQSYS_API_BASE_URL.TrimEnd('/') + '/v1/teams-gateway/ai-conversations/readiness'
-          try {
-            $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers
-            $json = $response | ConvertTo-Json -Depth 20
-            $json | Set-Content artifacts/ai-conversation-readiness.json -Encoding utf8
-            $data = $response.data
-            if ($null -eq $data) { throw 'READINESS_ENVELOPE_INVALID' }
-            Write-Host "status=$($data.status) ready=$($data.ready) references=$($data.conversation_references)"
-            $codes = @($data.bloqueios | ForEach-Object { $_.codigo })
-            if ($codes -contains 'CONVERSATION_REFERENCE_AUSENTE') { throw 'CONVERSATION_REFERENCE_AUSENTE' }
-            if ($codes -contains 'DESTINATARIO_SEM_CONVERSATION_REFERENCE') { throw 'DESTINATARIO_SEM_CONVERSATION_REFERENCE' }
-          } catch {
-            $status = $null
-            if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
-            $safe = [ordered]@{ success = $false; http_status = $status; error_type = $_.Exception.GetType().Name }
-            $safe | ConvertTo-Json | Set-Content artifacts/ai-conversation-readiness-error.json -Encoding utf8
-            if ($status -eq 403) { throw 'SERVICE_TOKEN_SCOPE_INSUFFICIENT' }
-            if ($status -eq 401) { throw 'SERVICE_TOKEN_INVALID_OR_EXPIRED' }
-            throw
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error -H "X-Service-Token: $SERVICE_TOKEN" "$REQSYS_API_BASE_URL/v1/teams-gateway/ai-conversations/readiness")"
+          printf '%s\n' "$response" > artifacts/ai-conversation-readiness.json
+          RESPONSE="$response" python - <<'PY'
+          import json, os
+          payload=json.loads(os.environ['RESPONSE'])
+          data=payload.get('data') or {}
+          safe={
+            'status': data.get('status'),
+            'ready': data.get('ready'),
+            'conversation_references': data.get('conversation_references'),
+            'checks': data.get('checks'),
+            'providers_configurados': data.get('providers_configurados'),
+            'bloqueios': data.get('bloqueios'),
+            'destinatario': data.get('destinatario'),
           }
+          print(json.dumps(safe, ensure_ascii=False))
+          codes={item.get('codigo') for item in (data.get('bloqueios') or [])}
+          if 'CONVERSATION_REFERENCE_AUSENTE' in codes or 'DESTINATARIO_SEM_CONVERSATION_REFERENCE' in codes:
+              raise SystemExit(20)
+          PY
 
-      - name: Publicar evidência sanitizada
+      - name: Revogar token efemero
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLY_ADMIN_TOKEN="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$FLY_TRUST_ANCHOR_SECRET_NAME" --query value --output tsv --only-show-errors)"
+          echo "::add-mask::$FLY_ADMIN_TOKEN"
+          PY_REVOKE='from datetime import datetime,timezone; from app.db import SessionLocal; from app.models.service_token import ServiceToken; db=SessionLocal(); obj=db.query(ServiceToken).filter(ServiceToken.label=="'"$TOKEN_LABEL"'").order_by(ServiceToken.id.desc()).first(); obj.revoked_at=datetime.now(timezone.utc) if obj else None; db.commit() if obj else None; print("revoked" if obj else "not_found")'
+          FLY_API_TOKEN="$FLY_ADMIN_TOKEN" flyctl ssh console --app "$FLY_APP" --command "python -c '$PY_REVOKE'" >/dev/null 2>&1 || true
+          unset FLY_ADMIN_TOKEN
+
+      - name: Publicar evidencia sanitizada
         if: always()
         uses: actions/upload-artifact@v4
         with:
