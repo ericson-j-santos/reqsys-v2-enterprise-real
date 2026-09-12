@@ -13,6 +13,7 @@ from scripts.integration_excel_sql_sharepoint_discovery import (
     choose_environment,
     evidence,
     has_table,
+    refresh_state,
     runtime_values,
     safe_error,
     write_github_env,
@@ -107,6 +108,44 @@ def test_real_workbook_table_contract_is_detected():
     assert has_table(stream.getvalue(), "OutraTabela") is False
 
 
+def test_refresh_state_ignora_entradas_json_que_nao_sao_objetos(tmp_path):
+    state_path = tmp_path / "msal-state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "sessionStorage": [
+                    {"name": "msal.boolean", "value": "true"},
+                    {"name": "msal.array", "value": "[]"},
+                    "entrada-invalida",
+                    {
+                        "name": "msal.refreshToken.test",
+                        "value": json.dumps(
+                            {
+                                "credentialType": "RefreshToken",
+                                "clientId": "client-test",
+                                "secret": "refresh-token-test",
+                            }
+                        ),
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    state = refresh_state(state_path)
+
+    assert state == {"client_id": "client-test", "refresh_token": "refresh-token-test"}
+
+
+def test_refresh_state_falha_fechado_para_envelope_invalido(tmp_path):
+    state_path = tmp_path / "msal-state.json"
+    state_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(DiscoveryError, match="msal_bundle_invalido"):
+        refresh_state(state_path)
+
+
 def test_evidence_hashes_private_ids_and_never_serializes_dsn(monkeypatch):
     contract, sp, pp = fixtures()
     resolved = runtime_values(contract, sp, pp)
@@ -129,6 +168,7 @@ def test_safe_error_does_not_serialize_exception_text():
 
     assert rendered == "DiscoveryError"
     assert secret_marker not in rendered
+    assert safe_error(DiscoveryError("msal_refresh_token_candidatos:0")) == "msal_refresh_token_candidatos:0"
 
 
 def test_runtime_values_are_written_only_to_ephemeral_github_env(tmp_path):
