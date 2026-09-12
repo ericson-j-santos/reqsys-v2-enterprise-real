@@ -47,23 +47,43 @@ jobs:
     environment: development
     env:
       REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
-      COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
-      VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       PC24X7_TEAMS_SERVICE_TOKEN_SECRET: reqsys-pc24x7-teams-service-token
       PC24X7_TEAMS_ALLOW_PROVISION: 'false'
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      - name: Inicializar evidência sanitizada
+        shell: bash
+        run: |
+          cat > pc24x7-teams-token-bootstrap.json <<'JSON'
+          {"status":"blocked","reason":"READINESS_NOT_EXECUTED","environment":"dev","mode":"validation_only","token_created":false,"secret_value_exposed":false}
+          JSON
+
+      - name: Validar configuração OIDC canônica
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name:-}" ]; then
+              printf '%s\n' '{"status":"blocked","reason":"OIDC_CONFIGURATION_MISSING","environment":"dev","mode":"validation_only","token_created":false,"secret_value_exposed":false}' > pc24x7-teams-token-bootstrap.json
+              echo "::error::$name não configurado. Validação permanece fail-closed."
+              exit 2
+            fi
+          done
+
       - name: Login Azure por OIDC
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
 
       - name: Instalar cliente Key Vault
         run: python -m pip install --disable-pip-version-check azure-identity azure-keyvault-secrets
