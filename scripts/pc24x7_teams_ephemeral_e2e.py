@@ -17,6 +17,14 @@ ADMIN_EMAIL_DEFAULT = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
 SCOPE = 'teams_gateway:ai_conversations'
 TOKEN_TTL_DAYS = 1
 PRODUCTION_ENVIRONMENTS = {'prod', 'production', 'producao', 'produção'}
+PROVIDER_DEFAULT_MODELS = {
+    'gemini': 'gemini-2.5-flash',
+    'groq': 'llama-3.3-70b-versatile',
+    'openai': 'gpt-4.1-mini',
+    'claude': 'claude-3-5-sonnet-latest',
+    'ollama': 'qwen2.5-coder:7b',
+}
+PROVIDER_PRIORITY = ('gemini', 'groq', 'openai', 'claude', 'ollama')
 
 
 class EphemeralE2EError(RuntimeError):
@@ -165,16 +173,34 @@ def check_readiness(api_base: str, token: str, correlation_id: str) -> tuple[int
         for item in blockers
         if isinstance(item, dict) and item.get('codigo')
     )
+    configured = data.get('providers_configurados') if isinstance(data.get('providers_configurados'), list) else []
+    providers_configured = sorted({str(item).strip().lower() for item in configured if str(item).strip()})
     summary = {
         'http_status': status,
         'schema_version': data.get('schema_version'),
         'status': data.get('status'),
         'ready': data.get('ready') is True,
         'blocker_codes': blocker_codes,
+        'providers_configured': providers_configured,
         'conversation_references': data.get('conversation_references'),
         'secret_value_exposed': False,
     }
     return status, summary
+
+
+def select_runtime_provider(
+    requested_provider: str,
+    requested_model: str,
+    providers_configured: list[str],
+) -> tuple[str, str, bool]:
+    requested = requested_provider.strip().lower()
+    configured = {item.strip().lower() for item in providers_configured if item.strip()}
+    if requested in configured:
+        return requested, requested_model, False
+    for candidate in PROVIDER_PRIORITY:
+        if candidate in configured:
+            return candidate, PROVIDER_DEFAULT_MODELS[candidate], True
+    raise EphemeralE2EError('provider_selection_failed:no_configured_provider')
 
 
 def execute_e2e(
@@ -187,13 +213,19 @@ def execute_e2e(
     admin_email: str = ADMIN_EMAIL_DEFAULT,
 ) -> dict:
     evidence: dict = {
-        'schema_version': '1.1.0',
+        'schema_version': '1.2.0',
         'status': 'blocked',
         'environment': 'dev',
         'correlation_id': correlation_id,
         'scope': SCOPE,
         'admin_auth_source': None,
         'admin_auth_recovered': False,
+        'requested_provider': provider,
+        'requested_model': model,
+        'selected_provider': None,
+        'selected_model': None,
+        'provider_fallback_used': False,
+        'data_classification': 'public',
         'token_created': False,
         'token_revoked': False,
         'readiness': None,
@@ -234,12 +266,22 @@ def execute_e2e(
             if readiness_status != 200 or readiness.get('ready') is not True:
                 raise EphemeralE2EError('readiness_not_ready')
 
+            selected_provider, selected_model, fallback_used = select_runtime_provider(
+                provider,
+                model,
+                readiness.get('providers_configured') or [],
+            )
+            evidence['selected_provider'] = selected_provider
+            evidence['selected_model'] = selected_model
+            evidence['provider_fallback_used'] = fallback_used
+
             job = queue.build_job(
-                provider=provider,
-                model=model,
+                provider=selected_provider,
+                model=selected_model,
                 mensagem=f'ReqSys PC24x7 DEV E2E {correlation_id}',
                 titulo='ReqSys PC24x7 Teams DEV — aceite efêmero',
                 correlation_id=correlation_id,
+                data_classification='public',
             )
             first_path = queue.enqueue(root, job)
             delivery = queue.process_one(root, api_base, token_file)
