@@ -15,8 +15,10 @@ on:
 permissions:
   contents: read
 
+# Execuções do mesmo PR compartilham o grupo e podem substituir uma anterior.
+# Schedule e workflow_dispatch usam run_id para não cancelar execuções independentes.
 concurrency:
-  group: workflow-governance-consolidator
+  group: workflow-governance-consolidator-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

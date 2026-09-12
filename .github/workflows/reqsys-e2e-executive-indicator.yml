@@ -15,9 +15,11 @@ permissions:
   actions: read
   contents: read
 
+# Agrupa apenas execuções equivalentes: workflow_run por branch, PR por número
+# e mantém disparos manuais independentes pelo run_id.
 concurrency:
-  group: reqsys-e2e-executive-indicator-${{ github.event.workflow_run.id || github.ref }}
-  cancel-in-progress: false
+  group: reqsys-e2e-executive-indicator-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   validate:
