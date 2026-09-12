@@ -13,8 +13,10 @@ from urllib.request import Request, urlopen
 import pc24x7_teams_queue as queue
 
 API_DEFAULT = 'https://reqsys-api-dev.fly.dev'
+ADMIN_EMAIL_DEFAULT = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
 SCOPE = 'teams_gateway:ai_conversations'
 TOKEN_TTL_DAYS = 1
+PRODUCTION_ENVIRONMENTS = {'prod', 'production', 'producao', 'produção'}
 
 
 class EphemeralE2EError(RuntimeError):
@@ -45,6 +47,67 @@ def request_json(
 def _data(payload: dict) -> dict:
     data = payload.get('data') if isinstance(payload, dict) else None
     return data if isinstance(data, dict) else payload if isinstance(payload, dict) else {}
+
+
+def validate_admin_jwt(api_base: str, admin_jwt: str, correlation_id: str) -> bool:
+    if not admin_jwt.strip():
+        return False
+    status, payload = request_json(
+        'GET',
+        api_base.rstrip('/') + '/v1/auth/session',
+        headers={
+            'Authorization': f'Bearer {admin_jwt}',
+            'X-Correlation-Id': correlation_id + '-admin-check',
+        },
+    )
+    return status == 200 and str(_data(payload).get('papel') or '').lower() == 'admin'
+
+
+def mint_dev_admin_jwt(api_base: str, correlation_id: str, admin_email: str) -> str:
+    config_status, config_payload = request_json(
+        'GET',
+        api_base.rstrip('/') + '/v1/auth/config',
+        headers={'X-Correlation-Id': correlation_id + '-auth-config'},
+    )
+    if config_status != 200:
+        raise EphemeralE2EError(f'admin_auth_config_failed:http_{config_status}')
+
+    config = _data(config_payload)
+    environment = str(config.get('environment') or '').strip().lower()
+    if environment in PRODUCTION_ENVIRONMENTS:
+        raise EphemeralE2EError('admin_auth_refused:production')
+    if config.get('demo_login_enabled') is not True:
+        raise EphemeralE2EError('admin_auth_unavailable:demo_login_disabled')
+
+    login_status, login_payload = request_json(
+        'POST',
+        api_base.rstrip('/') + '/v1/auth/login',
+        headers={'X-Correlation-Id': correlation_id + '-dev-login'},
+        body={'email': admin_email},
+    )
+    if login_status != 200:
+        raise EphemeralE2EError(f'admin_auth_dev_login_failed:http_{login_status}')
+
+    login = _data(login_payload)
+    usuario = login.get('usuario') if isinstance(login.get('usuario'), dict) else {}
+    if str(usuario.get('papel') or '').lower() != 'admin':
+        raise EphemeralE2EError('admin_auth_dev_login_not_admin')
+    token = str(login.get('access_token') or '').strip()
+    if not token:
+        raise EphemeralE2EError('admin_auth_dev_login_token_missing')
+    return token
+
+
+def resolve_admin_jwt(
+    api_base: str,
+    configured_admin_jwt: str,
+    correlation_id: str,
+    admin_email: str,
+) -> tuple[str, str, bool]:
+    if validate_admin_jwt(api_base, configured_admin_jwt, correlation_id):
+        return configured_admin_jwt, 'environment_secret_valid', False
+    fresh = mint_dev_admin_jwt(api_base, correlation_id, admin_email)
+    return fresh, 'dev_demo_ephemeral', True
 
 
 def mint_ephemeral_token(api_base: str, admin_jwt: str, correlation_id: str) -> tuple[int, str]:
@@ -121,13 +184,16 @@ def execute_e2e(
     correlation_id: str,
     provider: str,
     model: str,
+    admin_email: str = ADMIN_EMAIL_DEFAULT,
 ) -> dict:
     evidence: dict = {
-        'schema_version': '1.0.0',
+        'schema_version': '1.1.0',
         'status': 'blocked',
         'environment': 'dev',
         'correlation_id': correlation_id,
         'scope': SCOPE,
+        'admin_auth_source': None,
+        'admin_auth_recovered': False,
         'token_created': False,
         'token_revoked': False,
         'readiness': None,
@@ -140,10 +206,18 @@ def execute_e2e(
     }
     token_id: int | None = None
     token = ''
+    effective_admin_jwt = ''
     try:
-        if not admin_jwt.strip():
-            raise EphemeralE2EError('COFRE_ADMIN_JWT_missing')
-        token_id, token = mint_ephemeral_token(api_base, admin_jwt, correlation_id)
+        effective_admin_jwt, auth_source, recovered = resolve_admin_jwt(
+            api_base,
+            admin_jwt,
+            correlation_id,
+            admin_email,
+        )
+        evidence['admin_auth_source'] = auth_source
+        evidence['admin_auth_recovered'] = recovered
+
+        token_id, token = mint_ephemeral_token(api_base, effective_admin_jwt, correlation_id)
         evidence['token_created'] = True
 
         with tempfile.TemporaryDirectory(prefix='reqsys-pc24x7-e2e-') as tmp:
@@ -180,9 +254,7 @@ def execute_e2e(
             duplicate_path = queue.enqueue(root, job)
             second_delivery = queue.process_one(root, api_base, token_file)
             done_path = root / 'done' / first_path.name
-            evidence['queue_idempotency_proven'] = (
-                duplicate_path == done_path and second_delivery is None
-            )
+            evidence['queue_idempotency_proven'] = duplicate_path == done_path and second_delivery is None
             if evidence['queue_idempotency_proven'] is not True:
                 raise EphemeralE2EError('queue_idempotency_not_proven')
 
@@ -196,12 +268,13 @@ def execute_e2e(
         if token_id is not None:
             try:
                 evidence['token_revoked'] = revoke_ephemeral_token(
-                    api_base, admin_jwt, token_id, correlation_id
+                    api_base, effective_admin_jwt, token_id, correlation_id
                 )
             except Exception as exc:
                 evidence['token_revoked'] = False
                 if evidence['error'] is None:
                     evidence['error'] = f'revoke_failed:{type(exc).__name__}'
+        effective_admin_jwt = ''
         if token_id is not None and evidence['token_revoked'] is not True:
             evidence['status'] = 'blocked'
             if evidence['error'] is None:
@@ -214,6 +287,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--api-base', default=os.getenv('REQSYS_API_BASE_URL', API_DEFAULT))
     parser.add_argument('--provider', default=os.getenv('PC24X7_TEAMS_E2E_PROVIDER', 'gemini'))
     parser.add_argument('--model', default=os.getenv('PC24X7_TEAMS_E2E_MODEL', 'gemini-2.5-flash'))
+    parser.add_argument('--admin-email', default=os.getenv('PC24X7_TEAMS_E2E_ADMIN_EMAIL', ADMIN_EMAIL_DEFAULT))
     parser.add_argument('--correlation-id', default=os.getenv('PC24X7_TEAMS_E2E_CORRELATION_ID'))
     parser.add_argument('--evidence-path', default='artifacts/pc24x7-teams-ephemeral-e2e/evidence.json')
     return parser.parse_args()
@@ -228,6 +302,7 @@ def main() -> int:
         correlation_id=correlation_id,
         provider=args.provider,
         model=args.model,
+        admin_email=args.admin_email,
     )
     output = Path(args.evidence_path)
     output.parent.mkdir(parents=True, exist_ok=True)
