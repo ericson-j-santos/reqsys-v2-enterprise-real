@@ -41,6 +41,24 @@ jobs:
           python -m pip install --disable-pip-version-check pytest==9.0.3
           pytest -q tests/test_bootstrap_pc24x7_teams_service_token.py tests/test_pc24x7_teams_token_bootstrap_workflow.py
 
+  probe-repository-admin-jwt:
+    if: github.event_name == 'pull_request'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+    steps:
+      - name: Verificar presença no escopo do repositório sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${COFRE_ADMIN_JWT:-}" ]; then
+            echo 'REPOSITORY_ADMIN_JWT_PRESENT=true'
+          else
+            echo 'REPOSITORY_ADMIN_JWT_PRESENT=false'
+          fi
+
   bootstrap-dev:
     if: github.event_name != 'pull_request'
     needs: contract
