@@ -5,8 +5,8 @@ purpose: >
   parciais exclusivamente por ações humanas ou evidências reais pendentes, preservando
   o estado regulatório original e bloqueando promoção para produção.
 activation:
-  valid_from: 2026-07-30
-  valid_until: 2026-08-29
+  valid_from: 2026-09-12
+  valid_until: 2026-10-12
   review_owner_role: GOVERNANCE
   renewal_requires_explicit_policy_change: true
 allowed_scopes:
