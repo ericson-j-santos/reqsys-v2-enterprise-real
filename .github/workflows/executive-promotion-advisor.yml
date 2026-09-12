@@ -17,9 +17,11 @@ permissions:
   contents: read
   actions: read
 
+# Eventos automáticos da mesma branch substituem uma recomendação anterior ainda ativa.
+# Disparos manuais permanecem independentes e continuam apontando para o run_id informado.
 concurrency:
-  group: executive-promotion-advisor-${{ github.event.workflow_run.id || inputs.run_id }}
-  cancel-in-progress: false
+  group: executive-promotion-advisor-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   advise:
