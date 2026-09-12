@@ -51,6 +51,7 @@ jobs:
       VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       PC24X7_TEAMS_SERVICE_TOKEN_SECRET: reqsys-pc24x7-teams-service-token
+      PC24X7_TEAMS_ALLOW_PROVISION: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -67,7 +68,7 @@ jobs:
       - name: Instalar cliente Key Vault
         run: python -m pip install --disable-pip-version-check azure-identity azure-keyvault-secrets
 
-      - name: Validar ou provisionar token S2S DEV
+      - name: Validar token S2S DEV sem provisionamento
         id: bootstrap
         shell: bash
         run: |
@@ -102,15 +103,17 @@ jobs:
           script: |
             const marker = '<!-- reqsys-pc24x7-teams-token-bootstrap -->';
             const ready = process.env.READY === 'true';
-            const body = `${marker}\n## PC24x7 Teams — bootstrap do token S2S DEV\n\n` +
+            const body = `${marker}\n## PC24x7 Teams — validação do token S2S DEV\n\n` +
               `- estado: \`${ready ? 'READY' : 'BLOCKED'}\`;\n` +
+              `- modo: \`validation_only\`;\n` +
+              `- provisionamento/rotação: \`desabilitados\`;\n` +
               `- escopo: \`teams_gateway:ai_conversations\`;\n` +
               `- armazenamento: \`Azure Key Vault / reqsys-pc24x7-teams-service-token\`;\n` +
               `- valor do segredo exposto: \`não\`;\n` +
               `- execução: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}.\n\n` +
               (ready
-                ? 'Token existente foi validado ou um novo token foi emitido e validado pela rota readiness. Próximo passo: materializar o segredo no host PC24x7 e subir o worker.'
-                : 'Bootstrap falhou fechado. Verifique a evidência sanitizada; nenhum valor de token foi publicado.');
+                ? 'Token existente foi reutilizado e validado pela rota readiness; nenhum token foi emitido ou rotacionado.'
+                : 'Validação falhou fechada. Verifique a evidência sanitizada; nenhum token foi emitido, rotacionado ou publicado.');
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner, repo: context.repo.repo, issue_number: 1532, per_page: 100
             });
