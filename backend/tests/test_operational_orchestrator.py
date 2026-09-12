@@ -174,3 +174,13 @@ def test_run_saudavel_nao_cria_pendencia(tmp_path: Path):
 
     assert result == {"created": False, "reason": "healthy_run"}
     assert orchestrator.store.summary()["actions_total"] == 0
+
+
+def test_workflow_certifica_todo_sha_da_main_sem_filtro_de_paths():
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/operational-orchestrator-ci.yml").read_text(encoding="utf-8")
+    push_block = workflow.split("  push:\n", 1)[1].split("  workflow_dispatch:\n", 1)[0]
+
+    assert "    branches: [main]\n" in push_block
+    assert "    paths:" not in push_block
+    assert "REQSYS_VALIDATION_SHA: ${{ github.event.pull_request.head.sha || github.sha }}" in workflow
