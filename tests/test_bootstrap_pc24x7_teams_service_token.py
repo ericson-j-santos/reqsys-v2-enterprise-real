@@ -39,10 +39,7 @@ def test_reuses_existing_valid_token_without_admin_jwt(monkeypatch):
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
     monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
-    result = module.bootstrap(
-        api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault',
-        vault_name='kv', secret_name='pc24x7-token',
-    )
+    result = module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token')
     assert result.status == 'ready'
     assert result.existing_token_reused is True
     assert result.token_created is False
@@ -56,10 +53,7 @@ def test_validation_only_blocks_before_mint_when_existing_token_invalid(monkeypa
     monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
     monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
     try:
-        module.bootstrap(
-            api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault',
-            vault_name='kv', secret_name='pc24x7-token', allow_provision=False,
-        )
+        module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token', allow_provision=False)
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert str(exc) == 'existing_service_token_readiness_failed:http_401'
@@ -72,10 +66,7 @@ def test_validation_only_blocks_when_secret_missing(monkeypatch):
     monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
     monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
     try:
-        module.bootstrap(
-            api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault',
-            vault_name='kv', secret_name='pc24x7-token', allow_provision=False,
-        )
+        module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token', allow_provision=False)
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert str(exc) == 'service_token_missing_provisioning_disabled'
@@ -86,19 +77,7 @@ def test_validation_only_main_does_not_require_vault_api_token(monkeypatch, caps
     monkeypatch.setenv('PC24X7_TEAMS_ALLOW_PROVISION', 'false')
     monkeypatch.setenv('REQSYS_KEY_VAULT_NAME', 'kv')
     monkeypatch.delenv('VAULT_API_TOKEN', raising=False)
-    monkeypatch.setattr(
-        module,
-        'bootstrap',
-        lambda **kwargs: module.BootstrapResult(
-            status='ready',
-            environment='dev',
-            secret_name=kwargs['secret_name'],
-            scope=module.SCOPE,
-            token_created=False,
-            existing_token_reused=True,
-            readiness_http_status=200,
-        ),
-    )
+    monkeypatch.setattr(module, 'bootstrap', lambda **kwargs: module.BootstrapResult(status='ready', environment='dev', secret_name=kwargs['secret_name'], scope=module.SCOPE, token_created=False, existing_token_reused=True, readiness_http_status=200))
     assert module.main() == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload['status'] == 'ready'
@@ -112,10 +91,7 @@ def test_mints_and_stores_when_secret_missing(monkeypatch):
     monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: 'admin-jwt')
     monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: 'new-service-token')
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
-    result = module.bootstrap(
-        api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault',
-        vault_name='kv', secret_name='pc24x7-token',
-    )
+    result = module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token')
     assert result.token_created is True
     assert result.existing_token_reused is False
     assert len(client.set_calls) == 1
@@ -123,6 +99,23 @@ def test_mints_and_stores_when_secret_missing(monkeypatch):
     assert name == 'pc24x7-token'
     assert value == 'new-service-token'
     assert tags['scope'] == module.SCOPE
+
+
+def test_direct_admin_jwt_mints_without_vault_lookup(monkeypatch):
+    client = FakeClient()
+    monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
+    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('cofre lookup must not run')))
+    seen = {}
+    def mint(_api, jwt, **_kwargs):
+        seen['jwt'] = jwt
+        return 'new-service-token'
+    monkeypatch.setattr(module, 'mint_service_token', mint)
+    monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
+    result = module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='', vault_name='kv', secret_name='pc24x7-token', admin_jwt='admin-from-environment')
+    assert seen['jwt'] == 'admin-from-environment'
+    assert result.token_created is True
+    assert result.readiness_http_status == 200
+    assert client.set_calls[0][1] == 'new-service-token'
 
 
 def test_read_admin_jwt_blocks_expired_payload(monkeypatch):
@@ -142,10 +135,7 @@ def test_http_200_without_readiness_does_not_finish(monkeypatch):
     monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: 'new-service-token')
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 503)
     try:
-        module.bootstrap(
-            api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault',
-            vault_name='kv', secret_name='pc24x7-token',
-        )
+        module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token')
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert 'readiness_failed' in str(exc)
