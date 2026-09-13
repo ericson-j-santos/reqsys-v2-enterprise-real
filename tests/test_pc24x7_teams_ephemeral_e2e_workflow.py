@@ -22,7 +22,11 @@ def test_workflow_is_dev_only_and_does_not_execute_e2e_in_pr() -> None:
     assert 'https://reqsys-api-dev.fly.dev' in text
     assert 'reqsys-api-stg' not in text
     assert 'https://reqsys-api.fly.dev' not in text
-    assert "if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'" in text
+    assert 'workflow_run:' in text
+    assert '- Fly DEV Fast Deploy' in text
+    assert "github.event.workflow_run.conclusion == 'success'" in text
+    assert "github.event_name == 'workflow_dispatch'" in text
+    assert "github.event_name == 'push'" not in text
     assert 'pull_request:' in text
 
 
