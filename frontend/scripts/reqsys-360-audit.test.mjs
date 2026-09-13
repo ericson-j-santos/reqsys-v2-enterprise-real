@@ -144,7 +144,7 @@ const modo = 'mock'
 // TODO revisar tratamento de erro
 </script>
 `)
-  assert.deepEqual(markerInventory(root), [{ marker: 'TODO', file: 'src/views/Hygiene.vue', line: 10 }])
+  assert.deepEqual(markerInventory(root), [{ marker: 'TODO', file: 'src/views/Hygiene.vue', line: 9 }])
 })
 
 test('densidade considera subgrupos renderizados e não o total bruto do tema', async (t) => {
