@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: integration-excel-sql-sharepoint-sql-locator-dev
@@ -23,6 +24,7 @@ concurrency:
 env:
   INTEGRATION_E2E_ENVIRONMENT: dev
   INTEGRATION_E2E_SQL_PROCEDURE: integration.usp_ConsultarPorIdentificadores
+  INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
   EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev
 
 jobs:
@@ -54,9 +56,85 @@ jobs:
           set -euo pipefail
           python -m pytest tests/test_integration_excel_sql_sharepoint_sql_locator.py -q
 
-      - name: Consultar somente metadados SQL DEV
+      - name: Determinar fonte segura do DSN
+        id: dsn_source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${INTEGRATION_E2E_SQL_DSN:-}" ]; then
+            echo "source=github_environment_secret" >> "$GITHUB_OUTPUT"
+          else
+            echo "source=key_vault" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validar configuração OIDC para fallback Key Vault
+        if: steps.dsn_source.outputs.source == 'key_vault'
+        shell: bash
         env:
-          INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+          CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Configuração OIDC/Key Vault ausente: $name"
+              exit 2
+            fi
+          done
+          echo "oidc_keyvault_configured=true"
+
+      - name: Autenticar no Azure por OIDC
+        if: steps.dsn_source.outputs.source == 'key_vault'
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver DSN no Key Vault sem expor nome ou valor
+        if: steps.dsn_source.outputs.source == 'key_vault'
+        shell: bash
+        env:
+          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+        run: |
+          set -euo pipefail
+          names="$RUNNER_TEMP/secret-names.txt"
+          selected="$RUNNER_TEMP/sql-secret-name.txt"
+          az keyvault secret list --vault-name "$REQSYS_KEY_VAULT_NAME" --query '[].name' -o tsv > "$names"
+          python - "$names" "$selected" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          names = [x.strip() for x in Path(sys.argv[1]).read_text(encoding='utf-8').splitlines() if x.strip()]
+          candidates = [
+              name for name in names
+              if re.search(r'(sql.*(dsn|connection|conn|string)|(?:dsn|connection|conn|string).*sql)', name, re.I)
+          ]
+          print(f'sql_candidate_count={len(candidates)}')
+          if len(candidates) != 1:
+              raise SystemExit(3)
+          Path(sys.argv[2]).write_text(candidates[0], encoding='utf-8')
+          PY
+          secret_name="$(cat "$selected")"
+          dsn="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$secret_name" --query value -o tsv)"
+          if [ -z "$dsn" ]; then
+            echo "::error::Segredo SQL candidato está vazio."
+            exit 4
+          fi
+          case "$dsn" in
+            *$'\n'*|*$'\r'*)
+              echo "::error::DSN contém quebra de linha inesperada."
+              exit 5
+              ;;
+          esac
+          echo "::add-mask::$dsn"
+          printf 'INTEGRATION_E2E_SQL_DSN=%s\n' "$dsn" >> "$GITHUB_ENV"
+          echo "dsn_resolved_from_key_vault=true"
+
+      - name: Consultar somente metadados SQL DEV
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
