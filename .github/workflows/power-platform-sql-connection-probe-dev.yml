@@ -1,0 +1,73 @@
+name: Power Platform SQL Connection Probe — DEV
+
+on:
+  push:
+    branches:
+      - ops/noteri-sql-dev-gateway-20260913
+    paths:
+      - "scripts/power_platform_sql_connection_probe.mjs"
+      - ".github/workflows/power-platform-sql-connection-probe-dev.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: power-platform-sql-connection-probe-dev
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Descobrir conexão SQL DEV sem expor credenciais
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 20
+    env:
+      POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+      POWER_PLATFORM_ENVIRONMENT_ID: 567445cb-49a2-ef0f-8490-cc81a281d6ed
+      DEVICE_CODE_PUBLIC_PATH: audit/user-journey/excel-sql-sharepoint-dev/sql-connection-device-login.json
+      POWER_PLATFORM_SQL_PROBE_OUTPUT: audit/user-journey/excel-sql-sharepoint-dev/sql-connection-probe.json
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Restaurar somente a semente MSAL do Environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${WSJF_MSAL_STORAGE_STATE_B64:-}"
+          state="$RUNNER_TEMP/msal-storage-state.json"
+          private="$RUNNER_TEMP/sql-connection-device-code-private.json"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
+          chmod 600 "$state"
+          echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
+          echo "DEVICE_CODE_PRIVATE_PATH=$private" >> "$GITHUB_ENV"
+
+      - name: Preparar autorização Microsoft de leitura
+        run: node scripts/msal_device_code_prepare.mjs
+
+      - name: Publicar somente instrução pública de autorização
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: power-platform-sql-device-login-${{ github.run_id }}
+          path: ${{ env.DEVICE_CODE_PUBLIC_PATH }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Aguardar autorização Microsoft e atualizar sessão apenas no runner
+        run: node scripts/msal_device_code_complete.mjs
+
+      - name: Consultar conexões SQL do Power Platform em DEV
+        run: node scripts/power_platform_sql_connection_probe.mjs
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: power-platform-sql-connection-probe-${{ github.run_id }}
+          path: ${{ env.POWER_PLATFORM_SQL_PROBE_OUTPUT }}
+          if-no-files-found: warn
+          retention-days: 30
