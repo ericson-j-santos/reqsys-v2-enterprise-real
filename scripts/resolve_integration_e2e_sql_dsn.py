@@ -82,30 +82,27 @@ def collect_candidates(
 ) -> tuple[list[Candidate], list[dict[str, object]]]:
     candidates: list[Candidate] = []
     diagnostics: list[dict[str, object]] = []
-    seen_values: set[str] = set()
 
-    def add(source: str, value: str | None) -> None:
-        text = str(value or "").strip()
-        diagnostics.append({"source": source, "present": bool(text)})
-        if text and text not in seen_values:
-            seen_values.add(text)
-            candidates.append(Candidate(source=source, value=text))
+    direct = str(env.get("INTEGRATION_E2E_SQL_DSN", "") or "").strip()
+    diagnostics.append({"source": "github:INTEGRATION_E2E_SQL_DSN", "present": bool(direct)})
+    if direct:
+        candidates.append(Candidate(source="github:INTEGRATION_E2E_SQL_DSN", value=direct))
 
-    add("github:INTEGRATION_E2E_SQL_DSN", env.get("INTEGRATION_E2E_SQL_DSN", ""))
-    add("github:MOVIMENTO_EMAIL_SOURCE_DSN", env.get("MOVIMENTO_EMAIL_SOURCE_DSN", ""))
-
-    base_url = env.get("COFRE_API_URL", "").strip()
-    vault_token = env.get("VAULT_API_TOKEN", "").strip()
+    base_url = str(env.get("COFRE_API_URL", "") or "").strip()
+    vault_token = str(env.get("VAULT_API_TOKEN", "") or "").strip()
     vault_ready = bool(base_url and vault_token)
     diagnostics.append({"source": "cofre", "configured": vault_ready})
 
     if vault_ready:
-        for key in ("INTEGRATION_E2E_SQL_DSN", "MOVIMENTO_EMAIL_SOURCE_DSN"):
-            source = f"cofre:{key}"
-            try:
-                add(source, vault_getter(base_url, vault_token, key))
-            except RuntimeError as exc:
-                diagnostics.append({"source": source, "present": False, "error": str(exc)})
+        source = "cofre:INTEGRATION_E2E_SQL_DSN"
+        try:
+            vault_value = vault_getter(base_url, vault_token, "INTEGRATION_E2E_SQL_DSN")
+            vault_value = str(vault_value or "").strip()
+            diagnostics.append({"source": source, "present": bool(vault_value)})
+            if vault_value and vault_value != direct:
+                candidates.append(Candidate(source=source, value=vault_value))
+        except RuntimeError as exc:
+            diagnostics.append({"source": source, "present": False, "error": str(exc)})
 
     return candidates, diagnostics
 
@@ -133,6 +130,7 @@ def resolve_sql_dsn(
         if ok:
             return candidate, {
                 "status": "resolved",
+                "environment": "dev",
                 "procedure": procedure,
                 "source": candidate.source,
                 "attempts": attempts,
@@ -142,17 +140,18 @@ def resolve_sql_dsn(
 
     return None, {
         "status": "blocked",
+        "environment": "dev",
         "procedure": procedure,
         "source": None,
         "attempts": attempts,
         "discovery": diagnostics,
         "secret_exposed": False,
-        "blocked_code": "sql_dsn_validado_ausente",
+        "blocked_code": "sql_dsn_dev_validado_ausente",
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Resolve DSN SQL DEV sem expor credenciais")
+    parser = argparse.ArgumentParser(description="Resolve DSN SQL DEV explícito sem expor credenciais")
     parser.add_argument("--github-env", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--procedure", default=os.getenv("INTEGRATION_E2E_SQL_PROCEDURE", DEFAULT_PROCEDURE))
