@@ -7,14 +7,14 @@ test.describe('ReqSys 360 — coerência de navegação e consolidação', () =>
     await loginDemo(page)
   })
 
-  test('mantém deep links históricos nas experiências canônicas', async ({ page }) => {
+  test('mantém deep links históricos funcionais e os consolida nas experiências canônicas', async ({ page }) => {
     await page.goto('/requisitos/coleta')
     await expect(page.getByTestId('route-requisitos')).toBeVisible()
-    await expect(page).toHaveURL(/\/requisitos\/coleta$/)
+    await expect(page).toHaveURL(/\/requisitos\?acao=novo$/)
 
     await page.goto('/notificacoes')
     await expect(page.getByTestId('route-painel-integracao')).toBeVisible()
-    await expect(page).toHaveURL(/\/notificacoes$/)
+    await expect(page).toHaveURL(/\/painel-integracao$/)
   })
 
   test('usa Monitoramento como fonte canônica dos detalhes operacionais', async ({ page }) => {
