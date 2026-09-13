@@ -1,0 +1,128 @@
+name: Temporary Key Vault RBAC Admin Probe — DEV v2
+
+on:
+  push:
+    branches:
+      - ops/temp-kv-rbac-admin-probe-20260913-v2
+    paths:
+      - ".github/workflows/temp-kv-rbac-admin-probe-dev-v2.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: temp-kv-rbac-admin-probe-dev-v2
+  cancel-in-progress: false
+
+env:
+  TARGET_VAULT_NAME: kv-reqsys-ccp
+  TARGET_PRINCIPAL_OID: 5660aef6-6eb0-43d1-889a-0af710fe9054
+  TARGET_ROLE_ID: 4633458b-17de-408a-b874-0445c86b69e6
+  EVIDENCE_FILE: rbac-dev-result.json
+
+jobs:
+  grant:
+    name: Grant exact Key Vault Secrets User — DEV
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validar configuração autorizada
+        env:
+          CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            test -n "${!name:-}"
+          done
+          test "$REQSYS_KEY_VAULT_NAME" = "$TARGET_VAULT_NAME"
+          printf '%s\n' '{"status":"validated","environment":"dev","role":"Key Vault Secrets User","target_principal":"5660aef6-6eb0-43d1-889a-0af710fe9054","secret_values_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_FILE"
+
+      - name: Login Azure OIDC da identidade mutadora
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver escopo exato do Key Vault
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          scope="$(az keyvault show --name "$TARGET_VAULT_NAME" --query id -o tsv)"
+          test -n "$scope"
+          case "$scope" in
+            */providers/Microsoft.KeyVault/vaults/kv-reqsys-ccp) ;;
+            *) echo '::error::Escopo inesperado; abortando.'; exit 2 ;;
+          esac
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+
+      - name: Conceder RBAC mínimo e idempotente
+        id: grant
+        env:
+          SCOPE: ${{ steps.scope.outputs.scope }}
+          SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          role_definition_id="/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.Authorization/roleDefinitions/${TARGET_ROLE_ID}"
+          assignment_id="$(python - <<'PY'
+          import os, uuid
+          seed='|'.join([os.environ['SCOPE'], os.environ['TARGET_PRINCIPAL_OID'], os.environ['TARGET_ROLE_ID'], 'reqsys-kv-secrets-user-dev-authorized'])
+          print(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+          PY
+          )"
+          url="https://management.azure.com${SCOPE}/providers/Microsoft.Authorization/roleAssignments/${assignment_id}?api-version=2022-04-01"
+          body="$(python - <<'PY'
+          import json, os
+          print(json.dumps({'properties': {
+            'roleDefinitionId': f"/subscriptions/{os.environ['SUBSCRIPTION_ID']}/providers/Microsoft.Authorization/roleDefinitions/{os.environ['TARGET_ROLE_ID']}",
+            'principalId': os.environ['TARGET_PRINCIPAL_OID'],
+            'principalType': 'ServicePrincipal'
+          }}))
+          PY
+          )"
+          az rest --method put --url "$url" --body "$body" --output none
+          az rest --method get --url "$url" --query 'properties.principalId' -o tsv | grep -Fx "$TARGET_PRINCIPAL_OID" >/dev/null
+          echo "assignment_id=$assignment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Registrar evidência sanitizada
+        env:
+          ASSIGNMENT_ID: ${{ steps.grant.outputs.assignment_id }}
+          SCOPE: ${{ steps.scope.outputs.scope }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path(os.environ['EVIDENCE_FILE']).write_text(json.dumps({
+            'status':'granted',
+            'environment':'dev',
+            'scope':os.environ['SCOPE'],
+            'role':'Key Vault Secrets User',
+            'target_principal':os.environ['TARGET_PRINCIPAL_OID'],
+            'assignment_id':os.environ['ASSIGNMENT_ID'],
+            'secret_values_read':False,
+            'production_touched':False,
+            'test_touched':False
+          }, indent=2)+'\n', encoding='utf-8')
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: temp-kv-rbac-admin-probe-dev-v2-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 30
