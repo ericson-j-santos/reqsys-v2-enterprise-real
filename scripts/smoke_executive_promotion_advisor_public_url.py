@@ -55,20 +55,13 @@ def fetch_first(
 
 
 def public_candidates(base: str, environment: str) -> tuple[list[str], list[str]]:
-    """Resolve caminhos públicos por ambiente, preservando fallback compatível."""
-    if environment == "github-pages":
-        return (
-            [f"{base}/ops-dashboard/", f"{base}/"],
-            [
-                f"{base}/ops-dashboard/data/runtime-executive-index.json",
-                f"{base}/data/runtime-executive-index.json",
-            ],
-        )
-
-    return (
-        [f"{base}/"],
-        [f"{base}/data/runtime-executive-index.json"],
-    )
+    """Resolve caminhos públicos, priorizando o Ops Dashboard sem substituir a SPA."""
+    dashboard_paths = [f"{base}/ops-dashboard/", f"{base}/"]
+    contract_paths = [
+        f"{base}/ops-dashboard/data/runtime-executive-index.json",
+        f"{base}/data/runtime-executive-index.json",
+    ]
+    return dashboard_paths, contract_paths
 
 
 def smoke(
