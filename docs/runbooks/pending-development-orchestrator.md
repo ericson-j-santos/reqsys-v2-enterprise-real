@@ -14,6 +14,16 @@ Continuar automaticamente trabalhos pendentes do ReqSys sem criar um segundo pip
 
 Issues e PRs fora dessas condições não são alteradas automaticamente.
 
+## Despertar e eventos
+
+O workflow possui três formas de ativação:
+
+1. `workflow_dispatch`: inicia em `audit` por padrão e pode selecionar uma issue/PR específica.
+2. `schedule`: executa o lote elegível a cada hora, no minuto 41, em modo `execute`.
+3. `issues` (`opened`, `reopened`, `labeled`): executa imediatamente somente quando a issue é explicitamente elegível por `[AUTO-NEXT]`, marcador canônico ou label `orchestrator:auto`.
+
+No evento de issue, somente `github.event.issue.number` é encaminhado ao script. A condição do job ignora issues comuns antes de qualquer checkout ou ação de escrita. O agendamento permanece como rede de segurança para itens já existentes e para rotas de PR.
+
 ## Roteamento
 
 | Situação | Executor | Regra |
@@ -37,7 +47,7 @@ Sem esse secret:
 - auditoria continua funcionando;
 - rotas de CI que usam `GITHUB_TOKEN` continuam disponíveis;
 - rotas que precisam do Copilot ficam `blocked` com `missing_copilot_agent_token`;
-- a execução agendada falha fechada quando existir trabalho elegível que dependa do token.
+- execução por evento ou agendamento falha fechada quando existir trabalho elegível que dependa do token.
 
 ## Modos
 
@@ -64,7 +74,7 @@ python scripts/pending_development_orchestrator.py \
   --status-json artifacts/coordenador-status/coordenador-status.json
 ```
 
-O workflow `.github/workflows/pending-development-orchestrator.yml` executa em `execute` quando disparado pelo agendamento horário. O disparo manual começa em `audit` por segurança.
+O workflow `.github/workflows/pending-development-orchestrator.yml` entra em `execute` no agendamento horário e em eventos de issue explicitamente elegível. O disparo manual continua iniciando em `audit` por segurança.
 
 ## Idempotência e concorrência
 
@@ -72,11 +82,11 @@ O workflow `.github/workflows/pending-development-orchestrator.yml` executa em `
 - O `Actions Auto Operator` é disparado no máximo uma vez por execução do orquestrador.
 - Correção de PR grava marcador com o `HEAD SHA`; o mesmo SHA não recebe a mesma solicitação duas vezes.
 - Após duas tentativas de correção por Copilot no mesmo PR, o item é escalado para gate humano.
-- O workflow usa `concurrency` para impedir ciclos concorrentes sobre a mesma branch base.
+- O workflow usa `concurrency` por branch base e issue/lote para impedir ciclos concorrentes sobre o mesmo item.
 
 ## Integração com Autonomous Delivery Cycle
 
-Após um merge governado, o `Autonomous Delivery Cycle` extrai os próximos incrementos declarados no corpo do PR e cria uma Issue `[AUTO-NEXT]` para cada um. A issue recebe o marcador automático consumido por este orquestrador.
+Após um merge governado, o `Autonomous Delivery Cycle` extrai os próximos incrementos declarados no corpo do PR e cria uma Issue `[AUTO-NEXT]` para cada um. A criação da issue acorda o orquestrador imediatamente e o agendamento horário permanece como recuperação caso o evento não resulte em execução terminal.
 
 O handoff só acontece após merge bem-sucedido. Em `dry_run`, o próximo incremento permanece apenas como evidência capturada.
 
@@ -99,7 +109,7 @@ Cada execução registra `correlation_id`, modo, rota, status, motivo, tipo de i
 python -m pytest tests/test_pending_development_orchestrator.py -q
 ```
 
-O teste cobre seleção explícita, gate de risco, integração com Agent Increment Gate, idempotência, CI transitório, CI determinístico no mesmo PR, ausência do token e handoff do ciclo autônomo.
+O teste cobre seleção explícita, despertar por evento, filtro de issue elegível, gate de risco, integração com Agent Increment Gate, idempotência, CI transitório, CI determinístico no mesmo PR, ausência do token e handoff do ciclo autônomo.
 
 ## Critério de conclusão operacional
 
@@ -107,9 +117,10 @@ O incremento está funcionalmente validado apenas quando:
 
 1. o `Pre-PR Readiness Gate` estiver verde no HEAD atual;
 2. os checks da PR estiverem verdes no mesmo SHA;
-3. um run do orquestrador em `audit` produzir classificação correta;
-4. quando `COPILOT_AGENT_TOKEN` estiver provisionado, um caso positivo real criar/continuar uma sessão do Copilot;
-5. um caso de risco alto permanecer bloqueado sem efeito externo;
-6. uma repetição da mesma entrada não duplicar atribuição/comentário.
+3. uma issue comum for comprovadamente ignorada pelo gatilho orientado a eventos;
+4. uma issue elegível produzir run do orquestrador vinculado ao mesmo número/correlation_id;
+5. quando `COPILOT_AGENT_TOKEN` estiver provisionado, um caso positivo real criar/continuar uma sessão do Copilot;
+6. um caso de risco alto permanecer bloqueado sem efeito externo;
+7. uma repetição da mesma entrada não duplicar atribuição/comentário.
 
 Enquanto o token do Copilot não estiver provisionado e um caso real não for observado, classificar o estado como `parcialmente validado`.
