@@ -62,11 +62,13 @@ def _backfill(conn) -> None:
         "requester_id = COALESCE(NULLIF(TRIM(requester_id), ''), 'legacy-system')",
         "cost_center = COALESCE(NULLIF(TRIM(cost_center), ''), 'legacy')",
     )
-    conn.execute(text(f"UPDATE {table} SET {', '.join(statements)}"))
+    # B608: `table` deriva exclusivamente da constante _TABLE e é escapada pelo dialeto.
+    conn.execute(text(f"UPDATE {table} SET {', '.join(statements)}"))  # nosec B608
 
     rows = conn.execute(
         text(
-            f'SELECT id, data_classification FROM {table} '
+            # B608: o identificador de tabela é fixo e já foi escapado pelo dialeto.
+            f'SELECT id, data_classification FROM {table} '  # nosec B608
             "WHERE classification_lock_sha256 IS NULL OR TRIM(classification_lock_sha256) = ''"
         )
     ).mappings()
@@ -75,7 +77,8 @@ def _backfill(conn) -> None:
             f"{row['id']}|{row['data_classification']}".encode('utf-8')
         ).hexdigest()
         conn.execute(
-            text(f'UPDATE {table} SET classification_lock_sha256=:digest WHERE id=:id'),
+            # B608: o único identificador interpolado é a tabela fixa escapada acima.
+            text(f'UPDATE {table} SET classification_lock_sha256=:digest WHERE id=:id'),  # nosec B608
             {'digest': digest, 'id': row['id']},
         )
 
