@@ -139,7 +139,6 @@ jobs:
     permissions:
       contents: read
       actions: write
-      issues: write
       pull-requests: read
     env:
       REPORT_DIR: artifacts/pr-ci-watch
@@ -180,6 +179,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Em workflow_run o diagnóstico e a remediação são o resultado primário.
+          # A publicação de comentário é omitida para não transformar um 403 acessório
+          # em falha do próprio monitor; a evidência continua disponível no artifact.
           python scripts/pr_ci_watch.py \
             --repo "${GITHUB_REPOSITORY}" \
             --pr-number "${{ steps.context.outputs.pr_number }}" \
@@ -188,7 +190,6 @@ jobs:
             --exclude-run-id "${GITHUB_RUN_ID}" \
             --trigger-run-id "${{ github.event.workflow_run.id }}" \
             --auto-remediate \
-            --comment \
             --fail-on-unhealthy
 
       - name: Registrar execução ignorada com segurança

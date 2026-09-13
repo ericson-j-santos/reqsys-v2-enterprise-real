@@ -65,6 +65,18 @@ jobs:
           grep -qi -- "--exclude-run-id" .github/workflows/pr-ci-watch.yml
           grep -qi "upload-artifact" .github/workflows/pr-ci-watch.yml
           grep -qi "set -euo pipefail" .github/workflows/pr-ci-watch.yml
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path('.github/workflows/pr-ci-watch.yml').read_text(encoding='utf-8')
+          start = text.index('  remediate-workflow-run:')
+          end = text.index('\n  sweep-open-prs:', start)
+          block = text[start:end]
+
+          assert '--auto-remediate' in block, 'remediação automática deixou de ser executada'
+          assert '--comment' not in block, 'workflow_run não deve falhar por comentário acessório'
+          assert 'issues: write' not in block, 'workflow_run não deve pedir escrita em issues sem necessidade'
+          PY
 
       - name: Validar Workflow Command Center
         shell: bash
