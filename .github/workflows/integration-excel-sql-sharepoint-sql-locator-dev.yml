@@ -31,7 +31,9 @@ jobs:
   locator:
     name: Descobrir locator SQL DEV
     runs-on: ubuntu-latest
-    environment: reqsys-power-platform-dev
+    # O environment GitHub "development" já possui trust OIDC governado.
+    # O alvo funcional permanece DEV via INTEGRATION_E2E_ENVIRONMENT=dev.
+    environment: development
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
