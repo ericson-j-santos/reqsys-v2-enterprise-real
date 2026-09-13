@@ -1,0 +1,131 @@
+name: Pending Development Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo: audit apenas planeja; execute despacha rotas permitidas"
+        required: true
+        default: "audit"
+        type: choice
+        options:
+          - audit
+          - execute
+      max_items:
+        description: "Máximo de itens avaliados por execução"
+        required: true
+        default: "5"
+        type: string
+      issue_number:
+        description: "Issue/PR específica; 0 usa descoberta automática"
+        required: false
+        default: "0"
+        type: string
+      base_branch:
+        description: "Branch base para novos trabalhos"
+        required: true
+        default: "main"
+        type: string
+  schedule:
+    - cron: "41 * * * *"
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: read
+  checks: read
+  statuses: read
+
+concurrency:
+  group: pending-development-orchestrator-${{ github.event.inputs.base_branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    name: Descobrir, governar e encaminhar pendências executáveis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Consolidar estado operacional atual
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ github.event.inputs.base_branch || 'main' }}
+        run: |
+          set -euo pipefail
+          python scripts/coordenador_status_consolidator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch "${TARGET_BRANCH}" \
+            --output-dir artifacts/coordenador-status
+
+      - name: Orquestrar desenvolvimento pendente
+        id: orchestrator
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
+          TARGET_BRANCH: ${{ github.event.inputs.base_branch || 'main' }}
+          MAX_ITEMS: ${{ github.event.inputs.max_items || '5' }}
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || '0' }}
+          REQUESTED_MODE: ${{ github.event.inputs.mode || 'audit' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          MODE="${REQUESTED_MODE}"
+          if [[ "${EVENT_NAME}" == "schedule" ]]; then
+            MODE="execute"
+          fi
+          mkdir -p artifacts/pending-development-orchestrator
+          set +e
+          python scripts/pending_development_orchestrator.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base-branch "${TARGET_BRANCH}" \
+            --mode "${MODE}" \
+            --max-items "${MAX_ITEMS}" \
+            --issue-number "${ISSUE_NUMBER}" \
+            --status-json artifacts/coordenador-status/coordenador-status.json \
+            --output-dir artifacts/pending-development-orchestrator \
+            | tee artifacts/pending-development-orchestrator/stdout.json
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo operacional
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f artifacts/pending-development-orchestrator/summary.md ]]; then
+            cat artifacts/pending-development-orchestrator/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "# Pending Development Orchestrator" >> "$GITHUB_STEP_SUMMARY"
+            echo "Artifact de resumo não foi gerado; consulte os logs do job." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar evidência do orquestrador
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pending-development-orchestrator-evidence
+          path: |
+            artifacts/pending-development-orchestrator
+            artifacts/coordenador-status/coordenador-status.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Falhar fechado quando execução estiver bloqueada
+        if: steps.orchestrator.outputs.exit_code != '0'
+        shell: bash
+        run: |
+          echo "O orquestrador terminou bloqueado. Verifique o artifact e as pré-condições (incluindo COPILOT_AGENT_TOKEN quando aplicável)."
+          exit 1
