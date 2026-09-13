@@ -1,0 +1,177 @@
+name: DEV Grant Key Vault SQL Locator
+
+on:
+  push:
+    branches:
+      - ops/temp-kv-secrets-user-dev-20260913
+    paths:
+      - .github/workflows/dev-admin-grant-kv-sql-locator.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TARGET_PRINCIPAL_OID: 5660aef6-6eb0-43d1-889a-0af710fe9054
+  KEY_VAULT_NAME: kv-reqsys-ccp
+  KEY_VAULT_RESOURCE_GROUP: rg-reqsys-ccp
+  KEY_VAULT_SECRETS_USER_ROLE_ID: 4633458b-17de-408a-b874-0445c86b69e6
+  INTEGRATION_E2E_ENVIRONMENT: dev
+  INTEGRATION_E2E_SQL_PROCEDURE: integration.usp_ConsultarPorIdentificadores
+
+jobs:
+  grant:
+    name: Conceder RBAC temporário via identidade DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: dev
+    outputs:
+      assignment_id: ${{ steps.ctx.outputs.assignment_id }}
+      scope: ${{ steps.ctx.outputs.scope }}
+      grant_ok: ${{ steps.grant.outputs.grant_ok }}
+    steps:
+      - name: Login Azure OIDC DEV
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Construir atribuição determinística
+        id: ctx
+        shell: bash
+        env:
+          SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          scope="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${KEY_VAULT_RESOURCE_GROUP}/providers/Microsoft.KeyVault/vaults/${KEY_VAULT_NAME}"
+          role="/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.Authorization/roleDefinitions/${KEY_VAULT_SECRETS_USER_ROLE_ID}"
+          assignment_id="$(SCOPE="$scope" PRINCIPAL="$TARGET_PRINCIPAL_OID" ROLE="$role" python - <<'PY'
+          import os, uuid
+          seed='|'.join([os.environ['SCOPE'],os.environ['PRINCIPAL'],os.environ['ROLE'],'reqsys-authorized-temp-kv-sql-dev'])
+          print(uuid.uuid5(uuid.NAMESPACE_URL,seed))
+          PY
+          )"
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "role=$role" >> "$GITHUB_OUTPUT"
+          echo "assignment_id=$assignment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Criar RBAC temporário exato
+        id: grant
+        shell: bash
+        continue-on-error: true
+        env:
+          SCOPE: ${{ steps.ctx.outputs.scope }}
+          ROLE: ${{ steps.ctx.outputs.role }}
+          ASSIGNMENT_ID: ${{ steps.ctx.outputs.assignment_id }}
+        run: |
+          set -euo pipefail
+          url="https://management.azure.com${SCOPE}/providers/Microsoft.Authorization/roleAssignments/${ASSIGNMENT_ID}?api-version=2022-04-01"
+          body="$(python - <<'PY'
+          import json, os
+          print(json.dumps({'properties':{'roleDefinitionId':os.environ['ROLE'],'principalId':os.environ['TARGET_PRINCIPAL_OID'],'principalType':'ServicePrincipal'}}))
+          PY
+          )"
+          az rest --method put --url "$url" --body "$body" --output none
+          echo "grant_ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Falhar fechado se concessão foi negada
+        if: steps.grant.outcome != 'success'
+        run: |
+          echo "::error::Identidade DEV não possui roleAssignments/write no escopo autorizado."
+          exit 1
+
+  locator:
+    name: Key Vault -> DSN -> SQL locator
+    needs: grant
+    if: needs.grant.outputs.grant_ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: development
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Aguardar RBAC e localizar único candidato SQL
+        id: kv
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          names="$RUNNER_TEMP/names.txt"
+          selected="$RUNNER_TEMP/selected.txt"
+          ok=false
+          for attempt in $(seq 1 18); do
+            if az keyvault secret list --vault-name "$KEY_VAULT_NAME" --query '[].name' -o tsv > "$names" 2>/dev/null; then ok=true; break; fi
+            sleep 5
+          done
+          test "$ok" = true
+          python - "$names" "$selected" <<'PY'
+          import re,sys
+          from pathlib import Path
+          names=[x.strip() for x in Path(sys.argv[1]).read_text().splitlines() if x.strip()]
+          candidates=[n for n in names if re.search(r'(sql.*(dsn|connection|conn|string)|(?:dsn|connection|conn|string).*sql)',n,re.I)]
+          print(f'sql_candidate_count={len(candidates)}')
+          if len(candidates)!=1: raise SystemExit(9)
+          Path(sys.argv[2]).write_text(candidates[0])
+          PY
+          secret_name="$(cat "$selected")"
+          dsn="$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$secret_name" --query value -o tsv)"
+          test -n "$dsn"
+          echo "::add-mask::$dsn"
+          printf 'INTEGRATION_E2E_SQL_DSN=%s\n' "$dsn" >> "$GITHUB_ENV"
+
+      - name: Instalar dependências da sonda
+        run: |
+          set -euo pipefail
+          bash .github/scripts/install-unixodbc-ci.sh
+          python -m pip install --upgrade pip
+          pip install pyodbc
+
+      - name: Executar locator real DEV
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/dev-admin-grant-kv-sql-locator
+          python scripts/integration_excel_sql_sharepoint_sql_locator.py \
+            --strict \
+            --output artifacts/dev-admin-grant-kv-sql-locator/sql-locator.json \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "dev-admin-grant-kv-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dev-admin-grant-kv-sql-locator-${{ github.run_id }}
+          path: artifacts/dev-admin-grant-kv-sql-locator
+          if-no-files-found: warn
+          retention-days: 30
+
+  revoke:
+    name: Revogar RBAC temporário
+    needs: [grant, locator]
+    if: always() && needs.grant.outputs.grant_ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: dev
+    steps:
+      - name: Login Azure OIDC DEV
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      - name: Revogar exatamente a atribuição criada
+        shell: bash
+        env:
+          SCOPE: ${{ needs.grant.outputs.scope }}
+          ASSIGNMENT_ID: ${{ needs.grant.outputs.assignment_id }}
+        run: |
+          set -euo pipefail
+          url="https://management.azure.com${SCOPE}/providers/Microsoft.Authorization/roleAssignments/${ASSIGNMENT_ID}?api-version=2022-04-01"
+          az rest --method delete --url "$url" --output none
