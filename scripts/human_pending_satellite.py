@@ -13,6 +13,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 MARKER = "reqsys-human-pending-satellite"
+DEFER_NONPROD_LABEL = "satellite:defer-nonprod"
+PROD_ONLY_LABEL = "scope:prod-only"
+OCR_CERT_ONLY_LABEL = "scope:ocr-certification-only"
+VALID_SCOPES = {"nonprod", "prod", "ocr-certification"}
 
 HUMAN_PATTERNS: dict[str, tuple[str, ...]] = {
     "approval_review": ("aprovação obrigatória", "approval required", "review obrigatória", "review required", "aprovação humana"),
@@ -66,6 +70,34 @@ class Finding:
 
 def norm(value: str) -> str:
     return re.sub(r"\s+", " ", (value or "").lower()).strip()
+
+
+def _label_names(issue: dict[str, Any]) -> set[str]:
+    labels: set[str] = set()
+    for item in issue.get("labels") or []:
+        if isinstance(item, str):
+            labels.add(item.strip().lower())
+        elif isinstance(item, dict) and item.get("name"):
+            labels.add(str(item["name"]).strip().lower())
+    return labels
+
+
+def deferred_scope(issue: dict[str, Any]) -> str | None:
+    labels = _label_names(issue)
+    if DEFER_NONPROD_LABEL not in labels:
+        return None
+    if PROD_ONLY_LABEL in labels:
+        return "prod"
+    if OCR_CERT_ONLY_LABEL in labels:
+        return "ocr-certification"
+    return None
+
+
+def should_defer_notification(issue: dict[str, Any], scope: str) -> bool:
+    if scope not in VALID_SCOPES:
+        raise ValueError(f"scope inválido: {scope}")
+    target_scope = deferred_scope(issue)
+    return target_scope is not None and target_scope != scope
 
 
 def classify(title: str, body: str) -> list[str]:
@@ -251,11 +283,15 @@ def already_notified(comments: list[dict[str, Any]], finding: Finding) -> bool:
     return any(marker in (comment.get("body") or "") for comment in comments)
 
 
-def run(token: str, repo: str, dry_run: bool, output: str) -> int:
+def run(token: str, repo: str, dry_run: bool, output: str, scope: str = "nonprod") -> int:
+    if scope not in VALID_SCOPES:
+        raise ValueError(f"scope inválido: {scope}")
     gh = GitHub(token, repo)
     findings: list[Finding] = []
     notifications = 0
     for issue in gh.open_issues():
+        if should_defer_notification(issue, scope):
+            continue
         categories = classify(issue.get("title", ""), issue.get("body", ""))
         if not categories:
             continue
@@ -271,6 +307,7 @@ def run(token: str, repo: str, dry_run: bool, output: str) -> int:
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "repository": repo,
         "dry_run": dry_run,
+        "scope": scope,
         "human_findings": [asdict(item) for item in findings],
         "notification_count": notifications,
     }
@@ -286,12 +323,13 @@ def main() -> int:
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--token", default=os.environ.get("GITHUB_TOKEN", ""))
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--scope", choices=sorted(VALID_SCOPES), default="nonprod")
     parser.add_argument("--output", default="artifacts/human-pending-satellite/evidence.json")
     args = parser.parse_args()
     if not args.repo or not args.token:
         print("repo/token required", file=sys.stderr)
         return 2
-    return run(args.token, args.repo, args.dry_run, args.output)
+    return run(args.token, args.repo, args.dry_run, args.output, args.scope)
 
 
 if __name__ == "__main__":

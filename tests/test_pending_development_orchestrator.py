@@ -8,6 +8,7 @@ from scripts.pending_development_orchestrator import (
     build_report,
     classify_risk,
     copilot_fix_marker,
+    deferred_scope,
     failing_runs_for_pr,
     is_issue_candidate,
     pr_is_candidate,
@@ -306,3 +307,35 @@ def test_failure_classification_prefers_latest_run_per_workflow() -> None:
     )
     assert failures == []
     assert transient == []
+
+def test_nonprod_deferred_issue_does_not_consume_automatic_candidate_slot() -> None:
+    item = issue(labels=[
+        {"name": "orchestrator:auto"},
+        {"name": "satellite:defer-nonprod"},
+        {"name": "scope:prod-only"},
+    ])
+    assert deferred_scope(item) == "prod"
+    assert is_issue_candidate(item) is False
+    assert is_issue_candidate(item, explicitly_selected=True) is True
+
+
+def test_explicit_deferred_issue_is_auditable_without_dispatch() -> None:
+    client = FakeClient(copilot_token="configured")
+    item = issue(labels=[
+        {"name": "satellite:defer-nonprod"},
+        {"name": "scope:ocr-certification-only"},
+    ])
+    decision = process_issue(
+        client,
+        item,
+        green_status(),
+        execute=True,
+        base_branch="main",
+        dispatched_routes=set(),
+    )
+    assert decision.route == "deferred_external_gate"
+    assert decision.status == "deferred"
+    assert decision.reason == "deferred_until_ocr_certification"
+    assert decision.action_executed is False
+    assert client.assigned == []
+    assert client.dispatched == 0

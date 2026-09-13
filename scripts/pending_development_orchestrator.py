@@ -40,6 +40,9 @@ AUTO_MARKER = "<!-- pending-development-orchestrator:auto -->"
 AUTO_LABEL = "orchestrator:auto"
 AUTO_FIX_LABEL = "orchestrator:auto-fix"
 HUMAN_GATE_LABEL = "orchestrator:human-gate"
+DEFER_NONPROD_LABEL = "satellite:defer-nonprod"
+PROD_ONLY_LABEL = "scope:prod-only"
+OCR_CERT_ONLY_LABEL = "scope:ocr-certification-only"
 COPILOT_ASSIGNEE = "copilot-swe-agent[bot]"
 MAX_COPILOT_FIX_ATTEMPTS = 2
 TERMINAL_SUCCESS = {"success", "neutral", "skipped"}
@@ -254,11 +257,24 @@ def _combined_text(item: dict[str, Any]) -> str:
     return f"{item.get('title') or ''}\n{item.get('body') or ''}\n{labels}".lower()
 
 
+def deferred_scope(item: dict[str, Any]) -> str | None:
+    labels = _label_names(item)
+    if DEFER_NONPROD_LABEL not in labels:
+        return None
+    if PROD_ONLY_LABEL in labels:
+        return "prod"
+    if OCR_CERT_ONLY_LABEL in labels:
+        return "ocr-certification"
+    return None
+
+
 def is_issue_candidate(issue: dict[str, Any], *, explicitly_selected: bool = False) -> bool:
     if issue.get("pull_request"):
         return False
     if explicitly_selected:
         return True
+    if deferred_scope(issue):
+        return False
     title = str(issue.get("title") or "")
     body = str(issue.get("body") or "")
     labels = _label_names(issue)
@@ -356,8 +372,22 @@ def process_issue(
 ) -> Decision:
     number = int(issue["number"])
     title = str(issue.get("title") or "")
-    risk, risk_reason = classify_risk(issue)
     gate = evaluate_gate(status_report, issue)
+    scope = deferred_scope(issue)
+    if scope:
+        return Decision(
+            "issue",
+            number,
+            title,
+            "deferred_external_gate",
+            "deferred",
+            f"deferred_until_{scope.replace('-', '_')}",
+            "high",
+            gate["increment_type"],
+            gate["reason"],
+            url=_issue_url(issue),
+        )
+    risk, risk_reason = classify_risk(issue)
     if risk == "high":
         return Decision("issue", number, title, "human_gate", "blocked", risk_reason, risk, gate["increment_type"], gate["reason"], url=_issue_url(issue))
     if not gate["allowed"]:
@@ -468,6 +498,7 @@ def build_report(
             "blocked": sum(1 for item in decisions if item.status == "blocked"),
             "already_dispatched": sum(1 for item in decisions if item.status == "already_dispatched"),
             "planned": sum(1 for item in decisions if item.status == "planned"),
+            "deferred": sum(1 for item in decisions if item.status == "deferred"),
         },
         "decisions": [asdict(item) for item in decisions],
         "guardrails": [
@@ -480,6 +511,7 @@ def build_report(
             "transient_ci_reuses_actions_auto_operator",
             "maximum_two_copilot_fix_attempts_per_pr",
             "no_merge_no_prod_deploy_no_secret_or_admin_change",
+            "scoped_human_gates_deferred_without_weakening_external_gate",
         ],
     }
 
