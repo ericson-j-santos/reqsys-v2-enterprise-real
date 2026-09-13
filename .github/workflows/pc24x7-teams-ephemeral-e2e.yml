@@ -60,8 +60,11 @@ jobs:
       REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
       COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
       PC24X7_TEAMS_E2E_CORRELATION_ID: pc24x7-ephemeral-${{ github.run_id }}-${{ github.run_attempt }}
-      PC24X7_TEAMS_E2E_PROVIDER: groq
-      PC24X7_TEAMS_E2E_MODEL: llama-3.3-70b-versatile
+      # Gemini é o provedor primário configurado no ReqSys. Groq permanece visível
+      # no readiness e sua degradação HTTP 502 é tratada separadamente, sem bloquear
+      # a prova ponta a ponta do canal Teams.
+      PC24X7_TEAMS_E2E_PROVIDER: gemini
+      PC24X7_TEAMS_E2E_MODEL: gemini-2.5-flash
     steps:
       - name: Checkout
         uses: actions/checkout@v4
