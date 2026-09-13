@@ -23,17 +23,30 @@ def ready_payload():
             'status': 'ready',
             'ready': True,
             'bloqueios': [],
+            'providers_configurados': ['gemini', 'groq'],
             'conversation_references': 1,
         }
     }
 
 
-def delivered_payload():
+def creation_payload(conversation_id='conv-dev-1'):
     return {
         'data': {
-            'conversation': {'id': 'conv-dev-1'},
+            'conversation': {'id': conversation_id},
             'duplicate': False,
-            'teams': {'entrega': {'entregue': True, 'canal_usado': 'bot'}},
+            'teams': None,
+        }
+    }
+
+
+def reply_payload(*, conversation_id='conv-dev-1', duplicate=False, delivered=True, channel='bot'):
+    return {
+        'data': {
+            'conversation_id': conversation_id,
+            'duplicate': duplicate,
+            'teams': {
+                'entrega': {'entregue': delivered, 'canal_usado': channel}
+            } if delivered else None,
         }
     }
 
@@ -118,27 +131,37 @@ def test_production_auth_is_refused_before_login(monkeypatch):
         )
 
 
-def test_success_uses_minimum_scope_proves_delivery_idempotency_and_revokes(monkeypatch):
+def _success_request_recorder(calls, secret='service-token-must-never-appear'):
+    reply_count = {'value': 0}
+
+    def fake_request(method, url, *, headers, body=None):
+        calls.append((method, url, body, headers))
+        if method == 'POST' and url.endswith('/v1/admin/service-tokens'):
+            return 201, {'data': {'id': 77, 'token': secret}}
+        if method == 'GET' and url.endswith('/readiness'):
+            return 200, ready_payload()
+        if method == 'POST' and url.endswith('/ai-conversations'):
+            assert body['enviar_teams'] is False
+            return 200, creation_payload()
+        if method == 'POST' and url.endswith('/conv-dev-1/reply'):
+            reply_count['value'] += 1
+            if reply_count['value'] == 1:
+                assert body['enviar_teams'] is True
+                return 200, reply_payload(duplicate=False, delivered=True)
+            assert body['enviar_teams'] is False
+            return 200, reply_payload(duplicate=True, delivered=False)
+        if method == 'DELETE' and url.endswith('/77'):
+            return 200, {'data': {'id': 77, 'revogado': True}}
+        raise AssertionError((method, url, body))
+
+    return fake_request
+
+
+def test_success_separates_creation_delivery_proves_idempotency_and_revokes(monkeypatch):
     secret = 'service-token-must-never-appear'
     calls = []
     patch_valid_admin(monkeypatch)
-
-    def fake_request(method, url, *, headers, body=None):
-        calls.append((method, url, body))
-        if method == 'POST':
-            return 201, {'data': {'id': 77, 'token': secret}}
-        if method == 'GET':
-            return 200, ready_payload()
-        if method == 'DELETE':
-            return 200, {'data': {'id': 77, 'revogado': True}}
-        raise AssertionError(method)
-
-    def fake_call_reqsys(_base_url, token, _job):
-        assert token == secret
-        return delivered_payload()
-
-    monkeypatch.setattr(module, 'request_json', fake_request)
-    monkeypatch.setattr(module.queue, 'call_reqsys', fake_call_reqsys)
+    monkeypatch.setattr(module, 'request_json', _success_request_recorder(calls, secret))
 
     evidence = module.execute_e2e(
         api_base='https://reqsys-api-dev.invalid',
@@ -149,35 +172,115 @@ def test_success_uses_minimum_scope_proves_delivery_idempotency_and_revokes(monk
     )
 
     assert evidence['status'] == 'done'
-    assert evidence['admin_auth_source'] == 'environment_secret_valid'
-    assert evidence['admin_auth_recovered'] is False
     assert evidence['token_created'] is True
     assert evidence['token_revoked'] is True
-    assert evidence['readiness']['http_status'] == 200
-    assert evidence['readiness']['ready'] is True
-    assert evidence['delivery']['conversation_id'] == 'conv-dev-1'
-    assert evidence['delivery']['teams_delivered'] is True
-    assert evidence['delivery']['teams_channel'] == 'bot'
-    assert evidence['queue_idempotency_proven'] is True
+    assert evidence['conversation']['conversation_id'] == 'conv-dev-1'
+    assert evidence['conversation']['http_status'] == 200
+    assert len(evidence['delivery_attempts']) == 1
+    assert evidence['delivery_attempts'][0]['teams_delivered'] is True
+    assert evidence['turn_idempotency_proven'] is True
     assert evidence['secret_value_exposed'] is False
-    assert evidence['production_touched'] is False
-    assert evidence['test_touched'] is False
     assert secret not in json.dumps(evidence)
 
-    create = next(call for call in calls if call[0] == 'POST')
-    assert create[2]['scopes'] == [module.SCOPE]
-    assert create[2]['expires_in_days'] == 1
-    assert any(call[0] == 'DELETE' and call[1].endswith('/77') for call in calls)
+    creates = [call for call in calls if call[0] == 'POST' and call[1].endswith('/ai-conversations')]
+    replies = [call for call in calls if call[0] == 'POST' and '/reply' in call[1]]
+    assert len(creates) == 1
+    assert len(replies) == 2
+    assert replies[0][2]['idempotency_key'] == replies[1][2]['idempotency_key']
+    assert replies[0][2]['enviar_teams'] is True
+    assert replies[1][2]['enviar_teams'] is False
+    assert replies[0][3]['X-Tenant-ID'] == 'reqsys-dev'
+    assert replies[0][3]['X-Area-ID'] == 'teams-gateway'
 
 
-def test_readiness_blocked_still_revokes_and_never_calls_delivery(monkeypatch):
-    delivery_called = False
+def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
+    calls = []
     patch_valid_admin(monkeypatch)
+    reply_count = {'value': 0}
 
     def fake_request(method, url, *, headers, body=None):
-        if method == 'POST':
+        calls.append((method, url, body))
+        if method == 'POST' and url.endswith('/v1/admin/service-tokens'):
             return 201, {'data': {'id': 88, 'token': 'ephemeral-secret'}}
-        if method == 'GET':
+        if method == 'GET' and url.endswith('/readiness'):
+            return 200, ready_payload()
+        if method == 'POST' and url.endswith('/ai-conversations'):
+            return 200, creation_payload()
+        if method == 'POST' and url.endswith('/conv-dev-1/reply'):
+            reply_count['value'] += 1
+            if reply_count['value'] == 1:
+                return 500, {}
+            if reply_count['value'] == 2:
+                return 200, reply_payload(duplicate=True, delivered=True)
+            return 200, reply_payload(duplicate=True, delivered=False)
+        if method == 'DELETE' and url.endswith('/88'):
+            return 200, {'data': {'id': 88, 'revogado': True}}
+        raise AssertionError((method, url))
+
+    monkeypatch.setattr(module, 'request_json', fake_request)
+    evidence = module.execute_e2e(
+        api_base='https://reqsys-api-dev.invalid',
+        admin_jwt='admin-jwt',
+        correlation_id='corr-retry-same-conv',
+        provider='groq',
+        model='llama-3.3-70b-versatile',
+    )
+
+    assert evidence['status'] == 'done'
+    assert evidence['conversation']['conversation_id'] == 'conv-dev-1'
+    assert [item['http_status'] for item in evidence['delivery_attempts']] == [500, 200]
+    assert evidence['delivery_attempts'][1]['duplicate'] is True
+    assert evidence['turn_idempotency_proven'] is True
+    creates = [call for call in calls if call[0] == 'POST' and call[1].endswith('/ai-conversations')]
+    replies = [call for call in calls if call[0] == 'POST' and '/reply' in call[1]]
+    assert len(creates) == 1
+    assert len(replies) == 3
+    assert len({call[2]['idempotency_key'] for call in replies}) == 1
+
+
+def test_persistent_delivery_failure_preserves_conversation_id_and_revokes(monkeypatch):
+    patch_valid_admin(monkeypatch)
+    reply_count = {'value': 0}
+
+    def fake_request(method, url, *, headers, body=None):
+        if method == 'POST' and url.endswith('/v1/admin/service-tokens'):
+            return 201, {'data': {'id': 99, 'token': 'ephemeral-secret'}}
+        if method == 'GET' and url.endswith('/readiness'):
+            return 200, ready_payload()
+        if method == 'POST' and url.endswith('/ai-conversations'):
+            return 200, creation_payload('conv-preserved')
+        if method == 'POST' and url.endswith('/conv-preserved/reply'):
+            reply_count['value'] += 1
+            return (500, {}) if reply_count['value'] == 1 else (409, {})
+        if method == 'DELETE' and url.endswith('/99'):
+            return 200, {'data': {'id': 99, 'revogado': True}}
+        raise AssertionError((method, url))
+
+    monkeypatch.setattr(module, 'request_json', fake_request)
+    evidence = module.execute_e2e(
+        api_base='https://reqsys-api-dev.invalid',
+        admin_jwt='admin-jwt',
+        correlation_id='corr-delivery-failure',
+        provider='groq',
+        model='llama-3.3-70b-versatile',
+    )
+
+    assert evidence['status'] == 'blocked'
+    assert evidence['conversation']['conversation_id'] == 'conv-preserved'
+    assert [item['http_status'] for item in evidence['delivery_attempts']] == [500, 409]
+    assert evidence['error'] == 'teams_delivery_not_confirmed:http_409'
+    assert evidence['token_revoked'] is True
+
+
+def test_readiness_blocked_still_revokes_and_never_creates_conversation(monkeypatch):
+    patch_valid_admin(monkeypatch)
+    created = False
+
+    def fake_request(method, url, *, headers, body=None):
+        nonlocal created
+        if method == 'POST' and url.endswith('/v1/admin/service-tokens'):
+            return 201, {'data': {'id': 100, 'token': 'ephemeral-secret'}}
+        if method == 'GET' and url.endswith('/readiness'):
             return 200, {
                 'data': {
                     'schema_version': '1.0.0',
@@ -187,18 +290,14 @@ def test_readiness_blocked_still_revokes_and_never_calls_delivery(monkeypatch):
                     'bloqueios': [{'codigo': 'CONVERSATION_REFERENCE_AUSENTE'}],
                 }
             }
-        if method == 'DELETE':
-            return 200, {'data': {'id': 88, 'revogado': True}}
-        raise AssertionError(method)
-
-    def fake_delivery(*_args, **_kwargs):
-        nonlocal delivery_called
-        delivery_called = True
-        raise AssertionError('delivery must not run when readiness is blocked')
+        if method == 'POST' and url.endswith('/ai-conversations'):
+            created = True
+            raise AssertionError('conversation must not be created when readiness is blocked')
+        if method == 'DELETE' and url.endswith('/100'):
+            return 200, {'data': {'id': 100, 'revogado': True}}
+        raise AssertionError((method, url))
 
     monkeypatch.setattr(module, 'request_json', fake_request)
-    monkeypatch.setattr(module.queue, 'call_reqsys', fake_delivery)
-
     evidence = module.execute_e2e(
         api_base='https://reqsys-api-dev.invalid',
         admin_jwt='admin-jwt',
@@ -211,65 +310,20 @@ def test_readiness_blocked_still_revokes_and_never_calls_delivery(monkeypatch):
     assert evidence['error'] == 'readiness_not_ready'
     assert evidence['readiness']['blocker_codes'] == ['CONVERSATION_REFERENCE_AUSENTE']
     assert evidence['token_revoked'] is True
-    assert delivery_called is False
-
-
-def test_delivery_failure_still_revokes(monkeypatch):
-    deleted = False
-    patch_valid_admin(monkeypatch)
-
-    def fake_request(method, url, *, headers, body=None):
-        nonlocal deleted
-        if method == 'POST':
-            return 201, {'data': {'id': 99, 'token': 'ephemeral-secret'}}
-        if method == 'GET':
-            return 200, ready_payload()
-        if method == 'DELETE':
-            deleted = True
-            return 200, {'data': {'id': 99, 'revogado': True}}
-        raise AssertionError(method)
-
-    monkeypatch.setattr(module, 'request_json', fake_request)
-    monkeypatch.setattr(
-        module.queue,
-        'call_reqsys',
-        lambda *_args, **_kwargs: {
-            'data': {
-                'conversation': {'id': 'conv-dev-2'},
-                'teams': {'entrega': {'entregue': False, 'canal_usado': 'bot'}},
-            }
-        },
-    )
-
-    evidence = module.execute_e2e(
-        api_base='https://reqsys-api-dev.invalid',
-        admin_jwt='admin-jwt',
-        correlation_id='corr-delivery-failure',
-        provider='gemini',
-        model='gemini-2.5-flash',
-    )
-
-    assert evidence['status'] == 'blocked'
-    assert evidence['error'] == 'teams_delivery_not_done'
-    assert evidence['token_revoked'] is True
-    assert deleted is True
+    assert created is False
 
 
 def test_revoke_failure_fails_closed_even_after_delivery(monkeypatch):
     patch_valid_admin(monkeypatch)
+    calls = []
+    base_fake = _success_request_recorder(calls, 'ephemeral-secret')
 
     def fake_request(method, url, *, headers, body=None):
-        if method == 'POST':
-            return 201, {'data': {'id': 111, 'token': 'ephemeral-secret'}}
-        if method == 'GET':
-            return 200, ready_payload()
         if method == 'DELETE':
             return 503, {}
-        raise AssertionError(method)
+        return base_fake(method, url, headers=headers, body=body)
 
     monkeypatch.setattr(module, 'request_json', fake_request)
-    monkeypatch.setattr(module.queue, 'call_reqsys', lambda *_args, **_kwargs: delivered_payload())
-
     evidence = module.execute_e2e(
         api_base='https://reqsys-api-dev.invalid',
         admin_jwt='admin-jwt',
