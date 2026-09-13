@@ -32,15 +32,18 @@ on:
       - main
     paths:
       - ".github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml"
+      - ".github/scripts/install-msodbc18-ci.sh"
       - "backend/app/services/integration_excel_sql_sharepoint_flow.py"
       - "backend/app/services/integration_profile_provisioning.py"
       - "scripts/integration_excel_sql_sharepoint_discovery.py"
       - "scripts/integration_excel_sql_sharepoint_e2e.py"
       - "scripts/integration_excel_sql_sharepoint_readiness.py"
+      - "scripts/normalize_msal_storage_state.py"
       - "tests/test_integration_excel_sql_sharepoint_discovery.py"
       - "tests/test_integration_excel_sql_sharepoint_flow.py"
       - "tests/test_integration_excel_sql_sharepoint_e2e.py"
       - "tests/test_integration_excel_sql_sharepoint_readiness.py"
+      - "tests/test_normalize_msal_storage_state.py"
       - "docs/integrations/integration-generator/**"
 
 permissions:
@@ -72,7 +75,7 @@ jobs:
       - name: Instalar dependências mínimas
         run: |
           set -euo pipefail
-          bash .github/scripts/install-unixodbc-ci.sh
+          bash .github/scripts/install-msodbc18-ci.sh
           python -m pip install --upgrade pip
           pip install httpx pyodbc openpyxl pytest
 
@@ -86,11 +89,13 @@ jobs:
             tests/test_integration_excel_sql_sharepoint_readiness.py \
             tests/test_integration_excel_sql_sharepoint_flow.py \
             tests/test_integration_excel_sql_sharepoint_e2e.py \
+            tests/test_normalize_msal_storage_state.py \
             tests/test_integration_profile_provisioning.py \
             -q
           python -m py_compile \
             scripts/integration_excel_sql_sharepoint_discovery.py \
             scripts/integration_excel_sql_sharepoint_e2e.py \
+            scripts/normalize_msal_storage_state.py \
             backend/app/services/integration_excel_sql_sharepoint_flow.py
 
       - name: Inicializar correlação da execução
@@ -113,6 +118,7 @@ jobs:
           state="$RUNNER_TEMP/msal-storage-state.json"
           printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
           chmod 600 "$state"
+          python scripts/normalize_msal_storage_state.py --path "$state"
           echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
 
       - name: Descobrir referências não secretas DEV
