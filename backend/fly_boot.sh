@@ -1,6 +1,7 @@
 #!/bin/sh
 # Boot resiliente para runtime público Fly.io — Trilha A.
 # Garante volume gravável antes de subir uvicorn; fallback opcional para /tmp.
+# Após Fly DEV Fast Deploy verde, o workflow PC24x7 Teams executa o E2E DEV.
 set -eu
 
 DATA_DIR="${REQSYS_DATA_DIR:-/data}"
