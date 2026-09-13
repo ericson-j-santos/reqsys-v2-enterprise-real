@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,3 +45,26 @@ def test_connection_string_nao_e_usada_com_senha_vazia() -> None:
     assert "Uid=reqsys_e2e_gateway_dev" in value
     assert "Encrypt=yes" in value
     assert "TrustServerCertificate=yes" in value
+
+
+class FakeCursor:
+    def __init__(self) -> None:
+        self.args = None
+
+    def execute(self, *args):
+        self.args = args
+        return self
+
+    def fetchone(self):
+        return (MODULE.FIXTURE_ID, "fixture")
+
+
+def test_probe_parametriza_correlation_id() -> None:
+    cursor = FakeCursor()
+    MODULE.execute_probe(cursor)
+    assert cursor.args is not None
+    sql, ids_json, correlation_id = cursor.args
+    assert "@CorrelationId=?" in sql
+    assert "NEWID()" not in sql
+    assert MODULE.FIXTURE_ID in ids_json
+    assert str(uuid.UUID(correlation_id)) == correlation_id
