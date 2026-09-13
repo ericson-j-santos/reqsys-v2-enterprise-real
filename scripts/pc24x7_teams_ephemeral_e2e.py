@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
-import tempfile
 import uuid
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-
-import pc24x7_teams_queue as queue
 
 API_DEFAULT = 'https://reqsys-api-dev.fly.dev'
 ADMIN_EMAIL_DEFAULT = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
@@ -55,6 +53,11 @@ def request_json(
 def _data(payload: dict) -> dict:
     data = payload.get('data') if isinstance(payload, dict) else None
     return data if isinstance(data, dict) else payload if isinstance(payload, dict) else {}
+
+
+def _stable_key(prefix: str, *values: str) -> str:
+    digest = hashlib.sha256('|'.join(values).encode('utf-8')).hexdigest()
+    return f'{prefix}:{digest}'
 
 
 def validate_admin_jwt(api_base: str, admin_jwt: str, correlation_id: str) -> bool:
@@ -195,8 +198,6 @@ def select_runtime_provider(
 ) -> tuple[str, str, bool]:
     requested = requested_provider.strip().lower()
     configured = {item.strip().lower() for item in providers_configured if item.strip()}
-    # Compatibilidade fail-safe com versões antigas do readiness que ainda não
-    # publicavam a lista: conserva a escolha explícita do operador.
     if not configured:
         return requested, requested_model, False
     if requested in configured:
@@ -205,6 +206,94 @@ def select_runtime_provider(
         if candidate in configured:
             return candidate, PROVIDER_DEFAULT_MODELS[candidate], True
     raise EphemeralE2EError('provider_selection_failed:no_supported_configured_provider')
+
+
+def _service_headers(token: str, correlation_id: str, *, scoped: bool = False) -> dict[str, str]:
+    headers = {
+        'X-Service-Token': token,
+        'X-Correlation-Id': correlation_id,
+    }
+    if scoped:
+        headers['X-Tenant-ID'] = 'reqsys-dev'
+        headers['X-Area-ID'] = 'teams-gateway'
+    return headers
+
+
+def create_conversation_without_teams(
+    api_base: str,
+    token: str,
+    correlation_id: str,
+    provider: str,
+    model: str,
+) -> dict:
+    mensagem = f'ReqSys PC24x7 DEV E2E bootstrap {correlation_id}'
+    status, payload = request_json(
+        'POST',
+        api_base.rstrip('/') + '/v1/teams-gateway/ai-conversations',
+        headers=_service_headers(token, correlation_id + '-create'),
+        body={
+            'provider': provider,
+            'model': model,
+            'mensagem': mensagem,
+            'titulo': 'ReqSys PC24x7 Teams DEV — aceite efêmero',
+            'data_classification': 'public',
+            'tenant_id': 'reqsys-dev',
+            'area_id': 'teams-gateway',
+            'requester_id': 'pc24x7-worker',
+            'cost_center': 'dev',
+            'origem': 'pc24x7',
+            'idempotency_key': _stable_key('pc24x7-create', correlation_id, mensagem),
+            'teams_destino_tipo': 'chat_1a1',
+            'teams_modo': 'bot',
+            'enviar_teams': False,
+        },
+    )
+    data = _data(payload)
+    conversation = data.get('conversation') if isinstance(data.get('conversation'), dict) else {}
+    return {
+        'http_status': status,
+        'conversation_id': conversation.get('id'),
+        'duplicate': data.get('duplicate'),
+        'secret_value_exposed': False,
+    }
+
+
+def _delivery_summary(status: int, payload: dict) -> dict:
+    data = _data(payload)
+    teams = data.get('teams') if isinstance(data.get('teams'), dict) else {}
+    delivery = teams.get('entrega') if isinstance(teams.get('entrega'), dict) else {}
+    return {
+        'http_status': status,
+        'conversation_id': data.get('conversation_id'),
+        'duplicate': data.get('duplicate'),
+        'teams_delivered': delivery.get('entregue') is True,
+        'teams_channel': delivery.get('canal_usado'),
+        'error': None if status < 400 else f'http_{status}',
+        'secret_value_exposed': False,
+    }
+
+
+def reply_same_conversation(
+    api_base: str,
+    token: str,
+    correlation_id: str,
+    conversation_id: str,
+    *,
+    enviar_teams: bool,
+) -> dict:
+    mensagem = f'ReqSys PC24x7 DEV E2E entrega {correlation_id}'
+    status, payload = request_json(
+        'POST',
+        api_base.rstrip('/') + f'/v1/teams-gateway/ai-conversations/{conversation_id}/reply',
+        headers=_service_headers(token, correlation_id + '-reply', scoped=True),
+        body={
+            'mensagem': mensagem,
+            'idempotency_key': _stable_key('pc24x7-delivery', correlation_id, conversation_id, mensagem),
+            'origem': 'pc24x7',
+            'enviar_teams': enviar_teams,
+        },
+    )
+    return _delivery_summary(status, payload)
 
 
 def execute_e2e(
@@ -217,7 +306,7 @@ def execute_e2e(
     admin_email: str = ADMIN_EMAIL_DEFAULT,
 ) -> dict:
     evidence: dict = {
-        'schema_version': '1.2.0',
+        'schema_version': '1.3.0',
         'status': 'blocked',
         'environment': 'dev',
         'correlation_id': correlation_id,
@@ -233,8 +322,9 @@ def execute_e2e(
         'token_created': False,
         'token_revoked': False,
         'readiness': None,
-        'delivery': None,
-        'queue_idempotency_proven': False,
+        'conversation': None,
+        'delivery_attempts': [],
+        'turn_idempotency_proven': False,
         'error': None,
         'secret_value_exposed': False,
         'production_touched': False,
@@ -256,58 +346,80 @@ def execute_e2e(
         token_id, token = mint_ephemeral_token(api_base, effective_admin_jwt, correlation_id)
         evidence['token_created'] = True
 
-        with tempfile.TemporaryDirectory(prefix='reqsys-pc24x7-e2e-') as tmp:
-            root = Path(tmp) / 'queue'
-            token_file = Path(tmp) / 'service-token'
-            token_file.write_text(token, encoding='utf-8')
-            try:
-                token_file.chmod(0o600)
-            except OSError:
-                pass
+        readiness_status, readiness = check_readiness(api_base, token, correlation_id)
+        evidence['readiness'] = readiness
+        if readiness_status != 200 or readiness.get('ready') is not True:
+            raise EphemeralE2EError('readiness_not_ready')
 
-            readiness_status, readiness = check_readiness(api_base, token, correlation_id)
-            evidence['readiness'] = readiness
-            if readiness_status != 200 or readiness.get('ready') is not True:
-                raise EphemeralE2EError('readiness_not_ready')
+        selected_provider, selected_model, fallback_used = select_runtime_provider(
+            provider,
+            model,
+            readiness.get('providers_configured') or [],
+        )
+        evidence['selected_provider'] = selected_provider
+        evidence['selected_model'] = selected_model
+        evidence['provider_fallback_used'] = fallback_used
 
-            selected_provider, selected_model, fallback_used = select_runtime_provider(
-                provider,
-                model,
-                readiness.get('providers_configured') or [],
+        conversation = create_conversation_without_teams(
+            api_base,
+            token,
+            correlation_id,
+            selected_provider,
+            selected_model,
+        )
+        evidence['conversation'] = conversation
+        if conversation['http_status'] not in (200, 201):
+            raise EphemeralE2EError(f"conversation_create_failed:http_{conversation['http_status']}")
+        conversation_id = str(conversation.get('conversation_id') or '').strip()
+        if not conversation_id:
+            raise EphemeralE2EError('conversation_id_missing_before_delivery')
+
+        first = reply_same_conversation(
+            api_base,
+            token,
+            correlation_id,
+            conversation_id,
+            enviar_teams=True,
+        )
+        evidence['delivery_attempts'].append(first)
+
+        delivered = first.get('teams_delivered') is True and first.get('teams_channel') == 'bot'
+        if not delivered:
+            second = reply_same_conversation(
+                api_base,
+                token,
+                correlation_id,
+                conversation_id,
+                enviar_teams=True,
             )
-            evidence['selected_provider'] = selected_provider
-            evidence['selected_model'] = selected_model
-            evidence['provider_fallback_used'] = fallback_used
+            evidence['delivery_attempts'].append(second)
+            delivered = second.get('teams_delivered') is True and second.get('teams_channel') == 'bot'
 
-            job = queue.build_job(
-                provider=selected_provider,
-                model=selected_model,
-                mensagem=f'ReqSys PC24x7 DEV E2E {correlation_id}',
-                titulo='ReqSys PC24x7 Teams DEV — aceite efêmero',
-                correlation_id=correlation_id,
-                data_classification='public',
+        if not delivered:
+            last = evidence['delivery_attempts'][-1]
+            raise EphemeralE2EError(
+                f"teams_delivery_not_confirmed:{last.get('error') or 'delivery_false'}"
             )
-            first_path = queue.enqueue(root, job)
-            delivery = queue.process_one(root, api_base, token_file)
-            evidence['delivery'] = delivery
-            if not delivery or delivery.get('status') != 'done':
-                raise EphemeralE2EError('teams_delivery_not_done')
-            if delivery.get('teams_delivered') is not True or delivery.get('teams_channel') != 'bot':
-                raise EphemeralE2EError('teams_delivery_not_confirmed')
-            if not delivery.get('conversation_id'):
-                raise EphemeralE2EError('conversation_id_missing')
 
-            duplicate_path = queue.enqueue(root, job)
-            second_delivery = queue.process_one(root, api_base, token_file)
-            done_path = root / 'done' / first_path.name
-            evidence['queue_idempotency_proven'] = duplicate_path == done_path and second_delivery is None
-            if evidence['queue_idempotency_proven'] is not True:
-                raise EphemeralE2EError('queue_idempotency_not_proven')
+        replay = reply_same_conversation(
+            api_base,
+            token,
+            correlation_id,
+            conversation_id,
+            enviar_teams=False,
+        )
+        evidence['turn_idempotency_proven'] = (
+            replay.get('http_status') == 200
+            and replay.get('duplicate') is True
+            and replay.get('teams_delivered') is False
+        )
+        if evidence['turn_idempotency_proven'] is not True:
+            raise EphemeralE2EError('turn_idempotency_not_proven')
 
-            evidence['status'] = 'done'
+        evidence['status'] = 'done'
     except EphemeralE2EError as exc:
         evidence['error'] = str(exc)
-    except Exception as exc:  # fail closed without serializing sensitive values
+    except Exception as exc:
         evidence['error'] = f'unexpected:{type(exc).__name__}'
     finally:
         token = ''
