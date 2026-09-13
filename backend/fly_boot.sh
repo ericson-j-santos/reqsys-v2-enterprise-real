@@ -54,5 +54,9 @@ else
   log "teams_recipient_bootstrap_skipped reason=config_not_found"
 fi
 
+log "ai_conversation_schema_repair_start"
+python -m app.services.ai_conversation_schema_repair
+log "ai_conversation_schema_repair_ok"
+
 log "starting_uvicorn port=${PORT}"
 exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
