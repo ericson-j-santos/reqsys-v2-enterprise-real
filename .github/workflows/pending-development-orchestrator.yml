@@ -26,6 +26,8 @@ on:
         required: true
         default: "main"
         type: string
+  issues:
+    types: [opened, reopened, labeled]
   schedule:
     - cron: "41 * * * *"
 
@@ -38,12 +40,25 @@ permissions:
   statuses: read
 
 concurrency:
-  group: pending-development-orchestrator-${{ github.event.inputs.base_branch || 'main' }}
+  group: pending-development-orchestrator-${{ github.event.inputs.base_branch || 'main' }}-${{ github.event.issue.number || 'batch' }}
   cancel-in-progress: false
 
 jobs:
   orchestrate:
     name: Descobrir, governar e encaminhar pendências executáveis
+    if: >-
+      github.event_name != 'issues' ||
+      contains(github.event.issue.labels.*.name, 'orchestrator:auto') ||
+      (
+        (
+          startsWith(github.event.issue.title, '[AUTO-NEXT]') ||
+          contains(github.event.issue.body || '', '<!-- pending-development-orchestrator:auto -->')
+        ) &&
+        (
+          github.event.issue.user.login == 'github-actions[bot]' ||
+          github.event.issue.user.login == github.repository_owner
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -76,8 +91,8 @@ jobs:
           COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
           TARGET_BRANCH: ${{ github.event.inputs.base_branch || 'main' }}
           MAX_ITEMS: ${{ github.event.inputs.max_items || '5' }}
-          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || '0' }}
-          REQUESTED_MODE: ${{ github.event.inputs.mode || 'audit' }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issues' && github.event.issue.number || github.event.inputs.issue_number || '0' }}
+          REQUESTED_MODE: ${{ github.event_name == 'issues' && 'execute' || github.event.inputs.mode || 'audit' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail

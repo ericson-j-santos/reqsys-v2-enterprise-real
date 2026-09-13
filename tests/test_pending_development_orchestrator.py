@@ -95,6 +95,7 @@ def test_issue_candidate_requires_marker_label_or_explicit_selection() -> None:
     assert is_issue_candidate(issue()) is True
     assert is_issue_candidate(issue(body="")) is False
     assert is_issue_candidate(issue(body="", labels=[{"name": "orchestrator:auto"}])) is True
+    assert is_issue_candidate(issue(body="", title="[AUTO-NEXT] Incremento")) is True
     assert is_issue_candidate(issue(body=""), explicitly_selected=True) is True
 
 
@@ -263,9 +264,16 @@ def test_report_exposes_blocked_without_claiming_dispatch() -> None:
     assert report["summary"]["dispatched"] == 0
 
 
-def test_workflow_is_scheduled_and_fail_closed() -> None:
+def test_workflow_is_scheduled_event_driven_and_fail_closed() -> None:
     workflow = (ROOT / ".github/workflows/pending-development-orchestrator.yml").read_text(encoding="utf-8")
     assert 'cron: "41 * * * *"' in workflow
+    assert "issues:" in workflow
+    assert "types: [opened, reopened, labeled]" in workflow
+    assert "startsWith(github.event.issue.title, '[AUTO-NEXT]')" in workflow
+    assert "pending-development-orchestrator:auto" in workflow
+    assert "orchestrator:auto" in workflow
+    assert "github.event.issue.number" in workflow
+    assert "github.event_name == 'issues' && 'execute'" in workflow
     assert "COPILOT_AGENT_TOKEN" in workflow
     assert "MODE=\"execute\"" in workflow
     assert "Falhar fechado quando execução estiver bloqueada" in workflow
