@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 
 from sqlalchemy import Column, String, inspect, text
 from sqlalchemy.engine import Engine
@@ -74,9 +75,7 @@ def _backfill(conn) -> None:
             f"{row['id']}|{row['data_classification']}".encode('utf-8')
         ).hexdigest()
         conn.execute(
-            text(
-                f'UPDATE {table} SET classification_lock_sha256=:digest WHERE id=:id'
-            ),
+            text(f'UPDATE {table} SET classification_lock_sha256=:digest WHERE id=:id'),
             {'digest': digest, 'id': row['id']},
         )
 
@@ -90,3 +89,15 @@ def reconciliar_schema_ai_conversations(engine: Engine) -> dict[str, object]:
         added = _add_missing_columns(conn)
         _backfill(conn)
     return {'status': 'ready', 'added_columns': sorted(added)}
+
+
+def main() -> int:
+    from app.db import engine
+
+    result = reconciliar_schema_ai_conversations(engine)
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
