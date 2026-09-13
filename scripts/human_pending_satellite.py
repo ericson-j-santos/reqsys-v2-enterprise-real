@@ -7,7 +7,6 @@ import json
 import os
 import re
 import sys
-import urllib.parse
 import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -16,23 +15,30 @@ from typing import Any
 MARKER = "reqsys-human-pending-satellite"
 
 HUMAN_PATTERNS: dict[str, tuple[str, ...]] = {
-    "approval_review": ("aprovação obrigatória", "approval required", "review obrigatória", "review required", "aprovar", "aprovação humana"),
+    "approval_review": ("aprovação obrigatória", "approval required", "review obrigatória", "review required", "aprovação humana"),
     "merge_decision": ("decisão de merge", "merge decision", "human merge", "merge manual"),
-    "conflict_choice": ("conflito", "conflict", "escolha humana", "decisão humana"),
+    "conflict_choice": ("escolha humana", "decisão humana", "human choice"),
     "environment_approval": ("environment approval", "deployment approval", "aprovação de environment", "aprovação de deployment"),
-    "secret_variable": ("secret", "secrets", "variable", "variável ausente", "credencial externa", "credential"),
-    "permission": ("permissão github", "permissão fly", "permissão entra", "permission", "branch protection", "protected branch"),
-    "dns_domain": ("dns", "domínio", "domain"),
-    "billing_limit": ("billing", "quota", "limite", "limit exceeded"),
-    "operational_acceptance": ("aceite operacional", "operational acceptance", "homologação", "homologacao"),
+    "secret_variable": ("secret ausente", "secrets ausentes", "missing secret", "variável ausente", "missing variable", "credencial externa", "external credential"),
+    "permission": ("permissão github", "permissão fly", "permissão entra", "missing permission", "sem permissão", "branch protection", "protected branch"),
+    "dns_domain": ("dns manual", "configurar dns", "dns externo", "external dns", "domínio externo", "domain ownership"),
+    "billing_limit": ("billing", "quota exceeded", "limite de conta", "account limit", "payment required"),
+    "operational_acceptance": ("aceite operacional", "operational acceptance", "aceite humano", "human acceptance"),
     "production_confirmation": ("confirmação de produção", "production confirmation", "autorizar produção", "autorizar producao", "prod approval"),
     "architecture_decision": ("decisão arquitetural", "architecture decision", "adr approval", "decisão de arquitetura"),
     "real_external_evidence": ("corpus real", "documento real", "documentos reais", "mfa real", "contrato real", "evidência real", "evidencia real", "revisão humana", "revisao humana", "sign-off", "assinatura formal"),
 }
 
+HUMAN_INTENT_PATTERNS = (
+    "humano:", "ação humana", "acao humana", "human action", "humana única", "humana unica",
+    "blueprint humano", "aprovação humana", "revisão humana", "revisao humana", "pessoa autorizada",
+    "responsável", "responsavel", "não pode fabricar", "nao pode fabricar", "não automatizável", "nao automatizavel",
+)
+
 TECHNICAL_ONLY_PATTERNS = (
     "ci vermelho", "ci failed", "codeql", "lint", "unit test", "teste unitário", "teste unitario",
     "build failed", "compilation", "compilação", "compilacao", "bug", "falha técnica", "falha tecnica",
+    "router", "404", "500", "stack trace", "traceback",
 )
 
 APPROVAL_PATTERNS = (
@@ -64,15 +70,30 @@ def norm(value: str) -> str:
 
 def classify(title: str, body: str) -> list[str]:
     text = norm(f"{title}\n{body}")
-    categories: list[str] = []
-    for category, patterns in HUMAN_PATTERNS.items():
-        if any(pattern in text for pattern in patterns):
-            categories.append(category)
-    if categories and any(pattern in text for pattern in TECHNICAL_ONLY_PATTERNS):
-        # Technical failures do not cancel a human requirement; they merely must not be escalated alone.
-        human_specific = [c for c in categories if c not in {"conflict_choice"}]
-        return human_specific
-    return categories
+    categories = [
+        category
+        for category, patterns in HUMAN_PATTERNS.items()
+        if any(pattern in text for pattern in patterns)
+    ]
+    if not categories:
+        return []
+
+    explicit_human_intent = any(pattern in text for pattern in HUMAN_INTENT_PATTERNS)
+    strong_external = any(category in categories for category in {
+        "real_external_evidence", "environment_approval", "production_confirmation",
+        "architecture_decision", "billing_limit", "dns_domain",
+    })
+    technical_context = any(pattern in text for pattern in TECHNICAL_ONLY_PATTERNS)
+
+    # A technical issue that merely mentions permissions/secrets must stay with the Coordinator.
+    if technical_context and not explicit_human_intent and not strong_external:
+        return []
+
+    # Generic mentions are insufficient without explicit human intent or a strong external dependency.
+    if not explicit_human_intent and not strong_external:
+        return []
+
+    return sorted(set(categories))
 
 
 def explicit_approval(comment: dict[str, Any]) -> bool:
@@ -96,9 +117,10 @@ def approval_refs(comments: list[dict[str, Any]]) -> list[str]:
 def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categories: list[str]) -> Finding:
     number = int(issue["number"])
     title = issue.get("title", "")
+    raw_body = issue.get("body", "") or ""
     url = issue.get("html_url", "")
     refs = approval_refs(comments)
-    body = norm(issue.get("body", ""))
+    body = norm(raw_body)
 
     external = "real_external_evidence" in categories
     prod = "production_confirmation" in categories or "prod" in body or "produção" in body or "producao" in body
@@ -122,9 +144,10 @@ def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categor
 
     raw_signature = json.dumps({
         "n": number,
+        "title": title,
+        "body_sha256": hashlib.sha256(raw_body.encode("utf-8")).hexdigest(),
         "categories": sorted(categories),
         "refs": refs,
-        "updated_at": issue.get("updated_at"),
     }, sort_keys=True, ensure_ascii=False)
     signature = hashlib.sha256(raw_signature.encode("utf-8")).hexdigest()[:16]
 
@@ -185,7 +208,15 @@ class GitHub:
         return issues
 
     def comments(self, issue_number: int) -> list[dict[str, Any]]:
-        return self.request("GET", f"/repos/{self.repo}/issues/{issue_number}/comments?per_page=100") or []
+        comments: list[dict[str, Any]] = []
+        page = 1
+        while page <= 10:
+            batch = self.request("GET", f"/repos/{self.repo}/issues/{issue_number}/comments?per_page=100&page={page}") or []
+            comments.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        return comments
 
     def comment(self, issue_number: int, body: str) -> None:
         self.request("POST", f"/repos/{self.repo}/issues/{issue_number}/comments", {"body": body})
