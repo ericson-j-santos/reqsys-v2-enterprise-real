@@ -46,6 +46,17 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Validar rastreabilidade do SHA
+        shell: bash
+        env:
+          EXPECTED_CHECKOUT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$EXPECTED_CHECKOUT_SHA"
+          observed_sha="$(GITHUB_SHA="$actual_sha" node -p 'process.env.GITHUB_SHA')"
+          test "$observed_sha" = "$actual_sha"
+
       - name: Executar testes determinísticos do harness
         run: node --test scripts/tests/planner_teams_runtime_e2e.test.mjs
 
@@ -85,7 +96,21 @@ jobs:
           node-version: '22'
 
       - name: Executar prova real Planner → Teams
-        run: node scripts/planner_teams_runtime_e2e.mjs
+        shell: bash
+        env:
+          EXPECTED_EVIDENCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_EVIDENCE_SHA" ]; then
+            echo "::error::SHA efetivamente executado diverge do SHA esperado: actual=$actual_sha expected=$EXPECTED_EVIDENCE_SHA"
+            exit 42
+          fi
+          # O GITHUB_SHA do evento workflow_run aponta para a revisão do workflow na
+          # default branch, não necessariamente para o SHA implantado. O processo do
+          # harness recebe explicitamente o HEAD efetivamente executado para que o
+          # artifact não atribua a evidência a outra revisão.
+          GITHUB_SHA="$actual_sha" node scripts/planner_teams_runtime_e2e.mjs
 
       - name: Publicar evidência auditável
         if: always()
@@ -103,6 +128,7 @@ jobs:
           echo '## Runtime E2E — Planner → Teams DEV' >> "$GITHUB_STEP_SUMMARY"
           echo '- Disparo: ${{ github.event_name }}' >> "$GITHUB_STEP_SUMMARY"
           echo '- Ambiente: DEV' >> "$GITHUB_STEP_SUMMARY"
+          echo "- SHA efetivamente executado: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
           echo '- Timeout de observação: 420 s' >> "$GITHUB_STEP_SUMMARY"
           echo '- Política: tarefa normal é controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
           echo '- Sem login por device code e sem reprovisionamento de flow.' >> "$GITHUB_STEP_SUMMARY"
