@@ -46,6 +46,17 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Validar rastreabilidade do SHA
+        shell: bash
+        env:
+          EXPECTED_CHECKOUT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$EXPECTED_CHECKOUT_SHA"
+          observed_sha="$(GITHUB_SHA="$actual_sha" node -p 'process.env.GITHUB_SHA')"
+          test "$observed_sha" = "$actual_sha"
+
       - name: Executar testes determinísticos do harness
         run: node --test scripts/tests/planner_teams_runtime_e2e.test.mjs
 
