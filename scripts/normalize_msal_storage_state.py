@@ -25,16 +25,18 @@ def normalize_bundle(payload: Any) -> tuple[dict[str, Any], int]:
         if not isinstance(entry, dict):
             removed += 1
             continue
-        raw = entry.get("value")
-        if isinstance(raw, str):
-            try:
-                decoded = json.loads(raw)
-            except json.JSONDecodeError:
-                normalized.append(entry)
-                continue
-            if not isinstance(decoded, dict):
-                removed += 1
-                continue
+
+        # Reproduz a coerção do parser legado do E2E para eliminar apenas
+        # valores que seriam JSON válido, mas não objetos e portanto quebrariam `.get()`.
+        raw = str(entry.get("value") or "")
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            normalized.append(entry)
+            continue
+        if not isinstance(decoded, dict):
+            removed += 1
+            continue
         normalized.append(entry)
 
     result = dict(payload)
