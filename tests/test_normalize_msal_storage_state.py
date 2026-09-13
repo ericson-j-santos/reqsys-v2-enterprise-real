@@ -13,8 +13,10 @@ def test_normaliza_storage_misto_sem_expor_valores(tmp_path):
         "cookies": [],
         "sessionStorage": [
             {"name": "refresh", "value": json.dumps({"credentialType": "RefreshToken", "secret": secret, "clientId": "client"})},
-            {"name": "boolean", "value": "true"},
-            {"name": "array", "value": "[]"},
+            {"name": "boolean-string", "value": "true"},
+            {"name": "array-string", "value": "[]"},
+            {"name": "numero", "value": 1},
+            {"name": "lista", "value": [1]},
             {"name": "texto-nao-json", "value": "valor-normal"},
             False,
         ],
@@ -26,7 +28,7 @@ def test_normaliza_storage_misto_sem_expor_valores(tmp_path):
     result = json.loads(path.read_text(encoding="utf-8"))
 
     assert kept == 2
-    assert removed == 3
+    assert removed == 5
     assert [item["name"] for item in result["sessionStorage"]] == ["refresh", "texto-nao-json"]
     assert secret in result["sessionStorage"][0]["value"]
 
