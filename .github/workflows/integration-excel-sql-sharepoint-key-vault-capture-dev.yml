@@ -10,12 +10,6 @@ on:
       - "scripts/integration_excel_sql_sharepoint_sql_locator.py"
       - "tests/test_integration_excel_sql_sharepoint_sql_locator.py"
   workflow_dispatch:
-    inputs:
-      strict:
-        description: "Falhar se o Key Vault ainda não resolver o locator SQL DEV"
-        required: true
-        type: boolean
-        default: true
   schedule:
     - cron: "17 * * * *"
 
@@ -197,15 +191,30 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Aplicar modo estrito somente quando solicitado manualmente
-        if: github.event_name == 'workflow_dispatch' && inputs.strict
+      - name: Gate funcional obrigatório antes do verde
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
-          status="$(python - "$EVIDENCE_DIR/capture-summary.json" <<'PY'
+          summary="$EVIDENCE_DIR/capture-summary.json"
+          test -f "$summary"
+          python - "$summary" <<'PY'
           import json, sys
           from pathlib import Path
-          print(json.loads(Path(sys.argv[1]).read_text(encoding='utf-8')).get('status'))
+
+          payload=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          checks={
+            'status_resolved': payload.get('status') == 'resolved',
+            'dsn_resolved': payload.get('dsn_resolved') is True,
+            'procedure_exists': payload.get('procedure_exists') is True,
+            'parameter_contract_ok': payload.get('parameter_contract_ok') is True,
+          }
+          failed=[name for name, passed in checks.items() if not passed]
+          print(json.dumps({
+            'gate':'functional_readiness',
+            'passed': not failed,
+            'failed_checks': failed,
+          }))
+          if failed:
+              raise SystemExit(1)
           PY
-          )"
-          test "$status" = "resolved"
