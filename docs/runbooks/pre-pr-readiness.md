@@ -23,6 +23,46 @@ Reduzir retrabalho de CI deslocando para a branch, antes da abertura da Pull Req
 7. Qualquer novo commit invalida a evidência anterior e exige nova execução.
 8. Depois da abertura da PR, os gates completos continuam obrigatórios; um `READY_FOR_PR=passed` não autoriza merge.
 
+## Enforcement v2 — caminhos de abertura de PR
+
+A regra deixou de ser apenas documental e passou a ser aplicada nos dois caminhos canônicos de abertura de PR:
+
+### Autoabertura por agente
+
+`scripts/auto_open_agent_pr.py` consulta a API do GitHub antes de criar uma PR nova e exige:
+
+- run do workflow `Pre-PR Readiness Gate` para o mesmo `GITHUB_SHA`;
+- evento `push`;
+- execução `completed` com `conclusion=success`;
+- `main` corrente como ancestral do HEAD;
+- `behind_by=0`;
+- branch estritamente à frente da base, com `ahead_by>0`.
+
+O workflow pode iniciar em paralelo com o Pre-PR Readiness; por isso o autoabridor aguarda com limite configurável (`READY_FOR_PR_WAIT_SECONDS`, padrão 600 s) e polling controlado (`READY_FOR_PR_POLL_SECONDS`, padrão 5 s). Se a evidência não aparecer ou não ficar verde dentro do limite, nenhuma chamada de criação de PR é executada.
+
+O resultado é registrado em:
+
+- `artifacts/auto-pr-request/ready-for-pr-verification.json`;
+- `artifacts/auto-pr-request/auto-pr-request.json`.
+
+Quando bloqueado, `auto-pr-request.json` usa `status=blocked_readiness`.
+
+### Abertura governada manual/agente
+
+`scripts/criar-pr-governado.sh` preserva seus preflights existentes e, imediatamente antes de `gh pr create`, executa `scripts/pre_pr_readiness.py`. O script revalida o artifact gerado e exige simultaneamente:
+
+- `status=passed`;
+- `head_sha` igual ao `git rev-parse HEAD` atual;
+- `base_ref` igual à base solicitada;
+- `base_sha` igual ao `origin/<base>` atual após o fetch;
+- `behind_by=0`.
+
+Qualquer divergência bloqueia a criação da PR.
+
+### Contrato estrutural
+
+`.github/workflows/pr-readiness-guard.yml` valida continuamente que os dois caminhos acima mantêm os controles fail-closed e executa `tests/test_auto_open_agent_pr.py` quando o contrato é alterado.
+
 ## Verificações v1
 
 O script `scripts/pre_pr_readiness.py` seleciona verificações pelo diff contra `origin/main`:
@@ -46,16 +86,27 @@ O workflow executa:
 - validação real do diff atual;
 - artifact `pre-pr-readiness-<HEAD_SHA>` contendo `base_sha`, `head_sha`, `correlation_id`, checks, bloqueios e alertas.
 
+O enforcement v2 acrescenta controles negativos para:
+
+- ausência de run do Pre-PR Readiness no HEAD atual;
+- run concluído sem sucesso;
+- avanço da `main` após a evidência;
+- tentativa de criação automática sem evidência válida.
+
 Uma execução verde de commit anterior não é evidência válida para um novo HEAD.
 
 ## Limite explícito
 
-O gate reduz falhas determinísticas antes da PR, mas não garante ausência absoluta de falhas posteriores. Checks dependentes de GitHub, ambientes externos, credenciais, disponibilidade de serviços, E2E real, políticas de revisão ou concorrência continuam no ciclo normal da PR.
+O gate reduz falhas determinísticas antes da PR, mas não garante ausência absoluta de falhas posteriores. Checks dependentes de ambientes externos, credenciais, disponibilidade de serviços, E2E real, políticas de revisão ou concorrência continuam no ciclo normal da PR.
 
-## Critério de conclusão deste incremento
+`READY_FOR_PR=passed` autoriza somente a abertura da PR. Não autoriza merge, deploy ou promoção de ambiente.
 
-- workflow dispara por `push` antes de existir PR;
-- testes do gate e controle negativo passam;
-- execução real do HEAD termina `success`;
-- artifact fica vinculado ao mesmo HEAD;
-- somente depois disso a PR do próprio incremento pode ser criada.
+## Critério de conclusão do enforcement v2
+
+- os dois caminhos canônicos de abertura de PR falham fechado sem `READY_FOR_PR=passed` do HEAD atual;
+- testes positivos e negativos do autoabridor passam;
+- o contrato estrutural confirma os controles nos scripts atuais;
+- o `Pre-PR Readiness Gate` do próprio incremento fica verde no HEAD final;
+- a PR do incremento só é criada depois dessa evidência;
+- os checks completos da PR são revalidados no mesmo SHA;
+- nenhum merge automático é executado por este incremento.
