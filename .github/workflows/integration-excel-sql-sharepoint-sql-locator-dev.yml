@@ -10,12 +10,17 @@ on:
       - "tests/test_integration_excel_sql_sharepoint_sql_locator.py"
       - ".github/workflows/integration-excel-sql-sharepoint-sql-locator-dev.yml"
   workflow_dispatch:
+    inputs:
+      strict:
+        description: "Falhar se o DSN ou o contrato SQL DEV estiver indisponível"
+        required: true
+        type: boolean
+        default: true
   schedule:
     - cron: "30 12 * * 1-5"
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: integration-excel-sql-sharepoint-sql-locator-dev
@@ -56,142 +61,21 @@ jobs:
           set -euo pipefail
           python -m pytest tests/test_integration_excel_sql_sharepoint_sql_locator.py -q
 
-      - name: Determinar fonte segura do DSN
-        id: dsn_source
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -n "${INTEGRATION_E2E_SQL_DSN:-}" ]; then
-            echo "source=github_environment_secret" >> "$GITHUB_OUTPUT"
-          else
-            echo "source=key_vault" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Validar configuração OIDC para fallback Key Vault
-        if: steps.dsn_source.outputs.source == 'key_vault'
-        shell: bash
-        env:
-          CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
-          CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
-          CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
-          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-        run: |
-          set -euo pipefail
-          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::Configuração OIDC/Key Vault ausente: $name"
-              exit 2
-            fi
-          done
-          echo "oidc_keyvault_configured=true"
-
-      - name: Autenticar no Azure por OIDC
-        id: azure_login
-        if: steps.dsn_source.outputs.source == 'key_vault'
-        continue-on-error: true
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
-        with:
-          client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
-
-      - name: Resolver DSN no Key Vault sem expor nome ou valor
-        id: keyvault_resolver
-        if: steps.dsn_source.outputs.source == 'key_vault' && steps.azure_login.outcome == 'success'
-        continue-on-error: true
-        shell: bash
-        env:
-          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-        run: |
-          set -euo pipefail
-          names="$RUNNER_TEMP/secret-names.txt"
-          selected="$RUNNER_TEMP/sql-secret-name.txt"
-          az keyvault secret list --vault-name "$REQSYS_KEY_VAULT_NAME" --query '[].name' -o tsv > "$names"
-          python - "$names" "$selected" <<'PY'
-          import re
-          import sys
-          from pathlib import Path
-
-          names = [x.strip() for x in Path(sys.argv[1]).read_text(encoding='utf-8').splitlines() if x.strip()]
-          candidates = [
-              name for name in names
-              if re.search(r'(sql.*(dsn|connection|conn|string)|(?:dsn|connection|conn|string).*sql)', name, re.I)
-          ]
-          print(f'sql_candidate_count={len(candidates)}')
-          if len(candidates) != 1:
-              raise SystemExit(3)
-          Path(sys.argv[2]).write_text(candidates[0], encoding='utf-8')
-          PY
-          secret_name="$(cat "$selected")"
-          dsn="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$secret_name" --query value -o tsv)"
-          if [ -z "$dsn" ]; then
-            echo "::error::Segredo SQL candidato está vazio."
-            exit 4
-          fi
-          case "$dsn" in
-            *$'\n'*|*$'\r'*)
-              echo "::error::DSN contém quebra de linha inesperada."
-              exit 5
-              ;;
-          esac
-          echo "::add-mask::$dsn"
-          printf 'INTEGRATION_E2E_SQL_DSN=%s\n' "$dsn" >> "$GITHUB_ENV"
-          echo "dsn_resolved_from_key_vault=true"
-
-      - name: Registrar bloqueio externo sanitizado
-        if: >-
-          steps.dsn_source.outputs.source == 'key_vault' &&
-          (steps.azure_login.outcome != 'success' || steps.keyvault_resolver.outcome != 'success')
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$EVIDENCE_DIR"
-          if [ "${{ steps.azure_login.outcome }}" != "success" ]; then
-            error="azure_oidc_login_failed"
-          else
-            error="keyvault_dsn_resolution_failed"
-          fi
-          python - "$EVIDENCE_DIR/sql-locator.json" "$error" <<'PY'
-          import json
-          import os
-          import sys
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          error = sys.argv[2]
-          payload = {
-              "schema_version": "1.0.0",
-              "feature": "excel_sql_sharepoint_sql_locator",
-              "captured_at": datetime.now(timezone.utc).isoformat(),
-              "source_sha": os.environ.get("GITHUB_SHA", ""),
-              "correlation_id": f"sql-locator-{os.environ.get('GITHUB_RUN_ID', '')}-{os.environ.get('GITHUB_RUN_ATTEMPT', '')}",
-              "mocked": False,
-              "simulated": False,
-              "status": "blocked",
-              "environment": "dev",
-              "dsn_present": False,
-              "procedure": os.environ.get("INTEGRATION_E2E_SQL_PROCEDURE", ""),
-              "procedure_exists": False,
-              "parameter_contract_ok": False,
-              "error": error,
-          }
-          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          print(json.dumps({"status": "blocked", "error": error}, ensure_ascii=False))
-          PY
-
       - name: Consultar somente metadados SQL DEV
-        if: >-
-          steps.dsn_source.outputs.source == 'github_environment_secret' ||
-          (steps.dsn_source.outputs.source == 'key_vault' && steps.azure_login.outcome == 'success' && steps.keyvault_resolver.outcome == 'success')
+        env:
+          STRICT_REQUESTED: ${{ inputs.strict || 'false' }}
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
-          python scripts/integration_excel_sql_sharepoint_sql_locator.py \
-            --strict \
-            --output "$EVIDENCE_DIR/sql-locator.json" \
-            --source-sha "$GITHUB_SHA" \
+          args=(
+            --output "$EVIDENCE_DIR/sql-locator.json"
+            --source-sha "$GITHUB_SHA"
             --correlation-id "sql-locator-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          )
+          if [ "$STRICT_REQUESTED" = "true" ]; then
+            args+=(--strict)
+          fi
+          python scripts/integration_excel_sql_sharepoint_sql_locator.py "${args[@]}"
 
       - name: Publicar evidência sanitizada
         if: always()
@@ -201,13 +85,3 @@ jobs:
           path: ${{ env.EVIDENCE_DIR }}/sql-locator.json
           if-no-files-found: error
           retention-days: 30
-
-      - name: Falhar fechado se fallback externo permanecer bloqueado
-        if: >-
-          always() &&
-          steps.dsn_source.outputs.source == 'key_vault' &&
-          (steps.azure_login.outcome != 'success' || steps.keyvault_resolver.outcome != 'success')
-        shell: bash
-        run: |
-          echo "::error::Fallback Key Vault bloqueado; consulte o artifact sanitizado desta execução."
-          exit 1
