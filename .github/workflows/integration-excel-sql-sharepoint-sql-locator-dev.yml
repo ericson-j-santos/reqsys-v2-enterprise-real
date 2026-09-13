@@ -86,7 +86,9 @@ jobs:
           echo "oidc_keyvault_configured=true"
 
       - name: Autenticar no Azure por OIDC
+        id: azure_login
         if: steps.dsn_source.outputs.source == 'key_vault'
+        continue-on-error: true
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
@@ -94,7 +96,9 @@ jobs:
           subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
 
       - name: Resolver DSN no Key Vault sem expor nome ou valor
-        if: steps.dsn_source.outputs.source == 'key_vault'
+        id: keyvault_resolver
+        if: steps.dsn_source.outputs.source == 'key_vault' && steps.azure_login.outcome == 'success'
+        continue-on-error: true
         shell: bash
         env:
           REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
@@ -134,7 +138,52 @@ jobs:
           printf 'INTEGRATION_E2E_SQL_DSN=%s\n' "$dsn" >> "$GITHUB_ENV"
           echo "dsn_resolved_from_key_vault=true"
 
+      - name: Registrar bloqueio externo sanitizado
+        if: >-
+          steps.dsn_source.outputs.source == 'key_vault' &&
+          (steps.azure_login.outcome != 'success' || steps.keyvault_resolver.outcome != 'success')
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          if [ "${{ steps.azure_login.outcome }}" != "success" ]; then
+            error="azure_oidc_login_failed"
+          else
+            error="keyvault_dsn_resolution_failed"
+          fi
+          python - "$EVIDENCE_DIR/sql-locator.json" "$error" <<'PY'
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          error = sys.argv[2]
+          payload = {
+              "schema_version": "1.0.0",
+              "feature": "excel_sql_sharepoint_sql_locator",
+              "captured_at": datetime.now(timezone.utc).isoformat(),
+              "source_sha": os.environ.get("GITHUB_SHA", ""),
+              "correlation_id": f"sql-locator-{os.environ.get('GITHUB_RUN_ID', '')}-{os.environ.get('GITHUB_RUN_ATTEMPT', '')}",
+              "mocked": False,
+              "simulated": False,
+              "status": "blocked",
+              "environment": "dev",
+              "dsn_present": False,
+              "procedure": os.environ.get("INTEGRATION_E2E_SQL_PROCEDURE", ""),
+              "procedure_exists": False,
+              "parameter_contract_ok": False,
+              "error": error,
+          }
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps({"status": "blocked", "error": error}, ensure_ascii=False))
+          PY
+
       - name: Consultar somente metadados SQL DEV
+        if: >-
+          steps.dsn_source.outputs.source == 'github_environment_secret' ||
+          (steps.dsn_source.outputs.source == 'key_vault' && steps.azure_login.outcome == 'success' && steps.keyvault_resolver.outcome == 'success')
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
@@ -150,5 +199,15 @@ jobs:
         with:
           name: integration-sql-locator-dev-${{ github.run_id }}
           path: ${{ env.EVIDENCE_DIR }}/sql-locator.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
+
+      - name: Falhar fechado se fallback externo permanecer bloqueado
+        if: >-
+          always() &&
+          steps.dsn_source.outputs.source == 'key_vault' &&
+          (steps.azure_login.outcome != 'success' || steps.keyvault_resolver.outcome != 'success')
+        shell: bash
+        run: |
+          echo "::error::Fallback Key Vault bloqueado; consulte o artifact sanitizado desta execução."
+          exit 1
