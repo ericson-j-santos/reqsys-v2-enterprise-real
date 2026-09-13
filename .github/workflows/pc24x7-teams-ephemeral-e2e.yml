@@ -2,18 +2,14 @@ name: PC24x7 Teams Ephemeral E2E — DEV
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.github/workflows/pc24x7-teams-ephemeral-e2e.yml'
-      - 'scripts/pc24x7_teams_ephemeral_e2e.py'
-      - 'scripts/pc24x7_teams_queue.py'
-      - 'tests/test_pc24x7_teams_ephemeral_e2e.py'
-      - 'tests/test_pc24x7_teams_ephemeral_provider_selection.py'
-      - 'tests/test_pc24x7_teams_ephemeral_e2e_workflow.py'
-      - 'tests/test_pc24x7_teams_queue.py'
-  push:
+  workflow_run:
+    workflows:
+      - Fly DEV Fast Deploy
+    types:
+      - completed
     branches:
       - main
+  pull_request:
     paths:
       - '.github/workflows/pc24x7-teams-ephemeral-e2e.yml'
       - 'scripts/pc24x7_teams_ephemeral_e2e.py'
@@ -51,7 +47,9 @@ jobs:
 
   e2e-dev:
     name: Readiness + Teams real + revogação — DEV
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
