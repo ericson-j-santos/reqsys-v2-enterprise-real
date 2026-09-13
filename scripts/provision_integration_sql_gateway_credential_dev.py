@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import string
+import uuid
 from ctypes import wintypes
 from datetime import datetime, timezone
 from pathlib import Path
@@ -112,18 +113,30 @@ def credential_write(password: str) -> None:
     buffer = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
     credential = CREDENTIALW()
     credential.Flags = 0
-    credential.Type = 1  # CRED_TYPE_GENERIC
+    credential.Type = 1
     credential.TargetName = CREDENTIAL_TARGET
     credential.Comment = "ReqSys Excel-SQL-SharePoint DEV gateway credential"
     credential.CredentialBlobSize = len(blob)
     credential.CredentialBlob = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte))
-    credential.Persist = 2  # CRED_PERSIST_LOCAL_MACHINE
+    credential.Persist = 2
     credential.AttributeCount = 0
     credential.Attributes = None
     credential.TargetAlias = None
     credential.UserName = LOGIN
     if not ctypes.windll.advapi32.CredWriteW(ctypes.byref(credential), 0):
         raise ctypes.WinError()
+
+
+def execute_probe(cursor, fixture_id: str = FIXTURE_ID) -> None:
+    correlation_id = str(uuid.uuid4())
+    cursor.execute(
+        f"EXEC {PROCEDURE} @IdsJson=?, @CorrelationId=?",
+        json.dumps([fixture_id]),
+        correlation_id,
+    )
+    row = cursor.fetchone()
+    if row is None or str(row[0]) != fixture_id:
+        raise RuntimeError("sql_login_execute_probe_failed")
 
 
 def verify_login(server: str, driver: str, password: str) -> None:
@@ -136,13 +149,7 @@ def verify_login(server: str, driver: str, password: str) -> None:
         database, login = cursor.fetchone()
         if str(database) != DATABASE or str(login).casefold() != LOGIN.casefold():
             raise RuntimeError("sql_login_context_invalid")
-        cursor.execute(
-            f"EXEC {PROCEDURE} @IdsJson=?, @CorrelationId=NEWID()",
-            json.dumps([FIXTURE_ID]),
-        )
-        row = cursor.fetchone()
-        if row is None or str(row[0]) != FIXTURE_ID:
-            raise RuntimeError("sql_login_execute_probe_failed")
+        execute_probe(cursor)
     finally:
         connection.close()
 
