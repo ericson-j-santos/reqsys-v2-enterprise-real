@@ -9,6 +9,8 @@ on:
       - ".github/workflows/integration-excel-sql-sharepoint-key-vault-capture-dev.yml"
       - "scripts/integration_excel_sql_sharepoint_sql_locator.py"
       - "tests/test_integration_excel_sql_sharepoint_sql_locator.py"
+      - "scripts/provision_integration_excel_sql_sharepoint_dev_sql.py"
+      - "tests/test_provision_integration_excel_sql_sharepoint_dev_sql.py"
   workflow_dispatch:
   schedule:
     - cron: "17 * * * *"
