@@ -1,0 +1,78 @@
+name: Human Pending Satellite
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Executar sem comentar nas issues"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+  checks: read
+  deployments: read
+
+concurrency:
+  group: human-pending-satellite
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Detectar e capturar pendências humanas
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Executar testes do classificador
+        run: python -m pytest -q tests/test_human_pending_satellite.py
+
+      - name: Executar rotina satélite
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python scripts/human_pending_satellite.py "${args[@]}"
+
+      - name: Resumo
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f artifacts/human-pending-satellite/evidence.json ]]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/human-pending-satellite/evidence.json')
+          data = json.loads(p.read_text(encoding='utf-8'))
+          findings = data.get('human_findings', [])
+          print('## Human Pending Satellite')
+          print()
+          print(f"- Pendências humanas detectadas: {len(findings)}")
+          print(f"- Novas notificações: {data.get('notification_count', 0)}")
+          print('- Evidência bruta/segredos: não armazenados pelo workflow')
+          PY
+          fi >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-pending-satellite-${{ github.run_id }}
+          path: artifacts/human-pending-satellite/evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
