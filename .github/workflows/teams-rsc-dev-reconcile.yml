@@ -1,0 +1,194 @@
+name: Teams RSC DEV Reconcile
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/teams-rsc-dev-reconcile.yml"
+      - "scripts/teams_rsc_dev_reconciler.py"
+      - "tests/test_teams_rsc_dev_reconciler.py"
+  workflow_dispatch:
+    inputs:
+      attempt_apply:
+        description: "Tentar materializar RSC se bootstrap dedicado estiver configurado"
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    - cron: "11 * * * *"
+  workflow_run:
+    workflows:
+      - "Runtime E2E Continuous — DEV"
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: teams-rsc-dev-reconcile
+  cancel-in-progress: false
+
+env:
+  HUMAN_GATE_ISSUE: "1644"
+  PLANNER_TEAMS_DEV_TEAM_ID: "07936381-2d94-41db-9f46-a7b28008caba"
+  PLANNER_TEAMS_DEV_CHANNEL_ID: "19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2"
+  EVIDENCE_PATH: "audit/teams-rsc-dev/evidence.json"
+
+jobs:
+  contract:
+    name: Validar contrato do reconciliador RSC
+    if: ${{ github.event_name != 'workflow_run' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Executar testes focados
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir "pytest==9.0.3"
+          python -m pytest -q tests/test_teams_rsc_dev_reconciler.py
+
+  reconcile:
+    name: Reconciliar RSC e retomar E2E DEV
+    if: ${{ github.event_name != 'pull_request' && github.event_name != 'workflow_run' }}
+    needs: contract
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 8
+    env:
+      POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      TEAMS_RSC_BOOTSTRAP_CLIENT_ID: ${{ secrets.TEAMS_RSC_BOOTSTRAP_CLIENT_ID }}
+      TEAMS_RSC_BOOTSTRAP_CLIENT_SECRET: ${{ secrets.TEAMS_RSC_BOOTSTRAP_CLIENT_SECRET }}
+      TEAMS_RSC_CATALOG_APP_ID: ${{ vars.TEAMS_RSC_CATALOG_APP_ID }}
+      TEAMS_RSC_AUTO_APPLY: ${{ vars.TEAMS_RSC_AUTO_APPLY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Executar reconciliação fail-closed
+        id: reconcile
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--evidence "$EVIDENCE_PATH")
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.attempt_apply }}" == "true" ]]; then
+            args+=(--attempt-apply)
+          elif [[ "${TEAMS_RSC_AUTO_APPLY:-false}" == "true" ]]; then
+            args+=(--attempt-apply)
+          fi
+          python scripts/teams_rsc_dev_reconciler.py "${args[@]}"
+          echo "status=$(jq -r '.status' "$EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
+          echo "apply_status=$(jq -r '.apply_status // "none"' "$EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
+          echo "signature=$(jq -r '.state_signature' "$EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-rsc-dev-reconcile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_PATH }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Registrar bloqueio idempotente no Human Gate
+        if: steps.reconcile.outputs.status != 'ready'
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker="<!-- reqsys-teams-rsc:${{ steps.reconcile.outputs.signature }} -->"
+          body="$(gh issue view "$HUMAN_GATE_ISSUE" --repo "$GITHUB_REPOSITORY" --json comments --jq '.comments[].body')"
+          if grep -Fq "$marker" <<<"$body"; then
+            echo "Estado já registrado; comentário duplicado evitado."
+            exit 0
+          fi
+          apply_status="${{ steps.reconcile.outputs.apply_status }}"
+          gh issue comment "$HUMAN_GATE_ISSUE" --repo "$GITHUB_REPOSITORY" --body "$marker
+          ## Reconciliação automática RSC DEV
+          - Run: \`${{ github.run_id }}\`
+          - Estado: \`${{ steps.reconcile.outputs.status }}\`
+          - Aplicação automática: \`${apply_status}\`
+          - Permissão alvo: \`ChannelMessage.Read.Group\`
+          - Team: \`${PLANNER_TEAMS_DEV_TEAM_ID}\`
+          - Segredos expostos: **não**
+
+          O fluxo permanece fail-closed. Se \`bootstrap_configuration_missing\`, falta somente a identidade de bootstrap e o ID do app no catálogo; nenhuma permissão foi ampliada automaticamente."
+
+      - name: Disparar E2E real quando Graph estiver legível
+        if: steps.reconcile.outputs.status == 'ready'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run "runtime-e2e-continuous.yml" --repo "$GITHUB_REPOSITORY" --ref main
+          gh issue comment "$HUMAN_GATE_ISSUE" --repo "$GITHUB_REPOSITORY" --body "<!-- reqsys-teams-rsc-ready:${{ steps.reconcile.outputs.signature }} -->
+          RSC DEV confirmado por leitura Graph independente no run \`${{ github.run_id }}\`. O \`Runtime E2E Continuous — DEV\` foi disparado automaticamente. A issue só será fechada após artifact \`passed\` do mesmo SHA executado."
+
+  close-human-gate:
+    name: Fechar Human Gate somente com E2E real
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Validar job e artifact do E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs")"
+          conclusion="$(jq -r '.jobs[] | select(.name=="Planner → Teams — E2E contínuo DEV") | .conclusion' <<<"$jobs" | head -1)"
+          if [[ "$conclusion" != "success" ]]; then
+            echo "Job real não concluiu com sucesso; Human Gate permanece aberto."
+            exit 0
+          fi
+
+          artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts")"
+          artifact_id="$(jq -r '.artifacts[] | select(.name | startswith("runtime-e2e-planner-teams-")) | .id' <<<"$artifacts" | head -1)"
+          if [[ -z "$artifact_id" || "$artifact_id" == "null" ]]; then
+            echo "::error::Artifact E2E ausente."
+            exit 21
+          fi
+
+          mkdir -p /tmp/reqsys-e2e
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/reqsys-e2e/evidence.zip
+          unzip -q /tmp/reqsys-e2e/evidence.zip -d /tmp/reqsys-e2e/data
+          evidence="$(find /tmp/reqsys-e2e/data -name acceptance.json -print -quit)"
+          test -n "$evidence"
+
+          status="$(jq -r '.status' "$evidence")"
+          commit_sha="$(jq -r '.commit_sha' "$evidence")"
+          mocked="$(jq -r '.mocked' "$evidence")"
+          simulated="$(jq -r '.simulated' "$evidence")"
+          normal_message="$(jq -r '.observations.normal_message.id // empty' "$evidence")"
+          e2e_message="$(jq -r '.observations.e2e_message.id // empty' "$evidence")"
+
+          test "$status" = "passed"
+          test "$commit_sha" = "$SOURCE_HEAD_SHA"
+          test "$mocked" = "false"
+          test "$simulated" = "false"
+          test -n "$normal_message"
+          test -z "$e2e_message"
+
+      - name: Fechar Human Gate com evidência atual
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh issue close "$HUMAN_GATE_ISSUE" --repo "$GITHUB_REPOSITORY" --reason completed --comment "## E2E Planner → Teams comprovado
+          - Run: \`$SOURCE_RUN_ID\`
+          - SHA: \`$SOURCE_HEAD_SHA\`
+          - Resultado: **passed**
+          - Controle positivo Teams: observado por leitura Graph independente
+          - Controle negativo \`REQSYS-E2E-*\`: ausente
+          - Mock/simulação: **não**
+
+          Human Gate fechado automaticamente somente após validação real e vinculada ao mesmo SHA."
