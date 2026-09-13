@@ -59,5 +59,5 @@ def test_readiness_exposes_only_sanitized_provider_names(monkeypatch):
 
 def test_e2e_source_uses_public_classification_only_for_synthetic_probe():
     source = SCRIPT.read_text(encoding='utf-8')
-    assert "data_classification='public'" in source
     assert "'data_classification': 'public'" in source
+    assert "'data_classification': 'internal'" not in source
