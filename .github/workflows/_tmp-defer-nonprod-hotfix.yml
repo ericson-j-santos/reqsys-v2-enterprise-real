@@ -30,106 +30,101 @@ jobs:
 
           def replace_once(path: str, old: str, new: str) -> None:
               p = Path(path)
-              text = p.read_text(encoding='utf-8')
+              text = p.read_text(encoding="utf-8")
               if old not in text:
-                  raise SystemExit(f'marker not found in {path}: {old[:80]!r}')
-              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+                  raise SystemExit(f"marker not found in {path}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
 
           def append_once(path: str, marker: str, block: str) -> None:
               p = Path(path)
-              text = p.read_text(encoding='utf-8')
+              text = p.read_text(encoding="utf-8")
               if marker in text:
                   return
-              p.write_text(text.rstrip() + '\n\n' + block.strip() + '\n', encoding='utf-8')
+              p.write_text(text.rstrip() + "\n\n" + block.strip() + "\n", encoding="utf-8")
 
-          # Pending Development Orchestrator: rótulos de escopo e deferimento.
           replace_once(
-              'scripts/pending_development_orchestrator.py',
+              "scripts/pending_development_orchestrator.py",
               'HUMAN_GATE_LABEL = "orchestrator:human-gate"\nCOPILOT_ASSIGNEE = "copilot-swe-agent[bot]"',
               'HUMAN_GATE_LABEL = "orchestrator:human-gate"\nDEFER_NONPROD_LABEL = "satellite:defer-nonprod"\nPROD_ONLY_LABEL = "scope:prod-only"\nOCR_CERT_ONLY_LABEL = "scope:ocr-certification-only"\nCOPILOT_ASSIGNEE = "copilot-swe-agent[bot]"',
           )
           replace_once(
-              'scripts/pending_development_orchestrator.py',
+              "scripts/pending_development_orchestrator.py",
               '''def _combined_text(item: dict[str, Any]) -> str:\n    labels = " ".join(sorted(_label_names(item)))\n    return f"{item.get('title') or ''}\\n{item.get('body') or ''}\\n{labels}".lower()\n\n\ndef is_issue_candidate(issue: dict[str, Any], *, explicitly_selected: bool = False) -> bool:\n    if issue.get("pull_request"):\n        return False\n    if explicitly_selected:\n        return True\n    title = str(issue.get("title") or "")\n    body = str(issue.get("body") or "")\n    labels = _label_names(issue)\n    return AUTO_MARKER in body or AUTO_LABEL in labels or title.upper().startswith("[AUTO-NEXT]")''',
               '''def _combined_text(item: dict[str, Any]) -> str:\n    labels = " ".join(sorted(_label_names(item)))\n    return f"{item.get('title') or ''}\\n{item.get('body') or ''}\\n{labels}".lower()\n\n\ndef deferred_scope(item: dict[str, Any]) -> str | None:\n    labels = _label_names(item)\n    if DEFER_NONPROD_LABEL not in labels:\n        return None\n    if PROD_ONLY_LABEL in labels:\n        return "prod"\n    if OCR_CERT_ONLY_LABEL in labels:\n        return "ocr-certification"\n    return None\n\n\ndef is_issue_candidate(issue: dict[str, Any], *, explicitly_selected: bool = False) -> bool:\n    if issue.get("pull_request"):\n        return False\n    if explicitly_selected:\n        return True\n    if deferred_scope(issue):\n        return False\n    title = str(issue.get("title") or "")\n    body = str(issue.get("body") or "")\n    labels = _label_names(issue)\n    return AUTO_MARKER in body or AUTO_LABEL in labels or title.upper().startswith("[AUTO-NEXT]")''',
           )
           replace_once(
-              'scripts/pending_development_orchestrator.py',
+              "scripts/pending_development_orchestrator.py",
               '''    number = int(issue["number"])\n    title = str(issue.get("title") or "")\n    risk, risk_reason = classify_risk(issue)\n    gate = evaluate_gate(status_report, issue)\n    if risk == "high":''',
               '''    number = int(issue["number"])\n    title = str(issue.get("title") or "")\n    gate = evaluate_gate(status_report, issue)\n    scope = deferred_scope(issue)\n    if scope:\n        return Decision(\n            "issue",\n            number,\n            title,\n            "deferred_external_gate",\n            "deferred",\n            f"deferred_until_{scope.replace('-', '_')}",\n            "high",\n            gate["increment_type"],\n            gate["reason"],\n            url=_issue_url(issue),\n        )\n    risk, risk_reason = classify_risk(issue)\n    if risk == "high":''',
           )
           replace_once(
-              'scripts/pending_development_orchestrator.py',
+              "scripts/pending_development_orchestrator.py",
               '''            "planned": sum(1 for item in decisions if item.status == "planned"),\n        },''',
               '''            "planned": sum(1 for item in decisions if item.status == "planned"),\n            "deferred": sum(1 for item in decisions if item.status == "deferred"),\n        },''',
           )
           replace_once(
-              'scripts/pending_development_orchestrator.py',
+              "scripts/pending_development_orchestrator.py",
               '''            "no_merge_no_prod_deploy_no_secret_or_admin_change",\n        ],''',
               '''            "no_merge_no_prod_deploy_no_secret_or_admin_change",\n            "scoped_human_gates_deferred_without_weakening_external_gate",\n        ],''',
           )
 
-          # Human Pending Satellite: contexto explícito de escopo.
           replace_once(
-              'scripts/human_pending_satellite.py',
+              "scripts/human_pending_satellite.py",
               'MARKER = "reqsys-human-pending-satellite"\n\nHUMAN_PATTERNS:',
               'MARKER = "reqsys-human-pending-satellite"\nDEFER_NONPROD_LABEL = "satellite:defer-nonprod"\nPROD_ONLY_LABEL = "scope:prod-only"\nOCR_CERT_ONLY_LABEL = "scope:ocr-certification-only"\nVALID_SCOPES = {"nonprod", "prod", "ocr-certification"}\n\nHUMAN_PATTERNS:',
           )
           replace_once(
-              'scripts/human_pending_satellite.py',
+              "scripts/human_pending_satellite.py",
               '''def norm(value: str) -> str:\n    return re.sub(r"\\s+", " ", (value or "").lower()).strip()\n\n\ndef classify(title: str, body: str) -> list[str]:''',
               '''def norm(value: str) -> str:\n    return re.sub(r"\\s+", " ", (value or "").lower()).strip()\n\n\ndef _label_names(issue: dict[str, Any]) -> set[str]:\n    labels: set[str] = set()\n    for item in issue.get("labels") or []:\n        if isinstance(item, str):\n            labels.add(item.strip().lower())\n        elif isinstance(item, dict) and item.get("name"):\n            labels.add(str(item["name"]).strip().lower())\n    return labels\n\n\ndef deferred_scope(issue: dict[str, Any]) -> str | None:\n    labels = _label_names(issue)\n    if DEFER_NONPROD_LABEL not in labels:\n        return None\n    if PROD_ONLY_LABEL in labels:\n        return "prod"\n    if OCR_CERT_ONLY_LABEL in labels:\n        return "ocr-certification"\n    return None\n\n\ndef should_defer_notification(issue: dict[str, Any], scope: str) -> bool:\n    if scope not in VALID_SCOPES:\n        raise ValueError(f"scope inválido: {scope}")\n    target_scope = deferred_scope(issue)\n    return target_scope is not None and target_scope != scope\n\n\ndef classify(title: str, body: str) -> list[str]:''',
           )
           replace_once(
-              'scripts/human_pending_satellite.py',
+              "scripts/human_pending_satellite.py",
               '''def run(token: str, repo: str, dry_run: bool, output: str) -> int:\n    gh = GitHub(token, repo)\n    findings: list[Finding] = []\n    notifications = 0\n    for issue in gh.open_issues():\n        categories = classify(issue.get("title", ""), issue.get("body", ""))''',
               '''def run(token: str, repo: str, dry_run: bool, output: str, scope: str = "nonprod") -> int:\n    if scope not in VALID_SCOPES:\n        raise ValueError(f"scope inválido: {scope}")\n    gh = GitHub(token, repo)\n    findings: list[Finding] = []\n    notifications = 0\n    for issue in gh.open_issues():\n        if should_defer_notification(issue, scope):\n            continue\n        categories = classify(issue.get("title", ""), issue.get("body", ""))''',
           )
           replace_once(
-              'scripts/human_pending_satellite.py',
+              "scripts/human_pending_satellite.py",
               '''        "dry_run": dry_run,\n        "human_findings":''',
               '''        "dry_run": dry_run,\n        "scope": scope,\n        "human_findings":''',
           )
           replace_once(
-              'scripts/human_pending_satellite.py',
+              "scripts/human_pending_satellite.py",
               '''    parser.add_argument("--dry-run", action="store_true")\n    parser.add_argument("--output", default="artifacts/human-pending-satellite/evidence.json")''',
               '''    parser.add_argument("--dry-run", action="store_true")\n    parser.add_argument("--scope", choices=sorted(VALID_SCOPES), default="nonprod")\n    parser.add_argument("--output", default="artifacts/human-pending-satellite/evidence.json")''',
           )
           replace_once(
-              'scripts/human_pending_satellite.py',
-              '    return run(args.token, args.repo, args.dry_run, args.output)',
-              '    return run(args.token, args.repo, args.dry_run, args.output, args.scope)',
+              "scripts/human_pending_satellite.py",
+              "    return run(args.token, args.repo, args.dry_run, args.output)",
+              "    return run(args.token, args.repo, args.dry_run, args.output, args.scope)",
           )
 
-          # Workflow: schedule NONPROD; dispatch manual pode reativar escopo específico.
           replace_once(
-              '.github/workflows/human-pending-satellite.yml',
+              ".github/workflows/human-pending-satellite.yml",
               '''      dry_run:\n        description: "Executar sem comentar nas issues"\n        required: false\n        default: false\n        type: boolean\n  schedule:''',
               '''      dry_run:\n        description: "Executar sem comentar nas issues"\n        required: false\n        default: false\n        type: boolean\n      scope:\n        description: "Escopo da varredura humana"\n        required: false\n        default: nonprod\n        type: choice\n        options:\n          - nonprod\n          - prod\n          - ocr-certification\n  schedule:''',
           )
+          scope_expr = "$" + "{{ github.event_name == 'workflow_dispatch' && inputs.scope || 'nonprod' }}"
           replace_once(
-              '.github/workflows/human-pending-satellite.yml',
-              '''          args=()\n          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then\n            args+=(--dry-run)\n          fi\n          python scripts/human_pending_satellite.py "${args[@]}"''',
-              '''          args=(--scope "${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'nonprod' }}")\n          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then\n            args+=(--dry-run)\n          fi\n          python scripts/human_pending_satellite.py "${args[@]}"''',
+              ".github/workflows/human-pending-satellite.yml",
+              "          args=()\n",
+              f'          args=(--scope "{scope_expr}")\n',
           )
 
-          # Testes do orquestrador.
           replace_once(
-              'tests/test_pending_development_orchestrator.py',
+              "tests/test_pending_development_orchestrator.py",
               '''    copilot_fix_marker,\n    failing_runs_for_pr,''',
               '''    copilot_fix_marker,\n    deferred_scope,\n    failing_runs_for_pr,''',
           )
           append_once(
-              'tests/test_pending_development_orchestrator.py',
-              'test_nonprod_deferred_issue_does_not_consume_automatic_candidate_slot',
+              "tests/test_pending_development_orchestrator.py",
+              "test_nonprod_deferred_issue_does_not_consume_automatic_candidate_slot",
               '''def test_nonprod_deferred_issue_does_not_consume_automatic_candidate_slot() -> None:\n    item = issue(labels=[\n        {"name": "orchestrator:auto"},\n        {"name": "satellite:defer-nonprod"},\n        {"name": "scope:prod-only"},\n    ])\n    assert deferred_scope(item) == "prod"\n    assert is_issue_candidate(item) is False\n    assert is_issue_candidate(item, explicitly_selected=True) is True\n\n\ndef test_explicit_deferred_issue_is_auditable_without_dispatch() -> None:\n    client = FakeClient(copilot_token="configured")\n    item = issue(labels=[\n        {"name": "satellite:defer-nonprod"},\n        {"name": "scope:ocr-certification-only"},\n    ])\n    decision = process_issue(\n        client,\n        item,\n        green_status(),\n        execute=True,\n        base_branch="main",\n        dispatched_routes=set(),\n    )\n    assert decision.route == "deferred_external_gate"\n    assert decision.status == "deferred"\n    assert decision.reason == "deferred_until_ocr_certification"\n    assert decision.action_executed is False\n    assert client.assigned == []\n    assert client.dispatched == 0\n''',
           )
-
-          # Testes do satélite e do workflow.
           append_once(
-              'tests/test_human_pending_satellite.py',
-              'test_scoped_gate_is_deferred_only_outside_its_target_scope',
-              '''def test_scoped_gate_is_deferred_only_outside_its_target_scope():\n    prod_issue = {\n        "labels": [\n            {"name": "satellite:defer-nonprod"},\n            {"name": "scope:prod-only"},\n        ]\n    }\n    ocr_issue = {\n        "labels": [\n            {"name": "satellite:defer-nonprod"},\n            {"name": "scope:ocr-certification-only"},\n        ]\n    }\n    assert module.should_defer_notification(prod_issue, "nonprod") is True\n    assert module.should_defer_notification(prod_issue, "prod") is False\n    assert module.should_defer_notification(prod_issue, "ocr-certification") is True\n    assert module.should_defer_notification(ocr_issue, "nonprod") is True\n    assert module.should_defer_notification(ocr_issue, "ocr-certification") is False\n    assert module.should_defer_notification(ocr_issue, "prod") is True\n\n\ndef test_human_pending_workflow_defaults_schedule_to_nonprod_scope():\n    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/human-pending-satellite.yml").read_text(encoding="utf-8")\n    assert "default: nonprod" in workflow\n    assert "- prod" in workflow\n    assert "- ocr-certification" in workflow\n    assert "--scope" in workflow\n''',
+              "tests/test_human_pending_satellite.py",
+              "test_scoped_gate_is_deferred_only_outside_its_target_scope",
+              '''def test_scoped_gate_is_deferred_only_outside_its_target_scope():\n    prod_issue = {"labels": [{"name": "satellite:defer-nonprod"}, {"name": "scope:prod-only"}]}\n    ocr_issue = {"labels": [{"name": "satellite:defer-nonprod"}, {"name": "scope:ocr-certification-only"}]}\n    assert module.should_defer_notification(prod_issue, "nonprod") is True\n    assert module.should_defer_notification(prod_issue, "prod") is False\n    assert module.should_defer_notification(prod_issue, "ocr-certification") is True\n    assert module.should_defer_notification(ocr_issue, "nonprod") is True\n    assert module.should_defer_notification(ocr_issue, "ocr-certification") is False\n    assert module.should_defer_notification(ocr_issue, "prod") is True\n\n\ndef test_human_pending_workflow_defaults_schedule_to_nonprod_scope():\n    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/human-pending-satellite.yml").read_text(encoding="utf-8")\n    assert "default: nonprod" in workflow\n    assert "- prod" in workflow\n    assert "- ocr-certification" in workflow\n    assert "--scope" in workflow\n''',
           )
           PY
       - name: Executar testes focados
