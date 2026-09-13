@@ -7,11 +7,15 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
+
+
+PRE_PR_WORKFLOW = "pre-pr-readiness.yml"
 
 
 def build_body(branch: str, base: str) -> str:
@@ -47,6 +51,18 @@ increment-type: consolidate
 """
 
 
+def append_readiness_body(body: str, evidence: dict[str, Any]) -> str:
+    return (
+        body.rstrip()
+        + "\n\n## READY_FOR_PR\n\n"
+        + f"- Status: `passed`\n"
+        + f"- Head SHA: `{evidence['head_sha']}`\n"
+        + f"- Base SHA: `{evidence['base_sha']}`\n"
+        + f"- Run: `{evidence['run_id']}`\n"
+        + f"- Run URL: {evidence['run_url']}\n"
+    )
+
+
 def branch_metadata_slug(branch: str) -> str:
     return branch.replace("/", "-")
 
@@ -61,6 +77,12 @@ def load_branch_pr_metadata(branch: str) -> dict[str, str] | None:
     if not title and not body:
         return None
     return {"title": title, "body": body}
+
+
+class ReadyForPrBlocked(RuntimeError):
+    def __init__(self, reason: str, evidence: dict[str, Any] | None = None) -> None:
+        super().__init__(reason)
+        self.evidence = evidence or {"status": "blocked", "reason": reason}
 
 
 class GitHubClient:
@@ -107,6 +129,29 @@ class GitHubClient:
                 return pulls[0]
         return None
 
+    def list_pre_pr_readiness_runs(self, head_sha: str) -> list[dict[str, Any]]:
+        query = urlencode({"head_sha": head_sha, "event": "push", "per_page": "20"})
+        payload = self._request("GET", f"/actions/workflows/{PRE_PR_WORKFLOW}/runs?{query}")
+        if not isinstance(payload, dict):
+            return []
+        runs = payload.get("workflow_runs")
+        return [item for item in runs if isinstance(item, dict)] if isinstance(runs, list) else []
+
+    def get_branch_sha(self, branch: str) -> str:
+        payload = self._request("GET", f"/branches/{quote(branch, safe='')}")
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Resposta inválida ao consultar branch base: {branch}")
+        commit = payload.get("commit")
+        if not isinstance(commit, dict) or not str(commit.get("sha") or "").strip():
+            raise RuntimeError(f"SHA ausente ao consultar branch base: {branch}")
+        return str(commit["sha"])
+
+    def compare(self, base_sha: str, head_sha: str) -> dict[str, Any]:
+        payload = self._request("GET", f"/compare/{base_sha}...{head_sha}")
+        if not isinstance(payload, dict):
+            raise RuntimeError("Resposta inválida ao comparar base e HEAD")
+        return payload
+
     def create_pr(self, *, title: str, body: str, head: str, base: str, draft: bool = True) -> dict[str, Any]:
         return self._request(
             "POST",
@@ -119,6 +164,96 @@ class GitHubClient:
 
     def add_labels(self, number: int, labels: list[str]) -> None:
         self._request("POST", f"/issues/{number}/labels", {"labels": labels})
+
+
+def write_readiness_artifact(evidence: dict[str, Any]) -> Path:
+    out_dir = Path(os.environ.get("PR_REQUEST_ARTIFACT_DIR", "artifacts/auto-pr-request"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "ready-for-pr-verification.json"
+    path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def wait_for_ready_for_pr(
+    client: GitHubClient,
+    *,
+    head_sha: str,
+    base: str,
+    wait_seconds: float = 600.0,
+    poll_seconds: float = 5.0,
+) -> dict[str, Any]:
+    if not head_sha:
+        raise ReadyForPrBlocked("GITHUB_SHA ausente; não é possível vincular READY_FOR_PR ao HEAD atual")
+
+    started = time.monotonic()
+    last_run: dict[str, Any] | None = None
+    while True:
+        runs = [run for run in client.list_pre_pr_readiness_runs(head_sha) if str(run.get("head_sha") or "") == head_sha]
+        if runs:
+            last_run = runs[0]
+            status = str(last_run.get("status") or "")
+            conclusion = str(last_run.get("conclusion") or "")
+            if status == "completed":
+                if conclusion != "success":
+                    evidence = {
+                        "status": "blocked",
+                        "reason": "ready_for_pr_run_not_successful",
+                        "head_sha": head_sha,
+                        "run_id": last_run.get("id"),
+                        "run_url": last_run.get("html_url"),
+                        "run_status": status,
+                        "run_conclusion": conclusion,
+                    }
+                    raise ReadyForPrBlocked(
+                        f"Pre-PR Readiness Gate não passou para o HEAD atual ({conclusion or 'sem conclusão'})",
+                        evidence,
+                    )
+                break
+
+        elapsed = time.monotonic() - started
+        if elapsed >= wait_seconds:
+            evidence = {
+                "status": "blocked",
+                "reason": "ready_for_pr_run_missing_or_pending",
+                "head_sha": head_sha,
+                "run_id": last_run.get("id") if last_run else None,
+                "run_url": last_run.get("html_url") if last_run else None,
+                "run_status": last_run.get("status") if last_run else "missing",
+                "run_conclusion": last_run.get("conclusion") if last_run else None,
+                "wait_seconds": wait_seconds,
+            }
+            raise ReadyForPrBlocked(
+                "Pre-PR Readiness Gate verde não foi encontrado para o HEAD atual dentro do limite",
+                evidence,
+            )
+        time.sleep(max(0.05, min(poll_seconds, wait_seconds - elapsed)))
+
+    base_sha = client.get_branch_sha(base)
+    comparison = client.compare(base_sha, head_sha)
+    behind_by = int(comparison.get("behind_by") or 0)
+    ahead_by = int(comparison.get("ahead_by") or 0)
+    compare_status = str(comparison.get("status") or "")
+    evidence = {
+        "status": "passed",
+        "head_sha": head_sha,
+        "base": base,
+        "base_sha": base_sha,
+        "behind_by": behind_by,
+        "ahead_by": ahead_by,
+        "compare_status": compare_status,
+        "run_id": last_run.get("id") if last_run else None,
+        "run_url": last_run.get("html_url") if last_run else None,
+        "run_status": last_run.get("status") if last_run else None,
+        "run_conclusion": last_run.get("conclusion") if last_run else None,
+    }
+    if behind_by != 0 or compare_status != "ahead" or ahead_by <= 0:
+        evidence["status"] = "blocked"
+        evidence["reason"] = "base_not_ancestor_of_head"
+        raise ReadyForPrBlocked(
+            f"Branch não está estritamente à frente da base atual {base}; reconciliar antes de abrir PR",
+            evidence,
+        )
+    return evidence
 
 
 def write_pr_request_artifact(
@@ -333,6 +468,30 @@ def main() -> int:
                 existing=existing,
             )
 
+        head_sha = os.environ.get("GITHUB_SHA", "").strip()
+        try:
+            readiness = wait_for_ready_for_pr(
+                client,
+                head_sha=head_sha,
+                base=args.base,
+                wait_seconds=float(os.environ.get("READY_FOR_PR_WAIT_SECONDS", "600")),
+                poll_seconds=float(os.environ.get("READY_FOR_PR_POLL_SECONDS", "5")),
+            )
+        except ReadyForPrBlocked as exc:
+            write_readiness_artifact(exc.evidence)
+            write_pr_request_artifact(
+                branch=branch,
+                base=args.base,
+                title=title,
+                body=body,
+                status="blocked_readiness",
+                error=str(exc),
+            )
+            print(f"READY_FOR_PR bloqueou abertura do PR: {exc}", file=sys.stderr)
+            return 3
+
+        write_readiness_artifact(readiness)
+        body = append_readiness_body(body, readiness)
         return create_pr_best_effort(
             client,
             branch=branch,

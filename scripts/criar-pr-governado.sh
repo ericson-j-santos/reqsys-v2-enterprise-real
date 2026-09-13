@@ -93,13 +93,50 @@ if [[ "$ALTEROU_FRONTEND" == true ]]; then
 fi
 
 SHA="$(git rev-parse HEAD)"
-registrar "Preflight verde para SHA $SHA"
+EVIDENCIA_READY_FOR_PR="artifacts/pre-pr-readiness/pre-pr-readiness.json"
+registrar "Executando READY_FOR_PR canônico para SHA $SHA"
+if ! python scripts/pre_pr_readiness.py \
+  --base-ref "$BASE" \
+  --expected-head-sha "$SHA" \
+  --correlation-id "$CORRELACAO_ID" \
+  --output "$EVIDENCIA_READY_FOR_PR"; then
+  falhar "READY_FOR_PR bloqueado para o HEAD atual. Consulte $EVIDENCIA_READY_FOR_PR."
+fi
+
+BASE_SHA_ATUAL="$(git rev-parse "origin/$BASE")"
+python - "$EVIDENCIA_READY_FOR_PR" "$SHA" "$BASE" "$BASE_SHA_ATUAL" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+head_sha = sys.argv[2]
+base_ref = sys.argv[3]
+base_sha = sys.argv[4]
+payload = json.loads(path.read_text(encoding="utf-8"))
+errors = []
+if payload.get("status") != "passed":
+    errors.append(f"status={payload.get('status')}")
+if payload.get("head_sha") != head_sha:
+    errors.append("head_sha divergente")
+if payload.get("base_ref") != base_ref:
+    errors.append("base_ref divergente")
+if payload.get("base_sha") != base_sha:
+    errors.append("base_sha divergente")
+if payload.get("behind_by") != 0:
+    errors.append(f"behind_by={payload.get('behind_by')}")
+if errors:
+    raise SystemExit("READY_FOR_PR inválido: " + "; ".join(errors))
+print(f"READY_FOR_PR=passed head={head_sha} base={base_sha}")
+PY
+
+registrar "Preflight e READY_FOR_PR verdes para SHA $SHA"
 ARGUMENTOS=(--base "$BASE" --head "$BRANCH" --title "$TITULO")
 [[ "$RASCUNHO" == true ]] && ARGUMENTOS+=(--draft)
 if [[ -n "$ARQUIVO_CORPO" ]]; then
   ARGUMENTOS+=(--body-file "$ARQUIVO_CORPO")
 else
-  ARGUMENTOS+=(--body "Guard Rail de Prontidão para PR aprovado. Correlation ID: $CORRELACAO_ID. Head SHA: $SHA.")
+  ARGUMENTOS+=(--body "Guard Rail de Prontidão para PR aprovado. Correlation ID: $CORRELACAO_ID. Head SHA: $SHA. READY_FOR_PR=passed. Base SHA: $BASE_SHA_ATUAL.")
 fi
 gh pr create "${ARGUMENTOS[@]}"
-registrar "PR criado somente após preflight verde."
+registrar "PR criado somente após READY_FOR_PR=passed no HEAD atual."

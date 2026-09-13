@@ -5,11 +5,17 @@ on:
     branches: [main]
     paths:
       - scripts/criar-pr-governado.sh
+      - scripts/auto_open_agent_pr.py
+      - scripts/pre_pr_readiness.py
+      - tests/test_auto_open_agent_pr.py
       - .github/workflows/pr-readiness-guard.yml
   push:
     branches: [main]
     paths:
       - scripts/criar-pr-governado.sh
+      - scripts/auto_open_agent_pr.py
+      - scripts/pre_pr_readiness.py
+      - tests/test_auto_open_agent_pr.py
       - .github/workflows/pr-readiness-guard.yml
   workflow_dispatch:
 
@@ -24,17 +30,25 @@ jobs:
   validar-guard-rail:
     name: Validar contrato fail-closed
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependências mínimas de teste
+        run: python -m pip install --disable-pip-version-check pytest
       - name: Validar sintaxe
-        run: bash -n scripts/criar-pr-governado.sh
+        run: |
+          set -euo pipefail
+          bash -n scripts/criar-pr-governado.sh
+          python -m py_compile scripts/auto_open_agent_pr.py scripts/pre_pr_readiness.py
       - name: Validar controles obrigatórios
         shell: bash
         run: |
           set -euo pipefail
-          arquivo=scripts/criar-pr-governado.sh
-          controles=(
+          shell_script=scripts/criar-pr-governado.sh
+          shell_controls=(
             'set -Eeuo pipefail'
             'gh auth status'
             'git status --porcelain'
@@ -44,12 +58,33 @@ jobs:
             'npm audit --audit-level=high'
             'npm run test:unit'
             'npm run build'
+            'python scripts/pre_pr_readiness.py'
+            'READY_FOR_PR'
             'gh pr create'
           )
-          for controle in "${controles[@]}"; do
-            grep -Fq -- "$controle" "$arquivo" || {
-              echo "Controle obrigatório ausente: $controle"
+          for control in "${shell_controls[@]}"; do
+            grep -Fq -- "$control" "$shell_script" || {
+              echo "Controle obrigatório ausente no criador governado: $control"
               exit 1
             }
           done
-          echo "Contrato do Guard Rail de Prontidão para PR íntegro."
+
+          python_script=scripts/auto_open_agent_pr.py
+          python_controls=(
+            'PRE_PR_WORKFLOW = "pre-pr-readiness.yml"'
+            'wait_for_ready_for_pr'
+            'ready_for_pr_run_not_successful'
+            'ready_for_pr_run_missing_or_pending'
+            'base_not_ancestor_of_head'
+            'blocked_readiness'
+            'client.create_pr'
+          )
+          for control in "${python_controls[@]}"; do
+            grep -Fq -- "$control" "$python_script" || {
+              echo "Controle obrigatório ausente no autoabridor: $control"
+              exit 1
+            }
+          done
+          echo "Contrato READY_FOR_PR íntegro nos dois caminhos de abertura de PR."
+      - name: Executar testes do autoabridor
+        run: python -m pytest tests/test_auto_open_agent_pr.py -q

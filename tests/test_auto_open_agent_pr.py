@@ -7,6 +7,7 @@ import pytest
 
 from scripts.auto_open_agent_pr import (
     GitHubClient,
+    ReadyForPrBlocked,
     build_body,
     create_pr_best_effort,
     is_permission_error,
@@ -15,6 +16,7 @@ from scripts.auto_open_agent_pr import (
     resolve_token,
     skip_existing_pr,
     sync_existing_pr,
+    wait_for_ready_for_pr,
 )
 
 
@@ -225,3 +227,192 @@ def test_main_uses_branch_metadata_when_present(tmp_path, monkeypatch):
     assert main() == 0
     assert fake.updated["title"] == "fix(ci): corrigir PR Conflict Guard com checkout do head SHA"
     assert fake.updated["body"] == "descricao canonica do PR"
+
+
+def test_wait_for_ready_for_pr_accepts_same_sha_and_current_base():
+    class FakeClient:
+        def list_pre_pr_readiness_runs(self, head_sha: str):
+            return [
+                {
+                    "id": 77,
+                    "html_url": "https://github.com/example/repo/actions/runs/77",
+                    "head_sha": head_sha,
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+            ]
+
+        def get_branch_sha(self, branch: str):
+            assert branch == "main"
+            return "base-sha"
+
+        def compare(self, base_sha: str, head_sha: str):
+            assert base_sha == "base-sha"
+            assert head_sha == "head-sha"
+            return {"behind_by": 0, "ahead_by": 2, "status": "ahead"}
+
+    evidence = wait_for_ready_for_pr(
+        FakeClient(),  # type: ignore[arg-type]
+        head_sha="head-sha",
+        base="main",
+        wait_seconds=0,
+        poll_seconds=0.01,
+    )
+    assert evidence["status"] == "passed"
+    assert evidence["run_id"] == 77
+    assert evidence["base_sha"] == "base-sha"
+
+
+def test_wait_for_ready_for_pr_blocks_failed_run():
+    class FakeClient:
+        def list_pre_pr_readiness_runs(self, head_sha: str):
+            return [
+                {
+                    "id": 88,
+                    "html_url": "https://github.com/example/repo/actions/runs/88",
+                    "head_sha": head_sha,
+                    "status": "completed",
+                    "conclusion": "failure",
+                }
+            ]
+
+    with pytest.raises(ReadyForPrBlocked, match="não passou") as exc:
+        wait_for_ready_for_pr(
+            FakeClient(),  # type: ignore[arg-type]
+            head_sha="head-sha",
+            base="main",
+            wait_seconds=0,
+            poll_seconds=0.01,
+        )
+    assert exc.value.evidence["reason"] == "ready_for_pr_run_not_successful"
+
+
+def test_wait_for_ready_for_pr_blocks_missing_run():
+    class FakeClient:
+        def list_pre_pr_readiness_runs(self, head_sha: str):
+            return []
+
+    with pytest.raises(ReadyForPrBlocked, match="não foi encontrado") as exc:
+        wait_for_ready_for_pr(
+            FakeClient(),  # type: ignore[arg-type]
+            head_sha="head-sha",
+            base="main",
+            wait_seconds=0,
+            poll_seconds=0.01,
+        )
+    assert exc.value.evidence["reason"] == "ready_for_pr_run_missing_or_pending"
+
+
+def test_wait_for_ready_for_pr_blocks_when_main_advanced():
+    class FakeClient:
+        def list_pre_pr_readiness_runs(self, head_sha: str):
+            return [
+                {
+                    "id": 99,
+                    "html_url": "https://github.com/example/repo/actions/runs/99",
+                    "head_sha": head_sha,
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+            ]
+
+        def get_branch_sha(self, branch: str):
+            return "new-main"
+
+        def compare(self, base_sha: str, head_sha: str):
+            return {"behind_by": 1, "ahead_by": 2, "status": "diverged"}
+
+    with pytest.raises(ReadyForPrBlocked, match="reconciliar") as exc:
+        wait_for_ready_for_pr(
+            FakeClient(),  # type: ignore[arg-type]
+            head_sha="head-sha",
+            base="main",
+            wait_seconds=0,
+            poll_seconds=0.01,
+        )
+    assert exc.value.evidence["reason"] == "base_not_ancestor_of_head"
+
+
+def test_main_blocks_new_pr_without_ready_for_pr(monkeypatch, tmp_path):
+    class FakeClient:
+        created = False
+
+        def find_existing_pr(self, head: str, base: str):
+            return None
+
+        def list_pre_pr_readiness_runs(self, head_sha: str):
+            return []
+
+        def create_pr(self, **kwargs):
+            self.created = True
+            raise AssertionError("create_pr não deveria ser chamado")
+
+    fake = FakeClient()
+    monkeypatch.setenv("GITHUB_REPOSITORY", "ericson-j-santos/reqsys-v2-enterprise-real")
+    monkeypatch.setenv("GITHUB_REF_NAME", "cursor/novo-incremento")
+    monkeypatch.setenv("GITHUB_SHA", "sha-sem-gate")
+    monkeypatch.setenv("GH_TOKEN", "token-teste")
+    monkeypatch.setenv("READY_FOR_PR_WAIT_SECONDS", "0")
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
+    monkeypatch.setattr("scripts.auto_open_agent_pr.GitHubClient", lambda token, repo: fake)
+    monkeypatch.setattr("sys.argv", ["auto_open_agent_pr.py", "--base", "main"])
+
+    assert main() == 3
+    assert fake.created is False
+    request = json.loads((tmp_path / "auto-pr-request.json").read_text(encoding="utf-8"))
+    readiness = json.loads((tmp_path / "ready-for-pr-verification.json").read_text(encoding="utf-8"))
+    assert request["status"] == "blocked_readiness"
+    assert readiness["status"] == "blocked"
+    assert readiness["head_sha"] == "sha-sem-gate"
+
+
+def test_main_creates_new_pr_only_after_ready_for_pr(monkeypatch, tmp_path):
+    class FakeClient:
+        created_payload = None
+
+        def find_existing_pr(self, head: str, base: str):
+            return None
+
+        def list_pre_pr_readiness_runs(self, head_sha: str):
+            return [
+                {
+                    "id": 123,
+                    "html_url": "https://github.com/example/repo/actions/runs/123",
+                    "head_sha": head_sha,
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+            ]
+
+        def get_branch_sha(self, branch: str):
+            return "main-sha"
+
+        def compare(self, base_sha: str, head_sha: str):
+            return {"behind_by": 0, "ahead_by": 1, "status": "ahead"}
+
+        def create_pr(self, **kwargs):
+            self.created_payload = kwargs
+            return {"number": 500, "html_url": "https://github.com/example/repo/pull/500"}
+
+        def add_labels(self, number: int, labels: list[str]):
+            return None
+
+    fake = FakeClient()
+    monkeypatch.setenv("GITHUB_REPOSITORY", "ericson-j-santos/reqsys-v2-enterprise-real")
+    monkeypatch.setenv("GITHUB_REF_NAME", "cursor/novo-incremento")
+    monkeypatch.setenv("GITHUB_SHA", "head-sha")
+    monkeypatch.setenv("GH_TOKEN", "token-teste")
+    monkeypatch.setenv("READY_FOR_PR_WAIT_SECONDS", "0")
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path))
+    monkeypatch.setattr("scripts.auto_open_agent_pr.GitHubClient", lambda token, repo: fake)
+    monkeypatch.setattr("sys.argv", ["auto_open_agent_pr.py", "--base", "main"])
+
+    assert main() == 0
+    assert fake.created_payload is not None
+    assert "## READY_FOR_PR" in fake.created_payload["body"]
+    assert "head-sha" in fake.created_payload["body"]
+    request = json.loads((tmp_path / "auto-pr-request.json").read_text(encoding="utf-8"))
+    readiness = json.loads((tmp_path / "ready-for-pr-verification.json").read_text(encoding="utf-8"))
+    assert request["status"] == "created"
+    assert readiness["status"] == "passed"
+    assert readiness["run_id"] == 123
