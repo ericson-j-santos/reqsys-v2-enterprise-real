@@ -1,0 +1,223 @@
+name: Key Vault RBAC Bootstrap — DEV
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/key-vault-rbac-bootstrap-dev.yml"
+      - "tests/test_key_vault_rbac_bootstrap_dev_workflow.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write
+
+concurrency:
+  group: key-vault-rbac-bootstrap-dev
+  cancel-in-progress: false
+
+env:
+  TARGET_VAULT_NAME: kv-reqsys-ccp
+  TARGET_RESOURCE_GROUP: rg-reqsys-ccp
+  TARGET_PRINCIPAL_OID: 5660aef6-6eb0-43d1-889a-0af710fe9054
+  TARGET_ROLE_ID: 4633458b-17de-408a-b874-0445c86b69e6
+  EVIDENCE_FILE: key-vault-rbac-bootstrap-dev.json
+
+jobs:
+  grant:
+    name: Conceder Key Vault Secrets User no escopo exato DEV
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Inicializar evidência sanitizada
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"status":"started","environment":"dev","role":"Key Vault Secrets User","rbac_scope":"key_vault_only","role_assignment_verified":false,"secret_values_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_FILE"
+
+      - name: Validar configuração governada
+        shell: bash
+        env:
+          CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            test -n "${!name:-}"
+          done
+          test "$REQSYS_KEY_VAULT_NAME" = "$TARGET_VAULT_NAME"
+          printf 'CCP_AZURE_CLIENT_ID=%s\n' "$CCP_AZURE_CLIENT_ID" >> "$GITHUB_ENV"
+          printf 'CCP_AZURE_TENANT_ID=%s\n' "$CCP_AZURE_TENANT_ID" >> "$GITHUB_ENV"
+          printf 'CCP_AZURE_SUBSCRIPTION_ID=%s\n' "$CCP_AZURE_SUBSCRIPTION_ID" >> "$GITHUB_ENV"
+
+      - name: Login Azure OIDC da identidade mutadora
+        id: azure-login
+        continue-on-error: true
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Registrar bloqueio de autenticação sem falso verde
+        if: steps.azure-login.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$EVIDENCE_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          d = json.loads(p.read_text(encoding='utf-8'))
+          d.update(status='blocked', blocker='mutator_oidc_login_failed')
+          p.write_text(json.dumps(d, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Conceder RBAC mínimo de forma idempotente
+        id: grant
+        if: steps.azure-login.outcome == 'success'
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: none
+        run: |
+          set -euo pipefail
+          set +x
+          scope="/subscriptions/${CCP_AZURE_SUBSCRIPTION_ID}/resourceGroups/${TARGET_RESOURCE_GROUP}/providers/Microsoft.KeyVault/vaults/${TARGET_VAULT_NAME}"
+          role_definition_id="/subscriptions/${CCP_AZURE_SUBSCRIPTION_ID}/providers/Microsoft.Authorization/roleDefinitions/${TARGET_ROLE_ID}"
+          existing="$(az role assignment list --scope "$scope" --query "[?principalId=='${TARGET_PRINCIPAL_OID}' && roleDefinitionId=='${role_definition_id}'].id | [0]" -o tsv 2>/dev/null || true)"
+          created=false
+          if [ -z "$existing" ]; then
+            error_file="$RUNNER_TEMP/rbac-create.err"
+            if az role assignment create \
+              --assignee-object-id "$TARGET_PRINCIPAL_OID" \
+              --assignee-principal-type ServicePrincipal \
+              --role "$TARGET_ROLE_ID" \
+              --scope "$scope" \
+              --output none 2>"$error_file"; then
+              created=true
+            else
+              blocker=role_assignment_create_failed
+              if grep -q 'AuthorizationFailed' "$error_file"; then blocker=roleAssignments_write_not_permitted; fi
+              if grep -q 'RoleAssignmentExists' "$error_file"; then blocker=role_assignment_exists_unverified; fi
+              BLOCKER="$blocker" python - "$EVIDENCE_FILE" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          d = json.loads(p.read_text(encoding='utf-8'))
+          d.update(status='blocked', blocker=os.environ['BLOCKER'])
+          p.write_text(json.dumps(d, indent=2) + '\n', encoding='utf-8')
+          PY
+              exit 0
+            fi
+          fi
+
+          verified=""
+          for attempt in 1 2 3 4 5 6; do
+            verified="$(az role assignment list --scope "$scope" --query "[?principalId=='${TARGET_PRINCIPAL_OID}' && roleDefinitionId=='${role_definition_id}'].id | [0]" -o tsv 2>/dev/null || true)"
+            [ -n "$verified" ] && break
+            sleep 10
+          done
+          if [ -z "$verified" ]; then
+            python - "$EVIDENCE_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          d = json.loads(p.read_text(encoding='utf-8'))
+          d.update(status='blocked', blocker='role_assignment_not_observed_after_write')
+          p.write_text(json.dumps(d, indent=2) + '\n', encoding='utf-8')
+          PY
+            exit 0
+          fi
+
+          CREATED="$created" python - "$EVIDENCE_FILE" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          d = json.loads(p.read_text(encoding='utf-8'))
+          d.update(
+              status='resolved',
+              result='created' if os.environ['CREATED'] == 'true' else 'already_present',
+              role_assignment_verified=True,
+              blocker=None,
+          )
+          p.write_text(json.dumps(d, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: key-vault-rbac-bootstrap-dev-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Gate da concessão administrativa
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$EVIDENCE_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          d = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          if d.get('status') != 'resolved' or d.get('role_assignment_verified') is not True:
+              raise SystemExit('key_vault_rbac_bootstrap_not_resolved')
+          PY
+
+  verify-reader-and-dispatch:
+    name: Validar reader DEV e disparar captura SQL estrita
+    needs: grant
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 8
+    steps:
+      - name: Validar identidade reader DEV
+        shell: bash
+        env:
+          TARGET_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+        run: |
+          set -euo pipefail
+          for name in TARGET_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            test -n "${!name:-}"
+          done
+          test "$REQSYS_KEY_VAULT_NAME" = "$TARGET_VAULT_NAME"
+          printf 'TARGET_CLIENT_ID=%s\n' "$TARGET_CLIENT_ID" >> "$GITHUB_ENV"
+          printf 'AZURE_TENANT_ID=%s\n' "$AZURE_TENANT_ID" >> "$GITHUB_ENV"
+          printf 'AZURE_SUBSCRIPTION_ID=%s\n' "$AZURE_SUBSCRIPTION_ID" >> "$GITHUB_ENV"
+
+      - name: Login Azure OIDC do reader DEV
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ env.TARGET_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provar acesso metadata-only ao Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          az keyvault secret list --vault-name "$TARGET_VAULT_NAME" --maxresults 1 --query 'length(@)' -o tsv >/dev/null
+          printf '%s\n' 'KEY_VAULT_READER_METADATA_ACCESS=passed'
+
+      - name: Disparar captura SQL DEV em modo estrito
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run integration-excel-sql-sharepoint-key-vault-capture-dev.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f strict=true
+          echo 'CAPTURE_DISPATCHED=true'
