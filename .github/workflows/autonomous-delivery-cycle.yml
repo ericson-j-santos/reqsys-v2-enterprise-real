@@ -60,6 +60,8 @@ jobs:
           REQUIRED_WORKFLOWS: ${{ env.REQUIRED_WORKFLOWS }}
         with:
           script: |
+            const crypto = require('crypto');
+            const fs = require('fs');
             const { owner, repo } = context.repo;
             const dryRun = String(process.env.DRY_RUN || 'true') === 'true';
             const requiredLabel = process.env.REQUIRED_LABEL || 'cycle:auto-merge-approved';
@@ -107,8 +109,60 @@ jobs:
                   source_pr: prNumber,
                   source_url: prUrl,
                   title: title.slice(0, 180),
-                  status: 'queued_for_chat_execution',
+                  status: 'captured',
+                  issue_number: null,
+                  issue_url: null,
+                  handoff_error: null,
                 }));
+            }
+
+            async function materializeNextIncrement(increment, decision) {
+              if (!decision?.merged || !decision?.merge_sha) {
+                increment.status = 'captured_waiting_for_successful_merge';
+                return;
+              }
+
+              const key = crypto
+                .createHash('sha256')
+                .update(`${decision.merge_sha}:${increment.title}`)
+                .digest('hex')
+                .slice(0, 12);
+              const marker = `<!-- pending-development-orchestrator:source-pr:${increment.source_pr}:merge:${decision.merge_sha}:key:${key} -->`;
+              const body = [
+                '<!-- pending-development-orchestrator:auto -->',
+                marker,
+                '',
+                '## Origem automática',
+                '',
+                `- PR de origem: #${increment.source_pr}`,
+                `- Merge SHA: \`${decision.merge_sha}\``,
+                `- URL de origem: ${increment.source_url}`,
+                '',
+                '## Incremento',
+                '',
+                increment.title,
+                '',
+                '## Governança',
+                '',
+                '- Este item só deve ser executado pelo Pending Development Orchestrator após o Agent Increment Gate.',
+                '- Não autoriza merge, deploy de produção, alteração de segredos, permissões administrativas ou branch protection.',
+                '- A implementação deve usar branch isolada, testes e validação ponta a ponta aplicável.',
+              ].join('\n');
+
+              try {
+                const created = await github.rest.issues.create({
+                  owner,
+                  repo,
+                  title: `[AUTO-NEXT] ${increment.title}`.slice(0, 240),
+                  body,
+                });
+                increment.status = 'queued_for_orchestrator';
+                increment.issue_number = created.data.number;
+                increment.issue_url = created.data.html_url;
+              } catch (error) {
+                increment.status = 'handoff_failed';
+                increment.handoff_error = String(error?.message || error).slice(0, 500);
+              }
             }
 
             for (const candidate of candidates) {
@@ -190,8 +244,13 @@ jobs:
               decisions.push(decision);
             }
 
+            for (const increment of nextIncrements) {
+              const decision = decisions.find((item) => item.pr_number === increment.source_pr);
+              await materializeNextIncrement(increment, decision);
+            }
+
             const payload = {
-              schema_version: '1.0.0',
+              schema_version: '1.1.0',
               generated_at: new Date().toISOString(),
               repo: `${owner}/${repo}`,
               mode: dryRun ? 'dry_run' : 'merge_enabled',
@@ -209,9 +268,17 @@ jobs:
                 'requires_expected_head_sha',
                 'squash_merge_only',
                 'post_merge_push_observation',
-                'next_increment_capture_report_only',
+                'next_increment_issue_materialization_only_after_successful_merge',
+                'pending_development_orchestrator_handoff',
               ],
             };
+
+            fs.mkdirSync('artifacts/autonomous-delivery-cycle', { recursive: true });
+            fs.writeFileSync(
+              'artifacts/autonomous-delivery-cycle/autonomous-delivery-cycle.json',
+              `${JSON.stringify(payload, null, 2)}\n`,
+              'utf8',
+            );
 
             const summary = [
               '# Autonomous Delivery Cycle',
@@ -227,6 +294,17 @@ jobs:
               ...decisions.map((item) => `| [#${item.pr_number}](${item.pr_url}) | ${item.eligible} | ${item.merged} | ${item.blockers.length ? item.blockers.join('<br>') : 'nenhum'} |`),
               '',
               '## Próximos incrementos capturados',
-              nextIncrements.length ? nextIncrements.map((item) => `- PR #${item.source_pr}: ${item.title}`).join('\n') : '- Nenhum incremento natural capturado nos PRs processados.',
+              nextIncrements.length
+                ? nextIncrements.map((item) => `- PR #${item.source_pr}: ${item.title} — \`${item.status}\`${item.issue_url ? ` — [issue #${item.issue_number}](${item.issue_url})` : ''}`).join('\n')
+                : '- Nenhum incremento natural capturado nos PRs processados.',
             ];
             await core.summary.addRaw(summary.join('\n')).write();
+
+      - name: Publicar evidência do ciclo autônomo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-delivery-cycle-evidence
+          path: artifacts/autonomous-delivery-cycle
+          if-no-files-found: error
+          retention-days: 30
