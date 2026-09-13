@@ -11,7 +11,7 @@ def _text() -> str:
 def test_bootstrap_so_executa_na_main_e_no_cofre_dev() -> None:
     text = _text()
     assert "branches: [main]" in text
-    assert "if: github.ref == 'refs/heads/main'" in text
+    assert "github.ref == 'refs/heads/main'" in text
     assert "TARGET_VAULT_NAME: kv-reqsys-ccp" in text
     assert "TARGET_RESOURCE_GROUP: rg-reqsys-ccp" in text
     assert "TARGET_PRINCIPAL_OID: 5660aef6-6eb0-43d1-889a-0af710fe9054" in text
@@ -52,3 +52,13 @@ def test_gate_falha_fechado_sem_atribuicao_observada() -> None:
     assert "role_assignment_not_observed_after_write" in text
     assert "key_vault_rbac_bootstrap_not_resolved" in text
     assert "role_assignment_verified') is not True" in text
+
+
+def test_comando_issue_e_estritamente_restrito_a_issue_1649_e_ao_proprietario() -> None:
+    text = _text()
+    assert "issue_comment:" in text
+    assert "types: [created]" in text
+    assert "github.event_name == 'issue_comment'" in text
+    assert "github.event.issue.number == 1649" in text
+    assert "github.event.comment.user.login == 'ericson-j-santos'" in text
+    assert "github.event.comment.body == '/reqsys bootstrap-kv-rbac-dev'" in text
