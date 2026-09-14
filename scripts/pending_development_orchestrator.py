@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -257,6 +258,12 @@ def _combined_text(item: dict[str, Any]) -> str:
     return f"{item.get('title') or ''}\n{item.get('body') or ''}\n{labels}".lower()
 
 
+def _contains_literal_hint(text: str, hint: str) -> bool:
+    """Match a literal hint as a token/phrase, not as part of another word."""
+    pattern = rf"(?<![^\W_]){re.escape(hint)}(?![^\W_])"
+    return re.search(pattern, text) is not None
+
+
 def deferred_scope(item: dict[str, Any]) -> str | None:
     labels = _label_names(item)
     if DEFER_NONPROD_LABEL not in labels:
@@ -286,7 +293,7 @@ def classify_risk(item: dict[str, Any]) -> tuple[str, str]:
     if HUMAN_GATE_LABEL in labels:
         return "high", "explicit_human_gate_label"
     text = _combined_text(item)
-    matched = sorted(hint for hint in SENSITIVE_HINTS if hint in text)
+    matched = sorted(hint for hint in SENSITIVE_HINTS if _contains_literal_hint(text, hint))
     if matched:
         return "high", f"sensitive_hint:{matched[0]}"
     return "standard", "no_sensitive_hint"
@@ -294,7 +301,9 @@ def classify_risk(item: dict[str, Any]) -> tuple[str, str]:
 
 def looks_like_ci_failure(item: dict[str, Any]) -> bool:
     text = _combined_text(item)
-    return any(hint in text for hint in CI_HINTS) and any(hint in text for hint in FAILURE_HINTS)
+    return any(_contains_literal_hint(text, hint) for hint in CI_HINTS) and any(
+        _contains_literal_hint(text, hint) for hint in FAILURE_HINTS
+    )
 
 
 def infer_increment(item: dict[str, Any], head_ref: str = "") -> dict[str, Any]:
