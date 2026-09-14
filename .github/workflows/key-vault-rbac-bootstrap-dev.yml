@@ -7,6 +7,8 @@ on:
       - ".github/workflows/key-vault-rbac-bootstrap-dev.yml"
       - "tests/test_key_vault_rbac_bootstrap_dev_workflow.py"
   workflow_dispatch:
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -27,7 +29,18 @@ env:
 jobs:
   grant:
     name: Conceder Key Vault Secrets User no escopo exato DEV
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (
+        github.event_name == 'push' ||
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.number == 1649 &&
+          github.event.comment.user.login == 'ericson-j-santos' &&
+          github.event.comment.body == '/reqsys bootstrap-kv-rbac-dev'
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
