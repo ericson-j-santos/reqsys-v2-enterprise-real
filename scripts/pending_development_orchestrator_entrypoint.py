@@ -19,6 +19,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from scripts import pending_development_orchestrator as core  # noqa: E402
+from scripts.pending_development_agent_tasks import install_agent_task_route  # noqa: E402
 
 TRUSTED_AUTOMATION_ACTORS = {"github-actions[bot]"}
 TRUST_GUARDRAIL = "trusted_issue_source_or_privileged_auto_label"
@@ -113,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
 
     repo_owner = repo.split("/", 1)[0]
     install_trusted_policy(repo_owner, str(known.event_name or ""))
+    install_agent_task_route()
     return core.main(passthrough)
 
 
