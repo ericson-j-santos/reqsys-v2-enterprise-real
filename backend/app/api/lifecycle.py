@@ -22,6 +22,10 @@ from app.services.lifecycle_orchestrator import (
     register_lifecycle_evidence,
     start_lifecycle,
 )
+from app.services.redmine_lifecycle_sync import (
+    RedmineLifecycleSyncError,
+    sincronizar_requisito_redmine,
+)
 
 router = APIRouter(prefix='/lifecycle', tags=['Requisitos Lifecycle'])
 
@@ -41,6 +45,10 @@ class LifecycleEvidenceIn(BaseModel):
     url: str | None = Field(default=None, max_length=2000)
     titulo: str | None = Field(default=None, max_length=1000)
     ambiente: str | None = Field(default=None, max_length=30)
+
+
+class LifecycleRedmineSyncIn(BaseModel):
+    dry_run: bool = False
 
 
 def _correlation_id(value: str | None) -> str:
@@ -85,6 +93,32 @@ def iniciar_lifecycle(
             priority_id=payload.priority_id,
         )
     except (LifecycleError, IntegracaoError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return ok(result, correlation_id)
+
+
+@router.post('/{requisito_id}/sincronizar-redmine')
+def sincronizar_redmine_lifecycle(
+    requisito_id: int,
+    payload: LifecycleRedmineSyncIn | None = None,
+    db: Session = Depends(get_db),
+    auth: ServiceAuthContext = Depends(require_admin_or_service_token('lifecycle:write')),
+    x_correlation_id: str | None = Header(default=None),
+):
+    requisito = _get_requirement(db, requisito_id)
+    payload = payload or LifecycleRedmineSyncIn()
+    correlation_id = _correlation_id(x_correlation_id)
+
+    try:
+        result = sincronizar_requisito_redmine(
+            db,
+            requisito=requisito,
+            correlation_id=correlation_id,
+            actor=auth.ator,
+            dry_run=payload.dry_run,
+        )
+    except (RedmineLifecycleSyncError, IntegracaoError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return ok(result, correlation_id)
