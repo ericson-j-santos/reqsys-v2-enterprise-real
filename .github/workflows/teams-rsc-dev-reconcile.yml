@@ -25,6 +25,7 @@ permissions:
   contents: read
   actions: write
   issues: write
+  id-token: write
 
 concurrency:
   group: teams-rsc-dev-reconcile
@@ -65,11 +66,31 @@ jobs:
       POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
       TEAMS_RSC_BOOTSTRAP_CLIENT_ID: ${{ secrets.TEAMS_RSC_BOOTSTRAP_CLIENT_ID }}
       TEAMS_RSC_BOOTSTRAP_CLIENT_SECRET: ${{ secrets.TEAMS_RSC_BOOTSTRAP_CLIENT_SECRET }}
+      TEAMS_RSC_BOOTSTRAP_OIDC_CLIENT_ID: ${{ vars.TEAMS_RSC_BOOTSTRAP_CLIENT_ID }}
+      TEAMS_RSC_USE_OIDC: ${{ vars.TEAMS_RSC_USE_OIDC }}
       TEAMS_RSC_CATALOG_APP_ID: ${{ vars.TEAMS_RSC_CATALOG_APP_ID }}
       TEAMS_RSC_AUTO_APPLY: ${{ vars.TEAMS_RSC_AUTO_APPLY }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Autenticar bootstrap Teams por OIDC
+        if: env.TEAMS_RSC_USE_OIDC == 'true' && env.TEAMS_RSC_BOOTSTRAP_OIDC_CLIENT_ID != ''
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.TEAMS_RSC_BOOTSTRAP_OIDC_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Resolver token Graph do bootstrap federado
+        if: env.TEAMS_RSC_USE_OIDC == 'true' && env.TEAMS_RSC_BOOTSTRAP_OIDC_CLIENT_ID != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az account get-access-token --resource-type ms-graph --query accessToken -o tsv)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "TEAMS_RSC_BOOTSTRAP_ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
 
       - name: Executar reconciliação fail-closed
         id: reconcile
@@ -85,6 +106,7 @@ jobs:
           python scripts/teams_rsc_dev_reconciler.py "${args[@]}"
           echo "status=$(jq -r '.status' "$EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
           echo "apply_status=$(jq -r '.apply_status // "none"' "$EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
+          echo "auth_mode=$(jq -r '.bootstrap_auth_mode // "none"' "$EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
           echo "signature=$(jq -r '.state_signature' "$EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
 
       - name: Publicar evidência sanitizada
@@ -108,16 +130,18 @@ jobs:
             exit 0
           fi
           apply_status="${{ steps.reconcile.outputs.apply_status }}"
+          auth_mode="${{ steps.reconcile.outputs.auth_mode }}"
           gh issue comment "$HUMAN_GATE_ISSUE" --repo "$GITHUB_REPOSITORY" --body "$marker
           ## Reconciliação automática RSC DEV
           - Run: \`${{ github.run_id }}\`
           - Estado: \`${{ steps.reconcile.outputs.status }}\`
           - Aplicação automática: \`${apply_status}\`
+          - Autenticação bootstrap: \`${auth_mode}\`
           - Permissão alvo: \`ChannelMessage.Read.Group\`
           - Team: \`${PLANNER_TEAMS_DEV_TEAM_ID}\`
           - Segredos expostos: **não**
 
-          O fluxo permanece fail-closed. Se \`bootstrap_configuration_missing\`, falta somente a identidade de bootstrap e o ID do app no catálogo; nenhuma permissão foi ampliada automaticamente."
+          O fluxo permanece fail-closed. Se \`bootstrap_configuration_missing\`, falta a identidade técnica/OIDC e o ID do app no catálogo; nenhuma permissão foi ampliada automaticamente."
 
       - name: Disparar E2E real quando Graph estiver legível
         if: steps.reconcile.outputs.status == 'ready'
