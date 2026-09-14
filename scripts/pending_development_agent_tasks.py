@@ -180,7 +180,7 @@ def process_issue_branch_first(
             title,
             AGENT_TASK_ROUTE,
             "blocked",
-            "missing_copilot_agent_task_token",
+            "missing_copilot_agent_token",
             planned.risk,
             planned.increment_type,
             planned.gate_reason,
