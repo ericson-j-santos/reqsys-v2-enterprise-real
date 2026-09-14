@@ -97,13 +97,16 @@ Categorias aceitas:
 
 O timestamp usado no cálculo é `created_at` do comentário retornado pela API do GitHub, não um horário informado manualmente no payload.
 
-Texto livre, mensagens sem marcador, ausência de execução e diferenças aproximadas entre runs **não** viram tempo bloqueado.
+Texto livre, mensagens sem marcador, ausência de execução e diferenças aproximadas entre runs **não** viram tempo bloqueado. Comentários estruturados só são aceitos quando a fonte retornada pela API é `github-actions[bot]` e o `event_id` corresponde ao `recorder_run_id/run_attempt` declarado.
 
 ## Idempotência e antifalso positivo
 
+- comentários de autores diferentes de `github-actions[bot]` são rejeitados;
+- `event_id` precisa corresponder a `wait-<recorder_run_id>-<recorder_run_attempt>`;
 - `event_id` repetido é ignorado e contado como duplicado;
 - o mesmo `wait_id + action + correlation_id` com novo `event_id` também não é contado duas vezes;
 - `unblocked` sem `blocked` válido vira sequência inválida;
+- divergência de categoria ou de SHA entre `blocked` e `unblocked` invalida o par;
 - bloqueio aberto mantém `unblocked_at=null` e `duration_minutes=null`;
 - se a coleta da issue falhar, `external_wait_status=collection_failed` e `external_blocked_minutes=null`;
 - nenhum erro de coleta é convertido em zero minutos;

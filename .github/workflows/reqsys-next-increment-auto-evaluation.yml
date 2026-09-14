@@ -106,7 +106,7 @@ jobs:
             fi
 
             printf '%s' "$payload" \
-              | jq -c '.[] | {id, html_url, created_at, updated_at, body}' \
+              | jq -c '.[] | {id, html_url, created_at, updated_at, author_association, user: {login: .user.login}, body}' \
               >> .tmp/external-wait-comments.jsonl
             count="$(printf '%s' "$payload" | jq 'length')"
             if [ "$count" -lt 100 ]; then

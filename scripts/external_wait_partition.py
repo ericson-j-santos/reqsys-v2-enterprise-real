@@ -64,11 +64,14 @@ def extract_event_from_comment(comment: dict[str, Any]) -> tuple[dict[str, Any] 
 
     event = dict(payload)
     event["occurred_at"] = comment.get("created_at")
+    user = comment.get("user") or {}
     event["source"] = {
         "type": "github_issue_comment",
         "comment_id": comment.get("id"),
         "html_url": comment.get("html_url"),
         "created_at": comment.get("created_at"),
+        "author_login": user.get("login"),
+        "author_association": comment.get("author_association"),
     }
     return event, None
 
@@ -90,6 +93,15 @@ def validate_event(event: dict[str, Any]) -> list[str]:
     source = event.get("source") or {}
     if source.get("type") != "github_issue_comment" or not source.get("comment_id"):
         errors.append("source_invalid")
+    if source.get("author_login") != "github-actions[bot]":
+        errors.append("source_author_not_recorder_bot")
+
+    run_id = str(event.get("recorder_run_id") or "").strip()
+    run_attempt = str(event.get("recorder_run_attempt") or "").strip()
+    if not run_id.isdigit() or not run_attempt.isdigit():
+        errors.append("recorder_identity_missing")
+    elif str(event.get("event_id") or "") != f"wait-{run_id}-{run_attempt}":
+        errors.append("event_id_recorder_mismatch")
     return errors
 
 
@@ -101,7 +113,14 @@ def collect_structured_events(comments: list[dict[str, Any]]) -> dict[str, Any]:
     duplicate_event_ids: list[str] = []
     duplicate_semantic: list[dict[str, str]] = []
 
-    for comment in comments:
+    ordered_comments = sorted(
+        comments,
+        key=lambda item: (
+            str(item.get("created_at") or ""),
+            int(item.get("id") or 0),
+        ),
+    )
+    for comment in ordered_comments:
         event, parse_error = extract_event_from_comment(comment)
         if event is None:
             if parse_error:
@@ -203,6 +222,30 @@ def build_wait_partition(
             continue
 
         category = str(blocked["category"])
+        if unblocked and unblocked.get("category") != blocked.get("category"):
+            invalid_sequence_count += 1
+            waits.append({
+                "wait_id": wait_id,
+                "correlation_id": correlation_id,
+                "status": "invalid_sequence",
+                "reason": "category_mismatch",
+            })
+            continue
+        if (
+            unblocked
+            and blocked.get("sha")
+            and unblocked.get("sha")
+            and blocked.get("sha") != unblocked.get("sha")
+        ):
+            invalid_sequence_count += 1
+            waits.append({
+                "wait_id": wait_id,
+                "correlation_id": correlation_id,
+                "status": "invalid_sequence",
+                "reason": "sha_mismatch",
+            })
+            continue
+
         blocked_at = parse_dt(blocked["occurred_at"])
         unblocked_at = parse_dt(unblocked["occurred_at"]) if unblocked else None
         duration = None
