@@ -50,6 +50,14 @@ export function filterMessagesSince(messages, startedAt) {
   })
 }
 
+export function validatePollTimeout(value) {
+  const timeoutSeconds = Number(value)
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 60 || timeoutSeconds > 1200) {
+    throw new Error(`poll_timeout_invalido:${timeoutSeconds}`)
+  }
+  return timeoutSeconds
+}
+
 export function selectPlannerCandidate(candidates) {
   const normalized = (candidates || []).filter((item) => item?.plan_id && item?.bucket_id)
   const dev = normalized.filter((item) =>
@@ -233,14 +241,11 @@ async function main() {
   const clientSecret = required('POWER_PLATFORM_CLIENT_SECRET')
   const teamId = required('PLANNER_TEAMS_DEV_TEAM_ID')
   const channelId = required('PLANNER_TEAMS_DEV_CHANNEL_ID')
-  const timeoutSeconds = Number(env('PLANNER_TEAMS_POLL_SECONDS', '420'))
+  const timeoutSeconds = validatePollTimeout(env('PLANNER_TEAMS_POLL_SECONDS', '900'))
   const pollMs = Number(env('PLANNER_TEAMS_RUN_POLL_INTERVAL_MS', '30000'))
   const settleSeconds = Number(env('PLANNER_TEAMS_SETTLE_SECONDS', '45'))
   const evidencePath = env('EVIDENCE_PATH', 'audit/runtime-e2e/planner-teams/acceptance.json')
 
-  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 60 || timeoutSeconds > 600) {
-    throw new Error(`poll_timeout_invalido:${timeoutSeconds}`)
-  }
   if (!Number.isFinite(pollMs) || pollMs < 5000 || pollMs > 60000) {
     throw new Error(`poll_interval_invalido:${pollMs}`)
   }

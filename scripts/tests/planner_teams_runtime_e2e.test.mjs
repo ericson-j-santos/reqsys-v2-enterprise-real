@@ -6,6 +6,7 @@ import {
   filterMessagesSince,
   messageContainsTitle,
   selectPlannerCandidate,
+  validatePollTimeout,
 } from '../planner_teams_runtime_e2e.mjs'
 
 test('aprova somente com controle normal presente e E2E ausente', () => {
@@ -83,4 +84,13 @@ test('reprova descoberta quando existem dois alvos DEV possíveis', () => {
     ]),
     /descoberta_wsjf_ambigua:total=2:dev=2/,
   )
+})
+
+
+test('aceita janela de 900 s para atravessar o polling real do Planner', () => {
+  assert.equal(validatePollTimeout('900'), 900)
+})
+
+test('rejeita janela acima do teto operacional', () => {
+  assert.throws(() => validatePollTimeout('1201'), /poll_timeout_invalido:1201/)
 })
