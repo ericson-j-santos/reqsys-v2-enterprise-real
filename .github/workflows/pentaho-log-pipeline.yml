@@ -84,11 +84,19 @@ jobs:
             -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
             -d pentaho_log_test -b \
             < tools/pentaho_log_pipeline/sql/001_pentaho_log_pipeline.sql
+
+          set +e
           output="$(docker exec -i pentaho-sql "$SQLCMD_PATH" \
             -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
             -d pentaho_log_test -b \
-            < tools/pentaho_log_pipeline/sql/900_contract_test.sql)"
+            < tools/pentaho_log_pipeline/sql/900_contract_test.sql 2>&1)"
+          contract_rc=$?
+          set -e
           printf '%s\n' "$output"
+          if (( contract_rc != 0 )); then
+            echo "Contrato SQL falhou com rc=$contract_rc" >&2
+            exit "$contract_rc"
+          fi
           grep -q "PASS" <<< "$output"
 
       - name: Show SQL Server diagnostics on failure
