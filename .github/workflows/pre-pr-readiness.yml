@@ -46,10 +46,19 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Dependências mínimas do gate
+      - name: Dependências do gate por perfil
+        env:
+          BASE_REF: ${{ github.event.inputs.base_ref || 'main' }}
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check pytest PyYAML
+          git fetch origin "$BASE_REF" --prune
+          python -m pip install --disable-pip-version-check PyYAML
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -q '^backend/'; then
+            echo "Perfil backend detectado: instalando dependências oficiais do backend."
+            python -m pip install --disable-pip-version-check -r backend/requirements.txt
+          else
+            python -m pip install --disable-pip-version-check pytest
+          fi
 
       - name: Testes do contrato do gate
         id: contract
