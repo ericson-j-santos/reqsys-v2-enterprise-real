@@ -1,9 +1,9 @@
 import hashlib
 import json
-from types import SimpleNamespace
+from urllib.error import URLError
 
-import pytest
 from fastapi import HTTPException
+import pytest
 
 from app.api import ocr_review
 from app.ocr import redmine
@@ -82,6 +82,29 @@ def test_redmine_client_lista_e_materializa_pdf_com_sha_idempotente(monkeypatch,
     assert first.document_ref == f'redmine/42/attachment-77-{expected_sha[:16]}.pdf'
     assert 'nome-sensivel' not in first.document_ref
     assert (tmp_path / first.document_ref).read_bytes() == pdf
+
+
+def test_redmine_client_retentativa_controlada_em_falha_de_rede(monkeypatch):
+    payload = json.dumps({'issue': {'id': 42, 'attachments': []}}).encode('utf-8')
+    calls = 0
+
+    def flaky(req, timeout):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise URLError('temporário')
+        return FakeResponse(payload, 'https://redmine.example/issues/42.json?include=attachments')
+
+    monkeypatch.setattr(redmine.request, 'urlopen', flaky)
+    monkeypatch.setattr(redmine, 'REDMINE_RETRY_BACKOFF_SECONDS', 0)
+    client = RedmineAttachmentClient(
+        base_url='https://redmine.example',
+        api_key='test-key',
+        max_bytes=4096,
+    )
+
+    assert client.list_attachments(42) == []
+    assert calls == 2
 
 
 def test_redmine_client_rejeita_content_url_fora_da_origem(tmp_path):
