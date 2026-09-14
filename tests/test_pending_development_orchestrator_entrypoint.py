@@ -1,3 +1,7 @@
+import subprocess
+import sys
+from pathlib import Path
+
 from scripts.pending_development_orchestrator_entrypoint import (
     issue_source_is_trusted,
     trusted_issue_candidate,
@@ -18,6 +22,23 @@ def issue(
         "user": {"login": author},
         "labels": [{"name": name} for name in (labels or [])],
     }
+
+
+def test_entrypoint_executes_from_repository_root() -> None:
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/pending_development_orchestrator_entrypoint.py",
+            "--help",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Orquestrador governado de desenvolvimento pendente" in result.stdout
 
 
 def test_external_author_cannot_enable_with_title_only() -> None:
