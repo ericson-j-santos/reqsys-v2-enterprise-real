@@ -10,9 +10,15 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
+from pathlib import Path
 from typing import Any, Callable
 
-from scripts import pending_development_orchestrator as core
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from scripts import pending_development_orchestrator as core  # noqa: E402
 
 TRUSTED_AUTOMATION_ACTORS = {"github-actions[bot]"}
 TRUST_GUARDRAIL = "trusted_issue_source_or_privileged_auto_label"
