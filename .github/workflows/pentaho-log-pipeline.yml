@@ -32,3 +32,66 @@ jobs:
 
       - name: Run focused tests
         run: python -m pytest -q tests/test_pentaho_log_pipeline.py
+
+  sqlserver-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start disposable SQL Server
+        shell: bash
+        run: |
+          set -euo pipefail
+          pw="ReqSys-Pentaho-$(openssl rand -hex 12)!Aa1"
+          echo "::add-mask::$pw"
+          echo "MSSQL_SA_PASSWORD=$pw" >> "$GITHUB_ENV"
+          docker run -d --name pentaho-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$pw" \
+            -p 1433:1433 \
+            mcr.microsoft.com/mssql/server:2019-latest
+
+      - name: Wait for SQL Server
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            sqlcmd_path="$(docker exec pentaho-sql sh -lc \
+              'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then echo /opt/mssql-tools18/bin/sqlcmd; elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then echo /opt/mssql-tools/bin/sqlcmd; fi' \
+              2>/dev/null || true)"
+            if [ -n "$sqlcmd_path" ] && docker exec pentaho-sql "$sqlcmd_path" \
+              -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server pronto na tentativa $attempt"
+              echo "SQLCMD_PATH=$sqlcmd_path" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs pentaho-sql 2>&1 | tail -100
+          echo "SQL Server não ficou pronto no limite definido" >&2
+          exit 1
+
+      - name: Install schema and run transactional contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec pentaho-sql "$SQLCMD_PATH" \
+            -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
+            -Q "CREATE DATABASE pentaho_log_test"
+          docker exec -i pentaho-sql "$SQLCMD_PATH" \
+            -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
+            -d pentaho_log_test -b \
+            < tools/pentaho_log_pipeline/sql/001_pentaho_log_pipeline.sql
+          output="$(docker exec -i pentaho-sql "$SQLCMD_PATH" \
+            -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
+            -d pentaho_log_test -b \
+            < tools/pentaho_log_pipeline/sql/900_contract_test.sql)"
+          printf '%s\n' "$output"
+          grep -q "PASS" <<< "$output"
+
+      - name: Show SQL Server diagnostics on failure
+        if: failure()
+        shell: bash
+        run: docker logs pentaho-sql 2>&1 | tail -100 || true
