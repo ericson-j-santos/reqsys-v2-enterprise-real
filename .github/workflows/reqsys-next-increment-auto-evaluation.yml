@@ -13,14 +13,18 @@ on:
     branches: [main]
     paths:
       - 'scripts/evaluate_reqsys_next_increment.py'
+      - 'scripts/external_wait_partition.py'
       - 'tests/test_evaluate_reqsys_next_increment.py'
+      - 'tests/test_external_wait_partition.py'
       - '.github/workflows/reqsys-next-increment-auto-evaluation.yml'
+      - '.github/workflows/reqsys-external-wait-recorder.yml'
       - 'docs/contracts/reqsys-next-increment-auto-evaluation.md'
 
 permissions:
   actions: read
   contents: read
   pull-requests: read
+  issues: read
 
 concurrency:
   group: reqsys-next-increment-auto-evaluation
@@ -38,7 +42,10 @@ jobs:
       - name: Install focused test dependency
         run: python -m pip install --disable-pip-version-check pytest
       - name: Run focused tests
-        run: python -m pytest -q tests/test_evaluate_reqsys_next_increment.py
+        run: >-
+          python -m pytest -q
+          tests/test_evaluate_reqsys_next_increment.py
+          tests/test_external_wait_partition.py
       - name: Collect PRs, merged delivery velocity and workflow runs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -73,6 +80,54 @@ jobs:
               >> .tmp/runs.jsonl
           done
           jq -s '.' .tmp/runs.jsonl > .tmp/runs.json
+
+      - name: Collect structured external-wait ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_TIMEOUT_SECONDS: '30'
+          LEDGER_ISSUE: '1683'
+          COMMENT_MAX_PAGES: '3'
+        run: |
+          set -euo pipefail
+          : > .tmp/external-wait-comments.jsonl
+          collection_ok=true
+          collection_error=""
+
+          for page in $(seq 1 "$COMMENT_MAX_PAGES"); do
+            set +e
+            payload="$(timeout "${API_TIMEOUT_SECONDS}s" gh api \
+              "repos/${{ github.repository }}/issues/${LEDGER_ISSUE}/comments?per_page=100&page=${page}" 2>.tmp/external-wait-collector.err)"
+            rc=$?
+            set -e
+            if [ "$rc" -ne 0 ]; then
+              collection_ok=false
+              collection_error="github_issue_comments_collection_failed_rc_${rc}"
+              break
+            fi
+
+            printf '%s' "$payload" \
+              | jq -c '.[] | {id, html_url, created_at, updated_at, body}' \
+              >> .tmp/external-wait-comments.jsonl
+            count="$(printf '%s' "$payload" | jq 'length')"
+            if [ "$count" -lt 100 ]; then
+              break
+            fi
+          done
+
+          jq -s '.' .tmp/external-wait-comments.jsonl > .tmp/external-wait-comments.json
+          COLLECTION_OK="$collection_ok" COLLECTION_ERROR="$collection_error" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          Path(".tmp/external-wait-collection-status.json").write_text(
+              json.dumps({
+                  "ok": os.environ["COLLECTION_OK"] == "true",
+                  "error": os.environ["COLLECTION_ERROR"] or None,
+              }, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Collect public runtime and SHA-linked build evidence
         env:
           REQSYS_RUNTIME_BASE_URL: https://reqsys-api.fly.dev
@@ -130,6 +185,7 @@ jobs:
                   'endpoints': endpoints,
               }, handle, indent=2)
           PY
+
       - name: Download latest instrumented artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -143,6 +199,7 @@ jobs:
           HISTORY_FILE="$(find .tmp/history -name '*.json' -print -quit)"
           [ -n "$READINESS_FILE" ] && cp "$READINESS_FILE" .tmp/readiness.json || echo '{}' > .tmp/readiness.json
           [ -n "$HISTORY_FILE" ] && cp "$HISTORY_FILE" .tmp/history.json || echo '{}' > .tmp/history.json
+
       - name: Evaluate next safe increment
         run: |
           python scripts/evaluate_reqsys_next_increment.py \
@@ -155,8 +212,18 @@ jobs:
             --availability-target-minutes 30 \
             --output-json artifacts/reqsys-next-increment-auto-evaluation/report.json \
             --output-md artifacts/reqsys-next-increment-auto-evaluation/report.md
+
+      - name: Enrich report with external wait partition
+        run: |
+          python scripts/external_wait_partition.py \
+            --comments .tmp/external-wait-comments.json \
+            --collection-status .tmp/external-wait-collection-status.json \
+            --report artifacts/reqsys-next-increment-auto-evaluation/report.json \
+            --markdown artifacts/reqsys-next-increment-auto-evaluation/report.md
+
       - name: Publish executive summary
         run: cat artifacts/reqsys-next-increment-auto-evaluation/report.md >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: reqsys-next-increment-auto-evaluation
