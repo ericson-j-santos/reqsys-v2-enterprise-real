@@ -20,6 +20,8 @@ REQUIRED_WORKFLOWS = {
     "Security Specialized Scanners",
     "Instrumented Executive Readiness",
 }
+CI_WORKFLOW_NAME = "CI — ReqSys v2 Enterprise"
+DEFAULT_AVAILABILITY_TARGET_MINUTES = 30
 
 
 def load_json(path: Path, default: Any) -> Any:
@@ -44,6 +46,12 @@ def parse_dt(value: str | None) -> datetime | None:
         return None
 
 
+def minutes_between(start: datetime | None, end: datetime | None) -> float | None:
+    if not start or not end or end < start:
+        return None
+    return round((end - start).total_seconds() / 60, 2)
+
+
 def latest_runs_by_name(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     for run in sorted(runs, key=lambda item: item.get("created_at", ""), reverse=True):
@@ -53,6 +61,118 @@ def latest_runs_by_name(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]
     return latest
 
 
+def successful_ci_completion(
+    runs: list[dict[str, Any]], merge_sha: str, merged_at: datetime
+) -> datetime | None:
+    candidates: list[datetime] = []
+    for run in runs:
+        if run.get("name") != CI_WORKFLOW_NAME:
+            continue
+        if run.get("head_sha") != merge_sha:
+            continue
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            continue
+        completed_at = parse_dt(run.get("updated_at"))
+        if completed_at and completed_at >= merged_at:
+            candidates.append(completed_at)
+    return min(candidates) if candidates else None
+
+
+def build_delivery_velocity(
+    merged_prs: list[dict[str, Any]],
+    runs: list[dict[str, Any]],
+    runtime: dict[str, Any],
+    target_minutes: int,
+) -> dict[str, Any]:
+    merge_lead_times: list[float] = []
+    merge_to_ci_times: list[float] = []
+    merged_by_sha: dict[str, dict[str, Any]] = {}
+
+    for pr in merged_prs:
+        created = parse_dt(pr.get("created_at"))
+        merged = parse_dt(pr.get("merged_at"))
+        merge_sha = str(pr.get("merge_commit_sha") or "")
+        if created and merged and merged >= created:
+            merge_lead_times.append((merged - created).total_seconds() / 60)
+        if not merged or not merge_sha:
+            continue
+        merged_by_sha[merge_sha] = pr
+        ci_completed = successful_ci_completion(runs, merge_sha, merged)
+        ci_minutes = minutes_between(merged, ci_completed)
+        if ci_minutes is not None:
+            merge_to_ci_times.append(ci_minutes)
+
+    runtime_build_sha = str(runtime.get("build_sha") or "").strip()
+    runtime_observed_at = parse_dt(runtime.get("observed_at"))
+    runtime_healthy = runtime.get("healthy") is True
+    runtime_match = merged_by_sha.get(runtime_build_sha)
+
+    merge_to_runtime_minutes = None
+    created_to_runtime_minutes = None
+    matched_pr_number = None
+    matched_merge_sha = None
+    measurement_gaps: list[str] = []
+
+    if not runtime_build_sha or runtime_build_sha == "unknown":
+        measurement_gaps.append("runtime_build_sha_missing")
+    elif runtime_match is None:
+        measurement_gaps.append("runtime_build_sha_not_mapped_to_recent_merge")
+    if runtime_observed_at is None:
+        measurement_gaps.append("runtime_observed_at_missing")
+    if not runtime_healthy:
+        measurement_gaps.append("runtime_not_healthy")
+
+    if runtime_match and runtime_observed_at and runtime_healthy:
+        merged = parse_dt(runtime_match.get("merged_at"))
+        created = parse_dt(runtime_match.get("created_at"))
+        if merged and runtime_observed_at >= merged:
+            merge_to_runtime_minutes = minutes_between(merged, runtime_observed_at)
+            created_to_runtime_minutes = minutes_between(created, runtime_observed_at)
+            matched_pr_number = runtime_match.get("number")
+            matched_merge_sha = runtime_build_sha
+        else:
+            measurement_gaps.append("runtime_observation_precedes_merge")
+
+    if merged_prs and not merge_to_ci_times:
+        measurement_gaps.append("merge_to_ci_evidence_missing")
+
+    median_merge_minutes = round(median(merge_lead_times), 2) if merge_lead_times else None
+    median_merge_to_ci = round(median(merge_to_ci_times), 2) if merge_to_ci_times else None
+    target_met = None if merge_to_runtime_minutes is None else merge_to_runtime_minutes <= target_minutes
+
+    return {
+        "availability_target_minutes": target_minutes,
+        "merge_lead_time": {
+            "sample_count": len(merge_lead_times),
+            "median_minutes": median_merge_minutes,
+        },
+        "merge_to_ci_green": {
+            "sample_count": len(merge_to_ci_times),
+            "median_minutes": median_merge_to_ci,
+        },
+        "sha_linked_runtime": {
+            "matched_pr_number": matched_pr_number,
+            "merge_commit_sha": matched_merge_sha,
+            "runtime_build_sha": runtime_build_sha or None,
+            "runtime_observed_at": runtime.get("observed_at"),
+            "merge_to_runtime_observed_minutes": merge_to_runtime_minutes,
+            "created_to_runtime_observed_minutes": created_to_runtime_minutes,
+            "target_met": target_met,
+            "measurement_semantics": "upper_bound_until_sha_linked_runtime_observation",
+            "measurement_note": (
+                "O intervalo termina na primeira observacao deste avaliador com o mesmo SHA e runtime saudavel; "
+                "nao representa timestamp exato do deploy."
+            ),
+        },
+        "wait_partition": {
+            "technical_intervals_instrumented": True,
+            "external_blocked_minutes": None,
+            "external_wait_status": "not_instrumented",
+        },
+        "measurement_gaps": sorted(set(measurement_gaps)),
+    }
+
+
 def build_report(
     prs: list[dict[str, Any]],
     runs: list[dict[str, Any]],
@@ -60,6 +180,7 @@ def build_report(
     history: dict[str, Any],
     runtime: dict[str, Any] | None = None,
     merged_prs: list[dict[str, Any]] | None = None,
+    availability_target_minutes: int = DEFAULT_AVAILABILITY_TARGET_MINUTES,
 ) -> dict[str, Any]:
     runtime = runtime or {}
     merged_prs = merged_prs or []
@@ -93,6 +214,7 @@ def build_report(
     latencies = [float(item["latency_ms"]) for item in endpoints if isinstance(item.get("latency_ms"), (int, float))]
     average_latency_ms = round(sum(latencies) / len(latencies), 2) if latencies else None
     runtime_healthy = smoke_total > 0 and smoke_success == smoke_total
+    runtime["healthy"] = runtime_healthy
 
     merged_24h = 0
     merged_7d = 0
@@ -110,6 +232,12 @@ def build_report(
         if created and merged >= created:
             lead_times.append((merged - created).total_seconds() / 3600)
     median_lead_time_hours = round(median(lead_times), 2) if lead_times else None
+    delivery_velocity = build_delivery_velocity(
+        merged_prs,
+        runs,
+        runtime,
+        availability_target_minutes,
+    )
 
     trend = history.get("trend")
     if trend is None and len(snapshots) >= 2:
@@ -156,7 +284,7 @@ def build_report(
     ready_for_human_decision = not blockers and readiness_status in {"READY", "CONSOLIDATING"}
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "contract": "reqsys-next-increment-auto-evaluation",
         "generated_at": now.isoformat(),
         "mode": "report_only",
@@ -185,6 +313,9 @@ def build_report(
             "smoke_success": smoke_success,
             "smoke_success_percent": smoke_success_percent,
             "average_latency_ms": average_latency_ms,
+            "build_sha": runtime.get("build_sha"),
+            "observed_at": runtime.get("observed_at"),
+            "environment": runtime.get("environment"),
             "endpoints": endpoints,
         },
         "integration": {
@@ -195,6 +326,7 @@ def build_report(
             "merged_prs_7d": merged_7d,
             "median_merge_lead_time_hours": median_lead_time_hours,
         },
+        "delivery_velocity": delivery_velocity,
         "instrumented_metrics": {
             "readiness_status": readiness_status,
             "metric_coverage_percent": metric_coverage,
@@ -213,7 +345,10 @@ def render_markdown(report: dict[str, Any]) -> str:
     ci = report["ci"]
     runtime = report["runtime"]
     integration = report["integration"]
+    delivery = report["delivery_velocity"]
     metrics = report["instrumented_metrics"]
+    linked = delivery["sha_linked_runtime"]
+    gaps = delivery["measurement_gaps"]
     return "\n".join([
         "# Avaliação Automática do Próximo Incremento ReqSys",
         "",
@@ -221,9 +356,16 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Próximo incremento seguro: **{report['next_safe_increment']}**",
         f"- Estabilidade CI: **{ci['stability_percent']}%**",
         f"- Smoke público: **{runtime['smoke_success']}/{runtime['smoke_total']} ({runtime['smoke_success_percent']}%)**",
+        f"- Runtime build SHA: **{runtime['build_sha'] or 'não evidenciado'}**",
         f"- Latência média pública: **{runtime['average_latency_ms']} ms**",
         f"- PRs mergeadas 24h/7d: **{integration['merged_prs_24h']}/{integration['merged_prs_7d']}**",
-        f"- Lead time mediano: **{integration['median_merge_lead_time_hours']} h**",
+        f"- PR criado → merge (mediana): **{delivery['merge_lead_time']['median_minutes']} min**",
+        f"- Merge → CI verde (mediana): **{delivery['merge_to_ci_green']['median_minutes']} min**",
+        f"- Merge → runtime observado no mesmo SHA: **{linked['merge_to_runtime_observed_minutes']} min**",
+        f"- PR criado → runtime observado no mesmo SHA: **{linked['created_to_runtime_observed_minutes']} min**",
+        f"- Alvo disponibilidade DEV sem gate externo: **≤ {delivery['availability_target_minutes']} min**",
+        f"- Alvo observado: **{linked['target_met']}**",
+        f"- Lacunas de medição: **{', '.join(gaps) or 'nenhuma'}**",
         f"- Throughput paralelo: **{integration['parallel_throughput_percent']}%**",
         f"- Confiança instrumentada: **{metrics['confidence_percent']}%**",
         f"- Tendência: **{metrics['trend_delta_percent']} p.p.**",
@@ -242,6 +384,7 @@ def main() -> int:
     parser.add_argument("--readiness", type=Path, required=True)
     parser.add_argument("--history", type=Path, required=True)
     parser.add_argument("--runtime", type=Path, required=True)
+    parser.add_argument("--availability-target-minutes", type=int, default=DEFAULT_AVAILABILITY_TARGET_MINUTES)
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-md", type=Path, required=True)
     args = parser.parse_args()
@@ -253,6 +396,7 @@ def main() -> int:
         load_json(args.history, {}),
         load_json(args.runtime, {}),
         load_json(args.merged_prs, []),
+        args.availability_target_minutes,
     )
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

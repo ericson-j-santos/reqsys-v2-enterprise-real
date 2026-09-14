@@ -15,18 +15,30 @@ NAMES = [
 
 def successful_runs():
     return [
-        {"name": name, "status": "completed", "conclusion": "success", "created_at": "2026-07-21T10:00:00Z"}
+        {
+            "name": name,
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-07-21T10:00:00Z",
+            "updated_at": "2026-07-21T10:05:00Z",
+        }
         for name in NAMES
     ]
 
 
-def healthy_runtime():
-    return {
+def healthy_runtime(**overrides):
+    payload = {
+        "observed_at": "2026-07-21T10:20:00Z",
+        "build_sha": "unknown",
+        "environment": "dev",
         "endpoints": [
-            {"name": "health", "ok": True, "http_code": 200, "latency_ms": 100},
-            {"name": "readiness", "ok": True, "http_code": 200, "latency_ms": 120},
-        ]
+            {"name": "health", "ok": True, "http_code": 200, "latency_ms": 90},
+            {"name": "readiness", "ok": True, "http_code": 200, "latency_ms": 100},
+            {"name": "liveness", "ok": True, "http_code": 200, "latency_ms": 110},
+        ],
     }
+    payload.update(overrides)
+    return payload
 
 
 def test_prioritizes_failed_required_workflow():
@@ -68,16 +80,77 @@ def test_incorporates_throughput_lead_time_and_runtime_metrics():
     }
     report = build_report([], successful_runs(), {"status": "READY", "metric_coverage_percent": 100}, history, healthy_runtime(), merged_prs)
     assert report["runtime"]["smoke_success_percent"] == 100.0
-    assert report["runtime"]["average_latency_ms"] == 110.0
+    assert report["runtime"]["average_latency_ms"] == 100.0
     assert report["integration"]["median_merge_lead_time_hours"] == 36.0
+    assert report["delivery_velocity"]["merge_lead_time"]["median_minutes"] == 2160.0
     assert report["instrumented_metrics"]["trend_delta_percent"] == 10.0
     assert report["instrumented_metrics"]["confidence_percent"] == 100.0
     assert report["production_ready"] is True
     assert report["status"] == "READY_FOR_HUMAN_DECISION"
 
 
+def test_measures_sha_linked_merge_ci_and_runtime_intervals():
+    merge_sha = "a" * 40
+    merged_prs = [
+        {
+            "number": 101,
+            "created_at": "2026-07-21T09:00:00Z",
+            "merged_at": "2026-07-21T10:00:00Z",
+            "merge_commit_sha": merge_sha,
+        }
+    ]
+    runs = successful_runs()
+    runs[0].update({
+        "head_sha": merge_sha,
+        "created_at": "2026-07-21T10:00:10Z",
+        "updated_at": "2026-07-21T10:05:00Z",
+    })
+    runtime = healthy_runtime(build_sha=merge_sha, observed_at="2026-07-21T10:20:00Z")
+
+    report = build_report(
+        [], runs, {"status": "READY", "metric_coverage_percent": 100},
+        {"snapshots": [{}, {}, {}, {}, {}]}, runtime, merged_prs,
+        availability_target_minutes=30,
+    )
+
+    delivery = report["delivery_velocity"]
+    assert delivery["merge_to_ci_green"]["median_minutes"] == 5.0
+    linked = delivery["sha_linked_runtime"]
+    assert linked["matched_pr_number"] == 101
+    assert linked["merge_to_runtime_observed_minutes"] == 20.0
+    assert linked["created_to_runtime_observed_minutes"] == 80.0
+    assert linked["target_met"] is True
+    assert delivery["measurement_gaps"] == []
+    assert delivery["wait_partition"]["external_blocked_minutes"] is None
+
+
+def test_does_not_infer_runtime_availability_without_exact_sha_match():
+    merge_sha = "a" * 40
+    merged_prs = [
+        {
+            "number": 102,
+            "created_at": "2026-07-21T09:00:00Z",
+            "merged_at": "2026-07-21T10:00:00Z",
+            "merge_commit_sha": merge_sha,
+        }
+    ]
+    runtime = healthy_runtime(build_sha="b" * 40, observed_at="2026-07-21T10:10:00Z")
+    report = build_report(
+        [], successful_runs(), {"status": "READY", "metric_coverage_percent": 100},
+        {"snapshots": [{}, {}, {}, {}, {}]}, runtime, merged_prs,
+    )
+    linked = report["delivery_velocity"]["sha_linked_runtime"]
+    assert linked["merge_to_runtime_observed_minutes"] is None
+    assert linked["target_met"] is None
+    assert "runtime_build_sha_not_mapped_to_recent_merge" in report["delivery_velocity"]["measurement_gaps"]
+
+
 def test_failed_smoke_blocks_production():
-    runtime = {"endpoints": [{"name": "health", "ok": False, "http_code": 503, "latency_ms": 90}]}
+    runtime = {
+        "observed_at": "2026-07-21T10:20:00Z",
+        "build_sha": "unknown",
+        "endpoints": [{"name": "health", "ok": False, "http_code": 503, "latency_ms": 90}],
+    }
     report = build_report([], successful_runs(), {"status": "READY", "metric_coverage_percent": 100}, {"snapshots": [{}, {}, {}, {}, {}]}, runtime)
     assert report["production_ready"] is False
     assert report["next_safe_increment"] == "restore_runtime_and_smoke_evidence"
@@ -92,3 +165,7 @@ def test_workflow_uses_bounded_github_collection_contract():
     assert "RUN_MAX_PAGES: '3'" in workflow
     assert workflow.count('timeout "${API_TIMEOUT_SECONDS}s" gh api') == 3
     assert "timeout-minutes: 10" in workflow
+    assert "merge_commit_sha" in workflow
+    assert "/api/runtime/build-info" in workflow
+    assert "workflow_run:" in workflow
+    assert "ReqSys Fly Runtime P0" in workflow
