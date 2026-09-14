@@ -39,6 +39,7 @@ _TYPE_BY_EXTENSION = {
     '.tiff': 'REDMINE_IMAGEM',
     '.bmp': 'REDMINE_IMAGEM',
 }
+_circuits: dict[str, CircuitBreaker] = {}
 
 
 class RedmineAttachmentError(RuntimeError):
@@ -47,6 +48,44 @@ class RedmineAttachmentError(RuntimeError):
 
 class RedmineAttachmentUnsupported(RedmineAttachmentError):
     """Anexo válido no Redmine, mas fora dos formatos aceitos pelo OCR atual."""
+
+
+def _origin_for(url: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    return parsed.scheme.lower(), parsed.netloc.lower()
+
+
+def _circuit_for(origin: tuple[str, str]) -> CircuitBreaker:
+    key = f'{origin[0]}://{origin[1]}'
+    if key not in _circuits:
+        _circuits[key] = CircuitBreaker(
+            name=f'ocr_redmine_{origin[1]}',
+            failure_threshold=REDMINE_CIRCUIT_FAILURE_THRESHOLD,
+            cooldown_seconds=REDMINE_CIRCUIT_COOLDOWN_SECONDS,
+        )
+    return _circuits[key]
+
+
+def reset_circuit_breakers() -> None:
+    """Reseta circuit breakers compartilhados da integração (uso em testes)."""
+    for circuit in _circuits.values():
+        circuit.reset()
+
+
+class _SameOriginRedirectHandler(request.HTTPRedirectHandler):
+    """Impede redirect cross-origin antes de reenviar headers sensíveis."""
+
+    def __init__(self, allowed_origin: tuple[str, str]) -> None:
+        super().__init__()
+        self.allowed_origin = allowed_origin
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
+        resolved = parse.urljoin(req.full_url, newurl)
+        parsed = urlparse(resolved)
+        origin = (parsed.scheme.lower(), parsed.netloc.lower())
+        if parsed.scheme not in {'http', 'https'} or not parsed.netloc or origin != self.allowed_origin:
+            raise RedmineAttachmentError('redirect do Redmine aponta para origem não autorizada')
+        return super().redirect_request(req, fp, code, msg, headers, resolved)
 
 
 @dataclass(frozen=True)
@@ -98,11 +137,8 @@ class RedmineAttachmentClient:
         if self.max_bytes < 1:
             raise RedmineAttachmentError('OCR_REDMINE_MAX_BYTES deve ser maior que zero')
         self._origin = (parsed.scheme.lower(), parsed.netloc.lower())
-        self._circuit = CircuitBreaker(
-            name=f'ocr_redmine_{parsed.netloc.lower()}',
-            failure_threshold=REDMINE_CIRCUIT_FAILURE_THRESHOLD,
-            cooldown_seconds=REDMINE_CIRCUIT_COOLDOWN_SECONDS,
-        )
+        self._circuit = _circuit_for(self._origin)
+        self._opener = request.build_opener(_SameOriginRedirectHandler(self._origin))
 
     def list_attachments(self, issue_id: int) -> list[RedmineAttachment]:
         issue_id = _validated_positive_id(issue_id, 'issue_id')
@@ -227,6 +263,9 @@ class RedmineAttachmentClient:
         if parsed.scheme not in {'http', 'https'} or not parsed.netloc or origin != self._origin:
             raise RedmineAttachmentError('content_url do anexo aponta para origem não autorizada')
 
+    def _open(self, req: request.Request):  # noqa: ANN201
+        return self._opener.open(req, timeout=self.timeout_seconds)  # nosec B310
+
     def _call_external(self, operation: str, fn):
         try:
             return call_with_retry(
@@ -251,7 +290,7 @@ class RedmineAttachmentClient:
 
         def fetch() -> bytes:
             try:
-                with request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
+                with self._open(req) as resp:
                     self._assert_same_origin(resp.geturl())
                     return resp.read(self.max_bytes + 1)
             except HTTPError as exc:
@@ -276,7 +315,7 @@ class RedmineAttachmentClient:
 
         def fetch() -> bytes:
             try:
-                with request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
+                with self._open(req) as resp:
                     self._assert_same_origin(resp.geturl())
                     content_length = resp.headers.get('Content-Length')
                     if content_length:
