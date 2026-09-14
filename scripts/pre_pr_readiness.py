@@ -107,6 +107,48 @@ def _timed_check(name: str, command: list[str], *, cwd: Path | None = None) -> C
     return CheckResult(name, "failed", detail, duration)
 
 
+def targeted_pytest_checks(targeted: list[str], root: Path) -> list[CheckResult]:
+    """Executa testes direcionados no diretório que fornece seu import root.
+
+    Testes em ``backend/tests`` precisam rodar com ``backend`` como cwd para que
+    imports ``app.*`` resolvam exatamente como nos workflows oficiais do backend.
+    Testes de raiz continuam executando no root do repositório. Os grupos são
+    separados para suportar um mesmo incremento que altere gate e backend.
+    """
+    results: list[CheckResult] = []
+    root_tests = [path for path in targeted if path.startswith("tests/")]
+    backend_tests = [path for path in targeted if path.startswith("backend/tests/")]
+    unknown = [path for path in targeted if path not in root_tests and path not in backend_tests]
+
+    if root_tests:
+        results.append(
+            _timed_check(
+                "targeted:pytest:root",
+                [sys.executable, "-m", "pytest", *root_tests, "-q"],
+                cwd=root,
+            )
+        )
+    if backend_tests:
+        relative = [str(Path(path).relative_to("backend")) for path in backend_tests]
+        results.append(
+            _timed_check(
+                "targeted:pytest:backend",
+                [sys.executable, "-m", "pytest", *relative, "-q"],
+                cwd=root / "backend",
+            )
+        )
+    if unknown:
+        results.append(
+            CheckResult(
+                "targeted:pytest:unknown",
+                "failed",
+                f"caminhos de teste sem import root conhecido: {', '.join(unknown)}",
+                0.0,
+            )
+        )
+    return results
+
+
 def validate_structured_files(files: list[str], root: Path) -> list[CheckResult]:
     results: list[CheckResult] = []
     for rel in files:
@@ -238,7 +280,7 @@ def main() -> int:
 
     targeted = candidate_pytests(files, root)
     if targeted:
-        checks.append(_timed_check("targeted:pytest", [sys.executable, "-m", "pytest", *targeted, "-q"], cwd=root))
+        checks.extend(targeted_pytest_checks(targeted, root))
 
     if "operational" in profiles:
         checks.extend(operational_fast_checks(root))
