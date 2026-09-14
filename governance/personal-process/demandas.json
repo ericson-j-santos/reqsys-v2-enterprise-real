@@ -7,13 +7,17 @@
     "impacto": 5,
     "esforco": 3,
     "frequencia": 5,
-    "status": "Bloqueado",
+    "status": "Bloqueada externamente",
     "tipo_bloqueio": "Humano",
+    "responsavel_bloqueio": "Responsavel pela disponibilizacao do corpus real autorizado",
     "proxima_acao": "Disponibilizar corpus real autorizado, anonimizado ou homologado fora do repositorio; executar preparacao, politica e certificacao; publicar somente a evidencia sanitizada.",
     "criterio_conclusao": "Certificacao real sanitizada com promotion_eligible=true, 100% dos casos aprovados, SHA-256 integro e nenhuma revisao humana pendente.",
     "evidencia": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1420",
     "origem": "ocr_evidencia - baseline 92 testes e acompanhamento semanal",
-    "estado_evidenciado_em": "2026-09-08"
+    "estado_evidenciado_em": "2026-09-08",
+    "ultima_movimentacao_em": "2026-09-08",
+    "dependencias": [],
+    "causa_raiz_id": "OCR-CORPUS-REAL"
   },
   {
     "id": "EXT-002",
@@ -23,13 +27,16 @@
     "impacto": 5,
     "esforco": 2,
     "frequencia": 5,
-    "status": "Bloqueado",
-    "tipo_bloqueio": "Tecnico",
+    "status": "Pronta para execucao",
+    "tipo_bloqueio": "Nenhum",
     "proxima_acao": "Integrar a correcao do XLSX e executar os testes ponta a ponta Planner -> Excel -> Teams preservando as validacoes aprovadas.",
     "criterio_conclusao": "Sincronizacao ponta a ponta executada com sucesso e evidencia registrada.",
     "evidencia": "",
     "origem": "Backlog WSJF / Planner Excel Teams",
-    "estado_evidenciado_em": "2026-09-04"
+    "estado_evidenciado_em": "2026-09-04",
+    "ultima_movimentacao_em": "2026-09-04",
+    "dependencias": [],
+    "causa_raiz_id": "PPT-XLSX-COMPATIBILIDADE"
   },
   {
     "id": "EXT-003",
@@ -39,13 +46,16 @@
     "impacto": 4,
     "esforco": 2,
     "frequencia": 3,
-    "status": "Proxima acao",
+    "status": "Pronta para execucao",
     "tipo_bloqueio": "Nenhum",
     "proxima_acao": "Executar o Pentaho Lineage Mapper v1.3.2 contra uma pasta Pentaho real usando --fail-on-parse-error e revisar nao resolvidas.",
     "criterio_conclusao": "Execucao real concluida com JSON/HTML/CSV gerados e erros de parse classificados.",
     "evidencia": "",
     "origem": "Pentaho Lineage Mapper v1.3.2",
-    "estado_evidenciado_em": "2026-08-31"
+    "estado_evidenciado_em": "2026-08-31",
+    "ultima_movimentacao_em": "2026-08-31",
+    "dependencias": [],
+    "causa_raiz_id": "PENTAHO-EVIDENCIA-REAL"
   },
   {
     "id": "EXT-004",
@@ -61,7 +71,10 @@
     "criterio_conclusao": "Ciclo semanal executado com consulta validada e checklist concluido.",
     "evidencia": "",
     "origem": "Automacao Pratica SQL Server",
-    "estado_evidenciado_em": "2026-09-04"
+    "estado_evidenciado_em": "2026-09-04",
+    "ultima_movimentacao_em": "2026-09-04",
+    "dependencias": [],
+    "causa_raiz_id": "ESTUDO-SQL-RECORRENTE"
   },
   {
     "id": "EXT-005",
@@ -77,7 +90,10 @@
     "criterio_conclusao": "Base de revisao registra desempenho e reduz repeticao de conteudo ja dominado.",
     "evidencia": "",
     "origem": "Flashcards de programacao",
-    "estado_evidenciado_em": "2026-09-02"
+    "estado_evidenciado_em": "2026-09-02",
+    "ultima_movimentacao_em": "2026-09-02",
+    "dependencias": [],
+    "causa_raiz_id": "ESTUDO-LACUNAS-RECORRENTES"
   },
   {
     "id": "EXT-006",
@@ -87,12 +103,15 @@
     "impacto": 3,
     "esforco": 1,
     "frequencia": 2,
-    "status": "Proxima acao",
+    "status": "Pronta para execucao",
     "tipo_bloqueio": "Nenhum",
     "proxima_acao": "Executar o autoteste do Documentador VBA e corrigir achados objetivos antes de aplicar em modulos reais.",
     "criterio_conclusao": "Autoteste verde e relatorios HTML/Markdown/JSON validados em uma amostra.",
     "evidencia": "",
     "origem": "Documentador VBA",
-    "estado_evidenciado_em": "2026-08-28"
+    "estado_evidenciado_em": "2026-08-28",
+    "ultima_movimentacao_em": "2026-08-28",
+    "dependencias": [],
+    "causa_raiz_id": "VBA-AUTOTESTE-PENDENTE"
   }
 ]
