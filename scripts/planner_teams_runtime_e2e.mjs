@@ -246,9 +246,6 @@ async function main() {
   const settleSeconds = Number(env('PLANNER_TEAMS_SETTLE_SECONDS', '45'))
   const evidencePath = env('EVIDENCE_PATH', 'audit/runtime-e2e/planner-teams/acceptance.json')
 
-  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 60 || timeoutSeconds > 600) {
-    throw new Error(`poll_timeout_invalido:${timeoutSeconds}`)
-  }
   if (!Number.isFinite(pollMs) || pollMs < 5000 || pollMs > 60000) {
     throw new Error(`poll_interval_invalido:${pollMs}`)
   }
