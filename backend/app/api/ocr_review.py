@@ -5,6 +5,7 @@ resultado protegido e decidir itens pendentes de revisão humana.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from typing import Literal
 from uuid import uuid4
@@ -54,6 +55,11 @@ def _claims() -> RepositorioClaimsOcrSqlAlchemy:
         return RepositorioClaimsOcrSqlAlchemy()
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=f'OCR_CLAIM_STORE_NOT_READY: {exc}') from None
+
+
+def _owner_token(correlation_id: str) -> str:
+    correlation_hash = hashlib.sha256(correlation_id.encode('utf-8')).hexdigest()[:32]
+    return f'{correlation_hash}:{uuid4()}'
 
 
 def _reviewer_id(user: dict) -> str:
@@ -135,7 +141,7 @@ def processar_anexos_redmine(issue_id: int, payload: OcrRedmineAttachmentsReques
             items.append({'attachment_id': imported.attachment_id, 'status': 'JA_PROCESSADO', 'job_id': job_id, 'sha256': imported.sha256, 'resultado': existing})
             continue
 
-        owner_token = f'{correlation_id}:{uuid4()}'
+        owner_token = _owner_token(correlation_id)
         if not claims.adquirir(job_id, owner_token):
             existing = repo.obter(job_id, revelar_pii=False)
             if existing is not None:
@@ -147,8 +153,6 @@ def processar_anexos_redmine(issue_id: int, payload: OcrRedmineAttachmentsReques
             continue
 
         try:
-            # Revalida após adquirir o claim: outra execução pode ter concluído entre
-            # a primeira leitura e a aquisição/reapropriação do lease.
             existing = repo.obter(job_id, revelar_pii=False)
             if existing is not None:
                 already_processed_count += 1
