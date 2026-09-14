@@ -145,3 +145,5 @@ jobs:
           echo '- PolÃ­tica: tarefa normal Ã© controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
           echo '- Sem login por device code e sem reprovisionamento de flow.' >> "$GITHUB_STEP_SUMMARY"
 
+
+
