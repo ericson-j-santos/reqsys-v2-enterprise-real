@@ -102,7 +102,8 @@ def test_missing_agent_task_token_is_fail_closed() -> None:
 
     assert decision.route == agent_tasks.AGENT_TASK_ROUTE
     assert decision.status == "blocked"
-    assert decision.reason == "missing_copilot_agent_task_token"
+    # O core converte exatamente este motivo em exit code 2 no modo execute.
+    assert decision.reason == "missing_copilot_agent_token"
     assert decision.action_executed is False
     assert client.requests == []
 
