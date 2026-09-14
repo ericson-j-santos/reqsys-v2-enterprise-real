@@ -17,6 +17,13 @@ from app.ocr.redmine import (
 from app.services.runtime_core import RuntimeDeliveryResult, RuntimeEventStatus
 
 
+@pytest.fixture(autouse=True)
+def reset_redmine_circuits():
+    redmine.reset_circuit_breakers()
+    yield
+    redmine.reset_circuit_breakers()
+
+
 class FakeResponse:
     def __init__(self, payload: bytes, url: str, *, headers: dict[str, str] | None = None):
         self.payload = payload
@@ -63,13 +70,13 @@ def test_redmine_client_lista_e_materializa_pdf_com_sha_idempotente(monkeypatch,
             FakeResponse(pdf, 'https://redmine.example/attachments/download/77/doc.pdf'),
         ]
     )
-    monkeypatch.setattr(redmine.request, 'urlopen', lambda req, timeout: next(responses))
 
     client = RedmineAttachmentClient(
         base_url='https://redmine.example',
         api_key='test-key',
         max_bytes=4096,
     )
+    monkeypatch.setattr(client, '_open', lambda req: next(responses))
     attachments = client.list_attachments(42)
     assert len(attachments) == 1
 
@@ -88,23 +95,82 @@ def test_redmine_client_retentativa_controlada_em_falha_de_rede(monkeypatch):
     payload = json.dumps({'issue': {'id': 42, 'attachments': []}}).encode('utf-8')
     calls = 0
 
-    def flaky(req, timeout):
+    def flaky(req):
         nonlocal calls
         calls += 1
         if calls == 1:
             raise URLError('temporário')
         return FakeResponse(payload, 'https://redmine.example/issues/42.json?include=attachments')
 
-    monkeypatch.setattr(redmine.request, 'urlopen', flaky)
     monkeypatch.setattr(redmine, 'REDMINE_RETRY_BACKOFF_SECONDS', 0)
     client = RedmineAttachmentClient(
         base_url='https://redmine.example',
         api_key='test-key',
         max_bytes=4096,
     )
+    monkeypatch.setattr(client, '_open', flaky)
 
     assert client.list_attachments(42) == []
     assert calls == 2
+
+
+def test_redmine_client_compartilha_circuit_breaker_por_origem():
+    first = RedmineAttachmentClient(
+        base_url='https://redmine.example',
+        api_key='test-key',
+        max_bytes=4096,
+    )
+    second = RedmineAttachmentClient(
+        base_url='https://redmine.example',
+        api_key='other-key',
+        max_bytes=4096,
+    )
+    other = RedmineAttachmentClient(
+        base_url='https://other-redmine.example',
+        api_key='test-key',
+        max_bytes=4096,
+    )
+
+    assert first._circuit is second._circuit
+    assert first._circuit is not other._circuit
+
+
+def test_redirect_cross_origin_e_bloqueado_antes_de_nova_requisicao():
+    handler = redmine._SameOriginRedirectHandler(('https', 'redmine.example'))
+    req = redmine.request.Request(
+        'https://redmine.example/attachments/77',
+        headers={'X-Redmine-API-Key': 'test-secret'},
+    )
+
+    with pytest.raises(RedmineAttachmentError, match='redirect.*origem não autorizada'):
+        handler.redirect_request(
+            req,
+            None,
+            302,
+            'Found',
+            {'Location': 'https://attacker.invalid/steal'},
+            'https://attacker.invalid/steal',
+        )
+
+
+def test_redirect_same_origin_permanece_permitido():
+    handler = redmine._SameOriginRedirectHandler(('https', 'redmine.example'))
+    req = redmine.request.Request(
+        'https://redmine.example/attachments/77',
+        headers={'X-Redmine-API-Key': 'test-secret'},
+    )
+
+    redirected = handler.redirect_request(
+        req,
+        None,
+        302,
+        'Found',
+        {'Location': '/attachments/download/77'},
+        'https://redmine.example/attachments/download/77',
+    )
+
+    assert redirected is not None
+    assert redirected.full_url == 'https://redmine.example/attachments/download/77'
 
 
 def test_redmine_client_rejeita_content_url_fora_da_origem(tmp_path):
@@ -140,15 +206,15 @@ def test_redmine_client_rejeita_formato_nao_suportado(tmp_path):
 
 
 def test_redmine_client_rejeita_assinatura_incompativel(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        redmine.request,
-        'urlopen',
-        lambda req, timeout: FakeResponse(b'MZ!!', 'https://redmine.example/attachments/9'),
-    )
     client = RedmineAttachmentClient(
         base_url='https://redmine.example',
         api_key='test-key',
         max_bytes=4096,
+    )
+    monkeypatch.setattr(
+        client,
+        '_open',
+        lambda req: FakeResponse(b'MZ!!', 'https://redmine.example/attachments/9'),
     )
     attachment = RedmineAttachment(
         attachment_id=9,
@@ -163,17 +229,17 @@ def test_redmine_client_rejeita_assinatura_incompativel(monkeypatch, tmp_path):
 def test_redmine_client_aplica_limite_antes_do_download(monkeypatch, tmp_path):
     called = False
 
-    def never_called(req, timeout):
+    def never_called(req):
         nonlocal called
         called = True
         raise AssertionError('download não deveria ser iniciado')
 
-    monkeypatch.setattr(redmine.request, 'urlopen', never_called)
     client = RedmineAttachmentClient(
         base_url='https://redmine.example',
         api_key='test-key',
         max_bytes=10,
     )
+    monkeypatch.setattr(client, '_open', never_called)
     attachment = RedmineAttachment(
         attachment_id=10,
         filename='grande.pdf',
