@@ -2,6 +2,11 @@ name: ReqSys Next Increment Auto Evaluation
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - ReqSys Fly Runtime P0
+    types:
+      - completed
   schedule:
     - cron: '17 * * * *'
   push:
@@ -55,7 +60,7 @@ jobs:
           for page in $(seq 1 "$MERGED_PR_MAX_PAGES"); do
             timeout "${API_TIMEOUT_SECONDS}s" gh api \
               "repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=${page}" \
-              --jq '.[] | select(.merged_at != null) | {number, created_at, merged_at, updated_at, html_url}' \
+              --jq '.[] | select(.merged_at != null) | {number, created_at, merged_at, merge_commit_sha, updated_at, html_url}' \
               >> .tmp/merged-prs.jsonl
           done
           jq -s '.' .tmp/merged-prs.jsonl > .tmp/merged-prs.json
@@ -68,12 +73,14 @@ jobs:
               >> .tmp/runs.jsonl
           done
           jq -s '.' .tmp/runs.jsonl > .tmp/runs.json
-      - name: Collect public runtime and smoke evidence
+      - name: Collect public runtime and SHA-linked build evidence
         env:
           REQSYS_RUNTIME_BASE_URL: https://reqsys-api.fly.dev
         run: |
           python - <<'PY'
           import json, os, time, urllib.error, urllib.request
+          from datetime import datetime, timezone
+
           base = os.environ['REQSYS_RUNTIME_BASE_URL'].rstrip('/')
           paths = ['/health', '/api/runtime/health', '/api/runtime/readiness', '/api/runtime/liveness']
           endpoints = []
@@ -98,8 +105,30 @@ jobs:
                   'latency_ms': round((time.perf_counter() - started) * 1000, 2),
                   'error': error,
               })
+
+          build_info = {}
+          build_error = None
+          try:
+              with urllib.request.urlopen(base + '/api/runtime/build-info', timeout=15) as response:
+                  payload = json.loads(response.read().decode('utf-8'))
+                  if response.status == 200 and payload.get('success') is True:
+                      build_info = payload.get('data') or {}
+                  else:
+                      build_error = f"unexpected build-info response: HTTP {response.status}"
+          except Exception as exc:
+              build_error = f'{type(exc).__name__}: {exc}'
+
+          observed_at = datetime.now(timezone.utc).isoformat()
           with open('.tmp/runtime.json', 'w', encoding='utf-8') as handle:
-              json.dump({'base_url': base, 'endpoints': endpoints}, handle, indent=2)
+              json.dump({
+                  'base_url': base,
+                  'observed_at': observed_at,
+                  'build_sha': build_info.get('build_sha'),
+                  'environment': build_info.get('environment'),
+                  'build_info': build_info,
+                  'build_info_error': build_error,
+                  'endpoints': endpoints,
+              }, handle, indent=2)
           PY
       - name: Download latest instrumented artifacts
         env:
@@ -123,6 +152,7 @@ jobs:
             --readiness .tmp/readiness.json \
             --history .tmp/history.json \
             --runtime .tmp/runtime.json \
+            --availability-target-minutes 30 \
             --output-json artifacts/reqsys-next-increment-auto-evaluation/report.json \
             --output-md artifacts/reqsys-next-increment-auto-evaluation/report.md
       - name: Publish executive summary
