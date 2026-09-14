@@ -17,10 +17,27 @@ from app.api.documento_demanda import router as documento_demanda_router
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.core.security import require_admin
-from app.ocr.redmine import RedmineAttachmentClient, RedmineAttachmentError, RedmineAttachmentUnsupported
-from app.ocr.storage import RepositorioClaimsOcrSqlAlchemy, RepositorioResultadosOcrSqlAlchemy, ocr_store_readiness
-from app.ocr.worker import EVENTO_OCR_SOLICITADO, MotorOcrEvidencia, OcrWorker, registrar_ocr_worker
-from app.services.runtime_core import RuntimeEventBus, RuntimeEventEnvelope, RuntimeEventStatus
+from app.ocr.redmine import (
+    RedmineAttachmentClient,
+    RedmineAttachmentError,
+    RedmineAttachmentUnsupported,
+)
+from app.ocr.storage import (
+    RepositorioClaimsOcrSqlAlchemy,
+    RepositorioResultadosOcrSqlAlchemy,
+    ocr_store_readiness,
+)
+from app.ocr.worker import (
+    EVENTO_OCR_SOLICITADO,
+    MotorOcrEvidencia,
+    OcrWorker,
+    registrar_ocr_worker,
+)
+from app.services.runtime_core import (
+    RuntimeEventBus,
+    RuntimeEventEnvelope,
+    RuntimeEventStatus,
+)
 
 router = APIRouter(prefix='/v1/ocr', tags=['OCR Governado'])
 router.include_router(documento_demanda_router)
