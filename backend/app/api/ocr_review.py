@@ -5,6 +5,7 @@ resultado protegido e decidir itens pendentes de revisão humana.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from typing import Literal
 from uuid import uuid4
@@ -21,7 +22,11 @@ from app.ocr.redmine import (
     RedmineAttachmentError,
     RedmineAttachmentUnsupported,
 )
-from app.ocr.storage import RepositorioResultadosOcrSqlAlchemy, ocr_store_readiness
+from app.ocr.storage import (
+    RepositorioClaimsOcrSqlAlchemy,
+    RepositorioResultadosOcrSqlAlchemy,
+    ocr_store_readiness,
+)
 from app.ocr.worker import (
     EVENTO_OCR_SOLICITADO,
     MotorOcrEvidencia,
@@ -62,6 +67,18 @@ def _repo() -> RepositorioResultadosOcrSqlAlchemy:
         raise HTTPException(status_code=503, detail=f'OCR_STORE_NOT_READY: {exc}') from None
 
 
+def _claims() -> RepositorioClaimsOcrSqlAlchemy:
+    try:
+        return RepositorioClaimsOcrSqlAlchemy()
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=f'OCR_CLAIM_STORE_NOT_READY: {exc}') from None
+
+
+def _owner_token(correlation_id: str) -> str:
+    correlation_hash = hashlib.sha256(correlation_id.encode('utf-8')).hexdigest()[:32]
+    return f'{correlation_hash}:{uuid4()}'
+
+
 def _reviewer_id(user: dict) -> str:
     return str(user.get('sub') or user.get('email') or user.get('preferred_username') or 'admin-sem-identificador')
 
@@ -98,13 +115,8 @@ def criar_job_ocr(payload: OcrJobRequest, user: dict = Depends(require_admin), x
 
 
 @router.post('/redmine/issues/{issue_id}/attachments')
-def processar_anexos_redmine(
-    issue_id: int,
-    payload: OcrRedmineAttachmentsRequest,
-    user: dict = Depends(require_admin),
-    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-Id'),
-):
-    """Materializa anexos Redmine suportados e os processa pelo mesmo worker OCR."""
+def processar_anexos_redmine(issue_id: int, payload: OcrRedmineAttachmentsRequest, user: dict = Depends(require_admin), x_correlation_id: str | None = Header(default=None, alias='X-Correlation-Id')):
+    """Materializa anexos Redmine e garante uma única execução OCR ativa por job_id."""
     del user
     input_root = (os.getenv('OCR_INPUT_ROOT') or '').strip()
     if not input_root:
@@ -115,125 +127,81 @@ def processar_anexos_redmine(
         client = RedmineAttachmentClient()
         attachments = client.list_attachments(issue_id)
     except RedmineAttachmentError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail={
-                'code': 'OCR_REDMINE_SOURCE_UNAVAILABLE',
-                'correlation_id': correlation_id,
-                'error': str(exc),
-            },
-        ) from None
+        raise HTTPException(status_code=502, detail={'code': 'OCR_REDMINE_SOURCE_UNAVAILABLE', 'correlation_id': correlation_id, 'error': str(exc)}) from None
 
     repo = _repo()
+    claims = _claims()
     bus: RuntimeEventBus | None = None
     items: list[dict[str, object]] = []
     failed_count = 0
     processed_count = 0
     already_processed_count = 0
+    in_progress_count = 0
     unsupported_count = 0
 
     for attachment in attachments[: payload.limite]:
         try:
-            imported = client.import_attachment(
-                issue_id,
-                attachment,
-                input_root=input_root,
-            )
+            imported = client.import_attachment(issue_id, attachment, input_root=input_root)
         except RedmineAttachmentUnsupported as exc:
             unsupported_count += 1
-            items.append(
-                {
-                    'attachment_id': attachment.attachment_id,
-                    'status': 'IGNORADO_FORMATO',
-                    'reason': str(exc),
-                }
-            )
+            items.append({'attachment_id': attachment.attachment_id, 'status': 'IGNORADO_FORMATO', 'reason': str(exc)})
             continue
         except RedmineAttachmentError as exc:
             failed_count += 1
-            items.append(
-                {
-                    'attachment_id': attachment.attachment_id,
-                    'status': 'QUARENTENA',
-                    'reason': str(exc),
-                }
-            )
+            items.append({'attachment_id': attachment.attachment_id, 'status': 'QUARENTENA', 'reason': str(exc)})
             continue
 
-        job_id = (
-            f'ocr-redmine-{issue_id}-{imported.attachment_id}-'
-            f'{imported.sha256[:16]}'
-        )
+        job_id = f'ocr-redmine-{issue_id}-{imported.attachment_id}-{imported.sha256[:16]}'
         existing = repo.obter(job_id, revelar_pii=False)
         if existing is not None:
             already_processed_count += 1
-            items.append(
-                {
-                    'attachment_id': imported.attachment_id,
-                    'status': 'JA_PROCESSADO',
-                    'job_id': job_id,
-                    'sha256': imported.sha256,
-                    'resultado': existing,
-                }
-            )
+            items.append({'attachment_id': imported.attachment_id, 'status': 'JA_PROCESSADO', 'job_id': job_id, 'sha256': imported.sha256, 'resultado': existing})
             continue
 
-        if bus is None:
-            bus = _runtime_ocr(repo, input_root)
-        envelope = RuntimeEventEnvelope(
-            event_type=EVENTO_OCR_SOLICITADO,
-            source='redmine.attachment',
-            aggregate_type='ocr_job',
-            aggregate_id=job_id,
-            correlation_id=correlation_id,
-            causation_id=f'redmine-issue-{issue_id}-attachment-{imported.attachment_id}',
-            payload={
-                'document_ref': imported.document_ref,
-                'tipo_documento': imported.tipo_documento,
-                'campo': payload.campo,
-                'redmine_issue_id': issue_id,
-                'redmine_attachment_id': imported.attachment_id,
-                'sha256': imported.sha256,
-            },
-        )
-        entrega = bus.publish(envelope)[0]
-        if entrega.status is not RuntimeEventStatus.DELIVERED:
-            failed_count += 1
-            items.append(
-                {
-                    'attachment_id': imported.attachment_id,
-                    'status': 'FALHA_OCR',
-                    'job_id': job_id,
-                    'sha256': imported.sha256,
-                    'runtime_status': entrega.status.value,
-                    'attempts': entrega.attempts,
-                    'reason': entrega.error,
-                }
-            )
+        owner_token = _owner_token(correlation_id)
+        if not claims.adquirir(job_id, owner_token):
+            existing = repo.obter(job_id, revelar_pii=False)
+            if existing is not None:
+                already_processed_count += 1
+                items.append({'attachment_id': imported.attachment_id, 'status': 'JA_PROCESSADO', 'job_id': job_id, 'sha256': imported.sha256, 'resultado': existing})
+            else:
+                in_progress_count += 1
+                items.append({'attachment_id': imported.attachment_id, 'status': 'EM_PROCESSAMENTO', 'job_id': job_id, 'sha256': imported.sha256})
             continue
 
-        resultado = repo.obter(job_id, revelar_pii=False)
-        if resultado is None:
-            failed_count += 1
-            items.append(
-                {
-                    'attachment_id': imported.attachment_id,
-                    'status': 'FALHA_PERSISTENCIA',
-                    'job_id': job_id,
-                    'sha256': imported.sha256,
-                }
+        try:
+            existing = repo.obter(job_id, revelar_pii=False)
+            if existing is not None:
+                already_processed_count += 1
+                items.append({'attachment_id': imported.attachment_id, 'status': 'JA_PROCESSADO', 'job_id': job_id, 'sha256': imported.sha256, 'resultado': existing})
+                continue
+
+            if bus is None:
+                bus = _runtime_ocr(repo, input_root)
+            envelope = RuntimeEventEnvelope(
+                event_type=EVENTO_OCR_SOLICITADO,
+                source='redmine.attachment',
+                aggregate_type='ocr_job',
+                aggregate_id=job_id,
+                correlation_id=correlation_id,
+                causation_id=f'redmine-issue-{issue_id}-attachment-{imported.attachment_id}',
+                payload={'document_ref': imported.document_ref, 'tipo_documento': imported.tipo_documento, 'campo': payload.campo, 'redmine_issue_id': issue_id, 'redmine_attachment_id': imported.attachment_id, 'sha256': imported.sha256},
             )
-            continue
-        processed_count += 1
-        items.append(
-            {
-                'attachment_id': imported.attachment_id,
-                'status': 'PROCESSADO',
-                'job_id': job_id,
-                'sha256': imported.sha256,
-                'resultado': resultado,
-            }
-        )
+            entrega = bus.publish(envelope)[0]
+            if entrega.status is not RuntimeEventStatus.DELIVERED:
+                failed_count += 1
+                items.append({'attachment_id': imported.attachment_id, 'status': 'FALHA_OCR', 'job_id': job_id, 'sha256': imported.sha256, 'runtime_status': entrega.status.value, 'attempts': entrega.attempts, 'reason': entrega.error})
+                continue
+
+            resultado = repo.obter(job_id, revelar_pii=False)
+            if resultado is None:
+                failed_count += 1
+                items.append({'attachment_id': imported.attachment_id, 'status': 'FALHA_PERSISTENCIA', 'job_id': job_id, 'sha256': imported.sha256})
+                continue
+            processed_count += 1
+            items.append({'attachment_id': imported.attachment_id, 'status': 'PROCESSADO', 'job_id': job_id, 'sha256': imported.sha256, 'resultado': resultado})
+        finally:
+            claims.liberar(job_id, owner_token)
 
     data = {
         'redmine_issue_id': issue_id,
@@ -241,21 +209,16 @@ def processar_anexos_redmine(
         'attachments_considered': min(len(attachments), payload.limite),
         'processed_count': processed_count,
         'already_processed_count': already_processed_count,
+        'in_progress_count': in_progress_count,
         'unsupported_count': unsupported_count,
         'failed_count': failed_count,
         'items': items,
         'pii_exposta': False,
         'fail_closed': True,
+        'distributed_claim': True,
     }
     if failed_count:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                'code': 'OCR_REDMINE_ATTACHMENTS_PARTIAL_FAILURE',
-                'correlation_id': correlation_id,
-                'data': data,
-            },
-        )
+        raise HTTPException(status_code=422, detail={'code': 'OCR_REDMINE_ATTACHMENTS_PARTIAL_FAILURE', 'correlation_id': correlation_id, 'data': data})
     return ok(data, correlation_id)
 
 
