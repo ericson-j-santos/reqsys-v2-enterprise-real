@@ -1,0 +1,122 @@
+name: Pentaho Kitchen Hosted E2E v2
+
+on:
+  push:
+    branches:
+      - test/pentaho-kitchen-hosted-e2e
+    paths:
+      - ".github/workflows/pentaho-kitchen-hosted-e2e-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kitchen-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Extrair Pentaho PDI 9.4 do bottle Homebrew Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='ghcr.io/homebrew/core/kettle:9.4.0.0-343'
+          docker pull --platform linux/amd64 "$image"
+          cid="$(docker create --platform linux/amd64 "$image" /bin/true)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker export "$cid" -o "$RUNNER_TEMP/kettle-bottle.tar"
+          mkdir -p "$RUNNER_TEMP/kettle-runtime"
+          tar -xf "$RUNNER_TEMP/kettle-bottle.tar" \
+            -C "$RUNNER_TEMP/kettle-runtime" \
+            kettle/9.4.0.0-343/libexec
+          kettle_home="$RUNNER_TEMP/kettle-runtime/kettle/9.4.0.0-343/libexec"
+          test -x "$kettle_home/kitchen.sh"
+          echo "KETTLE_HOME=$kettle_home" >> "$GITHUB_ENV"
+          echo "PDI_RUNTIME_OK=$kettle_home"
+
+      - name: Iniciar API sintética
+        shell: bash
+        run: |
+          set -euo pipefail
+          pacote='tools/gerador_pentaho/pacote'
+          node "$pacote/src/servidor-simulado.js" > "$RUNNER_TEMP/pentaho-api.log" 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/saude >/dev/null; then
+              echo "API_SINTETICA_OK tentativa=$attempt"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/pentaho-api.log"
+          exit 1
+
+      - name: Executar job Pentaho real
+        shell: bash
+        run: |
+          set -euo pipefail
+          pacote="$GITHUB_WORKSPACE/tools/gerador_pentaho/pacote"
+          mkdir -p "$pacote/saida"
+          set +e
+          "$KETTLE_HOME/kitchen.sh" \
+            -file="$pacote/pentaho/jobs/jb_treino_criar_dossies.kjb" \
+            -level=Basic 2>&1 | tee "$RUNNER_TEMP/pentaho-kitchen.log"
+          kitchen_rc=${PIPESTATUS[0]}
+          set -e
+          echo "KITCHEN_RC=$kitchen_rc"
+          test "$kitchen_rc" -eq 0
+          test -s "$pacote/saida/evidencias_pentaho.csv"
+
+      - name: Validar efeito de negócio independentemente
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/gerador_pentaho/pacote/saida/evidencias_pentaho.csv')
+          text = path.read_text(encoding='utf-8-sig', errors='strict')
+          required = {
+              'DEM-TREINO-0001': 'DOSSIE_CRIADO',
+              'DEM-TREINO-0002': 'CRIACAO_RECUSADA',
+          }
+          missing = [f'{demanda}:{estado}' for demanda, estado in required.items()
+                     if demanda not in text or estado not in text]
+          if missing:
+              raise SystemExit('EVIDENCIA_INVALIDA ' + ','.join(missing))
+          print('E2E_PENTAHO_PASS')
+          print(text)
+          PY
+
+      - name: Encerrar API sintética
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "$SERVER_PID" 2>/dev/null || true
+          fi
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pentaho-kitchen-hosted-e2e-v2-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            tools/gerador_pentaho/pacote/saida/evidencias_pentaho.csv
+            ${{ runner.temp }}/pentaho-kitchen.log
+            ${{ runner.temp }}/pentaho-api.log
