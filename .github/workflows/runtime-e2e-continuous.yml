@@ -69,7 +69,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 12
+    timeout-minutes: 20
     env:
       TARGET_ENVIRONMENT: dev
       POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
@@ -79,7 +79,7 @@ jobs:
       WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
       PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
       PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
-      PLANNER_TEAMS_POLL_SECONDS: '420'
+      PLANNER_TEAMS_POLL_SECONDS: '900'
       PLANNER_TEAMS_RUN_POLL_INTERVAL_MS: '30000'
       PLANNER_TEAMS_SETTLE_SECONDS: '45'
       EVIDENCE_PATH: audit/runtime-e2e/planner-teams/acceptance.json
@@ -129,6 +129,6 @@ jobs:
           echo '- Disparo: ${{ github.event_name }}' >> "$GITHUB_STEP_SUMMARY"
           echo '- Ambiente: DEV' >> "$GITHUB_STEP_SUMMARY"
           echo "- SHA efetivamente executado: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Timeout de observação: 420 s' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Timeout de observação: 900 s' >> "$GITHUB_STEP_SUMMARY"
           echo '- Política: tarefa normal é controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
           echo '- Sem login por device code e sem reprovisionamento de flow.' >> "$GITHUB_STEP_SUMMARY"
