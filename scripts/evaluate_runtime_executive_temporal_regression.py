@@ -18,6 +18,7 @@ from typing import Any
 DEFAULT_HISTORY = Path("docs/ops-dashboard/data/runtime-executive-post-deploy-history.json")
 DEFAULT_OUTPUT = Path("artifacts/runtime-executive-regression-alert/runtime-executive-regression-alert.json")
 DEFAULT_BRIEF = Path("docs/ops-dashboard/data/executive-brief.json")
+MIN_REQUIRED_SAMPLES = 1
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -61,7 +62,15 @@ def evaluate(history_payload: dict[str, Any], args: argparse.Namespace) -> dict[
     score_down = consecutive_score_down(history, args.score_drop_runs)
 
     violations: list[dict[str, Any]] = []
-    if history and availability < args.min_availability:
+    if len(history) < MIN_REQUIRED_SAMPLES:
+        violations.append({
+            "code": "insufficient_evidence",
+            "severity": "critical",
+            "observed": len(history),
+            "threshold": MIN_REQUIRED_SAMPLES,
+            "detail": "historico temporal sem amostras; prontidao nao pode ser inferida",
+        })
+    elif availability < args.min_availability:
         violations.append({
             "code": "availability_below_threshold",
             "severity": "critical",
@@ -114,6 +123,7 @@ def evaluate(history_payload: dict[str, Any], args: argparse.Namespace) -> dict[
             "max_recent_failure_rate": args.max_recent_failure_rate,
             "score_drop_runs": args.score_drop_runs,
             "block_on_score_drop": args.block_on_score_drop,
+            "min_required_samples": MIN_REQUIRED_SAMPLES,
         },
         "observed": {
             "samples": len(history),
@@ -131,6 +141,7 @@ def evaluate(history_payload: dict[str, Any], args: argparse.Namespace) -> dict[
         "guardrails": [
             "offline_history_gate",
             "strict_mode_blocks_production",
+            "insufficient_evidence_blocks_production",
             "thresholds_parameterized",
             "no_secret_required",
         ],
@@ -181,15 +192,21 @@ def main() -> int:
             "schema_version": "1.0.0",
             "contract": "runtime-executive-regression-alert",
             "evaluated_at_epoch": int(time.time()),
-            "status": "warning",
-            "production_blocked": False,
-            "risk": "medium",
+            "status": "blocked",
+            "production_blocked": True,
+            "risk": "high",
             "violations": [{
                 "code": "history_missing",
-                "severity": "warning",
-                "detail": "historico temporal ainda indisponivel",
+                "severity": "critical",
+                "observed": 0,
+                "threshold": MIN_REQUIRED_SAMPLES,
+                "detail": "historico temporal indisponivel; producao bloqueada por evidencia insuficiente",
             }],
-            "guardrails": ["offline_history_gate", "safe_when_history_missing"],
+            "guardrails": [
+                "offline_history_gate",
+                "fail_closed_missing_history",
+                "insufficient_evidence_blocks_production",
+            ],
         }
     else:
         report = evaluate(history, args)
