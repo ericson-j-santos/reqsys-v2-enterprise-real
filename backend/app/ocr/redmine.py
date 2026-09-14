@@ -16,9 +16,19 @@ from urllib import parse, request
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 
+from app.core.resilience import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    HTTPErrorNaoRetentavel,
+    call_with_retry,
+)
 from app.core.secrets import get_secret
 
 DEFAULT_MAX_BYTES = 25 * 1024 * 1024
+REDMINE_MAX_RETRIES = 3
+REDMINE_RETRY_BACKOFF_SECONDS = 0.5
+REDMINE_CIRCUIT_FAILURE_THRESHOLD = 3
+REDMINE_CIRCUIT_COOLDOWN_SECONDS = 60
 SUPPORTED_EXTENSIONS = frozenset({'.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'})
 _TYPE_BY_EXTENSION = {
     '.pdf': 'REDMINE_PDF',
@@ -59,7 +69,7 @@ class ImportedRedmineAttachment:
 
 
 class RedmineAttachmentClient:
-    """Cliente mínimo e fail-closed para anexos da API REST do Redmine."""
+    """Cliente resiliente e fail-closed para anexos da API REST do Redmine."""
 
     def __init__(
         self,
@@ -88,6 +98,11 @@ class RedmineAttachmentClient:
         if self.max_bytes < 1:
             raise RedmineAttachmentError('OCR_REDMINE_MAX_BYTES deve ser maior que zero')
         self._origin = (parsed.scheme.lower(), parsed.netloc.lower())
+        self._circuit = CircuitBreaker(
+            name=f'ocr_redmine_{parsed.netloc.lower()}',
+            failure_threshold=REDMINE_CIRCUIT_FAILURE_THRESHOLD,
+            cooldown_seconds=REDMINE_CIRCUIT_COOLDOWN_SECONDS,
+        )
 
     def list_attachments(self, issue_id: int) -> list[RedmineAttachment]:
         issue_id = _validated_positive_id(issue_id, 'issue_id')
@@ -212,17 +227,37 @@ class RedmineAttachmentClient:
         if parsed.scheme not in {'http', 'https'} or not parsed.netloc or origin != self._origin:
             raise RedmineAttachmentError('content_url do anexo aponta para origem não autorizada')
 
+    def _call_external(self, operation: str, fn):
+        try:
+            return call_with_retry(
+                fn,
+                max_retries=REDMINE_MAX_RETRIES,
+                backoff_seconds=REDMINE_RETRY_BACKOFF_SECONDS,
+                retry_on=(URLError,),
+                circuit=self._circuit,
+            )
+        except HTTPErrorNaoRetentavel as exc:
+            original = exc.original
+            code = getattr(original, 'code', 'desconhecido')
+            raise RedmineAttachmentError(f'Redmine HTTP {code} ao {operation}') from original
+        except CircuitBreakerOpenError as exc:
+            raise RedmineAttachmentError(f'Redmine temporariamente bloqueado pelo circuit breaker: {exc}') from exc
+        except URLError as exc:
+            raise RedmineAttachmentError(f'Falha de rede ao {operation} no Redmine: {exc.reason}') from exc
+
     def _get_json(self, url: str) -> dict:
         self._assert_same_origin(url)
         req = request.Request(url=url, headers=self._headers(), method='GET')
-        try:
-            with request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
-                self._assert_same_origin(resp.geturl())
-                raw = resp.read(self.max_bytes + 1)
-        except HTTPError as exc:
-            raise RedmineAttachmentError(f'Redmine HTTP {exc.code} ao consultar anexos') from exc
-        except URLError as exc:
-            raise RedmineAttachmentError(f'Falha de rede ao consultar Redmine: {exc.reason}') from exc
+
+        def fetch() -> bytes:
+            try:
+                with request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
+                    self._assert_same_origin(resp.geturl())
+                    return resp.read(self.max_bytes + 1)
+            except HTTPError as exc:
+                raise HTTPErrorNaoRetentavel(exc) from exc
+
+        raw = self._call_external('consultar anexos', fetch)
         if len(raw) > self.max_bytes:
             raise RedmineAttachmentError('resposta JSON do Redmine excedeu o limite configurado')
         try:
@@ -238,23 +273,25 @@ class RedmineAttachmentClient:
         headers = self._headers()
         headers['Accept'] = 'application/octet-stream,application/pdf,image/*'
         req = request.Request(url=url, headers=headers, method='GET')
-        try:
-            with request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
-                self._assert_same_origin(resp.geturl())
-                content_length = resp.headers.get('Content-Length')
-                if content_length:
-                    try:
-                        if int(content_length) > self.max_bytes:
-                            raise RedmineAttachmentError(
-                                f'anexo excede limite de {self.max_bytes} bytes'
-                            )
-                    except ValueError:
-                        pass
-                data = resp.read(self.max_bytes + 1)
-        except HTTPError as exc:
-            raise RedmineAttachmentError(f'Redmine HTTP {exc.code} ao baixar anexo') from exc
-        except URLError as exc:
-            raise RedmineAttachmentError(f'Falha de rede ao baixar anexo Redmine: {exc.reason}') from exc
+
+        def fetch() -> bytes:
+            try:
+                with request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
+                    self._assert_same_origin(resp.geturl())
+                    content_length = resp.headers.get('Content-Length')
+                    if content_length:
+                        try:
+                            if int(content_length) > self.max_bytes:
+                                raise RedmineAttachmentError(
+                                    f'anexo excede limite de {self.max_bytes} bytes'
+                                )
+                        except ValueError:
+                            pass
+                    return resp.read(self.max_bytes + 1)
+            except HTTPError as exc:
+                raise HTTPErrorNaoRetentavel(exc) from exc
+
+        data = self._call_external('baixar anexo', fetch)
         if len(data) > self.max_bytes:
             raise RedmineAttachmentError(f'anexo excede limite de {self.max_bytes} bytes')
         if not data:
