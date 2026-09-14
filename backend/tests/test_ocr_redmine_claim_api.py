@@ -1,3 +1,6 @@
+from fastapi import HTTPException
+import pytest
+
 from app.api import ocr_review
 from app.ocr.redmine import ImportedRedmineAttachment, RedmineAttachment
 from app.services.runtime_core import RuntimeDeliveryResult, RuntimeEventStatus
@@ -145,15 +148,15 @@ def test_claim_e_liberado_mesmo_quando_worker_falha(monkeypatch):
 
     monkeypatch.setattr(ocr_review, '_runtime_ocr', lambda *_args: BrokenBus())
 
-    try:
+    with pytest.raises(HTTPException) as exc:
         ocr_review.processar_anexos_redmine(
             42,
             ocr_review.OcrRedmineAttachmentsRequest(),
             user={'sub': 'admin'},
             x_correlation_id='corr-falha',
         )
-    except Exception:
-        pass
 
+    assert exc.value.status_code == 422
+    assert exc.value.detail['code'] == 'OCR_REDMINE_ATTACHMENTS_PARTIAL_FAILURE'
     assert len(claims.acquired) == 1
     assert claims.acquired[0] == claims.released[0]
