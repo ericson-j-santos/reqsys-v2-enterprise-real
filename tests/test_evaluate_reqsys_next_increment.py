@@ -163,7 +163,19 @@ def test_workflow_uses_bounded_github_collection_contract():
     assert "API_TIMEOUT_SECONDS: '30'" in workflow
     assert "MERGED_PR_MAX_PAGES: '2'" in workflow
     assert "RUN_MAX_PAGES: '3'" in workflow
-    assert workflow.count('timeout "${API_TIMEOUT_SECONDS}s" gh api') == 3
+    assert "COMMENT_MAX_PAGES: '3'" in workflow
+
+    bounded_endpoints = [
+        '"repos/${{ github.repository }}/pulls?state=open&per_page=100&page=1"',
+        '"repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=${page}"',
+        '"repos/${{ github.repository }}/actions/runs?per_page=100&page=${page}"',
+        '"repos/${{ github.repository }}/issues/${LEDGER_ISSUE}/comments?per_page=100&page=${page}"',
+    ]
+    for endpoint in bounded_endpoints:
+        position = workflow.index(endpoint)
+        prefix = workflow[max(0, position - 220):position]
+        assert 'timeout "${API_TIMEOUT_SECONDS}s" gh api' in prefix
+
     assert "timeout-minutes: 10" in workflow
     assert "merge_commit_sha" in workflow
     assert "/api/runtime/build-info" in workflow
