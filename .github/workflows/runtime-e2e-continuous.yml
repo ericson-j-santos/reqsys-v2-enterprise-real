@@ -1,4 +1,4 @@
-name: Runtime E2E Continuous — DEV
+﻿name: Runtime E2E Continuous â€” DEV
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
       - 'scripts/planner_teams_runtime_e2e.mjs'
       - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
   schedule:
-    # 09:15 BRT (UTC-3), dias úteis.
+    # 09:15 BRT (UTC-3), dias Ãºteis.
     - cron: '15 12 * * 1-5'
   workflow_run:
     workflows:
@@ -57,11 +57,11 @@ jobs:
           observed_sha="$(GITHUB_SHA="$actual_sha" node -p 'process.env.GITHUB_SHA')"
           test "$observed_sha" = "$actual_sha"
 
-      - name: Executar testes determinísticos do harness
+      - name: Executar testes determinÃ­sticos do harness
         run: node --test scripts/tests/planner_teams_runtime_e2e.test.mjs
 
   planner-teams-runtime:
-    name: Planner → Teams — E2E contínuo DEV
+    name: Planner â†’ Teams â€” E2E contÃ­nuo DEV
     needs: contract
     if: >-
       github.event_name != 'pull_request' &&
@@ -95,7 +95,19 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Executar prova real Planner → Teams
+      - name: Identificar identidade E2E sem expor segredo
+        shell: bash
+        run: |
+          case "$POWER_PLATFORM_CLIENT_ID" in
+            4061c542-cdc1-4007-ab57-40ab8f9109fc) echo 'E2E_IDENTITY=ReqSys Enterprise' ;;
+            a02a473b-19c1-4579-b482-c83e11cc0f4e) echo 'E2E_IDENTITY=Portals-ReqSys IA' ;;
+            cb8c924f-70ce-4e5b-a1a7-290c73ca3953) echo 'E2E_IDENTITY=ReqSys ALM Pipeline' ;;
+            cc233a8b-e2dc-425c-bbb2-afcc876a865d) echo 'E2E_IDENTITY=ReqSys Teams Bot DEV' ;;
+            1c58f055-7b06-4a8a-a607-dd9070a5ee94) echo 'E2E_IDENTITY=reqsys-teams-bot-dev' ;;
+            7fa03e05-86f4-4421-91fc-4bfb3750236b) echo 'E2E_IDENTITY=reqsys-automation' ;;
+            *) echo 'E2E_IDENTITY=UNKNOWN' ;;
+          esac
+      - name: Executar prova real Planner â†’ Teams
         shell: bash
         env:
           EXPECTED_EVIDENCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
@@ -106,13 +118,13 @@ jobs:
             echo "::error::SHA efetivamente executado diverge do SHA esperado: actual=$actual_sha expected=$EXPECTED_EVIDENCE_SHA"
             exit 42
           fi
-          # O GITHUB_SHA do evento workflow_run aponta para a revisão do workflow na
-          # default branch, não necessariamente para o SHA implantado. O processo do
+          # O GITHUB_SHA do evento workflow_run aponta para a revisÃ£o do workflow na
+          # default branch, nÃ£o necessariamente para o SHA implantado. O processo do
           # harness recebe explicitamente o HEAD efetivamente executado para que o
-          # artifact não atribua a evidência a outra revisão.
+          # artifact nÃ£o atribua a evidÃªncia a outra revisÃ£o.
           GITHUB_SHA="$actual_sha" node scripts/planner_teams_runtime_e2e.mjs
 
-      - name: Publicar evidência auditável
+      - name: Publicar evidÃªncia auditÃ¡vel
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -125,10 +137,11 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo '## Runtime E2E — Planner → Teams DEV' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Runtime E2E â€” Planner â†’ Teams DEV' >> "$GITHUB_STEP_SUMMARY"
           echo '- Disparo: ${{ github.event_name }}' >> "$GITHUB_STEP_SUMMARY"
           echo '- Ambiente: DEV' >> "$GITHUB_STEP_SUMMARY"
           echo "- SHA efetivamente executado: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Timeout de observação: 420 s' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Política: tarefa normal é controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Timeout de observaÃ§Ã£o: 420 s' >> "$GITHUB_STEP_SUMMARY"
+          echo '- PolÃ­tica: tarefa normal Ã© controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
           echo '- Sem login por device code e sem reprovisionamento de flow.' >> "$GITHUB_STEP_SUMMARY"
+
