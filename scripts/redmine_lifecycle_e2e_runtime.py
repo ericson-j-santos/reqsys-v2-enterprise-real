@@ -104,6 +104,16 @@ def _update_issue(issue_id: int, fields: dict[str, Any]) -> None:
     _redmine(f"/issues/{issue_id}.json", method="PUT", payload={"issue": fields})
 
 
+def _normalize_eol(value: Any) -> str:
+    """Compara texto semanticamente sem aceitar perda de conteúdo.
+
+    O Redmine pode persistir LF como CRLF. O E2E continua comparando todo o
+    conteúdo; a única equivalência permitida é a representação da quebra de
+    linha.
+    """
+    return str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _expected_owned_fields(req: dict[str, Any]) -> dict[str, str]:
     urgency = {"alta": "Alta", "media": "Normal", "baixa": "Baixa"}.get(
         str(req.get("urgencia") or "media").lower(), "Normal"
@@ -340,7 +350,10 @@ def main() -> int:
             "assigned_to_id": (before.get("assigned_to") or {}).get("id"),
         }
         expected_owned = _expected_owned_fields(fixture)
-        if original["subject"] != expected_owned["subject"] or original["description"] != expected_owned["description"]:
+        if (
+            original["subject"] != expected_owned["subject"]
+            or _normalize_eol(original["description"]) != _normalize_eol(expected_owned["description"])
+        ):
             raise RuntimeError("bootstrap não deixou subject/description canônicos no Redmine")
         if original["status_id"] <= 0:
             raise RuntimeError("status inicial da fixture Redmine inválido")
@@ -357,7 +370,7 @@ def main() -> int:
         restore_required = True
         _update_issue(issue_id, {"subject": marker, "description": marker})
         divergent = _issue(issue_id)
-        if divergent.get("subject") != marker or divergent.get("description") != marker:
+        if divergent.get("subject") != marker or _normalize_eol(divergent.get("description")) != marker:
             raise RuntimeError("pré-condição ReqSys→Redmine não confirmada por leitura direta")
         EVIDENCE["checks"]["forward_precondition_confirmed"] = True
 
@@ -365,7 +378,10 @@ def main() -> int:
         after_forward = _issue(issue_id)
         if not (forward.get("reqsys_to_redmine") or {}).get("applied"):
             raise RuntimeError("sincronização ReqSys→Redmine não informou aplicação")
-        if after_forward.get("subject") != expected_owned["subject"] or after_forward.get("description") != expected_owned["description"]:
+        if (
+            after_forward.get("subject") != expected_owned["subject"]
+            or _normalize_eol(after_forward.get("description")) != _normalize_eol(expected_owned["description"])
+        ):
             raise RuntimeError("leitura direta Redmine não confirmou conteúdo canônico do ReqSys")
         EVIDENCE["checks"]["reqsys_to_redmine_independent_read"] = True
 
@@ -463,7 +479,7 @@ def main() -> int:
                 restored = _issue(issue_id)
                 EVIDENCE["checks"]["restore_confirmed"] = (
                     restored.get("subject") == original["subject"]
-                    and restored.get("description") == original["description"]
+                    and _normalize_eol(restored.get("description")) == _normalize_eol(original["description"])
                     and restored.get("done_ratio") == original["done_ratio"]
                     and int((restored.get("status") or {}).get("id") or 0) == original["status_id"]
                     and ((restored.get("assigned_to") or {}).get("id") or None) == (original["assigned_to_id"] or None)
