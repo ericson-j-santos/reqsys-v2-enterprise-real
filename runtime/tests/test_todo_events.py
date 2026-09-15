@@ -302,8 +302,7 @@ def test_api_publica_evento_com_202_location_e_correlation_id() -> None:
 def test_api_rejeita_reuso_do_event_id_com_payload_diferente_com_409() -> None:
     client = TestClient(app)
     first = _event(event_id="evt-todo-api-conflict-0001")
-    second = first.model_copy(deep=True)
-    second.todo.status = "EM ANDAMENTO"  # type: ignore[assignment]
+    second = _event(event_id="evt-todo-api-conflict-0001", status="EM ANDAMENTO")
 
     assert client.post("/api/todo-events", json=first.model_dump(mode="json")).status_code == 202
     response = client.post("/api/todo-events", json=second.model_dump(mode="json"))
