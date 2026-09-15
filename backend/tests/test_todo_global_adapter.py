@@ -118,7 +118,7 @@ async def test_notion_upsert_rejeita_chave_duplicada_na_fonte_canonica():
 
 
 def test_router_interno_existe_uma_unica_vez_e_exige_autenticacao():
-    paths = [route.path for route in app.routes]
+    paths = [getattr(route, 'path', None) for route in app.routes]
     assert paths.count('/api/internal/todo-global/upsert') == 1
     response = TestClient(app).post('/api/internal/todo-global/upsert', json=_event())
     assert response.status_code == 401
