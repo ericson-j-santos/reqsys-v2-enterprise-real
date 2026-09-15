@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -92,3 +93,11 @@ class TodoEventAcceptedResponse(BaseModel):
     duplicate_event: bool = False
     status_url: str
     message: str = "Evento persistido e aceito para processamento assíncrono."
+
+
+class TodoGlobalUpsertResult(BaseModel):
+    todo_id: str = Field(min_length=1, max_length=300)
+    idempotency_key: str = Field(pattern=r"^[a-f0-9]{64}$")
+    effect: Literal["created", "updated", "unchanged"]
+    canonical_status: TodoStatus
+    readback_verified: bool
