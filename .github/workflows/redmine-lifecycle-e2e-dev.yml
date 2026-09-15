@@ -10,6 +10,8 @@ permissions:
 jobs:
   redmine-lifecycle-e2e:
     runs-on: ubuntu-latest
+    environment:
+      name: dev
     timeout-minutes: 10
     env:
       REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
