@@ -2,6 +2,15 @@ name: OCR Public Corpus Technical Certification
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ocr_public_corpus_collect.py'
+      - 'scripts/ocr_public_corpus_certify.py'
+      - 'governance/ocr/public-corpus-sources.json'
+      - 'backend/ocr_tests/test_public_corpus_certify.py'
+      - 'docs/architecture/ocr-public-corpus-certification-v1.md'
+      - '.github/workflows/ocr-public-corpus-certification.yml'
   schedule:
     - cron: '17 10 * * 2'
   pull_request:
@@ -39,7 +48,7 @@ jobs:
           pytest -q ocr_tests/test_public_corpus_certify.py
 
   certify-public-corpus:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: validate-contract
     runs-on: ubuntu-latest
     timeout-minutes: 25
