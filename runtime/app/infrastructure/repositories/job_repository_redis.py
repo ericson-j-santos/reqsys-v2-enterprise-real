@@ -23,6 +23,12 @@ class JobRepositoryRedis:
             await pipeline.execute()
         return job
 
+    async def remover(self, job_id: str) -> None:
+        async with self._redis.pipeline(transaction=True) as pipeline:
+            pipeline.delete(self._key(job_id))
+            pipeline.srem(self._index_key, job_id)
+            await pipeline.execute()
+
     async def obter(self, job_id: str) -> JobAssincrono:
         payload = await self._redis.get(self._key(job_id))
         if payload is None:
