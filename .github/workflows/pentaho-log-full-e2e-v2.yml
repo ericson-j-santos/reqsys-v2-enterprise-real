@@ -174,3 +174,5 @@ jobs:
           name: pentaho-log-full-e2e-v2-${{ github.run_id }}
           if-no-files-found: warn
           path: ${{ runner.temp }}/pentaho-log-e2e/evidence
+
+# Revalidação explícita após sincronização com a main vigente.
