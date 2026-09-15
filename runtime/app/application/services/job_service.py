@@ -20,7 +20,6 @@ from app.domain.models.job_assincrono import (
 from app.domain.models.todo_event import TodoEventAcceptedResponse, TodoEventV1
 from app.infrastructure.http.httpx_gateway import HttpxGateway
 from app.infrastructure.queue.errors import QueueCapacityError
-from app.infrastructure.repositories.job_repository_memoria import JobNaoEncontradoError
 from app.observability.lease_slo import avaliar_lease_slo
 
 
@@ -61,27 +60,9 @@ class JobService:
         )
 
     async def criar_todo_evento(self, event: TodoEventV1) -> TodoEventAcceptedResponse:
-        """Persiste antes de confirmar aceitação e deduplica o mesmo event_id."""
-        job_id = self._gerar_todo_job_id(event.event_id)
-        try:
-            existing = await self._repository.obter(job_id)
-        except JobNaoEncontradoError:
-            existing = None
-
-        if existing is not None:
-            return TodoEventAcceptedResponse(
-                event_id=event.event_id,
-                job_id=existing.job_id,
-                status=existing.status.value,
-                correlation_id=event.correlation_id,
-                idempotency_key=event.idempotency_key,
-                duplicate_event=True,
-                status_url=f"/api/jobs/{existing.job_id}",
-                message="Evento já persistido; nenhum novo efeito foi enfileirado.",
-            )
-
+        """Cria atomicamente por event_id e publica de forma idempotente."""
         job = JobAssincrono(
-            job_id=job_id,
+            job_id=self._gerar_todo_job_id(event.event_id),
             origem=event.producer or "todo_event",
             tipo_operacao=TipoOperacao.SINCRONIZAR_TODO_GLOBAL,
             destino="todo_global",
@@ -90,7 +71,39 @@ class JobService:
             max_tentativas=self._settings.max_tentativas,
             destino_url=self._settings.todo_global_adapter_url,
         )
-        await self._persistir_e_publicar(job)
+
+        criar_se_ausente = getattr(self._repository, "criar_se_ausente", None)
+        if criar_se_ausente is None:
+            raise RuntimeError("repository_atomic_create_not_supported")
+        stored, created = await resolve_maybe_awaitable(criar_se_ausente(job))
+
+        if not created:
+            # Se o processo caiu entre persistir e publicar, um replay do produtor
+            # reassegura entrega. Duplicatas de fila são inofensivas porque jobs
+            # terminais são no-op e o Redis aplica lease por job_id.
+            if stored.status == JobStatus.QUEUED:
+                try:
+                    await self._queue.publicar(stored.job_id)
+                except QueueCapacityError:
+                    pass
+            return TodoEventAcceptedResponse(
+                event_id=event.event_id,
+                job_id=stored.job_id,
+                status=stored.status.value,
+                correlation_id=stored.correlation_id,
+                idempotency_key=event.idempotency_key,
+                duplicate_event=True,
+                status_url=f"/api/jobs/{stored.job_id}",
+                message="Evento já persistido; nenhum novo efeito lógico foi criado.",
+            )
+
+        try:
+            await self._queue.publicar(job.job_id)
+        except QueueCapacityError:
+            remover = getattr(self._repository, "remover", None)
+            if remover is not None:
+                await resolve_maybe_awaitable(remover(job.job_id))
+            raise
 
         return TodoEventAcceptedResponse(
             event_id=event.event_id,
@@ -109,6 +122,9 @@ class JobService:
 
     async def processar_job(self, job_id: str) -> None:
         job = await self._repository.obter(job_id)
+        if job.status in {JobStatus.COMPLETED, JobStatus.DEAD_LETTER}:
+            return
+
         job.registrar_tentativa()
         job.atualizar_status(JobStatus.PROCESSING)
         await self._repository.salvar(job)
@@ -121,6 +137,19 @@ class JobService:
 
         job.atualizar_status(JobStatus.COMPLETED, resultado=resultado)
         await self._repository.salvar(job)
+
+    async def recuperar_jobs_pendentes(self) -> int:
+        """Rede de segurança para o gap persistência -> publicação após reinício."""
+        recuperados = 0
+        for job in await self._repository.listar():
+            if job.status != JobStatus.QUEUED:
+                continue
+            try:
+                await self._queue.publicar(job.job_id)
+            except QueueCapacityError:
+                break
+            recuperados += 1
+        return recuperados
 
     async def metricas(self) -> dict[str, Any]:
         por_status = await self._repository.metricas_por_status()
@@ -176,18 +205,24 @@ class JobService:
         }
 
     async def _registrar_falha(self, job: JobAssincrono, erro: str) -> None:
-        proximo_status = JobStatus.RETRYING if job.tentativas < job.max_tentativas else JobStatus.DEAD_LETTER
-        job.atualizar_status(proximo_status, erro=erro)
-        await self._repository.salvar(job)
-
-        if proximo_status == JobStatus.RETRYING:
-            delay = min(
-                self._settings.retry_backoff_base_seconds * (2 ** max(job.tentativas - 1, 0)),
-                self._settings.retry_backoff_max_seconds,
-            )
-            await self._queue.publicar(job.job_id, delay_seconds=delay)
+        if job.tentativas >= job.max_tentativas:
+            await self._mover_para_dlq(job, erro)
             return
 
+        job.atualizar_status(JobStatus.RETRYING, erro=erro)
+        await self._repository.salvar(job)
+        delay = min(
+            self._settings.retry_backoff_base_seconds * (2 ** max(job.tentativas - 1, 0)),
+            self._settings.retry_backoff_max_seconds,
+        )
+        try:
+            await self._queue.publicar(job.job_id, delay_seconds=delay)
+        except QueueCapacityError:
+            await self._mover_para_dlq(job, "retry_queue_capacity_exceeded")
+
+    async def _mover_para_dlq(self, job: JobAssincrono, erro: str) -> None:
+        job.atualizar_status(JobStatus.DEAD_LETTER, erro=self._sanitizar_erro(erro))
+        await self._repository.salvar(job)
         quarentenar = getattr(self._queue, "quarentenar", None)
         if quarentenar is not None:
             await resolve_maybe_awaitable(quarentenar(job.job_id))
@@ -206,5 +241,5 @@ class JobService:
 
     @staticmethod
     def _gerar_todo_job_id(event_id: str) -> str:
-        digest = hashlib.sha256(event_id.encode("utf-8")).hexdigest()[:24].upper()
+        digest = hashlib.sha256(event_id.encode("utf-8")).hexdigest().upper()
         return f"TODOEVENT-{digest}"
