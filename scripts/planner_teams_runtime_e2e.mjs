@@ -58,6 +58,14 @@ export function validatePollTimeout(value) {
   return timeoutSeconds
 }
 
+export function resolveGraphAuth({ accessToken = '', clientSecret = '' } = {}) {
+  const normalizedToken = String(accessToken || '').trim()
+  const normalizedSecret = String(clientSecret || '').trim()
+  if (normalizedToken) return { mode: 'oidc', token: normalizedToken }
+  if (normalizedSecret) return { mode: 'client_secret', token: '' }
+  throw new Error('graph_auth_ausente:oidc_token_ou_client_secret')
+}
+
 export function selectPlannerCandidate(candidates) {
   const normalized = (candidates || []).filter((item) => item?.plan_id && item?.bucket_id)
   const dev = normalized.filter((item) =>
@@ -238,7 +246,9 @@ async function main() {
 
   const tenantId = required('POWER_PLATFORM_TENANT_ID')
   const clientId = required('POWER_PLATFORM_CLIENT_ID')
-  const clientSecret = required('POWER_PLATFORM_CLIENT_SECRET')
+  const accessToken = env('POWER_PLATFORM_GRAPH_ACCESS_TOKEN')
+  const clientSecret = env('POWER_PLATFORM_CLIENT_SECRET')
+  const auth = resolveGraphAuth({ accessToken, clientSecret })
   const teamId = required('PLANNER_TEAMS_DEV_TEAM_ID')
   const channelId = required('PLANNER_TEAMS_DEV_CHANNEL_ID')
   const timeoutSeconds = validatePollTimeout(env('PLANNER_TEAMS_POLL_SECONDS', '900'))
@@ -254,7 +264,7 @@ async function main() {
   }
 
   const evidence = {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     capability: 'planner-teams-runtime-e2e-continuous',
     mode: 'steady_state_black_box',
     environment: targetEnvironment,
@@ -265,6 +275,7 @@ async function main() {
     started_at: iso(),
     completed_at: null,
     status: 'running',
+    auth_mode: auth.mode,
     mocked: false,
     simulated: false,
     tokens_persisted: false,
@@ -286,8 +297,8 @@ async function main() {
   let token = ''
   const taskIds = []
   try {
-    token = await graphToken(tenantId, clientId, clientSecret)
-    evidence.checks = { graph_app_token: 'acquired' }
+    token = auth.mode === 'oidc' ? auth.token : await graphToken(tenantId, clientId, clientSecret)
+    evidence.checks = { graph_app_token: 'acquired', graph_auth_mode: auth.mode }
 
     // Preflight de leitura evita criar tarefas quando a identidade nao consegue
     // comprovar o resultado no Teams.
@@ -376,6 +387,7 @@ async function main() {
     await fs.writeFile(evidencePath, JSON.stringify(evidence, null, 2) + '\n', 'utf8')
     console.log(JSON.stringify({
       status: evidence.status,
+      auth_mode: evidence.auth_mode,
       correlation_id: evidence.correlation_id,
       planner_target: evidence.planner_target || null,
       contract: evidence.contract || null,
