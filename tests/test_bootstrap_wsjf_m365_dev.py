@@ -68,6 +68,29 @@ class FakeClient:
         return FakeResponse(json_body={"id": ITEM, "name": bootstrap.FILE_NAME})
 
 
+def test_token_graph_exige_oidc_e_nao_depende_de_client_secret(monkeypatch):
+    monkeypatch.setenv("POWER_PLATFORM_GRAPH_ACCESS_TOKEN", "federated-graph-token")
+    monkeypatch.delenv("POWER_PLATFORM_CLIENT_SECRET", raising=False)
+
+    assert bootstrap._token(None) == "federated-graph-token"
+
+
+def test_token_graph_falha_fechado_sem_oidc(monkeypatch):
+    monkeypatch.delenv("POWER_PLATFORM_GRAPH_ACCESS_TOKEN", raising=False)
+
+    with pytest.raises(bootstrap.BootstrapError, match="POWER_PLATFORM_GRAPH_ACCESS_TOKEN"):
+        bootstrap._token(None)
+
+
+def test_workflow_bootstrap_usa_oidc_sem_segredo_legado():
+    workflow = (RAIZ / ".github" / "workflows" / "bootstrap-wsjf-m365-dev.yml").read_text(encoding="utf-8")
+
+    assert "id-token: write" in workflow
+    assert "azure/login@v2" in workflow
+    assert "POWER_PLATFORM_GRAPH_ACCESS_TOKEN" in workflow
+    assert "POWER_PLATFORM_CLIENT_SECRET" not in workflow
+
+
 def test_validate_template_aprova_o_template_versionado(tmp_path):
     arquivo = tmp_path / "WSJF.xlsx"
     arquivo.write_bytes(_template_bytes())
@@ -96,10 +119,20 @@ def test_arquivo_valido_e_reutilizado_sem_reescrita(tmp_path):
     assert not [rota for metodo, rota in client.calls if metodo == "PUT"]
 
 
-def test_arquivo_recusado_pelo_graph_e_substituido_com_copia_de_seguranca(tmp_path):
+def test_arquivo_recusado_pelo_graph_e_substituido_com_copia_de_seguranca(tmp_path, monkeypatch):
     template = tmp_path / "WSJF.xlsx"
     template.write_bytes(_template_bytes())
     client = FakeClient(_indice_quebrado(_template_bytes()), workbook_ok_no_inicio=False)
+    monkeypatch.setattr(
+        bootstrap,
+        "reparar_workbook_wsjf",
+        lambda _: {
+            "conteudo": _template_bytes(),
+            "estrategia": "template_canonico",
+            "linhas_preservadas": 0,
+            "avisos": ["arquivo_atual_ilegivel:ValueError"],
+        },
+    )
 
     item, status, detalhe = bootstrap._find_or_create_file(client, "token", DRIVE, template)
 

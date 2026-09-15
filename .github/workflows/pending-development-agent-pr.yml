@@ -1,0 +1,59 @@
+name: Pending Development Agent PR
+
+on:
+  workflow_run:
+    workflows: ["Pre-PR Readiness Gate"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pending-development-agent-pr-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  open-governed-pr:
+    name: Abrir PR após READY_FOR_PR
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'copilot/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # workflow_run carrega dados de uma branch mutável; execute automação somente
+      # a partir da branch padrão confiável e use o SHA do evento apenas como dado.
+      - name: Checkout da automação confiável
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abrir ou atualizar PR draft governada
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          READY_FOR_PR_WAIT_SECONDS: "0"
+        run: |
+          set -euo pipefail
+          python scripts/auto_open_agent_pr.py \
+            --base main \
+            --branch "${{ github.event.workflow_run.head_branch }}"
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pending-development-agent-pr-${{ github.event.workflow_run.head_sha }}
+          path: artifacts/auto-pr-request/
+          if-no-files-found: error
+          retention-days: 30
