@@ -1,0 +1,215 @@
+name: Redmine Lifecycle E2E DEV
+
+on:
+  push:
+    branches: [ops/redmine-lifecycle-e2e-1686-20260915]
+
+permissions:
+  contents: read
+
+jobs:
+  redmine-lifecycle-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
+      REQSYS_LIFECYCLE_SERVICE_TOKEN: ${{ secrets.REQSYS_LIFECYCLE_SERVICE_TOKEN }}
+      REDMINE_API_KEY: ${{ secrets.REDMINE_API_KEY }}
+      CORRELATION_ID: redmine-lifecycle-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_PATH: artifacts/redmine-lifecycle-e2e.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Executar E2E ReqSys ↔ Redmine em fixture DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, sys, urllib.error, urllib.parse, urllib.request
+          from pathlib import Path
+
+          base = os.environ['REQSYS_API_BASE_URL'].rstrip('/')
+          service_token = os.environ.get('REQSYS_LIFECYCLE_SERVICE_TOKEN', '').strip()
+          redmine_key = os.environ.get('REDMINE_API_KEY', '').strip()
+          correlation_id = os.environ['CORRELATION_ID']
+          evidence_path = Path(os.environ['EVIDENCE_PATH'])
+          evidence_path.parent.mkdir(parents=True, exist_ok=True)
+          evidence = {
+              'schema_version': '1.0.0',
+              'capability': 'redmine-lifecycle-e2e',
+              'environment': 'dev',
+              'sha': os.environ.get('GITHUB_SHA'),
+              'correlation_id': correlation_id,
+              'status': 'running',
+              'mocked': False,
+              'simulated': False,
+              'checks': {},
+          }
+
+          def persist():
+              evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          def call(url, method='GET', payload=None, service=False, redmine=False):
+              headers = {'Accept': 'application/json', 'User-Agent': 'reqsys-redmine-lifecycle-e2e/1.0'}
+              if payload is not None:
+                  headers['Content-Type'] = 'application/json'
+              if service:
+                  headers['X-Service-Token'] = service_token
+                  headers['X-Correlation-Id'] = correlation_id
+              if redmine:
+                  headers['X-Redmine-API-Key'] = redmine_key
+              data = json.dumps(payload).encode() if payload is not None else None
+              req = urllib.request.Request(url, data=data, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as response:  # nosec B310
+                  raw = response.read().decode('utf-8')
+                  return json.loads(raw) if raw else {}
+
+          def data_of(payload):
+              return payload.get('data', payload) if isinstance(payload, dict) else payload
+
+          def lifecycle(req_id):
+              return data_of(call(f'{base}/v1/requisitos/lifecycle/{req_id}', service=True))
+
+          def sync(req_id, dry_run=False):
+              return data_of(call(
+                  f'{base}/v1/requisitos/lifecycle/{req_id}/sincronizar-redmine',
+                  method='POST', payload={'dry_run': dry_run}, service=True,
+              ))
+
+          def redmine_issue(redmine_base, issue_id):
+              return call(f'{redmine_base}/issues/{issue_id}.json?include=journals', redmine=True)['issue']
+
+          def redmine_update(redmine_base, issue_id, fields):
+              call(f'{redmine_base}/issues/{issue_id}.json', method='PUT', payload={'issue': fields}, redmine=True)
+
+          try:
+              if not service_token:
+                  raise RuntimeError('REQSYS_LIFECYCLE_SERVICE_TOKEN ausente')
+              if not redmine_key:
+                  raise RuntimeError('REDMINE_API_KEY ausente no GitHub Actions; nenhuma mutação executada')
+              evidence['checks']['credentials_present'] = True
+
+              requirements = data_of(call(f'{base}/v1/requisitos'))
+              if not isinstance(requirements, list):
+                  raise RuntimeError('lista de requisitos DEV inválida')
+              evidence['checks']['requirements_read'] = len(requirements)
+
+              fixture = None
+              fixture_lifecycle = None
+              for req in requirements:
+                  text = ' '.join(str(req.get(k) or '') for k in ('codigo', 'titulo', 'descricao')).lower()
+                  if 'e2e' not in text and 'sandbox' not in text:
+                      continue
+                  try:
+                      snap = lifecycle(req['id'])
+                  except Exception:
+                      continue
+                  redmine = snap.get('redmine') or {}
+                  if redmine.get('referencia') and redmine.get('url'):
+                      fixture, fixture_lifecycle = req, snap
+                      break
+
+              if not fixture:
+                  raise RuntimeError('fixture DEV E2E/sandbox com vínculo Redmine não encontrada; nenhuma mutação executada')
+
+              req_id = int(fixture['id'])
+              issue_id = int(fixture_lifecycle['redmine']['referencia'])
+              issue_url = fixture_lifecycle['redmine']['url']
+              redmine_base = issue_url.split('/issues/', 1)[0].rstrip('/')
+              evidence['fixture'] = {
+                  'requisito_id': req_id,
+                  'codigo': fixture.get('codigo'),
+                  'redmine_issue_id': issue_id,
+                  'redmine_base_url': redmine_base,
+              }
+
+              before = redmine_issue(redmine_base, issue_id)
+              original = {
+                  'subject': before.get('subject') or '',
+                  'description': before.get('description') or '',
+                  'done_ratio': before.get('done_ratio'),
+              }
+              evidence['checks']['redmine_direct_read'] = True
+
+              dry = sync(req_id, dry_run=True)
+              if dry.get('dry_run') is not True or dry.get('mutation_count') != 0:
+                  raise RuntimeError('dry_run não provou ausência de mutação')
+              evidence['checks']['dry_run_zero_mutations'] = True
+
+              marker = f'REQSYS-E2E-DIVERGENCE {correlation_id}'
+              redmine_update(redmine_base, issue_id, {'subject': marker, 'description': marker})
+              divergent = redmine_issue(redmine_base, issue_id)
+              if divergent.get('subject') != marker or divergent.get('description') != marker:
+                  raise RuntimeError('pré-condição ReqSys→Redmine não confirmada por leitura direta')
+              evidence['checks']['forward_precondition_confirmed'] = True
+
+              forward = sync(req_id, dry_run=False)
+              after_forward = redmine_issue(redmine_base, issue_id)
+              if not forward.get('reqsys_to_redmine', {}).get('applied'):
+                  raise RuntimeError('sincronização ReqSys→Redmine não informou aplicação')
+              if after_forward.get('subject') != fixture.get('titulo') or after_forward.get('description') != (fixture.get('descricao') or ''):
+                  raise RuntimeError('leitura direta Redmine não confirmou restauração canônica ReqSys')
+              evidence['checks']['reqsys_to_redmine_independent_read'] = True
+
+              ratio0 = int(after_forward.get('done_ratio') or 0)
+              ratio1 = 10 if ratio0 != 10 else 20
+              note = f'REQSYS-E2E {correlation_id}'
+              redmine_update(redmine_base, issue_id, {'done_ratio': ratio1, 'notes': note})
+              reverse_pre = redmine_issue(redmine_base, issue_id)
+              notes = [str(j.get('notes') or '') for j in reverse_pre.get('journals') or []]
+              if int(reverse_pre.get('done_ratio') or 0) != ratio1 or note not in notes:
+                  raise RuntimeError('pré-condição Redmine→ReqSys não confirmada por leitura direta')
+              evidence['checks']['reverse_precondition_confirmed'] = True
+
+              reverse = sync(req_id, dry_run=False)
+              execution = reverse.get('redmine_to_reqsys', {}).get('execution') or {}
+              if int(execution.get('done_ratio') or 0) != ratio1:
+                  raise RuntimeError('snapshot ReqSys não refletiu done_ratio do Redmine')
+              if reverse.get('redmine_to_reqsys', {}).get('imported_comment_count', 0) < 1:
+                  raise RuntimeError('journal E2E não foi importado pelo ReqSys')
+              snap_after = lifecycle(req_id)
+              sync_links = [x for x in (snap_after.get('links') or []) if x and x.get('provedor') == 'redmine' and x.get('tipo') == 'redmine_sync_state']
+              if not sync_links:
+                  raise RuntimeError('estado de sincronização não foi confirmado por leitura independente no ReqSys')
+              evidence['checks']['redmine_to_reqsys_independent_read'] = True
+
+              repeat = sync(req_id, dry_run=False)
+              if repeat.get('mutation_count') != 0 or repeat.get('redmine_to_reqsys', {}).get('new_journal_ids'):
+                  raise RuntimeError('repetição idempotente produziu mutação ou journal duplicado')
+              evidence['checks']['idempotent_repeat_zero_mutations'] = True
+              evidence['result'] = {
+                  'forward_mutation_count': forward.get('mutation_count'),
+                  'reverse_mutation_count': reverse.get('mutation_count'),
+                  'repeat_mutation_count': repeat.get('mutation_count'),
+                  'imported_comment_count': reverse.get('redmine_to_reqsys', {}).get('imported_comment_count'),
+              }
+              evidence['status'] = 'passed'
+          except Exception as exc:
+              evidence['status'] = 'blocked' if not evidence.get('fixture') else 'failed'
+              evidence['error'] = str(exc)[:500]
+              raise
+          finally:
+              try:
+                  if 'redmine_base' in locals() and 'issue_id' in locals() and 'original' in locals():
+                      redmine_update(redmine_base, issue_id, original)
+                      restored = redmine_issue(redmine_base, issue_id)
+                      evidence['checks']['restore_confirmed'] = (
+                          restored.get('subject') == original['subject'] and
+                          restored.get('description') == original['description'] and
+                          restored.get('done_ratio') == original['done_ratio']
+                      )
+                      if 'req_id' in locals():
+                          sync(req_id, dry_run=False)
+              except Exception as restore_exc:
+                  evidence['checks']['restore_confirmed'] = False
+                  evidence['restore_error'] = str(restore_exc)[:500]
+              persist()
+          PY
+
+      - name: Publicar evidência auditável
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: redmine-lifecycle-e2e-dev
+          path: artifacts/redmine-lifecycle-e2e.json
+          if-no-files-found: error
