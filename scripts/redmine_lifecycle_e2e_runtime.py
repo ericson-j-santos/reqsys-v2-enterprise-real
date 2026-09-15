@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """E2E governado ReqSys ↔ Redmine executado dentro do runtime DEV.
 
-Cria/reutiliza uma fixture explicitamente dedicada ao E2E quando necessário,
-usa apenas credenciais já provisionadas no container, nunca imprime segredos
-e restaura os campos mutados ao final. A fixture permanece em DEV para tornar
-as próximas execuções idempotentes e não depender de requisitos reais.
+Cria/reutiliza uma fixture explicitamente dedicada ao E2E, reconcilia timeouts
+de criação antes de qualquer repetição, usa apenas credenciais já provisionadas
+no container e restaura os campos operacionais mutados ao final.
 """
 from __future__ import annotations
 
 import json
 import os
+import socket
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -28,7 +30,7 @@ FIXTURE_DESCRIPTION = (
 )
 
 EVIDENCE: dict[str, Any] = {
-    "schema_version": "1.1.0",
+    "schema_version": "1.2.0",
     "capability": "redmine-lifecycle-e2e",
     "environment": "dev",
     "correlation_id": CORRELATION_ID,
@@ -46,10 +48,11 @@ def _call(
     payload: dict[str, Any] | None = None,
     bearer: str | None = None,
     redmine: bool = False,
+    timeout: int | None = None,
 ) -> Any:
     headers = {
         "Accept": "application/json",
-        "User-Agent": "reqsys-redmine-lifecycle-e2e/1.1",
+        "User-Agent": "reqsys-redmine-lifecycle-e2e/1.2",
         "X-Correlation-Id": CORRELATION_ID,
     }
     if payload is not None:
@@ -59,8 +62,9 @@ def _call(
     if redmine:
         headers["X-Redmine-API-Key"] = REDMINE_API_KEY
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
-    request = urllib.request.Request(url, data=data, method=method, headers=headers)
-    with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    effective_timeout = timeout or (90 if redmine else 45)
+    with urllib.request.urlopen(req, timeout=effective_timeout) as response:  # nosec B310
         raw = response.read().decode("utf-8")
         return json.loads(raw) if raw else {}
 
@@ -100,6 +104,23 @@ def _update_issue(issue_id: int, fields: dict[str, Any]) -> None:
     _redmine(f"/issues/{issue_id}.json", method="PUT", payload={"issue": fields})
 
 
+def _expected_owned_fields(req: dict[str, Any]) -> dict[str, str]:
+    urgency = {"alta": "Alta", "media": "Normal", "baixa": "Baixa"}.get(
+        str(req.get("urgencia") or "media").lower(), "Normal"
+    )
+    description = (
+        f"h2. {req['codigo']} — {req['titulo']}\n\n"
+        f"*Sistema:* {req.get('sistema') or ''}\n"
+        f"*Área:* {req.get('area') or ''}\n"
+        f"*Solicitante:* {req.get('solicitante') or ''}\n"
+        f"*Urgência:* {urgency}\n"
+        f"*Impacto Regulatório:* {'Sim' if req.get('impacto_regulatorio') else 'Não'}\n\n"
+        f"---\n\n"
+        f"{req.get('descricao') or ''}"
+    )
+    return {"subject": f"[{req['codigo']}] {req['titulo']}", "description": description}
+
+
 def _create_requirement() -> dict[str, Any]:
     return _reqsys(
         "/v1/requisitos",
@@ -116,22 +137,90 @@ def _create_requirement() -> dict[str, Any]:
     )
 
 
-def _create_redmine_fixture_issue(req: dict[str, Any]) -> int:
-    created = _redmine(
-        "/issues.json",
-        method="POST",
-        payload={
-            "issue": {
+def _find_redmine_fixture_issues() -> list[dict[str, Any]]:
+    found: dict[int, dict[str, Any]] = {}
+    for offset in range(0, 500, 100):
+        query = urllib.parse.urlencode(
+            {
                 "project_id": int(REDMINE_PROJECT_ID),
-                "subject": req["titulo"],
-                "description": req.get("descricao") or "",
+                "status_id": "*",
+                "sort": "id:desc",
+                "limit": 100,
+                "offset": offset,
             }
-        },
-    )
-    issue_id = int((created.get("issue") or {}).get("id") or 0)
-    if issue_id <= 0:
-        raise RuntimeError("Redmine não retornou id ao criar fixture")
-    return issue_id
+        )
+        payload = _redmine(f"/issues.json?{query}")
+        issues = payload.get("issues") or []
+        if not isinstance(issues, list):
+            raise RuntimeError("listagem Redmine retornou formato inválido")
+        for issue in issues:
+            if str(issue.get("subject") or "").strip() == FIXTURE_TITLE:
+                issue_id = int(issue.get("id") or 0)
+                if issue_id > 0:
+                    found[issue_id] = issue
+        total = int(payload.get("total_count") or 0)
+        if offset + len(issues) >= total or len(issues) < 100:
+            break
+    return [found[key] for key in sorted(found, reverse=True)]
+
+
+def _reconcile_redmine_fixture_after_timeout() -> list[dict[str, Any]]:
+    last_error: Exception | None = None
+    for attempt in range(4):
+        try:
+            matches = _find_redmine_fixture_issues()
+            if matches:
+                return matches
+        except Exception as exc:  # rede pode estar acordando após timeout do POST
+            last_error = exc
+        if attempt < 3:
+            time.sleep(3 * (attempt + 1))
+    if last_error:
+        raise RuntimeError(f"não foi possível reconciliar fixture Redmine após timeout: {type(last_error).__name__}") from last_error
+    return []
+
+
+def _create_or_reuse_redmine_fixture_issue(req: dict[str, Any]) -> tuple[int, str]:
+    matches = _reconcile_redmine_fixture_after_timeout()
+    if len(matches) > 1:
+        raise RuntimeError(
+            "mais de uma issue Redmine sandbox com o título canônico foi encontrada; "
+            "interrompido para evitar vínculo ambíguo"
+        )
+    if matches:
+        EVIDENCE["checks"]["orphan_redmine_fixture_reconciled"] = True
+        return int(matches[0]["id"]), "reconciled"
+
+    payload = {
+        "issue": {
+            "project_id": int(REDMINE_PROJECT_ID),
+            "subject": FIXTURE_TITLE,
+            "description": req.get("descricao") or "",
+        }
+    }
+    for attempt in range(2):
+        # pré-condição obrigatória antes de cada POST: não existe fixture remota.
+        matches = _reconcile_redmine_fixture_after_timeout()
+        if matches:
+            EVIDENCE["checks"]["redmine_fixture_found_before_retry"] = True
+            return int(matches[0]["id"]), "reconciled"
+        try:
+            created = _redmine("/issues.json", method="POST", payload=payload)
+            issue_id = int((created.get("issue") or {}).get("id") or 0)
+            if issue_id <= 0:
+                raise RuntimeError("Redmine não retornou id ao criar fixture")
+            return issue_id, "created"
+        except (TimeoutError, socket.timeout, urllib.error.URLError) as exc:
+            EVIDENCE["checks"][f"redmine_create_timeout_attempt_{attempt + 1}"] = True
+            matches = _reconcile_redmine_fixture_after_timeout()
+            if len(matches) > 1:
+                raise RuntimeError("timeout de criação resultou em múltiplas fixtures Redmine") from exc
+            if matches:
+                EVIDENCE["checks"]["redmine_create_timeout_reconciled"] = True
+                return int(matches[0]["id"]), "reconciled"
+            if attempt == 1:
+                raise RuntimeError("criação Redmine expirou e nenhuma fixture foi encontrada após reconciliação") from exc
+    raise RuntimeError("não foi possível obter fixture Redmine")
 
 
 def _link_fixture(req: dict[str, Any], issue_id: int) -> None:
@@ -158,10 +247,8 @@ def _ensure_fixture(token: str) -> tuple[dict[str, Any], dict[str, Any]]:
     EVIDENCE["checks"]["requirements_read"] = len(requirements)
 
     exact = next((req for req in requirements if str(req.get("titulo") or "").strip() == FIXTURE_TITLE), None)
-    created_requirement = False
     if exact is None:
         exact = _create_requirement()
-        created_requirement = True
         EVIDENCE["checks"]["fixture_requirement_created"] = True
     else:
         EVIDENCE["checks"]["fixture_requirement_reused"] = True
@@ -173,11 +260,12 @@ def _ensure_fixture(token: str) -> tuple[dict[str, Any], dict[str, Any]]:
         EVIDENCE["checks"]["fixture_redmine_link_reused"] = True
         return exact, snap
 
-    issue_id: int | None = None
+    issue_id, origin = _create_or_reuse_redmine_fixture_issue(exact)
+    created_now = origin == "created"
     try:
-        issue_id = _create_redmine_fixture_issue(exact)
         _link_fixture(exact, issue_id)
-        EVIDENCE["checks"]["fixture_redmine_issue_created"] = True
+        EVIDENCE["checks"]["fixture_redmine_issue_created"] = created_now
+        EVIDENCE["checks"]["fixture_redmine_issue_reused"] = not created_now
         snap = _lifecycle(req_id, token)
         redmine = snap.get("redmine") or {}
         if int(redmine.get("referencia") or 0) != issue_id:
@@ -185,14 +273,13 @@ def _ensure_fixture(token: str) -> tuple[dict[str, Any], dict[str, Any]]:
         EVIDENCE["checks"]["fixture_link_independent_read"] = True
         return exact, snap
     except Exception:
-        if issue_id is not None:
+        # Só removemos o remoto se esta execução comprovadamente o criou.
+        if created_now:
             try:
                 _redmine(f"/issues/{issue_id}.json", method="DELETE")
                 EVIDENCE["checks"]["partial_fixture_redmine_rollback"] = True
             except Exception:
                 EVIDENCE["checks"]["partial_fixture_redmine_rollback"] = False
-        if created_requirement:
-            EVIDENCE["checks"]["partial_fixture_requirement_retained_for_retry"] = True
         raise
 
 
@@ -239,6 +326,11 @@ def main() -> int:
             "dedicated": True,
         }
 
+        # Normaliza a fixture uma vez. Depois disso o E2E começa de um estado estável.
+        bootstrap = _sync(req_id, token, dry_run=False)
+        EVIDENCE["checks"]["fixture_bootstrap_sync"] = True
+        EVIDENCE["bootstrap_mutation_count"] = int(bootstrap.get("mutation_count") or 0)
+
         before = _issue(issue_id)
         original = {
             "subject": before.get("subject") or "",
@@ -247,6 +339,9 @@ def main() -> int:
             "status_id": int((before.get("status") or {}).get("id") or 0),
             "assigned_to_id": (before.get("assigned_to") or {}).get("id"),
         }
+        expected_owned = _expected_owned_fields(fixture)
+        if original["subject"] != expected_owned["subject"] or original["description"] != expected_owned["description"]:
+            raise RuntimeError("bootstrap não deixou subject/description canônicos no Redmine")
         if original["status_id"] <= 0:
             raise RuntimeError("status inicial da fixture Redmine inválido")
         EVIDENCE["checks"]["redmine_direct_read"] = True
@@ -254,6 +349,8 @@ def main() -> int:
         dry = _sync(req_id, token, dry_run=True)
         if dry.get("dry_run") is not True or int(dry.get("mutation_count") or 0) != 0:
             raise RuntimeError("dry_run não provou ausência de mutação")
+        if (dry.get("reqsys_to_redmine") or {}).get("planned"):
+            raise RuntimeError("dry_run detectou divergência inesperada após bootstrap")
         EVIDENCE["checks"]["dry_run_zero_mutations"] = True
 
         marker = f"REQSYS-E2E-DIVERGENCE {CORRELATION_ID}"
@@ -268,7 +365,7 @@ def main() -> int:
         after_forward = _issue(issue_id)
         if not (forward.get("reqsys_to_redmine") or {}).get("applied"):
             raise RuntimeError("sincronização ReqSys→Redmine não informou aplicação")
-        if after_forward.get("subject") != fixture.get("titulo") or after_forward.get("description") != (fixture.get("descricao") or ""):
+        if after_forward.get("subject") != expected_owned["subject"] or after_forward.get("description") != expected_owned["description"]:
             raise RuntimeError("leitura direta Redmine não confirmou conteúdo canônico do ReqSys")
         EVIDENCE["checks"]["reqsys_to_redmine_independent_read"] = True
 
