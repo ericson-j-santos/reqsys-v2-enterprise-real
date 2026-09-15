@@ -58,12 +58,10 @@ export function validatePollTimeout(value) {
   return timeoutSeconds
 }
 
-export function resolveGraphAuth({ accessToken = '', clientSecret = '' } = {}) {
+export function resolveGraphAuth({ accessToken = '' } = {}) {
   const normalizedToken = String(accessToken || '').trim()
-  const normalizedSecret = String(clientSecret || '').trim()
   if (normalizedToken) return { mode: 'oidc', token: normalizedToken }
-  if (normalizedSecret) return { mode: 'client_secret', token: '' }
-  throw new Error('graph_auth_ausente:oidc_token_ou_client_secret')
+  throw new Error('graph_auth_ausente:oidc_token_obrigatorio')
 }
 
 export function selectPlannerCandidate(candidates) {
@@ -77,22 +75,6 @@ export function selectPlannerCandidate(candidates) {
     throw new Error(`descoberta_wsjf_ambigua:total=${normalized.length}:dev=${dev.length}`)
   }
   return pool[0]
-}
-
-async function graphToken(tenantId, clientId, clientSecret) {
-  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'client_credentials',
-      scope: 'https://graph.microsoft.com/.default',
-    }),
-  })
-  const payload = await checkedJson(response, 'graph_token', [200])
-  if (!payload.access_token) throw new Error('graph_access_token_ausente')
-  return payload.access_token
 }
 
 async function graph(method, path, token, body, allowed = [200]) {
@@ -244,11 +226,8 @@ async function main() {
   const targetEnvironment = required('TARGET_ENVIRONMENT').toLowerCase()
   if (targetEnvironment !== 'dev') throw new Error(`ambiente_nao_autorizado:${targetEnvironment}`)
 
-  const tenantId = required('POWER_PLATFORM_TENANT_ID')
-  const clientId = required('POWER_PLATFORM_CLIENT_ID')
   const accessToken = env('POWER_PLATFORM_GRAPH_ACCESS_TOKEN')
-  const clientSecret = env('POWER_PLATFORM_CLIENT_SECRET')
-  const auth = resolveGraphAuth({ accessToken, clientSecret })
+  const auth = resolveGraphAuth({ accessToken })
   const teamId = required('PLANNER_TEAMS_DEV_TEAM_ID')
   const channelId = required('PLANNER_TEAMS_DEV_CHANNEL_ID')
   const timeoutSeconds = validatePollTimeout(env('PLANNER_TEAMS_POLL_SECONDS', '900'))
@@ -297,7 +276,7 @@ async function main() {
   let token = ''
   const taskIds = []
   try {
-    token = auth.mode === 'oidc' ? auth.token : await graphToken(tenantId, clientId, clientSecret)
+    token = auth.token
     evidence.checks = { graph_app_token: 'acquired', graph_auth_mode: auth.mode }
 
     // Preflight de leitura evita criar tarefas quando a identidade nao consegue
