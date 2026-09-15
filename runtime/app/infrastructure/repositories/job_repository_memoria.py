@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from app.domain.models.job_assincrono import JobAssincrono
 
 
@@ -10,10 +12,19 @@ class JobNaoEncontradoError(KeyError):
 class JobRepositoryMemoria:
     def __init__(self) -> None:
         self._jobs: dict[str, JobAssincrono] = {}
+        self._lock = asyncio.Lock()
 
     async def salvar(self, job: JobAssincrono) -> JobAssincrono:
         self._jobs[job.job_id] = job
         return job
+
+    async def criar_se_ausente(self, job: JobAssincrono) -> tuple[JobAssincrono, bool]:
+        async with self._lock:
+            existente = self._jobs.get(job.job_id)
+            if existente is not None:
+                return existente, False
+            self._jobs[job.job_id] = job
+            return job, True
 
     async def remover(self, job_id: str) -> None:
         self._jobs.pop(job_id, None)
