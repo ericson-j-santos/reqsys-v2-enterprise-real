@@ -12,15 +12,16 @@ class AsyncioQueueGateway:
         self._delayed_tasks: set[asyncio.Task[None]] = set()
         self._dlq: list[str] = []
 
+    def _sem_capacidade(self) -> bool:
+        return self._queue.qsize() + len(self._delayed_tasks) >= self._max_queue_size
+
     async def publicar(self, job_id: str, *, delay_seconds: float = 0) -> None:
+        if self._sem_capacidade():
+            raise QueueCapacityError("queue_capacity_exceeded")
+
         if delay_seconds <= 0:
-            if self._queue.full():
-                raise QueueCapacityError("queue_capacity_exceeded")
             await self._queue.put(job_id)
             return
-
-        if self._queue.qsize() + len(self._delayed_tasks) >= self._max_queue_size:
-            raise QueueCapacityError("queue_capacity_exceeded")
 
         async def publicar_depois() -> None:
             await asyncio.sleep(delay_seconds)
