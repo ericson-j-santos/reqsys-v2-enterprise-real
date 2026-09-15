@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/redmine-lifecycle-e2e-dev.yml"
       - "scripts/redmine_lifecycle_e2e_runtime.py"
+      - "scripts/redmine_lifecycle_sync_probe_runtime.py"
 
 permissions:
   contents: read
@@ -48,6 +49,20 @@ jobs:
           result="$(printf '%s\n' "$output" | tail -n 1)"
           printf 'redmine_runtime=%s\n' "$result"
           printf '%s\n' "$result" | grep -q '^configured$'
+
+      - name: Diagnosticar sincronização da fixture sem expor segredos
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          payload="$(base64 -w0 scripts/redmine_lifecycle_sync_probe_runtime.py)"
+          set +e
+          output="$(flyctl ssh console -a "$FLY_APP" --command "env REQSYS_E2E_CORRELATION_ID=${CORRELATION_ID}-probe REQSYS_E2E_REQUIREMENT_ID=8 python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"redmine_lifecycle_sync_probe_runtime.py\", \"exec\"))'")"
+          rc=$?
+          set -e
+          result="$(printf '%s\n' "$output" | tail -n 1)"
+          printf 'sync_probe=%s\n' "$result"
+          exit "$rc"
 
       - name: Executar E2E ReqSys ↔ Redmine no runtime DEV
         shell: bash
