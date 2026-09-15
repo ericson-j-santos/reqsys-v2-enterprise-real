@@ -113,5 +113,25 @@
     "ultima_movimentacao_em": "2026-08-28",
     "dependencias": [],
     "causa_raiz_id": "VBA-AUTOTESTE-PENDENTE"
+  },
+  {
+    "id": "EXT-007",
+    "titulo": "Excel SQL SharePoint - executar validacao v6 no Noteri",
+    "area": "Power Platform / SQL Server",
+    "problema": "A v6 e o autoteste estao preparados, mas a execucao real depende de o Noteri voltar a ficar disponivel no Remote Desktop Commander.",
+    "impacto": 5,
+    "esforco": 1,
+    "frequencia": 5,
+    "status": "Bloqueada externamente",
+    "tipo_bloqueio": "Externo",
+    "responsavel_bloqueio": "Operador do Noteri e do Remote Desktop Commander",
+    "proxima_acao": "Reconectar o Noteri, manter o formulario atual aberto e executar run_shared_sql_current_form_v6.cmd sem redigitar credenciais.",
+    "criterio_conclusao": "Execucao v6 evidencia shared_sql_count igual a 1, procedure executada pelo conector, fluxo Excel para SQL para SharePoint aprovado, leitura independente aprovada, reexecucao idempotente e limpeza concluida.",
+    "evidencia": "",
+    "origem": "Pendencia operacional v6 autorizada; SELF_TEST=passed",
+    "estado_evidenciado_em": "2026-09-15",
+    "ultima_movimentacao_em": "2026-09-15",
+    "dependencias": [],
+    "causa_raiz_id": "NOTERI-REMOTE-CONNECTOR-OFFLINE"
   }
 ]
