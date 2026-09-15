@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import urllib.request
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 MAX_BYTES = 25 * 1024 * 1024
+MAX_PAGES_PER_CASE = 25
 SAFE_CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 
 
@@ -92,6 +94,44 @@ def _extract_reference_text(pdf: Path) -> str:
     return text
 
 
+def _validate_page_range(value: object) -> tuple[int, int] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("PUBLIC_PAGE_RANGE_INVALID")
+    first = value.get("first")
+    last = value.get("last")
+    if (
+        isinstance(first, bool)
+        or isinstance(last, bool)
+        or not isinstance(first, int)
+        or not isinstance(last, int)
+        or first < 1
+        or last < first
+        or last - first + 1 > MAX_PAGES_PER_CASE
+    ):
+        raise ValueError("PUBLIC_PAGE_RANGE_INVALID")
+    return first, last
+
+
+def _slice_pdf(source: Path, destination: Path, page_range: tuple[int, int]) -> None:
+    pdftocairo = shutil.which("pdftocairo")
+    if not pdftocairo:
+        raise RuntimeError("PDF_SLICE_TOOL_MISSING:pdftocairo")
+    first, last = page_range
+    proc = subprocess.run(
+        [pdftocairo, "-pdf", "-f", str(first), "-l", str(last), str(source), str(destination)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+    if proc.returncode != 0 or not destination.is_file() or destination.stat().st_size == 0:
+        raise RuntimeError(f"PDF_SLICE_FAILED:{destination.name}")
+
+
 def collect(config_path: Path, output_root: Path, manifest_path: Path) -> dict:
     config = json.loads(config_path.read_text(encoding="utf-8"))
     domains = list(config.get("allowed_domains") or [])
@@ -99,7 +139,7 @@ def collect(config_path: Path, output_root: Path, manifest_path: Path) -> dict:
     if not domains or not sources:
         raise ValueError("PUBLIC_CORPUS_CONFIG_EMPTY")
 
-    validated_sources: list[tuple[dict, str, str]] = []
+    validated_sources: list[tuple[dict, str, str, tuple[int, int] | None]] = []
     case_ids: set[str] = set()
     for source in sources:
         if not isinstance(source, dict):
@@ -109,13 +149,22 @@ def collect(config_path: Path, output_root: Path, manifest_path: Path) -> dict:
             raise ValueError("PUBLIC_CASE_ID_DUPLICATED")
         case_ids.add(case_id)
         url = str(source["url"]).strip()
-        validated_sources.append((source, case_id, url))
+        page_range = _validate_page_range(source.get("page_range"))
+        validated_sources.append((source, case_id, url, page_range))
 
     cases = []
-    for source, case_id, url in validated_sources:
+    for source, case_id, url, page_range in validated_sources:
         filename = f"{case_id}.pdf"
         file_path = _destination_for(output_root, case_id)
-        _download(url, file_path, domains)
+        if page_range is None:
+            _download(url, file_path, domains)
+        else:
+            source_path = file_path.with_name(f"{case_id}.source.pdf")
+            _download(url, source_path, domains)
+            try:
+                _slice_pdf(source_path, file_path, page_range)
+            finally:
+                source_path.unlink(missing_ok=True)
         expected = _extract_reference_text(file_path)
         cases.append({
             "case_id": case_id,
@@ -127,6 +176,7 @@ def collect(config_path: Path, output_root: Path, manifest_path: Path) -> dict:
             "classification": "PUBLIC_REFERENCE_DOCUMENT",
             "contains_personal_data": False,
             "reference_text_method": "embedded_pdf_text",
+            "source_page_range": list(page_range) if page_range else None,
             "expected": expected,
             "human_review_required": False,
         })

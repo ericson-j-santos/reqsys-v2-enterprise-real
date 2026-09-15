@@ -38,9 +38,10 @@
     {
       "id": "OPS-GAP-OCR-REDMINE-ATTACHMENTS",
       "title": "OCR não ingere anexos originados no Redmine",
-      "status": "open",
+      "status": "resolved",
       "scope": "ocr-redmine-integration",
-      "detail": "O OCR atual exige document_ref já materializado em OCR_INPUT_ROOT e não possui adaptador governado para baixar, validar, deduplicar e processar anexos Redmine.",
+      "detail": "Adaptador governado para anexos Redmine entregue nas PRs #1687 e #1689, com validação de origem e tamanho, deduplicação SHA-256, quarentena, retentativas, circuit breaker e lease distribuído por job.",
+      "reference_pr": 1689,
       "allowed_increment_types": ["gap_fix", "hotfix"]
     }
   ]
