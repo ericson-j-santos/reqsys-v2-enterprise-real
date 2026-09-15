@@ -100,6 +100,7 @@ def test_approval_does_not_remove_external_evidence_requirement():
     assert finding.approval_references
     assert "falta apenas comprovar o fato externo" in finding.decision
 
+
 def test_scoped_gate_is_deferred_only_outside_its_target_scope():
     prod_issue = {"labels": [{"name": "satellite:defer-nonprod"}, {"name": "scope:prod-only"}]}
     ocr_issue = {"labels": [{"name": "satellite:defer-nonprod"}, {"name": "scope:ocr-certification-only"}]}
@@ -117,3 +118,11 @@ def test_human_pending_workflow_defaults_schedule_to_nonprod_scope():
     assert "- prod" in workflow
     assert "- ocr-certification" in workflow
     assert "--scope" in workflow
+
+
+def test_human_pending_workflow_bootstraps_pytest_before_classifier():
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/human-pending-satellite.yml").read_text(encoding="utf-8")
+    setup_pos = workflow.index("actions/setup-python@v5")
+    install_pos = workflow.index("python -m pip install --disable-pip-version-check pytest==9.0.3")
+    test_pos = workflow.index("python -m pytest -q tests/test_human_pending_satellite.py")
+    assert setup_pos < install_pos < test_pos
