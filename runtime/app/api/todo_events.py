@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from app.application.services.job_service import JobService
+from app.application.services.job_service import JobService, TodoEventIdentityConflictError
 from app.domain.models.job_assincrono import AsyncJobStatusResponse
 from app.domain.models.todo_event import TodoEventAcceptedResponse, TodoEventV1
 from app.infrastructure.queue.errors import QueueCapacityError
@@ -15,7 +15,15 @@ def get_job_service() -> JobService:  # pragma: no cover - sobrescrito em app.ma
     raise RuntimeError("Dependência JobService não configurada.")
 
 
-@router.post("", response_model=TodoEventAcceptedResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "",
+    response_model=TodoEventAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        409: {"description": "event_id já existe com conteúdo diferente."},
+        503: {"description": "Fila sem capacidade; produtor deve tentar novamente."},
+    },
+)
 async def publicar_todo_evento(
     event: TodoEventV1,
     response: Response,
@@ -23,6 +31,11 @@ async def publicar_todo_evento(
 ) -> TodoEventAcceptedResponse:
     try:
         accepted = await service.criar_todo_evento(event)
+    except TodoEventIdentityConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="event_id já persistido com conteúdo diferente.",
+        ) from exc
     except QueueCapacityError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -34,7 +47,11 @@ async def publicar_todo_evento(
     return accepted
 
 
-@router.get("/{event_id}", response_model=AsyncJobStatusResponse)
+@router.get(
+    "/{event_id}",
+    response_model=AsyncJobStatusResponse,
+    responses={404: {"description": "Evento não encontrado."}},
+)
 async def consultar_todo_evento(
     event_id: str,
     service: JobService = Depends(get_job_service),
