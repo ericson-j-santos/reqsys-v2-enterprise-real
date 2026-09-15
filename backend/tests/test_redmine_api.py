@@ -74,6 +74,29 @@ def test_obter_issue_redmine_inclui_journals_e_retorna_issue(monkeypatch):
     assert captured['payload'] is None
 
 
+def test_obter_issue_redmine_normaliza_crlf_sem_alterar_conteudo(monkeypatch):
+    _configurar_redmine(monkeypatch)
+    original = 'linha 1\r\nlinha 2\rlinha 3\nlinha 4'
+
+    monkeypatch.setattr(
+        redmine_api,
+        '_request_json',
+        lambda *_args, **_kwargs: {
+            'issue': {
+                'id': 42,
+                'subject': 'REQ-1686',
+                'description': original,
+            }
+        },
+    )
+
+    issue = redmine_api.obter_issue_redmine(42)
+
+    assert issue['description'] == 'linha 1\nlinha 2\nlinha 3\nlinha 4'
+    assert '\r' not in issue['description']
+    assert original == 'linha 1\r\nlinha 2\rlinha 3\nlinha 4'
+
+
 def test_obter_issue_redmine_sem_journals_e_formato_invalido(monkeypatch):
     _configurar_redmine(monkeypatch)
     captured = {}
