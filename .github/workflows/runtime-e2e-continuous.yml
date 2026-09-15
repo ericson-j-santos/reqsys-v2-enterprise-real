@@ -25,7 +25,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: runtime-e2e-continuous-dev-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'runtime' }}
@@ -71,6 +70,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
     env:
       TARGET_ENVIRONMENT: dev
       POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
