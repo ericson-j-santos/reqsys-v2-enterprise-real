@@ -119,10 +119,20 @@ def test_arquivo_valido_e_reutilizado_sem_reescrita(tmp_path):
     assert not [rota for metodo, rota in client.calls if metodo == "PUT"]
 
 
-def test_arquivo_recusado_pelo_graph_e_substituido_com_copia_de_seguranca(tmp_path):
+def test_arquivo_recusado_pelo_graph_e_substituido_com_copia_de_seguranca(tmp_path, monkeypatch):
     template = tmp_path / "WSJF.xlsx"
     template.write_bytes(_template_bytes())
     client = FakeClient(_indice_quebrado(_template_bytes()), workbook_ok_no_inicio=False)
+    monkeypatch.setattr(
+        bootstrap,
+        "reparar_workbook_wsjf",
+        lambda _: {
+            "conteudo": _template_bytes(),
+            "estrategia": "template_canonico",
+            "linhas_preservadas": 0,
+            "avisos": ["arquivo_atual_ilegivel:ValueError"],
+        },
+    )
 
     item, status, detalhe = bootstrap._find_or_create_file(client, "token", DRIVE, template)
 
