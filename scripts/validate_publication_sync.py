@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Valida se o runtime publicado (Fly.io) está sincronizado com o repositório.
+"""Valida se o runtime publicado está sincronizado com o repositório.
 
 Read-only: compara SHA/version local com evidências públicas da API e frontend,
-sem credenciais e sem deploy.
+sem credenciais e sem deploy. O manifesto pode customizar o caminho de health
+para provedores compatíveis, mantendo /health como padrão legado do Fly.
 """
 
 from __future__ import annotations
@@ -164,13 +165,22 @@ def validate_environment(
     timeout: float,
 ) -> dict[str, Any]:
     api_url = str(cfg["api_url"]).rstrip("/")
-    frontend_url = str(cfg["frontend_url"]).rstrip("/")
+    frontend_required = bool(cfg.get("frontend_required", True))
+    frontend_url = str(cfg.get("frontend_url") or api_url).rstrip("/")
+    health_path = str(cfg.get("health_path") or "/health")
+    if not health_path.startswith("/"):
+        health_path = f"/{health_path}"
 
     build_info, build_error = _http_json(f"{api_url}/api/runtime/build-info", timeout)
     version_info, _ = _http_json(f"{api_url}/api/runtime/version", timeout)
-    health_info, health_error = _http_json(f"{api_url}/health", timeout)
-    frontend_html, frontend_error = _http_text(f"{frontend_url}/", timeout)
-    frontend_modified, _ = _http_head_last_modified(f"{frontend_url}/", timeout)
+    health_info, health_error = _http_json(f"{api_url}{health_path}", timeout)
+
+    frontend_html = None
+    frontend_error = None
+    frontend_modified = None
+    if frontend_required:
+        frontend_html, frontend_error = _http_text(f"{frontend_url}/", timeout)
+        frontend_modified, _ = _http_head_last_modified(f"{frontend_url}/", timeout)
 
     observed_sha = None
     observed_version = None
@@ -180,7 +190,11 @@ def validate_environment(
         observed_version = str(version_info.get("version") or "")
 
     api_reachable = health_info is not None and health_error is None
-    frontend_reachable = frontend_html is not None and frontend_error is None
+    frontend_reachable = (
+        frontend_html is not None and frontend_error is None
+        if frontend_required
+        else True
+    )
     sha_ok, sync_reason = _api_sha_acceptable(expected_sha, observed_sha)
     api_synced = api_reachable and sha_ok and (
         not observed_version or observed_version == expected_version
@@ -192,7 +206,7 @@ def validate_environment(
             component="api",
             reachable=api_reachable,
             synced=api_synced,
-            expected=f"sha={expected_sha} version={expected_version}",
+            expected=f"sha={expected_sha} version={expected_version} health={health_path}",
             observed=f"sha={observed_sha or 'n/a'} version={observed_version or 'n/a'}",
             detail=health_error or build_error,
         ),
@@ -200,21 +214,27 @@ def validate_environment(
             component="frontend",
             reachable=frontend_reachable,
             synced=frontend_reachable,
-            expected=f"publicado em {frontend_url}",
-            observed=f"asset={frontend_asset or 'n/a'} last_modified={frontend_modified or 'n/a'}",
+            expected=(f"publicado em {frontend_url}" if frontend_required else "not_required"),
+            observed=(
+                f"asset={frontend_asset or 'n/a'} last_modified={frontend_modified or 'n/a'}"
+                if frontend_required
+                else "not_required"
+            ),
             detail=frontend_error,
         ),
     ]
 
     blocking_issues: list[str] = []
     if not api_reachable:
-        blocking_issues.append(f"API indisponível em {api_url}: {health_error or build_error or 'sem resposta'}")
+        blocking_issues.append(
+            f"API indisponível em {api_url}{health_path}: {health_error or build_error or 'sem resposta'}"
+        )
     elif not api_synced:
         blocking_issues.append(
             f"API dessincronizada: esperado sha={expected_sha} version={expected_version}, "
             f"observado sha={observed_sha or 'n/a'} version={observed_version or 'n/a'}"
         )
-    if not frontend_reachable:
+    if frontend_required and not frontend_reachable:
         blocking_issues.append(f"Frontend indisponível em {frontend_url}: {frontend_error or 'sem resposta'}")
 
     operational_status = "synced"
@@ -225,6 +245,8 @@ def validate_environment(
         "environment": env_name,
         "api_url": api_url,
         "frontend_url": frontend_url,
+        "health_path": health_path,
+        "frontend_required": frontend_required,
         "expected": {"sha": expected_sha, "version": expected_version},
         "observed": {
             "sha": observed_sha,
@@ -280,9 +302,9 @@ def build_payload(
         "ok": not blocking,
         "blocking_issues": blocking,
         "next_actions": [
-            "Executar workflow Deploy Production Sync com approve_prod_deploy=APROVO-PROD",
-            "Validar secrets Fly (JWT_ISSUER, JWT_AUDIENCE, AZURE_*) no app reqsys-api",
-            "Reexecutar este validador após o deploy",
+            "Corrigir ou publicar o runtime alvo e repetir a validação no mesmo SHA",
+            "Validar a configuração do provedor e os endpoints públicos obrigatórios",
+            "Reexecutar este validador após a correção",
         ]
         if blocking
         else ["Publicação sincronizada com o repositório"],
