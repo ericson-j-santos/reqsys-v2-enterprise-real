@@ -18,6 +18,7 @@ from scripts.runtime_health_validator import (  # noqa: E402
     build_retry_policy,
     compute_runtime_score,
     fetch_runs_with_fallback,
+    reconcile_runs,
     write_report,
 )
 
@@ -63,7 +64,10 @@ def test_build_report_adds_governed_runtime_operational_layers() -> None:
     assert report["rollback_policy"]["automatic_destructive_actions"] is False
     assert report["environment_sync"]["strategy"] == "dev_to_homolog_to_prod"
     assert any(item["type"] == "gap" for item in report["automatic_backlog"])
-    assert any(item["type"] == "remediation" for item in report["automatic_backlog"])
+    assert [item["title"] for item in report["automatic_backlog"]] == [
+        "Tratar falha não autocorrigível em Security Critical Gate"
+    ]
+    assert report["summary"]["cancelled_observations"] == 1
 
 
 def test_health_matrix_and_quarantine_on_security_failure() -> None:
@@ -85,7 +89,7 @@ def test_health_matrix_and_quarantine_on_security_failure() -> None:
 
 
 def test_retry_policy_blocks_max_attempts() -> None:
-    runs = [run("PR CI Watch", "cancelled", run_attempt=3)]
+    runs = [run("PR CI Watch", "timed_out", run_attempt=3)]
     plan = build_remediation_plan(runs)
     retry_policy = build_retry_policy(plan, runs, "execute")
 
@@ -95,7 +99,7 @@ def test_retry_policy_blocks_max_attempts() -> None:
 
 
 def test_retry_policy_allows_eligible_execute_mode() -> None:
-    runs = [run("PR CI Watch", "cancelled", run_attempt=1)]
+    runs = [run("PR CI Watch", "timed_out", run_attempt=1)]
     plan = build_remediation_plan(runs)
     retry_policy = build_retry_policy(plan, runs, "execute")
 
@@ -115,6 +119,49 @@ def test_mesh_cancelled_runs_do_not_open_ops_gap() -> None:
 
     assert plan == []
     assert not any(item["id"].startswith("OPS-GAP-") for item in backlog)
+
+
+def test_cancelled_run_is_neutral_for_any_workflow_including_teams() -> None:
+    runs = [run("Notify Teams - ReqSys Logs", "cancelled", run_id=700)]
+
+    plan = build_remediation_plan(runs)
+    report = build_report("owner/repo", "main", runs, plan, [], "report_only")
+
+    assert plan == []
+    assert report["state"] == "green"
+    assert report["automatic_backlog"] == []
+    assert report["run_observations"][0]["classification"] == "cancelled_without_successor"
+
+
+def test_cancelled_run_is_reconciled_with_successor_before_gap_creation() -> None:
+    cancelled = run("Executive Public Smoke Confirmation", "cancelled", run_id=701)
+    successor = run("Executive Public Smoke Confirmation", "success", run_id=702)
+    successor = WorkflowRun(
+        **{**successor.__dict__, "created_at": "2026-06-26T00:02:00Z", "updated_at": "2026-06-26T00:03:00Z"}
+    )
+
+    effective, observations = reconcile_runs([cancelled, successor])
+    report = build_report("owner/repo", "main", [cancelled, successor], [], [], "report_only")
+
+    assert [item.id for item in effective] == [702]
+    assert observations[0]["successor_run_id"] == 702
+    assert report["state"] == "green"
+    assert report["summary"]["superseded_runs"] == 1
+    assert report["automatic_backlog"] == []
+
+
+def test_successor_failure_remains_a_real_gap() -> None:
+    cancelled = run("Executive Promotion Advisor Public Smoke", "cancelled", run_id=801)
+    failed = run("Executive Promotion Advisor Public Smoke", "failure", run_id=802)
+    failed = WorkflowRun(
+        **{**failed.__dict__, "created_at": "2026-06-26T00:02:00Z", "updated_at": "2026-06-26T00:03:00Z"}
+    )
+
+    plan = build_remediation_plan([cancelled, failed])
+    report = build_report("owner/repo", "main", [cancelled, failed], plan, [], "report_only")
+
+    assert report["state"] == "red"
+    assert [item["id"] for item in report["automatic_backlog"]] == ["OPS-GAP-802"]
 
 
 def test_compute_runtime_score_weighted() -> None:

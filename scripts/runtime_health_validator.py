@@ -91,7 +91,7 @@ EVIDENCE_GATE_WORKFLOW_NAMES = {
     "PR Governed CI Validation",
 }
 
-TRANSIENT_CONCLUSIONS = {"cancelled", "timed_out", "action_required"}
+TRANSIENT_CONCLUSIONS = {"timed_out", "action_required"}
 HARD_FAILURE_CONCLUSIONS = {"failure"}
 SECURITY_KEYWORDS = ("security", "secret", "token", "permission", "branch protection", "governance")
 
@@ -119,6 +119,10 @@ class WorkflowRun:
             return "pending"
         if self.conclusion == "success":
             return "green"
+        # Um cancelamento é um resultado de coordenação (concorrência,
+        # supersessão ou ação humana), não evidência de defeito técnico.
+        if self.conclusion == "cancelled":
+            return "neutral"
         if self.conclusion in TRANSIENT_CONCLUSIONS:
             return "yellow"
         if self.conclusion in HARD_FAILURE_CONCLUSIONS:
@@ -137,6 +141,57 @@ class WorkflowRun:
         if self.health == "pending":
             return "low"
         return "none"
+
+
+def _run_identity(run: WorkflowRun) -> tuple[str, str, str]:
+    """Identidade estável usada para reconciliar tentativas do mesmo sinal."""
+    return (run.name, run.sha or "", run.branch or "")
+
+
+def _run_order(run: WorkflowRun) -> tuple[str, int, int]:
+    return (run.updated_at or run.created_at or "", run.run_attempt, run.id)
+
+
+def reconcile_runs(
+    runs: list[WorkflowRun],
+) -> tuple[list[WorkflowRun], list[dict[str, Any]]]:
+    """Mantém a run sucessora por workflow/SHA/branch e audita as substituídas.
+
+    A reconciliação ocorre antes da criação de backlog para impedir que uma run
+    cancelada antiga sobreviva como OPS-GAP quando já existe evidência posterior.
+    Cancelamentos sem sucessora também permanecem apenas como observação neutra.
+    """
+    grouped: dict[tuple[str, str, str], list[WorkflowRun]] = {}
+    for run in runs:
+        grouped.setdefault(_run_identity(run), []).append(run)
+
+    effective: list[WorkflowRun] = []
+    observations: list[dict[str, Any]] = []
+    for identity_runs in grouped.values():
+        ordered = sorted(identity_runs, key=_run_order)
+        successor = ordered[-1]
+        effective.append(successor)
+        for superseded in ordered[:-1]:
+            observations.append({
+                "run_id": superseded.id,
+                "workflow": superseded.name,
+                "sha": superseded.sha,
+                "classification": "superseded",
+                "conclusion": superseded.conclusion,
+                "successor_run_id": successor.id,
+                "successor_conclusion": successor.conclusion,
+            })
+        if successor.conclusion == "cancelled":
+            observations.append({
+                "run_id": successor.id,
+                "workflow": successor.name,
+                "sha": successor.sha,
+                "classification": "cancelled_without_successor",
+                "conclusion": successor.conclusion,
+                "successor_run_id": None,
+                "successor_conclusion": None,
+            })
+    return sorted(effective, key=_run_order, reverse=True), observations
 
 
 def github_request(method: str, url: str, token: str, payload: dict[str, Any] | None = None) -> Any:
@@ -397,7 +452,8 @@ def build_retry_policy(plan: list[dict[str, Any]], runs: list[WorkflowRun], mode
 
 def build_remediation_plan(runs: list[WorkflowRun]) -> list[dict[str, Any]]:
     plan: list[dict[str, Any]] = []
-    for run in runs:
+    reconciled, _ = reconcile_runs(runs)
+    for run in reconciled:
         if (
             run.conclusion == "cancelled"
             and run.name in CONCURRENCY_MESH_SUPPRESSED_WORKFLOWS
@@ -539,6 +595,9 @@ def build_report(
     confidence: str = "high",
 ) -> dict[str, Any]:
     artifact_root = artifact_root or Path(".")
+    runs, run_observations = reconcile_runs(runs)
+    effective_ids = {run.id for run in runs}
+    plan = [item for item in plan if int(item.get("run_id") or 0) in effective_ids]
     red = [run for run in runs if run.health == "red"]
     yellow = [run for run in runs if run.health == "yellow"]
     pending = [run for run in runs if run.health == "pending"]
@@ -571,6 +630,12 @@ def build_report(
             "yellow": len(yellow),
             "red": len(red),
             "pending": len(pending),
+            "cancelled_observations": sum(
+                1 for item in run_observations if item["conclusion"] == "cancelled"
+            ),
+            "superseded_runs": sum(
+                1 for item in run_observations if item["classification"] == "superseded"
+            ),
             "remediation_candidates": sum(1 for item in plan if item.get("allowed")),
             "blocked_remediations": sum(1 for item in plan if not item.get("allowed")),
             "executed_remediations": len(executed),
@@ -578,6 +643,7 @@ def build_report(
             "quarantine_active": quarantine.get("active", False),
         },
         "runs": [asdict(run) | {"health": run.health, "severity": run.severity} for run in runs],
+        "run_observations": run_observations,
         "remediation_plan": plan,
         "executed_remediations": executed,
         "automatic_backlog": backlog,
