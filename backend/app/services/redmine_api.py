@@ -25,6 +25,16 @@ def _redmine_config() -> tuple[str, str]:
     return base_url, api_key
 
 
+def _normalizar_quebras_linha(value: str) -> str:
+    """Converte CRLF/CR do Redmine para LF antes de comparar/fingerprintar.
+
+    Algumas instalações do Redmine persistem texto enviado com ``\n`` como
+    ``\r\n``. Essa normalização é equivalente semanticamente e evita loop de
+    reconciliação sem mascarar perda ou alteração de conteúdo.
+    """
+    return value.replace('\r\n', '\n').replace('\r', '\n')
+
+
 def montar_campos_requisito_redmine(requisito: Any) -> dict[str, str]:
     urgencia_label = {'alta': 'Alta', 'media': 'Normal', 'baixa': 'Baixa'}.get(
         (getattr(requisito, 'urgencia', None) or 'media').lower(),
@@ -60,6 +70,11 @@ def obter_issue_redmine(issue_id: int, *, incluir_journals: bool = True) -> dict
     issue = payload.get('issue') if isinstance(payload, dict) else None
     if not isinstance(issue, dict):
         raise IntegracaoError(f'Redmine não retornou a issue {issue_id} no formato esperado.')
+
+    description = issue.get('description')
+    if isinstance(description, str):
+        issue = dict(issue)
+        issue['description'] = _normalizar_quebras_linha(description)
     return issue
 
 
