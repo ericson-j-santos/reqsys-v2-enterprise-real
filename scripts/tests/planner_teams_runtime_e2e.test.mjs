@@ -5,6 +5,7 @@ import {
   evaluateContract,
   filterMessagesSince,
   messageContainsTitle,
+  resolveGraphAuth,
   selectPlannerCandidate,
   validatePollTimeout,
 } from '../planner_teams_runtime_e2e.mjs'
@@ -47,6 +48,27 @@ test('descarta mensagens antigas fora da janela de evidência', () => {
   assert.deepEqual(filterMessagesSince(messages, startedAt).map((item) => item.id), ['margem', 'nova'])
 })
 
+test('prioriza token OIDC mesmo quando fallback de secret ainda existe', () => {
+  assert.deepEqual(
+    resolveGraphAuth({ accessToken: 'oidc-token', clientSecret: 'legacy-secret' }),
+    { mode: 'oidc', token: 'oidc-token' },
+  )
+})
+
+test('mantem client secret apenas como fallback de transicao', () => {
+  assert.deepEqual(
+    resolveGraphAuth({ accessToken: '', clientSecret: 'legacy-secret' }),
+    { mode: 'client_secret', token: '' },
+  )
+})
+
+test('falha fechado quando nenhuma credencial Graph existe', () => {
+  assert.throws(
+    () => resolveGraphAuth({ accessToken: '', clientSecret: '' }),
+    /graph_auth_ausente:oidc_token_ou_client_secret/,
+  )
+})
+
 test('seleciona o único alvo Planner classificado como DEV', () => {
   const selected = selectPlannerCandidate([
     {
@@ -85,7 +107,6 @@ test('reprova descoberta quando existem dois alvos DEV possíveis', () => {
     /descoberta_wsjf_ambigua:total=2:dev=2/,
   )
 })
-
 
 test('aceita janela de 900 s para atravessar o polling real do Planner', () => {
   assert.equal(validatePollTimeout('900'), 900)
