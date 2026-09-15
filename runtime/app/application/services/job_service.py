@@ -19,6 +19,7 @@ from app.domain.models.job_assincrono import (
 )
 from app.domain.models.todo_event import TodoEventAcceptedResponse, TodoEventV1
 from app.infrastructure.http.httpx_gateway import HttpxGateway
+from app.infrastructure.queue.errors import QueueCapacityError
 from app.infrastructure.repositories.job_repository_memoria import JobNaoEncontradoError
 from app.observability.lease_slo import avaliar_lease_slo
 
@@ -51,8 +52,7 @@ class JobService:
             destino_url=str(request.destino_url) if request.destino_url else None,
         )
 
-        await self._repository.salvar(job)
-        await self._queue.publicar(job.job_id)
+        await self._persistir_e_publicar(job)
 
         return AsyncJobAcceptedResponse(
             job_id=job.job_id,
@@ -90,8 +90,7 @@ class JobService:
             max_tentativas=self._settings.max_tentativas,
             destino_url=self._settings.todo_global_adapter_url,
         )
-        await self._repository.salvar(job)
-        await self._queue.publicar(job.job_id)
+        await self._persistir_e_publicar(job)
 
         return TodoEventAcceptedResponse(
             event_id=event.event_id,
@@ -149,6 +148,16 @@ class JobService:
                 "slo": avaliar_lease_slo(metricas_lease),
             },
         }
+
+    async def _persistir_e_publicar(self, job: JobAssincrono) -> None:
+        await self._repository.salvar(job)
+        try:
+            await self._queue.publicar(job.job_id)
+        except QueueCapacityError:
+            remover = getattr(self._repository, "remover", None)
+            if remover is not None:
+                await resolve_maybe_awaitable(remover(job.job_id))
+            raise
 
     async def _executar_operacao(self, job: JobAssincrono) -> dict[str, Any]:
         if job.tipo_operacao == TipoOperacao.SINCRONIZAR_TODO_GLOBAL:
