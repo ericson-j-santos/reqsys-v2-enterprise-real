@@ -14,7 +14,12 @@ def get_job_service() -> JobService:  # pragma: no cover - sobrescrito em app.ma
     raise RuntimeError("Dependência JobService não configurada.")
 
 
-@router.post("", response_model=AsyncJobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "",
+    response_model=AsyncJobAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={503: {"description": "Fila sem capacidade; produtor deve tentar novamente."}},
+)
 async def criar_job_assincrono(
     request: AsyncJobCreateRequest,
     response: Response,
@@ -32,7 +37,11 @@ async def criar_job_assincrono(
     return accepted
 
 
-@router.get("/{job_id}", response_model=AsyncJobStatusResponse)
+@router.get(
+    "/{job_id}",
+    response_model=AsyncJobStatusResponse,
+    responses={404: {"description": "Job não encontrado."}},
+)
 async def consultar_job_assincrono(
     job_id: str,
     service: JobService = Depends(get_job_service),
