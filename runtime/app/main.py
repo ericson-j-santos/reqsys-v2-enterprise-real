@@ -8,7 +8,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from app.api import jobs, parallelism_control, parallelism_reconciliation
+from app.api import jobs, parallelism_control, parallelism_reconciliation, todo_events
 from app.application.services.job_service import JobService
 from app.core.async_compat import resolve_maybe_awaitable
 from app.core.components import build_runtime_components
@@ -76,6 +76,7 @@ async def run_reconciliation_loop() -> None:
 
 
 jobs.router.dependency_overrides_provider = None
+todo_events.router.dependency_overrides_provider = None
 parallelism_control.router.dependency_overrides_provider = None
 parallelism_reconciliation.router.dependency_overrides_provider = None
 
@@ -107,11 +108,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.dependency_overrides[jobs.get_job_service] = resolver_job_service
+app.dependency_overrides[todo_events.get_job_service] = resolver_job_service
 app.dependency_overrides[parallelism_control.get_parallelism_store] = resolver_parallelism_store
 app.dependency_overrides[parallelism_control.get_control_token] = resolver_control_token
 app.dependency_overrides[parallelism_control.get_smoke_check] = lambda: resolver_smoke_check
 app.dependency_overrides[parallelism_reconciliation.get_reconciler] = resolver_reconciler
 app.include_router(jobs.router)
+app.include_router(todo_events.router)
 app.include_router(parallelism_control.router)
 app.include_router(parallelism_reconciliation.router)
 
