@@ -92,6 +92,8 @@ class JobService:
                 try:
                     await self._queue.publicar(stored.job_id)
                 except QueueCapacityError:
+                    # O evento já está duravelmente persistido como QUEUED. Em replay,
+                    # backpressure não invalida o aceite anterior; recovery tentará de novo.
                     pass
             return TodoEventAcceptedResponse(
                 event_id=event.event_id,
