@@ -5,8 +5,11 @@ on:
     branches: [ops/redmine-lifecycle-e2e-1686-20260915]
     paths:
       - ".github/workflows/redmine-lifecycle-e2e-dev.yml"
+      - "backend/app/services/redmine_api.py"
+      - "backend/app/services/redmine_lifecycle_sync.py"
+      - "backend/tests/test_redmine_api.py"
+      - "backend/tests/test_redmine_lifecycle_sync.py"
       - "scripts/redmine_lifecycle_e2e_runtime.py"
-      - "scripts/redmine_lifecycle_sync_probe_runtime.py"
 
 permissions:
   contents: read
@@ -20,9 +23,10 @@ jobs:
   redmine-lifecycle-e2e:
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 10
+    timeout-minutes: 25
     env:
       FLY_APP: reqsys-api-dev
+      API_URL: https://reqsys-api-dev.fly.dev
       CORRELATION_ID: redmine-lifecycle-e2e-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
@@ -45,24 +49,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          output="$(flyctl ssh console -a "$FLY_APP" --command "python -c 'import os; keys=[\"REDMINE_BASE_URL\",\"REDMINE_API_KEY\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
+          output="$(flyctl ssh console -a "$FLY_APP" --command "python -c 'import os; keys=[\"REDMINE_BASE_URL\",\"REDMINE_API_KEY\",\"REDMINE_PROJECT_ID\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
           result="$(printf '%s\n' "$output" | tail -n 1)"
           printf 'redmine_runtime=%s\n' "$result"
           printf '%s\n' "$result" | grep -q '^configured$'
 
-      - name: Diagnosticar sincronização da fixture sem expor segredos
+      - name: Implantar temporariamente o HEAD da branch em DEV
+        id: deploy_branch
         shell: bash
-        continue-on-error: true
         run: |
           set -euo pipefail
-          payload="$(base64 -w0 scripts/redmine_lifecycle_sync_probe_runtime.py)"
-          set +e
-          output="$(flyctl ssh console -a "$FLY_APP" --command "env REQSYS_E2E_CORRELATION_ID=${CORRELATION_ID}-probe REQSYS_E2E_REQUIREMENT_ID=8 python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"redmine_lifecycle_sync_probe_runtime.py\", \"exec\"))'")"
-          rc=$?
-          set -e
-          result="$(printf '%s\n' "$output" | tail -n 1)"
-          printf 'sync_probe=%s\n' "$result"
-          exit "$rc"
+          echo "deploy_head=${GITHUB_SHA}"
+          cd backend
+          flyctl deploy --remote-only --config fly.dev.toml --app "$FLY_APP"
+
+      - name: Validar saúde do HEAD implantado
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tentativa in $(seq 1 60); do
+            health_ok=false
+            readiness_ok=false
+            curl --fail --silent --show-error --max-time 5 "$API_URL/health" >/dev/null && health_ok=true || true
+            curl --fail --silent --show-error --max-time 5 "$API_URL/api/runtime/readiness" >/dev/null && readiness_ok=true || true
+            if [ "$health_ok" = true ] && [ "$readiness_ok" = true ]; then
+              echo "HEAD da branch saudável no DEV."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::HEAD da branch não ficou saudável no DEV."
+          exit 1
 
       - name: Executar E2E ReqSys ↔ Redmine no runtime DEV
         shell: bash
@@ -87,12 +104,66 @@ jobs:
           correlation_id = payload.get('correlation_id')
           fixture = payload.get('fixture') or {}
           checks = payload.get('checks') or {}
+          result = payload.get('result') or {}
           print(f"status={status} correlation_id={correlation_id} requisito_id={fixture.get('requisito_id')} redmine_issue_id={fixture.get('redmine_issue_id')}")
           print(f"checks={json.dumps(checks, sort_keys=True)}")
-          if os.environ.get('REMOTE_RC') != '0' or status != 'passed':
-              print(f"::error::E2E Redmine não passou: {payload.get('error') or payload.get('restore_error') or status}")
+          print(f"result={json.dumps(result, sort_keys=True)}")
+          required_checks = (
+              'runtime_redmine_credential_present',
+              'reqsys_admin_session',
+              'fixture_bootstrap_sync',
+              'redmine_direct_read',
+              'dry_run_zero_mutations',
+              'forward_precondition_confirmed',
+              'reqsys_to_redmine_independent_read',
+              'reverse_precondition_confirmed',
+              'redmine_to_reqsys_independent_read',
+              'idempotent_repeat_zero_mutations',
+              'restore_confirmed',
+          )
+          missing = [name for name in required_checks if checks.get(name) is not True]
+          if os.environ.get('REMOTE_RC') != '0' or status != 'passed' or missing:
+              print(f"::error::E2E Redmine não passou: {payload.get('error') or payload.get('restore_error') or status}; missing_checks={missing}")
               sys.exit(1)
           PY
+
+      - name: Checkout da main para restauração do DEV
+        if: always() && steps.deploy_branch.outcome != 'skipped'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: restore-main
+          fetch-depth: 1
+
+      - name: Restaurar DEV para a main atual
+        if: always() && steps.deploy_branch.outcome != 'skipped'
+        id: restore_main
+        shell: bash
+        run: |
+          set -euo pipefail
+          restore_sha="$(git -C restore-main rev-parse HEAD)"
+          echo "restore_main_sha=$restore_sha"
+          cd restore-main/backend
+          flyctl deploy --remote-only --config fly.dev.toml --app "$FLY_APP"
+
+      - name: Confirmar saúde após restauração da main
+        if: always() && steps.restore_main.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tentativa in $(seq 1 60); do
+            health_ok=false
+            readiness_ok=false
+            curl --fail --silent --show-error --max-time 5 "$API_URL/health" >/dev/null && health_ok=true || true
+            curl --fail --silent --show-error --max-time 5 "$API_URL/api/runtime/readiness" >/dev/null && readiness_ok=true || true
+            if [ "$health_ok" = true ] && [ "$readiness_ok" = true ]; then
+              echo "DEV restaurado e saudável na main."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::DEV não ficou saudável após restauração da main."
+          exit 1
 
       - name: Publicar evidência auditável
         if: always()
