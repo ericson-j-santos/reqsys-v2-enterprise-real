@@ -83,6 +83,7 @@ def test_agent_task_instructions_preserve_ready_for_pr_boundary() -> None:
 
     assert agent_tasks.agent_task_marker(501) in instructions
     assert "Não abra Pull Request" in instructions
+    assert "branch copilot/*" in instructions
     assert "READY_FOR_PR=passed" in instructions
     assert "Base esperada: main" in instructions
 
@@ -142,7 +143,7 @@ def test_branch_first_task_is_dispatched_and_audited(monkeypatch) -> None:
     assert payload is not None
     assert agent_tasks.agent_task_marker(501) in str(payload["body"])
     assert "task-123" in str(payload["body"])
-    assert "READY_FOR_PR=passed" in str(payload["body"])
+    assert "push em `copilot/*`" in str(payload["body"])
 
 
 def test_existing_marker_prevents_duplicate_agent_task(monkeypatch) -> None:
