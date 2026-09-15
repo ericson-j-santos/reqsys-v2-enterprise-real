@@ -22,7 +22,10 @@ class RuntimeComponents:
 
 
 def build_runtime_components(settings: RuntimeSettings) -> RuntimeComponents:
-    http_gateway = HttpxGateway()
+    http_gateway = HttpxGateway(
+        service_token=settings.todo_global_service_token,
+        service_token_url=settings.todo_global_adapter_url,
+    )
 
     if settings.queue_backend == "redis":
         redis = Redis.from_url(settings.redis_url, decode_responses=True)

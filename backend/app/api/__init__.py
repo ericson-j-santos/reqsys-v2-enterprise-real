@@ -24,6 +24,7 @@ from app.api import (  # noqa: E402
     requisitos,
     teams_gateway,
     teams_github_actions,
+    todo_global_adapter,
     vba_legacy,
     wsjf_planner_excel,
 )
@@ -47,3 +48,7 @@ requisitos.api_router.include_router(gestao_ti.router)
 # Integrações Pentaho reutilizam a superfície canônica de monitoramento sem
 # introduzir um segundo ponto de composição no app.main.
 monitoramento_operacional.router.include_router(pentaho_integration.router)
+
+# A rota interna precisa conservar seu caminho absoluto sem herdar prefixo de
+# outra superfície já existente; o app.main inclui este router uma única vez.
+monitoramento_operacional.router.routes.extend(todo_global_adapter.router.routes)

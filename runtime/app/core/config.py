@@ -26,6 +26,7 @@ class RuntimeSettings(BaseModel):
     retry_backoff_base_seconds: float = 1.0
     retry_backoff_max_seconds: float = 60.0
     todo_global_adapter_url: str | None = None
+    todo_global_service_token: str = ""
     parallelism_control_token: str = ""
     parallelism_control_redis_prefix: str = "reqsys:runtime:parallelism"
     max_tentativas: int = 3
@@ -81,6 +82,7 @@ def get_settings() -> RuntimeSettings:
         retry_backoff_base_seconds=float(os.getenv("RETRY_BACKOFF_BASE_SECONDS", "1")),
         retry_backoff_max_seconds=float(os.getenv("RETRY_BACKOFF_MAX_SECONDS", "60")),
         todo_global_adapter_url=os.getenv("TODO_GLOBAL_ADAPTER_URL") or None,
+        todo_global_service_token=os.getenv("TODO_GLOBAL_ADAPTER_SERVICE_TOKEN", ""),
         parallelism_control_token=os.getenv("REQSYS_PARALLELISM_CONTROL_TOKEN", ""),
         parallelism_control_redis_prefix=os.getenv(
             "PARALLELISM_CONTROL_REDIS_PREFIX", "reqsys:runtime:parallelism"
