@@ -15,6 +15,9 @@ class JobRepositoryMemoria:
         self._jobs[job.job_id] = job
         return job
 
+    async def remover(self, job_id: str) -> None:
+        self._jobs.pop(job_id, None)
+
     async def obter(self, job_id: str) -> JobAssincrono:
         try:
             return self._jobs[job_id]
