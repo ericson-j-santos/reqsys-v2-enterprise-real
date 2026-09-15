@@ -87,18 +87,34 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          from datetime import UTC, date, datetime
           from pathlib import Path
+
+          import yaml
 
           evidence = json.loads(
               Path("artifacts/bacen/bacen-nonprod-tolerance-decision.json").read_text(
                   encoding="utf-8"
               )
           )
+          policy = yaml.safe_load(
+              Path("governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml").read_text(
+                  encoding="utf-8"
+              )
+          )
+          activation = policy["activation"]
+          expected_valid_until = str(activation["valid_until"])
+          expected_valid_from = str(activation["valid_from"])
+          today = datetime.now(UTC).date()
+
           assert evidence["mode"] == "temporary_nonprod_tolerance"
           assert evidence["decision"] == "allow"
           assert evidence["automatic_blocking"] is False
           assert evidence["policy_active"] is True
-          assert evidence["valid_until"] == "2026-08-29"
+          assert evidence["valid_from"] == expected_valid_from
+          assert evidence["valid_until"] == expected_valid_until
+          assert date.fromisoformat(evidence["valid_from"]) <= today
+          assert today <= date.fromisoformat(evidence["valid_until"])
           assert evidence["review_deadline"] == evidence["valid_until"]
           assert evidence["renewal_requires_explicit_policy_change"] is True
           assert evidence["preserved_control_status"] is True
@@ -139,7 +155,7 @@ jobs:
           print(f"- Política ativa: **{evidence['policy_active']}**")
           print(f"- Controles tolerados: **{len(evidence['tolerated_controls'])}**")
           print(f"- Produção liberada: **{evidence['production_deployment_allowed']}**")
-          print(f"- Validade fixa até: **{evidence['valid_until']}**")
+          print(f"- Validade da política até: **{evidence['valid_until']}**")
           print(f"- Responsável pela revisão: **{evidence['review_owner_role']}**")
           print("- Renovação automática: **false**")
           print("- Status regulatório preservado: **true**")

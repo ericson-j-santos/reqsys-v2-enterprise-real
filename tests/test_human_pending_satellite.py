@@ -99,3 +99,21 @@ def test_approval_does_not_remove_external_evidence_requirement():
     finding = module.build_finding(issue, comments, ["real_external_evidence"])
     assert finding.approval_references
     assert "falta apenas comprovar o fato externo" in finding.decision
+
+def test_scoped_gate_is_deferred_only_outside_its_target_scope():
+    prod_issue = {"labels": [{"name": "satellite:defer-nonprod"}, {"name": "scope:prod-only"}]}
+    ocr_issue = {"labels": [{"name": "satellite:defer-nonprod"}, {"name": "scope:ocr-certification-only"}]}
+    assert module.should_defer_notification(prod_issue, "nonprod") is True
+    assert module.should_defer_notification(prod_issue, "prod") is False
+    assert module.should_defer_notification(prod_issue, "ocr-certification") is True
+    assert module.should_defer_notification(ocr_issue, "nonprod") is True
+    assert module.should_defer_notification(ocr_issue, "ocr-certification") is False
+    assert module.should_defer_notification(ocr_issue, "prod") is True
+
+
+def test_human_pending_workflow_defaults_schedule_to_nonprod_scope():
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/human-pending-satellite.yml").read_text(encoding="utf-8")
+    assert "default: nonprod" in workflow
+    assert "- prod" in workflow
+    assert "- ocr-certification" in workflow
+    assert "--scope" in workflow

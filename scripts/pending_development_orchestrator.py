@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -40,6 +41,9 @@ AUTO_MARKER = "<!-- pending-development-orchestrator:auto -->"
 AUTO_LABEL = "orchestrator:auto"
 AUTO_FIX_LABEL = "orchestrator:auto-fix"
 HUMAN_GATE_LABEL = "orchestrator:human-gate"
+DEFER_NONPROD_LABEL = "satellite:defer-nonprod"
+PROD_ONLY_LABEL = "scope:prod-only"
+OCR_CERT_ONLY_LABEL = "scope:ocr-certification-only"
 COPILOT_ASSIGNEE = "copilot-swe-agent[bot]"
 MAX_COPILOT_FIX_ATTEMPTS = 2
 TERMINAL_SUCCESS = {"success", "neutral", "skipped"}
@@ -254,11 +258,30 @@ def _combined_text(item: dict[str, Any]) -> str:
     return f"{item.get('title') or ''}\n{item.get('body') or ''}\n{labels}".lower()
 
 
+def _contains_literal_hint(text: str, hint: str) -> bool:
+    """Match a literal hint as a token/phrase, not as part of another word."""
+    pattern = rf"(?<![^\W_]){re.escape(hint)}(?![^\W_])"
+    return re.search(pattern, text) is not None
+
+
+def deferred_scope(item: dict[str, Any]) -> str | None:
+    labels = _label_names(item)
+    if DEFER_NONPROD_LABEL not in labels:
+        return None
+    if PROD_ONLY_LABEL in labels:
+        return "prod"
+    if OCR_CERT_ONLY_LABEL in labels:
+        return "ocr-certification"
+    return None
+
+
 def is_issue_candidate(issue: dict[str, Any], *, explicitly_selected: bool = False) -> bool:
     if issue.get("pull_request"):
         return False
     if explicitly_selected:
         return True
+    if deferred_scope(issue):
+        return False
     title = str(issue.get("title") or "")
     body = str(issue.get("body") or "")
     labels = _label_names(issue)
@@ -270,7 +293,7 @@ def classify_risk(item: dict[str, Any]) -> tuple[str, str]:
     if HUMAN_GATE_LABEL in labels:
         return "high", "explicit_human_gate_label"
     text = _combined_text(item)
-    matched = sorted(hint for hint in SENSITIVE_HINTS if hint in text)
+    matched = sorted(hint for hint in SENSITIVE_HINTS if _contains_literal_hint(text, hint))
     if matched:
         return "high", f"sensitive_hint:{matched[0]}"
     return "standard", "no_sensitive_hint"
@@ -278,7 +301,9 @@ def classify_risk(item: dict[str, Any]) -> tuple[str, str]:
 
 def looks_like_ci_failure(item: dict[str, Any]) -> bool:
     text = _combined_text(item)
-    return any(hint in text for hint in CI_HINTS) and any(hint in text for hint in FAILURE_HINTS)
+    return any(_contains_literal_hint(text, hint) for hint in CI_HINTS) and any(
+        _contains_literal_hint(text, hint) for hint in FAILURE_HINTS
+    )
 
 
 def infer_increment(item: dict[str, Any], head_ref: str = "") -> dict[str, Any]:
@@ -356,8 +381,22 @@ def process_issue(
 ) -> Decision:
     number = int(issue["number"])
     title = str(issue.get("title") or "")
-    risk, risk_reason = classify_risk(issue)
     gate = evaluate_gate(status_report, issue)
+    scope = deferred_scope(issue)
+    if scope:
+        return Decision(
+            "issue",
+            number,
+            title,
+            "deferred_external_gate",
+            "deferred",
+            f"deferred_until_{scope.replace('-', '_')}",
+            "high",
+            gate["increment_type"],
+            gate["reason"],
+            url=_issue_url(issue),
+        )
+    risk, risk_reason = classify_risk(issue)
     if risk == "high":
         return Decision("issue", number, title, "human_gate", "blocked", risk_reason, risk, gate["increment_type"], gate["reason"], url=_issue_url(issue))
     if not gate["allowed"]:
@@ -468,6 +507,7 @@ def build_report(
             "blocked": sum(1 for item in decisions if item.status == "blocked"),
             "already_dispatched": sum(1 for item in decisions if item.status == "already_dispatched"),
             "planned": sum(1 for item in decisions if item.status == "planned"),
+            "deferred": sum(1 for item in decisions if item.status == "deferred"),
         },
         "decisions": [asdict(item) for item in decisions],
         "guardrails": [
@@ -480,6 +520,7 @@ def build_report(
             "transient_ci_reuses_actions_auto_operator",
             "maximum_two_copilot_fix_attempts_per_pr",
             "no_merge_no_prod_deploy_no_secret_or_admin_change",
+            "scoped_human_gates_deferred_without_weakening_external_gate",
         ],
     }
 

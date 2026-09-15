@@ -69,17 +69,19 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 12
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
     env:
       TARGET_ENVIRONMENT: dev
       POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
       POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
-      POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
       WSJF_DEV_PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
       WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
       PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
       PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
-      PLANNER_TEAMS_POLL_SECONDS: '420'
+      PLANNER_TEAMS_POLL_SECONDS: '900'
       PLANNER_TEAMS_RUN_POLL_INTERVAL_MS: '30000'
       PLANNER_TEAMS_SETTLE_SECONDS: '45'
       EVIDENCE_PATH: audit/runtime-e2e/planner-teams/acceptance.json
@@ -89,6 +91,33 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Autenticar ReqSys Enterprise por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Resolver token Graph federado
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az account get-access-token --resource-type ms-graph --query accessToken -o tsv)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          TOKEN="$token" python - <<'PY'
+          import base64, json, os
+          raw = os.environ['TOKEN'].split('.')[1]
+          raw += '=' * (-len(raw) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(raw).decode('utf-8'))
+          actual = claims.get('appid') or claims.get('azp')
+          expected = os.environ['POWER_PLATFORM_CLIENT_ID']
+          if actual != expected:
+              raise SystemExit('oidc_app_identity_mismatch')
+          print('OIDC_APP_ID_MATCH=true')
+          PY
+          echo "POWER_PLATFORM_GRAPH_ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -111,6 +140,7 @@ jobs:
           # harness recebe explicitamente o HEAD efetivamente executado para que o
           # artifact não atribua a evidência a outra revisão.
           GITHUB_SHA="$actual_sha" node scripts/planner_teams_runtime_e2e.mjs
+          jq -e '.status == "passed" and .auth_mode == "oidc" and .checks.graph_auth_mode == "oidc" and .tokens_persisted == false' "$EVIDENCE_PATH" >/dev/null
 
       - name: Publicar evidência auditável
         if: always()
@@ -129,6 +159,7 @@ jobs:
           echo '- Disparo: ${{ github.event_name }}' >> "$GITHUB_STEP_SUMMARY"
           echo '- Ambiente: DEV' >> "$GITHUB_STEP_SUMMARY"
           echo "- SHA efetivamente executado: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Timeout de observação: 420 s' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Autenticação Graph exigida: GitHub OIDC / Workload Identity Federation.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Timeout de observação: 900 s' >> "$GITHUB_STEP_SUMMARY"
           echo '- Política: tarefa normal é controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
           echo '- Sem login por device code e sem reprovisionamento de flow.' >> "$GITHUB_STEP_SUMMARY"

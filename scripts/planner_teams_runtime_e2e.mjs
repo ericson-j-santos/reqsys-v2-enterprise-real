@@ -50,6 +50,20 @@ export function filterMessagesSince(messages, startedAt) {
   })
 }
 
+export function validatePollTimeout(value) {
+  const timeoutSeconds = Number(value)
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 60 || timeoutSeconds > 1200) {
+    throw new Error(`poll_timeout_invalido:${timeoutSeconds}`)
+  }
+  return timeoutSeconds
+}
+
+export function resolveGraphAuth({ accessToken = '' } = {}) {
+  const normalizedToken = String(accessToken || '').trim()
+  if (normalizedToken) return { mode: 'oidc', token: normalizedToken }
+  throw new Error('graph_auth_ausente:oidc_token_obrigatorio')
+}
+
 export function selectPlannerCandidate(candidates) {
   const normalized = (candidates || []).filter((item) => item?.plan_id && item?.bucket_id)
   const dev = normalized.filter((item) =>
@@ -61,22 +75,6 @@ export function selectPlannerCandidate(candidates) {
     throw new Error(`descoberta_wsjf_ambigua:total=${normalized.length}:dev=${dev.length}`)
   }
   return pool[0]
-}
-
-async function graphToken(tenantId, clientId, clientSecret) {
-  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'client_credentials',
-      scope: 'https://graph.microsoft.com/.default',
-    }),
-  })
-  const payload = await checkedJson(response, 'graph_token', [200])
-  if (!payload.access_token) throw new Error('graph_access_token_ausente')
-  return payload.access_token
 }
 
 async function graph(method, path, token, body, allowed = [200]) {
@@ -228,19 +226,15 @@ async function main() {
   const targetEnvironment = required('TARGET_ENVIRONMENT').toLowerCase()
   if (targetEnvironment !== 'dev') throw new Error(`ambiente_nao_autorizado:${targetEnvironment}`)
 
-  const tenantId = required('POWER_PLATFORM_TENANT_ID')
-  const clientId = required('POWER_PLATFORM_CLIENT_ID')
-  const clientSecret = required('POWER_PLATFORM_CLIENT_SECRET')
+  const accessToken = env('POWER_PLATFORM_GRAPH_ACCESS_TOKEN')
+  const auth = resolveGraphAuth({ accessToken })
   const teamId = required('PLANNER_TEAMS_DEV_TEAM_ID')
   const channelId = required('PLANNER_TEAMS_DEV_CHANNEL_ID')
-  const timeoutSeconds = Number(env('PLANNER_TEAMS_POLL_SECONDS', '420'))
+  const timeoutSeconds = validatePollTimeout(env('PLANNER_TEAMS_POLL_SECONDS', '900'))
   const pollMs = Number(env('PLANNER_TEAMS_RUN_POLL_INTERVAL_MS', '30000'))
   const settleSeconds = Number(env('PLANNER_TEAMS_SETTLE_SECONDS', '45'))
   const evidencePath = env('EVIDENCE_PATH', 'audit/runtime-e2e/planner-teams/acceptance.json')
 
-  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 60 || timeoutSeconds > 600) {
-    throw new Error(`poll_timeout_invalido:${timeoutSeconds}`)
-  }
   if (!Number.isFinite(pollMs) || pollMs < 5000 || pollMs > 60000) {
     throw new Error(`poll_interval_invalido:${pollMs}`)
   }
@@ -249,7 +243,7 @@ async function main() {
   }
 
   const evidence = {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     capability: 'planner-teams-runtime-e2e-continuous',
     mode: 'steady_state_black_box',
     environment: targetEnvironment,
@@ -260,6 +254,7 @@ async function main() {
     started_at: iso(),
     completed_at: null,
     status: 'running',
+    auth_mode: auth.mode,
     mocked: false,
     simulated: false,
     tokens_persisted: false,
@@ -281,8 +276,8 @@ async function main() {
   let token = ''
   const taskIds = []
   try {
-    token = await graphToken(tenantId, clientId, clientSecret)
-    evidence.checks = { graph_app_token: 'acquired' }
+    token = auth.token
+    evidence.checks = { graph_app_token: 'acquired', graph_auth_mode: auth.mode }
 
     // Preflight de leitura evita criar tarefas quando a identidade nao consegue
     // comprovar o resultado no Teams.
@@ -371,6 +366,7 @@ async function main() {
     await fs.writeFile(evidencePath, JSON.stringify(evidence, null, 2) + '\n', 'utf8')
     console.log(JSON.stringify({
       status: evidence.status,
+      auth_mode: evidence.auth_mode,
       correlation_id: evidence.correlation_id,
       planner_target: evidence.planner_target || null,
       contract: evidence.contract || null,

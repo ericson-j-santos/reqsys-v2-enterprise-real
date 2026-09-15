@@ -126,6 +126,63 @@ def install_with_rsc(token: str, team_id: str, catalog_app_id: str) -> tuple[str
     return "apply_failed", status
 
 
+def consented_permissions(installation: dict[str, Any]) -> set[str]:
+    permission_set = installation.get("consentedPermissionSet") or {}
+    permissions = permission_set.get("resourceSpecificPermissions") or []
+    return {
+        str(item.get("permissionValue") or "")
+        for item in permissions
+        if isinstance(item, dict) and item.get("permissionValue")
+    }
+
+
+def reconcile_install_with_rsc(token: str, team_id: str, catalog_app_id: str) -> tuple[str, int]:
+    team = urllib.parse.quote(team_id)
+    status, payload = graph_call(
+        "GET",
+        f"/teams/{team}/installedApps?$expand=teamsApp&$select=id,consentedPermissionSet",
+        token,
+    )
+    if status in {401, 403}:
+        return "bootstrap_permission_required", status
+    if status != 200:
+        return "installation_inspection_failed", status
+
+    installations = payload.get("value") or []
+    matches = [
+        item
+        for item in installations
+        if isinstance(item, dict)
+        and str((item.get("teamsApp") or {}).get("id") or "") == catalog_app_id
+    ]
+    if len(matches) > 1:
+        return "duplicate_installations", status
+
+    had_existing = bool(matches)
+    if had_existing:
+        existing = matches[0]
+        if RSC_PERMISSION in consented_permissions(existing):
+            return "already_consented", 200
+
+        installation_id = str(existing.get("id") or "")
+        if not installation_id:
+            return "installation_id_missing", 200
+        remove_status, _ = graph_call(
+            "DELETE",
+            f"/teams/{team}/installedApps/{urllib.parse.quote(installation_id, safe='')}",
+            token,
+        )
+        if remove_status in {401, 403}:
+            return "bootstrap_permission_required", remove_status
+        if remove_status not in {200, 202, 204}:
+            return "remove_failed", remove_status
+
+    apply_status, apply_http = install_with_rsc(token, team_id, catalog_app_id)
+    if apply_status == "applied" and had_existing:
+        return "reinstalled", apply_http
+    return apply_status, apply_http
+
+
 def state_signature(payload: dict[str, Any]) -> str:
     material = "|".join(
         str(payload.get(key) or "")
@@ -147,7 +204,7 @@ def main() -> int:
     channel_id = required("PLANNER_TEAMS_DEV_CHANNEL_ID")
 
     evidence: dict[str, Any] = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "environment": "dev",
         "capability": "teams-rsc-dev-reconcile",
         "permission": RSC_PERMISSION,
@@ -162,6 +219,7 @@ def main() -> int:
         "probe_http_status": None,
         "apply_status": None,
         "apply_http_status": None,
+        "bootstrap_auth_mode": None,
         "secret_value_exposed": False,
     }
 
@@ -173,16 +231,28 @@ def main() -> int:
 
         if status == "permission_pending" and args.attempt_apply:
             catalog_app_id = env("TEAMS_RSC_CATALOG_APP_ID")
+            bootstrap_access_token = env("TEAMS_RSC_BOOTSTRAP_ACCESS_TOKEN")
             bootstrap_client_id = env("TEAMS_RSC_BOOTSTRAP_CLIENT_ID")
             bootstrap_client_secret = env("TEAMS_RSC_BOOTSTRAP_CLIENT_SECRET")
-            if not all((catalog_app_id, bootstrap_client_id, bootstrap_client_secret)):
+            has_client_secret = bool(bootstrap_client_id and bootstrap_client_secret)
+            if not catalog_app_id or not (bootstrap_access_token or has_client_secret):
                 evidence["apply_status"] = "bootstrap_configuration_missing"
             else:
-                bootstrap_token = graph_token(tenant_id, bootstrap_client_id, bootstrap_client_secret)
-                apply_status, apply_http = install_with_rsc(bootstrap_token, team_id, catalog_app_id)
+                if bootstrap_access_token:
+                    bootstrap_token = bootstrap_access_token
+                    evidence["bootstrap_auth_mode"] = "federated_access_token"
+                else:
+                    bootstrap_token = graph_token(tenant_id, bootstrap_client_id, bootstrap_client_secret)
+                    evidence["bootstrap_auth_mode"] = "client_secret"
+
+                apply_status, apply_http = reconcile_install_with_rsc(
+                    bootstrap_token,
+                    team_id,
+                    catalog_app_id,
+                )
                 evidence["apply_status"] = apply_status
                 evidence["apply_http_status"] = apply_http
-                if apply_status in {"applied", "already_installed_or_conflict"}:
+                if apply_status in {"applied", "reinstalled", "already_consented"}:
                     status, http_status = probe_channel(token, team_id, channel_id)
                     evidence["status"] = status
                     evidence["probe_http_status"] = http_status
@@ -198,6 +268,7 @@ def main() -> int:
     print(json.dumps({
         "status": evidence["status"],
         "apply_status": evidence["apply_status"],
+        "bootstrap_auth_mode": evidence["bootstrap_auth_mode"],
         "state_signature": evidence["state_signature"],
         "evidence": str(path),
     }, ensure_ascii=False))

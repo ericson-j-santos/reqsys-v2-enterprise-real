@@ -22,6 +22,11 @@ class RuntimeSettings(BaseModel):
     redis_job_ttl_seconds: int = 604800
     redis_lease_ttl_seconds: int = 60
     redis_lease_renew_interval_seconds: int = 20
+    max_queue_size: int = 1000
+    retry_backoff_base_seconds: float = 1.0
+    retry_backoff_max_seconds: float = 60.0
+    todo_global_adapter_url: str | None = None
+    todo_global_service_token: str = ""
     parallelism_control_token: str = ""
     parallelism_control_redis_prefix: str = "reqsys:runtime:parallelism"
     max_tentativas: int = 3
@@ -45,6 +50,12 @@ class RuntimeSettings(BaseModel):
             raise ValueError("REDIS_LEASE_RENEW_INTERVAL_SECONDS deve ser >= 1")
         if self.redis_lease_renew_interval_seconds >= self.redis_lease_ttl_seconds:
             raise ValueError("REDIS_LEASE_RENEW_INTERVAL_SECONDS deve ser menor que REDIS_LEASE_TTL_SECONDS")
+        if self.max_queue_size < 1:
+            raise ValueError("MAX_QUEUE_SIZE deve ser >= 1")
+        if self.retry_backoff_base_seconds < 0:
+            raise ValueError("RETRY_BACKOFF_BASE_SECONDS deve ser >= 0")
+        if self.retry_backoff_max_seconds < self.retry_backoff_base_seconds:
+            raise ValueError("RETRY_BACKOFF_MAX_SECONDS deve ser >= RETRY_BACKOFF_BASE_SECONDS")
         self.queue_backend = queue_backend
         self.storage_backend = storage_backend
         self.runtime_environment = environment
@@ -67,6 +78,11 @@ def get_settings() -> RuntimeSettings:
         redis_job_ttl_seconds=int(os.getenv("REDIS_JOB_TTL_SECONDS", "604800")),
         redis_lease_ttl_seconds=int(os.getenv("REDIS_LEASE_TTL_SECONDS", "60")),
         redis_lease_renew_interval_seconds=int(os.getenv("REDIS_LEASE_RENEW_INTERVAL_SECONDS", "20")),
+        max_queue_size=int(os.getenv("MAX_QUEUE_SIZE", "1000")),
+        retry_backoff_base_seconds=float(os.getenv("RETRY_BACKOFF_BASE_SECONDS", "1")),
+        retry_backoff_max_seconds=float(os.getenv("RETRY_BACKOFF_MAX_SECONDS", "60")),
+        todo_global_adapter_url=os.getenv("TODO_GLOBAL_ADAPTER_URL") or None,
+        todo_global_service_token=os.getenv("TODO_GLOBAL_ADAPTER_SERVICE_TOKEN", ""),
         parallelism_control_token=os.getenv("REQSYS_PARALLELISM_CONTROL_TOKEN", ""),
         parallelism_control_redis_prefix=os.getenv(
             "PARALLELISM_CONTROL_REDIS_PREFIX", "reqsys:runtime:parallelism"

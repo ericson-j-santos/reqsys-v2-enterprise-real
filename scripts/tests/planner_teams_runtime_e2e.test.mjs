@@ -5,7 +5,9 @@ import {
   evaluateContract,
   filterMessagesSince,
   messageContainsTitle,
+  resolveGraphAuth,
   selectPlannerCandidate,
+  validatePollTimeout,
 } from '../planner_teams_runtime_e2e.mjs'
 
 test('aprova somente com controle normal presente e E2E ausente', () => {
@@ -46,6 +48,17 @@ test('descarta mensagens antigas fora da janela de evidência', () => {
   assert.deepEqual(filterMessagesSince(messages, startedAt).map((item) => item.id), ['margem', 'nova'])
 })
 
+test('aceita somente token Graph obtido por OIDC', () => {
+  assert.deepEqual(resolveGraphAuth({ accessToken: 'oidc-token' }), { mode: 'oidc', token: 'oidc-token' })
+})
+
+test('ignora client secret legado e falha fechado sem token OIDC', () => {
+  assert.throws(
+    () => resolveGraphAuth({ accessToken: '', clientSecret: 'legacy-secret' }),
+    /graph_auth_ausente:oidc_token_obrigatorio/,
+  )
+})
+
 test('seleciona o único alvo Planner classificado como DEV', () => {
   const selected = selectPlannerCandidate([
     {
@@ -83,4 +96,12 @@ test('reprova descoberta quando existem dois alvos DEV possíveis', () => {
     ]),
     /descoberta_wsjf_ambigua:total=2:dev=2/,
   )
+})
+
+test('aceita janela de 900 s para atravessar o polling real do Planner', () => {
+  assert.equal(validatePollTimeout('900'), 900)
+})
+
+test('rejeita janela acima do teto operacional', () => {
+  assert.throws(() => validatePollTimeout('1201'), /poll_timeout_invalido:1201/)
 })

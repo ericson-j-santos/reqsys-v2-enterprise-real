@@ -20,6 +20,7 @@ class TipoOperacao(str, Enum):
     ENVIAR_RESPOSTA = "enviar_resposta"
     SINCRONIZAR_REQUISITO = "sincronizar_requisito"
     NOTIFICAR_STATUS = "notificar_status"
+    SINCRONIZAR_TODO_GLOBAL = "sincronizar_todo_global"
 
 
 class MetadataEntrada(BaseModel):

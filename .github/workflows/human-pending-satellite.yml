@@ -8,6 +8,15 @@ on:
         required: false
         default: false
         type: boolean
+      scope:
+        description: "Escopo da varredura humana"
+        required: false
+        default: nonprod
+        type: choice
+        options:
+          - nonprod
+          - prod
+          - ocr-certification
   schedule:
     - cron: "17 * * * *"
 
@@ -43,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          args=()
+          args=(--scope "${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'nonprod' }}")
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
             args+=(--dry-run)
           fi
@@ -62,6 +71,7 @@ jobs:
           findings = data.get('human_findings', [])
           print('## Human Pending Satellite')
           print()
+          print(f"- Escopo: {data.get('scope', 'nonprod')}")
           print(f"- Pendências humanas detectadas: {len(findings)}")
           print(f"- Novas notificações: {data.get('notification_count', 0)}")
           print('- Evidência bruta/segredos: não armazenados pelo workflow')

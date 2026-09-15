@@ -13,8 +13,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD = ROOT / "docs" / "ops-dashboard" / "index.html"
 
-SECTION_MARKER = "runtime-executive-post-deploy-card"
-SCRIPT_MARKER = "renderRuntimeExecutivePostDeploy"
+SECTION_MARKER = 'id="runtime-executive-post-deploy-card"'
+SCRIPT_MARKER = "async function renderRuntimeExecutivePostDeploy()"
+RENDER_CALL_MARKER = "await renderRuntimeExecutivePostDeploy();"
+NAV_LINK_MARKER = 'href="#runtime-executive-post-deploy-card">Runtime Executive — Post-Deploy</a>'
+QUICK_LINK_MARKER = "addLink(quick, 'Runtime Executive — Post-Deploy', '#runtime-executive-post-deploy-card');"
 
 SECTION = r'''
 
@@ -218,32 +221,36 @@ def insert_once(content: str, marker: str, payload: str, anchor: str, *, before:
     return content.replace(anchor, payload + anchor if before else anchor + payload, 1)
 
 
-def main() -> int:
-    html = DASHBOARD.read_text(encoding="utf-8")
+def inject_dashboard(html: str) -> str:
     html = insert_once(html, SECTION_MARKER, SECTION, "\n    <section class=\"card\">\n      <h2>Runtime público — readiness Fly/DuckDNS</h2>")
     html = insert_once(html, SCRIPT_MARKER, SCRIPT, "\n    async function renderMergeIntelligence() {")
     html = insert_once(
         html,
-        "await renderRuntimeExecutivePostDeploy();",
+        RENDER_CALL_MARKER,
         "      await renderRuntimeExecutivePostDeploy();\n",
         "      await renderRuntimeExecutiveIndex();\n",
         before=False,
     )
     html = insert_once(
         html,
-        "Runtime Executive — Post-Deploy",
+        NAV_LINK_MARKER,
         "        <a class=\"link-btn\" href=\"#runtime-executive-post-deploy-card\">Runtime Executive — Post-Deploy</a>\n",
         "        <a class=\"link-btn\" href=\"#trilha-d-history-card\">Trilha D — Histórico</a>\n",
         before=True,
     )
     html = insert_once(
         html,
-        "addLink(quick, 'Runtime Executive — Post-Deploy'",
+        QUICK_LINK_MARKER,
         "      addLink(quick, 'Runtime Executive — Post-Deploy', '#runtime-executive-post-deploy-card');\n",
         "      addLink(quick, `Trilha D — score ${trilhaScore}`, '#trilha-d-history-card');\n",
         before=True,
     )
-    DASHBOARD.write_text(html, encoding="utf-8")
+    return html
+
+
+def main() -> int:
+    html = DASHBOARD.read_text(encoding="utf-8")
+    DASHBOARD.write_text(inject_dashboard(html), encoding="utf-8")
     print("ops dashboard runtime executive post-deploy card injected")
     return 0
 

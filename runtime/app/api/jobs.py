@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.application.services.job_service import JobService
 from app.domain.models.job_assincrono import AsyncJobAcceptedResponse, AsyncJobCreateRequest, AsyncJobStatusResponse
+from app.infrastructure.queue.errors import QueueCapacityError
 from app.infrastructure.repositories.job_repository_memoria import JobNaoEncontradoError
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -13,18 +14,34 @@ def get_job_service() -> JobService:  # pragma: no cover - sobrescrito em app.ma
     raise RuntimeError("Dependência JobService não configurada.")
 
 
-@router.post("", response_model=AsyncJobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "",
+    response_model=AsyncJobAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={503: {"description": "Fila sem capacidade; produtor deve tentar novamente."}},
+)
 async def criar_job_assincrono(
     request: AsyncJobCreateRequest,
     response: Response,
     service: JobService = Depends(get_job_service),
 ) -> AsyncJobAcceptedResponse:
-    accepted = await service.criar_job(request)
+    try:
+        accepted = await service.criar_job(request)
+    except QueueCapacityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Fila temporariamente sem capacidade; job não foi aceito.",
+            headers={"Retry-After": "5"},
+        ) from exc
     response.headers["Location"] = accepted.status_url
     return accepted
 
 
-@router.get("/{job_id}", response_model=AsyncJobStatusResponse)
+@router.get(
+    "/{job_id}",
+    response_model=AsyncJobStatusResponse,
+    responses={404: {"description": "Job não encontrado."}},
+)
 async def consultar_job_assincrono(
     job_id: str,
     service: JobService = Depends(get_job_service),

@@ -52,5 +52,32 @@
     "problema_resolvido": "Acumular tendencia sem duplicar a mesma data.",
     "versao": "1.1.0",
     "status": "Ativo"
+  },
+  {
+    "id": "LIB-0007",
+    "nome": "Fila governada de pendencias",
+    "tipo": "Padrao",
+    "area": "Processos",
+    "problema_resolvido": "Manter toda pendencia em estado explicito ate estado terminal verificavel.",
+    "versao": "1.2.0",
+    "status": "Ativo"
+  },
+  {
+    "id": "LIB-0008",
+    "nome": "WIP maximo de tres itens ativos",
+    "tipo": "Regra",
+    "area": "Processos",
+    "problema_resolvido": "Evitar dispersao e favorecer conclusao antes de iniciar novas frentes.",
+    "versao": "1.2.0",
+    "status": "Ativo"
+  },
+  {
+    "id": "LIB-0009",
+    "nome": "Aging e escalonamento de pendencias",
+    "tipo": "Regra",
+    "area": "Processos",
+    "problema_resolvido": "Impedir esquecimento silencioso de itens sem movimentacao.",
+    "versao": "1.2.0",
+    "status": "Ativo"
   }
 ]

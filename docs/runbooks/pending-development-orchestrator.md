@@ -36,6 +36,17 @@ No evento de issue, somente `github.event.issue.number` é encaminhado ao script
 
 O orquestrador não faz merge, não faz deploy de produção, não altera segredos, permissões administrativas ou branch protection.
 
+### Continuidade branch → PR
+
+A tarefa de desenvolvimento é criada com `create_pull_request=false`, portanto o agente só publica commits em uma branch `copilot/*`. Esse limite não interrompe mais o ciclo:
+
+1. o push dispara o `Pre-PR Readiness Gate`, sem filtro de paths;
+2. somente quando esse run termina em `success`, o workflow `Pending Development Agent PR` é acordado por `workflow_run`;
+3. o workflow executa o script da branch padrão confiável e usa exatamente o `head_sha` aprovado como dado para abrir ou atualizar uma PR draft, sem executar código da branch do agente com token de escrita;
+4. falha ou ausência do `READY_FOR_PR` não abre PR; o artifact `pending-development-agent-pr-<sha>` preserva a evidência.
+
+Esse encadeamento é separado do workflow legado de branches `cursor/*` e cobre qualquer arquivo alterado pelo agente. PR, merge e produção continuam sujeitos aos gates existentes.
+
 ## Pré-requisito para o Copilot coding agent
 
 A automação de desenvolvimento requer o secret de repositório `COPILOT_AGENT_TOKEN`.
@@ -100,13 +111,18 @@ Arquivos principais:
 - `summary.md`;
 - `stdout.json`;
 - `coordenador-status.json` usado pela mesma execução.
+- `pending-development-agent-pr-<sha>` com a verificação do `READY_FOR_PR` e o resultado da abertura da PR.
 
 Cada execução registra `correlation_id`, modo, rota, status, motivo, tipo de incremento e se houve ação real.
 
 ## Validação mínima
 
 ```bash
-python -m pytest tests/test_pending_development_orchestrator.py -q
+python -m pytest \
+  tests/test_pending_development_orchestrator.py \
+  tests/test_pending_development_orchestrator_entrypoint.py \
+  tests/test_pending_development_agent_tasks.py \
+  tests/test_pending_development_agent_pr_workflow.py -q
 ```
 
 O teste cobre seleção explícita, despertar por evento, filtro de issue elegível, gate de risco, integração com Agent Increment Gate, idempotência, CI transitório, CI determinístico no mesmo PR, ausência do token e handoff do ciclo autônomo.

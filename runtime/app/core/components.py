@@ -22,7 +22,10 @@ class RuntimeComponents:
 
 
 def build_runtime_components(settings: RuntimeSettings) -> RuntimeComponents:
-    http_gateway = HttpxGateway()
+    http_gateway = HttpxGateway(
+        service_token=settings.todo_global_service_token,
+        service_token_url=settings.todo_global_adapter_url,
+    )
 
     if settings.queue_backend == "redis":
         redis = Redis.from_url(settings.redis_url, decode_responses=True)
@@ -33,6 +36,7 @@ def build_runtime_components(settings: RuntimeSettings) -> RuntimeComponents:
             settings.redis_block_timeout_seconds,
             settings.redis_lease_ttl_seconds,
             settings.redis_lease_renew_interval_seconds,
+            settings.max_queue_size,
         )
         repository = JobRepositoryRedis(
             redis,
@@ -41,7 +45,7 @@ def build_runtime_components(settings: RuntimeSettings) -> RuntimeComponents:
             settings.redis_job_ttl_seconds,
         )
     else:
-        queue = AsyncioQueueGateway()
+        queue = AsyncioQueueGateway(settings.max_queue_size)
         repository = JobRepositoryMemoria()
 
     return RuntimeComponents(

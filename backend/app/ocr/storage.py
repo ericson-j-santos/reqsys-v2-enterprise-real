@@ -1,19 +1,16 @@
-"""Persistência protegida de resultados OCR.
-
-PII reconhecida nunca é gravada em texto puro. O payload sensível usa AES-GCM
-com chave dedicada resolvida pelo mecanismo central de secrets do ReqSys.
-"""
+"""Persistência protegida de resultados OCR e coordenação distribuída de jobs."""
 from __future__ import annotations
 
 import base64
 import hashlib
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Callable
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from sqlalchemy import DateTime, Float, Integer, String, Text, select
+from sqlalchemy import DateTime, Float, Integer, String, Text, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.core.secrets import get_secret
@@ -22,6 +19,7 @@ from app.ocr.worker import OcrResultado
 
 _CHAVE_SEGREDO = 'OCR_DATA_ENCRYPTION_KEY'
 _NONCE_BYTES = 12
+_DEFAULT_CLAIM_LEASE_SECONDS = 600
 
 
 class OcrResultadoPersistido(Base):
@@ -42,6 +40,69 @@ class OcrResultadoPersistido(Base):
     decisao_protegida: Mapped[str | None] = mapped_column(Text, nullable=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     revisado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OcrJobClaimPersistido(Base):
+    """Lease distribuído; um único dono pode processar cada job por vez."""
+
+    __tablename__ = 'ocr_job_claims'
+
+    job_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    owner_token: Mapped[str] = mapped_column(String(160), index=True, nullable=False)
+    lease_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
+class RepositorioClaimsOcrSqlAlchemy:
+    def __init__(self, *, session_factory: Callable[[], Session] = SessionLocal, lease_seconds: int | None = None) -> None:
+        self._session_factory = session_factory
+        configured = lease_seconds if lease_seconds is not None else int(os.getenv('OCR_JOB_CLAIM_LEASE_SECONDS', str(_DEFAULT_CLAIM_LEASE_SECONDS)))
+        if configured < 1:
+            raise ValueError('OCR_JOB_CLAIM_LEASE_SECONDS deve ser maior que zero')
+        self._lease_seconds = configured
+
+    def adquirir(self, job_id: str, owner_token: str, *, agora: datetime | None = None) -> bool:
+        now = agora or datetime.now(UTC)
+        lease_until = now + timedelta(seconds=self._lease_seconds)
+        with self._session_factory() as db:
+            db.add(OcrJobClaimPersistido(job_id=job_id, owner_token=owner_token, lease_until=lease_until, atualizado_em=now))
+            try:
+                db.commit()
+                return True
+            except IntegrityError:
+                db.rollback()
+
+            stmt = (
+                update(OcrJobClaimPersistido)
+                .where(OcrJobClaimPersistido.job_id == job_id)
+                .where(OcrJobClaimPersistido.lease_until <= now)
+                .values(owner_token=owner_token, lease_until=lease_until, atualizado_em=now)
+            )
+            result = db.execute(stmt)
+            db.commit()
+            return bool(result.rowcount == 1)
+
+    def renovar(self, job_id: str, owner_token: str, *, agora: datetime | None = None) -> bool:
+        now = agora or datetime.now(UTC)
+        lease_until = now + timedelta(seconds=self._lease_seconds)
+        with self._session_factory() as db:
+            result = db.execute(
+                update(OcrJobClaimPersistido)
+                .where(OcrJobClaimPersistido.job_id == job_id)
+                .where(OcrJobClaimPersistido.owner_token == owner_token)
+                .values(lease_until=lease_until, atualizado_em=now)
+            )
+            db.commit()
+            return bool(result.rowcount == 1)
+
+    def liberar(self, job_id: str, owner_token: str) -> bool:
+        with self._session_factory() as db:
+            item = db.get(OcrJobClaimPersistido, job_id)
+            if item is None or item.owner_token != owner_token:
+                return False
+            db.delete(item)
+            db.commit()
+            return True
 
 
 class OcrDataProtector:
@@ -75,12 +136,7 @@ class OcrDataProtector:
 
 
 class RepositorioResultadosOcrSqlAlchemy:
-    def __init__(
-        self,
-        *,
-        session_factory: Callable[[], Session] = SessionLocal,
-        protector: OcrDataProtector | None = None,
-    ) -> None:
+    def __init__(self, *, session_factory: Callable[[], Session] = SessionLocal, protector: OcrDataProtector | None = None) -> None:
         self._session_factory = session_factory
         self._protector = protector or OcrDataProtector()
 
@@ -90,22 +146,8 @@ class RepositorioResultadosOcrSqlAlchemy:
             if existente is not None:
                 return
             status = 'AUTO' if resultado.estado_ocr == 'AUTO' else 'PENDENTE'
-            protegido = self._protector.proteger(
-                {'valor': resultado.valor, 'motivos': list(resultado.motivos)},
-                aad=resultado.job_id,
-            )
-            db.add(OcrResultadoPersistido(
-                job_id=resultado.job_id,
-                correlation_id=resultado.correlation_id,
-                tipo_documento=resultado.tipo_documento,
-                campo=resultado.campo,
-                estado_ocr=resultado.estado_ocr,
-                confianca=resultado.confianca,
-                engine_version=resultado.engine_version,
-                key_version=self._protector.key_version,
-                payload_protegido=protegido,
-                status_revisao=status,
-            ))
+            protegido = self._protector.proteger({'valor': resultado.valor, 'motivos': list(resultado.motivos)}, aad=resultado.job_id)
+            db.add(OcrResultadoPersistido(job_id=resultado.job_id, correlation_id=resultado.correlation_id, tipo_documento=resultado.tipo_documento, campo=resultado.campo, estado_ocr=resultado.estado_ocr, confianca=resultado.confianca, engine_version=resultado.engine_version, key_version=self._protector.key_version, payload_protegido=protegido, status_revisao=status))
             db.commit()
 
     def listar(self, *, status: str | None = None, limite: int = 100) -> list[dict]:
@@ -150,30 +192,9 @@ class RepositorioResultadosOcrSqlAlchemy:
 
     @staticmethod
     def _metadata(item: OcrResultadoPersistido) -> dict:
-        return {
-            'job_id': item.job_id,
-            'correlation_id': item.correlation_id,
-            'tipo_documento': item.tipo_documento,
-            'campo': item.campo,
-            'estado_ocr': item.estado_ocr,
-            'confianca': round(float(item.confianca), 6),
-            'engine_version': item.engine_version,
-            'key_version': item.key_version,
-            'status_revisao': item.status_revisao,
-            'criado_em': item.criado_em.isoformat() if item.criado_em else None,
-            'revisado_em': item.revisado_em.isoformat() if item.revisado_em else None,
-            'pii_exposta': False,
-        }
+        return {'job_id': item.job_id, 'correlation_id': item.correlation_id, 'tipo_documento': item.tipo_documento, 'campo': item.campo, 'estado_ocr': item.estado_ocr, 'confianca': round(float(item.confianca), 6), 'engine_version': item.engine_version, 'key_version': item.key_version, 'status_revisao': item.status_revisao, 'criado_em': item.criado_em.isoformat() if item.criado_em else None, 'revisado_em': item.revisado_em.isoformat() if item.revisado_em else None, 'pii_exposta': False}
 
 
 def ocr_store_readiness() -> dict[str, object]:
     segredo = get_secret(_CHAVE_SEGREDO, prefer_vault=True)
-    return {
-        'schema_version': '1.0.0',
-        'encryption': 'AES-256-GCM',
-        'key_name': _CHAVE_SEGREDO,
-        'key_configured': bool(segredo),
-        'key_version': os.getenv('OCR_DATA_KEY_VERSION', 'v1').strip() or 'v1',
-        'plaintext_storage_allowed': False,
-        'ready': bool(segredo),
-    }
+    return {'schema_version': '1.0.0', 'encryption': 'AES-256-GCM', 'key_name': _CHAVE_SEGREDO, 'key_configured': bool(segredo), 'key_version': os.getenv('OCR_DATA_KEY_VERSION', 'v1').strip() or 'v1', 'plaintext_storage_allowed': False, 'ready': bool(segredo)}
