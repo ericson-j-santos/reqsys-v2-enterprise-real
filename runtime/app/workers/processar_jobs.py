@@ -30,8 +30,10 @@ async def executar_worker_local(service: JobService, queue: Any) -> None:
         recuperados = await resolve_maybe_awaitable(recuperar())
         logger.info("jobs_orfaos_recuperados", extra={"quantidade": recuperados})
 
-    republicados = await service.recuperar_jobs_pendentes()
-    logger.info("jobs_persistidos_republicados", extra={"quantidade": republicados})
+    recuperar_persistidos = getattr(service, "recuperar_jobs_pendentes", None)
+    if recuperar_persistidos is not None:
+        republicados = await resolve_maybe_awaitable(recuperar_persistidos())
+        logger.info("jobs_persistidos_republicados", extra={"quantidade": republicados})
 
     logger.info("worker_iniciado")
     while True:
