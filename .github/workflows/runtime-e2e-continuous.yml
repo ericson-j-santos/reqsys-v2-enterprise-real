@@ -77,8 +77,6 @@ jobs:
       TARGET_ENVIRONMENT: dev
       POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
       POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
-      # Fallback temporário durante a migração; OIDC tem precedência no harness.
-      POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
       WSJF_DEV_PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
       WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
       PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba

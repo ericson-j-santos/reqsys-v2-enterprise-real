@@ -48,24 +48,14 @@ test('descarta mensagens antigas fora da janela de evidência', () => {
   assert.deepEqual(filterMessagesSince(messages, startedAt).map((item) => item.id), ['margem', 'nova'])
 })
 
-test('prioriza token OIDC mesmo quando fallback de secret ainda existe', () => {
-  assert.deepEqual(
-    resolveGraphAuth({ accessToken: 'oidc-token', clientSecret: 'legacy-secret' }),
-    { mode: 'oidc', token: 'oidc-token' },
-  )
+test('aceita somente token Graph obtido por OIDC', () => {
+  assert.deepEqual(resolveGraphAuth({ accessToken: 'oidc-token' }), { mode: 'oidc', token: 'oidc-token' })
 })
 
-test('mantem client secret apenas como fallback de transicao', () => {
-  assert.deepEqual(
-    resolveGraphAuth({ accessToken: '', clientSecret: 'legacy-secret' }),
-    { mode: 'client_secret', token: '' },
-  )
-})
-
-test('falha fechado quando nenhuma credencial Graph existe', () => {
+test('ignora client secret legado e falha fechado sem token OIDC', () => {
   assert.throws(
-    () => resolveGraphAuth({ accessToken: '', clientSecret: '' }),
-    /graph_auth_ausente:oidc_token_ou_client_secret/,
+    () => resolveGraphAuth({ accessToken: '', clientSecret: 'legacy-secret' }),
+    /graph_auth_ausente:oidc_token_obrigatorio/,
   )
 })
 
