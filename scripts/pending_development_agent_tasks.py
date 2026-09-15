@@ -3,8 +3,8 @@
 
 A rota preserva a governança ReqSys: a tarefa do agente é criada com
 ``create_pull_request=false``. Assim, implementação e testes podem ocorrer em
-branch antes do Pre-PR Readiness Gate; a PR só deve ser aberta depois de
-``READY_FOR_PR=passed`` pelo fluxo canônico.
+branch antes do Pre-PR Readiness Gate. Depois de ``READY_FOR_PR=passed``, o
+workflow ``Pending Development Agent PR`` abre a PR draft automaticamente.
 """
 
 from __future__ import annotations
@@ -51,7 +51,8 @@ def build_agent_task_instructions(issue: dict[str, Any], base_branch: str) -> st
         "Trabalhe em branch isolada a partir da base informada, preserve o escopo da issue e faça a menor implementação real. "
         "Inclua testes automatizados e validação ponta a ponta aplicável, com controles contra falso positivo e idempotência quando aplicável. "
         "Não abra Pull Request, não faça merge, não faça deploy de produção, não altere segredos, permissões administrativas ou branch protection. "
-        "A Pull Request somente poderá ser aberta pelo fluxo governado após READY_FOR_PR=passed. "
+        "Envie os commits para uma branch copilot/* do repositório. O fluxo governado abrirá uma Pull Request draft automaticamente "
+        "somente após READY_FOR_PR=passed. "
         f"Base esperada: {base_branch}."
     )
 
@@ -102,7 +103,7 @@ def record_agent_task_dispatch(
         "Pending Development Orchestrator: Agent Task branch-first criada com `create_pull_request=false`.\n\n"
         f"- task_id: `{task_id}`\n"
         f"- task_url: {task_url or 'indisponível'}\n"
-        "- próximo gate obrigatório: `READY_FOR_PR=passed` antes da abertura de Pull Request."
+        "- próximo passo automático: push em `copilot/*` → `READY_FOR_PR` → abertura de Pull Request draft."
     )
     client.request("POST", f"issues/{issue_number}/comments", payload={"body": body})
 
