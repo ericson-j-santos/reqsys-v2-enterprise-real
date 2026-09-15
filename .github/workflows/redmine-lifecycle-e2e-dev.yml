@@ -9,7 +9,7 @@ on:
       - "backend/app/services/redmine_lifecycle_sync.py"
       - "backend/tests/test_redmine_api.py"
       - "backend/tests/test_redmine_lifecycle_sync.py"
-      - "scripts/redmine_lifecycle_e2e_runtime.py"
+      - "scripts/redmine_lifecycle_e2e_v2_runtime.py"
 
 permissions:
   contents: read
@@ -86,9 +86,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p audit
-          payload="$(base64 -w0 scripts/redmine_lifecycle_e2e_runtime.py)"
+          payload="$(base64 -w0 scripts/redmine_lifecycle_e2e_v2_runtime.py)"
           set +e
-          output="$(flyctl ssh console -a "$FLY_APP" --command "env REQSYS_E2E_CORRELATION_ID=$CORRELATION_ID python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"redmine_lifecycle_e2e_runtime.py\", \"exec\"))'")"
+          output="$(flyctl ssh console -a "$FLY_APP" --command "env REQSYS_E2E_CORRELATION_ID=$CORRELATION_ID python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"redmine_lifecycle_e2e_v2_runtime.py\", \"exec\"))'")"
           remote_rc=$?
           set -e
           result="$(printf '%s\n' "$output" | tail -n 1)"
@@ -105,13 +105,16 @@ jobs:
           fixture = payload.get('fixture') or {}
           checks = payload.get('checks') or {}
           result = payload.get('result') or {}
+          restore_fields = payload.get('restore_field_checks') or {}
           print(f"status={status} correlation_id={correlation_id} requisito_id={fixture.get('requisito_id')} redmine_issue_id={fixture.get('redmine_issue_id')}")
           print(f"checks={json.dumps(checks, sort_keys=True)}")
+          print(f"restore_fields={json.dumps(restore_fields, sort_keys=True)}")
           print(f"result={json.dumps(result, sort_keys=True)}")
           required_checks = (
               'runtime_redmine_credential_present',
               'reqsys_admin_session',
               'fixture_bootstrap_sync',
+              'unassign_semantics_confirmed',
               'redmine_direct_read',
               'dry_run_zero_mutations',
               'forward_precondition_confirmed',
