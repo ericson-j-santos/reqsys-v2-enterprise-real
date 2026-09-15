@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.secrets import get_secret
 from app.core.service_tokens import require_admin_or_service_token
 from app.schemas.todo_global import TodoGlobalUpsertRequest, TodoGlobalUpsertResponse
-from app.services.todo_global_notion import NotionTodoGlobalClient, NotionTodoGlobalError
+from app.services.todo_global_notion import (
+    NotionTodoGlobalClient,
+    NotionTodoGlobalError,
+)
 
 router = APIRouter(prefix='/api/internal/todo-global', tags=['TODO Global'])
 require_upsert_auth = require_admin_or_service_token('todo_global:upsert')
