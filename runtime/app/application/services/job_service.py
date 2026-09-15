@@ -17,10 +17,14 @@ from app.domain.models.job_assincrono import (
     JobStatus,
     TipoOperacao,
 )
-from app.domain.models.todo_event import TodoEventAcceptedResponse, TodoEventV1
+from app.domain.models.todo_event import TodoEventAcceptedResponse, TodoEventV1, TodoGlobalUpsertResult
 from app.infrastructure.http.httpx_gateway import HttpxGateway
 from app.infrastructure.queue.errors import QueueCapacityError
 from app.observability.lease_slo import avaliar_lease_slo
+
+
+class TodoEventIdentityConflictError(ValueError):
+    """O mesmo event_id foi reutilizado com conteúdo diferente."""
 
 
 class JobService:
@@ -61,12 +65,13 @@ class JobService:
 
     async def criar_todo_evento(self, event: TodoEventV1) -> TodoEventAcceptedResponse:
         """Cria atomicamente por event_id e publica de forma idempotente."""
+        payload = event.model_dump(mode="json")
         job = JobAssincrono(
             job_id=self._gerar_todo_job_id(event.event_id),
             origem=event.producer or "todo_event",
             tipo_operacao=TipoOperacao.SINCRONIZAR_TODO_GLOBAL,
             destino="todo_global",
-            payload=event.model_dump(mode="json"),
+            payload=payload,
             correlation_id=event.correlation_id,
             max_tentativas=self._settings.max_tentativas,
             destino_url=self._settings.todo_global_adapter_url,
@@ -78,9 +83,11 @@ class JobService:
         stored, created = await resolve_maybe_awaitable(criar_se_ausente(job))
 
         if not created:
-            # Se o processo caiu entre persistir e publicar, um replay do produtor
-            # reassegura entrega. Duplicatas de fila são inofensivas porque jobs
-            # terminais são no-op e o Redis aplica lease por job_id.
+            if stored.payload != payload:
+                raise TodoEventIdentityConflictError("event_id_reused_with_different_payload")
+            # Reassegura entrega se houve queda entre persistência e publicação.
+            # Duplicatas de transporte não criam novo efeito lógico: jobs terminais
+            # são no-op e o Redis aplica lease por job_id.
             if stored.status == JobStatus.QUEUED:
                 try:
                     await self._queue.publicar(stored.job_id)
@@ -91,7 +98,7 @@ class JobService:
                 job_id=stored.job_id,
                 status=stored.status.value,
                 correlation_id=stored.correlation_id,
-                idempotency_key=event.idempotency_key,
+                idempotency_key=str(stored.payload["idempotency_key"]),
                 duplicate_event=True,
                 status_url=f"/api/jobs/{stored.job_id}",
                 message="Evento já persistido; nenhum novo efeito lógico foi criado.",
@@ -192,7 +199,17 @@ class JobService:
         if job.tipo_operacao == TipoOperacao.SINCRONIZAR_TODO_GLOBAL:
             if not job.destino_url:
                 raise RuntimeError("todo_global_adapter_not_configured")
-            return await self._http_gateway.post_json(job.destino_url, job.payload, job.correlation_id)
+            raw = await self._http_gateway.post_json(job.destino_url, job.payload, job.correlation_id)
+            result = TodoGlobalUpsertResult.model_validate(raw)
+            expected_key = str(job.payload["idempotency_key"])
+            expected_status = str(job.payload["todo"]["status"])
+            if result.idempotency_key != expected_key:
+                raise RuntimeError("todo_global_adapter_identity_mismatch")
+            if result.canonical_status.value != expected_status:
+                raise RuntimeError("todo_global_adapter_status_mismatch")
+            if not result.readback_verified:
+                raise RuntimeError("todo_global_adapter_readback_not_verified")
+            return result.model_dump(mode="json")
 
         if job.destino_url:
             return await self._http_gateway.post_json(job.destino_url, job.payload, job.correlation_id)
