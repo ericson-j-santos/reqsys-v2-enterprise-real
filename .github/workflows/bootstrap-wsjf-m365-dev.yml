@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
   actions: write
+  id-token: write
 
 concurrency:
   group: bootstrap-wsjf-m365-dev
@@ -52,11 +53,38 @@ jobs:
           PY
           echo "Template SHA-256: $(sha256sum build/wsjf/WSJF.xlsx | awk '{print $1}')"
 
+      - name: Autenticar ReqSys Enterprise por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Resolver token Graph federado
+        shell: bash
+        env:
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          token="$(az account get-access-token --resource-type ms-graph --query accessToken -o tsv)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          TOKEN="$token" python - <<'PY'
+          import base64, json, os
+          raw = os.environ['TOKEN'].split('.')[1]
+          raw += '=' * (-len(raw) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(raw).decode('utf-8'))
+          actual = claims.get('appid') or claims.get('azp')
+          expected = os.environ['POWER_PLATFORM_CLIENT_ID']
+          if actual != expected:
+              raise SystemExit('oidc_app_identity_mismatch')
+          print('OIDC_APP_ID_MATCH=true')
+          PY
+          echo "POWER_PLATFORM_GRAPH_ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
+
       - name: Criar ou reutilizar recursos Microsoft 365 do WSJF
         env:
-          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
-          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           python scripts/bootstrap_wsjf_m365_dev.py \

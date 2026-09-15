@@ -22,7 +22,6 @@ from wsjf_workbook_package import (  # noqa: E402
 )
 
 GRAPH = "https://graph.microsoft.com/v1.0"
-TOKEN_URL = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
 GROUP_NAME = "ReqSys WSJF DEV"
 PLAN_NAME = "WSJF DEV"
 BUCKET_NAME = "Backlog"
@@ -61,26 +60,9 @@ def _validate_template(path: Path) -> None:
         raise BootstrapError(f"Template WSJF.xlsx inválido para o Microsoft Graph: {resultado['erros']}")
 
 
-def _token(client: httpx.Client) -> str:
-    tenant = _required("POWER_PLATFORM_TENANT_ID")
-    client_id = _required("POWER_PLATFORM_CLIENT_ID")
-    secret = _required("POWER_PLATFORM_CLIENT_SECRET")
-    response = client.post(
-        TOKEN_URL.format(tenant=tenant),
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": secret,
-            "scope": "https://graph.microsoft.com/.default",
-        },
-        timeout=TIMEOUT,
-    )
-    if response.status_code >= 400:
-        raise BootstrapError(f"Falha ao obter token Microsoft Graph: HTTP {response.status_code}")
-    token = str(response.json().get("access_token") or "")
-    if not token:
-        raise BootstrapError("Microsoft Graph não retornou access_token")
-    return token
+def _token(_: httpx.Client) -> str:
+    """Usa exclusivamente o token Graph federado materializado pelo workflow."""
+    return _required("POWER_PLATFORM_GRAPH_ACCESS_TOKEN")
 
 
 def _error_code(response: httpx.Response) -> str:
