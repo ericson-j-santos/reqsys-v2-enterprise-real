@@ -11,8 +11,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from wsjf_workbook_package import (  # noqa: E402
@@ -337,6 +335,8 @@ def main() -> int:
 
     try:
         _validate_template(args.template)
+        import httpx
+
         with httpx.Client(follow_redirects=True) as client:
             token = _token(client)
             group, group_created = _find_or_create_group(client, token)
