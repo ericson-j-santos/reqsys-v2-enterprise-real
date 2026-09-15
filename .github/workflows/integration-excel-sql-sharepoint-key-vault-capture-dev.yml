@@ -3,16 +3,19 @@ name: Integration SQL Capture via Key Vault — DEV
 on:
   push:
     branches:
-      - ops/auto-capture-sql-locator-dev-20260913-v2
+      - main
+      - ops/auto-capture-sql-locator-dev-20260913-v3
     paths:
       - ".github/workflows/integration-excel-sql-sharepoint-key-vault-capture-dev.yml"
       - "scripts/integration_excel_sql_sharepoint_sql_locator.py"
       - "tests/test_integration_excel_sql_sharepoint_sql_locator.py"
+      - "scripts/provision_integration_excel_sql_sharepoint_dev_sql.py"
+      - "tests/test_provision_integration_excel_sql_sharepoint_dev_sql.py"
   workflow_dispatch:
     inputs:
       strict:
-        description: "Falhar se o Key Vault ainda não resolver o locator SQL DEV"
-        required: true
+        description: "Compatibilidade com o bootstrap RBAC DEV; o gate funcional permanece obrigatório"
+        required: false
         type: boolean
         default: true
   schedule:
@@ -75,7 +78,7 @@ jobs:
           done
           test "$REQSYS_KEY_VAULT_NAME" = "$EXPECTED_KEY_VAULT_NAME"
 
-      - name: Login Azure OIDC governado
+      - name: Login Azure OIDC com identidade Key Vault DEV
         id: azure-login
         continue-on-error: true
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
@@ -196,15 +199,30 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Aplicar modo estrito somente quando solicitado manualmente
-        if: github.event_name == 'workflow_dispatch' && inputs.strict
+      - name: Gate funcional obrigatório antes do verde
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
-          status="$(python - "$EVIDENCE_DIR/capture-summary.json" <<'PY'
+          summary="$EVIDENCE_DIR/capture-summary.json"
+          test -f "$summary"
+          python - "$summary" <<'PY'
           import json, sys
           from pathlib import Path
-          print(json.loads(Path(sys.argv[1]).read_text(encoding='utf-8')).get('status'))
+
+          payload=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          checks={
+            'status_resolved': payload.get('status') == 'resolved',
+            'dsn_resolved': payload.get('dsn_resolved') is True,
+            'procedure_exists': payload.get('procedure_exists') is True,
+            'parameter_contract_ok': payload.get('parameter_contract_ok') is True,
+          }
+          failed=[name for name, passed in checks.items() if not passed]
+          print(json.dumps({
+            'gate':'functional_readiness',
+            'passed': not failed,
+            'failed_checks': failed,
+          }))
+          if failed:
+              raise SystemExit(1)
           PY
-          )"
-          test "$status" = "resolved"
