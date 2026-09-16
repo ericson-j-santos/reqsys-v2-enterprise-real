@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: reqsys-agent-token-broker
+    runtime: docker
+    plan: 0.5c-512mb
+    region: oregon
+    branch: main
+    dockerfilePath: ./backend/token_broker/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    healthCheckPath: /healthz
+    numInstances: 1
+    disk:
+      name: reqsys-token-broker-state
+      mountPath: /var/lib/reqsys-token-broker
+      sizeGB: 1
+    envVars:
+      - key: BROKER_TOKEN_STATE_ENCRYPTION_KEY
+        generateValue: true
+      - key: BROKER_TOKEN_STATE_DB_PATH
+        value: /var/lib/reqsys-token-broker/token-broker.db
+      - key: BROKER_PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: reqsys-agent-token-broker
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: BROKER_BOOTSTRAP_ENABLED
+        value: "true"
+      - key: BROKER_AUDIENCE
+        value: reqsys-copilot-agent-token-broker
+      - key: BROKER_ALLOWED_REPOSITORY
+        value: ericson-j-santos/reqsys-v2-enterprise-real
+      - key: BROKER_ALLOWED_WORKFLOW_REF
+        value: ericson-j-santos/reqsys-v2-enterprise-real/.github/workflows/pending-development-orchestrator.yml@refs/heads/main
+      - key: BROKER_ALLOWED_REF
+        value: refs/heads/main
+      - key: BROKER_ALLOWED_EVENTS
+        value: workflow_dispatch,schedule
