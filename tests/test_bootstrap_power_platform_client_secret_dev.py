@@ -208,3 +208,33 @@ def test_rollback_failure_is_sanitized(monkeypatch):
             rotation.SECRET_NAME,
         )
     assert "provider detail" not in str(exc.value)
+
+
+def test_main_never_serializes_internal_execution_result(monkeypatch, capsys):
+    monkeypatch.setattr(rotation, "parse_args", lambda *_: args())
+    monkeypatch.setattr(
+        rotation,
+        "execute",
+        lambda *_: {"status": "rotated", "internal_secret": "super-secret-must-not-print"},
+    )
+
+    assert rotation.main([]) == 0
+    output = capsys.readouterr().out
+    assert '"status":"rotated"' in output
+    assert "super-secret-must-not-print" not in output
+    assert '"secret_value_exposed":false' in output
+
+
+def test_main_exception_output_is_fixed_and_sanitized(monkeypatch, capsys):
+    monkeypatch.setattr(rotation, "parse_args", lambda *_: args())
+
+    def fail_with_sensitive_detail(*_):
+        raise rotation.RotationError("provider said super-secret-must-not-print")
+
+    monkeypatch.setattr(rotation, "execute", fail_with_sensitive_detail)
+
+    assert rotation.main([]) == 4
+    output = capsys.readouterr().out
+    assert '"status":"blocked"' in output
+    assert '"reason":"rotation_not_performed"' in output
+    assert "super-secret-must-not-print" not in output
