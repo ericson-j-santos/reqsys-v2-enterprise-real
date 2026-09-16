@@ -68,15 +68,15 @@ jobs:
 
 O watcher nativo confirmou que a instalação da GitHub App aceita a emissão de token com escopo mínimo explícito:
 
-- `actions: read`
-- `contents: read`
-- `pull_requests: write`
+- actions: read
+- contents: read
+- pull_requests: write
 
 Evidência:
-- workflow: `${GITHUB_WORKFLOW}`
-- run: `${GITHUB_RUN_ID}`
-- SHA da automação: `${GITHUB_SHA}`
-- correlation_id: `github-app-pr-write-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}`
+- workflow: ${GITHUB_WORKFLOW}
+- run: ${GITHUB_RUN_ID}
+- SHA da automação: ${GITHUB_SHA}
+- correlation_id: github-app-pr-write-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
 
 Nenhum segredo foi lido ou publicado. O watcher será desabilitado após este registro para evitar novas execuções desnecessárias.
 EOF
