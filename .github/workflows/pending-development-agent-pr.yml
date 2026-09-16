@@ -44,6 +44,9 @@ jobs:
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: reqsys-v2-enterprise-real
+          permission-actions: read
+          permission-contents: read
+          permission-pull-requests: write
 
       - name: Abrir ou atualizar PR draft governada
         env:
