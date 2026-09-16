@@ -35,12 +35,16 @@ def changed_file(filename: str, changes: int = 10) -> ChangedFile:
     )
 
 
-def governed_changed_file(filename: str, changes: int = 10):
+def governed_changed_file(
+    filename: str,
+    changes: int = 10,
+    status: str = "modified",
+):
     return pr_quality_review_entry.review.ChangedFile(
         filename=filename,
-        status="modified",
-        additions=changes,
-        deletions=0,
+        status=status,
+        additions=changes if status != "removed" else 0,
+        deletions=changes if status == "removed" else 0,
         changes=changes,
     )
 
@@ -104,6 +108,12 @@ def test_governed_classifier_allows_credential_named_composite_action() -> None:
     assert action.is_sensitive is False
 
 
+def test_governed_classifier_allows_public_pc24x7_token_broker_compose() -> None:
+    compose = governed_changed_file("docker-compose.pc24x7-token-broker.yml")
+
+    assert compose.is_sensitive is False
+
+
 def test_governed_classifier_keeps_real_token_config_sensitive() -> None:
     token_config = governed_changed_file("config/access-token.json")
 
@@ -114,6 +124,12 @@ def test_governed_classifier_treats_token_named_runtime_config_as_sensitive_by_d
     runtime_config = governed_changed_file("render.token-broker.yaml")
 
     assert runtime_config.is_sensitive is True
+
+
+def test_governed_classifier_does_not_block_removed_sensitive_config() -> None:
+    removed = governed_changed_file("config/access-token.json", status="removed")
+
+    assert removed.is_sensitive is False
 
 
 def test_classify_docs_only_ok() -> None:
