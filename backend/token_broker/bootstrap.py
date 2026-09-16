@@ -231,6 +231,13 @@ class BootstrapStore:
             client_secret=client_secret,
         )
 
+    def has_authorized_tokens(self) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM token_state WHERE id = 1 LIMIT 1"
+            ).fetchone()
+        return row is not None
+
     def save_authorized_tokens(self, token_state: AuthorizedTokenState) -> None:
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -400,10 +407,13 @@ class GitHubAppBootstrap:
             try:
                 payload = response.json()
                 repositories = payload.get("repositories") if isinstance(payload, dict) else None
+                total_count = payload.get("total_count") if isinstance(payload, dict) else None
             except (ValueError, TypeError, AttributeError) as exc:
                 raise BootstrapError("github_installation_verification_invalid_response") from exc
             if not isinstance(repositories, list):
                 raise BootstrapError("github_installation_verification_invalid_response")
+            if isinstance(total_count, int) and total_count != 1:
+                raise BootstrapError("github_app_repository_scope_too_broad")
             for repository in repositories:
                 if (
                     isinstance(repository, dict)
@@ -419,6 +429,11 @@ class GitHubAppBootstrap:
         @app.get("/bootstrap/github-app", response_class=HTMLResponse)
         def bootstrap_start() -> HTMLResponse:
             store = self._require_enabled()
+            if store.has_authorized_tokens():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="github_app_already_authorized",
+                )
             csrf_state = store.create_state(
                 "manifest",
                 self.settings.bootstrap_state_ttl_seconds,
@@ -453,6 +468,11 @@ class GitHubAppBootstrap:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="bootstrap_state_rejected",
                 ) from exc
+            if not code.isalnum():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="github_manifest_code_rejected",
+                )
 
             conversion_url = self.settings.github_manifest_conversion_url.format(
                 code=quote(code, safe="")
