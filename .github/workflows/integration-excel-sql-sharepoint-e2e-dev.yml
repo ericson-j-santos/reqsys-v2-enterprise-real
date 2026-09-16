@@ -60,6 +60,8 @@ concurrency:
 
 env:
   INTEGRATION_E2E_ENVIRONMENT: dev
+  INTEGRATION_E2E_SQL_VALIDATION_MODE: power_platform_gateway
+  INTEGRATION_E2E_SQL_FIXTURE_ID: "990000000000001"
   EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev
 
 jobs:
@@ -117,7 +119,7 @@ jobs:
           echo "E2E_CORRELATION_ID=excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
 
       - name: Resolver DSN SQL DEV por fonte segura validada
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && env.INTEGRATION_E2E_SQL_VALIDATION_MODE == 'direct_dsn'
         env:
           INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
           MOVIMENTO_EMAIL_SOURCE_DSN: ${{ secrets.MOVIMENTO_EMAIL_SOURCE_DSN }}

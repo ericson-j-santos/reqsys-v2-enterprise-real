@@ -63,6 +63,8 @@ def valid_config(**overrides) -> ReadinessConfig:
         "list_id": "list",
         "sql_dsn": "dsn-secreto",
         "sql_procedure": "integration.usp_ConsultarPorIdentificadores",
+        "sql_validation_mode": "direct_dsn",
+        "sql_fixture_id": "",
         "power_platform_environment_id": "Default-env",
         "excel_connection_id": "excel-connection",
         "sql_connection_id": "sql-connection",
@@ -118,3 +120,28 @@ def test_graph_failure_is_reported_as_sanitized_blocker():
 def test_non_dev_environment_is_rejected():
     with pytest.raises(ReadinessError, match="restrito_a_dev"):
         run_readiness(valid_config(environment="prod"), client=FakeClient())
+
+
+def test_gateway_mode_does_not_require_direct_dsn_or_call_sql_checker():
+    called = []
+    result = run_readiness(
+        valid_config(sql_dsn="", sql_validation_mode="power_platform_gateway", sql_fixture_id="990000000000001"),
+        client=FakeClient(),
+        sql_checker=lambda _: called.append(True) or {"status": "blocked"},
+    )
+    assert result["ready"] is True
+    assert result["sql_validation_mode"] == "power_platform_gateway"
+    assert result["checks"]["sql_server"]["connectivity_validation"] == "deferred_to_real_flow"
+    assert result["checks"]["sql_server"]["procedure_validation"] == "deferred_to_real_flow"
+    assert called == []
+
+
+def test_gateway_mode_requires_numeric_fixture_and_sql_connection():
+    result = run_readiness(
+        valid_config(sql_dsn="", sql_validation_mode="power_platform_gateway", sql_fixture_id="INVALID", sql_connection_id=""),
+        client=FakeClient(),
+    )
+    assert result["ready"] is False
+    assert "configuration" in result["blockers"]
+    assert "sql_server" in result["blockers"]
+    assert "power_automate_connections" in result["blockers"]

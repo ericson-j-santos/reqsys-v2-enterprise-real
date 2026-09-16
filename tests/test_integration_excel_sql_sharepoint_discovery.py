@@ -180,3 +180,14 @@ def test_runtime_values_are_written_only_to_ephemeral_github_env(tmp_path):
 
     for name, value in resolved.items():
         assert f"{name}={value}" in content
+
+
+def test_gateway_mode_does_not_report_direct_dsn_as_unresolved(monkeypatch):
+    contract, sp, pp = fixtures()
+    resolved = runtime_values(contract, sp, pp)
+    monkeypatch.delenv("INTEGRATION_E2E_SQL_DSN", raising=False)
+    monkeypatch.setenv("INTEGRATION_E2E_SQL_VALIDATION_MODE", "power_platform_gateway")
+    payload = evidence(contract, sp, pp, resolved, "sha-1", "corr-1", "resolved_non_secret", None)
+    assert payload["sql_validation_mode"] == "power_platform_gateway"
+    assert payload["secret_presence"]["INTEGRATION_E2E_SQL_DSN"] is False
+    assert payload["unresolved_secrets"] == []

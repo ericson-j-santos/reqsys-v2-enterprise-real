@@ -15,6 +15,9 @@ import httpx
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 TIMEOUT_SECONDS = 30.0
 DEFAULT_PROCEDURE = "integration.usp_ConsultarPorIdentificadores"
+SQL_VALIDATION_DIRECT_DSN = "direct_dsn"
+SQL_VALIDATION_POWER_PLATFORM_GATEWAY = "power_platform_gateway"
+SUPPORTED_SQL_VALIDATION_MODES = {SQL_VALIDATION_DIRECT_DSN, SQL_VALIDATION_POWER_PLATFORM_GATEWAY}
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,8 @@ class ReadinessConfig:
     list_id: str
     sql_dsn: str
     sql_procedure: str
+    sql_validation_mode: str
+    sql_fixture_id: str
     power_platform_environment_id: str
     excel_connection_id: str
     sql_connection_id: str
@@ -47,6 +52,8 @@ class ReadinessConfig:
             list_id=os.getenv("INTEGRATION_E2E_LIST_ID", "").strip(),
             sql_dsn=os.getenv("INTEGRATION_E2E_SQL_DSN", "").strip(),
             sql_procedure=os.getenv("INTEGRATION_E2E_SQL_PROCEDURE", DEFAULT_PROCEDURE).strip(),
+            sql_validation_mode=os.getenv("INTEGRATION_E2E_SQL_VALIDATION_MODE", SQL_VALIDATION_DIRECT_DSN).strip().lower(),
+            sql_fixture_id=os.getenv("INTEGRATION_E2E_SQL_FIXTURE_ID", "").strip(),
             power_platform_environment_id=os.getenv(
                 "INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID", ""
             ).strip(),
@@ -69,7 +76,7 @@ def _safe_error(exc: Exception) -> str:
 
 
 def _required_configuration(config: ReadinessConfig) -> dict[str, bool]:
-    return {
+    values = {
         "power_platform_tenant": bool(config.tenant_id),
         "power_platform_client": bool(config.client_id),
         "power_platform_client_secret": bool(config.client_secret),
@@ -77,13 +84,17 @@ def _required_configuration(config: ReadinessConfig) -> dict[str, bool]:
         "excel_file": bool(config.file_id),
         "sharepoint_site": bool(config.site_id),
         "sharepoint_list": bool(config.list_id),
-        "sql_dsn": bool(config.sql_dsn),
         "sql_procedure": bool(config.sql_procedure),
         "power_platform_environment": bool(config.power_platform_environment_id),
         "excel_connection": bool(config.excel_connection_id),
         "sql_connection": bool(config.sql_connection_id),
         "sharepoint_connection": bool(config.sharepoint_connection_id),
     }
+    if config.sql_validation_mode == SQL_VALIDATION_DIRECT_DSN:
+        values["sql_dsn"] = bool(config.sql_dsn)
+    elif config.sql_validation_mode == SQL_VALIDATION_POWER_PLATFORM_GATEWAY:
+        values["sql_fixture"] = bool(config.sql_fixture_id and config.sql_fixture_id.isdigit())
+    return values
 
 
 def _graph_token(client: httpx.Client, config: ReadinessConfig) -> str:
@@ -151,6 +162,8 @@ def run_readiness(
 ) -> dict[str, Any]:
     if config.environment not in {"dev", "development"}:
         raise ReadinessError("preflight_restrito_a_dev")
+    if config.sql_validation_mode not in SUPPORTED_SQL_VALIDATION_MODES:
+        raise ReadinessError("sql_validation_mode_invalido")
 
     configuration = _required_configuration(config)
     missing = sorted(name for name, configured in configuration.items() if not configured)
@@ -229,10 +242,26 @@ def run_readiness(
         if owns_client:
             http_client.close()
 
-    if configuration["sql_dsn"] and configuration["sql_procedure"]:
-        checks["sql_server"] = sql_checker(config)
+    if config.sql_validation_mode == SQL_VALIDATION_DIRECT_DSN:
+        if configuration.get("sql_dsn") and configuration["sql_procedure"]:
+            checks["sql_server"] = sql_checker(config)
+        else:
+            checks["sql_server"] = {"status": "blocked", "reason": "configuracao_sql_incompleta"}
     else:
-        checks["sql_server"] = {"status": "blocked", "reason": "configuracao_sql_incompleta"}
+        gateway_ready = bool(
+            configuration.get("sql_fixture")
+            and configuration["sql_procedure"]
+            and configuration["sql_connection"]
+        )
+        checks["sql_server"] = {
+            "status": "passed" if gateway_ready else "blocked",
+            "validation_mode": SQL_VALIDATION_POWER_PLATFORM_GATEWAY,
+            "direct_dsn_required": False,
+            "fixture_contract_ready": bool(configuration.get("sql_fixture")),
+            "connectivity_validation": "deferred_to_real_flow",
+            "procedure_validation": "deferred_to_real_flow",
+            "reason": None if gateway_ready else "configuracao_gateway_sql_incompleta",
+        }
 
     power_automate_ready = all(
         configuration[name]
@@ -252,6 +281,7 @@ def run_readiness(
     return {
         "ready": not blockers,
         "environment": "dev",
+        "sql_validation_mode": config.sql_validation_mode,
         "checks": checks,
         "blockers": blockers,
     }

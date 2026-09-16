@@ -383,6 +383,8 @@ def write_github_env(path: Path, resolved: dict[str, str]) -> None:
 
 def evidence(contract, sp, pp, resolved, source_sha, correlation_id, status, error) -> dict:
     sql_dsn_present = bool(text(os.getenv("INTEGRATION_E2E_SQL_DSN")))
+    sql_validation_mode = text(os.getenv("INTEGRATION_E2E_SQL_VALIDATION_MODE")) or "direct_dsn"
+    dsn_required = sql_validation_mode == "direct_dsn"
     return {
         "schema_version": "1.0.0",
         "feature": "excel_sql_sharepoint_discovery",
@@ -392,6 +394,7 @@ def evidence(contract, sp, pp, resolved, source_sha, correlation_id, status, err
         "status": status,
         "mocked": False,
         "simulated": False,
+        "sql_validation_mode": sql_validation_mode,
         "profile": contract,
         "resolved": {
             "variable_names": sorted((resolved or {}).keys()),
@@ -403,7 +406,7 @@ def evidence(contract, sp, pp, resolved, source_sha, correlation_id, status, err
             "power_platform_environment_name": (pp or {}).get("environment_name"),
         },
         "secret_presence": {"INTEGRATION_E2E_SQL_DSN": sql_dsn_present},
-        "unresolved_secrets": [] if sql_dsn_present else ["INTEGRATION_E2E_SQL_DSN"],
+        "unresolved_secrets": [] if (sql_dsn_present or not dsn_required) else ["INTEGRATION_E2E_SQL_DSN"],
         "error": error,
     }
 
