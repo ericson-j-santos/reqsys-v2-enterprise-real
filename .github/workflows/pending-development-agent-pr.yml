@@ -56,6 +56,30 @@ jobs:
             --branch "${{ github.event.workflow_run.head_branch }}" \
             --head-sha "${{ github.event.workflow_run.head_sha }}"
 
+      - name: Validar efeito real da abertura governada
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          artifact = Path("artifacts/auto-pr-request/auto-pr-request.json")
+          if not artifact.is_file():
+              raise SystemExit("auto_pr_effect_missing_artifact")
+
+          payload = json.loads(artifact.read_text(encoding="utf-8"))
+          status = str(payload.get("status") or "")
+          allowed = {"created", "updated", "skipped_merged"}
+          if status not in allowed:
+              error = str(payload.get("error") or "sem detalhe")
+              raise SystemExit(f"auto_pr_effect_not_applied: status={status}; error={error}")
+
+          if status in {"created", "updated"}:
+              if not payload.get("pr_number") or not payload.get("pr_url"):
+                  raise SystemExit(f"auto_pr_effect_incomplete: status={status}")
+
+          print(f"AUTO_PR_EFFECT_OK status={status} pr_number={payload.get('pr_number')}")
+          PY
+
       - name: Publicar evidência
         if: always()
         uses: actions/upload-artifact@v4
