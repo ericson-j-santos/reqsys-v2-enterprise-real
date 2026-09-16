@@ -292,14 +292,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _emit_public_status(status: str) -> None:
+    """Emite somente envelopes constantes sem serializar dados de execução."""
+    if status == "rotated":
+        print('{"environment":"reqsys-power-platform-dev","secret_value_exposed":false,"status":"rotated"}')
+    elif status == "dry_run":
+        print('{"environment":"reqsys-power-platform-dev","secret_value_exposed":false,"status":"dry_run"}')
+    else:
+        print('{"environment":"reqsys-power-platform-dev","reason":"rotation_not_performed","secret_value_exposed":false,"status":"blocked"}')
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         result = execute(parse_args(argv))
-    except RotationError as exc:
-        print(json.dumps({"status": "blocked", "reason": str(exc), "environment": ENVIRONMENT, "secret_value_exposed": False}, ensure_ascii=False, sort_keys=True))
+    except RotationError:
+        _emit_public_status("blocked")
         return 4
-    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
-    return 0 if result.get("status") in {"rotated", "dry_run"} else 5
+    status = str(result.get("status") or "blocked")
+    _emit_public_status(status)
+    return 0 if status in {"rotated", "dry_run"} else 5
 
 
 if __name__ == "__main__":
