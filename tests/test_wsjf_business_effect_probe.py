@@ -79,3 +79,29 @@ def test_retry_locked_rejeita_politica_fora_dos_limites(monkeypatch):
 
     with pytest.raises(ValueError, match=probe.LOCK_RETRY_ATTEMPTS_ENV):
         probe._retry_locked(lambda: "ok")
+
+
+def test_token_prefere_graph_federado_sem_client_secret(monkeypatch):
+    monkeypatch.setenv("POWER_PLATFORM_GRAPH_ACCESS_TOKEN", "token-federado")
+    monkeypatch.delenv("POWER_PLATFORM_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("AZURE_CLIENT_SECRET", raising=False)
+
+    class NoNetworkClient:
+        def post(self, *args, **kwargs):
+            raise AssertionError("não deveria solicitar token por client_secret")
+
+    assert probe._token(NoNetworkClient()) == "token-federado"
+
+
+def test_token_sem_oidc_continua_fail_closed_sem_secret(monkeypatch):
+    for name in (
+        "POWER_PLATFORM_GRAPH_ACCESS_TOKEN",
+        "POWER_PLATFORM_CLIENT_SECRET",
+        "AZURE_CLIENT_SECRET",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("POWER_PLATFORM_TENANT_ID", "tenant")
+    monkeypatch.setenv("POWER_PLATFORM_CLIENT_ID", "client")
+
+    with pytest.raises(RuntimeError, match="POWER_PLATFORM_CLIENT_SECRET"):
+        probe._token(httpx.Client())

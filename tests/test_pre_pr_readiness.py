@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "pre_pr_readiness.py"
+WORKFLOW_PATH = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "pre-pr-readiness.yml"
 SPEC = importlib.util.spec_from_file_location("pre_pr_readiness", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -76,6 +77,12 @@ def test_valid_workflow_yaml_is_accepted(tmp_path: Path) -> None:
     results = MODULE.validate_structured_files([".github/workflows/sample.yml"], tmp_path)
     assert len(results) == 1
     assert results[0].status == "passed"
+
+
+def test_workflow_installs_dependencies_for_root_operational_tests() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "'httpx==0.28.1'" in workflow
+    assert "'openpyxl==3.1.5'" in workflow
 
 
 def test_negative_self_test_proves_detector_is_fail_closed() -> None:

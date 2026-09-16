@@ -63,6 +63,10 @@ def _lock_retry_policy() -> tuple[int, float]:
 
 
 def _token(client: httpx.Client) -> str:
+    federated_token = _env("POWER_PLATFORM_GRAPH_ACCESS_TOKEN")
+    if federated_token:
+        return federated_token
+
     tenant = _required("POWER_PLATFORM_TENANT_ID", "AZURE_TENANT_ID")
     client_id = _required("POWER_PLATFORM_CLIENT_ID", "AZURE_CLIENT_ID")
     secret = _required("POWER_PLATFORM_CLIENT_SECRET", "AZURE_CLIENT_SECRET")
@@ -288,8 +292,6 @@ def _wait_row(
             data, _ = _download_workbook(client, token, target)
             last = _read_task_row(data, task_id)
         except Exception:
-            # Leitura logo após criação/gravação pode encontrar o arquivo
-            # ainda em processamento no SharePoint; trata como não pronto.
             time.sleep(15)
             continue
         values = last.get("values") or {}
