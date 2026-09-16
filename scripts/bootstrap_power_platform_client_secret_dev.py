@@ -144,7 +144,12 @@ def _set_github_secret(repository: str, environment: str, secret_name: str, secr
 def _verify_github_secret(repository: str, environment: str, secret_name: str) -> dict[str, str]:
     payload = _run(
         "gh",
-        ["api", f"repos/{repository}/environments/{environment}/secrets", "--jq", f'.secrets[] | select(.name=="{secret_name}") | {{name:name,updated_at:updated_at}}'],
+        [
+            "api",
+            f"repos/{repository}/environments/{environment}/secrets",
+            "--jq",
+            f'.secrets[] | select(.name=="{secret_name}") | {{name:.name,updated_at:.updated_at}}',
+        ],
     ).stdout.strip()
     if not payload:
         raise RotationError("github_secret_not_observed_after_write")
