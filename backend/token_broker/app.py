@@ -17,6 +17,8 @@ from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .bootstrap import GitHubAppBootstrap, load_persisted_app_credentials
+
 logger = logging.getLogger("reqsys.token_broker")
 
 
@@ -41,9 +43,18 @@ class BrokerSettings(BaseSettings):
     refresh_skew_seconds: int = 300
     request_timeout_seconds: float = 15.0
 
+    bootstrap_enabled: bool = False
+    public_base_url: str = ""
+    github_app_name: str = "ReqSys Copilot Agent Token Broker"
+    github_app_manifest_permission: str = "agent_tasks"
+    bootstrap_state_ttl_seconds: int = 900
+
     oidc_issuer: str = "https://token.actions.githubusercontent.com"
     oidc_jwks_url: str = "https://token.actions.githubusercontent.com/.well-known/jwks"
     github_oauth_token_url: str = "https://github.com/login/oauth/access_token"
+    github_manifest_conversion_url: str = "https://api.github.com/app-manifests/{code}/conversions"
+    github_app_manifest_url: str = "https://github.com/settings/apps/new"
+    github_app_install_url: str = "https://github.com/apps/{slug}/installations/new"
 
     @property
     def allowed_event_set(self) -> set[str]:
@@ -217,9 +228,17 @@ class SQLiteEncryptedTokenStore:
 
 
 class GitHubUserTokenProvider:
-    def __init__(self, settings: BrokerSettings, store: SQLiteEncryptedTokenStore) -> None:
+    def __init__(
+        self,
+        settings: BrokerSettings,
+        store: SQLiteEncryptedTokenStore,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+    ) -> None:
         self.settings = settings
         self.store = store
+        self.client_id = client_id or settings.github_app_client_id
+        self.client_secret = client_secret or settings.github_app_client_secret
         self._lock = threading.Lock()
 
     def _refresh(self, refresh_token: str) -> TokenState:
@@ -230,8 +249,8 @@ class GitHubUserTokenProvider:
                 data={
                     "grant_type": "refresh_token",
                     "refresh_token": refresh_token,
-                    "client_id": self.settings.github_app_client_id,
-                    "client_secret": self.settings.github_app_client_secret,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
                 },
                 timeout=self.settings.request_timeout_seconds,
             )
@@ -265,7 +284,7 @@ class GitHubUserTokenProvider:
         )
 
     def get_access_token(self) -> str:
-        if not self.settings.github_app_client_id or not self.settings.github_app_client_secret:
+        if not self.client_id or not self.client_secret:
             raise BrokerNotReady("github_app_not_configured")
 
         with self._lock:
@@ -304,19 +323,49 @@ def build_runtime(settings: BrokerSettings | None = None) -> BrokerRuntime:
     cfg = settings or BrokerSettings()
     if not cfg.token_state_encryption_key:
         return BrokerRuntime(cfg, None, None, "missing_token_state_encryption_key")
-    if not cfg.github_app_client_id or not cfg.github_app_client_secret:
-        return BrokerRuntime(cfg, None, None, "github_app_not_configured")
     try:
         store = SQLiteEncryptedTokenStore(cfg.token_state_db_path, cfg.token_state_encryption_key)
+        client_id = cfg.github_app_client_id
+        client_secret = cfg.github_app_client_secret
+        if not client_id or not client_secret:
+            persisted = load_persisted_app_credentials(
+                cfg.token_state_db_path,
+                cfg.token_state_encryption_key,
+            )
+            if persisted is not None:
+                client_id = persisted.client_id
+                client_secret = persisted.client_secret
+        if not client_id or not client_secret:
+            return BrokerRuntime(cfg, None, None, "github_app_not_configured")
+
         store.seed_refresh_token(cfg.github_app_refresh_token_bootstrap)
         verifier = GitHubActionsOIDCVerifier(cfg)
         state = store.load()
         if state is None or not state.refresh_token:
             return BrokerRuntime(cfg, verifier, None, "github_app_authorization_required")
-        provider = GitHubUserTokenProvider(cfg, store)
+        provider = GitHubUserTokenProvider(cfg, store, client_id, client_secret)
         return BrokerRuntime(cfg, verifier, provider)
     except BrokerNotReady as exc:
         return BrokerRuntime(cfg, None, None, str(exc))
+
+
+class RuntimeManager:
+    def __init__(
+        self,
+        settings: BrokerSettings,
+        initial_runtime: BrokerRuntime | None = None,
+    ) -> None:
+        self.settings = settings
+        self._lock = threading.Lock()
+        self._runtime = initial_runtime or build_runtime(settings)
+
+    def current(self) -> BrokerRuntime:
+        return self._runtime
+
+    def refresh(self) -> BrokerRuntime:
+        with self._lock:
+            self._runtime = build_runtime(self.settings)
+            return self._runtime
 
 
 def _bearer_token(header: str | None) -> str:
@@ -325,10 +374,15 @@ def _bearer_token(header: str | None) -> str:
     return header.split(None, 1)[1]
 
 
-def create_app(runtime: BrokerRuntime | None = None) -> FastAPI:
-    active = runtime or build_runtime()
-    app = FastAPI(title="ReqSys Copilot Agent Token Broker", version="1.0.0")
-    app.state.runtime = active
+def create_app(
+    runtime: BrokerRuntime | None = None,
+    settings: BrokerSettings | None = None,
+) -> FastAPI:
+    cfg = settings or (runtime.settings if runtime else BrokerSettings())
+    manager = RuntimeManager(cfg, runtime)
+    app = FastAPI(title="ReqSys Copilot Agent Token Broker", version="1.1.0")
+    app.state.runtime_manager = manager
+    GitHubAppBootstrap(cfg, manager.refresh).register(app)
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -336,12 +390,14 @@ def create_app(runtime: BrokerRuntime | None = None) -> FastAPI:
 
     @app.get("/readyz")
     def readyz() -> dict[str, str]:
+        active = manager.current()
         if active.not_ready_reason or not active.verifier or not active.token_provider:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="bootstrap_required")
         return {"status": "ready"}
 
     @app.post("/token", response_model=TokenResponse)
     def issue_token(payload: TokenRequest, authorization: str | None = Header(default=None)) -> TokenResponse:
+        active = manager.current()
         if active.not_ready_reason or not active.verifier or not active.token_provider:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="bootstrap_required")
         if payload.repository != active.settings.allowed_repository:
