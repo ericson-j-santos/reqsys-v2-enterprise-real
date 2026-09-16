@@ -18,9 +18,14 @@ from urllib.parse import quote, urlencode
 PRE_PR_WORKFLOW = "pre-pr-readiness.yml"
 
 
-def build_body(branch: str, base: str) -> str:
+def build_body(branch: str, base: str, head_sha: str | None = None) -> str:
     repo = os.environ.get("GITHUB_REPOSITORY", "ericson-j-santos/reqsys-v2-enterprise-real")
-    head_sha = os.environ.get("GITHUB_SHA", "local")
+    head_sha = (
+        head_sha
+        or os.environ.get("READY_FOR_PR_HEAD_SHA")
+        or os.environ.get("GITHUB_SHA")
+        or "local"
+    ).strip()
     run_id = os.environ.get("GITHUB_RUN_ID", "local")
     return f"""## Resumo
 
@@ -427,6 +432,7 @@ def main() -> int:
     parser.add_argument("--base", default=os.environ.get("PR_BASE_BRANCH", "main"))
     parser.add_argument("--branch", default=os.environ.get("GITHUB_REF_NAME", ""))
     parser.add_argument("--title", default=os.environ.get("PR_TITLE", ""))
+    parser.add_argument("--head-sha", default=os.environ.get("READY_FOR_PR_HEAD_SHA", ""))
     args = parser.parse_args()
 
     branch = args.branch.strip()
@@ -443,9 +449,9 @@ def main() -> int:
     metadata = load_branch_pr_metadata(branch)
     if metadata:
         title = metadata.get("title") or title
-        body = metadata.get("body") or build_body(branch, args.base)
+        body = metadata.get("body") or build_body(branch, args.base, args.head_sha)
     else:
-        body = build_body(branch, args.base)
+        body = build_body(branch, args.base, args.head_sha)
 
     try:
         client = GitHubClient(resolve_token(), repository)
@@ -468,7 +474,7 @@ def main() -> int:
                 existing=existing,
             )
 
-        head_sha = os.environ.get("GITHUB_SHA", "").strip()
+        head_sha = args.head_sha.strip() or os.environ.get("GITHUB_SHA", "").strip()
         try:
             readiness = wait_for_ready_for_pr(
                 client,
