@@ -20,13 +20,24 @@ class FakeResponse:
 
 
 def test_direct_secret_remains_break_glass_compatible() -> None:
+    calls = []
+
+    def opener(request, timeout):
+        calls.append((request, timeout))
+        raise AssertionError("broker must not be called when direct token exists")
+
     result = provider.resolve_copilot_agent_token(
         repository="owner/repo",
-        environ={"COPILOT_AGENT_TOKEN": "direct-token"},
+        environ={
+            "COPILOT_AGENT_TOKEN": "direct-token",
+            "COPILOT_AGENT_TOKEN_BROKER_URL": "https://broker.example/token",
+        },
+        opener=opener,
     )
     assert result.available is True
     assert result.token == "direct-token"
     assert result.source == "repository_secret"
+    assert calls == []
 
 
 def test_missing_broker_fails_closed_without_token() -> None:
@@ -60,6 +71,7 @@ def test_oidc_broker_exchanges_short_lived_token_without_refresh_secret() -> Non
     assert result.token == "ghu-short-lived"
     assert result.source == "oidc_broker"
     oidc_request = requests[0][0]
+    assert "x=1" in oidc_request.full_url
     assert "audience=reqsys-copilot-agent-token-broker" in oidc_request.full_url
     broker_request = requests[1][0]
     assert broker_request.full_url == "https://broker.example/token"
