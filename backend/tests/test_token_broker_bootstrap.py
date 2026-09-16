@@ -116,7 +116,7 @@ def test_manifest_bootstrap_rotates_to_ready_without_exposing_secrets(tmp_path, 
 
     manifest_callback = client.get(
         "/bootstrap/github-app/manifest/callback",
-        params={"code": "manifest-code", "state": manifest_state},
+        params={"code": "manifestcode123", "state": manifest_state},
         follow_redirects=False,
     )
     assert manifest_callback.status_code == 303
@@ -221,7 +221,7 @@ def test_oauth_does_not_become_ready_without_reqsys_repository_access(tmp_path, 
     manifest_state = _manifest_state(start.text)
     manifest_callback = client.get(
         "/bootstrap/github-app/manifest/callback",
-        params={"code": "manifest-code", "state": manifest_state},
+        params={"code": "manifestcode123", "state": manifest_state},
         follow_redirects=False,
     )
     assert manifest_callback.status_code == 303
@@ -266,3 +266,124 @@ def test_manifest_callback_rejects_unknown_state_before_network_call(tmp_path, m
     assert response.status_code == 400
     assert response.json()["detail"] == "bootstrap_state_rejected"
     assert called is False
+
+
+def test_manifest_callback_rejects_non_alphanumeric_code_before_network_call(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    client = TestClient(broker.create_app(settings=settings), base_url="https://broker.example")
+    called = False
+
+    def fake_post(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("network must not be called")
+
+    monkeypatch.setattr(bootstrap_module.httpx, "post", fake_post)
+    start = client.get("/bootstrap/github-app")
+    manifest_state = _manifest_state(start.text)
+
+    response = client.get(
+        "/bootstrap/github-app/manifest/callback",
+        params={"code": "../metadata", "state": manifest_state},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "github_manifest_code_rejected"
+    assert called is False
+
+
+def test_bootstrap_cannot_restart_after_authorization(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    store = bootstrap_module.BootstrapStore(
+        settings.token_state_db_path,
+        settings.token_state_encryption_key,
+    )
+    store.save_authorized_tokens(
+        bootstrap_module.AuthorizedTokenState(
+            refresh_token="refresh-token",
+            access_token="access-token",
+            access_expires_at=1,
+            refresh_expires_at=2,
+        )
+    )
+    client = TestClient(broker.create_app(settings=settings), base_url="https://broker.example")
+
+    response = client.get("/bootstrap/github-app")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "github_app_already_authorized"
+
+
+def test_oauth_rejects_installation_scope_broader_than_target_repository(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    client = TestClient(broker.create_app(settings=settings), base_url="https://broker.example")
+
+    class Response:
+        def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+            self.status_code = status_code
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_post(url, *args, **kwargs):
+        if "app-manifests" in str(url):
+            return Response(
+                201,
+                {
+                    "id": 123,
+                    "slug": "reqsys-copilot-agent-token-broker",
+                    "client_id": "client-id",
+                    "client_secret": "client-secret",
+                },
+            )
+        return Response(
+            200,
+            {
+                "access_token": "access-token",
+                "expires_in": 28_800,
+                "refresh_token": "refresh-token",
+                "refresh_token_expires_in": 15_552_000,
+            },
+        )
+
+    monkeypatch.setattr(bootstrap_module.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        bootstrap_module.httpx,
+        "get",
+        lambda *args, **kwargs: Response(
+            200,
+            {
+                "total_count": 2,
+                "repositories": [
+                    {"full_name": "ericson-j-santos/reqsys-v2-enterprise-real"},
+                    {"full_name": "ericson-j-santos/another-repo"},
+                ],
+            },
+        ),
+    )
+
+    start = client.get("/bootstrap/github-app")
+    manifest_state = _manifest_state(start.text)
+    manifest_callback = client.get(
+        "/bootstrap/github-app/manifest/callback",
+        params={"code": "manifestcode123", "state": manifest_state},
+        follow_redirects=False,
+    )
+    assert manifest_callback.status_code == 303
+
+    install_callback = client.get(
+        "/bootstrap/github-app/install/callback",
+        params={"installation_id": 456},
+        follow_redirects=False,
+    )
+    oauth_state = parse_qs(urlparse(install_callback.headers["location"]).query)["state"][0]
+
+    oauth_callback = client.get(
+        "/bootstrap/github-app/oauth/callback",
+        params={"code": "oauth-code", "state": oauth_state},
+    )
+
+    assert oauth_callback.status_code == 502
+    assert oauth_callback.json()["detail"] == "github_app_repository_scope_too_broad"
+    assert client.get("/readyz").status_code == 503
