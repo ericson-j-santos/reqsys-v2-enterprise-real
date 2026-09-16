@@ -54,6 +54,23 @@ def test_health_is_available_while_bootstrap_is_pending() -> None:
     ).status_code == 503
 
 
+def test_build_runtime_is_not_ready_without_initial_authorization(tmp_path) -> None:
+    settings = broker.BrokerSettings(
+        github_app_client_id="client-id",
+        github_app_client_secret="client-secret",
+        token_state_encryption_key=Fernet.generate_key().decode("ascii"),
+        token_state_db_path=str(tmp_path / "broker.db"),
+        github_app_refresh_token_bootstrap="",
+    )
+
+    runtime = broker.build_runtime(settings)
+    client = TestClient(broker.create_app(runtime))
+
+    assert runtime.not_ready_reason == "github_app_authorization_required"
+    assert runtime.token_provider is None
+    assert client.get("/readyz").status_code == 503
+
+
 def test_token_endpoint_requires_bearer() -> None:
     client = _client()
     response = client.post(
