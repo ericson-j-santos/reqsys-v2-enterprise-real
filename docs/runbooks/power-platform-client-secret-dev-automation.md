@@ -17,6 +17,8 @@ Executar pelo runtime PC24x7/Command Gateway com:
 
 Senha, MFA, token e client secret não são aceitos como argumentos.
 
+A operação é Risk 3. O gateway padrão permanece fail-closed; a execução real deve usar a exceção local do proprietário prevista em `chatgpt-operational-rules`, com `action_id`, escopo, expiração e fingerprint previamente allowlisted na máquina. A configuração privada não é criada nem alterada pelo próprio script.
+
 ## Fluxo
 
 1. valida tenant e aplicação pelo `client_id` já conhecido pelo executor;
@@ -25,12 +27,12 @@ Senha, MFA, token e client secret não são aceitos como argumentos.
 4. bloqueia se a mesma rotação já existir;
 5. cria password credential aditiva no Entra com validade máxima de 365 dias;
 6. mantém `secretText` apenas em memória;
-7. envia o valor ao `gh secret set` exclusivamente por `stdin`;
+7. envia o valor ao `gh secret set` exclusivamente por `stdin`, com `stdout` e `stderr` descartados;
 8. relê somente metadados do Environment Secret (`name`/`updated_at`);
-9. se a escrita no GitHub falhar, remove a password credential recém-criada;
+9. se a escrita/verificação no GitHub falhar, remove a password credential recém-criada;
 10. captura o SHA vigente da `main`;
 11. dispara `Integration Excel SQL SharePoint — Functional Evidence DEV` na `main`;
-12. retorna somente evidência sanitizada.
+12. emite ao terminal somente um envelope constante de status, sem serializar o objeto interno da execução.
 
 A automação não remove credenciais Entra preexistentes. A limpeza de credenciais antigas depende de comprovação de não uso.
 
@@ -53,17 +55,20 @@ Remover somente `--dry-run`. O padrão cria credential com validade de 90 dias e
 
 Para uma rotação controlada sem disparar imediatamente o E2E, usar `--skip-validation-dispatch`.
 
-## Evidência de sucesso
+## Saída pública e evidência
 
-A saída deve conter:
+O `stdout` da CLI é deliberadamente mínimo e contém somente um envelope constante:
 
-- `status=rotated`;
+- `status=rotated`, `dry_run` ou `blocked`;
 - `environment=reqsys-power-platform-dev`;
-- `github_secret.name=POWER_PLATFORM_CLIENT_SECRET`;
-- `github_secret.updated_at` preenchido;
 - `secret_value_exposed=false`;
-- `existing_credentials_deleted=false`;
-- `validation.run_id` e `validation.head_sha` quando o dispatch não foi suprimido.
+- em bloqueio, apenas `reason=rotation_not_performed`.
+
+O processo que manipulou o segredo **não** imprime `application_name`, `credential_key`, `github_secret.updated_at`, run ID, URL, SHA ou mensagens brutas de provedor. Após `status=rotated`, esses fatos devem ser comprovados por fontes independentes e não sensíveis:
+
+1. releitura do metadado do Environment Secret confirma `name=POWER_PLATFORM_CLIENT_SECRET` e `updated_at` recente, sem ler o valor;
+2. releitura do workflow confirma um novo run de `Integration Excel SQL SharePoint — Functional Evidence DEV` no SHA esperado da `main`;
+3. o audit log do Owner Risk 3 registra somente hashes, `action_id`, ambiente, retorno e `correlation_id`, sem `stdout`/`stderr`.
 
 A existência do secret não prova o E2E. O fechamento da issue #1649 continua condicionado ao workflow funcional produzir `functional_evidence=true`, incluindo fonte SQL real, positivo, negativo, idempotência, leitura independente e cleanup.
 
@@ -72,5 +77,6 @@ A existência do secret não prova o E2E. O fechamento da issue #1649 continua c
 - tenant divergente, sessão ausente ou aplicação não localizada: fail-closed antes de mutação;
 - mesmo `correlation_id`: `ROTATION_ALREADY_EXISTS`, sem duplicar credential;
 - falha no `gh secret set`/verificação: tenta remover imediatamente a credential criada nesta execução;
+- se o rollback também falhar, a saída pública continua sanitizada e a execução termina bloqueada;
 - falha depois da confirmação do secret no GitHub: mantém a credential para não invalidar o secret recém-gravado e exige reconciliação posterior;
-- nenhum caminho imprime `secretText`.
+- nenhum caminho imprime `secretText` ou detalhe bruto de erro de operação sensível.
