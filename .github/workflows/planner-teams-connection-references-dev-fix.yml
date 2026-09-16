@@ -1,0 +1,84 @@
+name: Planner Teams DEV Connection Reference Repair
+
+on:
+  push:
+    branches:
+      - fix/planner-teams-connection-refs-dev-20260916
+    paths:
+      - .github/workflows/planner-teams-connection-references-dev-fix.yml
+      - scripts/fix_planner_teams_connection_references_dev.mjs
+      - tests/fix_planner_teams_connection_references_dev.test.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: planner-teams-connection-reference-repair-dev
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Planner → Teams — corrigir referências de conexão em DEV
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 20
+    env:
+      APPLY: 'true'
+      POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+      WSJF_DEV_ENVIRONMENT_ID: 567445cb-49a2-ef0f-8490-cc81a281d6ed
+      WSJF_DEV_PLANNER_CONNECTION_ID: ${{ vars.WSJF_DEV_PLANNER_CONNECTION_ID }}
+      PLANNER_TEAMS_DEV_TEAMS_CONNECTION_ID: ${{ vars.PLANNER_TEAMS_DEV_TEAMS_CONNECTION_ID }}
+      EVIDENCE_PATH: audit/user-journey/planner-teams-dev/connection-reference-repair.json
+      DEVICE_CODE_PUBLIC_PATH: audit/user-journey/planner-teams-dev/connection-reference-device-login.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validar contrato fail-closed do reparo
+        run: node --test tests/fix_planner_teams_connection_references_dev.test.mjs
+
+      - name: Restaurar sessão Microsoft sem expor credenciais
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente"
+            exit 1
+          fi
+          state="$RUNNER_TEMP/msal-storage-state.json"
+          device_private="$RUNNER_TEMP/planner-teams-connection-reference-device-private.json"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
+          chmod 600 "$state"
+          echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
+          echo "DEVICE_CODE_PRIVATE_PATH=$device_private" >> "$GITHUB_ENV"
+
+      - name: Preparar autorização Microsoft somente quando necessária
+        run: node scripts/msal_device_code_prepare.mjs
+
+      - name: Publicar gate de autorização Microsoft desta tentativa
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-teams-connection-reference-device-login-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ env.DEVICE_CODE_PUBLIC_PATH }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Corrigir referências de conexão e validar integridade
+        run: node scripts/fix_planner_teams_connection_references_dev.mjs
+
+      - name: Publicar evidência do reparo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-teams-connection-reference-repair-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_PATH }}
+          if-no-files-found: warn
+          retention-days: 30
