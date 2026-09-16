@@ -8,8 +8,6 @@ on:
 permissions:
   actions: read
   contents: read
-  issues: write
-  pull-requests: write
 
 concurrency:
   group: pending-development-agent-pr-${{ github.event.workflow_run.head_branch }}
@@ -38,9 +36,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Gerar token temporário da GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+
       - name: Abrir ou atualizar PR draft governada
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           READY_FOR_PR_WAIT_SECONDS: "0"
         run: |
           set -euo pipefail
