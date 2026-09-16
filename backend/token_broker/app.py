@@ -13,9 +13,9 @@ import httpx
 import jwt
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import FastAPI, Header, HTTPException, status
+from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from jwt import PyJWKClient
 
 logger = logging.getLogger("reqsys.token_broker")
 
@@ -99,7 +99,7 @@ class GitHubActionsOIDCVerifier:
                 issuer=self.settings.oidc_issuer,
                 options={"require": ["exp", "iat", "iss", "aud", "repository", "workflow_ref", "ref", "event_name"]},
             )
-        except Exception as exc:  # noqa: BLE001 - fail closed for every JWT/JWKS error
+        except Exception as exc:  # noqa: BLE001 - every JWT/JWKS error must fail closed
             raise OIDCValidationError("oidc_validation_failed") from exc
 
         expected = {
@@ -240,17 +240,23 @@ class GitHubUserTokenProvider:
 
         if response.status_code != 200:
             raise BrokerNotReady("github_refresh_rejected")
-        payload = response.json()
-        access_token = str(payload.get("access_token") or "")
-        next_refresh_token = str(payload.get("refresh_token") or "")
+        try:
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise TypeError("response is not an object")
+            access_token = str(payload.get("access_token") or "")
+            next_refresh_token = str(payload.get("refresh_token") or "")
+            expires_in = int(payload.get("expires_in") or 0)
+            refresh_expires_in = int(payload.get("refresh_token_expires_in") or 0)
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise BrokerNotReady("github_refresh_invalid_response") from exc
+
         if not access_token or not next_refresh_token:
             raise BrokerNotReady("github_refresh_invalid_response")
-
-        now = int(time.time())
-        expires_in = int(payload.get("expires_in") or 0)
-        refresh_expires_in = int(payload.get("refresh_token_expires_in") or 0)
         if expires_in <= 0 or refresh_expires_in <= 0:
             raise BrokerNotReady("github_refresh_invalid_expiry")
+
+        now = int(time.time())
         return TokenState(
             refresh_token=next_refresh_token,
             access_token=access_token,
@@ -304,6 +310,9 @@ def build_runtime(settings: BrokerSettings | None = None) -> BrokerRuntime:
         store = SQLiteEncryptedTokenStore(cfg.token_state_db_path, cfg.token_state_encryption_key)
         store.seed_refresh_token(cfg.github_app_refresh_token_bootstrap)
         verifier = GitHubActionsOIDCVerifier(cfg)
+        state = store.load()
+        if state is None or not state.refresh_token:
+            return BrokerRuntime(cfg, verifier, None, "github_app_authorization_required")
         provider = GitHubUserTokenProvider(cfg, store)
         return BrokerRuntime(cfg, verifier, provider)
     except BrokerNotReady as exc:
