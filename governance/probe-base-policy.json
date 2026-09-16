@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "disposable-probe-base-policy",
+  "default_branch": "main",
+  "protected_branches": ["main", "master", "release/*", "hml", "prod"],
+  "isolated_base_prefixes": ["probe-base/", "ops/probe-base/"],
+  "isolated_head_prefixes": ["probe/", "ops/probe/"],
+  "require_source_sha_anchor": true,
+  "require_cleanup_after_evidence": true,
+  "probe_classification_markers": ["REQSYS_PROBE_CLASS: disposable", "NUNCA MERGEAR"],
+  "pull_request_creation_markers": [
+    "gh pr create",
+    "create_pull_request",
+    "auto_open_agent_pr.py",
+    "criar-pr-governado.sh"
+  ]
+}

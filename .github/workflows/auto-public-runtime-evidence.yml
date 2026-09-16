@@ -83,20 +83,58 @@ jobs:
             echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Validate governed token
+      - name: Validar pré-condição da identidade governada
         if: steps.ctx.outputs.should_dispatch == 'true'
         env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
+          GOVERNED_APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          GOVERNED_APP_PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
         run: |
-          if [ -z "${GH_PAT_ACTIONS}" ]; then
-            echo "Secret GH_PAT_ACTIONS não configurado."
+          set -euo pipefail
+          set +x
+          missing=()
+          [ -n "${GOVERNED_APP_ID:-}" ] || missing+=("vars.REQSYS_STACK_REBASE_APP_ID")
+          [ -n "${GOVERNED_APP_PRIVATE_KEY:-}" ] || missing+=("secrets.REQSYS_STACK_REBASE_PRIVATE_KEY")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Identidade governada incompleta: ${missing[*]}" >&2
             exit 1
           fi
+          echo "Identidade governada declarada (valores nao expostos)."
+
+      - name: Emitir token efêmero da GitHub App
+        id: app-token
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-actions: write
+          permission-contents: read
+
+      - name: Provar token por leitura autenticada independente
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "Token efêmero não emitido." >&2
+            exit 1
+          fi
+          state="$(gh api "repos/${REPOSITORY}/actions/workflows/public-runtime-evidence.yml" --jq '.state')"
+          if [ "${state}" != "active" ]; then
+            echo "Workflow alvo indisponível para dispatch governado: ${state}" >&2
+            exit 1
+          fi
+          echo "Credencial efêmera validada contra o workflow alvo (state=${state})."
 
       - name: Dispatch Public Runtime Evidence Gate
         if: steps.ctx.outputs.should_dispatch == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
           PUBLIC_URL: ${{ steps.inputs.outputs.public_url }}
           STRICT: ${{ steps.inputs.outputs.strict }}
@@ -115,7 +153,7 @@ jobs:
       - name: Show latest public runtime evidence runs
         if: steps.ctx.outputs.should_dispatch == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
           gh run list \

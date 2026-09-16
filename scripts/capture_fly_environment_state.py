@@ -21,6 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "infra" / "fly-environments.json"
 PASSING_CHECK_STATES = {"passing", "pass", "success", "healthy", "ok"}
 DEPLOYED_SECRET_STATES = {"deployed", "complete", "ready", "active"}
+UNAVAILABLE_MACHINE_STATES = {"destroyed", "failed", "dead"}
+STOPPED_MACHINE_STATES = {"stopped", "suspended"}
+WORKLOAD_ALWAYS_ON = "always_on"
+WORKLOAD_SCALE_TO_ZERO = "scale_to_zero"
+SUPPORTED_WORKLOAD_TYPES = {WORKLOAD_ALWAYS_ON, WORKLOAD_SCALE_TO_ZERO}
 REDACTION_PATTERNS = (
     re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s]+"),
     re.compile(r"(?i)(token[=:]\s*)[^\s,;]+"),
@@ -281,12 +286,127 @@ def _config_consistency(
     )
 
 
+def _resolve_workload_contract(
+    config: dict[str, Any],
+    role: str,
+    *,
+    legacy_min_machines: int,
+) -> dict[str, Any]:
+    """Resolve the evidence contract for a single workload role.
+
+    The environment level ``min_machines_running`` describes the API topology
+    only (it is the value ``validate_fly_enterprise_sync`` enforces against the
+    backend fly config). Reusing it for the frontend produced a structural
+    ``machines_below_minimum`` blocker on a workload that is scale-to-zero by
+    design, so each role now carries its own explicit contract.
+    """
+    contracts = config.get("workload_contracts")
+    declared = contracts.get(role) if isinstance(contracts, dict) else None
+    if isinstance(declared, dict):
+        workload_type = str(
+            declared.get("workload_type") or WORKLOAD_ALWAYS_ON
+        ).strip().lower()
+        minimum = int(declared.get("min_machines_running") or 0)
+        source = "workload_contracts"
+    else:
+        workload_type = WORKLOAD_ALWAYS_ON
+        minimum = legacy_min_machines
+        source = "environment_min_machines_running"
+    return {
+        "role": role,
+        "workload_type": workload_type,
+        "min_machines_running": minimum,
+        "source": source,
+    }
+
+
+def _evaluate_machine_topology(
+    machines: list[dict[str, Any]],
+    contract: dict[str, Any],
+    remote_config: Any,
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+    """Return active machines, blockers and sanitized topology evidence."""
+    active = [
+        machine
+        for machine in machines
+        if machine["state"] not in UNAVAILABLE_MACHINE_STATES
+        and machine["state"] not in STOPPED_MACHINE_STATES
+    ]
+    stopped = [
+        machine for machine in machines if machine["state"] in STOPPED_MACHINE_STATES
+    ]
+    unavailable = [
+        machine
+        for machine in machines
+        if machine["state"] in UNAVAILABLE_MACHINE_STATES
+    ]
+    workload_type = contract["workload_type"]
+    minimum = contract["min_machines_running"]
+    remote_http = (
+        remote_config.get("http_service")
+        if isinstance(remote_config, dict)
+        and isinstance(remote_config.get("http_service"), dict)
+        else {}
+    )
+    auto_start = remote_http.get("auto_start_machines")
+
+    blockers: list[str] = []
+    if workload_type not in SUPPORTED_WORKLOAD_TYPES:
+        blockers.append(f"workload_type_invalid:{workload_type}")
+    elif workload_type == WORKLOAD_SCALE_TO_ZERO:
+        if minimum != 0:
+            blockers.append(
+                f"workload_contract_invalid:scale_to_zero_requires_zero_minimum:{minimum}"
+            )
+        if not active and not stopped:
+            blockers.append("scale_to_zero_without_machine")
+        if not active and auto_start is not True:
+            blockers.append("scale_to_zero_autostart_disabled")
+    elif len(active) < minimum:
+        blockers.append(f"machines_below_minimum:{len(active)}/{minimum}")
+
+    evidence = {
+        "role": contract["role"],
+        "workload_type": workload_type,
+        "min_machines_running": minimum,
+        "contract_source": contract["source"],
+        "active_machine_count": len(active),
+        "stopped_machine_count": len(stopped),
+        "unavailable_machine_count": len(unavailable),
+        "remote_auto_start_machines": auto_start,
+    }
+    return active, blockers, evidence
+
+
+def _workload_declaration_blockers(
+    local_payload: Any,
+    contract: dict[str, Any],
+) -> list[str]:
+    """Fail closed when the declared contract diverges from the fly config."""
+    if not isinstance(local_payload, dict):
+        return []
+    http_service = local_payload.get("http_service")
+    if not isinstance(http_service, dict):
+        return []
+    if "min_machines_running" not in http_service:
+        return []
+    declared = http_service.get("min_machines_running")
+    try:
+        declared_int = int(declared)
+    except (TypeError, ValueError):
+        return [f"workload_contract_undeclared:{declared}"]
+    contract_minimum = contract["min_machines_running"]
+    if declared_int != contract_minimum:
+        return [f"workload_contract_mismatch:{declared_int}/{contract_minimum}"]
+    return []
+
+
 def _app_snapshot(
     *,
     app_name: str,
     config_path: str,
     required_secret_names: Iterable[str],
-    min_machines_running: int,
+    workload_contract: dict[str, Any],
     runner: Callable[[list[str], int], CommandResult],
 ) -> dict[str, Any]:
     commands = {
@@ -314,14 +434,17 @@ def _app_snapshot(
         if results["status"].ok
         else []
     )
-    active_machines = [
-        machine
-        for machine in machines
-        if machine["state"] not in {"stopped", "destroyed", "failed", "dead"}
-    ]
-    if len(active_machines) < min_machines_running:
-        blockers.append(
-            f"machines_below_minimum:{len(active_machines)}/{min_machines_running}"
+    active_machines, topology_blockers, topology_evidence = _evaluate_machine_topology(
+        machines,
+        workload_contract,
+        results["remote_config"].payload if results["remote_config"].ok else None,
+    )
+    blockers.extend(topology_blockers)
+    if results["local_config"].ok:
+        blockers.extend(
+            _workload_declaration_blockers(
+                results["local_config"].payload, workload_contract
+            )
         )
 
     secrets = (
@@ -373,6 +496,8 @@ def _app_snapshot(
         "machine_count": len(active_machines),
         "regions": sorted({item["region"] for item in active_machines}),
         "machines": active_machines,
+        "workload_contract": workload_contract,
+        "topology_evidence": topology_evidence,
         "required_secret_names": sorted(set(required_secret_names)),
         "secrets": secrets,
         "checks": checks,
@@ -402,19 +527,25 @@ def capture_environment(
     if not isinstance(config, dict):
         raise ValueError(f"environment_not_found:{environment}")
     required_secrets = config.get("required_secret_names") or []
-    min_machines = int(config.get("min_machines_running") or 1)
+    legacy_min_machines = int(config.get("min_machines_running") or 0)
+    api_contract = _resolve_workload_contract(
+        config, "api", legacy_min_machines=legacy_min_machines
+    )
+    frontend_contract = _resolve_workload_contract(
+        config, "frontend", legacy_min_machines=legacy_min_machines
+    )
     api = _app_snapshot(
         app_name=str(config["api_app"]),
         config_path=str(config.get("backend_fly_config") or config["fly_config"]),
         required_secret_names=[str(item) for item in required_secrets],
-        min_machines_running=min_machines,
+        workload_contract=api_contract,
         runner=runner,
     )
     frontend = _app_snapshot(
         app_name=str(config["frontend_app"]),
         config_path=str(config["frontend_fly_config"]),
         required_secret_names=[],
-        min_machines_running=min_machines,
+        workload_contract=frontend_contract,
         runner=runner,
     )
     blockers = [f"api:{item}" for item in api["blocking_issues"]] + [
@@ -430,6 +561,10 @@ def capture_environment(
         "phase": phase,
         "expected_sha": expected_sha,
         "ready": not blockers,
+        "workload_contracts": {
+            "api": api_contract,
+            "frontend": frontend_contract,
+        },
         "api": api,
         "frontend": frontend,
         "blocking_issues": blockers,
