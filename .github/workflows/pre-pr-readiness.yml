@@ -57,7 +57,7 @@ jobs:
             echo "Perfil backend detectado: instalando dependências oficiais do backend."
             python -m pip install --disable-pip-version-check -r backend/requirements.txt
           else
-            python -m pip install --disable-pip-version-check pytest
+            python -m pip install --disable-pip-version-check pytest 'httpx==0.28.1' 'openpyxl==3.1.5'
           fi
 
       - name: Testes do contrato do gate

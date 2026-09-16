@@ -34,6 +34,7 @@ env:
   INTEGRATION_E2E_SQL_PROCEDURE: integration.usp_ConsultarPorIdentificadores
   EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev/key-vault-capture
   EXPECTED_KEY_VAULT_NAME: kv-reqsys-ccp
+  INTEGRATION_E2E_SQL_DSN_SECRET_NAME: ${{ vars.INTEGRATION_E2E_SQL_DSN_SECRET_NAME }}
 
 jobs:
   capture:
@@ -97,40 +98,15 @@ jobs:
           set -euo pipefail
           set +x
           mkdir -p "$EVIDENCE_DIR"
-          names="$RUNNER_TEMP/kv-secret-names.txt"
-          selected="$RUNNER_TEMP/sql-secret-name.txt"
-
-          if ! az keyvault secret list --vault-name "$REQSYS_KEY_VAULT_NAME" --query '[].name' -o tsv > "$names" 2>/dev/null; then
-            printf '%s\n' '{"source":"azure_key_vault","status":"read_unavailable","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+          secret_name="${INTEGRATION_E2E_SQL_DSN_SECRET_NAME:-}"
+          if [ -z "$secret_name" ]; then
+            printf '%s\n' '{"source":"azure_key_vault","status":"secret_name_unconfigured","selection_mode":"exact_configured_name","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
             exit 0
           fi
-
-          candidate_count="$(python - "$names" "$selected" <<'PY'
-          import re, sys
-          from pathlib import Path
-          names=[x.strip() for x in Path(sys.argv[1]).read_text(encoding='utf-8').splitlines() if x.strip()]
-          candidates=[n for n in names if re.search(r'(sql.*(dsn|connection|conn|string)|(?:dsn|connection|conn|string).*sql)', n, re.I)]
-          if len(candidates) == 1:
-              Path(sys.argv[2]).write_text(candidates[0], encoding='utf-8')
-          print(len(candidates))
-          PY
-          )"
-          echo "sql_candidate_count=$candidate_count"
-          if [ "$candidate_count" != "1" ]; then
-            CANDIDATE_COUNT="$candidate_count" python - "$EVIDENCE_DIR/source.json" <<'PY'
-          import json, os, sys
-          from pathlib import Path
-          Path(sys.argv[1]).write_text(json.dumps({
-            'source':'azure_key_vault','status':'candidate_count_mismatch',
-            'candidate_count':int(os.environ['CANDIDATE_COUNT']),'dsn_resolved':False,
-            'secret_value_exposed':False,'business_data_read':False,
-            'production_touched':False,'test_touched':False
-          }, indent=2)+'\n', encoding='utf-8')
-          PY
+          if [[ ! "$secret_name" =~ ^[A-Za-z0-9-]{1,127}$ ]]; then
+            printf '%s\n' '{"source":"azure_key_vault","status":"secret_name_invalid","selection_mode":"exact_configured_name","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
             exit 0
           fi
-
-          secret_name="$(cat "$selected")"
           if ! dsn="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name "$secret_name" --query value -o tsv 2>/dev/null)"; then
             printf '%s\n' '{"source":"azure_key_vault","status":"secret_read_unavailable","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
             exit 0
@@ -146,7 +122,7 @@ jobs:
 
           echo "::add-mask::$dsn"
           printf 'INTEGRATION_E2E_SQL_DSN=%s\n' "$dsn" >> "$GITHUB_ENV"
-          printf '%s\n' '{"source":"azure_key_vault","status":"resolved","candidate_count":1,"dsn_resolved":true,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+          printf '%s\n' '{"source":"azure_key_vault","status":"resolved","selection_mode":"exact_configured_name","dsn_resolved":true,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
 
       - name: Registrar bloqueio OIDC sanitizado
         if: steps.azure-login.outcome != 'success'
