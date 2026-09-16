@@ -7,7 +7,7 @@ services:
     branch: main
     dockerfilePath: ./backend/token_broker/Dockerfile
     dockerContext: .
-    autoDeployTrigger: off
+    autoDeployTrigger: "off"
     healthCheckPath: /healthz
     numInstances: 1
     disk:
