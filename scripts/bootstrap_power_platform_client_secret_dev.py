@@ -41,10 +41,14 @@ def _tool(name: str) -> str:
     raise RotationError(f"tool_missing:{name}")
 
 
-def _run(tool: str, args: list[str], *, stdin: str | None = None, sensitive: bool = False) -> subprocess.CompletedProcess[str]:
+def _run(tool: str, args: list[str], *, sensitive: bool = False) -> subprocess.CompletedProcess[str]:
+    """Executa somente operações sem entrada secreta.
+
+    Operações marcadas como ``sensitive`` nunca propagam stdout/stderr para a
+    exceção. Entrada secreta possui executor dedicado e não passa por aqui.
+    """
     result = subprocess.run(
         [_tool(tool), *args],
-        input=stdin,
         text=True,
         capture_output=True,
         encoding="utf-8",
@@ -132,13 +136,23 @@ def _remove_password(app_object_id: str, key_id: str) -> None:
 
 
 def _set_github_secret(repository: str, environment: str, secret_name: str, secret_value: str) -> None:
-    # Sem --body: o valor entra exclusivamente via stdin e não aparece na linha de comando.
-    _run(
-        "gh",
-        ["secret", "set", secret_name, "--env", environment, "--repo", repository],
-        stdin=secret_value,
-        sensitive=True,
+    """Transmite o segredo somente por stdin e descarta toda saída do processo.
+
+    Esta função é deliberadamente separada de ``_run`` para que material
+    sensível nunca alcance um ``CompletedProcess`` capturado, mensagem de erro,
+    evidência ou caminho de logging.
+    """
+    result = subprocess.run(
+        [_tool("gh"), "secret", "set", secret_name, "--env", environment, "--repo", repository],
+        input=secret_value,
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=120,
     )
+    if result.returncode != 0:
+        raise RotationError("gh_sensitive_operation_failed")
 
 
 def _verify_github_secret(repository: str, environment: str, secret_name: str) -> dict[str, str]:
@@ -160,6 +174,33 @@ def _verify_github_secret(repository: str, environment: str, secret_name: str) -
     if data.get("name") != secret_name:
         raise RotationError("github_secret_name_mismatch")
     return {"name": secret_name, "updated_at": str(data.get("updated_at") or "")}
+
+
+def _rotate_password_into_github(
+    app_object_id: str,
+    display_name: str,
+    days_valid: int,
+    repository: str,
+    environment: str,
+    secret_name: str,
+) -> tuple[str, dict[str, str]]:
+    """Cria e consome o segredo dentro do menor escopo possível.
+
+    Somente ``key_id`` e metadados não sensíveis saem desta função. Se a
+    publicação/verificação falhar, a credential criada nesta tentativa é
+    removida antes de propagar a falha.
+    """
+    secret_material, key_id = _add_password(app_object_id, display_name, days_valid)
+    try:
+        _set_github_secret(repository, environment, secret_name, secret_material)
+        github_evidence = _verify_github_secret(repository, environment, secret_name)
+    except Exception as operation_error:
+        try:
+            _remove_password(app_object_id, key_id)
+        except Exception as rollback_error:
+            raise RotationError("github_write_failed_and_entra_rollback_failed") from rollback_error
+        raise operation_error
+    return key_id, github_evidence
 
 
 def _main_sha(repository: str) -> str:
@@ -209,22 +250,14 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             "secret_value_exposed": False,
         }
 
-    secret_value = ""
-    key_id = ""
-    github_evidence: dict[str, str] | None = None
-    try:
-        secret_value, key_id = _add_password(app_object_id, display_name, args.days_valid)
-        _set_github_secret(args.repository, args.environment, args.secret_name, secret_value)
-        github_evidence = _verify_github_secret(args.repository, args.environment, args.secret_name)
-    except Exception:
-        if key_id and not github_evidence:
-            try:
-                _remove_password(app_object_id, key_id)
-            except Exception:
-                pass
-        raise
-    finally:
-        secret_value = ""
+    key_id, github_evidence = _rotate_password_into_github(
+        app_object_id,
+        display_name,
+        args.days_valid,
+        args.repository,
+        args.environment,
+        args.secret_name,
+    )
 
     main_sha = _main_sha(args.repository)
     if not main_sha:
