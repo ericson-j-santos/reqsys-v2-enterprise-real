@@ -4,12 +4,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any, Iterable
 
 import httpx
 
-from scripts.integration_excel_sql_sharepoint_e2e import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from scripts.integration_excel_sql_sharepoint_e2e import (  # noqa: E402
     download_workbook,
     graph_token,
     list_items,
