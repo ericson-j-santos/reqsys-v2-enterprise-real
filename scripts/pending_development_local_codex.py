@@ -52,6 +52,77 @@ def queue_local_codex(client: core.GitHubClient, issue: dict[str, Any], base_bra
     return request_id
 
 
+def process_issue_with_local_fallback(
+    client: core.GitHubClient,
+    issue: dict[str, Any],
+    status_report: dict[str, Any],
+    *,
+    execute: bool,
+    base_branch: str,
+    dispatched_routes: set[str],
+    fallback: Callable[..., core.Decision],
+    enabled: bool | None = None,
+) -> core.Decision:
+    fallback_enabled = (os.getenv("LOCAL_CODEX_QUEUE_ENABLED", "0") == "1") if enabled is None else enabled
+    quota_blocked = False
+    try:
+        decision = fallback(
+            client,
+            issue,
+            status_report,
+            execute=execute,
+            base_branch=base_branch,
+            dispatched_routes=dispatched_routes,
+        )
+    except core.GitHubApiError as exc:
+        if "premium quota" not in str(exc).lower() or not fallback_enabled:
+            raise
+        quota_blocked = True
+        decision = fallback(
+            client,
+            issue,
+            status_report,
+            execute=False,
+            base_branch=base_branch,
+            dispatched_routes=dispatched_routes,
+        )
+
+    agent_route = decision.route == "copilot_agent_task_branch_first"
+    missing_token = decision.status == "blocked" and decision.reason == "missing_copilot_agent_token"
+    if not execute or not fallback_enabled or not agent_route or not (missing_token or quota_blocked):
+        return decision
+
+    number = int(issue["number"])
+    if _existing_marker(client, number):
+        return core.Decision(
+            "issue",
+            number,
+            decision.title,
+            LOCAL_CODEX_ROUTE,
+            "already_dispatched",
+            "local_codex_request_already_present",
+            decision.risk,
+            decision.increment_type,
+            decision.gate_reason,
+            url=decision.url,
+        )
+    request_id = queue_local_codex(client, issue, base_branch)
+    reason = "agent_task_quota_local_codex_queued" if quota_blocked else "agent_task_unavailable_local_codex_queued"
+    return core.Decision(
+        "issue",
+        number,
+        decision.title,
+        LOCAL_CODEX_ROUTE,
+        "dispatched",
+        f"{reason}:{request_id}",
+        decision.risk,
+        decision.increment_type,
+        decision.gate_reason,
+        True,
+        url=decision.url,
+    )
+
+
 def install_local_codex_fallback() -> None:
     if getattr(core, _INSTALL_MARKER, False):
         return
@@ -59,27 +130,15 @@ def install_local_codex_fallback() -> None:
     original_build_report = core.build_report
 
     def process_issue(client: core.GitHubClient, issue: dict[str, Any], status_report: dict[str, Any], *, execute: bool, base_branch: str, dispatched_routes: set[str]) -> core.Decision:
-        quota_blocked = False
-        try:
-            decision = original_process_issue(client, issue, status_report, execute=execute, base_branch=base_branch, dispatched_routes=dispatched_routes)
-        except core.GitHubApiError as exc:
-            if "premium quota" not in str(exc).lower() or os.getenv("LOCAL_CODEX_QUEUE_ENABLED", "0") != "1":
-                raise
-            quota_blocked = True
-            decision = original_process_issue(client, issue, status_report, execute=False, base_branch=base_branch, dispatched_routes=dispatched_routes)
-
-        agent_route = decision.route == "copilot_agent_task_branch_first"
-        missing_token = decision.status == "blocked" and decision.reason == "missing_copilot_agent_token"
-        fallback_enabled = os.getenv("LOCAL_CODEX_QUEUE_ENABLED", "0") == "1"
-        if not execute or not fallback_enabled or not agent_route or not (missing_token or quota_blocked):
-            return decision
-
-        number = int(issue["number"])
-        if _existing_marker(client, number):
-            return core.Decision("issue", number, decision.title, LOCAL_CODEX_ROUTE, "already_dispatched", "local_codex_request_already_present", decision.risk, decision.increment_type, decision.gate_reason, url=decision.url)
-        request_id = queue_local_codex(client, issue, base_branch)
-        reason = "agent_task_quota_local_codex_queued" if quota_blocked else "agent_task_unavailable_local_codex_queued"
-        return core.Decision("issue", number, decision.title, LOCAL_CODEX_ROUTE, "dispatched", f"{reason}:{request_id}", decision.risk, decision.increment_type, decision.gate_reason, True, url=decision.url)
+        return process_issue_with_local_fallback(
+            client,
+            issue,
+            status_report,
+            execute=execute,
+            base_branch=base_branch,
+            dispatched_routes=dispatched_routes,
+            fallback=original_process_issue,
+        )
 
     def build_report(*args: Any, **kwargs: Any) -> dict[str, Any]:
         report = original_build_report(*args, **kwargs)
