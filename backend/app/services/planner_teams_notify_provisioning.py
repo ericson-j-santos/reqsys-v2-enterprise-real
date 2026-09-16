@@ -12,6 +12,7 @@ SCHEMA = 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/
 PLANNER_API = '/providers/Microsoft.PowerApps/apis/shared_planner'
 TEAMS_API = '/providers/Microsoft.PowerApps/apis/shared_teams'
 TEAMS_POST_CARD_OPERATION = 'PostCardToConversation'
+PLANNER_TASK_URL = "https://planner.cloud.microsoft/webui/plan/@{parameters('PLANNER_PLAN_ID')}/view/board/task/@{triggerBody()?['id']}"
 FILTRO_TAREFA_TESTE_ID = 'Ignorar_tarefas_de_teste_automatizado'
 # Suites de E2E recorrentes (fora do ReqSys) criam tarefas nesse plano com
 # esse prefixo para testar a propria sincronizacao Planner->Excel. Sem esse
@@ -25,7 +26,7 @@ EVENTOS = {
         'operation_id': 'OnNewTask_V3',
         'trigger_name': 'Quando_uma_tarefa_e_criada',
         'display_name': 'ReqSys - Notificar Teams (Tarefa criada no Planner)',
-        'titulo_mensagem': 'Nova tarefa criada no Planner',
+        'titulo_mensagem': 'Nova tarefa no Planner',
     },
     'concluida': {
         'operation_id': 'OnCompleteTask_V3',
@@ -57,15 +58,30 @@ def _adaptive_card(titulo_mensagem: str) -> dict[str, Any]:
             {
                 'type': 'TextBlock',
                 'wrap': True,
+                'weight': 'Bolder',
                 'text': "@{triggerBody()?['title']}",
             },
             {
                 'type': 'FactSet',
                 'facts': [
-                    {'title': 'Plano', 'value': "@{parameters('PLANNER_PLAN_ID')}"},
-                    {'title': 'Percentual', 'value': "@{string(triggerBody()?['percentComplete'])}%"},
-                    {'title': 'Vencimento', 'value': "@{coalesce(triggerBody()?['dueDateTime'], 'sem prazo')}"},
+                    {'title': 'Progresso', 'value': "@{string(triggerBody()?['percentComplete'])}%"},
+                    {'title': 'Vencimento', 'value': "@{coalesce(triggerBody()?['dueDateTime'], 'Sem prazo')}"},
                 ],
+            },
+            {
+                'type': 'TextBlock',
+                'wrap': True,
+                'isSubtle': True,
+                'spacing': 'Small',
+                'size': 'Small',
+                'text': "ID da tarefa: @{triggerBody()?['id']}",
+            },
+        ],
+        'actions': [
+            {
+                'type': 'Action.OpenUrl',
+                'title': 'Abrir no Planner',
+                'url': PLANNER_TASK_URL,
             },
         ],
     }
@@ -193,6 +209,8 @@ def validar_definicao(definition: dict[str, Any]) -> list[str]:
         if action_host.get('apiId') != TEAMS_API or action_host.get('operationId') != TEAMS_POST_CARD_OPERATION:
             errors.append('acao_notificar_teams_conector_invalido')
     raw = json.dumps(definition, ensure_ascii=False)
+    if 'Action.OpenUrl' not in raw or PLANNER_TASK_URL not in raw:
+        errors.append('acao_abrir_planner_ausente')
     if 'UpdateTask' in raw:
         errors.append('escrita_planner_proibida')
     return errors
