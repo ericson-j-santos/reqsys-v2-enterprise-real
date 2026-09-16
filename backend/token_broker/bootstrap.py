@@ -14,8 +14,15 @@ from urllib.parse import quote, urlencode
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import Cookie, FastAPI, HTTPException, Query, status
 from fastapi.responses import HTMLResponse, RedirectResponse
+
+
+INSTALL_STATE_COOKIE = "reqsys_github_app_install_state"
+GITHUB_OAUTH_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+GITHUB_USER_INSTALLATION_REPOS_URL = (
+    "https://api.github.com/user/installations/{installation_id}/repositories"
+)
 
 
 class BootstrapSettings(Protocol):
@@ -27,6 +34,7 @@ class BootstrapSettings(Protocol):
     token_state_encryption_key: str
     token_state_db_path: str
     request_timeout_seconds: float
+    allowed_repository: str
     github_oauth_token_url: str
     github_manifest_conversion_url: str
     github_app_manifest_url: str
@@ -95,12 +103,20 @@ class BootstrapStore:
                 CREATE TABLE IF NOT EXISTS bootstrap_state (
                     state_hash TEXT PRIMARY KEY,
                     purpose TEXT NOT NULL,
+                    context TEXT NULL,
                     expires_at INTEGER NOT NULL,
                     consumed_at INTEGER NULL,
                     created_at INTEGER NOT NULL
                 );
                 """
             )
+            columns = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(bootstrap_state)").fetchall()
+            }
+            if "context" not in columns:
+                conn.execute("ALTER TABLE bootstrap_state ADD COLUMN context TEXT NULL")
+            conn.commit()
 
     def _encrypt(self, value: str) -> bytes:
         return self.fernet.encrypt(value.encode("utf-8"))
@@ -115,20 +131,35 @@ class BootstrapStore:
     def _state_hash(raw_state: str) -> str:
         return hashlib.sha256(raw_state.encode("utf-8")).hexdigest()
 
-    def create_state(self, purpose: str, ttl_seconds: int) -> str:
+    def create_state(
+        self,
+        purpose: str,
+        ttl_seconds: int,
+        context: str | None = None,
+    ) -> str:
         if ttl_seconds <= 0:
             raise BootstrapError("invalid_bootstrap_state_ttl")
         raw_state = secrets.token_urlsafe(32)
         now = int(time.time())
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO bootstrap_state(state_hash, purpose, expires_at, consumed_at, created_at) VALUES(?, ?, ?, NULL, ?)",
-                (self._state_hash(raw_state), purpose, now + ttl_seconds, now),
+                """
+                INSERT INTO bootstrap_state(
+                    state_hash, purpose, context, expires_at, consumed_at, created_at
+                ) VALUES(?, ?, ?, ?, NULL, ?)
+                """,
+                (
+                    self._state_hash(raw_state),
+                    purpose,
+                    context,
+                    now + ttl_seconds,
+                    now,
+                ),
             )
             conn.commit()
         return raw_state
 
-    def consume_state(self, raw_state: str, purpose: str) -> None:
+    def consume_state(self, raw_state: str, purpose: str) -> str | None:
         if not raw_state:
             raise BootstrapError("missing_bootstrap_state")
         state_hash = self._state_hash(raw_state)
@@ -136,7 +167,11 @@ class BootstrapStore:
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT purpose, expires_at, consumed_at FROM bootstrap_state WHERE state_hash = ?",
+                """
+                SELECT purpose, context, expires_at, consumed_at
+                FROM bootstrap_state
+                WHERE state_hash = ?
+                """,
                 (state_hash,),
             ).fetchone()
             if (
@@ -152,6 +187,7 @@ class BootstrapStore:
                 (now, state_hash),
             )
             conn.commit()
+            return str(row["context"]) if row["context"] is not None else None
 
     def save_app_credentials(self, credentials: AppCredentials) -> None:
         with self._connect() as conn:
@@ -245,6 +281,14 @@ class GitHubAppBootstrap:
     def base_url(self) -> str:
         return self.settings.public_base_url.rstrip("/")
 
+    @property
+    def oauth_callback_url(self) -> str:
+        return f"{self.base_url}/bootstrap/github-app/oauth/callback"
+
+    @property
+    def install_callback_url(self) -> str:
+        return f"{self.base_url}/bootstrap/github-app/install/callback"
+
     def _require_enabled(self) -> BootstrapStore:
         if not self.settings.bootstrap_enabled:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
@@ -274,9 +318,11 @@ class GitHubAppBootstrap:
             "name": self.settings.github_app_name,
             "url": self.base_url,
             "redirect_url": f"{self.base_url}/bootstrap/github-app/manifest/callback",
-            "callback_urls": [f"{self.base_url}/bootstrap/github-app/oauth/callback"],
+            "callback_urls": [self.oauth_callback_url],
+            "setup_url": self.install_callback_url,
+            "setup_on_update": False,
             "public": False,
-            "request_oauth_on_install": True,
+            "request_oauth_on_install": False,
             "default_permissions": {
                 self.settings.github_app_manifest_permission: "write",
             },
@@ -326,6 +372,49 @@ class GitHubAppBootstrap:
             refresh_expires_at=now + refresh_expires_in,
         )
 
+    def _verify_repository_installation(
+        self,
+        access_token: str,
+        installation_id: int,
+    ) -> None:
+        url = GITHUB_USER_INSTALLATION_REPOS_URL.format(
+            installation_id=installation_id
+        )
+        page = 1
+        while page <= 100:
+            try:
+                response = httpx.get(
+                    url,
+                    headers={
+                        "Accept": "application/vnd.github+json",
+                        "Authorization": f"Bearer {access_token}",
+                        "X-GitHub-Api-Version": "2026-03-10",
+                    },
+                    params={"per_page": 100, "page": page},
+                    timeout=self.settings.request_timeout_seconds,
+                )
+            except httpx.HTTPError as exc:
+                raise BootstrapError("github_installation_verification_unavailable") from exc
+            if response.status_code != 200:
+                raise BootstrapError("github_installation_verification_rejected")
+            try:
+                payload = response.json()
+                repositories = payload.get("repositories") if isinstance(payload, dict) else None
+            except (ValueError, TypeError, AttributeError) as exc:
+                raise BootstrapError("github_installation_verification_invalid_response") from exc
+            if not isinstance(repositories, list):
+                raise BootstrapError("github_installation_verification_invalid_response")
+            for repository in repositories:
+                if (
+                    isinstance(repository, dict)
+                    and repository.get("full_name") == self.settings.allowed_repository
+                ):
+                    return
+            if len(repositories) < 100:
+                break
+            page += 1
+        raise BootstrapError("github_app_repository_access_required")
+
     def register(self, app: FastAPI) -> None:
         @app.get("/bootstrap/github-app", response_class=HTMLResponse)
         def bootstrap_start() -> HTMLResponse:
@@ -340,7 +429,7 @@ class GitHubAppBootstrap:
                 "<!doctype html><html><head><meta charset='utf-8'>"
                 "<title>ReqSys GitHub App Bootstrap</title></head><body>"
                 "<h1>ReqSys GitHub App Bootstrap</h1>"
-                "<p>Continue no GitHub para criar e autorizar a App. Segredos não são exibidos.</p>"
+                "<p>Continue no GitHub para criar, instalar e autorizar a App. Segredos não são exibidos.</p>"
                 f"<form method='post' action='{html.escape(action, quote=True)}'>"
                 f"<input type='hidden' name='manifest' value='{html.escape(manifest_json, quote=True)}'>"
                 "<button type='submit'>Create GitHub App</button></form></body></html>"
@@ -396,17 +485,57 @@ class GitHubAppBootstrap:
                 ) from exc
 
             store.save_app_credentials(credentials)
-            oauth_state = store.create_state(
-                "oauth",
+            install_state = store.create_state(
+                "installation",
                 self.settings.bootstrap_state_ttl_seconds,
             )
             install_url = self.settings.github_app_install_url.format(
                 slug=quote(credentials.slug, safe="")
             )
-            return RedirectResponse(
-                url=f"{install_url}?{urlencode({'state': oauth_state})}",
-                status_code=303,
+            redirect = RedirectResponse(url=install_url, status_code=303)
+            redirect.set_cookie(
+                key=INSTALL_STATE_COOKIE,
+                value=install_state,
+                max_age=self.settings.bootstrap_state_ttl_seconds,
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                path="/bootstrap/github-app/install/callback",
             )
+            return redirect
+
+        @app.get("/bootstrap/github-app/install/callback")
+        def install_callback(
+            installation_id: int = Query(gt=0),
+            install_state: str | None = Cookie(default=None, alias=INSTALL_STATE_COOKIE),
+        ) -> RedirectResponse:
+            store = self._require_enabled()
+            try:
+                store.consume_state(install_state or "", "installation")
+                credentials = store.load_app_credentials()
+            except BootstrapError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="bootstrap_state_rejected",
+                ) from exc
+            if credentials is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="github_app_not_configured",
+                )
+
+            oauth_state = store.create_state(
+                "oauth",
+                self.settings.bootstrap_state_ttl_seconds,
+                context=str(installation_id),
+            )
+            authorize_url = f"{GITHUB_OAUTH_AUTHORIZE_URL}?{urlencode({'client_id': credentials.client_id, 'redirect_uri': self.oauth_callback_url, 'state': oauth_state})}"
+            redirect = RedirectResponse(url=authorize_url, status_code=303)
+            redirect.delete_cookie(
+                key=INSTALL_STATE_COOKIE,
+                path="/bootstrap/github-app/install/callback",
+            )
+            return redirect
 
         @app.get("/bootstrap/github-app/oauth/callback", response_class=HTMLResponse)
         def oauth_callback(
@@ -415,14 +544,15 @@ class GitHubAppBootstrap:
         ) -> HTMLResponse:
             store = self._require_enabled()
             try:
-                store.consume_state(csrf_state, "oauth")
+                installation_context = store.consume_state(csrf_state, "oauth")
+                installation_id = int(installation_context or "0")
                 credentials = store.load_app_credentials()
-            except BootstrapError as exc:
+            except (BootstrapError, TypeError, ValueError) as exc:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="bootstrap_state_rejected",
                 ) from exc
-            if credentials is None:
+            if installation_id <= 0 or credentials is None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="github_app_not_configured",
@@ -436,6 +566,7 @@ class GitHubAppBootstrap:
                         "client_id": credentials.client_id,
                         "client_secret": credentials.client_secret,
                         "code": code,
+                        "redirect_uri": self.oauth_callback_url,
                     },
                     timeout=self.settings.request_timeout_seconds,
                 )
@@ -451,10 +582,14 @@ class GitHubAppBootstrap:
                 )
             try:
                 token_state = self._parse_oauth_tokens(response.json())
+                self._verify_repository_installation(
+                    token_state.access_token,
+                    installation_id,
+                )
             except BootstrapError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="github_oauth_invalid_response",
+                    detail=str(exc),
                 ) from exc
 
             store.save_authorized_tokens(token_state)
