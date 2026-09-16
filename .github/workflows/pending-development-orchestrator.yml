@@ -89,6 +89,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
+          LOCAL_CODEX_QUEUE_ENABLED: "1"
           TARGET_BRANCH: ${{ github.event.inputs.base_branch || 'main' }}
           MAX_ITEMS: ${{ github.event.inputs.max_items || '5' }}
           ISSUE_NUMBER: ${{ github.event_name == 'issues' && github.event.issue.number || github.event.inputs.issue_number || '0' }}
@@ -143,5 +144,5 @@ jobs:
         if: steps.orchestrator.outputs.exit_code != '0'
         shell: bash
         run: |
-          echo "O orquestrador terminou bloqueado. Verifique o artifact e as pré-condições (incluindo COPILOT_AGENT_TOKEN quando aplicável)."
+          echo "O orquestrador terminou bloqueado. Verifique o artifact e as pré-condições; quando Agent Tasks estiver indisponível, a rota local Codex só é válida se o envelope governado puder ser enfileirado."
           exit 1
