@@ -35,7 +35,11 @@ export function validateVerificationUri(raw) {
   const url = new URL(value)
   if (url.protocol !== 'https:') throw new Error('verification_uri_protocolo_invalido')
   const host = url.hostname.toLowerCase()
-  const allowed = host === 'microsoft.com' || host === 'www.microsoft.com' || host.endsWith('.microsoft.com') || host === 'login.microsoftonline.com'
+  const allowed =
+    host === 'microsoft.com' ||
+    host === 'www.microsoft.com' ||
+    host.endsWith('.microsoft.com') ||
+    host === 'login.microsoftonline.com'
   if (!allowed) throw new Error(`verification_uri_host_nao_permitido:${host}`)
   return url.toString()
 }
@@ -44,6 +48,12 @@ export function validateUserCode(raw) {
   const value = String(raw || '').trim().toUpperCase()
   if (!/^[A-Z0-9-]{6,16}$/.test(value)) throw new Error('user_code_formato_invalido')
   return value
+}
+
+export function buildDeviceLoginUrl(verificationUri, userCode) {
+  const url = new URL(validateVerificationUri(verificationUri))
+  url.searchParams.set('otc', validateUserCode(userCode))
+  return url.toString()
 }
 
 export function selectGateArtifact(artifacts, prefix = DEFAULT_ARTIFACT_PREFIX) {
@@ -68,7 +78,9 @@ export function sanitizedGateSummary(gate, runId, artifactName) {
     artifact: String(artifactName || ''),
     required: gate?.required === true,
     status: String(gate?.status || ''),
-    verification_host: gate?.verification_uri ? new URL(validateVerificationUri(gate.verification_uri)).hostname : null,
+    verification_host: gate?.verification_uri
+      ? new URL(validateVerificationUri(gate.verification_uri)).hostname
+      : null,
     user_code_present: Boolean(gate?.user_code),
     generated_at: gate?.generated_at || null,
     expires_in_seconds: Number(gate?.expires_in_seconds || 0) || null,
@@ -93,7 +105,8 @@ function spawnCapture(command, args, options = {}) {
 }
 
 async function ghJson(args) {
-  const result = await spawnCapture('gh', args)
+  const gh = env('AUTH_GATE_GH_PATH', 'gh')
+  const result = await spawnCapture(gh, args)
   if (result.code !== 0) throw new Error(`gh_falhou:${result.code}:${result.stderr.slice(0, 300)}`)
   try {
     return JSON.parse(result.stdout)
@@ -103,7 +116,10 @@ async function ghJson(args) {
 }
 
 async function latestRun(repo, branch, workflowName) {
-  const payload = await ghJson(['api', `repos/${repo}/actions/runs?branch=${encodeURIComponent(branch)}&per_page=30`])
+  const payload = await ghJson([
+    'api',
+    `repos/${repo}/actions/runs?branch=${encodeURIComponent(branch)}&per_page=30`,
+  ])
   return (payload.workflow_runs || [])
     .filter((run) => run?.name === workflowName)
     .sort((a, b) => Date.parse(b?.created_at || 0) - Date.parse(a?.created_at || 0))[0] || null
@@ -118,57 +134,30 @@ async function downloadGate(repo, runId, artifactName, rootDir) {
   const target = path.join(rootDir, `${runId}-${artifactName}`)
   await fs.rm(target, { recursive: true, force: true })
   await fs.mkdir(target, { recursive: true })
-  const result = await spawnCapture('gh', ['run', 'download', String(runId), '--repo', repo, '--name', artifactName, '--dir', target])
-  if (result.code !== 0) throw new Error(`gh_download_falhou:${result.code}:${result.stderr.slice(0, 300)}`)
+  const gh = env('AUTH_GATE_GH_PATH', 'gh')
+  const result = await spawnCapture(gh, [
+    'run', 'download', String(runId), '--repo', repo,
+    '--name', artifactName, '--dir', target,
+  ])
+  if (result.code !== 0) {
+    throw new Error(`gh_download_falhou:${result.code}:${result.stderr.slice(0, 300)}`)
+  }
   const entries = await fs.readdir(target, { withFileTypes: true })
   const jsonFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
   if (jsonFiles.length !== 1) throw new Error(`gate_json_quantidade_invalida:${jsonFiles.length}`)
   return JSON.parse(await fs.readFile(path.join(target, jsonFiles[0].name), 'utf8'))
 }
 
-async function openAndFillDeviceCode(verificationUri, userCode, profileDir) {
-  const url = validateVerificationUri(verificationUri)
-  const code = validateUserCode(userCode)
-  const { chromium } = await import('@playwright/test')
-  await fs.mkdir(profileDir, { recursive: true })
-  let context
-  try {
-    context = await chromium.launchPersistentContext(profileDir, { headless: false, channel: 'chrome' })
-  } catch {
-    context = await chromium.launchPersistentContext(profileDir, { headless: false })
+async function openDeviceLogin(verificationUri, userCode) {
+  if (process.platform !== 'win32') throw new Error('device_login_requer_windows')
+  const completeUrl = buildDeviceLoginUrl(verificationUri, userCode)
+  const result = await spawnCapture('rundll32.exe', [
+    'url.dll,FileProtocolHandler',
+    completeUrl,
+  ])
+  if (result.code !== 0) {
+    throw new Error(`device_login_browser_falhou:${result.code}`)
   }
-  const page = context.pages()[0] || await context.newPage()
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
-
-  const selectors = [
-    'input[name="otc"]',
-    'input[name="code"]',
-    'input#otc',
-    'input[type="text"]',
-  ]
-  let input = null
-  for (const selector of selectors) {
-    const candidate = page.locator(selector).first()
-    if (await candidate.count() && await candidate.isVisible().catch(() => false)) {
-      input = candidate
-      break
-    }
-  }
-  if (!input) throw new Error('microsoft_device_code_input_nao_encontrado')
-  await input.fill(code)
-
-  const buttons = [
-    page.getByRole('button', { name: /next|continue|continuar|avançar|enviar|submit/i }).first(),
-    page.locator('button[type="submit"]').first(),
-    page.locator('input[type="submit"]').first(),
-  ]
-  for (const button of buttons) {
-    if (await button.count() && await button.isVisible().catch(() => false)) {
-      await button.click()
-      break
-    }
-  }
-  return context
 }
 
 async function readState(statePath) {
@@ -182,11 +171,17 @@ async function readState(statePath) {
 
 async function writeState(statePath, state) {
   await fs.mkdir(path.dirname(statePath), { recursive: true })
-  await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+  await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  })
 }
 
 async function rerunFailed(repo, runId) {
-  const result = await spawnCapture('gh', ['run', 'rerun', String(runId), '--repo', repo, '--failed'])
+  const gh = env('AUTH_GATE_GH_PATH', 'gh')
+  const result = await spawnCapture(gh, [
+    'run', 'rerun', String(runId), '--repo', repo, '--failed',
+  ])
   if (result.code !== 0) throw new Error(`gh_rerun_falhou:${result.code}:${result.stderr.slice(0, 300)}`)
 }
 
@@ -203,13 +198,11 @@ async function main() {
   const base = env('LOCALAPPDATA', path.join(os.homedir(), 'AppData', 'Local'))
   const root = env('AUTH_GATE_HOME', path.join(base, 'ReqSys', 'MicrosoftAuthGate'))
   const statePath = path.join(root, 'state.json')
-  const profileDir = path.join(root, 'browser-profile')
   const artifactsDir = path.join(root, 'artifacts')
   const deadline = Date.now() + timeoutSeconds * 1000
   const state = await readState(statePath)
   state.handled_artifacts ||= {}
   state.reruns ||= {}
-  let browserContext = null
 
   while (Date.now() < deadline) {
     const run = await latestRun(repo, branch, workflow)
@@ -225,18 +218,31 @@ async function main() {
       gate = await downloadGate(repo, run.id, artifact.name, artifactsDir)
       const key = `${run.id}:${artifact.id}`
       if (gate?.required === true && !state.handled_artifacts[key]) {
-        console.log(JSON.stringify({ event: 'auth_gate_detected', ...sanitizedGateSummary(gate, run.id, artifact.name) }))
-        browserContext = await openAndFillDeviceCode(gate.verification_uri, gate.user_code, profileDir)
-        state.handled_artifacts[key] = { handled_at: new Date().toISOString(), run_attempt: run.run_attempt }
+        console.log(JSON.stringify({
+          event: 'auth_gate_detected',
+          ...sanitizedGateSummary(gate, run.id, artifact.name),
+        }))
+        await openDeviceLogin(gate.verification_uri, gate.user_code)
+        state.handled_artifacts[key] = {
+          handled_at: new Date().toISOString(),
+          run_attempt: run.run_attempt,
+        }
         await writeState(statePath, state)
-        console.log(JSON.stringify({ event: 'device_code_prefilled', run_id: run.id, human_action: 'somente_se_microsoft_exigir_conta_mfa_ou_consentimento' }))
+        console.log(JSON.stringify({
+          event: 'device_code_opened',
+          run_id: run.id,
+          human_action: 'somente_se_microsoft_exigir_conta_mfa_ou_consentimento',
+        }))
       }
     }
 
     if (run.status === 'completed') {
       if (run.conclusion === 'success') {
-        console.log(JSON.stringify({ event: 'auth_gate_resolved', run_id: run.id, conclusion: run.conclusion }))
-        await browserContext?.close().catch(() => {})
+        console.log(JSON.stringify({
+          event: 'auth_gate_resolved',
+          run_id: run.id,
+          conclusion: run.conclusion,
+        }))
         return
       }
       const used = Number(state.reruns[run.id] || 0)
@@ -244,7 +250,11 @@ async function main() {
         await rerunFailed(repo, run.id)
         state.reruns[run.id] = used + 1
         await writeState(statePath, state)
-        console.log(JSON.stringify({ event: 'workflow_rerun_requested', run_id: run.id, rerun_number: used + 1 }))
+        console.log(JSON.stringify({
+          event: 'workflow_rerun_requested',
+          run_id: run.id,
+          rerun_number: used + 1,
+        }))
         await sleep(5000)
         continue
       }
@@ -259,7 +269,10 @@ async function main() {
 const __filename = fileURLToPath(import.meta.url)
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   main().catch((error) => {
-    console.error(JSON.stringify({ event: 'auth_gate_failed', error: String(error?.message || error).slice(0, 500) }))
+    console.error(JSON.stringify({
+      event: 'auth_gate_failed',
+      error: String(error?.message || error).slice(0, 500),
+    }))
     process.exitCode = 1
   })
 }
