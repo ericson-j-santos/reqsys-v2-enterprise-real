@@ -394,7 +394,7 @@ async function deletePlannerTask(token, taskId) {
 function controlledEvidence(runtime) {
   const succeeded = runtime.status === 'runtime_executed_awaiting_teams_observation'
   return {
-    schema_version: '1.3.0',
+    schema_version: '1.4.0',
     capability: 'planner-teams-notify-dev-acceptance',
     environment: 'dev',
     run_id: runtime.run_id,
@@ -426,6 +426,8 @@ function controlledEvidence(runtime) {
       provisioning: runtime.checks.provisioning === 'implanted' ? 'implanted' : 'not_confirmed',
       flow_activation: runtime.checks.flow_activation === 'started_confirmed'
         ? 'started_confirmed' : 'not_confirmed',
+      flow_final_state: runtime.checks.flow_final_state === 'started_confirmed'
+        ? 'started_confirmed' : 'not_confirmed',
       planner_tasks_created: runtime.checks.planner_tasks_created === 2 ? 'two' : 'not_confirmed',
       created_flow_runs_observed: Number(runtime.checks.created_flow_runs_observed || 0) >= 2
         ? 'at_least_two' : 'insufficient',
@@ -434,15 +436,18 @@ function controlledEvidence(runtime) {
     cleanup: {
       tasks: (runtime.cleanup?.tasks || []).length > 0 &&
         (runtime.cleanup?.tasks || []).every((item) => item.status === 'deleted') ? 'completed' : 'incomplete',
-      flows: (runtime.cleanup?.flows || []).length > 0 &&
-        (runtime.cleanup?.flows || []).every((item) => item.status === 'stopped') ? 'completed' : 'incomplete',
+    },
+    postconditions: {
+      flows: (runtime.postconditions?.flows || []).length > 0 &&
+        (runtime.postconditions?.flows || []).every((item) => item.status === 'started_confirmed')
+        ? 'started_confirmed' : 'not_confirmed',
     },
     error_code: succeeded ? null : 'acceptance_failed_see_runtime_log',
   }
 }
 
 const evidence = {
-  schema_version: '1.3.0',
+  schema_version: '1.4.0',
   capability: 'planner-teams-notify-dev-acceptance',
   environment: 'dev',
   run_id: optional('GITHUB_RUN_ID'),
@@ -457,6 +462,7 @@ const evidence = {
   tasks: [],
   flows: [],
   checks: {},
+  postconditions: { flows: [] },
   timing: {
     run_poll_interval_seconds: RUN_POLL_INTERVAL_MS / 1000,
     run_poll_timeout_seconds: POLL_SECONDS,
@@ -658,7 +664,8 @@ try {
   evidence.error = `${error?.name || 'Error'}:${String(error?.message || error).slice(0, 1800)}`
   process.exitCode = 1
 } finally {
-  evidence.cleanup = { tasks: [], flows: [] }
+  evidence.cleanup = { tasks: [] }
+  evidence.postconditions = { flows: [] }
 
   if (graphToken) {
     for (const taskId of createdTaskIds) {
@@ -675,13 +682,32 @@ try {
   if (flowToken && environmentId) {
     for (const flowId of startedFlowIds) {
       try {
-        await flowAction(environmentId, flowId, 'stop', flowToken)
-        evidence.cleanup.flows.push({ id: flowId, status: 'stopped' })
+        const stateBefore = await getFlowState(environmentId, flowId, flowToken)
+        let confirmed
+        if (stateBefore.toLowerCase() === 'started') {
+          confirmed = { state: stateBefore, confirmed_at: iso() }
+        } else {
+          await flowAction(environmentId, flowId, 'start', flowToken)
+          confirmed = await waitForFlowStarted(environmentId, flowId, flowToken)
+        }
+        evidence.postconditions.flows.push({
+          id: flowId,
+          status: 'started_confirmed',
+          state_before: stateBefore,
+          state_after: confirmed.state,
+          confirmed_at: confirmed.confirmed_at,
+        })
       } catch (error) {
-        evidence.cleanup.flows.push({ id: flowId, status: 'failed', error: String(error?.message || error).slice(0, 300) })
+        const message = String(error?.message || error).slice(0, 300)
+        evidence.postconditions.flows.push({ id: flowId, status: 'failed', error: message })
+        evidence.status = 'failed'
+        evidence.error = `flow_final_state:${flowId}:${message}`
         process.exitCode = 1
       }
     }
+    evidence.checks.flow_final_state = startedFlowIds.length > 0 &&
+      evidence.postconditions.flows.every((item) => item.status === 'started_confirmed')
+      ? 'started_confirmed' : 'not_confirmed'
   }
 
   evidence.completed_at = iso()
@@ -696,6 +722,7 @@ try {
     run_attempt: persistedEvidence.run_attempt,
     checks: persistedEvidence.checks,
     cleanup: persistedEvidence.cleanup,
+    postconditions: persistedEvidence.postconditions,
     evidence_path: EVIDENCE_PATH,
     error_code: persistedEvidence.error_code,
   }))
