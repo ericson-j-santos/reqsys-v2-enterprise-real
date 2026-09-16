@@ -33,6 +33,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 defaults:
   run:
@@ -83,20 +84,21 @@ jobs:
             echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Validate governed token
+      - name: Validate ephemeral Actions token contract
         if: steps.ctx.outputs.should_dispatch == 'true'
         env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "${GH_PAT_ACTIONS}" ]; then
-            echo "Secret GH_PAT_ACTIONS não configurado."
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Ephemeral GITHUB_TOKEN indisponível."
             exit 1
           fi
+          echo "::add-mask::${GH_TOKEN}"
 
       - name: Dispatch Public Runtime Evidence Gate
         if: steps.ctx.outputs.should_dispatch == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           PUBLIC_URL: ${{ steps.inputs.outputs.public_url }}
           STRICT: ${{ steps.inputs.outputs.strict }}
@@ -115,7 +117,7 @@ jobs:
       - name: Show latest public runtime evidence runs
         if: steps.ctx.outputs.should_dispatch == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
           gh run list \
