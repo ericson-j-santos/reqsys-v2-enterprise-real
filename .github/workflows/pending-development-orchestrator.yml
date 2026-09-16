@@ -38,6 +38,7 @@ permissions:
   pull-requests: read
   checks: read
   statuses: read
+  id-token: write
 
 concurrency:
   group: pending-development-orchestrator-${{ github.event.inputs.base_branch || 'main' }}-${{ github.event.issue.number || 'batch' }}
@@ -89,6 +90,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
+          COPILOT_AGENT_TOKEN_BROKER_URL: ${{ vars.COPILOT_AGENT_TOKEN_BROKER_URL }}
+          COPILOT_AGENT_TOKEN_BROKER_AUDIENCE: ${{ vars.COPILOT_AGENT_TOKEN_BROKER_AUDIENCE }}
           LOCAL_CODEX_QUEUE_ENABLED: "1"
           TARGET_BRANCH: ${{ github.event.inputs.base_branch || 'main' }}
           MAX_ITEMS: ${{ github.event.inputs.max_items || '5' }}

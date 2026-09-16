@@ -41,13 +41,13 @@ jobs:
       - name: Abrir ou atualizar PR draft governada
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
           READY_FOR_PR_WAIT_SECONDS: "0"
         run: |
           set -euo pipefail
           python scripts/auto_open_agent_pr.py \
             --base main \
-            --branch "${{ github.event.workflow_run.head_branch }}"
+            --branch "${{ github.event.workflow_run.head_branch }}" \
+            --head-sha "${{ github.event.workflow_run.head_sha }}"
 
       - name: Publicar evidência
         if: always()
