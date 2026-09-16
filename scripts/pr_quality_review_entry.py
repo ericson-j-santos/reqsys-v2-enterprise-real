@@ -61,6 +61,7 @@ _SAFE_PUBLIC_ARTIFACTS = {
     "frontend/artifacts/figma-tokens/reqsys.tokens.json",
     "frontend/artifacts/figma-tokens/reqsys.tokens.sha256",
     "frontend/src/theme/design-tokens.json",
+    "render.token-broker.yaml",
 }
 
 
