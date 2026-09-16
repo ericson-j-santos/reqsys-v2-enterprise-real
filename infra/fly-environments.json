@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "strategy": "fly-enterprise-sync",
   "canonical_environments": ["dev", "hml", "prod"],
   "promotion_order": ["dev", "hml", "prod"],
@@ -20,6 +20,10 @@
       "volume": "reqsys_data_dev",
       "approval_required": false,
       "min_machines_running": 1,
+      "workload_contracts": {
+        "api": { "workload_type": "always_on", "min_machines_running": 1 },
+        "frontend": { "workload_type": "scale_to_zero", "min_machines_running": 0 }
+      },
       "smoke_endpoints": [
         "/health",
         "/api/runtime/health",
@@ -41,6 +45,10 @@
       "volume": "reqsys_data_stg",
       "approval_required": true,
       "min_machines_running": 0,
+      "workload_contracts": {
+        "api": { "workload_type": "scale_to_zero", "min_machines_running": 0 },
+        "frontend": { "workload_type": "scale_to_zero", "min_machines_running": 0 }
+      },
       "smoke_endpoints": [
         "/health",
         "/api/runtime/health",
@@ -62,6 +70,10 @@
       "volume": "reqsys_data",
       "approval_required": true,
       "min_machines_running": 0,
+      "workload_contracts": {
+        "api": { "workload_type": "scale_to_zero", "min_machines_running": 0 },
+        "frontend": { "workload_type": "scale_to_zero", "min_machines_running": 0 }
+      },
       "smoke_endpoints": [
         "/health",
         "/api/runtime/health",

@@ -35,6 +35,7 @@ env:
   EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev/key-vault-capture
   EXPECTED_KEY_VAULT_NAME: kv-reqsys-ccp
   INTEGRATION_E2E_SQL_DSN_SECRET_NAME: ${{ vars.INTEGRATION_E2E_SQL_DSN_SECRET_NAME }}
+  INTEGRATION_E2E_SQL_VALIDATION_MODE: ${{ vars.INTEGRATION_E2E_SQL_VALIDATION_MODE || 'direct_dsn' }}
 
 jobs:
   capture:
@@ -79,8 +80,41 @@ jobs:
           done
           test "$REQSYS_KEY_VAULT_NAME" = "$EXPECTED_KEY_VAULT_NAME"
 
+      - name: Resolver modo canônico de validação SQL
+        id: sql-mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os
+
+          from scripts.evaluate_integration_sql_capture_contract import (
+              SUPPORTED_SQL_VALIDATION_MODES,
+              direct_dsn_required,
+              normalize_mode,
+          )
+
+          mode = normalize_mode(os.environ.get("INTEGRATION_E2E_SQL_VALIDATION_MODE"))
+          if mode not in SUPPORTED_SQL_VALIDATION_MODES:
+              raise SystemExit(f"sql_validation_mode_invalido:{mode or 'vazio'}")
+          print(f"mode={mode}")
+          print(f"direct_dsn_required={'true' if direct_dsn_required(mode) else 'false'}")
+          PY
+        env:
+          PYTHONPATH: .
+
+      - name: Registrar dispensa do DSN direto no modo gateway
+        if: steps.sql-mode.outputs.direct_dsn_required != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' '{"source":"power_platform_gateway","status":"direct_dsn_not_required","selection_mode":"gateway_contract","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
+
       - name: Login Azure OIDC com identidade Key Vault DEV
         id: azure-login
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true'
         continue-on-error: true
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
         with:
@@ -90,7 +124,7 @@ jobs:
 
       - name: Capturar DSN sem expor nome ou valor
         id: key-vault
-        if: steps.azure-login.outcome == 'success'
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.azure-login.outcome == 'success'
         env:
           REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
         shell: bash
@@ -125,7 +159,7 @@ jobs:
           printf '%s\n' '{"source":"azure_key_vault","status":"resolved","selection_mode":"exact_configured_name","dsn_resolved":true,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
 
       - name: Registrar bloqueio OIDC sanitizado
-        if: steps.azure-login.outcome != 'success'
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true' && steps.azure-login.outcome != 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -133,6 +167,7 @@ jobs:
           printf '%s\n' '{"source":"azure_key_vault","status":"oidc_login_failed","dsn_resolved":false,"secret_value_exposed":false,"business_data_read":false,"production_touched":false,"test_touched":false}' > "$EVIDENCE_DIR/source.json"
 
       - name: Validar procedure e contrato SQL
+        if: steps.sql-mode.outputs.direct_dsn_required == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -143,28 +178,25 @@ jobs:
 
       - name: Gerar evidência consolidada sanitizada
         shell: bash
+        env:
+          PYTHONPATH: .
         run: |
           set -euo pipefail
-          python - "$EVIDENCE_DIR/source.json" "$EVIDENCE_DIR/sql-locator.json" "$EVIDENCE_DIR/capture-summary.json" <<'PY'
-          import json, os, sys
-          from pathlib import Path
-          source=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-          locator=json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
-          resolved=(source.get('status')=='resolved' and locator.get('status')=='resolved' and locator.get('procedure_exists') is True and locator.get('parameter_contract_ok') is True)
-          payload={
-            'schema_version':'1.0.0','feature':'excel_sql_sharepoint_key_vault_capture',
-            'status':'resolved' if resolved else 'blocked','source':'azure_key_vault',
-            'source_status':source.get('status'),'dsn_resolved':source.get('dsn_resolved') is True,
-            'procedure':locator.get('procedure'),'procedure_exists':locator.get('procedure_exists') is True,
-            'parameter_contract_ok':locator.get('parameter_contract_ok') is True,
-            'locator_error':locator.get('error'),'source_sha':os.getenv('GITHUB_SHA',''),
-            'run_id':os.getenv('GITHUB_RUN_ID',''),'run_attempt':os.getenv('GITHUB_RUN_ATTEMPT',''),
-            'secret_value_exposed':False,'business_data_read':False,
-            'production_touched':False,'test_touched':False
-          }
-          Path(sys.argv[3]).write_text(json.dumps(payload, indent=2)+'\n', encoding='utf-8')
-          print(json.dumps({k:payload[k] for k in ('status','source_status','dsn_resolved','procedure_exists','parameter_contract_ok','locator_error')}))
-          PY
+          locator_arg=()
+          if [ "${{ steps.sql-mode.outputs.direct_dsn_required }}" = "true" ]; then
+            locator_arg=(--locator "$EVIDENCE_DIR/sql-locator.json")
+          fi
+          # A decisao vinculante fica no gate final; aqui apenas materializamos
+          # a evidencia para que o artefato seja publicado mesmo quando bloqueia.
+          python scripts/evaluate_integration_sql_capture_contract.py \
+            --mode "${{ steps.sql-mode.outputs.mode }}" \
+            --source "$EVIDENCE_DIR/source.json" \
+            "${locator_arg[@]}" \
+            --output "$EVIDENCE_DIR/capture-summary.json" \
+            --source-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --correlation-id "kv-sql-capture-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" || true
 
       - name: Publicar evidência sanitizada
         if: always()
@@ -186,19 +218,14 @@ jobs:
           import json, sys
           from pathlib import Path
 
-          payload=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-          checks={
-            'status_resolved': payload.get('status') == 'resolved',
-            'dsn_resolved': payload.get('dsn_resolved') is True,
-            'procedure_exists': payload.get('procedure_exists') is True,
-            'parameter_contract_ok': payload.get('parameter_contract_ok') is True,
-          }
-          failed=[name for name, passed in checks.items() if not passed]
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           print(json.dumps({
-            'gate':'functional_readiness',
-            'passed': not failed,
-            'failed_checks': failed,
-          }))
-          if failed:
+            "gate": payload["gate"],
+            "sql_validation_mode": payload["sql_validation_mode"],
+            "direct_dsn_required": payload["direct_dsn_required"],
+            "passed": payload["passed"],
+            "failed_checks": payload["failed_checks"],
+          }, ensure_ascii=False))
+          if not payload["passed"]:
               raise SystemExit(1)
           PY
