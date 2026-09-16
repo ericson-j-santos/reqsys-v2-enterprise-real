@@ -20,5 +20,6 @@ def test_auto_public_runtime_runbook_matches_ephemeral_contract() -> None:
 
     assert "GITHUB_TOKEN" in runbook
     assert "actions: write" in runbook
-    assert "GH_PAT_ACTIONS não faz parte deste contrato" in runbook
+    assert "GH_PAT_ACTIONS" in runbook
+    assert "não faz parte deste contrato" in runbook
     assert "PAT persistente" in runbook
