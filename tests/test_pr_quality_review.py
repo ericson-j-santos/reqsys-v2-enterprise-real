@@ -104,6 +104,12 @@ def test_governed_classifier_allows_credential_named_composite_action() -> None:
     assert action.is_sensitive is False
 
 
+def test_governed_classifier_allows_public_token_broker_blueprint() -> None:
+    blueprint = governed_changed_file("render.token-broker.yaml")
+
+    assert blueprint.is_sensitive is False
+
+
 def test_governed_classifier_keeps_real_token_config_sensitive() -> None:
     token_config = governed_changed_file("config/access-token.json")
 
