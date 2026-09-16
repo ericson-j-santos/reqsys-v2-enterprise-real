@@ -63,24 +63,24 @@ jobs:
 
           if [[ -z "$existing" ]]; then
             body="$(cat <<EOF
-<!-- ${MARKER} -->
-## GitHub App — permissão de Pull Request efetiva
+          <!-- ${MARKER} -->
+          ## GitHub App — permissão de Pull Request efetiva
 
-O watcher nativo confirmou que a instalação da GitHub App aceita a emissão de token com escopo mínimo explícito:
+          O watcher nativo confirmou que a instalação da GitHub App aceita a emissão de token com escopo mínimo explícito:
 
-- actions: read
-- contents: read
-- pull_requests: write
+          - actions: read
+          - contents: read
+          - pull_requests: write
 
-Evidência:
-- workflow: ${GITHUB_WORKFLOW}
-- run: ${GITHUB_RUN_ID}
-- SHA da automação: ${GITHUB_SHA}
-- correlation_id: github-app-pr-write-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          Evidência:
+          - workflow: ${GITHUB_WORKFLOW}
+          - run: ${GITHUB_RUN_ID}
+          - SHA da automação: ${GITHUB_SHA}
+          - correlation_id: github-app-pr-write-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
 
-Nenhum segredo foi lido ou publicado. O watcher será desabilitado após este registro para evitar novas execuções desnecessárias.
-EOF
-)"
+          Nenhum segredo foi lido ou publicado. O watcher será desabilitado após este registro para evitar novas execuções desnecessárias.
+          EOF
+          )"
             gh api --method POST \
               "repos/${GITHUB_REPOSITORY}/issues/1677/comments" \
               -f body="$body" >/dev/null
