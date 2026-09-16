@@ -19,6 +19,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from scripts import pending_development_orchestrator as core  # noqa: E402
+from scripts.copilot_agent_token_provider import resolve_copilot_agent_token  # noqa: E402
 from scripts.pending_development_agent_tasks import install_agent_task_route  # noqa: E402
 from scripts.pending_development_local_codex import install_local_codex_fallback  # noqa: E402
 
@@ -103,6 +104,19 @@ def _argument_value(args: list[str], name: str) -> str:
     return args[index + 1] if index + 1 < len(args) else ""
 
 
+def _install_agent_token(repo: str) -> None:
+    """Resolve token efêmero sem sobrescrever um secret já fornecido."""
+    if os.environ.get("COPILOT_AGENT_TOKEN"):
+        return
+    resolution = resolve_copilot_agent_token(
+        repository=repo,
+        correlation_id=os.environ.get("GITHUB_RUN_ID", ""),
+    )
+    if resolution.available:
+        # Processo atual somente; o valor não é persistido nem impresso.
+        os.environ["COPILOT_AGENT_TOKEN"] = resolution.token
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_args = list(argv if argv is not None else os.sys.argv[1:])
     parser = argparse.ArgumentParser(add_help=False)
@@ -114,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         return core.main(passthrough)
 
     repo_owner = repo.split("/", 1)[0]
+    _install_agent_token(repo)
     install_trusted_policy(repo_owner, str(known.event_name or ""))
     install_agent_task_route()
     install_local_codex_fallback()
