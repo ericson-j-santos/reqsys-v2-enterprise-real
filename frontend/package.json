@@ -26,12 +26,14 @@
         "validate:tooltip-a11y": "node scripts/validate-tooltip-accessible-name.mjs",
         "test:wcag22-guard": "vitest run src/accessibility/__tests__/wcag22Guard.test.js",
         "validate:wcag22-evidence": "node scripts/validate-wcag22-evidence.mjs",
+        "test:wcag22-automated-criteria": "node --test scripts/validate-wcag22-automated-criteria.test.mjs",
+        "validate:wcag22-automated-criteria": "node scripts/validate-wcag22-automated-criteria.mjs",
         "validate:wcag22-formal": "node scripts/validate-wcag22-formal-readiness.mjs",
         "export:figma-tokens": "node scripts/export-figma-tokens.mjs",
         "check:figma-token-drift": "npm run export:figma-tokens && git diff --exit-code -- artifacts/figma-tokens",
         "quality:design-system": "npm run validate:design-tokens && npm run check:figma-token-drift && npm run test:design-token-usage && npm run validate:design-token-usage && npm run build",
         "quality:linguagem-simples": "npm run test:linguagem-simples && npm run validate:linguagem-simples",
-        "quality:acessibilidade": "npm run test:tooltip-a11y && npm run validate:tooltip-a11y && npm run test:wcag22-guard"
+        "quality:acessibilidade": "npm run test:tooltip-a11y && npm run validate:tooltip-a11y && npm run test:wcag22-guard && npm run test:wcag22-automated-criteria"
     },
     "dependencies": {
         "@azure/msal-browser": "^5.18.0",

@@ -46,7 +46,7 @@ jobs:
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
             git fetch --no-tags --depth=200 origin || true
             git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/e2e-changed-files.txt || true
-            if grep -Eq '^(frontend/tests/e2e/|frontend/playwright\.config\.|frontend/scripts/validate-wcag22-|frontend/scripts/validate-tooltip-accessible-name|frontend/src/router/|frontend/src/views/|frontend/src/components/|frontend/src/layouts/|frontend/src/services/auth|frontend/src/stores/.*auth|governance/accessibility/)' /tmp/e2e-changed-files.txt; then
+            if grep -Eq '^(frontend/tests/e2e/|frontend/playwright\.config\.|frontend/scripts/validate-wcag22-|frontend/scripts/validate-tooltip-accessible-name|frontend/src/accessibility/|frontend/src/router/|frontend/src/views/|frontend/src/components/|frontend/src/layouts/|frontend/src/services/auth|frontend/src/stores/.*auth|governance/accessibility/)' /tmp/e2e-changed-files.txt; then
               run_e2e=true
             fi
           fi
@@ -107,9 +107,14 @@ jobs:
           tests/e2e/fluxo-completo-reqsys.spec.js
           tests/e2e/design-tokens-regressao.spec.js
           tests/e2e/acessibilidade-rotas.spec.js
+          tests/e2e/acessibilidade-teclado-foco.spec.js
           tests/e2e/accessibility-visual.spec.ts
       - name: Validar evidência automatizada WCAG 2.2
         run: npm run validate:wcag22-evidence
+      - name: Testar contrato do validador de critérios automatizados
+        run: npm run test:wcag22-automated-criteria
+      - name: Validar critérios automatizados de teclado e foco
+        run: npm run validate:wcag22-automated-criteria
       - name: Avaliar prontidão formal WCAG 2.2 AA
         id: wcag_formal
         continue-on-error: true

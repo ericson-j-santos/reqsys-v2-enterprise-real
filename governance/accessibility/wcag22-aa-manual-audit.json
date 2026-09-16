@@ -7,14 +7,32 @@
     {
       "id": "keyboard_navigation",
       "description": "Navegação integral apenas por teclado nos fluxos críticos",
-      "status": "pending",
-      "evidence": []
+      "status": "automated_gate",
+      "evidence": [],
+      "wcag_criteria": [
+        "2.1.1",
+        "2.1.2"
+      ],
+      "automated_gate": {
+        "spec": "frontend/tests/e2e/acessibilidade-teclado-foco.spec.js",
+        "validator": "frontend/scripts/validate-wcag22-automated-criteria.mjs",
+        "evidence_artifact": "test-results/accessibility/wcag22-criterios-automatizados.json"
+      }
     },
     {
       "id": "focus_visibility_and_not_obscured",
       "description": "Foco visível e não encoberto durante a navegação",
-      "status": "pending",
-      "evidence": []
+      "status": "automated_gate",
+      "evidence": [],
+      "wcag_criteria": [
+        "2.4.7",
+        "2.4.11"
+      ],
+      "automated_gate": {
+        "spec": "frontend/tests/e2e/acessibilidade-teclado-foco.spec.js",
+        "validator": "frontend/scripts/validate-wcag22-automated-criteria.mjs",
+        "evidence_artifact": "test-results/accessibility/wcag22-criterios-automatizados.json"
+      }
     },
     {
       "id": "zoom_and_reflow",
@@ -40,5 +58,6 @@
       "status": "pending",
       "evidence": []
     }
-  ]
+  ],
+  "automated_criteria_note": "Critérios com status automated_gate são comprovados por execução automatizada vinculada ao SHA corrente; a evidência é lida do artifact da execução vigente e nunca reaproveitada. Os demais continuam exigindo auditoria humana registrada."
 }

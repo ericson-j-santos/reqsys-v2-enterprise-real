@@ -59,3 +59,22 @@
 [data-testid="route-specs"] .v-list-item--disabled .muted {
   color: var(--text-muted) !important;
 }
+
+/*
+ * WCAG 2.2 AA — SC 2.4.7 (Foco visível) e SC 2.4.11 (Foco não encoberto).
+ *
+ * Vuetify zera o outline nativo em `.v-btn` e parte dos componentes locais
+ * também usa `outline: none` ao redefinir `:focus-visible`. Sem uma linha de
+ * base global, várias paradas de tabulação ficavam sem nenhuma diferença
+ * visual entre o estado focado e o não focado — condição que o axe-core não
+ * detecta, por depender de estado de interação.
+ *
+ * A linha de base abaixo garante indicador de foco para qualquer elemento
+ * alcançável por teclado, reutilizando o token institucional de destaque.
+ * Componentes podem continuar somando os próprios realces (borda, fundo,
+ * sombra); o outline apenas assegura o mínimo exigido pelo critério.
+ */
+:focus-visible {
+  outline: 3px solid var(--accent-strong) !important;
+  outline-offset: 2px !important;
+}
