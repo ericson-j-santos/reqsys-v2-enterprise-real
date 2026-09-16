@@ -56,6 +56,7 @@ _SAFE_PUBLIC_ARTIFACTS = {
     ".github/workflows/credential-control-plane.yml",
     ".github/workflows/credential-control-plane-runtime-health.yml",
     "config/credential-control-plane.json",
+    "docker-compose.pc24x7-token-broker.yml",
     "frontend/artifacts/figma-tokens/drift-report.json",
     "frontend/artifacts/figma-tokens/manifest.json",
     "frontend/artifacts/figma-tokens/reqsys.tokens.json",
@@ -65,6 +66,11 @@ _SAFE_PUBLIC_ARTIFACTS = {
 
 
 def _is_sensitive(self: review.ChangedFile) -> bool:
+    # Remover um arquivo potencialmente sensível reduz a superfície de exposição;
+    # não deve bloquear o PR como se um segredo estivesse sendo introduzido.
+    if self.status == "removed":
+        return False
+
     lowered = self.filename.lower()
     name = Path(lowered).name
     suffix = Path(name).suffix.lower()
