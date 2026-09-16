@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - fix/planner-teams-connection-refs-dev-20260916
+      - feat/pc24x7-microsoft-auth-gate-agent-20260916
     paths:
       - .github/workflows/planner-teams-connection-references-dev-fix.yml
       - scripts/fix_planner_teams_connection_references_dev.mjs
       - tests/fix_planner_teams_connection_references_dev.test.mjs
+      - scripts/pc24x7_microsoft_auth_gate_agent.mjs
+      - tests/pc24x7_microsoft_auth_gate_agent.test.mjs
   workflow_dispatch:
 
 permissions:
@@ -42,8 +45,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Validar contrato fail-closed do reparo
-        run: node --test tests/fix_planner_teams_connection_references_dev.test.mjs
+      - name: Validar contrato fail-closed do reparo e do agente PC24x7
+        run: node --test tests/fix_planner_teams_connection_references_dev.test.mjs tests/pc24x7_microsoft_auth_gate_agent.test.mjs
 
       - name: Restaurar sessão Microsoft sem expor credenciais
         shell: bash
