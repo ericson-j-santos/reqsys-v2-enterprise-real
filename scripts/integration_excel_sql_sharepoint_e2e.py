@@ -41,6 +41,9 @@ LOCK_RETRY_DELAY_SECONDS = 5
 SQL_CANDIDATE_LIMIT = 25
 _SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?$")
 _NUMERIC = re.compile(r"^\d+$")
+SQL_VALIDATION_DIRECT_DSN = "direct_dsn"
+SQL_VALIDATION_POWER_PLATFORM_GATEWAY = "power_platform_gateway"
+SUPPORTED_SQL_VALIDATION_MODES = {SQL_VALIDATION_DIRECT_DSN, SQL_VALIDATION_POWER_PLATFORM_GATEWAY}
 
 
 def utcnow() -> str:
@@ -327,6 +330,27 @@ def choose_candidate(
     raise RuntimeError("nenhum_identificador_valido_sem_residuo_sharepoint")
 
 
+def select_positive_identifier(
+    *,
+    validation_mode: str,
+    candidates: Iterable[str],
+    fixture_id: str,
+    sql_dsn: str,
+    procedure: str,
+    existing_items: Iterable[dict[str, Any]],
+) -> tuple[str, dict[str, Any] | None]:
+    if validation_mode == SQL_VALIDATION_DIRECT_DSN:
+        return choose_candidate(candidates, sql_dsn=sql_dsn, procedure=procedure, existing_items=existing_items)
+    if validation_mode != SQL_VALIDATION_POWER_PLATFORM_GATEWAY:
+        raise RuntimeError("sql_validation_mode_invalido")
+    fixture = fixture_id.strip()
+    if not _NUMERIC.fullmatch(fixture):
+        raise RuntimeError("sql_fixture_id_invalido")
+    if matching_items(existing_items, fixture):
+        raise RuntimeError("baseline_sharepoint_residual_detectado")
+    return fixture, None
+
+
 def derive_excel_source(
     client: httpx.Client,
     token: str,
@@ -520,7 +544,13 @@ def main() -> int:
     file_id = required_env("INTEGRATION_E2E_FILE_ID")
     site_id = required_env("INTEGRATION_E2E_SITE_ID")
     list_id = required_env("INTEGRATION_E2E_LIST_ID")
-    sql_dsn = required_env("INTEGRATION_E2E_SQL_DSN")
+    validation_mode = os.getenv("INTEGRATION_E2E_SQL_VALIDATION_MODE", SQL_VALIDATION_DIRECT_DSN).strip().lower()
+    if validation_mode not in SUPPORTED_SQL_VALIDATION_MODES:
+        raise RuntimeError("sql_validation_mode_invalido")
+    sql_dsn = os.getenv("INTEGRATION_E2E_SQL_DSN", "").strip()
+    if validation_mode == SQL_VALIDATION_DIRECT_DSN and not sql_dsn:
+        raise RuntimeError("variavel_obrigatoria_ausente:INTEGRATION_E2E_SQL_DSN")
+    sql_fixture_id = os.getenv("INTEGRATION_E2E_SQL_FIXTURE_ID", "").strip()
     procedure = required_env("INTEGRATION_E2E_SQL_PROCEDURE")
     environment_id = required_env("INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID")
     excel_connection = required_env("INTEGRATION_E2E_EXCEL_CONNECTION_ID")
@@ -540,6 +570,7 @@ def main() -> int:
         "real": True,
         "mocked": False,
         "simulated": False,
+        "sql_validation_mode": validation_mode,
         "checks": {},
         "flow": {},
         "positive": {},
@@ -586,8 +617,8 @@ def main() -> int:
                 file_id,
             )
             evidence["workbook_original_sha256"] = hashlib.sha256(original_workbook).hexdigest()
-            candidates = workbook_candidates(original_workbook)
-            if not candidates:
+            candidates = workbook_candidates(original_workbook) if validation_mode == SQL_VALIDATION_DIRECT_DSN else []
+            if validation_mode == SQL_VALIDATION_DIRECT_DSN and not candidates:
                 raise RuntimeError("tbEntrada_sem_identificador_numerico_candidato")
 
             baseline_items = list_items(
@@ -596,15 +627,22 @@ def main() -> int:
                 site_id,
                 list_id,
             )
-            selected_identifier, sql_row = choose_candidate(
-                candidates,
+            selected_identifier, sql_row = select_positive_identifier(
+                validation_mode=validation_mode,
+                candidates=candidates,
+                fixture_id=sql_fixture_id,
                 sql_dsn=sql_dsn,
                 procedure=procedure,
                 existing_items=baseline_items,
             )
             evidence["positive"]["identifier"] = selected_identifier
-            evidence["positive"]["sql_probe_key"] = str(sql_row.get(IDENTIFIER_COLUMN) or "")
-            evidence["checks"]["known_positive_sql_candidate"] = "passed"
+            if sql_row is not None:
+                evidence["positive"]["sql_probe_key"] = str(sql_row.get(IDENTIFIER_COLUMN) or "")
+                evidence["checks"]["known_positive_sql_candidate"] = "passed"
+            else:
+                evidence["positive"]["candidate_source"] = "configured_dev_fixture"
+                evidence["checks"]["fixture_contract"] = "passed"
+                evidence["checks"]["known_positive_sql_candidate"] = "deferred_to_real_flow"
             if matching_items(baseline_items, selected_identifier):
                 raise RuntimeError("baseline_sharepoint_residual_detectado")
             evidence["checks"]["baseline_sharepoint_absent"] = "passed"
@@ -730,6 +768,8 @@ def main() -> int:
                 }
             )
             evidence["checks"]["positive_case"] = "passed"
+            if validation_mode == SQL_VALIDATION_POWER_PLATFORM_GATEWAY:
+                evidence["checks"]["sql_via_gateway_real_flow"] = "passed"
 
             invalid_items = matching_items(first_items, invalid_identifier)
             if invalid_items:
