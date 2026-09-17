@@ -48,7 +48,8 @@ jobs:
             local name="$1"
             local resource="$2"
             local url="$3"
-            local token http
+            local token http body
+            body="/tmp/oidc-probe-$name.json"
             set +e
             token="$(az account get-access-token --resource "$resource" --query accessToken -o tsv 2>/dev/null)"
             local token_rc=$?
@@ -66,18 +67,56 @@ jobs:
             fi
             echo "::add-mask::$token"
             set +e
-            http="$(curl -sS -o /tmp/oidc-probe-body -w '%{http_code}' -H "Authorization: Bearer $token" -H 'Accept: application/json' "$url")"
+            http="$(curl -sS -o "$body" -w '%{http_code}' -H "Authorization: Bearer $token" -H 'Accept: application/json' "$url")"
             local curl_rc=$?
             set -e
-            python - "$name" "$http" "$curl_rc" <<'PY'
-          import json, sys
+            TOKEN="$token" BODY_PATH="$body" python - "$name" "$http" "$curl_rc" <<'PY'
+          import base64, json, os, sys
           from pathlib import Path
+
+          def claims(token):
+              try:
+                  raw=token.split(".")[1]
+                  raw += "=" * (-len(raw) % 4)
+                  payload=json.loads(base64.urlsafe_b64decode(raw).decode("utf-8"))
+                  roles=payload.get("roles") or []
+                  if isinstance(roles, str):
+                      roles=[roles]
+                  return {
+                      "aud": payload.get("aud"),
+                      "appid_or_azp": payload.get("appid") or payload.get("azp"),
+                      "roles": sorted(str(x) for x in roles),
+                  }
+              except Exception:
+                  return {"decode_failed": True}
+
+          def safe_error(path):
+              try:
+                  payload=json.loads(Path(path).read_text(encoding="utf-8"))
+              except Exception:
+                  return None
+              err=payload.get("error")
+              if isinstance(err, dict):
+                  code=err.get("code")
+                  msg=err.get("message")
+              else:
+                  code=payload.get("code") or payload.get("Code")
+                  msg=payload.get("message") or payload.get("Message") or (err if isinstance(err, str) else None)
+              result={}
+              if code:
+                  result["code"]=str(code)[:120]
+              if msg:
+                  result["message"]=str(msg).replace("\n"," ")[:300]
+              return result or None
+
           p=Path("audit/oidc/oidc-probe.json")
           d=json.loads(p.read_text())
           d["checks"][sys.argv[1]]={
               "token_acquired": True,
               "http_status": int(sys.argv[2] or 0),
               "transport_ok": int(sys.argv[3]) == 0,
+              "claims": claims(os.environ["TOKEN"]),
+              "error": safe_error(os.environ["BODY_PATH"]),
           }
           p.write_text(json.dumps(d, indent=2)+"\n")
           PY
