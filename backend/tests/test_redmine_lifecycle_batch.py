@@ -199,6 +199,12 @@ def test_falha_aplica_backoff_depois_quarentena_e_liberacao_explicita(db_session
         **comuns,
     )
     assert primeira['outcome'] == batch.OUTCOME_FAILED
+    # O texto da exceção fica no estado de controle e na auditoria, nunca na
+    # resposta devolvida ao chamador.
+    assert primeira['error_type'] == 'RedmineLifecycleSyncError'
+    assert primeira['error_ref'] == 'corr-falha-1'
+    assert 'error' not in primeira
+    assert _control(db_session, requisito)['last_error'] == 'conflito de propriedade de campo'
     assert primeira['attempts'] == 1
     assert primeira['backoff_minutos'] == 5
     assert primeira['next_attempt_at'] == '2026-09-17T12:05:00Z'
@@ -222,6 +228,8 @@ def test_falha_aplica_backoff_depois_quarentena_e_liberacao_explicita(db_session
         **comuns,
     )
     assert segunda['outcome'] == batch.OUTCOME_QUARANTINED
+    assert segunda['error_type'] == 'RedmineLifecycleSyncError'
+    assert 'error' not in segunda
     assert segunda['attempts'] == 2
     assert segunda['next_attempt_at'] is None
     assert 'REDMINE_SYNC_QUARENTENA' in _acoes(db_session)
@@ -326,7 +334,10 @@ def test_requisito_sem_vinculo_ou_com_vinculo_invalido_falha_fechado(db_session,
         agora=AGORA,
     )
     assert resultado_sem['outcome'] == batch.OUTCOME_FAILED
-    assert 'vínculo' in resultado_sem['error']
+    assert resultado_sem['error_type'] == 'vinculo_ausente'
+    assert resultado_sem['error_ref'] == 'corr-sem-vinculo'
+    # Resposta não pode carregar texto de exceção (CodeQL: information exposure).
+    assert 'error' not in resultado_sem
 
     invalido = _requisito(db_session, codigo='REQ-168620008', issue_id='nao-numerico')
     resultado_invalido = batch.reconciliar_requisito(
@@ -337,6 +348,8 @@ def test_requisito_sem_vinculo_ou_com_vinculo_invalido_falha_fechado(db_session,
         agora=AGORA,
     )
     assert resultado_invalido['outcome'] == batch.OUTCOME_FAILED
+    assert resultado_invalido['error_type'] == 'vinculo_invalido'
+    assert 'error' not in resultado_invalido
 
     # Lote só considera requisitos com vínculo de issue Redmine.
     lote = batch.reconciliar_lote(

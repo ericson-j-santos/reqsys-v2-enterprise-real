@@ -310,7 +310,8 @@ def reconciliar_requisito(
             'requisito_id': requisito.id,
             'codigo': requisito.codigo,
             'outcome': OUTCOME_FAILED,
-            'error': 'Requisito não possui vínculo de issue Redmine.',
+            'error_type': 'vinculo_ausente',
+            'error_ref': correlation_id,
             'attempts': 0,
             'quarantined': False,
         }
@@ -324,7 +325,8 @@ def reconciliar_requisito(
             'requisito_id': requisito.id,
             'codigo': requisito.codigo,
             'outcome': OUTCOME_FAILED,
-            'error': f'Vínculo Redmine inválido: {issue_link.referencia!r}.',
+            'error_type': 'vinculo_invalido',
+            'error_ref': correlation_id,
             'attempts': 0,
             'quarantined': False,
         }
@@ -420,15 +422,16 @@ def reconciliar_requisito(
             control['quarantined'] = True
             control['quarantine_reason'] = erro
             control['quarantined_at'] = _iso(agora)
-            control['next_attempt_at'] = None
             proximo_em = None
+            next_attempt_at = None
         else:
             proximo_em = _backoff_minutos(
                 attempts,
                 base_minutos=backoff_base_minutos,
                 max_minutos=backoff_max_minutos,
             )
-            control['next_attempt_at'] = _iso(agora + timedelta(minutes=proximo_em))
+            next_attempt_at = _iso(agora + timedelta(minutes=proximo_em))
+        control['next_attempt_at'] = next_attempt_at
 
         control = _release_lock(db, control_link, control)
         _audit(
@@ -443,7 +446,7 @@ def reconciliar_requisito(
                 'max_tentativas': max_tentativas,
                 'error': erro,
                 'quarantined': quarentenado,
-                'next_attempt_at': control.get('next_attempt_at'),
+                'next_attempt_at': next_attempt_at,
                 'backoff_minutos': proximo_em,
             },
         )
@@ -452,10 +455,14 @@ def reconciliar_requisito(
             'codigo': requisito.codigo,
             'redmine_issue_id': issue_id,
             'outcome': OUTCOME_QUARANTINED if quarentenado else OUTCOME_FAILED,
-            'error': erro,
+            # O texto da falha fica no estado de controle e no evento de
+            # auditoria; a resposta da API devolve apenas o tipo e a chave de
+            # correlação, para não expor detalhe de exceção ao chamador.
+            'error_type': type(exc).__name__,
+            'error_ref': correlation_id,
             'attempts': attempts,
             'quarantined': quarentenado,
-            'next_attempt_at': control.get('next_attempt_at'),
+            'next_attempt_at': next_attempt_at,
             'backoff_minutos': proximo_em,
         }
 
@@ -465,7 +472,7 @@ def reconciliar_requisito(
     control['next_attempt_at'] = None
     control['last_success_at'] = _iso(agora)
     control['last_correlation_id'] = correlation_id
-    control = _release_lock(db, control_link, control)
+    _release_lock(db, control_link, control)
 
     return {
         'requisito_id': requisito.id,

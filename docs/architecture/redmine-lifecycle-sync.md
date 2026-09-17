@@ -102,7 +102,12 @@ credencial no repositório.
 - fingerprint impede reenvio sem mudança — repetir a mesma entrada produz zero
   mutações adicionais;
 - journal já processado não é reimportado (checkpoint pelo maior `journal_id`);
-- requisito sem vínculo Redmine válido falha fechado, sem sincronizar.
+- requisito sem vínculo Redmine válido falha fechado, sem sincronizar;
+- **texto de exceção nunca sai na resposta da API**: o item falho devolve
+  `error_type` (código ou classe da exceção) e `error_ref` (o `correlation_id`),
+  enquanto a mensagem completa fica no estado de controle e no evento de
+  auditoria — achado de *information exposure* do CodeQL tratado na origem, não
+  suprimido.
 
 ## Estado de validação
 
