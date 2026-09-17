@@ -53,12 +53,27 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Validar configuração OIDC governada
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado; bootstrap permanece fail-closed."
+              exit 2
+            fi
+          done
+
       - name: Login Azure por OIDC
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
 
       - name: Instalar ODBC Driver 18 e pyodbc
         shell: bash
