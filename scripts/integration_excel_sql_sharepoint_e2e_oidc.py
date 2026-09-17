@@ -32,6 +32,7 @@ from scripts.integration_excel_sql_sharepoint_e2e import (
     delete_sharepoint_item,
     derive_excel_source,
     download_workbook,
+    graph_request,
     list_items,
     matching_items,
     upload_workbook,
@@ -55,6 +56,63 @@ def required_env(name: str) -> str:
 
 def item_version(item: dict[str, Any]) -> str:
     return str(item.get("eTag") or item.get("lastModifiedDateTime") or "").strip()
+
+def latest_workbook_version_id(
+    client: httpx.Client,
+    token: str,
+    drive_id: str,
+    file_id: str,
+) -> str:
+    response = graph_request(
+        client,
+        "GET",
+        f"/drives/{drive_id}/items/{file_id}/versions?$top=20",
+        token,
+    ).json()
+    versions = response.get("value") or []
+    if not versions:
+        raise OidcE2EError("workbook_version_history_ausente")
+    def numeric(version: dict[str, Any]) -> tuple[int, ...]:
+        parts = str(version.get("id") or "0").split(".")
+        return tuple(int(part) if part.isdigit() else 0 for part in parts)
+    latest = max(versions, key=numeric)
+    version_id = str(latest.get("id") or "").strip()
+    if not version_id:
+        raise OidcE2EError("workbook_version_id_ausente")
+    return version_id
+
+
+def restore_workbook_version(
+    client: httpx.Client,
+    token: str,
+    drive_id: str,
+    file_id: str,
+    version_id: str,
+    expected_sha256: str,
+    attempts: int = 24,
+    delay_seconds: int = 10,
+) -> None:
+    last_status = 0
+    for attempt in range(1, attempts + 1):
+        try:
+            graph_request(
+                client,
+                "POST",
+                f"/drives/{drive_id}/items/{file_id}/versions/{version_id}/restoreVersion",
+                token,
+            )
+            restored, _ = download_workbook(client, token, drive_id, file_id)
+            observed = hashlib.sha256(restored).hexdigest()
+            if observed != expected_sha256:
+                raise OidcE2EError("workbook_restore_hash_divergente")
+            return
+        except httpx.HTTPStatusError as exc:
+            last_status = exc.response.status_code
+            if last_status != 423 or attempt >= attempts:
+                raise
+            time.sleep(delay_seconds)
+    raise OidcE2EError(f"workbook_restore_timeout:http_{last_status}")
+
 
 
 def wait_first_effect(
@@ -159,6 +217,7 @@ def main() -> int:
     }
 
     original_workbook: bytes | None = None
+    original_workbook_version_id = ""
     original_clientdata: str | None = None
     created_item_id = ""
 
@@ -178,7 +237,11 @@ def main() -> int:
             original_workbook, original_etag = download_workbook(
                 client, graph_token, drive_id, file_id
             )
+            original_workbook_version_id = latest_workbook_version_id(
+                client, graph_token, drive_id, file_id
+            )
             evidence["workbook_original_sha256"] = hashlib.sha256(original_workbook).hexdigest()
+            evidence["workbook_original_version_captured"] = True
 
             baseline = list_items(client, graph_token, site_id, list_id)
             if matching_items(baseline, fixture_id):
@@ -296,29 +359,23 @@ def main() -> int:
                     evidence["cleanup"]["flow_restore_error"] = exc.__class__.__name__
                     evidence["status"] = "failed"
 
-            if original_workbook is not None:
+            if original_workbook is not None and original_workbook_version_id:
                 try:
-                    _, current_etag = download_workbook(
-                        cleanup, graph_token, drive_id, file_id
-                    )
-                    upload_workbook(
+                    restore_workbook_version(
                         cleanup,
                         graph_token,
                         drive_id,
                         file_id,
-                        original_workbook,
-                        current_etag,
+                        original_workbook_version_id,
+                        hashlib.sha256(original_workbook).hexdigest(),
                     )
-                    restored, _ = download_workbook(
-                        cleanup, graph_token, drive_id, file_id
-                    )
-                    ok = hashlib.sha256(restored).hexdigest() == hashlib.sha256(original_workbook).hexdigest()
-                    evidence["cleanup"]["workbook_restored"] = ok
-                    if not ok:
-                        evidence["status"] = "failed"
+                    evidence["cleanup"]["workbook_restored"] = True
+                    evidence["cleanup"]["workbook_restore_method"] = "sharepoint_version_history"
                 except Exception as exc:
                     evidence["cleanup"]["workbook_restored"] = False
                     evidence["cleanup"]["workbook_restore_error"] = exc.__class__.__name__
+                    if isinstance(exc, httpx.HTTPStatusError):
+                        evidence["cleanup"]["workbook_restore_http_status"] = exc.response.status_code
                     evidence["status"] = "failed"
 
             if created_item_id:
