@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Revalidação não interativa do contrato SQL DEV via OIDC + Key Vault.
+
 import json
 
 import pytest
