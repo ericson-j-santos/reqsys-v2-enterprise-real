@@ -36,7 +36,8 @@ jobs:
           path: source
 
       - name: Testar contrato do produtor
-        run: python -m pytest source/tests/test_todo_event_relay_snapshot.py -q
+        working-directory: source
+        run: python -m pytest tests/test_todo_event_relay_snapshot.py -q
 
       - name: Autenticar no Microsoft Entra por OIDC
         uses: azure/login@v2
@@ -94,7 +95,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- relay/snapshot.json; then
+          if [ -z "$(git status --porcelain -- relay/snapshot.json)" ]; then
             echo 'RELAY_CHANGED=false'
             exit 0
           fi
