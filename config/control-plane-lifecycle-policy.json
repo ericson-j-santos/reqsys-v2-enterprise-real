@@ -33,7 +33,8 @@
         "project": "ericson-j-santos/reqsys-v2-enterprise-real"
       },
       "consumers": [
-        "github-actions:gitlab-main-mirror"
+        "github-actions:gitlab-main-mirror",
+        "github-actions:todo-event-relay"
       ]
     },
     {
