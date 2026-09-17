@@ -225,7 +225,36 @@ def test_main_never_serializes_internal_execution_result(monkeypatch, capsys):
     assert '"secret_value_exposed":false' in output
 
 
-def test_main_exception_output_is_fixed_and_sanitized(monkeypatch, capsys):
+@pytest.mark.parametrize(
+    ("internal_reason", "public_reason"),
+    [
+        ("azure_session_missing", "azure_session_missing"),
+        ("tenant_mismatch", "tenant_mismatch"),
+        ("entra_application_not_found", "entra_application_not_found"),
+        ("tool_missing:az", "azure_cli_missing"),
+        ("tool_missing:gh", "github_cli_missing"),
+        ("az_failed:provider detail must not escape", "azure_command_failed"),
+        ("gh_failed:provider detail must not escape", "github_command_failed"),
+        ("gh_sensitive_operation_failed", "github_secret_write_failed"),
+        ("validation_workflow_run_not_found", "validation_workflow_run_not_found"),
+    ],
+)
+def test_main_exposes_only_allowlisted_failure_code(monkeypatch, capsys, internal_reason, public_reason):
+    monkeypatch.setattr(rotation, "parse_args", lambda *_: args())
+    monkeypatch.setattr(
+        rotation,
+        "execute",
+        lambda *_: (_ for _ in ()).throw(rotation.RotationError(internal_reason)),
+    )
+
+    assert rotation.main([]) == 4
+    output = capsys.readouterr().out
+    assert f'"reason":"{public_reason}"' in output
+    assert "provider detail" not in output
+    assert '"secret_value_exposed":false' in output
+
+
+def test_unknown_exception_output_remains_generic_and_sanitized(monkeypatch, capsys):
     monkeypatch.setattr(rotation, "parse_args", lambda *_: args())
 
     def fail_with_sensitive_detail(*_):
@@ -238,3 +267,24 @@ def test_main_exception_output_is_fixed_and_sanitized(monkeypatch, capsys):
     assert '"status":"blocked"' in output
     assert '"reason":"rotation_not_performed"' in output
     assert "super-secret-must-not-print" not in output
+
+
+def test_public_emitter_rejects_untrusted_reason(capsys):
+    rotation._emit_public_status("blocked", "provider-secret-detail")
+    output = capsys.readouterr().out
+    assert '"reason":"rotation_not_performed"' in output
+    assert "provider-secret-detail" not in output
+
+
+def test_blocked_result_reports_idempotent_duplicate_without_details(monkeypatch, capsys):
+    monkeypatch.setattr(rotation, "parse_args", lambda *_: args())
+    monkeypatch.setattr(
+        rotation,
+        "execute",
+        lambda *_: {"status": "blocked", "reason": "ROTATION_ALREADY_EXISTS"},
+    )
+
+    assert rotation.main([]) == 5
+    output = capsys.readouterr().out
+    assert '"reason":"rotation_already_exists"' in output
+    assert '"secret_value_exposed":false' in output
