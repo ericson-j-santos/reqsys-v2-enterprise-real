@@ -8,7 +8,8 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from app.api import jobs, parallelism_control, parallelism_reconciliation, todo_events
+from app.api import central, jobs, parallelism_control, parallelism_reconciliation, todo_events
+from app.application.services.central_service import CentralService
 from app.application.services.job_service import JobService
 from app.core.async_compat import resolve_maybe_awaitable
 from app.core.components import build_runtime_components
@@ -22,6 +23,7 @@ queue_gateway = components.queue
 worker_task: asyncio.Task[None] | None = None
 reconciliation_task: asyncio.Task[None] | None = None
 parallelism_redis: Redis | None = None
+central_service = CentralService()
 
 if settings.storage_backend == "redis":
     parallelism_redis = Redis.from_url(settings.redis_url, decode_responses=True)
@@ -55,6 +57,10 @@ def resolver_job_service() -> JobService:
     return job_service
 
 
+def resolver_central_service() -> CentralService:
+    return central_service
+
+
 def resolver_parallelism_store() -> parallelism_control.ParallelismStore:
     return parallelism_store
 
@@ -79,6 +85,7 @@ jobs.router.dependency_overrides_provider = None
 todo_events.router.dependency_overrides_provider = None
 parallelism_control.router.dependency_overrides_provider = None
 parallelism_reconciliation.router.dependency_overrides_provider = None
+central.router.dependency_overrides_provider = None
 
 
 @asynccontextmanager
@@ -113,10 +120,12 @@ app.dependency_overrides[parallelism_control.get_parallelism_store] = resolver_p
 app.dependency_overrides[parallelism_control.get_control_token] = resolver_control_token
 app.dependency_overrides[parallelism_control.get_smoke_check] = lambda: resolver_smoke_check
 app.dependency_overrides[parallelism_reconciliation.get_reconciler] = resolver_reconciler
+app.dependency_overrides[central.get_central_service] = resolver_central_service
 app.include_router(jobs.router)
 app.include_router(todo_events.router)
 app.include_router(parallelism_control.router)
 app.include_router(parallelism_reconciliation.router)
+app.include_router(central.router)
 
 
 @app.get("/health", tags=["runtime"])
