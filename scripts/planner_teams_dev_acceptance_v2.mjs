@@ -399,6 +399,19 @@ function classifyFailure(error) {
   if (message.includes('device_code_privado_ausente')) return { failure_stage: 'microsoft_session', error_code: 'device_code_privado_ausente' }
   if (message.includes('id_token_ausente')) return { failure_stage: 'microsoft_session', error_code: 'id_token_ausente' }
   if (message.startsWith('token:')) return { failure_stage: 'microsoft_session', error_code: 'oauth_token_exchange_failed' }
+  if (message.startsWith('power_platform_connections:')) return { failure_stage: 'connections', error_code: 'power_platform_connections_failed' }
+  if (message.includes('conexao_shared_planner_ambigua')) return { failure_stage: 'connections', error_code: 'planner_connection_ambiguous' }
+  if (message.includes('conexao_shared_teams_ambigua')) return { failure_stage: 'connections', error_code: 'teams_connection_ambiguous' }
+  if (message.includes('conexao_explicita_nao_encontrada:WSJF_DEV_PLANNER_CONNECTION_ID')) return { failure_stage: 'connections', error_code: 'planner_connection_not_found' }
+  if (message.includes('conexao_explicita_nao_encontrada:PLANNER_TEAMS_DEV_TEAMS_CONNECTION_ID')) return { failure_stage: 'connections', error_code: 'teams_connection_not_found' }
+  if (message.startsWith('reqsys:/v1/hub-lowcode/planner-teams-notify/deploy:')) return { failure_stage: 'provisioning', error_code: 'provisioning_deploy_request_failed' }
+  if (message.includes('provisionamento_nao_implantado')) return { failure_stage: 'provisioning', error_code: 'provisioning_not_implanted' }
+  if (message.startsWith('flow_state:')) return { failure_stage: 'flow_activation', error_code: 'flow_state_query_failed' }
+  if (message.startsWith('flow_start:')) return { failure_stage: 'flow_activation', error_code: 'flow_start_failed' }
+  if (message.includes('flow_nao_confirmou_started')) return { failure_stage: 'flow_activation', error_code: 'flow_not_started' }
+  if (message.startsWith('graph:POST:/planner/tasks:')) return { failure_stage: 'planner_tasks', error_code: 'planner_task_create_failed' }
+  if (message.startsWith('flow_runs:')) return { failure_stage: 'flow_observation', error_code: 'flow_runs_query_failed' }
+  if (message.includes('execucoes_flow_criada_insuficientes')) return { failure_stage: 'flow_observation', error_code: 'created_flow_runs_insufficient' }
   return { failure_stage: 'acceptance', error_code: 'acceptance_failed' }
 }
 
