@@ -43,16 +43,15 @@ jobs:
           evidence_dir = Path("dashboard-health-evidence")
           evidence_dir.mkdir(exist_ok=True)
           started = time.monotonic()
-          errors: list[str] = []
+          transport_errors: list[str] = []
+          contract_errors: list[str] = []
+          freshness_errors: list[str] = []
           http_status: int | None = None
           data_age_hours: float | None = None
           payload: dict[str, object] | None = None
 
           def fetch(url: str) -> tuple[int, bytes]:
-              request = urllib.request.Request(
-                  url,
-                  headers={"User-Agent": "ReqSys-Dashboard-Health/1.0"},
-              )
+              request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-Dashboard-Health/1.1"})
               with urllib.request.urlopen(request, timeout=20) as response:
                   return int(response.status), response.read()
 
@@ -60,45 +59,48 @@ jobs:
               http_status, html = fetch(base_url)
               text = html.decode("utf-8", errors="replace")
               if http_status != 200:
-                  errors.append(f"dashboard HTTP {http_status}")
+                  transport_errors.append(f"dashboard HTTP {http_status}")
               if "Teams" not in text or "SLO" not in text:
-                  errors.append("marcadores do dashboard ausentes")
+                  contract_errors.append("marcadores do dashboard ausentes")
           except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-              errors.append(f"dashboard inacessível: {exc}")
+              transport_errors.append(f"dashboard inacessível: {exc}")
 
           try:
               data_status, raw_data = fetch(base_url + "data.json")
               if data_status != 200:
-                  errors.append(f"data.json HTTP {data_status}")
+                  transport_errors.append(f"data.json HTTP {data_status}")
               payload = json.loads(raw_data)
+          except (urllib.error.URLError, TimeoutError) as exc:
+              transport_errors.append(f"data.json inacessível: {exc}")
+          except (ValueError, json.JSONDecodeError) as exc:
+              contract_errors.append(f"data.json inválido: {exc}")
+
+          if payload is not None:
               required = {
-                  "schema_version",
-                  "service",
-                  "generated_at",
-                  "state",
-                  "success_rate_percent",
-                  "total_runs",
-                  "recent_runs",
+                  "schema_version", "service", "generated_at", "state",
+                  "success_rate_percent", "total_runs", "recent_runs",
               }
               missing = sorted(required.difference(payload))
               if missing:
-                  errors.append("campos ausentes: " + ", ".join(missing))
-              generated_at = datetime.fromisoformat(
-                  str(payload["generated_at"]).replace("Z", "+00:00")
-              )
-              data_age_hours = round(
-                  (datetime.now(timezone.utc) - generated_at).total_seconds() / 3600,
-                  2,
-              )
-              if data_age_hours < 0 or data_age_hours > max_age_hours:
-                  errors.append(f"dados desatualizados: {data_age_hours}h")
-          except (urllib.error.URLError, TimeoutError, ValueError, KeyError, json.JSONDecodeError) as exc:
-              errors.append(f"data.json inválido: {exc}")
+                  contract_errors.append("campos ausentes: " + ", ".join(missing))
+              generated_at_value = payload.get("generated_at")
+              if generated_at_value is not None:
+                  try:
+                      generated_at = datetime.fromisoformat(str(generated_at_value).replace("Z", "+00:00"))
+                      if generated_at.tzinfo is None:
+                          contract_errors.append("generated_at sem fuso horário")
+                      else:
+                          data_age_hours = round((datetime.now(timezone.utc) - generated_at).total_seconds() / 3600, 2)
+                          if data_age_hours < 0 or data_age_hours > max_age_hours:
+                              freshness_errors.append(f"dados desatualizados: {data_age_hours}h")
+                  except ValueError as exc:
+                      contract_errors.append(f"generated_at inválido: {exc}")
 
+          errors = transport_errors + contract_errors + freshness_errors
           latency_ms = round((time.monotonic() - started) * 1000, 2)
           state = "healthy" if not errors else "unhealthy"
           evidence = {
-              "schema_version": "1.0.0",
+              "schema_version": "1.1.0",
               "service": "teams-notification-dashboard",
               "checked_at": datetime.now(timezone.utc).isoformat(),
               "dashboard_url": base_url,
@@ -107,12 +109,12 @@ jobs:
               "latency_ms": latency_ms,
               "data_age_hours": data_age_hours,
               "dashboard_state": None if payload is None else payload.get("state"),
+              "transport_errors": transport_errors,
+              "contract_errors": contract_errors,
+              "freshness_errors": freshness_errors,
               "errors": errors,
           }
-          (evidence_dir / "health.json").write_text(
-              json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
-              encoding="utf-8",
-          )
+          (evidence_dir / "health.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"state={state}\n")
@@ -127,6 +129,7 @@ jobs:
               summary.write(f"- HTTP: **{http_status or 'n/a'}**\n")
               summary.write(f"- Latência: **{latency_ms} ms**\n")
               summary.write(f"- Idade dos dados: **{data_age_hours if data_age_hours is not None else 'n/a'} h**\n")
+              summary.write(f"- Transporte: **{len(transport_errors)}** · Contrato: **{len(contract_errors)}** · Frescor: **{len(freshness_errors)}**\n")
               if errors:
                   summary.write("- Falhas: " + "; ".join(errors) + "\n")
           PY
