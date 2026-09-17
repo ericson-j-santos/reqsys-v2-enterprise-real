@@ -14,6 +14,7 @@ Regras estruturais:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
@@ -94,6 +95,58 @@ def derivar_status(checks: dict[EvidenceCheck, CheckResult]) -> EvidenceStatus:
     return EvidenceStatus.NOT_VALIDATED
 
 
+@dataclass(frozen=True)
+class EvidenceApplication:
+    """Resultado de aplicar uma entrada de evidência sobre o registro corrente."""
+
+    registro: EvidenceRecord
+    #: Preenchido quando o SHA mudou: o registro anterior passa a SUPERSEDED.
+    anterior_invalidado: EvidenceRecord | None = None
+
+
+def aplicar_evidencia(
+    anterior: EvidenceRecord | None, entrada: EvidenceRecordInput
+) -> EvidenceApplication:
+    """Regra canônica de evidência, independente de onde o estado é guardado.
+
+    Memória e Redis compartilham esta função para que a semântica de mesclagem,
+    invalidação por SHA e derivação de status não divirja entre backends.
+    """
+    checks = dict(entrada.checks)
+    invalidado: EvidenceRecord | None = None
+
+    if anterior is not None and anterior.sha == entrada.sha:
+        # Mesmo SHA: as verificações se acumulam; a mais recente prevalece.
+        mescladas = dict(anterior.checks)
+        mescladas.update(checks)
+        checks = mescladas
+    elif anterior is not None:
+        invalidado = anterior.model_copy(
+            update={"status": EvidenceStatus.SUPERSEDED, "superseded_by_sha": entrada.sha}
+        )
+
+    registro = EvidenceRecord(
+        request_id=entrada.request_id,
+        sha=entrada.sha,
+        environment=entrada.environment,
+        checks=checks,
+        production_touched=entrada.production_touched,
+        evidence_run_url=entrada.evidence_run_url,
+        status=derivar_status(checks),
+        recorded_at=agora(),
+    )
+    return EvidenceApplication(registro=registro, anterior_invalidado=invalidado)
+
+
+def status_valido_para_sha(registro: EvidenceRecord | None, sha: str | None) -> EvidenceStatus:
+    """Status que vale para o SHA informado; evidência de outro SHA não conta."""
+    if registro is None:
+        return EvidenceStatus.NOT_VALIDATED
+    if sha is not None and registro.sha != sha:
+        return EvidenceStatus.NOT_VALIDATED
+    return registro.status
+
+
 class EvidenceLedger:
     """Ledger em memória, uma entrada corrente por solicitação e histórico imutável."""
 
@@ -103,29 +156,12 @@ class EvidenceLedger:
 
     def registrar(self, entrada: EvidenceRecordInput) -> EvidenceRecord:
         anterior = self._corrente.get(entrada.request_id)
-        checks = dict(entrada.checks)
+        aplicacao = aplicar_evidencia(anterior, entrada)
 
-        if anterior is not None and anterior.sha == entrada.sha:
-            # Mesmo SHA: as verificações se acumulam; a mais recente prevalece.
-            mescladas = dict(anterior.checks)
-            mescladas.update(checks)
-            checks = mescladas
-        elif anterior is not None:
-            invalidado = anterior.model_copy(
-                update={"status": EvidenceStatus.SUPERSEDED, "superseded_by_sha": entrada.sha}
-            )
-            self._substituir_no_historico(anterior, invalidado)
+        if aplicacao.anterior_invalidado is not None and anterior is not None:
+            self._substituir_no_historico(anterior, aplicacao.anterior_invalidado)
 
-        registro = EvidenceRecord(
-            request_id=entrada.request_id,
-            sha=entrada.sha,
-            environment=entrada.environment,
-            checks=checks,
-            production_touched=entrada.production_touched,
-            evidence_run_url=entrada.evidence_run_url,
-            status=derivar_status(checks),
-            recorded_at=agora(),
-        )
+        registro = aplicacao.registro
         self._corrente[entrada.request_id] = registro
         self._historico.append(registro)
         return registro
@@ -138,12 +174,7 @@ class EvidenceLedger:
 
         Evidência de outro SHA nunca é reaproveitada: devolve NOT_VALIDATED.
         """
-        registro = self._corrente.get(request_id)
-        if registro is None:
-            return EvidenceStatus.NOT_VALIDATED
-        if sha is not None and registro.sha != sha:
-            return EvidenceStatus.NOT_VALIDATED
-        return registro.status
+        return status_valido_para_sha(self._corrente.get(request_id), sha)
 
     def historico(self, request_id: str) -> tuple[EvidenceRecord, ...]:
         return tuple(item for item in self._historico if item.request_id == request_id)

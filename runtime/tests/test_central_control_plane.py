@@ -444,3 +444,66 @@ def test_api_evidencia_ausente_retorna_404(client):
 
 def test_api_solicitacao_inexistente_retorna_404(client):
     assert client.get("/api/central/work-requests/WR-INEXISTENTE").status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Durabilidade: o plano de controle sobrevive ao processo
+# --------------------------------------------------------------------------- #
+
+
+def _store_redis():
+    from tests.test_central_store import FakeRedis
+
+    from app.infrastructure.repositories.central_store import RedisCentralStore
+
+    return RedisCentralStore(FakeRedis(), prefix="test:central")
+
+
+async def test_estado_sobrevive_a_reinicio_do_servico():
+    """Um novo CentralService sobre o mesmo store reencontra fila e evidência."""
+    store = _store_redis()
+    service = CentralService(store=store)
+    criada = await service.registrar(entrada(sha=SHA_A))
+    await service.aplicar_admissao()
+    await service.transicionar(criada.request_id, WorkRequestStatus.EXECUTING)
+    await service.registrar_evidencia(
+        EvidenceRecordInput(
+            request_id=criada.request_id,
+            sha=SHA_A,
+            environment=Environment.DEV,
+            checks={check: CheckResult.PASS for check in EvidenceCheck},
+        )
+    )
+
+    # Reinício: novo serviço, mesmo estado durável.
+    reiniciado = CentralService(store=store)
+    relida = await reiniciado.obter(criada.request_id)
+    assert relida.status is WorkRequestStatus.AWAITING_EVIDENCE
+    assert (await reiniciado.obter_evidencia(criada.request_id)).status is EvidenceStatus.EVIDENCED
+
+    final = await reiniciado.transicionar(criada.request_id, WorkRequestStatus.EVIDENCED)
+    assert final.status is WorkRequestStatus.EVIDENCED
+
+
+async def test_ciclo_completo_sobre_store_redis():
+    service = CentralService(store=_store_redis(), wip_policy=WipPolicy(max_active_root_causes=1))
+    await service.registrar(entrada(title="Reparar workflow de CI", root_cause_id="rc-ci"))
+    await service.registrar(
+        entrada(
+            title="Sincronizar Planner com Teams",
+            root_cause_id="rc-graph",
+            correlation_id="corr-87654321",
+        )
+    )
+
+    proximo = await service.proximo_item()
+    assert proximo is not None and proximo.executor is ExecutorKind.CI_REPAIR
+    assert await service.proximo_item(ExecutorKind.GRAPH) is None
+
+
+async def test_registro_idempotente_sobre_store_redis():
+    service = CentralService(store=_store_redis())
+    primeira = await service.registrar(entrada())
+    segunda = await service.registrar(entrada())
+    assert primeira.request_id == segunda.request_id
+    assert len(await service.listar()) == 1

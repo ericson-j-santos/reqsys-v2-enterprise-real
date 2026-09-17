@@ -10,6 +10,12 @@ from redis.asyncio import Redis
 
 from app.api import central, jobs, parallelism_control, parallelism_reconciliation, todo_events
 from app.application.services.central_service import CentralService
+from app.domain.central.wip_policy import WipPolicy
+from app.infrastructure.repositories.central_store import (
+    CentralStore,
+    InMemoryCentralStore,
+    RedisCentralStore,
+)
 from app.application.services.job_service import JobService
 from app.core.async_compat import resolve_maybe_awaitable
 from app.core.components import build_runtime_components
@@ -22,16 +28,23 @@ job_service = components.service
 queue_gateway = components.queue
 worker_task: asyncio.Task[None] | None = None
 reconciliation_task: asyncio.Task[None] | None = None
-parallelism_redis: Redis | None = None
-central_service = CentralService()
+runtime_redis: Redis | None = None
 
 if settings.storage_backend == "redis":
-    parallelism_redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    # Um único cliente serve o controle de paralelismo e a Central.
+    runtime_redis = Redis.from_url(settings.redis_url, decode_responses=True)
     parallelism_store: parallelism_control.ParallelismStore = parallelism_control.RedisParallelismStore(
-        parallelism_redis, settings.parallelism_control_redis_prefix
+        runtime_redis, settings.parallelism_control_redis_prefix
     )
+    central_store: CentralStore = RedisCentralStore(runtime_redis, settings.central_redis_prefix)
 else:
     parallelism_store = parallelism_control.InMemoryParallelismStore()
+    central_store = InMemoryCentralStore()
+
+central_service = CentralService(
+    wip_policy=WipPolicy(settings.central_max_active_root_causes),
+    store=central_store,
+)
 
 
 async def resolver_smoke_check(target: parallelism_control.Target) -> dict[str, object]:
@@ -104,8 +117,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             except asyncio.CancelledError:
                 pass
     await queue_gateway.fechar()
-    if parallelism_redis is not None:
-        await parallelism_redis.aclose()
+    if runtime_redis is not None:
+        await runtime_redis.aclose()
 
 
 app = FastAPI(
