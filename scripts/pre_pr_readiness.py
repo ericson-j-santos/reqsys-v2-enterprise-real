@@ -129,7 +129,7 @@ def targeted_pytest_checks(targeted: list[str], root: Path) -> list[CheckResult]
             )
         )
     if backend_tests:
-        relative = [str(Path(path).relative_to("backend")) for path in backend_tests]
+        relative = [Path(path).relative_to("backend").as_posix() for path in backend_tests]
         results.append(
             _timed_check(
                 "targeted:pytest:backend",
@@ -173,7 +173,6 @@ def validate_structured_files(files: list[str], root: Path) -> list[CheckResult]
                         raise ValueError("workflow sem objeto jobs")
                     if "name" not in payload:
                         raise ValueError("workflow sem name")
-                    # PyYAML 1.1 pode converter a chave 'on' para True.
                     if "on" not in payload and True not in payload:
                         raise ValueError("workflow sem gatilho on")
                 results.append(CheckResult(f"yaml:{rel}", "passed", "YAML válido", round(time.monotonic() - started, 3)))
@@ -277,6 +276,13 @@ def main() -> int:
 
     checks.extend(validate_python(files, root))
     checks.extend(validate_structured_files(files, root))
+    checks.append(
+        _timed_check(
+            "sdd:contract",
+            [sys.executable, "scripts/sdd_gate.py", "--base-ref", args.base_ref, "--head-sha", head_sha],
+            cwd=root,
+        )
+    )
 
     targeted = candidate_pytests(files, root)
     if targeted:
