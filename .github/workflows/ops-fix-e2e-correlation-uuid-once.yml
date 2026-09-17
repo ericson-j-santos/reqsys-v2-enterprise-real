@@ -1,0 +1,45 @@
+name: Ops fix Excel SQL E2E correlation UUID once
+
+on:
+  push:
+    branches:
+      - fix/excel-sql-e2e-correlation-uuid-20260917
+    paths:
+      - ".github/workflows/ops-fix-e2e-correlation-uuid-once.yml"
+      - ".github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fix/excel-sql-e2e-correlation-uuid-20260917
+          fetch-depth: 0
+      - name: Substituir correlation textual por UUID deterministico
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml')
+          text = path.read_text(encoding='utf-8')
+          old = '          echo "E2E_CORRELATION_ID=excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"\n'
+          new = '''          correlation_id="$(python -c 'import os,uuid; seed="reqsys:excel-sql-sharepoint:"+os.environ["GITHUB_RUN_ID"]+":"+os.environ["GITHUB_RUN_ATTEMPT"]+":"+os.environ["GITHUB_SHA"]; print(uuid.uuid5(uuid.NAMESPACE_URL, seed))')"\n          echo "E2E_CORRELATION_ID=$correlation_id" >> "$GITHUB_ENV"\n'''
+          if old not in text:
+              print('CORRELATION_PATCH_NOT_NEEDED=true')
+          else:
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('CORRELATION_PATCH_APPLIED=true')
+          PY
+          if git diff --quiet; then
+            echo "Nenhuma alteracao necessaria."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml
+          git commit -m "fix: usar UUID como correlation id no E2E Excel SQL"
+          git push origin HEAD:fix/excel-sql-e2e-correlation-uuid-20260917
