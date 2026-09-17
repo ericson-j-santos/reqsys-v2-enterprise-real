@@ -17,7 +17,7 @@ Executar pelo runtime PC24x7/Command Gateway com:
 
 Senha, MFA, token e client secret não são aceitos como argumentos.
 
-A operação é Risk 3. O gateway padrão permanece fail-closed; a execução real deve usar a exceção local do proprietário prevista em `chatgpt-operational-rules`, com `action_id`, escopo, expiração e fingerprint previamente allowlisted na máquina. A configuração privada não é criada nem alterada pelo próprio script.
+A operação é Risk 3. O gateway padrão permanece fail-closed; a execução real deve usar a exceção local do proprietário prevista em `chatgpt-operational-rules`, com `action_id`, escopo, expiração e fingerprint previamente allowlisted na máquina ou o modo DEV temporário vigente e auditado quando aplicável. A configuração privada não é criada nem alterada pelo próprio script.
 
 ## Fluxo
 
@@ -32,7 +32,7 @@ A operação é Risk 3. O gateway padrão permanece fail-closed; a execução re
 9. se a escrita/verificação no GitHub falhar, remove a password credential recém-criada;
 10. captura o SHA vigente da `main`;
 11. dispara `Integration Excel SQL SharePoint — Functional Evidence DEV` na `main`;
-12. emite ao terminal somente um envelope constante de status, sem serializar o objeto interno da execução.
+12. emite ao terminal somente um envelope sanitizado de status, sem serializar o objeto interno da execução nem mensagens brutas de provedor.
 
 A automação não remove credenciais Entra preexistentes. A limpeza de credenciais antigas depende de comprovação de não uso.
 
@@ -57,12 +57,14 @@ Para uma rotação controlada sem disparar imediatamente o E2E, usar `--skip-val
 
 ## Saída pública e evidência
 
-O `stdout` da CLI é deliberadamente mínimo e contém somente um envelope constante:
+O `stdout` da CLI é deliberadamente mínimo:
 
 - `status=rotated`, `dry_run` ou `blocked`;
 - `environment=reqsys-power-platform-dev`;
 - `secret_value_exposed=false`;
-- em bloqueio, apenas `reason=rotation_not_performed`.
+- em bloqueio, `reason` pertence a uma lista fechada de códigos sanitizados, como `azure_session_missing`, `tenant_mismatch`, `entra_application_not_found`, `azure_cli_missing`, `github_cli_missing`, `azure_command_failed`, `github_command_failed`, `github_secret_write_failed`, `validation_workflow_run_not_found`, `rotation_already_exists` ou o fallback `rotation_not_performed`.
+
+Detalhes brutos retornados por Azure/GitHub nunca são serializados no envelope público. Causas não reconhecidas continuam reduzidas a `rotation_not_performed`.
 
 O processo que manipulou o segredo **não** imprime `application_name`, `credential_key`, `github_secret.updated_at`, run ID, URL, SHA ou mensagens brutas de provedor. Após `status=rotated`, esses fatos devem ser comprovados por fontes independentes e não sensíveis:
 
@@ -74,9 +76,9 @@ A existência do secret não prova o E2E. O fechamento da issue #1649 continua c
 
 ## Falhas e rollback
 
-- tenant divergente, sessão ausente ou aplicação não localizada: fail-closed antes de mutação;
-- mesmo `correlation_id`: `ROTATION_ALREADY_EXISTS`, sem duplicar credential;
+- tenant divergente, sessão ausente ou aplicação não localizada: fail-closed antes de mutação e código público sanitizado;
+- mesmo `correlation_id`: `rotation_already_exists`, sem duplicar credential;
 - falha no `gh secret set`/verificação: tenta remover imediatamente a credential criada nesta execução;
 - se o rollback também falhar, a saída pública continua sanitizada e a execução termina bloqueada;
 - falha depois da confirmação do secret no GitHub: mantém a credential para não invalidar o secret recém-gravado e exige reconciliação posterior;
-- nenhum caminho imprime `secretText` ou detalhe bruto de erro de operação sensível.
+- nenhum caminho imprime `secretText`, token, senha ou detalhe bruto de erro de operação sensível.
