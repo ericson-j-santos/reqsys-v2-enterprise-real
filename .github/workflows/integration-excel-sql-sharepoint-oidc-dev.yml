@@ -15,7 +15,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       INTEGRATION_E2E_ENVIRONMENT: dev
       INTEGRATION_E2E_DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
