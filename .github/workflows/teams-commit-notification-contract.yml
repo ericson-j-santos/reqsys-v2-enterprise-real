@@ -28,6 +28,8 @@ jobs:
           python tests/test_teams_graph_gateway_autocontido.py
           grep -Fq "adaptive-card-file" .github/workflows/teams-commit-notification.yml
           grep -Fq "Action.OpenUrl" .github/workflows/teams-commit-notification.yml
+          ! grep -Fq "concurrency:" .github/workflows/teams-commit-notification.yml
+          ! grep -Fq "continue-on-error:" .github/workflows/teams-commit-notification.yml
           grep -Fq "renderMode" tools/geradores/teams_graph_gateway_autocontido.py
           grep -Fq "adaptiveCardJson" tools/geradores/teams_graph_gateway_autocontido.py
           grep -Fq "adaptive_card=self.card" tests/test_teams_graph_gateway_autocontido.py
