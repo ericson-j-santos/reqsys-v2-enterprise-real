@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from scripts.validate_issue_governance import load_issue_json, render_comment, validate_issue
+from scripts.validate_issue_governance import (
+    load_issue_author_type,
+    load_issue_json,
+    main,
+    render_comment,
+    validate_issue,
+)
 
 
 VALID_BODY = """### Descrição do problema
@@ -137,3 +143,98 @@ def test_comentario_valido_marca_conformidade() -> None:
 
     assert "Governança da Issue — conforme" in comment
     assert "13/13 campos válidos" in comment
+
+
+PANEL_BODY = """<!-- reqsys-operational-panel -->
+## Progresso da certificação GitHub → Teams
+
+**Estado atual:** `quality_blocked`
+"""
+
+
+def test_painel_operacional_de_bot_fica_fora_do_contrato() -> None:
+    result = validate_issue(
+        title="[STATUS][TEAMS] Progresso da certificação operacional",
+        body=PANEL_BODY,
+        issue_number=1358,
+        author_type="Bot",
+    )
+
+    assert result.scope == "operational_panel"
+    assert result.valid is True
+    assert result.missing_fields == []
+    assert result.checked_fields == 0
+
+
+def test_marcador_de_painel_em_issue_humana_nao_dispensa_o_contrato() -> None:
+    result = validate_issue(
+        title="[ISSUE] Tentativa de escapar do contrato",
+        body=PANEL_BODY,
+        issue_number=1359,
+        author_type="User",
+    )
+
+    assert result.scope == "governed_issue"
+    assert result.valid is False
+    assert "Descrição do problema" in result.missing_fields
+
+
+def test_issue_de_bot_sem_marcador_permanece_sob_contrato() -> None:
+    result = validate_issue(
+        title="[ISSUE] Criada por automação",
+        body="## Painel sem marcador\n",
+        issue_number=1360,
+        author_type="Bot",
+    )
+
+    assert result.scope == "governed_issue"
+    assert result.valid is False
+
+
+def test_issue_governada_conforme_mantem_escopo_padrao() -> None:
+    result = validate_issue(title="[ISSUE] Corrigir fluxo X", body=VALID_BODY, author_type="User")
+
+    assert result.scope == "governed_issue"
+    assert result.valid is True
+
+
+def test_comentario_de_painel_declara_fora_de_escopo() -> None:
+    result = validate_issue(title="[STATUS] Painel", body=PANEL_BODY, author_type="Bot")
+    comment = render_comment(result)
+
+    assert "<!-- reqsys-issue-governance-validator -->" in comment
+    assert "fora de escopo" in comment
+    assert "Nenhuma ação humana é necessária" in comment
+
+
+def test_author_type_do_payload_e_utilizado(tmp_path: Path) -> None:
+    payload_path = tmp_path / "event.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "issue": {
+                    "number": 1358,
+                    "title": "[STATUS][TEAMS] Painel",
+                    "body": PANEL_BODY,
+                    "user": {"type": "Bot"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_issue_author_type(payload_path) == "Bot"
+
+
+def test_cli_retorna_zero_para_painel_operacional(tmp_path: Path) -> None:
+    issue_path = tmp_path / "issue.json"
+    issue_path.write_text(
+        json.dumps({"number": 1358, "title": "[STATUS] Painel", "body": PANEL_BODY, "author_type": "Bot"}),
+        encoding="utf-8",
+    )
+    comment_path = tmp_path / "comment.md"
+
+    exit_code = main(["--issue-json", str(issue_path), "--comment-output", str(comment_path)])
+
+    assert exit_code == 0
+    assert "fora de escopo" in comment_path.read_text(encoding="utf-8")
