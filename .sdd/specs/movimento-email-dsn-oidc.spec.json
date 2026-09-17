@@ -1,0 +1,19 @@
+{
+  "feature_name": "movimento-email-dsn-oidc",
+  "project": "ReqSys v2 Enterprise — Prospecção Movimento",
+  "created_at": "2026-09-17",
+  "updated_at": "2026-09-17",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Corrige a autenticação Azure do bootstrap do DSN reutilizando a identidade OIDC governada já existente no ReqSys, com validação fail-closed e sem introduzir segredo de cliente.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_movimento_email_dsn_bootstrap_workflow.py"
+    ],
+    "evidence_contract": "A evidência pode registrar somente nomes de controles, presença/ausência e status; nunca valores de IDs, tokens, usuário, senha ou MOVIMENTO_EMAIL_SOURCE_DSN. A validação estática não substitui o E2E contra SQL Server real."
+  }
+}
