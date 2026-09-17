@@ -1,4 +1,4 @@
-name: Ops fix Excel SQL E2E correlation UUID once
+name: Ops validate and dispatch Excel SQL E2E once
 
 on:
   push:
@@ -6,40 +6,37 @@ on:
       - fix/excel-sql-e2e-correlation-uuid-20260917
     paths:
       - ".github/workflows/ops-fix-e2e-correlation-uuid-once.yml"
-      - ".github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml"
 
 permissions:
-  contents: write
+  contents: read
+  actions: write
 
 jobs:
-  patch:
+  validate-and-dispatch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          ref: fix/excel-sql-e2e-correlation-uuid-20260917
-          fetch-depth: 0
-      - name: Substituir correlation textual por UUID deterministico
+          python-version: "3.12"
+
+      - name: Validar correção do correlation id SQL
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml')
-          text = path.read_text(encoding='utf-8')
-          old = '          echo "E2E_CORRELATION_ID=excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"\n'
-          new = '''          correlation_id="$(python -c 'import os,uuid; seed="reqsys:excel-sql-sharepoint:"+os.environ["GITHUB_RUN_ID"]+":"+os.environ["GITHUB_RUN_ATTEMPT"]+":"+os.environ["GITHUB_SHA"]; print(uuid.uuid5(uuid.NAMESPACE_URL, seed))')"\n          echo "E2E_CORRELATION_ID=$correlation_id" >> "$GITHUB_ENV"\n'''
-          if old not in text:
-              print('CORRELATION_PATCH_NOT_NEEDED=true')
-          else:
-              path.write_text(text.replace(old, new, 1), encoding='utf-8')
-              print('CORRELATION_PATCH_APPLIED=true')
-          PY
-          if git diff --quiet; then
-            echo "Nenhuma alteracao necessaria."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml
-          git commit -m "fix: usar UUID como correlation id no E2E Excel SQL"
-          git push origin HEAD:fix/excel-sql-e2e-correlation-uuid-20260917
+          python -m pip install --quiet pytest
+          python -m pytest tests/test_integration_excel_sql_sharepoint_flow.py -q
+          python -m py_compile backend/app/services/integration_excel_sql_sharepoint_flow.py
+
+      - name: Disparar E2E real DEV no mesmo ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/integration-excel-sql-sharepoint-e2e-dev.yml/dispatches" \
+            -f ref="${GITHUB_REF_NAME}" \
+            -f 'inputs[power_platform_environment_hint]=567445cb-49a2-ef0f-8490-cc81a281d6ed'
+          echo "E2E_DISPATCHED_REF=${GITHUB_REF_NAME}"
+          echo "E2E_DISPATCHED_SHA=${GITHUB_SHA}"
