@@ -191,4 +191,5 @@ async def runtime_health() -> dict[str, object]:
 async def runtime_analytics() -> dict[str, object]:
     metrics = await job_service.metricas()
     metrics["parallelism_reconciliation"] = parallelism_reconciler.metrics.snapshot()
+    metrics["central"] = (await central_service.metricas()).to_dict()
     return metrics

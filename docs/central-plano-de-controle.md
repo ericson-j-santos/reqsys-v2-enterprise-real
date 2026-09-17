@@ -23,6 +23,7 @@ executor nunca é escolhido pelo produtor: a Central classifica.
 | Serviço | `runtime/app/application/services/central_service.py` | Fecha o ciclo e impõe as transições válidas |
 | Store | `runtime/app/infrastructure/repositories/central_store.py` | Persistência do estado: memória (DEV) ou Redis (durável) |
 | Worker | `runtime/app/application/services/central_worker.py` | Puxa o próximo item, executa e registra evidência |
+| Métricas | `runtime/app/domain/central/metrics.py` | Lead Time to Evidence e onde o tempo é gasto |
 | Executor HTTP | `runtime/app/infrastructure/executors/http_executor.py` | Executor concreto: produz o efeito e comprova o que conseguiu |
 | Registro de executores | `runtime/app/infrastructure/executors/registry.py` | De `ExecutorKind` para o adaptador configurado |
 | API | `runtime/app/api/central.py` | Endpoints sob `/api/central` |
@@ -107,6 +108,33 @@ executor não consegue, sozinho, declarar trabalho comprovado.
 `POST /api/central/worker/cycle` executa um único ciclo (operação assistida e
 E2E) e responde `403` em produção, onde o ciclo é do worker contínuo.
 
+## Métricas
+
+A métrica principal não é commit nem PR verde: é **Lead Time to Evidence** — o
+tempo entre a solicitação entrar e existir evidência completa no SHA corrente.
+As demais séries existem para explicar onde esse tempo é gasto.
+
+| Série | O que responde |
+| --- | --- |
+| `lead_time_to_evidence` | p50, p95 e máximo, em segundos, com o nº de amostras |
+| `por_status` / `por_executor` | onde o trabalho está e quem deveria executá-lo |
+| `evidencia_por_status` | quanto está `PARTIAL`, `BLOCKED` ou `EVIDENCED` |
+| `wip` | causas raiz ativas, enfileiradas e se o limite foi violado |
+| `bloqueios.por_causa` | bloqueios agrupados pelo prefixo do `blocker` — a causa, não a instância |
+| `aguardando_evidencia.verificacoes_pendentes` | qual verificação mais impede a conclusão |
+| `aguardando_evidencia.idade_maxima_segundos` | há quanto tempo o item mais antigo espera comprovação |
+
+Duas decisões de medição que evitam número bonito e falso:
+
+* o lead time é medido do `created_at` da solicitação até o `recorded_at` do
+  registro de evidência que a tornou `EVIDENCED` — não até o `updated_at`, que
+  qualquer escrita posterior moveria;
+* evidência de **outro SHA não entra na amostra**: mediria um lead time
+  fictício, de uma versão que não é a concluída.
+
+Disponível em `GET /api/central/metrics` e embutida em `GET /api/runtime/analytics`
+sob a chave `central`.
+
 ## Persistência e concorrência
 
 O estado vive em um `CentralStore`, escolhido por `STORAGE_BACKEND`:
@@ -169,6 +197,7 @@ continua consultando o ledger e nenhuma conclusão indevida passa.
 | GET | `/api/central/next[?executor=]` | Próximo item executável; `204` quando não há |
 | POST | `/api/central/evidence` | Registra verificações no ledger |
 | GET | `/api/central/evidence/{id}` | Leitura independente do ledger |
+| GET | `/api/central/metrics` | Séries operacionais, incluindo Lead Time to Evidence |
 | POST | `/api/central/worker/cycle[?executor=]` | Executa um ciclo; `403` em produção |
 
 ## Validação E2E
@@ -232,8 +261,6 @@ executado.
 
 * Há um executor concreto (HTTP). Executores nativos de GitHub, Graph, SQL e
   Drive ainda precisam ser expostos por trás desse contrato.
-* A Central não expõe métricas próprias em `/api/runtime/analytics`, logo o
-  Lead Time to Evidence ainda não é medido automaticamente.
 * O preflight de identidade (verificação ativa de consentimento, segredo e
   validade antes da fila) não está implementado; hoje o bloqueio é declarado
   pela regra `identity.blocked` a partir dos sinais da solicitação.

@@ -23,6 +23,7 @@ from app.domain.central.evidence_ledger import (
     EvidenceStatus,
 )
 from app.domain.central.executor_router import ExecutorRouter
+from app.domain.central.metrics import CentralMetrics, calcular_metricas
 from app.domain.central.models import (
     ACTIVE_STATUSES,
     ExecutorKind,
@@ -227,6 +228,21 @@ class CentralService:
 
         await self._store.atualizar(entrada.request_id, mutator)
         return registro
+
+    async def metricas(self) -> CentralMetrics:
+        """Fotografia operacional da Central a partir do estado persistido.
+
+        A evidência é lida por solicitação (N+1). No volume da Central isso é
+        irrelevante e mantém o store livre de uma consulta especializada; se um
+        dia doer, o lugar de otimizar é o store, não este cálculo.
+        """
+        solicitacoes = await self._store.listar()
+        evidencias: dict[str, EvidenceRecord] = {}
+        for solicitacao in solicitacoes:
+            registro = await self._store.obter_evidencia(solicitacao.request_id)
+            if registro is not None:
+                evidencias[solicitacao.request_id] = registro
+        return calcular_metricas(solicitacoes, evidencias, self._wip.plan(solicitacoes))
 
     async def obter_evidencia(self, request_id: str) -> EvidenceRecord | None:
         return await self._store.obter_evidencia(request_id)

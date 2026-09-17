@@ -238,6 +238,36 @@ def main() -> int:
             depois["posts"] == antes["posts"] and depois["efeitos"] == antes["efeitos"],
             f"posts={depois['posts']} (antes {antes['posts']})",
         )
+        # --- MÉTRICAS: medidas sobre o que o ciclo real produziu -----------
+        st, m = central("GET", "/api/central/metrics")
+        check("metricas_200", st == 200, st)
+        check("metricas_total", m["total"] == 4, m["total"])
+        check("metricas_status", m["por_status"].get("EVIDENCED") == 1, m["por_status"])
+        check(
+            "lead_time_medido",
+            m["lead_time_to_evidence"]["amostras"] == 1
+            and m["lead_time_to_evidence"]["p50_segundos"] is not None,
+            m["lead_time_to_evidence"],
+        )
+        check(
+            "metricas_bloqueio_por_causa",
+            m["bloqueios"]["por_causa"].get("executor_nao_configurado") == 1,
+            m["bloqueios"],
+        )
+        check(
+            "metricas_pendencia_de_comprovacao",
+            m["aguardando_evidencia"]["verificacoes_pendentes"].get("negative_control") == 1,
+            m["aguardando_evidencia"],
+        )
+        check("metricas_wip_sem_violacao", m["wip"]["breach"] is False, m["wip"])
+
+        # Leitura independente: as mesmas séries em /api/runtime/analytics.
+        st, analytics = central("GET", "/api/runtime/analytics")
+        check(
+            "metricas_em_analytics",
+            st == 200 and analytics["central"]["lead_time_to_evidence"]["amostras"] == 1,
+            st,
+        )
     finally:
         servidor.shutdown()
 
