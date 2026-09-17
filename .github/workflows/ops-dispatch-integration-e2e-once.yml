@@ -1,0 +1,31 @@
+name: One-shot dispatch Integration Excel SQL SharePoint DEV
+
+on:
+  push:
+    branches:
+      - ops/e2e-sql-dispatch-20260917
+    paths:
+      - .github/workflows/ops-dispatch-integration-e2e-once.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar E2E oficial na main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/integration-excel-sql-sharepoint-e2e-dev.yml/dispatches" \
+            --data '{"ref":"main","inputs":{"power_platform_environment_hint":"567445cb-49a2-ef0f-8490-cc81a281d6ed","sql_connection_hint":"311d88b3cc1d4c72914014bc1d64b92d"}}')"
+          echo "dispatch_http_status=${status}"
+          test "${status}" = '204'
