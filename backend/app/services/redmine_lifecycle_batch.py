@@ -242,14 +242,16 @@ def _acquire_lock(
     return True, control
 
 
-def _release_lock(db: Session, link: VinculoGit, control: dict[str, Any]) -> dict[str, Any]:
+def _release_lock(db: Session, link: VinculoGit, control: dict[str, Any]) -> None:
+    """Libera a reserva gravando o controle sem lock.
+
+    Se o compare-and-swap falhar, outra sessão já avançou o estado (por exemplo,
+    um lock expirado assumido por outro worker) e nada é sobrescrito. Nenhum
+    chamador precisa do estado resultante: quem decide segue com os valores
+    locais da própria execução, e a leitura seguinte vem do banco.
+    """
     raw_before = link.titulo
-    liberado = {**control, 'lock': None}
-    if not _swap_control(db, link, raw_before, liberado):
-        # Outra sessão avançou o estado (ex.: lock expirado assumido por outro
-        # worker). Não sobrescreve: devolve o estado corrente.
-        return {**_empty_control(), **_load(link.titulo)}
-    return liberado
+    _swap_control(db, link, raw_before, {**control, 'lock': None})
 
 
 def _backoff_minutos(attempts: int, *, base_minutos: int, max_minutos: int) -> int:
@@ -433,7 +435,7 @@ def reconciliar_requisito(
             next_attempt_at = _iso(agora + timedelta(minutes=proximo_em))
         control['next_attempt_at'] = next_attempt_at
 
-        control = _release_lock(db, control_link, control)
+        _release_lock(db, control_link, control)
         _audit(
             db,
             requisito=requisito,
