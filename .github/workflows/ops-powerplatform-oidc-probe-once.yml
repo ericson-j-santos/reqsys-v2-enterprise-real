@@ -30,6 +30,7 @@ jobs:
         shell: bash
         env:
           ENVIRONMENT_ID: "567445cb-49a2-ef0f-8490-cc81a281d6ed"
+          DATAVERSE_URL: "https://orge9b920f1.crm2.dynamics.com"
         run: |
           set -euo pipefail
           mkdir -p audit/oidc
@@ -85,6 +86,7 @@ jobs:
           probe graph "https://graph.microsoft.com/" "https://graph.microsoft.com/v1.0/sites/root?\$select=id"
           probe power_platform "https://api.powerplatform.com/" "https://api.powerplatform.com/environmentmanagement/environments?api-version=2024-10-01"
           probe flow "https://service.flow.microsoft.com/" "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/$ENVIRONMENT_ID/flows?api-version=2016-11-01"
+          probe dataverse "$DATAVERSE_URL/" "$DATAVERSE_URL/api/data/v9.2/workflows?\$select=workflowid,name,statecode,statuscode&\$top=1"
 
           cat audit/oidc/oidc-probe.json
 
