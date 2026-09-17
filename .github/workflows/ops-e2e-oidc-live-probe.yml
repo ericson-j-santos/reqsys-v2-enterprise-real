@@ -1,0 +1,79 @@
+name: Ops E2E OIDC live probe once
+
+on:
+  push:
+    branches:
+      - feat/e2e-powerplatform-oidc-20260917
+    paths:
+      - ".github/workflows/ops-e2e-oidc-live-probe.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    env:
+      PYTHONPATH: .
+      INTEGRATION_E2E_DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
+      INTEGRATION_E2E_SITE_HINT: reqsys-wsjf-dev
+      INTEGRATION_E2E_FILE_HINT: ReqSys-Excel-SQL-SharePoint-DEV.xlsx
+      INTEGRATION_E2E_FLOW_DISPLAY_NAME: ReqSys - Excel SQL SharePoint DEV E2E
+      TARGET_CORRELATION: excel-sql-sharepoint-oidc-35288172682-1
+      TARGET_KEY: "990000000000001"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check httpx openpyxl
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Estado independente
+        shell: bash
+        run: |
+          set -euo pipefail
+          graph_token="$(az account get-access-token --resource https://graph.microsoft.com/ --query accessToken -o tsv)"
+          dataverse_token="$(az account get-access-token --resource "$INTEGRATION_E2E_DATAVERSE_URL/" --query accessToken -o tsv)"
+          echo "::add-mask::$graph_token"
+          echo "::add-mask::$dataverse_token"
+          export POWER_PLATFORM_GRAPH_ACCESS_TOKEN="$graph_token"
+          export POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN="$dataverse_token"
+          python scripts/integration_excel_sql_sharepoint_oidc_discovery.py \
+            --output /tmp/discovery.json \
+            --github-env "$GITHUB_ENV" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id live-probe
+          python - <<'PY'
+          import json, os
+          import httpx
+          from scripts.integration_excel_sql_sharepoint_dataverse import get_flow
+          from scripts.integration_excel_sql_sharepoint_e2e import list_items, matching_items, current_correlation_items
+
+          with httpx.Client(follow_redirects=True) as client:
+              flow=get_flow(
+                  client,
+                  os.environ["INTEGRATION_E2E_DATAVERSE_URL"],
+                  os.environ["INTEGRATION_E2E_FLOW_ID"],
+                  os.environ["POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN"],
+              )
+              items=list_items(
+                  client,
+                  os.environ["POWER_PLATFORM_GRAPH_ACCESS_TOKEN"],
+                  os.environ["INTEGRATION_E2E_SITE_ID"],
+                  os.environ["INTEGRATION_E2E_LIST_ID"],
+              )
+          corr=current_correlation_items(items, os.environ["TARGET_KEY"], os.environ["TARGET_CORRELATION"])
+          key=matching_items(items, os.environ["TARGET_KEY"])
+          print(json.dumps({
+              "flow_statecode": flow.get("statecode"),
+              "positive_key_count": len(key),
+              "current_correlation_count": len(corr),
+              "versions_present": [bool(x.get("eTag") or x.get("lastModifiedDateTime")) for x in corr],
+          }))
+          PY
