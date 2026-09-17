@@ -24,6 +24,32 @@ WORKFLOW_FILE = "integration-excel-sql-sharepoint-functional-evidence-dev.yml"
 CONFIRMATION = "ROTATE-POWER-PLATFORM-CLIENT-SECRET-DEV"
 GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
 
+PUBLIC_REASON_EXACT = {
+    "azure_session_missing": "azure_session_missing",
+    "tenant_mismatch": "tenant_mismatch",
+    "entra_application_not_found": "entra_application_not_found",
+    "azure_json_invalid": "azure_response_invalid",
+    "entra_add_password_incomplete": "entra_add_password_incomplete",
+    "gh_sensitive_operation_failed": "github_secret_write_failed",
+    "github_secret_not_observed_after_write": "github_secret_not_observed_after_write",
+    "github_secret_verification_invalid": "github_secret_verification_invalid",
+    "github_secret_name_mismatch": "github_secret_name_mismatch",
+    "github_write_failed_and_entra_rollback_failed": "github_write_failed_and_entra_rollback_failed",
+    "main_sha_missing": "main_sha_missing",
+    "validation_workflow_run_not_found": "validation_workflow_run_not_found",
+    "dev_scope_violation": "dev_scope_violation",
+    "days_valid_out_of_range": "days_valid_out_of_range",
+}
+PUBLIC_REASONS = set(PUBLIC_REASON_EXACT.values()) | {
+    "azure_cli_missing",
+    "github_cli_missing",
+    "azure_command_failed",
+    "github_command_failed",
+    "confirmation_required",
+    "rotation_already_exists",
+    "rotation_not_performed",
+}
+
 
 class RotationError(RuntimeError):
     pass
@@ -136,12 +162,7 @@ def _remove_password(app_object_id: str, key_id: str) -> None:
 
 
 def _set_github_secret(repository: str, environment: str, secret_name: str, secret_value: str) -> None:
-    """Transmite o segredo somente por stdin e descarta toda saída do processo.
-
-    Esta função é deliberadamente separada de ``_run`` para que material
-    sensível nunca alcance um ``CompletedProcess`` capturado, mensagem de erro,
-    evidência ou caminho de logging.
-    """
+    """Transmite o segredo somente por stdin e descarta toda saída do processo."""
     result = subprocess.run(
         [_tool("gh"), "secret", "set", secret_name, "--env", environment, "--repo", repository],
         input=secret_value,
@@ -184,12 +205,7 @@ def _rotate_password_into_github(
     environment: str,
     secret_name: str,
 ) -> tuple[str, dict[str, str]]:
-    """Cria e consome o segredo dentro do menor escopo possível.
-
-    Somente ``key_id`` e metadados não sensíveis saem desta função. Se a
-    publicação/verificação falhar, a credential criada nesta tentativa é
-    removida antes de propagar a falha.
-    """
+    """Cria e consome o segredo dentro do menor escopo possível."""
     secret_material, key_id = _add_password(app_object_id, display_name, days_valid)
     try:
         _set_github_secret(repository, environment, secret_name, secret_material)
@@ -292,24 +308,50 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _emit_public_status(status: str) -> None:
-    """Emite somente envelopes constantes sem serializar dados de execução."""
-    if status == "rotated":
-        print('{"environment":"reqsys-power-platform-dev","secret_value_exposed":false,"status":"rotated"}')
-    elif status == "dry_run":
-        print('{"environment":"reqsys-power-platform-dev","secret_value_exposed":false,"status":"dry_run"}')
-    else:
-        print('{"environment":"reqsys-power-platform-dev","reason":"rotation_not_performed","secret_value_exposed":false,"status":"blocked"}')
+def _public_reason(error: RotationError) -> str:
+    message = str(error)
+    if message in PUBLIC_REASON_EXACT:
+        return PUBLIC_REASON_EXACT[message]
+    if message.startswith("tool_missing:az"):
+        return "azure_cli_missing"
+    if message.startswith("tool_missing:gh"):
+        return "github_cli_missing"
+    if message.startswith("az_failed:"):
+        return "azure_command_failed"
+    if message.startswith("gh_failed:"):
+        return "github_command_failed"
+    if message.startswith("confirmation_required:"):
+        return "confirmation_required"
+    return "rotation_not_performed"
+
+
+def _public_result_reason(result: dict[str, Any]) -> str:
+    if result.get("reason") == "ROTATION_ALREADY_EXISTS":
+        return "rotation_already_exists"
+    return "rotation_not_performed"
+
+
+def _emit_public_status(status: str, reason: str | None = None) -> None:
+    """Emite somente valores públicos de uma allowlist fechada."""
+    payload: dict[str, Any] = {
+        "environment": ENVIRONMENT,
+        "secret_value_exposed": False,
+        "status": status,
+    }
+    if status == "blocked":
+        payload["reason"] = reason if reason in PUBLIC_REASONS else "rotation_not_performed"
+    print(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
 
 
 def main(argv: list[str] | None = None) -> int:
     try:
         result = execute(parse_args(argv))
-    except RotationError:
-        _emit_public_status("blocked")
+    except RotationError as exc:
+        _emit_public_status("blocked", _public_reason(exc))
         return 4
     status = str(result.get("status") or "blocked")
-    _emit_public_status(status)
+    reason = _public_result_reason(result) if status == "blocked" else None
+    _emit_public_status(status, reason)
     return 0 if status in {"rotated", "dry_run"} else 5
 
 
