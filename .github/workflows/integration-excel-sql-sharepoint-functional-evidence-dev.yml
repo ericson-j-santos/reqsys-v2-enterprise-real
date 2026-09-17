@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - ".github/workflows/integration-excel-sql-sharepoint-functional-evidence-dev.yml"
+      - "scripts/msal_device_code.mjs"
+      - "scripts/msal_device_code_prepare.mjs"
+      - "scripts/msal_device_code_complete.mjs"
+      - "tests/msal_device_code_complete.test.mjs"
       - "scripts/select_integration_excel_sql_sharepoint_real_candidate.py"
       - "scripts/validate_integration_excel_sql_sharepoint_functional_evidence.py"
       - "scripts/integration_excel_sql_sharepoint_discovery.py"
@@ -41,6 +45,10 @@ on:
         description: "Trecho opcional do nome da conexão SharePoint DEV"
         required: false
         default: ""
+      auth_wait_minutes:
+        description: "Minutos totais de espera pela autorização Microsoft (5-50; o device code é renovado automaticamente)"
+        required: false
+        default: "25"
 
 permissions:
   contents: read
@@ -59,7 +67,7 @@ jobs:
     name: Functional Evidence DEV — Excel → SQL Server → SharePoint
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 35
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -80,6 +88,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install httpx pyodbc openpyxl pytest
 
+      # Em pull_request só roda o que é verificável sem tenant e sem humano:
+      # testes e compilação. A autorização interativa e o E2E DEV ficam no
+      # workflow_dispatch, onde existe alguém para autorizar.
       - name: Validar automação e controles contra falso positivo
         env:
           PYTHONPATH: backend
@@ -105,12 +116,14 @@ jobs:
             backend/app/services/integration_excel_sql_sharepoint_flow.py
 
       - name: Inicializar correlação da execução
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
         run: |
           set -euo pipefail
           echo "E2E_CORRELATION_ID=excel-sql-sharepoint-functional-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
 
       - name: Preparar sessão Microsoft para autorização móvel
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
         env:
           WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
@@ -132,11 +145,13 @@ jobs:
           echo "DEVICE_CODE_PUBLIC_PATH=$device_public" >> "$GITHUB_ENV"
 
       - name: Preparar autorização Microsoft somente se necessária
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
         run: node scripts/msal_device_code_prepare.mjs
 
       - name: Registrar instrução de autenticação quando necessária
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -152,12 +167,18 @@ jobs:
                   uri = payload.get("verification_uri") or "https://microsoft.com/devicelogin"
                   code = payload.get("user_code") or ""
                   handle.write("## Autorização Microsoft necessária\n\n")
-                  handle.write(f"Abra [{uri}]({uri}) e informe **`{code}`**. O job continuará automaticamente.\n")
+                  handle.write(f"Abra [{uri}]({uri}) e informe **`{code}`**. O job continuará automaticamente.\n\n")
+                  handle.write(
+                      "Se este código expirar antes da autorização, o job gera um novo automaticamente "
+                      "e publica o código renovado neste mesmo resumo, até esgotar a janela configurada "
+                      "em `auth_wait_minutes`.\n"
+                  )
               else:
                   handle.write("## Autorização Microsoft\n\nSessão existente válida; nenhuma ação humana necessária.\n")
           PY
 
       - name: Publicar instrução temporária de autenticação
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: integration-functional-device-login-${{ github.run_id }}-${{ github.run_attempt }}
@@ -166,11 +187,14 @@ jobs:
           retention-days: 1
 
       - name: Concluir sessão Microsoft efêmera
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          DEVICE_CODE_TOTAL_WAIT_MINUTES: ${{ inputs.auth_wait_minutes }}
         run: node scripts/msal_device_code_complete.mjs
 
       - name: Descobrir referências DEV sem segredos
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -191,6 +215,7 @@ jobs:
             --correlation-id "$E2E_CORRELATION_ID"
 
       - name: Selecionar candidato real já existente no Excel
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -204,6 +229,7 @@ jobs:
             --correlation-id "$E2E_CORRELATION_ID"
 
       - name: Readiness estrito no mesmo SHA
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -217,6 +243,7 @@ jobs:
             --correlation-id "$E2E_CORRELATION_ID"
 
       - name: Executar E2E real
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -231,6 +258,7 @@ jobs:
             --wait-seconds 420
 
       - name: Gate final de evidência funcional
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
           python scripts/validate_integration_excel_sql_sharepoint_functional_evidence.py \
@@ -242,7 +270,7 @@ jobs:
             --strict
 
       - name: Publicar evidências sanitizadas
-        if: always()
+        if: ${{ always() && github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: integration-functional-evidence-${{ github.run_id }}
