@@ -191,6 +191,25 @@ class Settings(BaseSettings):
     )
     redmine_sync_max_tentativas: int = Field(default_factory=lambda: int(get_secret('REDMINE_SYNC_MAX_TENTATIVAS', '5') or '5'))
 
+    # Reconciliação de lifecycle ReqSys <-> Redmine em lote (issue #1686,
+    # incremento 2): lock por requisito, backoff e quarentena de conflito
+    # permanente. Distinto da fila Planner -> Dataverse -> Redmine acima.
+    redmine_lifecycle_sync_lote_max: int = Field(
+        default_factory=lambda: int(get_secret('REDMINE_LIFECYCLE_SYNC_LOTE_MAX', '10') or '10')
+    )
+    redmine_lifecycle_sync_lock_timeout_minutos: int = Field(
+        default_factory=lambda: int(get_secret('REDMINE_LIFECYCLE_SYNC_LOCK_TIMEOUT_MINUTOS', '10') or '10')
+    )
+    redmine_lifecycle_sync_max_tentativas: int = Field(
+        default_factory=lambda: int(get_secret('REDMINE_LIFECYCLE_SYNC_MAX_TENTATIVAS', '5') or '5')
+    )
+    redmine_lifecycle_sync_backoff_base_minutos: int = Field(
+        default_factory=lambda: int(get_secret('REDMINE_LIFECYCLE_SYNC_BACKOFF_BASE_MINUTOS', '5') or '5')
+    )
+    redmine_lifecycle_sync_backoff_max_minutos: int = Field(
+        default_factory=lambda: int(get_secret('REDMINE_LIFECYCLE_SYNC_BACKOFF_MAX_MINUTOS', '240') or '240')
+    )
+
     # Migração da rotina de e-mail Prospecção Movimento — Portabilidade
     # Consignado (Funcionalidade #2861: substitui SSRS por pipeline Python —
     # ver docs/architecture/movimento-email-pipeline.md)

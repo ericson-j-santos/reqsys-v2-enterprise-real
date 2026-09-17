@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.envelope import ok
 from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
 from app.db import get_db
@@ -21,6 +22,11 @@ from app.services.lifecycle_orchestrator import (
     lifecycle_snapshot,
     register_lifecycle_evidence,
     start_lifecycle,
+)
+from app.services.redmine_lifecycle_batch import (
+    RedmineLifecycleBatchError,
+    liberar_quarentena,
+    reconciliar_lote,
 )
 from app.services.redmine_lifecycle_sync import (
     RedmineLifecycleSyncError,
@@ -49,6 +55,13 @@ class LifecycleEvidenceIn(BaseModel):
 
 class LifecycleRedmineSyncIn(BaseModel):
     dry_run: bool = False
+
+
+class LifecycleRedmineBatchIn(BaseModel):
+    dry_run: bool = False
+    lote_max: int | None = Field(default=None, gt=0, le=200)
+    requisito_ids: list[int] | None = Field(default=None, max_length=200)
+    incluir_quarentena: bool = False
 
 
 def _correlation_id(value: str | None) -> str:
@@ -122,6 +135,68 @@ def sincronizar_redmine_lifecycle(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return ok(result, correlation_id)
+
+
+@router.post('/sincronizar-redmine/lote')
+def sincronizar_redmine_lote(
+    payload: LifecycleRedmineBatchIn | None = None,
+    db: Session = Depends(get_db),
+    auth: ServiceAuthContext = Depends(require_admin_or_service_token('lifecycle:write')),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Reconcilia um lote de requisitos com vínculo Redmine (issue #1686).
+
+    Cada requisito é processado sob reserva própria (lock por
+    compare-and-swap), respeitando backoff exponencial após falha e quarentena
+    após `REDMINE_LIFECYCLE_SYNC_MAX_TENTATIVAS`. `dry_run=true` apenas informa
+    o que SERIA processado, sem lock, sem chamada de escrita ao Redmine e sem
+    mutação de estado.
+    """
+    payload = payload or LifecycleRedmineBatchIn()
+    correlation_id = _correlation_id(x_correlation_id)
+
+    resultado = reconciliar_lote(
+        db,
+        correlation_id=correlation_id,
+        actor=auth.ator,
+        lote_max=payload.lote_max or settings.redmine_lifecycle_sync_lote_max,
+        dry_run=payload.dry_run,
+        requisito_ids=payload.requisito_ids,
+        incluir_quarentena=payload.incluir_quarentena,
+        lock_timeout_minutos=settings.redmine_lifecycle_sync_lock_timeout_minutos,
+        max_tentativas=settings.redmine_lifecycle_sync_max_tentativas,
+        backoff_base_minutos=settings.redmine_lifecycle_sync_backoff_base_minutos,
+        backoff_max_minutos=settings.redmine_lifecycle_sync_backoff_max_minutos,
+    )
+    return ok(resultado, correlation_id)
+
+
+@router.post('/{requisito_id}/sincronizar-redmine/liberar-quarentena')
+def liberar_quarentena_redmine(
+    requisito_id: int,
+    db: Session = Depends(get_db),
+    auth: ServiceAuthContext = Depends(require_admin_or_service_token('lifecycle:write')),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Libera a quarentena de reconciliação após tratamento do conflito.
+
+    Operação explícita e auditada: a quarentena existe para impedir retentativa
+    infinita sobre conflito permanente, então a saída dela não é automática.
+    """
+    requisito = _get_requirement(db, requisito_id)
+    correlation_id = _correlation_id(x_correlation_id)
+
+    try:
+        resultado = liberar_quarentena(
+            db,
+            requisito=requisito,
+            correlation_id=correlation_id,
+            actor=auth.ator,
+        )
+    except RedmineLifecycleBatchError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return ok(resultado, correlation_id)
 
 
 @router.get('/{requisito_id}')
