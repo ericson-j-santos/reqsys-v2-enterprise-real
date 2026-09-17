@@ -10,7 +10,9 @@ from redis.asyncio import Redis
 
 from app.api import central, jobs, parallelism_control, parallelism_reconciliation, todo_events
 from app.application.services.central_service import CentralService
+from app.application.services.central_worker import CentralWorker
 from app.domain.central.wip_policy import WipPolicy
+from app.infrastructure.executors.registry import registry_de_configuracao
 from app.infrastructure.repositories.central_store import (
     CentralStore,
     InMemoryCentralStore,
@@ -45,6 +47,16 @@ central_service = CentralService(
     wip_policy=WipPolicy(settings.central_max_active_root_causes),
     store=central_store,
 )
+executor_registry = registry_de_configuracao(
+    settings.central_executor_endpoints,
+    service_token=settings.central_executor_service_token,
+)
+central_worker = CentralWorker(
+    central_service,
+    executor_registry,
+    intervalo_ocioso_segundos=settings.central_worker_idle_seconds,
+)
+central_worker_task: asyncio.Task[None] | None = None
 
 
 async def resolver_smoke_check(target: parallelism_control.Target) -> dict[str, object]:
@@ -72,6 +84,15 @@ def resolver_job_service() -> JobService:
 
 def resolver_central_service() -> CentralService:
     return central_service
+
+
+def resolver_central_worker() -> CentralWorker:
+    return central_worker
+
+
+def resolver_worker_cycle_enabled() -> bool:
+    # Em produção o ciclo é do worker contínuo, não de um POST manual.
+    return settings.runtime_environment != "prod"
 
 
 def resolver_parallelism_store() -> parallelism_control.ParallelismStore:
@@ -103,13 +124,15 @@ central.router.dependency_overrides_provider = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global worker_task, reconciliation_task
+    global worker_task, reconciliation_task, central_worker_task
+    if settings.central_worker_enabled:
+        central_worker_task = asyncio.create_task(central_worker.executar_continuamente())
     if settings.enable_async_worker:
         worker_task = asyncio.create_task(executar_worker_local(job_service, queue_gateway))
     if settings.runtime_environment != "prod":
         reconciliation_task = asyncio.create_task(run_reconciliation_loop())
     yield
-    for task in (reconciliation_task, worker_task):
+    for task in (central_worker_task, reconciliation_task, worker_task):
         if task:
             task.cancel()
             try:
@@ -134,6 +157,8 @@ app.dependency_overrides[parallelism_control.get_control_token] = resolver_contr
 app.dependency_overrides[parallelism_control.get_smoke_check] = lambda: resolver_smoke_check
 app.dependency_overrides[parallelism_reconciliation.get_reconciler] = resolver_reconciler
 app.dependency_overrides[central.get_central_service] = resolver_central_service
+app.dependency_overrides[central.get_central_worker] = resolver_central_worker
+app.dependency_overrides[central.get_worker_cycle_enabled] = resolver_worker_cycle_enabled
 app.include_router(jobs.router)
 app.include_router(todo_events.router)
 app.include_router(parallelism_control.router)
@@ -157,6 +182,8 @@ async def runtime_health() -> dict[str, object]:
         "environment": settings.runtime_environment,
         "parallelism_reconciliation_enabled": settings.runtime_environment != "prod",
         "parallelism_validation_slo_seconds": validation_slo_seconds,
+        "central_worker_enabled": settings.central_worker_enabled,
+        "central_executors": [item.value for item in executor_registry.configurados()],
     }
 
 

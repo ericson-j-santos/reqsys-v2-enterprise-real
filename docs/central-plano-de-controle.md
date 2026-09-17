@@ -22,6 +22,9 @@ executor nunca é escolhido pelo produtor: a Central classifica.
 | Evidence Ledger | `runtime/app/domain/central/evidence_ledger.py` | Registro canônico de "comprovadamente concluído", vinculado ao SHA |
 | Serviço | `runtime/app/application/services/central_service.py` | Fecha o ciclo e impõe as transições válidas |
 | Store | `runtime/app/infrastructure/repositories/central_store.py` | Persistência do estado: memória (DEV) ou Redis (durável) |
+| Worker | `runtime/app/application/services/central_worker.py` | Puxa o próximo item, executa e registra evidência |
+| Executor HTTP | `runtime/app/infrastructure/executors/http_executor.py` | Executor concreto: produz o efeito e comprova o que conseguiu |
+| Registro de executores | `runtime/app/infrastructure/executors/registry.py` | De `ExecutorKind` para o adaptador configurado |
 | API | `runtime/app/api/central.py` | Endpoints sob `/api/central` |
 
 ## Regras que o código impõe
@@ -42,6 +45,67 @@ executor nunca é escolhido pelo produtor: a Central classifica.
 6. **Evidência é vinculada ao SHA.** Registrar evidência em um SHA novo
    invalida (`SUPERSEDED`) o registro anterior, e a conclusão é recusada com
    HTTP 409 se a evidência corrente não for do SHA da solicitação.
+
+## Execução
+
+O worker fecha o ciclo:
+
+```
+next → EXECUTING → executor → evidência → EVIDENCED
+```
+
+Invariantes que o worker preserva:
+
+1. **Nunca conclui sem evidência completa.** Registra o que o executor
+   comprovou e tenta a conclusão; faltando verificação, a solicitação fica em
+   `AWAITING_EVIDENCE` e o ciclo reporta quais faltam. A recusa é dupla: além
+   da guarda do worker, `transicionar` consulta o ledger.
+2. **Nenhuma falha vira silêncio.** Executor não configurado, solicitação sem
+   SHA, endpoint indisponível, exceção não tratada ou verificação reprovada
+   viram `BLOCKED` com `blocker` e `next_action`.
+3. **`human_gate` nunca é executado.** Não aceita adaptador e não entra na fila
+   executável — automatizá-lo anularia o próprio gate.
+4. **Corrida entre réplicas cede a vez.** Se outra réplica assumiu o item, a
+   transição é recusada e o ciclo devolve `CEDIDO`, com a evidência já gravada
+   preservada para quem assumiu.
+
+### Contrato do executor HTTP
+
+`POST {url}` com a solicitação e `idempotency_key` (derivada de
+`request_id + sha`, logo estável entre replays); resposta:
+
+```json
+{"accepted": true,
+ "effect_id": "<id do efeito>",
+ "duplicate_effect": false,
+ "verification_url": "<URL de leitura independente>",
+ "evidence_run_url": "<opcional>"}
+```
+
+O adaptador então comprova, nesta ordem:
+
+| Verificação | Como é comprovada | Reprova quando |
+| --- | --- | --- |
+| `positive` | POST aceito com `effect_id` | resposta sem `accepted`/`effect_id` |
+| `idempotency` | repete o POST com a mesma chave | o replay cria um segundo efeito |
+| `independent_read` | `GET verification_url` | o efeito lido diverge do produzido |
+| `negative_control` | envia o `negative_probe` configurado | o executor **aceita** carga inválida |
+
+Verificação que o endpoint não suporta **não vira PASS**: fica `PENDING`, a
+evidência permanece `PARTIAL` e a solicitação não é concluída. É por isso que um
+executor não consegue, sozinho, declarar trabalho comprovado.
+
+### Configuração dos executores
+
+`CENTRAL_EXECUTOR_ENDPOINTS` é um objeto JSON; `human_gate` é recusado:
+
+```json
+{"ci_repair": "https://executor/ci",
+ "graph": {"url": "https://executor/graph", "negative_probe": {"sha": "invalido"}}}
+```
+
+`POST /api/central/worker/cycle` executa um único ciclo (operação assistida e
+E2E) e responde `403` em produção, onde o ciclo é do worker contínuo.
 
 ## Persistência e concorrência
 
@@ -89,6 +153,10 @@ continua consultando o ledger e nenhuma conclusão indevida passa.
 | `REDIS_URL` | `redis://localhost:6379/0` | Conexão (compartilhada com o controle de paralelismo) |
 | `CENTRAL_REDIS_PREFIX` | `reqsys:runtime:central` | Prefixo das chaves |
 | `CENTRAL_MAX_ACTIVE_ROOT_CAUSES` | `3` | Limite de causas raiz ativas simultâneas |
+| `CENTRAL_EXECUTOR_ENDPOINTS` | `""` | Mapa JSON de executor para endpoint |
+| `CENTRAL_EXECUTOR_SERVICE_TOKEN` | `""` | Token enviado aos executores (`X-Service-Token`) |
+| `CENTRAL_WORKER_ENABLED` | `false` | Liga o worker contínuo no runtime |
+| `CENTRAL_WORKER_IDLE_SECONDS` | `5` | Espera do worker quando a fila está vazia |
 
 ## Endpoints
 
@@ -101,6 +169,7 @@ continua consultando o ledger e nenhuma conclusão indevida passa.
 | GET | `/api/central/next[?executor=]` | Próximo item executável; `204` quando não há |
 | POST | `/api/central/evidence` | Registra verificações no ledger |
 | GET | `/api/central/evidence/{id}` | Leitura independente do ledger |
+| POST | `/api/central/worker/cycle[?executor=]` | Executa um ciclo; `403` em produção |
 
 ## Validação E2E
 
@@ -134,6 +203,24 @@ Controle contra falso positivo: a mesma sequência com `STORAGE_BACKEND=memory`
 **precisa** reprovar (`404` na fase `verify`). Se passar nos dois backends, o
 teste não está provando durabilidade.
 
+### Ciclo executável
+
+Sobe um executor HTTP real e comprova o ciclo de ponta a ponta:
+
+```bash
+cd runtime
+CENTRAL_EXECUTOR_ENDPOINTS='{"ci_repair": {"url": "http://127.0.0.1:8098/executar",
+                                           "negative_probe": {"sha": "invalido"}},
+                             "graph": "http://127.0.0.1:8098/executar"}' \
+  python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 &
+python scripts/e2e_central_executor.py   # sobe o executor na 8098
+```
+
+Cobre o caso positivo (até `EVIDENCED`, com leitura do efeito no próprio
+executor) e três controles negativos: executor sem controle negativo não
+conclui, executor não configurado bloqueia com causa, e `human_gate` não é
+executado.
+
 ### Integração Redis
 
 `tests/test_central_store_redis_integration.py` roda contra um Redis real
@@ -143,8 +230,10 @@ teste não está provando durabilidade.
 
 ## Estado e limites conhecidos
 
-* Os executores ainda não executam: a Central decide e enfileira o trabalho. O
-  acoplamento de cada executor real é incremento subsequente.
+* Há um executor concreto (HTTP). Executores nativos de GitHub, Graph, SQL e
+  Drive ainda precisam ser expostos por trás desse contrato.
+* A Central não expõe métricas próprias em `/api/runtime/analytics`, logo o
+  Lead Time to Evidence ainda não é medido automaticamente.
 * O preflight de identidade (verificação ativa de consentimento, segredo e
   validade antes da fila) não está implementado; hoje o bloqueio é declarado
   pela regra `identity.blocked` a partir dos sinais da solicitação.

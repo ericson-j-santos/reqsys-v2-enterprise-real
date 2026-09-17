@@ -10,6 +10,7 @@ from app.application.services.central_service import (
     InvalidTransitionError,
     WorkRequestNotFoundError,
 )
+from app.application.services.central_worker import CentralWorker
 from app.domain.central.evidence_ledger import EvidenceRecord, EvidenceRecordInput
 from app.domain.central.models import ExecutorKind, WorkRequest, WorkRequestInput, WorkRequestStatus
 
@@ -18,6 +19,14 @@ router = APIRouter(prefix="/api/central", tags=["central"])
 
 def get_central_service() -> CentralService:  # pragma: no cover - sobrescrito em app.main
     raise RuntimeError("Dependência CentralService não configurada.")
+
+
+def get_central_worker() -> CentralWorker:  # pragma: no cover - sobrescrito em app.main
+    raise RuntimeError("Dependência CentralWorker não configurada.")
+
+
+def get_worker_cycle_enabled() -> bool:  # pragma: no cover - sobrescrito em app.main
+    raise RuntimeError("Política do ciclo manual não configurada.")
 
 
 class RootCauseSlotView(BaseModel):
@@ -31,6 +40,15 @@ class AdmissionPlanView(BaseModel):
     wip_breach: bool
     admitted: list[RootCauseSlotView]
     queued: list[RootCauseSlotView]
+
+
+class CycleReportView(BaseModel):
+    resultado: str
+    request_id: str | None = None
+    executor: str | None = None
+    evidence_status: str | None = None
+    verificacoes_pendentes: list[str] = Field(default_factory=list)
+    blocker: str | None = None
 
 
 class TransitionRequest(BaseModel):
@@ -134,6 +152,37 @@ async def obter_evidencia(
     if registro is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sem evidência registrada.")
     return registro
+
+
+@router.post(
+    "/worker/cycle",
+    response_model=CycleReportView,
+    responses={403: {"description": "Ciclo manual indisponível neste ambiente."}},
+)
+async def executar_ciclo(
+    executor: ExecutorKind | None = None,
+    worker: CentralWorker = Depends(get_central_worker),
+    habilitado: bool = Depends(get_worker_cycle_enabled),
+) -> CycleReportView:
+    """Executa um único ciclo do worker, para operação assistida e E2E.
+
+    Indisponível em produção: lá o ciclo é do worker contínuo, não de um POST
+    manual que ninguém audita.
+    """
+    if not habilitado:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ciclo manual da Central indisponível neste ambiente.",
+        )
+    relatorio = await worker.executar_um_ciclo(executor)
+    return CycleReportView(
+        resultado=relatorio.resultado.value,
+        request_id=relatorio.request_id,
+        executor=relatorio.executor.value if relatorio.executor else None,
+        evidence_status=relatorio.evidence_status.value if relatorio.evidence_status else None,
+        verificacoes_pendentes=[item.value for item in relatorio.verificacoes_pendentes],
+        blocker=relatorio.blocker,
+    )
 
 
 def _slot_view(slot) -> RootCauseSlotView:
