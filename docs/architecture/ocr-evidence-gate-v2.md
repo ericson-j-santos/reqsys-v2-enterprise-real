@@ -31,6 +31,8 @@ Para cada caso, o artefato `ocr-evidence-v2.json` registra somente:
 - confiança mínima e média;
 - quantidade e tipos de candidatos;
 - confirmação de revisão humana;
+- quantidade, tipos e estados dos identificadores documentais detectados;
+- quantidade de identificadores classificados como confiáveis;
 - resultado de reprocessamento idempotente;
 - fingerprint SHA-256 do resultado normalizado;
 - falhas do caso, quando houver.
@@ -45,6 +47,11 @@ Texto OCR bruto e identificadores pessoais não são publicados no artefato.
 - documento desconhecido não pode gerar candidato inesperado;
 - página vazia deve falhar fechada por ausência de texto utilizável;
 - nenhum candidato do gate pode dispensar revisão humana;
+- nenhum identificador documental pode dispensar revisão humana;
+- os identificadores sintéticos do cenário 7 não podem ser classificados como
+  confiáveis, e o cenário exige um piso mínimo de detecções (`min_identifiers`)
+  para que a proibição não passe por um detector cego;
+- página vazia e documento desconhecido não podem produzir identificador;
 - corpus real continua fora do repositório e sujeito a aprovação + SHA-256 pela política existente.
 
 ## Critério de aprovação
@@ -57,4 +64,13 @@ O cenário de página vazia é aprovado apenas quando o OCR falha por ausência 
 
 ## Limite atual
 
-Este gate certifica a camada OCR e a classificação de candidatos já existente. Ele não promove automaticamente STG/PROD e não cria novos parsers de domínio para validar juridicamente CPF, RG/CIN ou CNH. A validação semântica desses documentos deve permanecer em incremento separado.
+Este gate certifica a camada OCR, a classificação de candidatos e a validação
+estrutural de identificadores documentais. Ele não promove automaticamente
+STG/PROD.
+
+A validação semântica de CPF, CIN, CNH e RG foi entregue em incremento
+separado e está descrita em `ocr-identificadores-documentais-v1.md`. Ela é
+estrutural — dígito verificador e formato — e não afirma autenticidade
+documental, titularidade nem validade jurídica; nenhum identificador dispensa
+revisão humana. Consulta a base oficial e leitura de MRZ/código de barras
+continuam fora de escopo.
