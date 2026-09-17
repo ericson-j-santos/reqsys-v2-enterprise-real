@@ -30,6 +30,8 @@ PUBLIC_REASON_EXACT = {
     "entra_application_not_found": "entra_application_not_found",
     "azure_json_invalid": "azure_response_invalid",
     "entra_add_password_incomplete": "entra_add_password_incomplete",
+    "github_auth_unavailable": "github_auth_unavailable",
+    "github_repo_access_unavailable": "github_repo_access_unavailable",
     "gh_sensitive_operation_failed": "github_secret_write_failed",
     "github_secret_not_observed_after_write": "github_secret_not_observed_after_write",
     "github_secret_verification_invalid": "github_secret_verification_invalid",
@@ -123,8 +125,18 @@ def _resolve_app(client_id: str, tenant_id: str) -> tuple[str, str]:
 
 
 def _github_ready(repository: str) -> None:
-    _run("gh", ["auth", "status", "--hostname", "github.com"])
-    _run("gh", ["repo", "view", repository, "--json", "nameWithOwner"])
+    try:
+        _run("gh", ["auth", "status", "--hostname", "github.com"])
+    except RotationError as exc:
+        if str(exc).startswith("tool_missing:gh"):
+            raise
+        raise RotationError("github_auth_unavailable") from exc
+    try:
+        _run("gh", ["repo", "view", repository, "--json", "nameWithOwner"])
+    except RotationError as exc:
+        if str(exc).startswith("tool_missing:gh"):
+            raise
+        raise RotationError("github_repo_access_unavailable") from exc
 
 
 def _credential_name(correlation_id: str) -> str:
