@@ -27,6 +27,10 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.ocr.documento_worker import FalhaOcrDocumento, TesseractDocumento
+from app.ocr.identificadores_documentais import (
+    IdentificadorDocumental,
+    detectar_identificadores_por_paginas,
+)
 from app.services.documento_demanda import (
     CandidatoDemanda,
     calcular_sha256,
@@ -48,6 +52,10 @@ class CaseEvidence:
     candidates: int
     candidate_types: tuple[str, ...]
     all_candidates_require_human_review: bool
+    identifiers: int
+    identifier_types: tuple[str, ...]
+    identifier_states: tuple[str, ...]
+    trusted_identifiers: int
     idempotent: bool
     outcome_fingerprint: str
     status: str
@@ -200,10 +208,13 @@ def _gerar_caso(caso: dict, workdir: Path) -> tuple[Path, str]:
         return path, "image/png"
 
     if kind == "identity_proof_bundle":
+        # O rótulo fica adjacente ao número, como em documento real, para que a
+        # validação semântica de identificadores seja de fato exercitada. Os
+        # valores continuam sintéticos e deliberadamente inválidos.
         specs = [
-            ["CPF SINTETICO", "000.000.000-00", "NAO UTILIZAR COMO IDENTIFICADOR REAL"],
-            ["RG CIN SINTETICO", "00.000.000-0", "NAO UTILIZAR COMO IDENTIFICADOR REAL"],
-            ["CNH SINTETICA", "00000000000", "NAO UTILIZAR COMO IDENTIFICADOR REAL"],
+            ["DOCUMENTO SINTETICO", "CPF: 000.000.000-00", "NAO UTILIZAR COMO IDENTIFICADOR REAL"],
+            ["DOCUMENTO SINTETICO", "RG: 00.000.000-0", "CIN: 000.000.000-00"],
+            ["DOCUMENTO SINTETICO", "CNH: 00000000000", "NAO UTILIZAR COMO IDENTIFICADOR REAL"],
             ["COMPROVANTE SINTETICO", "ENDERECO DE TESTE", "SEM DADOS PESSOAIS REAIS"],
         ]
         images: list[Path] = []
@@ -237,7 +248,12 @@ def _gerar_caso(caso: dict, workdir: Path) -> tuple[Path, str]:
     raise ValueError(f"kind não suportado: {kind}")
 
 
-def _fingerprint(texto: str, candidatos: list[CandidatoDemanda], paginas: int) -> str:
+def _fingerprint(
+    texto: str,
+    candidatos: list[CandidatoDemanda],
+    paginas: int,
+    identificadores: list[IdentificadorDocumental] | None = None,
+) -> str:
     payload = {
         "pages": paginas,
         "text_sha256": hashlib.sha256(_normalizar(texto).encode("utf-8")).hexdigest(),
@@ -249,6 +265,12 @@ def _fingerprint(texto: str, candidatos: list[CandidatoDemanda], paginas: int) -
                 "human": c.requer_validacao_humana,
             }
             for c in candidatos
+        ],
+        # O fingerprint HMAC do identificador usa chave efêmera por processo e
+        # ficaria instável entre execuções; aqui basta a classificação.
+        "identifiers": [
+            {"type": i.tipo, "state": i.estado, "page": i.pagina}
+            for i in (identificadores or [])
         ],
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -291,8 +313,28 @@ def _avaliar_execucao(caso: dict, arquivo: Path, content_type: str) -> tuple[dic
     if caso.get("expect_human_review") and any(not c.requer_validacao_humana for c in candidatos):
         falhas.append("CANDIDATE_WITHOUT_HUMAN_REVIEW")
 
+    identificadores = detectar_identificadores_por_paginas(
+        [(p.pagina, p.texto, p.confianca) for p in resultado.paginas]
+    )
+    confiaveis = [i for i in identificadores if i.confiavel]
+    if caso.get("expect_no_identifiers") and identificadores:
+        falhas.append("UNEXPECTED_IDENTIFIERS")
+    minimo = int(caso.get("min_identifiers", 0))
+    if minimo and len(identificadores) < minimo:
+        # Sem este piso, um detector que não enxerga nada passaria trivialmente
+        # nos critérios de proibição abaixo.
+        falhas.append("IDENTIFIER_COUNT_BELOW_EXPECTED")
+    if caso.get("forbid_trusted_identifiers") and confiaveis:
+        # Cenário de identidade usa valores sintéticos deliberadamente
+        # inválidos: reconhecê-los como confiáveis seria falso positivo.
+        falhas.append("SYNTHETIC_IDENTIFIER_ACCEPTED")
+    if any(not i.requer_validacao_humana for i in identificadores):
+        falhas.append("IDENTIFIER_WITHOUT_HUMAN_REVIEW")
+
     confidences = [p.confianca for p in resultado.paginas]
-    fingerprint = _fingerprint(resultado.texto, candidatos, len(resultado.paginas))
+    fingerprint = _fingerprint(
+        resultado.texto, candidatos, len(resultado.paginas), identificadores
+    )
     return {
         "expected_failure": False,
         "pages": len(resultado.paginas),
@@ -301,6 +343,10 @@ def _avaliar_execucao(caso: dict, arquivo: Path, content_type: str) -> tuple[dic
         "candidates": candidatos,
         "candidate_types": tuple(sorted({c.tipo for c in candidatos})),
         "all_candidates_require_human_review": all(c.requer_validacao_humana for c in candidatos),
+        "identifiers": identificadores,
+        "identifier_types": tuple(sorted({i.tipo for i in identificadores})),
+        "identifier_states": tuple(sorted({i.estado for i in identificadores})),
+        "trusted_identifiers": len(confiaveis),
         "fingerprint": fingerprint,
     }, falhas
 
@@ -338,6 +384,10 @@ def _avaliar_caso(caso: dict, workdir: Path) -> CaseEvidence:
         all_candidates_require_human_review=bool(
             first.get("all_candidates_require_human_review", True)
         ),
+        identifiers=len(first.get("identifiers", [])),
+        identifier_types=tuple(first.get("identifier_types", ())),
+        identifier_states=tuple(first.get("identifier_states", ())),
+        trusted_identifiers=int(first.get("trusted_identifiers", 0)),
         idempotent=idempotent,
         outcome_fingerprint=str(first.get("fingerprint", "expected-failure")),
         status="PASS" if not failures else "FAIL",

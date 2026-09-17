@@ -52,3 +52,31 @@ def test_evidencia_publicada_nao_tem_campo_de_texto_ocr_bruto():
     assert "raw_text" not in fields
     assert "file_sha256" in fields
     assert "outcome_fingerprint" in fields
+
+
+def test_cenario_de_identidade_exige_piso_de_identificadores_detectados():
+    """Sem piso, um detector cego passaria trivialmente nas proibições."""
+    payload = mod.carregar_manifesto()
+    case = next(item for item in payload["cases"] if item["kind"] == "identity_proof_bundle")
+    assert case["min_identifiers"] >= 3
+    assert case["forbid_trusted_identifiers"] is True
+
+
+def test_documento_desconhecido_e_pagina_vazia_nao_podem_gerar_identificador():
+    payload = mod.carregar_manifesto()
+    for kind in ("unknown_document", "blank_page"):
+        case = next(item for item in payload["cases"] if item["kind"] == kind)
+        assert case["expect_no_identifiers"] is True
+
+
+def test_conteudo_ambiguo_nao_pode_produzir_identificador_confiavel():
+    payload = mod.carregar_manifesto()
+    case = next(item for item in payload["cases"] if item["kind"] == "ambiguous_ocr")
+    assert case["forbid_trusted_identifiers"] is True
+
+
+def test_evidencia_publica_estado_de_identificador_sem_expor_valor():
+    fields = set(mod.CaseEvidence.__dataclass_fields__)
+    assert {"identifiers", "identifier_types", "identifier_states", "trusted_identifiers"} <= fields
+    assert "identifier_values" not in fields
+    assert "mascara" not in fields
