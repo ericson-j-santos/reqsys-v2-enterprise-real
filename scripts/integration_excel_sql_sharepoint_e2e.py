@@ -278,7 +278,8 @@ def execute_sql_probe(sql_dsn: str, procedure: str, identifier: str) -> list[dic
 def list_items(client: httpx.Client, token: str, site_id: str, list_id: str) -> list[dict[str, Any]]:
     url: str | None = (
         f"/sites/{site_id}/lists/{list_id}/items"
-        "?$expand=fields($select=Title,ChaveIntegracao,CorrelationId)&$top=200"
+        "?$select=id,eTag,lastModifiedDateTime"
+        "&$expand=fields($select=Title,ChaveIntegracao,CorrelationId)&$top=200"
     )
     items: list[dict[str, Any]] = []
     pages = 0
