@@ -24,7 +24,8 @@ executor nunca é escolhido pelo produtor: a Central classifica.
 | Store | `runtime/app/infrastructure/repositories/central_store.py` | Persistência do estado: memória (DEV) ou Redis (durável) |
 | Worker | `runtime/app/application/services/central_worker.py` | Puxa o próximo item, executa e registra evidência |
 | Métricas | `runtime/app/domain/central/metrics.py` | Lead Time to Evidence e onde o tempo é gasto |
-| Executor HTTP | `runtime/app/infrastructure/executors/http_executor.py` | Executor concreto: produz o efeito e comprova o que conseguiu |
+| Executor HTTP | `runtime/app/infrastructure/executors/http_executor.py` | Executor genérico: produz o efeito e comprova o que conseguiu |
+| Executor GitHub | `runtime/app/infrastructure/executors/github_executor.py` | Executor nativo: dispara um workflow e comprova a execução |
 | Registro de executores | `runtime/app/infrastructure/executors/registry.py` | De `ExecutorKind` para o adaptador configurado |
 | API | `runtime/app/api/central.py` | Endpoints sob `/api/central` |
 
@@ -96,14 +97,44 @@ Verificação que o endpoint não suporta **não vira PASS**: fica `PENDING`, a
 evidência permanece `PARTIAL` e a solicitação não é concluída. É por isso que um
 executor não consegue, sozinho, declarar trabalho comprovado.
 
+### Executor nativo de GitHub Actions
+
+Efeito produzido: um `workflow_dispatch` no repositório e SHA da solicitação,
+carregando `request_id`, `correlation_id` e `idempotency_key` como inputs — de
+modo que a execução resultante seja rastreável até a Solicitação de Trabalho.
+
+| Verificação | Como é comprovada |
+| --- | --- |
+| `positive` | dispatch aceito (204) e execução presente para o SHA |
+| `idempotency` | antes de disparar, procura execução existente para (workflow, SHA, `workflow_dispatch`); se existe, **não dispara** |
+| `independent_read` | relê a execução pelo id e confere o `head_sha` |
+| `negative_control` | dispara para `negative_probe_ref` inexistente e exige recusa 4xx |
+
+A idempotência no GitHub não pode ser verificada disparando duas vezes — isso
+criaria um segundo efeito real. O adaptador verifica o **mecanismo**: após o
+dispatch, reexecuta a decisão de guarda e confirma que um replay resolveria para
+a execução existente.
+
+Sem token, o adaptador **bloqueia** com `github_token_ausente` e a próxima ação
+("provisionar `CENTRAL_GITHUB_TOKEN` com escopo `actions:write`") em vez de
+tentar e falhar na autenticação dentro do E2E — o gargalo de identidade aparece
+onde custa barato. Também bloqueia sem SHA, sem repositório ou com repositório
+fora do formato `owner/repo`.
+
 ### Configuração dos executores
 
 `CENTRAL_EXECUTOR_ENDPOINTS` é um objeto JSON; `human_gate` é recusado:
 
 ```json
 {"ci_repair": "https://executor/ci",
- "graph": {"url": "https://executor/graph", "negative_probe": {"sha": "invalido"}}}
+ "graph": {"url": "https://executor/graph", "negative_probe": {"sha": "invalido"}},
+ "github": {"kind": "github",
+            "workflow": "ci-repair.yml",
+            "repository": "owner/repo",
+            "negative_probe_ref": "refs/heads/inexistente"}}
 ```
+
+Sem `kind`, o executor é HTTP genérico; com `kind: "github"`, é o nativo.
 
 `POST /api/central/worker/cycle` executa um único ciclo (operação assistida e
 E2E) e responde `403` em produção, onde o ciclo é do worker contínuo.
@@ -182,7 +213,8 @@ continua consultando o ledger e nenhuma conclusão indevida passa.
 | `CENTRAL_REDIS_PREFIX` | `reqsys:runtime:central` | Prefixo das chaves |
 | `CENTRAL_MAX_ACTIVE_ROOT_CAUSES` | `3` | Limite de causas raiz ativas simultâneas |
 | `CENTRAL_EXECUTOR_ENDPOINTS` | `""` | Mapa JSON de executor para endpoint |
-| `CENTRAL_EXECUTOR_SERVICE_TOKEN` | `""` | Token enviado aos executores (`X-Service-Token`) |
+| `CENTRAL_EXECUTOR_SERVICE_TOKEN` | `""` | Token enviado aos executores HTTP (`X-Service-Token`) |
+| `CENTRAL_GITHUB_TOKEN` | `""` | Token do executor nativo GitHub (escopo `actions:write`) |
 | `CENTRAL_WORKER_ENABLED` | `false` | Liga o worker contínuo no runtime |
 | `CENTRAL_WORKER_IDLE_SECONDS` | `5` | Espera do worker quando a fila está vazia |
 
@@ -248,7 +280,13 @@ python scripts/e2e_central_executor.py   # sobe o executor na 8098
 Cobre o caso positivo (até `EVIDENCED`, com leitura do efeito no próprio
 executor) e três controles negativos: executor sem controle negativo não
 conclui, executor não configurado bloqueia com causa, e `human_gate` não é
-executado.
+executado. O script também sobe uma API do GitHub simulada e roda o **executor
+nativo** por HTTP real, além de conferir as métricas sobre os dados que os
+ciclos produziram.
+
+O E2E do executor nativo exercita o adaptador contra uma API simulada: prova o
+tratamento do protocolo de ponta a ponta, **não** o comportamento contra
+`api.github.com`, que exige token provisionado.
 
 ### Integração Redis
 
@@ -259,8 +297,6 @@ executado.
 
 ## Estado e limites conhecidos
 
-* Há um executor concreto (HTTP). Executores nativos de GitHub, Graph, SQL e
-  Drive ainda precisam ser expostos por trás desse contrato.
 * O preflight de identidade (verificação ativa de consentimento, segredo e
   validade antes da fila) não está implementado; hoje o bloqueio é declarado
   pela regra `identity.blocked` a partir dos sinais da solicitação.

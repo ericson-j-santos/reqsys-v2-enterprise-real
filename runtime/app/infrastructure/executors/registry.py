@@ -12,6 +12,10 @@ from typing import Any
 
 from app.domain.central.execution import ExecutorAdapter
 from app.domain.central.models import ExecutorKind
+from app.infrastructure.executors.github_executor import (
+    GitHubExecutorAdapter,
+    GitHubExecutorConfig,
+)
 from app.infrastructure.executors.http_executor import HttpExecutorAdapter, HttpExecutorEndpoint
 
 
@@ -29,14 +33,19 @@ class ExecutorRegistry:
         return tuple(sorted(self._adaptadores, key=lambda item: item.value))
 
 
-def registry_de_configuracao(bruto: str, service_token: str = "") -> ExecutorRegistry:
+def registry_de_configuracao(
+    bruto: str, service_token: str = "", github_token: str = ""
+) -> ExecutorRegistry:
     """Constrói o registro a partir de ``CENTRAL_EXECUTOR_ENDPOINTS`` (JSON).
 
-    Formato aceito::
+    Formatos aceitos por executor::
 
-        {"ci_repair": "https://executor/ci",
-         "graph": {"url": "https://executor/graph",
-                   "negative_probe": {"sha": "invalido"}}}
+        "ci_repair": "https://executor/ci"                       # HTTP simples
+        "graph": {"url": "...", "negative_probe": {"sha": "x"}}   # HTTP completo
+        "ci_repair": {"kind": "github",                           # nativo GitHub
+                      "workflow": "ci-repair.yml",
+                      "repository": "owner/repo",
+                      "negative_probe_ref": "refs/heads/inexistente"}
 
     ``human_gate`` nunca pode receber adaptador: é a marca de que a próxima ação
     é de uma pessoa, e automatizá-lo anularia o próprio gate.
@@ -63,11 +72,31 @@ def registry_de_configuracao(bruto: str, service_token: str = "") -> ExecutorReg
         if kind is ExecutorKind.HUMAN_GATE:
             raise ValueError("human_gate não aceita executor automático")
 
-        adaptadores[kind] = HttpExecutorAdapter(
-            _endpoint(kind, valor), service_token=service_token
-        )
+        if isinstance(valor, dict) and valor.get("kind") == "github":
+            adaptadores[kind] = GitHubExecutorAdapter(
+                _config_github(kind, valor), token=github_token
+            )
+        else:
+            adaptadores[kind] = HttpExecutorAdapter(
+                _endpoint(kind, valor), service_token=service_token
+            )
 
     return ExecutorRegistry(adaptadores)
+
+
+def _config_github(kind: ExecutorKind, valor: dict[str, Any]) -> GitHubExecutorConfig:
+    workflow = valor.get("workflow")
+    if not isinstance(workflow, str) or not workflow.strip():
+        raise ValueError(f"executor github '{kind.value}' exige 'workflow'")
+    for campo in ("repository", "negative_probe_ref", "api_url"):
+        if campo in valor and not isinstance(valor[campo], str):
+            raise ValueError(f"'{campo}' de '{kind.value}' deve ser texto")
+    return GitHubExecutorConfig(
+        workflow=workflow,
+        api_url=valor.get("api_url", "https://api.github.com"),
+        repository=valor.get("repository"),
+        negative_probe_ref=valor.get("negative_probe_ref"),
+    )
 
 
 def _endpoint(kind: ExecutorKind, valor: Any) -> HttpExecutorEndpoint:

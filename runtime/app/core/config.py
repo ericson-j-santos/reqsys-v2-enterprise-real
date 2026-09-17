@@ -33,6 +33,7 @@ class RuntimeSettings(BaseModel):
     central_max_active_root_causes: int = 3
     central_executor_endpoints: str = ""
     central_executor_service_token: str = ""
+    central_github_token: str = ""
     central_worker_enabled: bool = False
     central_worker_idle_seconds: float = 5.0
     max_tentativas: int = 3
@@ -101,6 +102,7 @@ def get_settings() -> RuntimeSettings:
         central_max_active_root_causes=int(os.getenv("CENTRAL_MAX_ACTIVE_ROOT_CAUSES", "3")),
         central_executor_endpoints=os.getenv("CENTRAL_EXECUTOR_ENDPOINTS", ""),
         central_executor_service_token=os.getenv("CENTRAL_EXECUTOR_SERVICE_TOKEN", ""),
+        central_github_token=os.getenv("CENTRAL_GITHUB_TOKEN", ""),
         central_worker_enabled=os.getenv("CENTRAL_WORKER_ENABLED", "false").lower() == "true",
         central_worker_idle_seconds=float(os.getenv("CENTRAL_WORKER_IDLE_SECONDS", "5")),
         max_tentativas=int(os.getenv("ASYNC_JOB_MAX_TENTATIVAS", "3")),

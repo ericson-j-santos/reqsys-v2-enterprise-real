@@ -38,6 +38,9 @@ falhas: list[str] = []
 #: Efeitos realmente produzidos pelo executor: idempotency_key -> effect_id.
 EFEITOS: dict[str, str] = {}
 POSTS: list[dict] = []
+#: GitHub Actions simulado, para exercitar o executor nativo por HTTP real.
+GH_RUNS: list[dict] = []
+GH_DISPATCHES: list[dict] = []
 
 
 class ExecutorHandler(BaseHTTPRequestHandler):
@@ -65,11 +68,48 @@ class ExecutorHandler(BaseHTTPRequestHandler):
         if partes.path == "/efeitos":
             self._responder(200, {"efeitos": EFEITOS, "posts": len(POSTS)})
             return
+        if partes.path.endswith("/runs") and "/actions/workflows/" in partes.path:
+            sha = parse_qs(partes.query).get("head_sha", [""])[0]
+            achados = [item for item in GH_RUNS if item["head_sha"] == sha]
+            self._responder(200, {"workflow_runs": achados[:1]})
+            return
+        if "/actions/runs/" in partes.path:
+            run_id = int(partes.path.rsplit("/", 1)[1])
+            for item in GH_RUNS:
+                if item["id"] == run_id:
+                    self._responder(200, item)
+                    return
+            self._responder(404, {"message": "Not Found"})
+            return
+        if partes.path == "/gh/estado":
+            self._responder(200, {"runs": GH_RUNS, "dispatches": len(GH_DISPATCHES)})
+            return
         self._responder(404, {"erro": "rota desconhecida"})
 
     def do_POST(self) -> None:  # noqa: N802 - assinatura do http.server
         tamanho = int(self.headers.get("Content-Length", "0"))
         corpo = json.loads(self.rfile.read(tamanho) or b"{}")
+
+        if self.path.endswith("/dispatches"):
+            GH_DISPATCHES.append(corpo)
+            if corpo.get("ref") == "refs/heads/inexistente":
+                # Ref inexistente: o GitHub recusa, e é isso que comprova o
+                # controle negativo.
+                self._responder(422, {"message": "No ref found"})
+                return
+            GH_RUNS.append(
+                {
+                    "id": 100 + len(GH_RUNS),
+                    "head_sha": corpo["inputs"]["sha"],
+                    "event": "workflow_dispatch",
+                    "html_url": f"https://github.local/run/{100 + len(GH_RUNS)}",
+                }
+            )
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
         POSTS.append(corpo)
 
         chave = corpo.get("idempotency_key")
@@ -238,14 +278,52 @@ def main() -> int:
             depois["posts"] == antes["posts"] and depois["efeitos"] == antes["efeitos"],
             f"posts={depois['posts']} (antes {antes['posts']})",
         )
+        # --- EXECUTOR NATIVO GITHUB: ciclo por HTTP real contra a API ------
+        st, gh = central(
+            "POST",
+            "/api/central/work-requests",
+            {
+                "title": "Abrir pull request de correcao",
+                "project": "reqsys",
+                "root_cause_id": f"rc-gh-{uuid.uuid4().hex[:8]}",
+                "correlation_id": f"e2e-gh-{uuid.uuid4().hex[:10]}",
+                "signals": ["pull request"],
+                "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+                "branch": "main",
+                "sha": SHA,
+            },
+        )
+        check("gh_roteou_github", gh["executor"] == "github", gh["routing_rule"])
+        st, ciclo = central("POST", "/api/central/worker/cycle?executor=github")
+        check("gh_ciclo_evidenciou", ciclo["resultado"] == "EVIDENCIADO", ciclo)
+
+        st, estado_gh = call("GET", f"http://127.0.0.1:{EXECUTOR_PORT}/gh/estado")
+        check("gh_disparou_uma_execucao", len(estado_gh["runs"]) == 1, estado_gh["runs"])
+        check(
+            "gh_dispatch_produtivo_mais_probe",
+            estado_gh["dispatches"] == 2,
+            estado_gh["dispatches"],
+        )
+        st, ev_gh = central("GET", f"/api/central/evidence/{gh['request_id']}")
+        check(
+            "gh_quatro_verificacoes_pass",
+            all(valor == "PASS" for valor in ev_gh["checks"].values()),
+            ev_gh["checks"],
+        )
+        check(
+            "gh_evidencia_aponta_a_execucao",
+            (ev_gh["evidence_run_url"] or "").startswith("https://github.local/run/"),
+            ev_gh["evidence_run_url"],
+        )
+
         # --- MÉTRICAS: medidas sobre o que o ciclo real produziu -----------
         st, m = central("GET", "/api/central/metrics")
         check("metricas_200", st == 200, st)
-        check("metricas_total", m["total"] == 4, m["total"])
-        check("metricas_status", m["por_status"].get("EVIDENCED") == 1, m["por_status"])
+        check("metricas_total", m["total"] == 5, m["total"])
+        check("metricas_status", m["por_status"].get("EVIDENCED") == 2, m["por_status"])
         check(
             "lead_time_medido",
-            m["lead_time_to_evidence"]["amostras"] == 1
+            m["lead_time_to_evidence"]["amostras"] == 2
             and m["lead_time_to_evidence"]["p50_segundos"] is not None,
             m["lead_time_to_evidence"],
         )
@@ -265,7 +343,7 @@ def main() -> int:
         st, analytics = central("GET", "/api/runtime/analytics")
         check(
             "metricas_em_analytics",
-            st == 200 and analytics["central"]["lead_time_to_evidence"]["amostras"] == 1,
+            st == 200 and analytics["central"]["lead_time_to_evidence"]["amostras"] == 2,
             st,
         )
     finally:
