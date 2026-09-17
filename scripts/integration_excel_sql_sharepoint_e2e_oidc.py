@@ -5,10 +5,15 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import time
 import uuid
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import httpx
 
