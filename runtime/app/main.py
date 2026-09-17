@@ -50,6 +50,7 @@ central_service = CentralService(
 executor_registry = registry_de_configuracao(
     settings.central_executor_endpoints,
     service_token=settings.central_executor_service_token,
+    github_token=settings.central_github_token,
 )
 central_worker = CentralWorker(
     central_service,
@@ -191,4 +192,5 @@ async def runtime_health() -> dict[str, object]:
 async def runtime_analytics() -> dict[str, object]:
     metrics = await job_service.metricas()
     metrics["parallelism_reconciliation"] = parallelism_reconciler.metrics.snapshot()
+    metrics["central"] = (await central_service.metricas()).to_dict()
     return metrics

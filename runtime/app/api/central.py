@@ -154,6 +154,12 @@ async def obter_evidencia(
     return registro
 
 
+@router.get("/metrics", response_model=dict)
+async def obter_metricas(service: CentralService = Depends(get_central_service)) -> dict:
+    """Séries operacionais da Central, incluindo Lead Time to Evidence."""
+    return (await service.metricas()).to_dict()
+
+
 @router.post(
     "/worker/cycle",
     response_model=CycleReportView,
