@@ -34,7 +34,8 @@ env:
   INTEGRATION_E2E_SQL_PROCEDURE: integration.usp_ConsultarPorIdentificadores
   EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev/key-vault-capture
   EXPECTED_KEY_VAULT_NAME: kv-reqsys-ccp
-  INTEGRATION_E2E_SQL_DSN_SECRET_NAME: ${{ vars.INTEGRATION_E2E_SQL_DSN_SECRET_NAME }}
+  # Branch operacional: validar o DSN já governado da Prospecção Movimento apenas como candidato.
+  INTEGRATION_E2E_SQL_DSN_SECRET_NAME: movimento-email-source-dsn
   INTEGRATION_E2E_SQL_VALIDATION_MODE: ${{ vars.INTEGRATION_E2E_SQL_VALIDATION_MODE || 'direct_dsn' }}
 
 jobs:
