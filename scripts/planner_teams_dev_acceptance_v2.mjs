@@ -391,6 +391,17 @@ async function deletePlannerTask(token, taskId) {
   if (response.status !== 204) throw new Error(`planner_cleanup_http_${response.status}:${taskId}`)
 }
 
+function classifyFailure(error) {
+  const message = String(error?.message || error || '')
+  if (message.includes('msal_refresh_token_ausente')) return { failure_stage: 'microsoft_session', error_code: 'msal_refresh_token_ausente' }
+  if (message.includes('AADSTS700084')) return { failure_stage: 'microsoft_session', error_code: 'msal_refresh_token_expirado' }
+  if (message.includes('device_code_expirado_sem_autorizacao')) return { failure_stage: 'microsoft_session', error_code: 'device_code_expirado_sem_autorizacao' }
+  if (message.includes('device_code_privado_ausente')) return { failure_stage: 'microsoft_session', error_code: 'device_code_privado_ausente' }
+  if (message.includes('id_token_ausente')) return { failure_stage: 'microsoft_session', error_code: 'id_token_ausente' }
+  if (message.startsWith('token:')) return { failure_stage: 'microsoft_session', error_code: 'oauth_token_exchange_failed' }
+  return { failure_stage: 'acceptance', error_code: 'acceptance_failed' }
+}
+
 function controlledEvidence(runtime) {
   const succeeded = runtime.status === 'runtime_executed_awaiting_teams_observation'
   return {
@@ -442,7 +453,8 @@ function controlledEvidence(runtime) {
         (runtime.postconditions?.flows || []).every((item) => item.status === 'started_confirmed')
         ? 'started_confirmed' : 'not_confirmed',
     },
-    error_code: succeeded ? null : 'acceptance_failed_see_runtime_log',
+    failure_stage: succeeded ? null : runtime.failure_stage || 'acceptance',
+    error_code: succeeded ? null : runtime.error_code || 'acceptance_failed',
   }
 }
 
@@ -661,6 +673,9 @@ try {
   evidence.status = 'runtime_executed_awaiting_teams_observation'
 } catch (error) {
   evidence.status = 'failed'
+  const failure = classifyFailure(error)
+  evidence.failure_stage = failure.failure_stage
+  evidence.error_code = failure.error_code
   evidence.error = `${error?.name || 'Error'}:${String(error?.message || error).slice(0, 1800)}`
   process.exitCode = 1
 } finally {
