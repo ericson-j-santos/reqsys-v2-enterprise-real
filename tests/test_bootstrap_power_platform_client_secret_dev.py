@@ -210,6 +210,38 @@ def test_rollback_failure_is_sanitized(monkeypatch):
     assert "provider detail" not in str(exc.value)
 
 
+def test_github_ready_maps_auth_failure(monkeypatch):
+    def fake_run(tool, call_args, **_):
+        assert tool == "gh"
+        if call_args[:2] == ["auth", "status"]:
+            raise rotation.RotationError("gh_failed:provider detail must not escape")
+        pytest.fail("repo view must not execute after auth failure")
+
+    monkeypatch.setattr(rotation, "_run", fake_run)
+    with pytest.raises(rotation.RotationError, match="^github_auth_unavailable$") as exc:
+        rotation._github_ready(rotation.REPOSITORY)
+    assert "provider detail" not in str(exc.value)
+
+
+def test_github_ready_maps_repo_access_failure(monkeypatch):
+    class Result:
+        stdout = ""
+
+    calls = []
+
+    def fake_run(tool, call_args, **_):
+        calls.append(call_args)
+        if call_args[:2] == ["auth", "status"]:
+            return Result()
+        raise rotation.RotationError("gh_failed:provider detail must not escape")
+
+    monkeypatch.setattr(rotation, "_run", fake_run)
+    with pytest.raises(rotation.RotationError, match="^github_repo_access_unavailable$") as exc:
+        rotation._github_ready(rotation.REPOSITORY)
+    assert len(calls) == 2
+    assert "provider detail" not in str(exc.value)
+
+
 def test_main_never_serializes_internal_execution_result(monkeypatch, capsys):
     monkeypatch.setattr(rotation, "parse_args", lambda *_: args())
     monkeypatch.setattr(
@@ -235,6 +267,8 @@ def test_main_never_serializes_internal_execution_result(monkeypatch, capsys):
         ("tool_missing:gh", "github_cli_missing"),
         ("az_failed:provider detail must not escape", "azure_command_failed"),
         ("gh_failed:provider detail must not escape", "github_command_failed"),
+        ("github_auth_unavailable", "github_auth_unavailable"),
+        ("github_repo_access_unavailable", "github_repo_access_unavailable"),
         ("gh_sensitive_operation_failed", "github_secret_write_failed"),
         ("validation_workflow_run_not_found", "validation_workflow_run_not_found"),
     ],
