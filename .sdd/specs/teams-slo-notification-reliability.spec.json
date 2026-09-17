@@ -1,0 +1,16 @@
+{
+  "feature_name": "teams-slo-notification-reliability",
+  "project": "ReqSys v2 Enterprise — GitHub Actions / Teams notifications",
+  "created_at": "2026-09-17",
+  "updated_at": "2026-09-17",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Evita descarte de notificações GitHub → Teams em rajadas de pushes e torna falhas reais de entrega observáveis no resultado do workflow, em resposta ao incidente #1576.",
+  "sdd_gate": {
+    "tests": [
+      ".github/workflows/teams-commit-notification-contract.yml",
+      "tests/test_teams_graph_gateway_autocontido.py"
+    ],
+    "evidence_contract": "A correção só pode ser considerada pronta para revisão quando o workflow não tiver concorrência que descarte pushes pendentes nem continue-on-error no envio. Recuperação do SLO exige evidência posterior em runtime e não é declarada por este spec."
+  }
+}
