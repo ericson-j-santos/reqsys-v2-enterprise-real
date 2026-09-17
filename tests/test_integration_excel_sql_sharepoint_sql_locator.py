@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Revalidação não interativa do locator SQL DEV pelo Environment Secret governado.
+
 import json
 
 import pytest
