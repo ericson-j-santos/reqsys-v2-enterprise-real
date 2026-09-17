@@ -39,6 +39,7 @@ on:
       - "scripts/integration_excel_sql_sharepoint_e2e.py"
       - "scripts/integration_excel_sql_sharepoint_readiness.py"
       - "scripts/normalize_msal_storage_state.py"
+      - "scripts/msal_device_code.mjs"
       - "scripts/msal_device_code_prepare.mjs"
       - "scripts/msal_device_code_complete.mjs"
       - "scripts/resolve_integration_e2e_sql_dsn.py"
