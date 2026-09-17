@@ -79,10 +79,14 @@ def test_valid_workflow_yaml_is_accepted(tmp_path: Path) -> None:
     assert results[0].status == "passed"
 
 
-def test_workflow_installs_dependencies_for_root_operational_tests() -> None:
+def test_workflow_installs_root_dependencies_before_backend_profile_branch() -> None:
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "'httpx==0.28.1'" in workflow
-    assert "'openpyxl==3.1.5'" in workflow
+    common_install = "python -m pip install --disable-pip-version-check PyYAML pytest 'httpx==0.28.1' 'openpyxl==3.1.5'"
+    backend_branch = "if git diff --name-only \"origin/$BASE_REF...HEAD\" | grep -q '^backend/'; then"
+
+    assert common_install in workflow
+    assert backend_branch in workflow
+    assert workflow.index(common_install) < workflow.index(backend_branch)
 
 
 def test_negative_self_test_proves_detector_is_fail_closed() -> None:
