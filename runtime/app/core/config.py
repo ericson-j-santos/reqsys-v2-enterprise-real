@@ -31,6 +31,10 @@ class RuntimeSettings(BaseModel):
     parallelism_control_redis_prefix: str = "reqsys:runtime:parallelism"
     central_redis_prefix: str = "reqsys:runtime:central"
     central_max_active_root_causes: int = 3
+    central_executor_endpoints: str = ""
+    central_executor_service_token: str = ""
+    central_worker_enabled: bool = False
+    central_worker_idle_seconds: float = 5.0
     max_tentativas: int = 3
 
     @model_validator(mode="after")
@@ -48,6 +52,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("RUNTIME_ENVIRONMENT deve ser dev, stg, prod ou test")
         if self.central_max_active_root_causes < 1:
             raise ValueError("CENTRAL_MAX_ACTIVE_ROOT_CAUSES deve ser >= 1")
+        if self.central_worker_idle_seconds <= 0:
+            raise ValueError("CENTRAL_WORKER_IDLE_SECONDS deve ser > 0")
         if self.redis_lease_ttl_seconds < 5:
             raise ValueError("REDIS_LEASE_TTL_SECONDS deve ser >= 5")
         if self.redis_lease_renew_interval_seconds < 1:
@@ -93,5 +99,9 @@ def get_settings() -> RuntimeSettings:
         ),
         central_redis_prefix=os.getenv("CENTRAL_REDIS_PREFIX", "reqsys:runtime:central"),
         central_max_active_root_causes=int(os.getenv("CENTRAL_MAX_ACTIVE_ROOT_CAUSES", "3")),
+        central_executor_endpoints=os.getenv("CENTRAL_EXECUTOR_ENDPOINTS", ""),
+        central_executor_service_token=os.getenv("CENTRAL_EXECUTOR_SERVICE_TOKEN", ""),
+        central_worker_enabled=os.getenv("CENTRAL_WORKER_ENABLED", "false").lower() == "true",
+        central_worker_idle_seconds=float(os.getenv("CENTRAL_WORKER_IDLE_SECONDS", "5")),
         max_tentativas=int(os.getenv("ASYNC_JOB_MAX_TENTATIVAS", "3")),
     )
