@@ -8,6 +8,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-09-08
 
+### Adicionado (ReqSys ↔ Redmine · reconciliação em lote com reserva, backoff e quarentena)
+
+- `backend/app/services/redmine_lifecycle_batch.py` (novo, Issue #1686 incremento 2): o reconciliador por requisito do incremento 1 passa a ter execução em lote governada. A reserva por requisito é adquirida por **compare-and-swap no próprio `UPDATE`** (`WHERE titulo = <valor lido>`): quando outra sessão já avançou o estado, o `rowcount` volta zero e o requisito é devolvido como `pulado_lock` em vez de ser processado por dois workers. O lock tem expiração configurável, então um worker morto não trava a fila indefinidamente.
+- Falha deixa de virar retentativa cega: cada erro incrementa `attempts`, registra `last_error` e agenda `next_attempt_at` por backoff exponencial com teto; ao atingir o limite de tentativas o requisito entra em **quarentena** e sai do lote. A saída da quarentena é explícita e auditada (`REDMINE_SYNC_QUARENTENA_LIBERADA`) — conflito permanente é decisão operacional, não loop de retry.
+- `POST /requisitos/lifecycle/sincronizar-redmine/lote` e `POST /requisitos/lifecycle/{id}/sincronizar-redmine/liberar-quarentena`, ambos sob escopo `lifecycle:write` (admin ou service token). A política de reserva/backoff vem da configuração (`REDMINE_LIFECYCLE_SYNC_*`), não do corpo da requisição. `dry_run` não adquire lock, não chama escrita no Redmine e não cria estado de controle.
+- O estado de controle vive em linha própria de `VinculoGit` (`tipo='redmine_sync_control'`), separada do checkpoint do incremento 1 (`redmine_sync_state`): misturar os dois faria uma escrita apagar a outra, e a separação dispensa migração de schema neste incremento.
+- Testes: 20 direcionados verdes, cobrindo caso positivo, idempotência (mesma entrada, zero mutações adicionais), concorrência real de lock (segundo worker tentando o mesmo requisito enquanto o primeiro o mantém), tomada de lock expirado, ciclo completo de backoff → quarentena → liberação → reprocessamento, dry-run sem efeito e vínculo ausente/inválido falhando fechado. Teste do próprio teste executado: ignorar lock ativo e nunca quarentenar reprovaram exatamente os testes correspondentes, e a injeção foi revertida antes da validação final.
+- `docs/architecture/redmine-lifecycle-sync.md` (novo): propriedade de campos por lado, mecânica do lock, política de backoff/quarentena, variáveis de configuração e o que falta — **o E2E real contra instância Redmine configurada permanece pendente, logo o incremento está `parcialmente validado`**.
+
 ### Corrigido (Central de Conversas IA · bootstrap do Azure Bot DEV à prova de falha parcial e com retomada automática)
 
 - O bloqueio da Issue #1532 permanece humano por decisão de projeto: a identidade de CI não possui `Application.ReadWrite.*` no Microsoft Graph e ampliá-la só para criar a App Registration do bot violaria menor privilégio. O que foi eliminado é todo o custo humano ao redor desse único passo.
