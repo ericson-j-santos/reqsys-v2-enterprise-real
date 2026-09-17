@@ -212,8 +212,22 @@ jobs:
           )
 
           eta_text = eta.strftime("%d/%m/%Y %H:%M UTC") if eta else "indeterminada até recuperação do SLO móvel"
-          blockers_text = "\n".join(f"- {item}" for item in blockers) or "- nenhum bloqueio atual"
+
+          def align_block(text: str, spaces: int = 4) -> str:
+              """Alinha bloco multilinha à indentação do template.
+
+              Sem isso a primeira linha herda a indentação do literal e as demais
+              ficam na coluna zero, o que zera o prefixo comum e faz
+              ``textwrap.dedent`` devolver o corpo inteiro indentado — publicado
+              no GitHub como bloco de código em vez de Markdown.
+              """
+              return textwrap.indent(text, " " * spaces).strip()
+
+          blockers_text = align_block(
+              "\n".join(f"- {item}" for item in blockers) or "- nenhum bloqueio atual"
+          )
           body = textwrap.dedent(f"""\
+              <!-- reqsys-operational-panel -->
               ## Progresso da certificação GitHub → Teams
 
               **Estado atual:** `{state}`  

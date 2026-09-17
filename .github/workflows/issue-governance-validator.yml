@@ -71,7 +71,12 @@ jobs:
               const commentFile = `${base}.md`;
               fs.writeFileSync(
                 issueFile,
-                JSON.stringify({ number: issue.number, title: issue.title || '', body: issue.body || '' }),
+                JSON.stringify({
+                  number: issue.number,
+                  title: issue.title || '',
+                  body: issue.body || '',
+                  author_type: (issue.user && issue.user.type) || 'User',
+                }),
                 'utf8',
               );
 
@@ -119,10 +124,11 @@ jobs:
 
             async function syncComment(issue, validation) {
               const existing = await findGovernanceComment(issue.number);
+              const outOfScope = validation.result.scope === 'operational_panel';
 
               if (validation.result.valid && !existing) {
-                // Issue já nasceu conforme: não gerar ruído desnecessário.
-                return 'sem_comentario_necessario';
+                // Issue conforme ou fora de escopo: não gerar ruído desnecessário.
+                return outOfScope ? 'fora_de_escopo' : 'sem_comentario_necessario';
               }
 
               if (existing && (existing.body || '').trim() === validation.commentBody) {
@@ -158,6 +164,7 @@ jobs:
                 number: issue.number,
                 title: issue.title,
                 url: issue.html_url,
+                scope: validation.result.scope,
                 valid: validation.result.valid,
                 missing: validation.result.missing_fields,
                 invalid: validation.result.invalid_fields,
@@ -166,19 +173,27 @@ jobs:
             }
 
             const invalidIssues = results.filter((item) => !item.valid);
+            const panelIssues = results.filter((item) => item.scope === 'operational_panel');
+            const governedIssues = results.filter((item) => item.scope !== 'operational_panel');
             const lines = [
               '# Issue Governance Validator',
               '',
               `Evento: ${context.eventName}`,
               `Issues avaliadas: ${results.length}`,
-              `Conformes: ${results.length - invalidIssues.length}`,
+              `Sob contrato: ${governedIssues.length}`,
+              `Painéis operacionais (fora de escopo): ${panelIssues.length}`,
+              `Conformes: ${governedIssues.length - invalidIssues.length}`,
               `Não conformes: ${invalidIssues.length}`,
               '',
-              '| Issue | Estado | Comentário |',
-              '|---|---|---|',
-              ...results.map((item) =>
-                `| [#${item.number}](${item.url}) | ${item.valid ? 'conforme' : 'correção necessária'} | ${item.commentAction} |`
-              ),
+              '| Issue | Escopo | Estado | Comentário |',
+              '|---|---|---|---|',
+              ...results.map((item) => {
+                const scope = item.scope === 'operational_panel' ? 'painel operacional' : 'issue governada';
+                const state = item.scope === 'operational_panel'
+                  ? 'fora de escopo'
+                  : (item.valid ? 'conforme' : 'correção necessária');
+                return `| [#${item.number}](${item.url}) | ${scope} | ${state} | ${item.commentAction} |`;
+              }),
             ];
             await core.summary.addRaw(lines.join('\n')).write();
 

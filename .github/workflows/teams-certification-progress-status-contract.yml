@@ -38,6 +38,8 @@ jobs:
             'retention-days: 365'
             'teams-commit-notification.yml'
             'teams-dashboard-availability-monitor.yml'
+            '<!-- reqsys-operational-panel -->'
+            'blockers_text = align_block('
           )
           for marker in "${markers[@]}"; do
             grep -Fq "$marker" "$workflow" || {

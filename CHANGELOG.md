@@ -8,6 +8,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) �
 
 ## [Unreleased] - 2026-09-08
 
+### Corrigido (Governança de Issues · painel operacional deixa de reprovar o validador a cada hora)
+
+- `scripts/validate_issue_governance.py` e `.github/workflows/issue-governance-validator.yml`: o gate agendado (`cron 23 * * * *`) estava vermelho de forma permanente porque a Issue #1358 — painel `[STATUS][TEAMS]` reescrito por automação a cada 6 horas — nunca poderia atender ao contrato de 12 seções de rastreabilidade. Corrigir o corpo da Issue não resolveria: a própria automação o sobrescreve na execução seguinte. A causa raiz era o validador não distinguir Issue governada de painel operacional.
+- O escopo passa a ser explícito no resultado (`scope`): `governed_issue` ou `operational_panel`. O painel só sai do contrato quando **as duas** condições valem — o corpo carrega `<!-- reqsys-operational-panel -->` **e** o autor da Issue é um bot. Marcador colado por humano não dispensa o contrato, e Issue de bot sem marcador continua sob contrato; a exclusão não vira porta de saída da governança.
+- `.github/workflows/teams-certification-progress-status.yml` passa a emitir o marcador no corpo do painel. Enquanto a Issue #1358 não for reescrita pela próxima execução agendada, o validador segue apontando a não conformidade — o fechamento é automático, não instantâneo.
+- Quando um painel já tinha comentário de diagnóstico, ele é atualizado para “fora de escopo” em vez de ficar com um pedido de correção que ninguém deve atender. Painel sem comentário não recebe nenhum.
+- Testes: 20 verdes em `tests/test_validate_issue_governance.py`, incluindo os dois controles negativos (marcador em Issue humana e Issue de bot sem marcador seguem reprovando) e o código de saída da CLI. Validação ponta a ponta local executada com o corpo real da Issue #1358: `exit=0` para painel de bot, `exit=2` nos dois controles.
+
+### Corrigido (Painel de certificação Teams · corpo publicado como bloco de código no GitHub)
+
+- `.github/workflows/teams-certification-progress-status.yml`: o corpo da Issue #1358 era publicado inteiro com 4 espaços de indentação e, por isso, renderizado pelo GitHub como bloco de código — sem tabela, sem títulos, sem links clicáveis. A causa raiz é `textwrap.dedent` aplicado a um literal com interpolação multilinha: `blockers_text` entrava com a primeira linha indentada e as demais na coluna zero, o prefixo comum virava vazio e o `dedent` não removia nada.
+- O bloco de bloqueios passa a ser alinhado à indentação do template antes da interpolação (`align_block`), preservando o `dedent`. A correção é de renderização apenas: nenhuma métrica, janela, critério ou estado do painel foi alterado.
+- Testes: `tests/test_teams_certification_progress_status_body.py` (novo) lê o workflow real, executa o helper versionado e mantém um controle negativo que reproduz o defeito original; o contrato do workflow passa a exigir o marcador de painel e o alinhamento. 6 verdes.
+
+
 ### Adicionado (ReqSys ↔ Redmine · reconciliação em lote com reserva, backoff e quarentena)
 
 - `backend/app/services/redmine_lifecycle_batch.py` (novo, Issue #1686 incremento 2): o reconciliador por requisito do incremento 1 passa a ter execução em lote governada. A reserva por requisito é adquirida por **compare-and-swap no próprio `UPDATE`** (`WHERE titulo = <valor lido>`): quando outra sessão já avançou o estado, o `rowcount` volta zero e o requisito é devolvido como `pulado_lock` em vez de ser processado por dois workers. O lock tem expiração configurável, então um worker morto não trava a fila indefinidamente.
