@@ -130,7 +130,7 @@ async def registrar_evidencia(
 async def obter_evidencia(
     request_id: str, service: CentralService = Depends(get_central_service)
 ) -> EvidenceRecord:
-    registro = service.ledger.obter(request_id)
+    registro = await service.obter_evidencia(request_id)
     if registro is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sem evidência registrada.")
     return registro

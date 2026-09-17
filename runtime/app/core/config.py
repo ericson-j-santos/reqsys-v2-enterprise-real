@@ -29,6 +29,8 @@ class RuntimeSettings(BaseModel):
     todo_global_service_token: str = ""
     parallelism_control_token: str = ""
     parallelism_control_redis_prefix: str = "reqsys:runtime:parallelism"
+    central_redis_prefix: str = "reqsys:runtime:central"
+    central_max_active_root_causes: int = 3
     max_tentativas: int = 3
 
     @model_validator(mode="after")
@@ -44,6 +46,8 @@ class RuntimeSettings(BaseModel):
             raise ValueError("QUEUE_BACKEND=redis exige STORAGE_BACKEND=redis para worker desacoplado")
         if environment not in {"dev", "stg", "prod", "test"}:
             raise ValueError("RUNTIME_ENVIRONMENT deve ser dev, stg, prod ou test")
+        if self.central_max_active_root_causes < 1:
+            raise ValueError("CENTRAL_MAX_ACTIVE_ROOT_CAUSES deve ser >= 1")
         if self.redis_lease_ttl_seconds < 5:
             raise ValueError("REDIS_LEASE_TTL_SECONDS deve ser >= 5")
         if self.redis_lease_renew_interval_seconds < 1:
@@ -87,5 +91,7 @@ def get_settings() -> RuntimeSettings:
         parallelism_control_redis_prefix=os.getenv(
             "PARALLELISM_CONTROL_REDIS_PREFIX", "reqsys:runtime:parallelism"
         ),
+        central_redis_prefix=os.getenv("CENTRAL_REDIS_PREFIX", "reqsys:runtime:central"),
+        central_max_active_root_causes=int(os.getenv("CENTRAL_MAX_ACTIVE_ROOT_CAUSES", "3")),
         max_tentativas=int(os.getenv("ASYNC_JOB_MAX_TENTATIVAS", "3")),
     )
