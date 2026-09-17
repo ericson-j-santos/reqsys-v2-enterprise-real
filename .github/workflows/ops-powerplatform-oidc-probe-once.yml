@@ -1,0 +1,98 @@
+name: Ops Power Platform OIDC probe once
+
+on:
+  push:
+    branches:
+      - feat/e2e-powerplatform-oidc-20260917
+    paths:
+      - ".github/workflows/ops-powerplatform-oidc-probe-once.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Autenticar identidade ReqSys DEV por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Provar tokens app-only sem expor credenciais
+        shell: bash
+        env:
+          ENVIRONMENT_ID: "567445cb-49a2-ef0f-8490-cc81a281d6ed"
+        run: |
+          set -euo pipefail
+          mkdir -p audit/oidc
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          Path("audit/oidc/oidc-probe.json").write_text(json.dumps({
+              "schema_version": "1.0.0",
+              "environment": "dev",
+              "checks": {}
+          }, indent=2) + "\n", encoding="utf-8")
+          PY
+
+          probe() {
+            local name="$1"
+            local resource="$2"
+            local url="$3"
+            local token http
+            set +e
+            token="$(az account get-access-token --resource "$resource" --query accessToken -o tsv 2>/dev/null)"
+            local token_rc=$?
+            set -e
+            if [ "$token_rc" -ne 0 ] || [ -z "$token" ]; then
+              python - "$name" <<'PY'
+          import json, sys
+          from pathlib import Path
+          p=Path("audit/oidc/oidc-probe.json")
+          d=json.loads(p.read_text())
+          d["checks"][sys.argv[1]]={"token_acquired": False, "http_status": None}
+          p.write_text(json.dumps(d, indent=2)+"\n")
+          PY
+              return 0
+            fi
+            echo "::add-mask::$token"
+            set +e
+            http="$(curl -sS -o /tmp/oidc-probe-body -w '%{http_code}' -H "Authorization: Bearer $token" -H 'Accept: application/json' "$url")"
+            local curl_rc=$?
+            set -e
+            python - "$name" "$http" "$curl_rc" <<'PY'
+          import json, sys
+          from pathlib import Path
+          p=Path("audit/oidc/oidc-probe.json")
+          d=json.loads(p.read_text())
+          d["checks"][sys.argv[1]]={
+              "token_acquired": True,
+              "http_status": int(sys.argv[2] or 0),
+              "transport_ok": int(sys.argv[3]) == 0,
+          }
+          p.write_text(json.dumps(d, indent=2)+"\n")
+          PY
+          }
+
+          probe graph "https://graph.microsoft.com/" "https://graph.microsoft.com/v1.0/sites/root?\$select=id"
+          probe power_platform "https://api.powerplatform.com/" "https://api.powerplatform.com/environmentmanagement/environments?api-version=2024-10-01"
+          probe flow "https://service.flow.microsoft.com/" "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/$ENVIRONMENT_ID/flows?api-version=2016-11-01"
+
+          cat audit/oidc/oidc-probe.json
+
+      - name: Publicar evidência OIDC
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: powerplatform-oidc-probe-${{ github.run_id }}
+          path: audit/oidc/oidc-probe.json
+          if-no-files-found: error
+          retention-days: 7
