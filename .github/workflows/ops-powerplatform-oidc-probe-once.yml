@@ -127,6 +127,48 @@ jobs:
           probe flow "https://service.flow.microsoft.com/" "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/$ENVIRONMENT_ID/flows?api-version=2016-11-01"
           probe dataverse "$DATAVERSE_URL/" "$DATAVERSE_URL/api/data/v9.2/workflows?\$select=workflowid,name,statecode,statuscode&\$top=1"
 
+          dataverse_token="$(az account get-access-token --resource "$DATAVERSE_URL/" --query accessToken -o tsv)"
+          echo "::add-mask::$dataverse_token"
+          curl -fsS \
+            -H "Authorization: Bearer $dataverse_token" \
+            -H 'Accept: application/json' \
+            "$DATAVERSE_URL/api/data/v9.2/workflows(7bb2c13a-d4b2-f111-aaac-000d3a89116f)?\$select=workflowid,name,statecode,statuscode,category,type,clientdata" \
+            > /tmp/flow-metadata.json
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          p=Path("audit/oidc/oidc-probe.json")
+          d=json.loads(p.read_text())
+          row=json.loads(Path("/tmp/flow-metadata.json").read_text())
+          raw=row.get("clientdata") or ""
+          try:
+              clientdata=json.loads(raw)
+          except Exception:
+              clientdata={}
+          props=clientdata.get("properties") if isinstance(clientdata,dict) else {}
+          props=props if isinstance(props,dict) else {}
+          refs=props.get("connectionReferences")
+          refs=refs if isinstance(refs,dict) else {}
+          definition=props.get("definition")
+          definition=definition if isinstance(definition,dict) else {}
+          d["existing_flow"]={
+              "found": bool(row.get("workflowid")),
+              "name": row.get("name"),
+              "statecode": row.get("statecode"),
+              "statuscode": row.get("statuscode"),
+              "category": row.get("category"),
+              "type": row.get("type"),
+              "clientdata_sha256": hashlib.sha256(raw.encode()).hexdigest() if raw else None,
+              "clientdata_length": len(raw),
+              "connection_reference_keys": sorted(refs.keys()),
+              "connection_reference_count": len(refs),
+              "definition_present": bool(definition),
+              "definition_action_names": sorted((definition.get("actions") or {}).keys()),
+              "definition_trigger_names": sorted((definition.get("triggers") or {}).keys()),
+          }
+          p.write_text(json.dumps(d, indent=2)+"\n")
+          PY
+
           cat audit/oidc/oidc-probe.json
 
       - name: Publicar evidência OIDC
