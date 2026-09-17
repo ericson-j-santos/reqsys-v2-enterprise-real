@@ -41,21 +41,29 @@ class ConcurrentUpdateError(RuntimeError):
 
 
 class CentralStore(Protocol):
-    async def criar_se_ausente(self, solicitacao: WorkRequest) -> tuple[WorkRequest, bool]: ...
+    async def criar_se_ausente(self, solicitacao: WorkRequest) -> tuple[WorkRequest, bool]:
+        """Cria atomicamente; devolve (solicitação vigente, foi_criada)."""
 
-    async def obter(self, request_id: str) -> WorkRequest | None: ...
+    async def obter(self, request_id: str) -> WorkRequest | None:
+        """Solicitação corrente, ou None se não existir."""
 
-    async def listar(self) -> list[WorkRequest]: ...
+    async def listar(self) -> list[WorkRequest]:
+        """Todas as solicitações conhecidas pela Central."""
 
-    async def atualizar(self, request_id: str, mutator: Mutator) -> WorkRequest | None: ...
+    async def atualizar(self, request_id: str, mutator: Mutator) -> WorkRequest | None:
+        """Aplica o mutator sob compare-and-swap; None se a solicitação sumiu."""
 
-    async def registrar_evidencia(self, entrada: EvidenceRecordInput) -> EvidenceRecord: ...
+    async def registrar_evidencia(self, entrada: EvidenceRecordInput) -> EvidenceRecord:
+        """Grava a evidência e devolve o registro corrente resultante."""
 
-    async def obter_evidencia(self, request_id: str) -> EvidenceRecord | None: ...
+    async def obter_evidencia(self, request_id: str) -> EvidenceRecord | None:
+        """Registro corrente de evidência, ou None se ainda não houver."""
 
-    async def historico_evidencia(self, request_id: str) -> tuple[EvidenceRecord, ...]: ...
+    async def historico_evidencia(self, request_id: str) -> tuple[EvidenceRecord, ...]:
+        """Histórico append-only de evidência da solicitação."""
 
-    async def status_evidencia(self, request_id: str, sha: str | None) -> EvidenceStatus: ...
+    async def status_evidencia(self, request_id: str, sha: str | None) -> EvidenceStatus:
+        """Status de evidência válido para o SHA informado."""
 
 
 class InMemoryCentralStore:
