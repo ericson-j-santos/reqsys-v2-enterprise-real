@@ -15,20 +15,6 @@ jobs:
     name: SQL Server efêmero — contrato técnico DEV
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        env:
-          ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: "ReqSys_E2E_DEV_Only_2026!"
-        ports:
-          - 1433:1433
-        options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'ReqSys_E2E_DEV_Only_2026!' -C -Q 'SELECT 1' || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 12
-
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -41,12 +27,29 @@ jobs:
           bash .github/scripts/install-msodbc18-ci.sh
           python -m pip install --disable-pip-version-check pyodbc pytest
 
+      - name: Iniciar SQL Server efêmero com credencial mascarada
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL_PASSWORD="ReqSys_$(openssl rand -hex 18)_Aa1!"
+          echo "::add-mask::$SQL_PASSWORD"
+          printf 'SQL_PASSWORD=%s\n' "$SQL_PASSWORD" >> "$GITHUB_ENV"
+          docker run -d --name reqsys-sql-e2e             -e ACCEPT_EULA=Y             -e MSSQL_SA_PASSWORD="$SQL_PASSWORD"             -p 1433:1433             mcr.microsoft.com/mssql/server:2022-latest >/dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec reqsys-sql-e2e /opt/mssql-tools18/bin/sqlcmd               -S localhost -U sa -P "$SQL_PASSWORD" -C -Q "SELECT 1" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::SQL Server efêmero não ficou pronto no prazo."
+          docker logs reqsys-sql-e2e 2>&1 | tail -n 50
+          exit 1
+
       - name: Provisionar banco sintético isolado
         env:
           SQL_SERVER: localhost,1433
           SQL_DATABASE: ReqSysIntegrationDev
           SQL_USER: sa
-          SQL_PASSWORD: ReqSys_E2E_DEV_Only_2026!
         run: |
           set -euo pipefail
           mkdir -p audit/user-journey/excel-sql-sharepoint-dev/ephemeral
@@ -64,7 +67,6 @@ jobs:
           cur = con.cursor()
           cur.execute("IF DB_ID('ReqSysIntegrationDev') IS NULL CREATE DATABASE ReqSysIntegrationDev")
           con.close()
-
           dsn = dsn.replace("Database=master", "Database=ReqSysIntegrationDev")
           con = pyodbc.connect(dsn, autocommit=True, timeout=15)
           cur = con.cursor()
@@ -94,7 +96,7 @@ jobs:
                       json.dumps(["999999999999999"]),corr)
           negative=cur.fetchone()
           payload={
-            "schema_version":"1.0.0",
+            "schema_version":"1.1.0",
             "environment":"dev-ephemeral",
             "data_class":"synthetic",
             "corporate_source_certified":False,
@@ -102,6 +104,7 @@ jobs:
             "procedure_exists":True,
             "positive_probe":"passed" if positive and str(positive[0])==fixture else "failed",
             "negative_probe":"passed" if negative is None else "failed",
+            "credential_strategy":"runtime_random_masked",
             "secret_exposed":False,
             "production_touched":False
           }
