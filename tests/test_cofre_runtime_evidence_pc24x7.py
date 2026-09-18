@@ -17,6 +17,7 @@ def test_workflow_uses_pc24x7_dev_and_has_no_fly_runtime():
     assert "FLY_API_TOKEN" not in raw
     assert "runtime_target = \"pc24x7\"" in raw
     assert "production_touched = $false" in raw
+    assert "runner.temp" not in raw
 
 
 def test_workflow_is_dev_only_until_dev_is_green():
