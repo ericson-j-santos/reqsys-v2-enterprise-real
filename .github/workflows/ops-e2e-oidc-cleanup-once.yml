@@ -1,0 +1,73 @@
+name: Ops E2E OIDC cleanup once
+
+on:
+  push:
+    branches:
+      - feat/e2e-powerplatform-oidc-20260917
+    paths:
+      - ".github/workflows/ops-e2e-oidc-cleanup-once.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 10
+    env:
+      DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
+      FLOW_ID: 7bb2c13a-d4b2-f111-aaac-000d3a89116f
+      SITE_ID: tieri659.sharepoint.com,f72be222-7b9b-42e0-8f91-29b7b8db35e0,5e24e819-4dcf-475d-b0e9-5b8f83c30a2c
+      LIST_ID: 4eeb6036-c3a2-4912-8a67-b5e172b15bf8
+      TARGET_KEY: "990000000000001"
+      TARGET_CORRELATION: excel-sql-sharepoint-oidc-35288786690-1
+
+    steps:
+      - name: Autenticar identidade ReqSys DEV por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Normalizar fluxo e remover residuos E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          dv_token="$(az account get-access-token --resource "$DATAVERSE_URL/" --query accessToken -o tsv)"
+          graph_token="$(az account get-access-token --resource https://graph.microsoft.com/ --query accessToken -o tsv)"
+          test -n "$dv_token"
+          test -n "$graph_token"
+          echo "::add-mask::$dv_token"
+          echo "::add-mask::$graph_token"
+
+          flow_url="$DATAVERSE_URL/api/data/v9.2/workflows($FLOW_ID)"
+          state="$(curl -fsS -H "Authorization: Bearer $dv_token" -H 'Accept: application/json' "$flow_url?\$select=statecode,statuscode" | jq -r '.statecode')"
+          if [ "$state" != "0" ]; then
+            curl -fsS -X PATCH               -H "Authorization: Bearer $dv_token"               -H 'Content-Type: application/json'               -H 'If-Match: *'               --data '{"statecode":0}'               "$flow_url"
+          fi
+
+          confirmed=0
+          for _ in $(seq 1 18); do
+            state="$(curl -fsS -H "Authorization: Bearer $dv_token" -H 'Accept: application/json' "$flow_url?\$select=statecode,statuscode" | jq -r '.statecode')"
+            if [ "$state" = "0" ]; then confirmed=1; break; fi
+            sleep 5
+          done
+          test "$confirmed" = "1"
+
+          list_url="https://graph.microsoft.com/v1.0/sites/$SITE_ID/lists/$LIST_ID/items?\$select=id&\$expand=fields(\$select=ChaveIntegracao,CorrelationId)&\$top=200"
+          curl -fsS -H "Authorization: Bearer $graph_token" -H 'Accept: application/json' "$list_url" > /tmp/items.json
+          jq -r --arg key "$TARGET_KEY" --arg corr "$TARGET_CORRELATION"             '.value[] | select(.fields.ChaveIntegracao == $key and .fields.CorrelationId == $corr) | .id'             /tmp/items.json > /tmp/residual_ids.txt
+
+          while IFS= read -r item_id; do
+            [ -z "$item_id" ] && continue
+            curl -fsS -X DELETE               -H "Authorization: Bearer $graph_token"               "https://graph.microsoft.com/v1.0/sites/$SITE_ID/lists/$LIST_ID/items/$item_id"
+          done < /tmp/residual_ids.txt
+
+          curl -fsS -H "Authorization: Bearer $graph_token" -H 'Accept: application/json' "$list_url" > /tmp/items-after.json
+          remaining="$(jq -r --arg key "$TARGET_KEY" --arg corr "$TARGET_CORRELATION"             '[.value[] | select(.fields.ChaveIntegracao == $key and .fields.CorrelationId == $corr)] | length'             /tmp/items-after.json)"
+          test "$remaining" = "0"
+
+          printf '{"flow_statecode":0,"residual_items":0,"status":"clean"}\n'
