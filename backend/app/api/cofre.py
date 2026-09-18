@@ -131,13 +131,18 @@ def _check_vault_token(
             db.commit()
             return VaultTokenContext(ator=f'token:{scoped.label}', key_patterns=json.loads(scoped.key_patterns))
 
-    if not settings.vault_api_token:
-        raise HTTPException(status_code=503, detail='VAULT_API_TOKEN não configurado no servidor')
-    if not x_vault_token or x_vault_token != settings.vault_api_token:
+    if x_vault_token:
+        if settings.vault_api_token and x_vault_token == settings.vault_api_token:
+            _auditar(db, None, 'token-legado-global', 'COFRE_TOKEN_LEGADO_USADO', 'global')
+            return VaultTokenContext(ator='token-legado-global', key_patterns=None)
+        # Um token apresentado mas não reconhecido (inclusive token escopado já
+        # revogado) é uma falha de autenticação. A ausência do fallback legado
+        # não transforma credencial inválida em indisponibilidade do serviço.
         raise HTTPException(status_code=401, detail='Vault token inválido ou ausente')
 
-    _auditar(db, None, 'token-legado-global', 'COFRE_TOKEN_LEGADO_USADO', 'global')
-    return VaultTokenContext(ator='token-legado-global', key_patterns=None)
+    if not settings.vault_api_token:
+        raise HTTPException(status_code=503, detail='VAULT_API_TOKEN não configurado no servidor')
+    raise HTTPException(status_code=401, detail='Vault token inválido ou ausente')
 
 
 def _exigir_escopo(ctx: VaultTokenContext, key: str) -> None:
