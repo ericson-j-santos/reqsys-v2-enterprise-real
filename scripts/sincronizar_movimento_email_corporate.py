@@ -333,7 +333,7 @@ def run(*, mode: str, ref: date, mapping_path: Path | None, evidence_path: Path,
             status = "dry_run_passed"
             repeat_action = "no_write"
             observed = {}
-        elif previous == overall_hash:
+        elif previous == overall_hash and before == overall_hash:
             observed = validate_views(target, mapping, ref, counts)
             record_run(
                 target, correlation_id=correlation_id, ref=ref, payload_hash=overall_hash,
@@ -354,6 +354,9 @@ def run(*, mode: str, ref: date, mapping_path: Path | None, evidence_path: Path,
             status = "applied"
             repeat_action = "write_applied"
             after = target_scope_fingerprint(target, mapping, ref)
+
+        if mode == "apply" and after != overall_hash:
+            raise RuntimeError("target_fingerprint_mismatch_after_apply")
 
         payload.update({
             "status": status,
