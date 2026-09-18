@@ -23,13 +23,22 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
-def build_dsn(server: str, database: str) -> str:
+def choose_driver(installed: list[str]) -> str:
+    for candidate in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
+        if candidate in installed:
+            return candidate
+    raise RuntimeError("no_supported_sql_server_odbc_driver")
+
+
+def build_dsn(server: str, database: str, driver: str = "ODBC Driver 18 for SQL Server") -> str:
     if not _SAFE_NAME.fullmatch(server):
         raise ValueError("invalid_server")
     if not _SAFE_NAME.fullmatch(database):
         raise ValueError("invalid_database")
+    if driver not in {"ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"}:
+        raise ValueError("invalid_driver")
     return (
-        "Driver={ODBC Driver 18 for SQL Server};"
+        f"Driver={{{driver}}};"
         f"Server={server};Database={database};"
         "Trusted_Connection=yes;"
         "Encrypt=yes;TrustServerCertificate=no;"
@@ -41,13 +50,15 @@ def build_dsn(server: str, database: str) -> str:
 def probe(server: str, database: str) -> dict[str, Any]:
     import pyodbc
 
-    dsn = build_dsn(server, database)
+    driver = choose_driver(list(pyodbc.drivers()))
+    dsn = build_dsn(server, database, driver)
     evidence: dict[str, Any] = {
         "schema_version": "1.0.0",
         "feature": "movimento_email_source_readonly_probe",
         "source_server_hash": _hash(server),
         "source_database_hash": _hash(database),
         "auth": "windows_integrated",
+        "driver": driver,
         "encrypt": True,
         "trust_server_certificate": False,
         "application_intent": "ReadOnly",
