@@ -90,7 +90,7 @@ jobs:
     environment:
       name: ${{ needs.validate-inputs.outputs.github_environment }}
     env:
-      STATE_FILE: ${{ runner.temp }}/cofre-runtime-state.bin
+      STATE_FILE: .tmp/cofre-runtime-state.bin
       BASE_URL: ${{ needs.validate-inputs.outputs.base_url }}
       TARGET_ENV: dev
       TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
