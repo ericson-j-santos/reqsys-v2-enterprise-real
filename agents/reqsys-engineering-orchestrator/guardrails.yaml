@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "source_of_truth": {
+    "precedence": [
+      "current_chat",
+      "project_rules",
+      "global_operational_rules",
+      "tool_model_convention"
+    ],
+    "global_repo": "ericson-j-santos/chatgpt-operational-rules",
+    "project_rule": "projects/reqsys.md"
+  },
+  "invariants": [
+    "resolve_current_state_before_mutation",
+    "preserve_existing_work",
+    "one_worker_per_worktree",
+    "bind_evidence_to_exact_sha",
+    "invalidate_affected_evidence_after_sha_change",
+    "no_unrestricted_terminal_fallback",
+    "never_expose_secrets",
+    "fail_closed_without_required_evidence"
+  ],
+  "critical_actions": [
+    "merge",
+    "production_deploy",
+    "production_change",
+    "destructive_database_change",
+    "permanent_delete",
+    "force_push",
+    "protected_branch_mutation",
+    "administrative_permission_change",
+    "secret_mutation",
+    "irreversible_high_impact_action"
+  ],
+  "e2e": {
+    "required_for_functional_increment": true,
+    "positive_case": true,
+    "negative_or_control_case": true,
+    "independent_effect_confirmation": true,
+    "idempotency_repeat_when_applicable": true,
+    "test_the_test_when_safe": true
+  },
+  "statuses": [
+    "green",
+    "yellow",
+    "red",
+    "pending"
+  ]
+}
