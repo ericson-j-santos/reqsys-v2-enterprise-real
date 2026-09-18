@@ -153,25 +153,27 @@ class Handler(BaseHTTPRequestHandler):
     def _raw_origin(self) -> str:
         return self.headers.get("Origin", "")
 
-    def _origin(self) -> str | None:
+    def _cors_origin(self) -> str | None:
         raw_origin = self._raw_origin()
         if not raw_origin:
             return None
         try:
-            return normalize_origin(raw_origin)
+            requested_origin = normalize_origin(raw_origin)
         except ValueError:
             return None
+        for allowed_origin in self.server.config.allowed_origins:
+            if requested_origin == allowed_origin:
+                return allowed_origin
+        return None
 
     def _origin_allowed(self) -> bool:
-        raw_origin = self._raw_origin()
-        if not raw_origin:
+        if not self._raw_origin():
             return True
-        origin = self._origin()
-        return origin is not None and origin in self.server.config.allowed_origins
+        return self._cors_origin() is not None
 
     def _headers(self, status: int, *, content_type: str = "application/json; charset=utf-8") -> None:
         self.send_response(status)
-        origin = self._origin()
+        origin = self._cors_origin()
         if origin is not None and origin in self.server.config.allowed_origins:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
@@ -194,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard_origin():
             return
         self.send_response(HTTPStatus.NO_CONTENT)
-        origin = self._origin()
+        origin = self._cors_origin()
         if origin is not None and origin in self.server.config.allowed_origins:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
@@ -260,7 +262,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "host": socket.gethostname(),
-                    "origin": self._origin() or None,
+                    "origin": self._cors_origin(),
                     "before_profile": before["profile"],
                     "after_profile": result["profile"],
                     "changed": result["changed"],
