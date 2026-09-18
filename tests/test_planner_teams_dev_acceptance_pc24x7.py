@@ -26,5 +26,7 @@ def test_runtime_is_reusable_and_oidc_only() -> None:
     assert "planner_teams_flow_state_oidc.py" in source
     assert "PLANNER_TEAMS_DATAVERSE_URL" in source
     assert "POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN" in source
+    assert "PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS: '15'" in source
+    assert "Aguardar aquecimento dos gatilhos Planner" in source
     assert "msal_device_code" not in source.lower()
     assert "device_code" not in source.lower()

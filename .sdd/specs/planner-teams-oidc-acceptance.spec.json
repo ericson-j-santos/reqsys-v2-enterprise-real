@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Substitui o acceptance Planner→Teams baseado em Device Code por GitHub OIDC, garante os flows DEV ativos via Dataverse e reutiliza o Runtime E2E Continuous com leitura Graph real do canal Teams.",
+  "description": "Substitui o acceptance Planner→Teams baseado em Device Code por GitHub OIDC, garante os flows DEV ativos via Dataverse, aguarda o aquecimento dos gatilhos e reutiliza o Runtime E2E Continuous com leitura Graph real do canal Teams.",
   "sdd_gate": {
     "tests": [
       "tests/test_planner_teams_dev_acceptance_pc24x7.py",

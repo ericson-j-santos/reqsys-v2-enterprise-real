@@ -32,3 +32,7 @@ O nome histórico `Planner Teams Notify DEV Acceptance` permanece disponível po
 ## Requisito 7 — flows ativos
 Antes de criar tarefas de prova, o E2E deve localizar os dois flows Planner→Teams no Dataverse, validar as referências `shared_planner` e `shared_teams`, ativar somente quando necessário e confirmar `statecode=1/statuscode=2` sem alterar o `clientdata`.
 
+
+## Requisito 8 — aquecimento do gatilho
+Após confirmar os flows ativos, o workflow deve aguardar 15 segundos antes de criar as tarefas de prova, preservando a janela já usada pelo acceptance legado para evitar perda do primeiro evento do gatilho recém-ativado.
+

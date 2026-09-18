@@ -42,6 +42,12 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
+      - name: Aguardar aquecimento dos gatilhos Planner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep "$PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS"
+
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
@@ -84,6 +90,7 @@ jobs:
       PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
       PLANNER_TEAMS_DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
       PLANNER_TEAMS_FLOW_STATE_EVIDENCE_PATH: audit/runtime-e2e/planner-teams/flow-state.json
+      PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS: '15'
       PLANNER_TEAMS_POLL_SECONDS: '900'
       PLANNER_TEAMS_RUN_POLL_INTERVAL_MS: '30000'
       PLANNER_TEAMS_SETTLE_SECONDS: '45'
