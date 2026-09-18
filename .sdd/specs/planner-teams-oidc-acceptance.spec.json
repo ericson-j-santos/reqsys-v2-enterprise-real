@@ -4,12 +4,17 @@
   "created_at": "2026-09-18",
   "updated_at": "2026-09-18",
   "phase": "implementation",
-  "approvals": {"requirements": true, "design": true, "tasks": true},
-  "description": "Substitui o acceptance Planner→Teams baseado em Device Code por reutilização do Runtime E2E Continuous com GitHub OIDC e leitura Graph real do canal Teams.",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Substitui o acceptance Planner→Teams baseado em Device Code por GitHub OIDC, garante os flows DEV ativos via Dataverse e reutiliza o Runtime E2E Continuous com leitura Graph real do canal Teams.",
   "sdd_gate": {
     "tests": [
       "tests/test_planner_teams_dev_acceptance_pc24x7.py",
-      "scripts/tests/planner_teams_runtime_e2e.test.mjs"
+      "scripts/tests/planner_teams_runtime_e2e.test.mjs",
+      "tests/test_planner_teams_flow_state_oidc.py"
     ],
     "evidence_contract": "O acceptance deve reutilizar o workflow OIDC canônico, sem refresh token, client secret, Device Code ou sessão MSAL persistida. A prova real exige CT-01 negativo, CT-02 positivo, leitura independente do Teams e cleanup das tarefas Planner."
   }

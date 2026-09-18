@@ -28,3 +28,7 @@ O nome histórico `Planner Teams Notify DEV Acceptance` permanece disponível po
 3. Os testes de contrato OIDC passam.
 4. O E2E real Planner→Teams retorna `status=passed`, `auth_mode=oidc`, CT-01 negativo, CT-02 positivo e cleanup concluído.
 5. Os módulos Device Code são removidos somente após busca confirmar ausência de consumidores ativos.
+
+## Requisito 7 — flows ativos
+Antes de criar tarefas de prova, o E2E deve localizar os dois flows Planner→Teams no Dataverse, validar as referências `shared_planner` e `shared_teams`, ativar somente quando necessário e confirmar `statecode=1/statuscode=2` sem alterar o `clientdata`.
+

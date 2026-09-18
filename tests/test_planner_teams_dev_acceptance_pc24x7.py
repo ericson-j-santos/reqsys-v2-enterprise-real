@@ -23,5 +23,8 @@ def test_runtime_is_reusable_and_oidc_only() -> None:
     assert "id-token: write" in source
     assert "POWER_PLATFORM_GRAPH_ACCESS_TOKEN" in source
     assert "planner_teams_runtime_e2e.mjs" in source
+    assert "planner_teams_flow_state_oidc.py" in source
+    assert "PLANNER_TEAMS_DATAVERSE_URL" in source
+    assert "POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN" in source
     assert "msal_device_code" not in source.lower()
     assert "device_code" not in source.lower()

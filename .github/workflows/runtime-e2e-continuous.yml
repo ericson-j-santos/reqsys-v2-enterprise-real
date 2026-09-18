@@ -82,6 +82,8 @@ jobs:
       WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
       PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
       PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
+      PLANNER_TEAMS_DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
+      PLANNER_TEAMS_FLOW_STATE_EVIDENCE_PATH: audit/runtime-e2e/planner-teams/flow-state.json
       PLANNER_TEAMS_POLL_SECONDS: '900'
       PLANNER_TEAMS_RUN_POLL_INTERVAL_MS: '30000'
       PLANNER_TEAMS_SETTLE_SECONDS: '45'
@@ -100,13 +102,16 @@ jobs:
           tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           allow-no-subscriptions: true
 
-      - name: Resolver token Graph federado
+      - name: Resolver tokens Graph e Dataverse federados
         shell: bash
         run: |
           set -euo pipefail
           token="$(az account get-access-token --resource-type ms-graph --query accessToken -o tsv)"
+          dataverse_token="$(az account get-access-token --resource "$PLANNER_TEAMS_DATAVERSE_URL/" --query accessToken -o tsv)"
           test -n "$token"
+          test -n "$dataverse_token"
           echo "::add-mask::$token"
+          echo "::add-mask::$dataverse_token"
           TOKEN="$token" python - <<'PY'
           import base64, json, os
           raw = os.environ['TOKEN'].split('.')[1]
@@ -119,6 +124,12 @@ jobs:
           print('OIDC_APP_ID_MATCH=true')
           PY
           echo "POWER_PLATFORM_GRAPH_ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN=$dataverse_token" >> "$GITHUB_ENV"
+
+      - name: Garantir flows Planner → Teams ativos via Dataverse
+        run: |
+          python scripts/planner_teams_flow_state_oidc.py \
+            --output "$PLANNER_TEAMS_FLOW_STATE_EVIDENCE_PATH"
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -148,7 +159,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: runtime-e2e-planner-teams-${{ github.run_id }}-attempt-${{ github.run_attempt }}
-          path: ${{ env.EVIDENCE_PATH }}
+          path: audit/runtime-e2e/planner-teams/
           if-no-files-found: warn
           retention-days: 30
 
