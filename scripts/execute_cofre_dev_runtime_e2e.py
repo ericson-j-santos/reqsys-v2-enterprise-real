@@ -147,20 +147,32 @@ def inspect_runtime(expected_sha: str) -> dict[str, Any]:
     }
 
 
-def wait_health(timeout_seconds: int = 120) -> int:
+def wait_health(timeout_seconds: int = 180) -> int:
     deadline = time.monotonic() + timeout_seconds
-    last_status = 0
     while time.monotonic() < deadline:
         try:
-            status, payload = request_json("GET", "/health", expected=(200,), timeout=5)
-            data = _data(payload)
-            if status == 200 and str(data.get("status") or "").lower() in {"ok", "healthy"}:
+            status, _ = request_json("GET", "/health", expected=(200,), timeout=5)
+            if status == 200:
                 return status
-            last_status = status
         except E2EError:
             pass
         time.sleep(2)
-    raise E2EError(f"health_timeout:last_status_{last_status}")
+    raise E2EError("health_timeout")
+
+
+def wait_container_healthy(timeout_seconds: int = 180) -> str:
+    deadline = time.monotonic() + timeout_seconds
+    last = "unknown"
+    while time.monotonic() < deadline:
+        payload = json.loads(run_docker(["inspect", CONTAINER]).stdout)
+        item = payload[0] if isinstance(payload, list) and payload else {}
+        state = item.get("State") or {}
+        health = state.get("Health") or {}
+        last = str(health.get("Status") or state.get("Status") or "unknown").lower()
+        if last == "healthy":
+            return last
+        time.sleep(2)
+    raise E2EError(f"container_health_timeout:{last}")
 
 
 def mint_admin_jwt(correlation_id: str) -> str:
@@ -206,19 +218,74 @@ def admin_headers(token: str, correlation_id: str) -> dict[str, str]:
     }
 
 
-def audit_actions(token: str, correlation_id: str) -> set[str]:
-    query = urlencode({"entidade": "cofre_segredo", "limit": 100})
+def audit_events(token: str, correlation_id: str) -> list[dict[str, Any]]:
+    query = urlencode({"entidade": "cofre_segredo", "limit": 500})
     _, payload = request_json(
         "GET",
         f"/v1/auditoria/eventos?{query}",
-        headers=admin_headers(token, correlation_id),
+        headers=admin_headers(token, correlation_id + "-audit"),
     )
     events = _data(payload).get("dados") or []
-    return {
-        str(item.get("acao"))
-        for item in events
+    return [
+        item for item in events
         if isinstance(item, dict) and item.get("correlation_id") == correlation_id
+    ]
+
+
+def audit_actions(token: str, correlation_id: str) -> set[str]:
+    return {str(item.get("acao")) for item in audit_events(token, correlation_id)}
+
+
+def recover_residual(correlation_id: str, evidence_file: Path) -> dict[str, Any]:
+    wait_health()
+    admin_token = mint_admin_jwt(correlation_id + "-recover")
+    events = audit_events(admin_token, correlation_id)
+    secret_keys = sorted({
+        str(item.get("entidade_id"))
+        for item in events
+        if item.get("acao") == "COFRE_SEGREDO_GRAVADO" and item.get("entidade_id")
+    })
+    token_ids: set[int] = set()
+    for item in events:
+        if item.get("acao") != "COFRE_TOKEN_CRIADO":
+            continue
+        raw = item.get("payload_minimo") or "{}"
+        try:
+            payload = json.loads(raw) if isinstance(raw, str) else raw
+            token_ids.add(int(payload["id"]))
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+
+    for key in secret_keys:
+        request_json(
+            "DELETE",
+            f"/v1/cofre/segredos/{key}",
+            headers=admin_headers(admin_token, correlation_id + "-recover"),
+            expected=(200,),
+        )
+    for token_id in sorted(token_ids):
+        request_json(
+            "DELETE",
+            f"/v1/cofre/tokens/{token_id}",
+            headers=admin_headers(admin_token, correlation_id + "-recover"),
+            expected=(200, 404),
+        )
+
+    result = {
+        "schema_version": "1.0.0",
+        "contract": "reqsys-cofre-dev-pc24x7-recovery",
+        "ok": True,
+        "environment": "dev",
+        "recovered_correlation_id": correlation_id,
+        "secret_count_cleaned": len(secret_keys),
+        "token_count_revoked": len(token_ids),
+        "secret_key_hashes": [_sha256(key) for key in secret_keys],
+        "sensitive_values_exposed": False,
+        "production_touched": False,
     }
+    evidence_file.parent.mkdir(parents=True, exist_ok=True)
+    evidence_file.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return result
 
 
 def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict[str, Any]:
@@ -301,6 +368,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
             raise E2EError("audit_before_missing:" + ",".join(missing_before))
 
         run_docker(["restart", CONTAINER], timeout=120)
+        wait_container_healthy()
         wait_health()
         admin_token = mint_admin_jwt(correlation_id + "-postrestart")
 
@@ -455,14 +523,29 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="E2E real do Cofre DEV PC24x7")
     parser.add_argument("--expected-runtime-sha")
     parser.add_argument("--correlation-id")
+    parser.add_argument("--recover-correlation-id")
     parser.add_argument("--evidence-file", default=".tmp/cofre1760-runtime-e2e.json")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    if not args.expected_runtime_sha or not args.correlation_id:
-        parser.error("--expected-runtime-sha e --correlation-id são obrigatórios")
     try:
+        if args.recover_correlation_id:
+            result = recover_residual(
+                args.recover_correlation_id,
+                Path(args.evidence_file),
+            )
+            print(json.dumps({
+                "ok": result["ok"],
+                "environment": result["environment"],
+                "secret_count_cleaned": result["secret_count_cleaned"],
+                "token_count_revoked": result["token_count_revoked"],
+                "sensitive_values_exposed": result["sensitive_values_exposed"],
+                "production_touched": result["production_touched"],
+            }))
+            return 0
+        if not args.expected_runtime_sha or not args.correlation_id:
+            parser.error("--expected-runtime-sha e --correlation-id são obrigatórios")
         result = execute(
             args.expected_runtime_sha,
             args.correlation_id,
@@ -479,6 +562,14 @@ def main() -> int:
         }))
         return 0
     except Exception as exc:
+        failure_path = Path(args.evidence_file)
+        failure_path.parent.mkdir(parents=True, exist_ok=True)
+        failure_path.write_text(json.dumps({
+            "ok": False,
+            "error": str(exc),
+            "sensitive_values_exposed": False,
+            "production_touched": False,
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps({"ok": False, "error": str(exc), "production_touched": False}), file=sys.stderr)
         return 1
 
