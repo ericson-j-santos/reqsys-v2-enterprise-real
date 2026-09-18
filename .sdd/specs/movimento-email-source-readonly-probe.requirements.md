@@ -9,3 +9,4 @@
 6. Consultar apenas metadados e existência do objeto de Prospecção conhecido.
 7. Não imprimir servidor ou banco em texto puro na evidência; usar SHA-256 truncado.
 8. Falhar fechado quando conexão ou contrato não puderem ser confirmados.
+9. Preferir `ODBC Driver 18 for SQL Server`; aceitar `ODBC Driver 17 for SQL Server` somente mantendo explicitamente TLS, validação de certificado e `ApplicationIntent=ReadOnly`.
