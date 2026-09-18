@@ -1,0 +1,32 @@
+{
+  "id": "movimento-email-real-source-bridge",
+  "version": "1.0.0",
+  "environment": "dev",
+  "runtime_target": "pc24x7",
+  "source": {
+    "type": "sql_server_corporate",
+    "access": "read_only",
+    "secret": "MOVIMENTO_EMAIL_SOURCE_DSN",
+    "synthetic": false
+  },
+  "target": {
+    "type": "sql_server_dev_persistent",
+    "secret": "MOVIMENTO_EMAIL_TARGET_DSN",
+    "schema": "movimento_src"
+  },
+  "controls": {
+    "source_tls_required": true,
+    "source_trust_server_certificate": false,
+    "target_database_suffix": "Dev",
+    "idempotency": "payload_sha256",
+    "source_tag": "CORPORATE_SQL",
+    "production_enabled": false
+  },
+  "acceptance": [
+    "dry_run_no_write",
+    "apply_to_canonical_layer",
+    "independent_view_read",
+    "repeat_no_write",
+    "sanitized_evidence"
+  ]
+}
