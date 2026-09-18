@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -112,6 +113,39 @@ def install(
     }
 
 
+def start_supervisor(install_root: Path, supervisor_path: Path) -> int:
+    logs = install_root / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    log_path = logs / "supervisor.log"
+    log_handle = log_path.open("ab", buffering=0)
+    kwargs = {
+        "cwd": str(install_root),
+        "stdin": subprocess.DEVNULL,
+        "stdout": log_handle,
+        "stderr": subprocess.STDOUT,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+    else:
+        kwargs["start_new_session"] = True
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "scripts.service_supervisor",
+            "--config",
+            str(supervisor_path),
+        ],
+        **kwargs,
+    )
+    (install_root / "supervisor.pid").write_text(
+        str(process.pid) + "\n", encoding="utf-8"
+    )
+    return process.pid
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-root", required=True)
@@ -123,6 +157,7 @@ def main() -> None:
     parser.add_argument("--dispatch-priority", type=int, default=100)
     parser.add_argument("--port", type=int, default=18787)
     parser.add_argument("--startup-root")
+    parser.add_argument("--start-now", action="store_true")
     args = parser.parse_args()
 
     result = install(
@@ -136,6 +171,11 @@ def main() -> None:
         port=args.port,
         startup_root=Path(args.startup_root) if args.startup_root else None,
     )
+    if args.start_now:
+        result["supervisor_pid"] = start_supervisor(
+            Path(result["install_root"]),
+            Path(result["supervisor_config"]),
+        )
     print(json.dumps(result, sort_keys=True))
 
 
