@@ -64,6 +64,8 @@ jobs:
           }
 
           has_name "movimento-email-source-dsn" "source_dsn_secret"
+          has_name "movimento-email-sql-username" "default_sql_username_secret"
+          has_name "movimento-email-sql-password" "default_sql_password_secret"
 
           if [ -n "${MOVIMENTO_EMAIL_SQL_USERNAME_SECRET:-}" ]; then
             has_name "$MOVIMENTO_EMAIL_SQL_USERNAME_SECRET" "sql_username_secret"
