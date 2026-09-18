@@ -415,15 +415,19 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
         )
         cleanup["token_revoked"] = True
 
-        request_json(
+        revoked_status, revoked_payload = request_json(
             "GET",
             f"/v1/cofre/segredos/{test_key}",
             headers={
                 "X-Vault-Token": vault_token,
                 "X-Correlation-Id": correlation_id,
             },
-            expected=(401,),
+            expected=(401, 503),
         )
+        if revoked_status == 503:
+            detail = str(revoked_payload.get("detail") or "")
+            if "VAULT_API_TOKEN" not in detail or "configurado" not in detail:
+                raise E2EError("revoked_token_unexpected_503")
 
         after_actions = audit_actions(admin_token, correlation_id)
         missing_after = sorted(REQUIRED_AFTER_ACTIONS - after_actions)
@@ -451,7 +455,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
                 "vault_initialized": True,
                 "persistence_match": True,
                 "post_cleanup_http_404": True,
-                "revoked_token_http_401": True,
+                "revoked_token_rejected_http": revoked_status,
                 "audit_actions_found": sorted(REQUIRED_AFTER_ACTIONS),
                 "cleanup_completed": True,
             },
