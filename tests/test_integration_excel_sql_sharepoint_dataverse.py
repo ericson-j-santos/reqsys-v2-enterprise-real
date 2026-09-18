@@ -1,6 +1,5 @@
 import json
 
-import httpx
 import pytest
 
 from scripts.integration_excel_sql_sharepoint_dataverse import (
