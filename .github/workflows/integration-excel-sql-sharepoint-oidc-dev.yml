@@ -11,6 +11,10 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: integration-excel-sql-sharepoint-dev
+  cancel-in-progress: false
+
 jobs:
   e2e:
     runs-on: ubuntu-latest
