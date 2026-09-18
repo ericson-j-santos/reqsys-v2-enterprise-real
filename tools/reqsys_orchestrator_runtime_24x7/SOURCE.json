@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "purpose": "physical_24x7_e2e_transport_only",
+  "source_repository": "ericson-j-santos/reqsys-engineering-orchestrator",
+  "source_sha": "89045052da00f3d6b29ed7dc9cff2a63f2974bfb",
+  "transport_parent_sha": "84b7b6be956b257c9672aa2058c54411b1ca85a1",
+  "merge_intent": false
+}
