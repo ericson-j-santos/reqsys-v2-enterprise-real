@@ -1,0 +1,16 @@
+{
+  "feature_name": "cofre-pc24x7-auth-automation",
+  "project": "ReqSys v2 Enterprise — Cofre Runtime Evidence DEV PC24x7",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Automatiza credenciais governadas do Cofre em DEV PC24x7, usa JWT administrativo no header Bearer correto e persiste o keyring cifrado em /data sem expor segredos.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_cofre_pc24x7_auth_automation.py",
+      "backend/tests/test_cofre_runtime_evidence_script.py"
+    ],
+    "evidence_contract": "JWT administrativo não pode aparecer em linha de comando, stdout, stderr, Git ou artefato público; COFRE_KEYRING_PASSPHRASE deve vir do ambiente/gestor de segredos e nunca do repositório; /data deve ser persistente; produção permanece fora do escopo."
+  }
+}
