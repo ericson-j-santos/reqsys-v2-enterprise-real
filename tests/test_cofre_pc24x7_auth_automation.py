@@ -1,14 +1,28 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
-from scripts import cofre_human_token as human
-from scripts import cofre_runtime_evidence as runtime
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_module(name: str, relative_path: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relative_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+human = _load_module("cofre_human_token_under_test", "scripts/cofre_human_token.py")
+runtime = _load_module("cofre_runtime_evidence_under_test", "scripts/cofre_runtime_evidence.py")
 
 
 def test_bootstrap_reader_with_token_persists_only_scoped_reader(monkeypatch, tmp_path: Path) -> None:
