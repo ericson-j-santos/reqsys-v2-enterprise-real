@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import socket
 import tempfile
 from dataclasses import dataclass
@@ -26,6 +27,16 @@ DEFAULT_ORIGINS = {
     "http://127.0.0.1:8084",
     "http://localhost:8084",
 }
+_ORIGIN_RE = re.compile(
+    r"\\Ahttps?://(?:localhost|127\\.0\\.0\\.1|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::[1-9][0-9]{0,4})?\\Z"
+)
+
+
+def normalize_origin(value: object) -> str:
+    origin = str(value or "").strip().rstrip("/")
+    if not origin or "\r" in origin or "\n" in origin or not _ORIGIN_RE.fullmatch(origin):
+        raise ValueError("origin HTTP/HTTPS inválida")
+    return origin
 
 
 def default_profile_path() -> Path:
@@ -139,17 +150,29 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
 
-    def _origin(self) -> str:
-        return self.headers.get("Origin", "").strip()
+    def _raw_origin(self) -> str:
+        return self.headers.get("Origin", "")
+
+    def _origin(self) -> str | None:
+        raw_origin = self._raw_origin()
+        if not raw_origin:
+            return None
+        try:
+            return normalize_origin(raw_origin)
+        except ValueError:
+            return None
 
     def _origin_allowed(self) -> bool:
+        raw_origin = self._raw_origin()
+        if not raw_origin:
+            return True
         origin = self._origin()
-        return not origin or origin in self.server.config.allowed_origins
+        return origin is not None and origin in self.server.config.allowed_origins
 
     def _headers(self, status: int, *, content_type: str = "application/json; charset=utf-8") -> None:
         self.send_response(status)
         origin = self._origin()
-        if origin and origin in self.server.config.allowed_origins:
+        if origin is not None and origin in self.server.config.allowed_origins:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
         self.send_header("Cache-Control", "no-store")
@@ -172,7 +195,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_response(HTTPStatus.NO_CONTENT)
         origin = self._origin()
-        if origin:
+        if origin is not None and origin in self.server.config.allowed_origins:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -269,8 +292,8 @@ def main() -> int:
     if args.bind not in {"127.0.0.1", "::1", "localhost"}:
         print(json.dumps({"ok": False, "error": "bind deve permanecer em loopback"}, ensure_ascii=False))
         return 2
-    origins = set(DEFAULT_ORIGINS)
-    origins.update(str(item).strip() for item in args.allow_origin if str(item).strip())
+    origins = {normalize_origin(item) for item in DEFAULT_ORIGINS}
+    origins.update(normalize_origin(item) for item in args.allow_origin if str(item).strip())
     config = AgentConfig(
         profile_path=args.profile_path,
         audit_path=args.audit_path,
@@ -297,7 +320,7 @@ def main() -> int:
     try:
         server.serve_forever(poll_interval=0.25)
     except KeyboardInterrupt:
-        pass
+        print(json.dumps({"ok": True, "status": "stopping", "reason": "keyboard_interrupt"}), flush=True)
     finally:
         server.server_close()
     return 0
