@@ -2,7 +2,7 @@
   "schema_version": "1",
   "purpose": "physical_e2e_transport_only",
   "source_repository": "ericson-j-santos/reqsys-engineering-orchestrator",
-  "source_sha": "5dccadc622464daa411508e730883f0433c25a2c",
+  "source_sha": "4edafe4dc82ddbfd0aeea301ac07f447d97c2667",
   "target_base_sha": "e8f217f5e7b599f73e8e7e31c68dd0aca4ce5ae6",
   "merge_intent": false,
   "files": [
@@ -11,6 +11,7 @@
     "orchestrator/core.py",
     "orchestrator/server.py",
     "orchestrator/workers.py",
-    "scripts/worker_heartbeat.py"
+    "scripts/worker_heartbeat.py",
+    "scripts/control_plane_client.py"
   ]
 }
