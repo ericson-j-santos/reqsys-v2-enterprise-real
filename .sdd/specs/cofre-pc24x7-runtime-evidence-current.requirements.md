@@ -14,7 +14,6 @@ A issue #1760 exige evidência nova do ciclo completo do Cofre em DEV no SHA atu
 8. Estado transitório deve permanecer criptografado e ser removido ao final.
 9. Artifact e resumo não podem conter JWT, passphrase, token S2S ou segredo de teste.
 10. STG/PROD permanecem bloqueados neste incremento.
-11. O deploy operacional de DEV deve ser restrito à API, validar SHA/árvore limpa e possuir rollback para o runtime anterior.
 
 ## Critérios de aceite
 - testes dirigidos passam no SHA da branch;
@@ -23,3 +22,4 @@ A issue #1760 exige evidência nova do ciclo completo do Cofre em DEV no SHA atu
 - E2E novo DEV usa correlation_id próprio, same-SHA, restart, persistência, auditoria e cleanup;
 - `production_touched=false`;
 - nenhum merge automático.
+- o recreate/deploy GitOps permanece responsabilidade da PR #1798, sem duplicação neste incremento.
