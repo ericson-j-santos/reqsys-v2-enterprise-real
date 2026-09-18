@@ -62,6 +62,57 @@
       <a :href="ambienteAtual.url_acesso" target="_blank">{{ ambienteAtual.url_acesso }}</a>
     </v-alert>
 
+    <v-card class="table-card mb-4" data-testid="noteri-study-mode-card">
+      <v-card-title class="panel-title">
+        <span>Modo do Noteri</span>
+        <v-chip
+          size="small"
+          :color="noteriAgentReady ? (noteriProfile === 'ESTUDO' ? 'amber' : 'green') : 'grey'"
+          variant="tonal"
+        >
+          {{ noteriAgentReady ? noteriProfile : 'Agente local indisponível' }}
+        </v-chip>
+      </v-card-title>
+      <v-card-text>
+        <p class="muted mb-3">
+          ESTUDO impede novas tarefas de desenvolvimento neste computador. Controle e monitoramento continuam disponíveis.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          <v-btn
+            color="amber-darken-2"
+            variant="tonal"
+            prepend-icon="mdi-book-open-page-variant"
+            :loading="noteriProfileLoading"
+            :disabled="!noteriAgentReady || noteriProfileLoading || noteriProfile === 'ESTUDO'"
+            @click="alterarModoNoteri('ESTUDO')"
+          >
+            Ativar estudo
+          </v-btn>
+          <v-btn
+            color="green"
+            variant="tonal"
+            prepend-icon="mdi-laptop"
+            :loading="noteriProfileLoading"
+            :disabled="!noteriAgentReady || noteriProfileLoading || noteriProfile === 'NORMAL'"
+            @click="alterarModoNoteri('NORMAL')"
+          >
+            Voltar ao desenvolvimento
+          </v-btn>
+          <v-btn
+            variant="text"
+            prepend-icon="mdi-refresh"
+            :loading="noteriProfileLoading"
+            @click="carregarPerfilNoteriLocal"
+          >
+            Atualizar estado
+          </v-btn>
+        </div>
+        <div v-if="noteriProfileError" class="text-caption text-medium-emphasis mt-2">
+          {{ noteriProfileError }}
+        </div>
+      </v-card-text>
+    </v-card>
+
     <v-row class="mb-4">
       <v-col v-for="metric in metrics" :key="metric.label" cols="12" sm="6" lg="3">
         <v-card
@@ -376,7 +427,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '../components/PageHeader.vue'
-import { api } from '../services/api'
+import { api, obterCorrelationIdSessao } from '../services/api'
+import { alterarPerfilNoteri, obterPerfilNoteri } from '../services/hostProfileLocalAgent'
 import {
   carregarHistoricoEnvios,
   contarTarefasTaskConsole,
@@ -441,6 +493,10 @@ const formValido = ref(false)
 const envioPlanner = ref(false)
 const ultimoEnvioPlanner = ref(null)
 const ambienteAtual = ref({ ambiente: '', url_acesso: '', frontend: '', api: '' })
+const noteriProfile = ref('NORMAL')
+const noteriAgentReady = ref(false)
+const noteriProfileLoading = ref(false)
+const noteriProfileError = ref('')
 
 const form = reactive({
   titulo: 'Revisar integracao Planner',
@@ -742,6 +798,43 @@ async function enviarPlanner() {
   }
 }
 
+async function carregarPerfilNoteriLocal() {
+  noteriProfileLoading.value = true
+  noteriProfileError.value = ''
+  try {
+    const result = await obterPerfilNoteri()
+    noteriProfile.value = result.profile
+    noteriAgentReady.value = true
+  } catch (error) {
+    noteriAgentReady.value = false
+    noteriProfileError.value = error?.message || 'Agente local do Noteri indisponível.'
+  } finally {
+    noteriProfileLoading.value = false
+  }
+}
+
+async function alterarModoNoteri(profile) {
+  noteriProfileLoading.value = true
+  noteriProfileError.value = ''
+  const correlationId = `${obterCorrelationIdSessao()}-noteri-${String(profile).toLowerCase()}`
+  try {
+    const result = await alterarPerfilNoteri(profile, correlationId)
+    noteriProfile.value = result.profile
+    noteriAgentReady.value = true
+    if (result.profile === 'ESTUDO') {
+      feedbackOk('Modo ESTUDO confirmado no Noteri. Novas tarefas de desenvolvimento ficam bloqueadas neste computador.')
+    } else {
+      feedbackOk('Modo NORMAL confirmado no Noteri. O computador voltou a aceitar tarefas de desenvolvimento.')
+    }
+  } catch (error) {
+    noteriAgentReady.value = false
+    noteriProfileError.value = error?.message || 'Não foi possível alterar o modo do Noteri.'
+    feedbackErro(noteriProfileError.value)
+  } finally {
+    noteriProfileLoading.value = false
+  }
+}
+
 async function carregarAmbienteAtual() {
   try {
     const { data } = await api.get('/v1/hub-lowcode/status')
@@ -847,6 +940,7 @@ function loadTasks() {
 onMounted(() => {
   historicoEnvios.value = carregarHistoricoEnvios()
   carregarAmbienteAtual()
+  carregarPerfilNoteriLocal()
 })
 </script>
 
