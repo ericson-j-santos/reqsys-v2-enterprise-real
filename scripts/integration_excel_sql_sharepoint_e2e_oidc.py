@@ -22,9 +22,9 @@ from backend.app.services.integration_excel_sql_sharepoint_flow import (
     validar_definicao_real,
 )
 from scripts.integration_excel_sql_sharepoint_dataverse import (
-    install_definition,
-    restore_clientdata,
-    set_state,
+    get_flow,
+    merge_definition,
+    patch_flow,
 )
 from scripts.integration_excel_sql_sharepoint_e2e import (
     build_e2e_workbook,
@@ -177,6 +177,7 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--correlation-id", required=True)
+    parser.add_argument("--cleanup-state", required=True, type=Path)
     parser.add_argument("--wait-seconds", type=int, default=DEFAULT_WAIT_SECONDS)
     args = parser.parse_args()
 
@@ -212,7 +213,7 @@ def main() -> int:
         "positive": {"identifier": fixture_id},
         "negative": {"identifier": invalid_identifier},
         "idempotency": {},
-        "cleanup": {},
+        "cleanup": {"delegated": True, "state_captured": False},
         "error": None,
     }
 
@@ -240,8 +241,41 @@ def main() -> int:
             original_workbook_version_id = latest_workbook_version_id(
                 client, graph_token, drive_id, file_id
             )
-            evidence["workbook_original_sha256"] = hashlib.sha256(original_workbook).hexdigest()
+            workbook_original_sha256 = hashlib.sha256(original_workbook).hexdigest()
+            evidence["workbook_original_sha256"] = workbook_original_sha256
             evidence["workbook_original_version_captured"] = True
+
+            flow_before = get_flow(
+                client, dataverse_url, flow_id, dataverse_token
+            )
+            if int(flow_before.get("statecode", -1)) != 0:
+                raise OidcE2EError("flow_baseline_nao_esta_desligado")
+            original_clientdata = str(flow_before.get("clientdata") or "")
+            if not original_clientdata:
+                raise OidcE2EError("flow_clientdata_original_ausente")
+            original_clientdata_sha256 = hashlib.sha256(
+                original_clientdata.encode("utf-8")
+            ).hexdigest()
+
+            cleanup_state = {
+                "schema_version": "1.0.0",
+                "environment": "dev",
+                "correlation_id": args.correlation_id,
+                "fixture_id": fixture_id,
+                "flow_id": flow_id,
+                "workbook_original_version_id": original_workbook_version_id,
+                "workbook_original_sha256": workbook_original_sha256,
+                "original_clientdata": original_clientdata,
+                "original_clientdata_sha256": original_clientdata_sha256,
+            }
+            args.cleanup_state.parent.mkdir(parents=True, exist_ok=True)
+            state_tmp = args.cleanup_state.with_suffix(args.cleanup_state.suffix + ".tmp")
+            state_tmp.write_text(
+                json.dumps(cleanup_state, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            state_tmp.replace(args.cleanup_state)
+            evidence["cleanup"]["state_captured"] = True
 
             baseline = list_items(client, graph_token, site_id, list_id)
             if matching_items(baseline, fixture_id):
@@ -273,12 +307,34 @@ def main() -> int:
             if errors:
                 raise OidcE2EError("flow_definition_invalida:" + ",".join(errors))
 
-            original_clientdata = install_definition(
-                client, dataverse_url, flow_id, dataverse_token, definition
+            flow_pre_patch = get_flow(
+                client, dataverse_url, flow_id, dataverse_token
+            )
+            current_clientdata = str(flow_pre_patch.get("clientdata") or "")
+            if hashlib.sha256(current_clientdata.encode("utf-8")).hexdigest() != original_clientdata_sha256:
+                raise OidcE2EError("flow_clientdata_mudou_concorrentemente")
+            if int(flow_pre_patch.get("statecode", -1)) != 0:
+                raise OidcE2EError("flow_estado_mudou_concorrentemente")
+
+            patch_flow(
+                client,
+                dataverse_url,
+                flow_id,
+                dataverse_token,
+                {"clientdata": merge_definition(original_clientdata, definition)},
             )
             evidence["checks"]["flow_definition_installed_via_dataverse"] = "passed"
 
-            set_state(client, dataverse_url, flow_id, dataverse_token, 1)
+            patch_flow(
+                client,
+                dataverse_url,
+                flow_id,
+                dataverse_token,
+                {"statecode": 1},
+            )
+            activated = get_flow(client, dataverse_url, flow_id, dataverse_token)
+            if int(activated.get("statecode", -1)) != 1:
+                raise OidcE2EError("flow_activation_nao_confirmada")
             evidence["checks"]["flow_activation_via_dataverse"] = "passed"
 
             first_item, first_items = wait_first_effect(
@@ -338,67 +394,11 @@ def main() -> int:
             "type": exc.__class__.__name__,
             "message": str(exc)[:500],
         }
-    finally:
-        with httpx.Client(follow_redirects=True) as cleanup:
-            try:
-                set_state(cleanup, dataverse_url, flow_id, dataverse_token, 0)
-                evidence["cleanup"]["flow_stopped"] = True
-            except Exception as exc:
-                evidence["cleanup"]["flow_stopped"] = False
-                evidence["cleanup"]["flow_stop_error"] = exc.__class__.__name__
-                evidence["status"] = "failed"
-
-            if original_clientdata is not None:
-                try:
-                    restore_clientdata(
-                        cleanup, dataverse_url, flow_id, dataverse_token, original_clientdata
-                    )
-                    evidence["cleanup"]["flow_clientdata_restored"] = True
-                except Exception as exc:
-                    evidence["cleanup"]["flow_clientdata_restored"] = False
-                    evidence["cleanup"]["flow_restore_error"] = exc.__class__.__name__
-                    evidence["status"] = "failed"
-
-            if original_workbook is not None and original_workbook_version_id:
-                try:
-                    restore_workbook_version(
-                        cleanup,
-                        graph_token,
-                        drive_id,
-                        file_id,
-                        original_workbook_version_id,
-                        hashlib.sha256(original_workbook).hexdigest(),
-                    )
-                    evidence["cleanup"]["workbook_restored"] = True
-                    evidence["cleanup"]["workbook_restore_method"] = "sharepoint_version_history"
-                except Exception as exc:
-                    evidence["cleanup"]["workbook_restored"] = False
-                    evidence["cleanup"]["workbook_restore_error"] = exc.__class__.__name__
-                    if isinstance(exc, httpx.HTTPStatusError):
-                        evidence["cleanup"]["workbook_restore_http_status"] = exc.response.status_code
-                    evidence["status"] = "failed"
-
-            if created_item_id:
-                try:
-                    delete_sharepoint_item(
-                        cleanup, graph_token, site_id, list_id, created_item_id
-                    )
-                    remaining = matching_items(
-                        list_items(cleanup, graph_token, site_id, list_id), fixture_id
-                    )
-                    evidence["cleanup"]["sharepoint_item_removed"] = not remaining
-                    if remaining:
-                        evidence["status"] = "failed"
-                except Exception as exc:
-                    evidence["cleanup"]["sharepoint_item_removed"] = False
-                    evidence["cleanup"]["sharepoint_cleanup_error"] = exc.__class__.__name__
-                    evidence["status"] = "failed"
-
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(
-            json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     print(json.dumps({
         "status": evidence["status"],
