@@ -1,0 +1,17 @@
+name: Ops Planner Teams OIDC E2E e3d33461
+
+on:
+  push:
+    branches:
+      - ops/planner-teams-oidc-e2e-e3d33461
+    paths:
+      - ".github/workflows/ops-planner-teams-oidc-e2e-e3d33461.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  acceptance:
+    uses: ./.github/workflows/runtime-e2e-continuous.yml
+    secrets: inherit
