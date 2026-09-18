@@ -42,6 +42,7 @@ def run_once() -> int:
     ]
 
     summary = {
+        "captured_at": datetime.now(TIMEZONE).isoformat(),
         "correlation_id": correlation_id,
         "data_referencia": ref,
         "runtime": "pc24x7",
