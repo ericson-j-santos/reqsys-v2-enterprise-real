@@ -22,7 +22,8 @@ jobs:
         github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev' ||
         github.event.comment.body == '/reqsys run runtime-e2e-dev' ||
         github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
-        github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'
+        github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
+        github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -46,6 +47,9 @@ jobs:
               ;;
             '/reqsys run bacen-57-simulation-assessment')
               target='bacen-57-simulation-assessment.yml'
+              ;;
+            '/reqsys run cofre-runtime-evidence-dev')
+              target='cofre-runtime-evidence-gate.yml'
               ;;
             *)
               echo 'command_not_allowlisted' >&2
@@ -73,12 +77,20 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
-          gh workflow run "$TARGET_WORKFLOW" \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main
+          if [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
+            gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f environment=dev \
+              -f timeout_seconds=20
+          else
+            gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main
+          fi
 
       - name: Resolve dispatched run evidence
         id: evidence
