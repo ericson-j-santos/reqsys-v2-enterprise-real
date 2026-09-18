@@ -33,7 +33,7 @@ def validate(root: Path, files: list[str], head_sha: str) -> tuple[bool, str]:
     functional = functional_files(files)
     if not functional:
         return True, "SDD não aplicável: nenhuma mudança funcional"
-    manifests = manifest_files(files)
+    manifests = [rel for rel in manifest_files(files) if (root / rel).is_file()]
     if not manifests:
         return False, "SDD_SPEC_REQUIRED: mudança funcional sem especificação alterada"
     errors: list[str] = []
