@@ -10,7 +10,7 @@ def test_pc24x7_cofre_overlay_versions_secret_mount_without_secret_value() -> No
     assert '/run/secrets/cofre_keyring_passphrase' in content
     assert 'COFRE_KEYRING_PASSPHRASE_FILE' in content
     assert 'cofre-keyring-passphrase.txt' in content
-    assert 'export COFRE_KEYRING_PASSPHRASE="$(cat /run/secrets/cofre_keyring_passphrase)"' in content
+    assert 'export COFRE_KEYRING_PASSPHRASE="$$(cat /run/secrets/cofre_keyring_passphrase)"' in content
     assert 'COFRE_KEYRING_PASSPHRASE: "' not in content
 
 
