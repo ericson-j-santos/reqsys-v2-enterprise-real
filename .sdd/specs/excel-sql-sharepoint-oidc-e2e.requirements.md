@@ -42,3 +42,9 @@ Nenhum workflow Excel → SQL Server → SharePoint pode invocar `msal_device_co
 7. O teste de contrato comprova `workflow_dispatch` + `push` na `main` + `workflow_call` no workflow OIDC.
 8. O alias manual e o workflow de evidência funcional chamam `integration-excel-sql-sharepoint-oidc-dev.yml`, usam `secrets: inherit` e não contêm referências a Device Code.
 9. Contratos de captura SQL em modo `power_platform_gateway` deferem a validação real para `integration-excel-sql-sharepoint-oidc-dev.yml`.
+
+## Requisito 9 — remoção de resíduo MSAL órfão
+Após evidência OIDC real verde na `main`, o normalizador `scripts/normalize_msal_storage_state.py` e seu teste dedicado devem ser removidos quando não houver consumidores reais. Os módulos `msal_device_code_*` compartilhados não devem ser apagados enquanto outras jornadas independentes, como Planner → Teams, ainda dependerem deles.
+
+### Critério adicional de aceite
+10. Busca no repositório comprova que `normalize_msal_storage_state` não possui consumidor fora do próprio teste removido, e o E2E OIDC da `main` permanece verde antes da retirada.
