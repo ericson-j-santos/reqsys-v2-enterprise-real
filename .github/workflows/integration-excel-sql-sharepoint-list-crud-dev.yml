@@ -1,0 +1,279 @@
+name: Integration Excel SQL SharePoint — List CRUD DEV
+
+on:
+  push:
+    branches:
+      - test/excel-sql-sharepoint-ephemeral-dev-20260917
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-list-crud-dev.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-excel-sql-sharepoint-list-crud-dev
+  cancel-in-progress: false
+
+env:
+  INTEGRATION_E2E_ENVIRONMENT: dev
+  E2E_BUSINESS_KEY: "990000000000001"
+  E2E_SQL_RUN_ID: "35291883815"
+  E2E_SQL_SHA: "238443260c1e4c57f75c8e8307bd9371843f7942"
+  E2E_SQL_CORRELATION_ID: "5FC9E1E7-2B51-4119-B480-0D868CC42ECE"
+  E2E_SITE_HOSTNAME: "tieri659.sharepoint.com"
+  E2E_SITE_PATH: "/sites/reqsys-wsjf-dev"
+  E2E_LIST_NAME: "ResultadoConsulta"
+  EVIDENCE_DIR: "audit/user-journey/excel-sql-sharepoint-dev/list-crud"
+
+jobs:
+  list-crud:
+    name: SharePoint ResultadoConsulta — create update read repeat
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Instalar cliente HTTP
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check httpx
+
+      - name: Validar Excel fonte no mesmo alvo DEV
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python - <<'PY'
+          import json, os
+          import httpx
+
+          tenant=os.environ["POWER_PLATFORM_TENANT_ID"]
+          client_id=os.environ["POWER_PLATFORM_CLIENT_ID"]
+          client_secret=os.environ["POWER_PLATFORM_CLIENT_SECRET"]
+          with httpx.Client(timeout=30.0, follow_redirects=True) as c:
+              t=c.post(
+                  f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+                  data={"grant_type":"client_credentials","client_id":client_id,
+                        "client_secret":client_secret,"scope":"https://graph.microsoft.com/.default"},
+              )
+              t.raise_for_status()
+              token=t.json()["access_token"]
+              headers={"Authorization":f"Bearer {token}","Accept":"application/json"}
+              site=c.get(
+                  f"https://graph.microsoft.com/v1.0/sites/{os.environ['E2E_SITE_HOSTNAME']}:{os.environ['E2E_SITE_PATH']}?$select=id,displayName,webUrl",
+                  headers=headers,
+              )
+              site.raise_for_status()
+              site_payload=site.json()
+              drive=c.get(
+                  f"https://graph.microsoft.com/v1.0/sites/{site_payload['id']}/drive/root:/ReqSys-Excel-SQL-SharePoint-DEV.xlsx:/content",
+                  headers=headers,
+              )
+              drive.raise_for_status()
+              from io import BytesIO
+              from zipfile import ZipFile
+              raw=drive.content
+              # XLSX é ZIP/XML. A prova aqui exige apenas que o identificador publicado esteja presente.
+              with ZipFile(BytesIO(raw)) as z:
+                  merged="\n".join(
+                      z.read(name).decode("utf-8","ignore")
+                      for name in z.namelist()
+                      if name.startswith("xl/") and name.endswith(".xml")
+                  )
+              key=os.environ["E2E_BUSINESS_KEY"]
+              if key not in merged:
+                  raise SystemExit("excel_identifier_not_found")
+              payload={
+                  "site_id":site_payload["id"],
+                  "site_name":site_payload.get("displayName"),
+                  "site_url":site_payload.get("webUrl"),
+                  "source_workbook":"ReqSys-Excel-SQL-SharePoint-DEV.xlsx",
+                  "source_identifier":key,
+                  "source_identifier_present":True,
+              }
+              open(f"{os.environ['EVIDENCE_DIR']}/source.json","w").write(json.dumps(payload,ensure_ascii=False,indent=2)+"\n")
+              print(json.dumps(payload,ensure_ascii=False))
+          PY
+
+      - name: Executar CRUD idempotente direto na lista SharePoint
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, uuid
+          from pathlib import Path
+          import httpx
+
+          GRAPH="https://graph.microsoft.com/v1.0"
+          key=os.environ["E2E_BUSINESS_KEY"]
+          desired_final={
+              "Title":"ReqSys E2E DEV fixture",
+              "ChaveIntegracao":key,
+              "CorrelationId":os.environ["E2E_SQL_CORRELATION_ID"],
+          }
+
+          def req(c,method,url,token,**kwargs):
+              h={"Authorization":f"Bearer {token}","Accept":"application/json"}
+              h.update(kwargs.pop("headers",{}))
+              r=c.request(method,url if url.startswith("http") else GRAPH+url,headers=h,timeout=30.0,**kwargs)
+              if r.status_code >= 400:
+                  print(json.dumps({"http_status":r.status_code,"method":method,"path":url.split("?")[0]},ensure_ascii=False))
+              r.raise_for_status()
+              return r
+
+          tenant=os.environ["POWER_PLATFORM_TENANT_ID"]
+          with httpx.Client(follow_redirects=True) as c:
+              tok=req(c,"POST",f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token","",
+                  data={"grant_type":"client_credentials",
+                        "client_id":os.environ["POWER_PLATFORM_CLIENT_ID"],
+                        "client_secret":os.environ["POWER_PLATFORM_CLIENT_SECRET"],
+                        "scope":"https://graph.microsoft.com/.default"}).json()["access_token"]
+
+              site=req(c,"GET",
+                  f"/sites/{os.environ['E2E_SITE_HOSTNAME']}:{os.environ['E2E_SITE_PATH']}?$select=id,displayName,webUrl",
+                  tok).json()
+              site_id=site["id"]
+
+              lists=req(c,"GET",f"/sites/{site_id}/lists?$select=id,name,displayName&$top=200",tok).json().get("value",[])
+              matches=[x for x in lists if str(x.get("displayName") or x.get("name") or "").casefold()==os.environ["E2E_LIST_NAME"].casefold()]
+              if len(matches)!=1:
+                  raise SystemExit(f"sharepoint_list_match_count:{len(matches)}")
+              target=matches[0]
+              list_id=target["id"]
+
+              columns=req(c,"GET",f"/sites/{site_id}/lists/{list_id}/columns?$select=id,name,displayName,required",tok).json().get("value",[])
+              names={str(x.get("name") or "") for x in columns}
+              missing=sorted({"ChaveIntegracao","CorrelationId"}-names)
+              if missing:
+                  raise SystemExit("sharepoint_missing_columns:"+",".join(missing))
+
+              def all_items():
+                  url=f"/sites/{site_id}/lists/{list_id}/items?$expand=fields&$top=200"
+                  out=[]
+                  for _ in range(10):
+                      p=req(c,"GET",url,tok).json()
+                      out.extend(p.get("value") or [])
+                      url=str(p.get("@odata.nextLink") or "")
+                      if not url: break
+                  return out
+
+              def matching(items):
+                  return [x for x in items if str((x.get("fields") or {}).get("ChaveIntegracao") or "")==key]
+
+              baseline=matching(all_items())
+              if len(baseline)>1:
+                  raise SystemExit(f"baseline_duplicate_count:{len(baseline)}")
+
+              create_performed=False
+              if not baseline:
+                  create_fields=dict(desired_final)
+                  create_fields["Title"]="ReqSys E2E DEV fixture [create]"
+                  created=req(c,"POST",f"/sites/{site_id}/lists/{list_id}/items",tok,
+                              json={"fields":create_fields}).json()
+                  item_id=str(created.get("id") or "")
+                  if not item_id:
+                      raise SystemExit("create_item_id_missing")
+                  create_performed=True
+              else:
+                  item_id=str(baseline[0].get("id") or "")
+                  if not item_id:
+                      raise SystemExit("baseline_item_id_missing")
+
+              after_create=req(c,"GET",f"/sites/{site_id}/lists/{list_id}/items/{item_id}?$expand=fields",tok).json()
+              if str((after_create.get("fields") or {}).get("ChaveIntegracao") or "")!=key:
+                  raise SystemExit("independent_read_after_create_failed")
+
+              update_fields=dict(desired_final)
+              req(c,"PATCH",f"/sites/{site_id}/lists/{list_id}/items/{item_id}/fields",tok,json=update_fields)
+              after_update=req(c,"GET",f"/sites/{site_id}/lists/{list_id}/items/{item_id}?$expand=fields",tok).json()
+              observed=after_update.get("fields") or {}
+              for field,value in desired_final.items():
+                  if str(observed.get(field) or "")!=str(value):
+                      raise SystemExit(f"update_field_mismatch:{field}")
+
+              all_after=all_items()
+              same_key=matching(all_after)
+              if len(same_key)!=1:
+                  raise SystemExit(f"duplicate_count_after_update:{len(same_key)}")
+              if str(same_key[0].get("id") or "")!=item_id:
+                  raise SystemExit("same_business_key_different_item_id")
+
+              # Terceira passagem: compara antes de escrever. Se já igual, nenhuma PATCH é feita.
+              current=req(c,"GET",f"/sites/{site_id}/lists/{list_id}/items/{item_id}?$expand=fields",tok).json()
+              current_fields=current.get("fields") or {}
+              needs_write=any(str(current_fields.get(k) or "")!=str(v) for k,v in desired_final.items())
+              if needs_write:
+                  req(c,"PATCH",f"/sites/{site_id}/lists/{list_id}/items/{item_id}/fields",tok,json=desired_final)
+                  repeat="unexpected_write_required"
+              else:
+                  repeat="already_present_no_write"
+
+              final_items=matching(all_items())
+              final=req(c,"GET",f"/sites/{site_id}/lists/{list_id}/items/{item_id}?$expand=fields",tok).json()
+              final_fields=final.get("fields") or {}
+              passed=(
+                  len(final_items)==1
+                  and str(final_items[0].get("id") or "")==item_id
+                  and repeat=="already_present_no_write"
+                  and all(str(final_fields.get(k) or "")==str(v) for k,v in desired_final.items())
+              )
+              if not passed:
+                  raise SystemExit("final_contract_failed")
+
+              evidence={
+                  "schema_version":"1.0.0",
+                  "feature":"excel_sql_sharepoint_sync",
+                  "environment":"dev",
+                  "source_sha":os.environ.get("GITHUB_SHA",""),
+                  "correlation_id":f"list-crud-{os.environ.get('GITHUB_RUN_ID','')}-{os.environ.get('GITHUB_RUN_ATTEMPT','')}",
+                  "data_class":"synthetic",
+                  "corporate_source_certified":False,
+                  "site_id":site_id,
+                  "site_name":site.get("displayName"),
+                  "list_id":list_id,
+                  "list_name":target.get("displayName") or target.get("name"),
+                  "columns":[{"name":x.get("name"),"displayName":x.get("displayName"),"required":x.get("required")} for x in columns],
+                  "business_key":key,
+                  "sql_run_id":int(os.environ["E2E_SQL_RUN_ID"]),
+                  "sql_sha":os.environ["E2E_SQL_SHA"],
+                  "sql_correlation_id":os.environ["E2E_SQL_CORRELATION_ID"],
+                  "item_id":item_id,
+                  "create_performed":create_performed,
+                  "create_read_back":"passed",
+                  "update_same_item":"passed",
+                  "independent_read":"passed",
+                  "duplicate_count":len(final_items),
+                  "repeat_idempotent":"passed",
+                  "repeat_action":repeat,
+                  "expected":desired_final,
+                  "observed":{k:final_fields.get(k) for k in desired_final},
+                  "production_touched":False,
+                  "secret_exposed":False,
+                  "passed":True,
+              }
+              path=Path(os.environ["EVIDENCE_DIR"])/"list-crud-evidence.json"
+              path.write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+              print(json.dumps({k:evidence[k] for k in ("passed","site_id","list_id","item_id","create_performed","duplicate_count","repeat_action")},ensure_ascii=False))
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: excel-sql-sharepoint-list-crud-dev-${{ github.run_id }}
+          path: |
+            ${{ env.EVIDENCE_DIR }}/source.json
+            ${{ env.EVIDENCE_DIR }}/list-crud-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
