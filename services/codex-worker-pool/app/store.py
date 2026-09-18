@@ -87,13 +87,18 @@ class WorkerPoolStore:
         heartbeat_ttl_seconds: int = 90,
         default_lease_seconds: int = 120,
         default_max_attempts: int = 3,
+        expected_rules_sha: str | None = None,
     ) -> None:
         if min(heartbeat_ttl_seconds, default_lease_seconds, default_max_attempts) < 1:
             raise ValueError("timeouts e tentativas devem ser positivos")
+        normalized_rules_sha = (expected_rules_sha or "").strip().lower()
+        if normalized_rules_sha and not SHA40.fullmatch(normalized_rules_sha):
+            raise ValueError("expected_rules_sha inválido")
         self.db_path, self.clock = Path(db_path), clock
         self.heartbeat_ttl_seconds = heartbeat_ttl_seconds
         self.default_lease_seconds = default_lease_seconds
         self.default_max_attempts = default_max_attempts
+        self.expected_rules_sha = normalized_rules_sha or None
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_lock = threading.Lock()
         self._init()
@@ -183,6 +188,9 @@ class WorkerPoolStore:
             raise ValueError("worker_id, host e correlation_id são obrigatórios")
         if role not in ROLES or profile not in PROFILES:
             raise ValueError("role/profile inválido")
+        rules_sha = (rules_sha or "").strip().lower() or None
+        if rules_sha and not SHA40.fullmatch(rules_sha):
+            raise ValueError("rules_sha inválido")
         stamp = iso(self.clock())
         with self._tx() as db:
             db.execute("""INSERT INTO workers VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -261,6 +269,8 @@ class WorkerPoolStore:
             raise ConflictError(f"worker {worker_id} está em profile {w['profile']}")
         if not w["gateway_ok"] or not w["state_validated"]:
             raise ConflictError("worker não está governado/pronto")
+        if self.expected_rules_sha and w["rules_sha"] != self.expected_rules_sha:
+            raise ConflictError("worker rules_sha divergente")
         if (self.clock() - parse_iso(w["last_heartbeat_at"])).total_seconds() > self.heartbeat_ttl_seconds:
             raise ConflictError("worker está offline/stale")
         if db.execute("SELECT 1 FROM tasks WHERE leased_by=? AND state IN ('leased','running','validating')", (worker_id,)).fetchone():

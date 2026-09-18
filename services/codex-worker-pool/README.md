@@ -5,6 +5,7 @@ Serviço local/DEV para coordenar workers Codex em múltiplos hosts sem comparti
 ## Capacidades
 
 - registro de worker com `host`, `role`, `profile`, versão do controlador, SHA das regras e estado do Gateway;
+- readiness fail-closed quando o SHA canônico esperado das regras não estiver configurado ou o worker anunciar SHA divergente;
 - heartbeat e distinção entre worker ocioso, `ESTUDO`, degradado e offline;
 - fila SQLite persistente com transação `BEGIN IMMEDIATE`, idempotência e aquisição exclusiva;
 - lease renovável e recuperação automática após timeout;
@@ -21,6 +22,7 @@ cd services/codex-worker-pool
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 $env:CODEX_WORKER_POOL_API_TOKEN_FILE="C:\caminho\seguro\token"
+$env:CODEX_WORKER_POOL_EXPECTED_RULES_SHA="<sha-canônico-de-40-caracteres>"
 .venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8097
 ```
 
@@ -28,10 +30,11 @@ Linux/macOS:
 
 ```bash
 CODEX_WORKER_POOL_API_TOKEN_FILE=/run/secrets/codex_worker_pool_api_token \
+CODEX_WORKER_POOL_EXPECTED_RULES_SHA=<sha-canônico-de-40-caracteres> \
 uvicorn app.main:app --host 127.0.0.1 --port 8097
 ```
 
-O `/health` fica `503/not_ready` quando o arquivo de token não está disponível.
+O `/health` fica `503/not_ready` quando o arquivo de token não está disponível ou quando `CODEX_WORKER_POOL_EXPECTED_RULES_SHA` não fixa o SHA canônico das regras.
 
 ## Testes
 

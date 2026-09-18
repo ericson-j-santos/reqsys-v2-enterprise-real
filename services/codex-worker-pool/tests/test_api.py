@@ -18,6 +18,7 @@ def load_app(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CODEX_WORKER_POOL_HEARTBEAT_TTL_SECONDS", "60")
     monkeypatch.setenv("CODEX_WORKER_POOL_LEASE_SECONDS", "30")
     monkeypatch.setenv("CODEX_WORKER_POOL_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("CODEX_WORKER_POOL_EXPECTED_RULES_SHA", "a" * 40)
     sys.modules.pop("app.main", None)
     module = importlib.import_module("app.main")
     return module, TestClient(module.app), {"Authorization": "Bearer test-token-value"}
@@ -29,6 +30,7 @@ def test_health_and_auth_fail_closed(tmp_path: Path, monkeypatch) -> None:
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json()["auth_configured"] is True
+    assert health.json()["expected_rules_sha_configured"] is True
 
     denied = client.get("/v1/snapshot")
     assert denied.status_code == 401
@@ -141,3 +143,20 @@ def test_api_e2e_builder_validator_replay(tmp_path: Path, monkeypatch) -> None:
     final_replay = client.post("/v1/tasks", headers=headers, json=payload)
     assert final_replay.status_code == 200
     assert final_replay.json()["created"] is False
+
+
+def test_task_requires_base_sha(tmp_path: Path, monkeypatch) -> None:
+    _module, client, headers = load_app(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/v1/tasks",
+        headers=headers,
+        json={
+            "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+            "issue_number": 1769,
+            "request_id": "missing-base-sha",
+            "correlation_id": "missing-base-sha",
+        },
+    )
+
+    assert response.status_code == 422

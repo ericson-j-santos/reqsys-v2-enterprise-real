@@ -2,7 +2,9 @@
 
 ## Objetivo
 
-Consolidar as issues #1767, #1768, #1769, #1770 e #1771 num único contrato operacional reutilizável, sem criar mecanismos paralelos.
+Consolidar as issues #1767, #1768, #1769, #1770 e #1771 num único contrato operacional reutilizável.
+
+O serviço é o **control plane local/DEV de coordenação do pool**. Ele não substitui a fila canônica de autonomia operacional já existente em `backend/app/core/operational_queue.py`; para STG/PROD, o transporte durável continua sendo `OperationalQueue` com Redis Streams. O SQLite deste serviço guarda apenas estado de coordenação/lease do pool no escopo PC24x7 local/DEV.
 
 Fluxo:
 
@@ -25,11 +27,12 @@ issue/request
 3. `BEGIN IMMEDIATE` serializa a aquisição de task no SQLite; a atualização exige estado elegível e lease livre.
 4. Um worker possui no máximo uma task ativa.
 5. Um workspace ativo não pode ser compartilhado.
-6. Worker `ESTUDO`, stale, sem Gateway ou sem `state_validated` não adquire trabalho.
+6. Worker `ESTUDO`, stale, sem Gateway, sem `state_validated` ou com `rules_sha` diferente do SHA canônico esperado não adquire trabalho.
 7. Lease expirado é recuperado; ao atingir `max_attempts`, a task vai para `failed` + quarentena.
 8. Builder entrega exatamente um `produced_sha`; Validator diferente valida o SHA.
 9. Task `blocked` não mantém lease e não ocupa worker.
 10. Token da API é lido de arquivo e não aparece em snapshot/log.
+11. Toda task é vinculada a `base_sha` explícito; request sem SHA base falha antes de entrar na fila.
 
 ## Mapeamento de issues
 

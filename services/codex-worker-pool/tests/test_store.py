@@ -38,6 +38,7 @@ def store(tmp_path: Path, clock: MutableClock) -> WorkerPoolStore:
         heartbeat_ttl_seconds=60,
         default_lease_seconds=10,
         default_max_attempts=2,
+        expected_rules_sha="a" * 40,
     )
 
 
@@ -340,3 +341,26 @@ def test_e2e_replay_readback_and_independent_validation(store: WorkerPoolStore) 
     final_replay, final_replay_created = enqueue(store, request_id="e2e-1769")
     assert final_replay_created is False
     assert final_replay["task_id"] == task["task_id"]
+
+
+def test_rules_sha_mismatch_fails_closed(store: WorkerPoolStore) -> None:
+    store.register_worker(
+        worker_id="builder-stale-rules",
+        host="host-builder-stale-rules",
+        role="builder",
+        profile="NORMAL",
+        correlation_id="corr-stale-rules",
+        controller_version="0.2.51",
+        rules_sha="b" * 40,
+        gateway_ok=True,
+        state_validated=True,
+        worktree_root="C:/dev/chatgpt-workers/builder-stale-rules",
+    )
+    enqueue(store, request_id="rules-sha-negative")
+
+    with pytest.raises(ConflictError, match="rules_sha divergente"):
+        store.claim_task(
+            worker_id="builder-stale-rules",
+            role="builder",
+            correlation_id="claim-stale-rules",
+        )

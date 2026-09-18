@@ -6,7 +6,7 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 
 ## Requisitos funcionais
 
-1. Registrar workers com `worker_id`, host, role, profile, capacidade, heartbeat, controller version, rules SHA, Gateway e `state_validated`.
+1. Registrar workers com `worker_id`, host, role, profile, capacidade, heartbeat, controller version, rules SHA, Gateway e `state_validated`, recusando claim quando o rules SHA divergir do SHA canônico esperado.
 2. Derivar `idempotency_key` estável de repositório, issue e `request_id`.
 3. Impedir duas aquisições da mesma task sob concorrência.
 4. Manter lease com expiração e recuperação governada.
@@ -20,6 +20,8 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 12. Snapshot deve informar host, worker, papel, profile, task, SHA, heartbeat, fila e `why_idle`, sem lease token ou segredo.
 13. API mutável e snapshot devem exigir bearer token lido de arquivo; `/health` deve falhar readiness quando o token não estiver configurado.
 14. O serviço não executa merge, deploy, alteração de segredo ou permissão administrativa.
+15. Toda task deve informar `base_sha` explícito antes de ser aceita.
+16. O SQLite é estado de coordenação local/DEV do pool e não substitui `OperationalQueue`/Redis Streams como transporte durável corporativo em STG/PROD.
 
 ## Requisitos de qualidade
 
