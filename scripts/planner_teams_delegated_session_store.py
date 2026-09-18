@@ -252,7 +252,8 @@ def load_state(
         if dedicated_client_id:
             _write_state(state_path, _minimal_state())
             client_id = dedicated_client_id
-            source = "dedicated_identity_bootstrap"
+            if source != "dedicated_identity_cutover":
+                source = "dedicated_identity_bootstrap"
         elif legacy_b64.strip():
             try:
                 raw = base64.b64decode(legacy_b64, validate=True)
