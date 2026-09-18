@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Migra o Cofre Runtime Evidence Gate de Fly.io para PC24x7 DEV, corrige autenticação Bearer e semântica 401 para token revogado, e adiciona controle/deploy DEV governados.",
+  "description": "Migra o Cofre Runtime Evidence Gate de Fly.io para PC24x7 DEV, corrige autenticação Bearer e semântica 401 para token revogado, e adiciona controle governado de restart DEV.",
   "sdd_gate": {
     "tests": [
       "tests/test_cofre_runtime_evidence_pc24x7.py",
