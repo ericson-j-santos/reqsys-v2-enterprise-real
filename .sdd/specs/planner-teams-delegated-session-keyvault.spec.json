@@ -1,0 +1,24 @@
+{
+  "feature_name": "planner-teams-delegated-session-keyvault",
+  "project": "ReqSys v2 Enterprise — Planner → Teams DEV",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Cria uma identidade delegada DEV sem client secret e persiste somente o refresh token MSAL mínimo no Azure Key Vault, reduzindo autorizações repetidas sem automatizar MFA ou consentimento.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_planner_teams_delegated_session_store.py",
+      "tests/test_bootstrap_planner_teams_delegated_identity.py",
+      "tests/test_planner_teams_delegated_identity_workflow.py",
+      "tests/test_planner_teams_dev_acceptance_pc24x7.py",
+      "tests/msal_device_code_prepare.test.mjs",
+      "tests/test_bootstrap_planner_teams_delegated_identity_temporary_permission.py"
+    ],
+    "evidence_contract": "O Key Vault é a fonte da sessão delegada; evidências nunca contêm refresh token, device_code, senha ou client secret."
+  }
+}
