@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -20,12 +21,18 @@ def load_structured(path: Path) -> dict:
     return data
 
 
+def contains_keyword(text: str, keyword: str) -> bool:
+    normalized_keyword = keyword.casefold()
+    pattern = rf"(?<!\w){re.escape(normalized_keyword)}(?!\w)"
+    return re.search(pattern, text) is not None
+
+
 def route_text(text: str, router: dict) -> str:
     normalized = text.casefold()
     routes = {item["id"]: item for item in router["routes"]}
     for route_id in router["execution_order"]:
         route = routes[route_id]
-        if any(keyword.casefold() in normalized for keyword in route.get("any_keywords", [])):
+        if any(contains_keyword(normalized, keyword) for keyword in route.get("any_keywords", [])):
             return route_id
     return router["default_route"]
 
