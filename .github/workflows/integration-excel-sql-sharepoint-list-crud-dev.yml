@@ -124,7 +124,9 @@ jobs:
           }
 
           def req(c,method,url,token,**kwargs):
-              h={"Authorization":f"Bearer {token}","Accept":"application/json"}
+              h={"Accept":"application/json"}
+              if token:
+                  h["Authorization"]=f"Bearer {token}"
               h.update(kwargs.pop("headers",{}))
               r=c.request(method,url if url.startswith("http") else GRAPH+url,headers=h,timeout=30.0,**kwargs)
               if r.status_code >= 400:
