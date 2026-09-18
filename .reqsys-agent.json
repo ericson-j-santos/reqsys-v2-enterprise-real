@@ -9,7 +9,8 @@
     "frontend",
     "backend",
     "src",
-    "tests"
+    "tests",
+    "agents"
   ],
   "blockedActions": [
     "merge",
@@ -35,5 +36,13 @@
     "required": false,
     "runtime": "local",
     "scope": "developer-experience"
+  },
+  "orchestration": {
+    "version": "1.0.0",
+    "contract": "agents/reqsys-engineering-orchestrator/SKILL.md",
+    "router": "agents/reqsys-engineering-orchestrator/router.yaml",
+    "guardrails": "agents/reqsys-engineering-orchestrator/guardrails.yaml",
+    "runtimeBridge": "docs/architecture/operational-orchestrator-v1.md",
+    "inheritOperationalRules": true
   }
 }
