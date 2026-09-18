@@ -30,7 +30,7 @@ async function localFetch(path, options = {}, { baseUrl = DEFAULT_AGENT_URL, tim
     })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
-      const message = payload?.error || `Agente local indisponível (código HTTP ${response.status}).`
+      const message = payload?.error || 'Agente local indisponível.'
       throw new Error(message)
     }
     return payload
