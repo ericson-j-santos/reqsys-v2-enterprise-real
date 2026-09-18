@@ -12,6 +12,9 @@ Antes de `azure/login`, o workflow deve verificar apenas a presença dos parâme
 
 A validação deve incluir a identidade OIDC e `REQSYS_KEY_VAULT_NAME`.
 
+## Requisito 2.1 — nomes padrão dos segredos SQL
+Quando os nomes customizados dos segredos SQL não forem configurados, o workflow deve reutilizar os nomes padrão já adotados pelo bootstrap: `movimento-email-sql-username` e `movimento-email-sql-password`. Servidor e banco permanecem obrigatórios e nunca devem ser inventados.
+
 ## Requisito 3 — preservar sigilo do DSN
 A alteração de autenticação não pode reduzir os controles existentes: usuário, senha, DSN, tokens e valores recuperados do Key Vault não podem ser publicados em logs, issues ou artefatos de evidência.
 
@@ -33,3 +36,4 @@ O valor do DSN nunca deve ser impresso. Timeout ausente, vazio ou inválido deve
 7. O comando `status` do verificador deve funcionar sem importar o backend e deve diferenciar DSN ausente de DSN configurado.
 8. O teste `tests/test_verificar_movimento_email_fontes.py` deve validar leitura das variáveis, fallback do timeout e não exposição do DSN.
 9. O job `bootstrap` deve declarar `environment: development`, de modo que o token OIDC use o subject federado já autorizado em DEV.
+10. Na ausência de nomes customizados, o workflow deve usar `movimento-email-sql-username` e `movimento-email-sql-password` como nomes padrão de segredo; servidor e banco continuam obrigatórios.
