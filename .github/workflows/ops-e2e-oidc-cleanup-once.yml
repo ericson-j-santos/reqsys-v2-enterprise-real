@@ -22,7 +22,7 @@ jobs:
       SITE_ID: tieri659.sharepoint.com,f72be222-7b9b-42e0-8f91-29b7b8db35e0,5e24e819-4dcf-475d-b0e9-5b8f83c30a2c
       LIST_ID: 4eeb6036-c3a2-4912-8a67-b5e172b15bf8
       TARGET_KEY: "990000000000001"
-      TARGET_CORRELATION: excel-sql-sharepoint-oidc-35288786690-1
+      TARGET_CORRELATION: excel-sql-sharepoint-oidc-35290544957-1
 
     steps:
       - name: Autenticar identidade ReqSys DEV por OIDC
