@@ -28,3 +28,16 @@ def test_e2e_executor_is_dev_only_and_sanitized() -> None:
     assert '"sensitive_values_exposed": False' in content
     assert 'wait_container_healthy()' in content
     assert 'scope_denial_http_403' in content
+
+
+def test_recreate_executor_is_dev_scoped_and_never_reads_secret_value() -> None:
+    content = (ROOT / "scripts" / "recreate_cofre_dev_pc24x7.py").read_text(encoding="utf-8")
+    assert 'DEFAULT_PROJECT = "wt-pc24x7-piloto"' in content
+    assert 'DEFAULT_CONTAINER = "wt-pc24x7-piloto-api-1"' in content
+    assert 'cofre-keyring-passphrase.txt' in content
+    assert 'args.secret_file.is_file()' in content
+    assert 'args.secret_file.read_text' not in content
+    assert '"--build"' in content
+    assert '"--force-recreate"' in content
+    assert '"api"' in content
+    assert '"production_touched": False' in content
