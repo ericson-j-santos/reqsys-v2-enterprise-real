@@ -43,6 +43,7 @@ jobs:
             tests/test_integration_excel_sql_sharepoint_dataverse.py \
             tests/test_integration_excel_sql_sharepoint_oidc_discovery.py \
             tests/test_integration_excel_sql_sharepoint_e2e_oidc.py \
+            tests/test_integration_excel_sql_sharepoint_e2e_cleanup_oidc.py \
             tests/test_integration_excel_sql_sharepoint_flow.py
 
       - name: Autenticar identidade ReqSys DEV por OIDC
