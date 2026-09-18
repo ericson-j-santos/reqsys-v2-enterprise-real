@@ -42,12 +42,6 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Aguardar aquecimento dos gatilhos Planner
-        shell: bash
-        run: |
-          set -euo pipefail
-          sleep "$PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS"
-
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
@@ -137,6 +131,12 @@ jobs:
         run: |
           python scripts/planner_teams_flow_state_oidc.py \
             --output "$PLANNER_TEAMS_FLOW_STATE_EVIDENCE_PATH"
+
+      - name: Aguardar aquecimento dos gatilhos Planner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep "$PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS"
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
