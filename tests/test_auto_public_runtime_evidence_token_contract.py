@@ -1,9 +1,4 @@
-"""Contract tests for the Auto Public Runtime Evidence ephemeral credential.
-
-The workflow must use only the native per-job GITHUB_TOKEN with the minimum
-permissions needed to dispatch another workflow. Long-lived PATs and GitHub App
-private keys are intentionally excluded from this path.
-"""
+"""Contract tests for Auto Public Runtime Evidence routing and ephemeral auth."""
 
 from __future__ import annotations
 
@@ -40,6 +35,11 @@ def _step(steps: list[dict], name_fragment: str) -> dict:
     return matches[0]
 
 
+def test_current_runtime_promotion_is_the_automatic_upstream(raw: str) -> None:
+    assert "Fly Automatic Environment Promotion" in raw
+    assert "ReqSys Fly Runtime P0" not in raw
+
+
 def test_long_lived_or_app_credentials_are_not_referenced(raw: str) -> None:
     assert "GH_PAT_ACTIONS" not in raw
     assert "REQSYS_STACK_REBASE_APP_ID" not in raw
@@ -53,6 +53,20 @@ def test_native_token_has_only_required_permissions(document: dict) -> None:
         "actions": "write",
         "contents": "read",
     }
+
+
+def test_automatic_inputs_follow_the_runtime_provider(steps: list[dict]) -> None:
+    resolver = _step(steps, "Resolve inputs")
+    assert resolver["env"]["DEV_RUNTIME_PROVIDER"] == "${{ vars.REQSYS_DEV_RUNTIME_PROVIDER || 'fly' }}"
+    assert resolver["env"]["PC24X7_DEV_BASE_URL"] == "${{ vars.PC24X7_DEV_BASE_URL }}"
+    body = resolver["run"]
+    assert 'case "$provider" in' in body
+    assert "fly)" in body
+    assert "pc24x7)" in body
+    assert "PC24X7_DEV_BASE_URL não configurada" in body
+    assert "PC24X7_DEV_BASE_URL deve usar HTTPS" in body
+    assert "REQSYS_DEV_RUNTIME_PROVIDER deve ser fly ou pc24x7" in body
+    assert 'echo "strict=true"' in body
 
 
 def test_native_token_is_proved_before_dispatch(steps: list[dict]) -> None:

@@ -1,32 +1,30 @@
-# Auto Public Runtime Evidence — token efêmero nativo
+# Auto Public Runtime Evidence — roteamento atual de runtime
 
 ## Contexto
 
-A execução 35377738842 falhou ao solicitar `actions:write` para a GitHub App configurada. A instalação respondeu HTTP 422 porque essa permissão não está concedida.
+A correção anterior eliminou o HTTP 422 da GitHub App usando `GITHUB_TOKEN` efêmero. A validação pós-merge mostrou dois resíduos de arquitetura:
 
-O workflow já executa dentro do GitHub Actions e pode usar o `GITHUB_TOKEN` efêmero do próprio job com escopo declarado no YAML, eliminando dependência de PAT ou chave privada para este dispatch.
-
-Na primeira validação da PR, o `PR Quality Review` classificou a especificação SDD deste incremento como segredo somente porque o nome do arquivo contém `token`. Esse é um falso positivo: `.sdd/specs/` contém contratos de governança versionados, não material secreto.
+1. o workflow automático ainda escutava `ReqSys Fly Runtime P0`, que não é mais o caminho canônico de validação DEV;
+2. o modo automático fixava `https://reqsys-api.fly.dev`, embora `REQSYS_DEV_RUNTIME_PROVIDER=pc24x7` seja suportado e já usado pelo fluxo de promoção atual.
 
 ## Requisitos
 
-1. O workflow deve declarar somente `actions: write` e `contents: read`.
-2. Nenhum `GH_PAT_ACTIONS`, App ID ou chave privada de GitHub App deve ser consumido nesse caminho.
-3. Todo comando `gh` autenticado deve usar `${{ github.token }}`.
-4. Antes do dispatch, uma leitura autenticada deve confirmar que `public-runtime-evidence.yml` está `active`.
-5. Ausência de token, falha da leitura ou workflow alvo não ativo deve falhar fechado antes do dispatch.
-6. Os inputs `public_url`, `strict`, `publish_comment`, `issue_number` e `ref` devem ser preservados.
-7. O workflow não deve imprimir o valor do token.
-8. Arquivos sob `.sdd/specs/` não devem ser classificados como segredo somente por conterem marcadores como `token` ou `secret` no nome.
-9. Arquivos de configuração reais, como `config/access-token.json`, devem continuar sensíveis.
+1. O gatilho `workflow_run` deve escutar `Fly Automatic Environment Promotion`.
+2. Execução automática só pode avançar quando o upstream terminar `success` em `main`.
+3. O provider automático deve vir de `vars.REQSYS_DEV_RUNTIME_PROVIDER`, aceitando somente `fly` ou `pc24x7`.
+4. Para `fly`, usar a URL canônica `https://reqsys-api.fly.dev`.
+5. Para `pc24x7`, exigir `vars.PC24X7_DEV_BASE_URL`, não vazio e HTTPS.
+6. Provider inválido ou URL PC24x7 ausente/insegura deve falhar fechado antes do dispatch.
+7. O disparo automático deve usar `strict=true`, `publish_comment=false` e `ref=main`.
+8. O fluxo manual deve preservar os inputs explícitos do operador.
+9. O token deve continuar sendo somente `${{ github.token }}`, com `actions: write` e `contents: read`.
 
-## Critérios de aceite (Acceptance Criteria)
+## Critérios de aceite
 
-1. `tests/test_auto_public_runtime_evidence_token_contract.py` passa.
-2. O teste prova que PAT e credenciais de GitHub App não aparecem no workflow.
-3. O teste prova a permissão mínima `actions:write + contents:read`.
-4. O teste prova que a validação autenticada ocorre antes do dispatch.
-5. O teste prova que todos os usos de `GH_TOKEN` apontam para `${{ github.token }}`.
-6. `tests/test_pr_quality_review.py` prova que a especificação SDD com `token` no nome é segura e que configuração real com token continua sensível.
-7. O SDD Gate passa no HEAD exato.
-8. O Pre-PR Readiness passa no HEAD exato e com a branch não atrasada em relação à `main`.
+1. O teste contratual prova que o upstream antigo não está mais configurado.
+2. O teste contratual prova os ramos `fly` e `pc24x7`.
+3. O teste prova fail-closed para provider inválido, URL PC24x7 vazia e URL não HTTPS.
+4. O teste prova `strict=true` no caminho automático.
+5. O contrato de token efêmero continua verde.
+6. O SDD Gate passa no HEAD exato.
+7. O Pre-PR Readiness retorna `READY_FOR_PR=passed` e `behind_by=0`.

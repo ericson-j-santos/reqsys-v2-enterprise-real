@@ -9,12 +9,12 @@
     "design": true,
     "tasks": true
   },
-  "description": "Substitui a emissão inviável de token da GitHub App por GITHUB_TOKEN efêmero nativo, limitado a actions:write e contents:read, preservando prova autenticada e dispatch do Public Runtime Evidence Gate; também corrige o falso positivo do PR Quality Review para especificações SDD versionadas.",
+  "description": "Mantém o GITHUB_TOKEN efêmero nativo e corrige o roteamento automático para o pipeline atual de promoção, selecionando a URL pública DEV conforme REQSYS_DEV_RUNTIME_PROVIDER (fly ou pc24x7) em modo fail-closed.",
   "sdd_gate": {
     "tests": [
       "tests/test_auto_public_runtime_evidence_token_contract.py",
       "tests/test_pr_quality_review.py"
     ],
-    "evidence_contract": "O workflow não pode usar PAT nem chave privada de GitHub App neste caminho; deve provar o GITHUB_TOKEN efêmero contra o workflow alvo antes de executar workflow_dispatch. O PR Quality Review não pode classificar .sdd/specs como segredo apenas porque o nome do requisito contém token/secret."
+    "evidence_contract": "O workflow automático deve ser disparado pelo Fly Automatic Environment Promotion, selecionar fly ou pc24x7 explicitamente, exigir PC24X7_DEV_BASE_URL HTTPS quando aplicável, executar strict=true e continuar usando somente GITHUB_TOKEN efêmero."
   }
 }
