@@ -17,6 +17,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev'" in content
     assert "github.event.comment.body == '/reqsys run runtime-e2e-dev'" in content
     assert "github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch'" in content
+    assert "github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'" in content
 
 
 def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
@@ -25,12 +26,23 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='bootstrap-wsjf-m365-dev.yml'" in content
     assert "target='runtime-e2e-continuous.yml'" in content
     assert "target='pending-development-agent-pr-permission-watch.yml'" in content
+    assert "target='bacen-57-simulation-assessment.yml'" in content
     assert (
         "bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|"
-        "pending-development-agent-pr-permission-watch.yml"
+        "pending-development-agent-pr-permission-watch.yml|"
+        "bacen-57-simulation-assessment.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
+
+
+def test_gateway_bacen_57_permanece_somente_simulacao_nonprod() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run bacen-57-simulation-assessment')" in content
+    assert "target='bacen-57-simulation-assessment.yml'" in content
+    assert "'production_touched': False" in content
+    assert "'secrets_read': False" in content
 
 
 def test_gateway_fixa_main_e_permissoes_minimas() -> None:
