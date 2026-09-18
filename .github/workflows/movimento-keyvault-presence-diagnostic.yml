@@ -1,0 +1,80 @@
+name: Movimento Key Vault Presence Diagnostic
+
+on:
+  push:
+    branches:
+      - 'diag/movimento-keyvault-presence-20260918'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  presence:
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 10
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      MOVIMENTO_EMAIL_SQL_SERVER: ${{ vars.MOVIMENTO_EMAIL_SQL_SERVER }}
+      MOVIMENTO_EMAIL_SQL_DATABASE: ${{ vars.MOVIMENTO_EMAIL_SQL_DATABASE }}
+      MOVIMENTO_EMAIL_SQL_USERNAME_SECRET: ${{ vars.MOVIMENTO_EMAIL_SQL_USERNAME_SECRET }}
+      MOVIMENTO_EMAIL_SQL_PASSWORD_SECRET: ${{ vars.MOVIMENTO_EMAIL_SQL_PASSWORD_SECRET }}
+    steps:
+      - name: Validar identidade OIDC
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::${name}_present=false"
+              exit 2
+            fi
+          done
+          echo "oidc_config_present=true"
+          [ -n "${MOVIMENTO_EMAIL_SQL_SERVER:-}" ] && echo "sql_server_present=true" || echo "sql_server_present=false"
+          [ -n "${MOVIMENTO_EMAIL_SQL_DATABASE:-}" ] && echo "sql_database_present=true" || echo "sql_database_present=false"
+          [ -n "${MOVIMENTO_EMAIL_SQL_USERNAME_SECRET:-}" ] && echo "sql_username_secret_name_present=true" || echo "sql_username_secret_name_present=false"
+          [ -n "${MOVIMENTO_EMAIL_SQL_PASSWORD_SECRET:-}" ] && echo "sql_password_secret_name_present=true" || echo "sql_password_secret_name_present=false"
+
+      - name: Login Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verificar metadados do Key Vault sem ler valores
+        shell: bash
+        run: |
+          set -euo pipefail
+          names="$(az keyvault secret list --vault-name "$REQSYS_KEY_VAULT_NAME" --query "[].name" -o tsv)"
+
+          has_name() {
+            local name="$1"
+            if printf '%s\n' "$names" | grep -Fqx "$name"; then
+              printf '%s_present=true\n' "$2"
+            else
+              printf '%s_present=false\n' "$2"
+            fi
+          }
+
+          has_name "movimento-email-source-dsn" "source_dsn_secret"
+
+          if [ -n "${MOVIMENTO_EMAIL_SQL_USERNAME_SECRET:-}" ]; then
+            has_name "$MOVIMENTO_EMAIL_SQL_USERNAME_SECRET" "sql_username_secret"
+          else
+            echo "sql_username_secret_present=false"
+          fi
+
+          if [ -n "${MOVIMENTO_EMAIL_SQL_PASSWORD_SECRET:-}" ]; then
+            has_name "$MOVIMENTO_EMAIL_SQL_PASSWORD_SECRET" "sql_password_secret"
+          else
+            echo "sql_password_secret_present=false"
+          fi
+
+          echo "secret_values_read=false"
