@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import getpass
 import hashlib
 import json
 import os
@@ -87,10 +88,10 @@ def reboot_observed(baseline_boot_epoch: int, current_boot_epoch: int) -> bool:
 
 
 def current_user_id() -> str:
-    computer = str(os.environ.get("COMPUTERNAME") or "").strip()
-    username = str(os.environ.get("USERNAME") or "").strip()
+    computer = socket.gethostname().strip()
+    username = getpass.getuser().strip()
     if not computer or not username:
-        raise RuntimeError("COMPUTERNAME/USERNAME indisponível")
+        raise RuntimeError("identidade local indisponível")
     return f"{computer}\\{username}"
 
 
