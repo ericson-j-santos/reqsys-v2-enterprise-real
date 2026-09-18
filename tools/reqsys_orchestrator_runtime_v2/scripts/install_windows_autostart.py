@@ -116,12 +116,30 @@ def install(
 
 def start_supervisor(install_root: Path, supervisor_path: Path) -> int:
     pid_file = install_root / "supervisor.pid"
+    shutdown = install_root / "data" / "control" / "shutdown.request"
     if pid_file.exists():
-        control_dir = install_root / "data" / "control"
-        control_dir.mkdir(parents=True, exist_ok=True)
-        shutdown = control_dir / "shutdown.request"
+        try:
+            old_pid = int(pid_file.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            old_pid = None
+        shutdown.parent.mkdir(parents=True, exist_ok=True)
         shutdown.write_text("upgrade\n", encoding="utf-8")
-        time.sleep(2)
+        time.sleep(3)
+        if old_pid and old_pid != os.getpid():
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(old_pid), "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+            else:
+                try:
+                    os.kill(old_pid, 15)
+                except ProcessLookupError:
+                    pass
+        shutdown.unlink(missing_ok=True)
 
     logs = install_root / "logs"
     logs.mkdir(parents=True, exist_ok=True)
@@ -149,9 +167,7 @@ def start_supervisor(install_root: Path, supervisor_path: Path) -> int:
         ],
         **kwargs,
     )
-    (install_root / "supervisor.pid").write_text(
-        str(process.pid) + "\n", encoding="utf-8"
-    )
+    pid_file.write_text(str(process.pid) + "\n", encoding="utf-8")
     return process.pid
 
 
