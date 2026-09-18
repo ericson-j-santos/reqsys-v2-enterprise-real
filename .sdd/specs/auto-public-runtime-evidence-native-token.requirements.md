@@ -6,6 +6,8 @@ A execução 35377738842 falhou ao solicitar `actions:write` para a GitHub App c
 
 O workflow já executa dentro do GitHub Actions e pode usar o `GITHUB_TOKEN` efêmero do próprio job com escopo declarado no YAML, eliminando dependência de PAT ou chave privada para este dispatch.
 
+Na primeira validação da PR, o `PR Quality Review` classificou a especificação SDD deste incremento como segredo somente porque o nome do arquivo contém `token`. Esse é um falso positivo: `.sdd/specs/` contém contratos de governança versionados, não material secreto.
+
 ## Requisitos
 
 1. O workflow deve declarar somente `actions: write` e `contents: read`.
@@ -15,6 +17,8 @@ O workflow já executa dentro do GitHub Actions e pode usar o `GITHUB_TOKEN` ef�
 5. Ausência de token, falha da leitura ou workflow alvo não ativo deve falhar fechado antes do dispatch.
 6. Os inputs `public_url`, `strict`, `publish_comment`, `issue_number` e `ref` devem ser preservados.
 7. O workflow não deve imprimir o valor do token.
+8. Arquivos sob `.sdd/specs/` não devem ser classificados como segredo somente por conterem marcadores como `token` ou `secret` no nome.
+9. Arquivos de configuração reais, como `config/access-token.json`, devem continuar sensíveis.
 
 ## Critérios de aceite (Acceptance Criteria)
 
@@ -23,5 +27,6 @@ O workflow já executa dentro do GitHub Actions e pode usar o `GITHUB_TOKEN` ef�
 3. O teste prova a permissão mínima `actions:write + contents:read`.
 4. O teste prova que a validação autenticada ocorre antes do dispatch.
 5. O teste prova que todos os usos de `GH_TOKEN` apontam para `${{ github.token }}`.
-6. O SDD Gate passa no HEAD exato.
-7. O Pre-PR Readiness passa no HEAD exato e com a branch não atrasada em relação à `main`.
+6. `tests/test_pr_quality_review.py` prova que a especificação SDD com `token` no nome é segura e que configuração real com token continua sensível.
+7. O SDD Gate passa no HEAD exato.
+8. O Pre-PR Readiness passa no HEAD exato e com a branch não atrasada em relação à `main`.
