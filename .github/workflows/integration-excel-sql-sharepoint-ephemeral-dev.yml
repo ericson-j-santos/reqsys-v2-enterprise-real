@@ -1,0 +1,121 @@
+name: Integration Excel SQL SharePoint — Ephemeral SQL DEV
+
+on:
+  push:
+    branches:
+      - test/excel-sql-sharepoint-ephemeral-dev-20260917
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-ephemeral-dev.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  sql-contract:
+    name: SQL Server efêmero — contrato técnico DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "ReqSys_E2E_DEV_Only_2026!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'ReqSys_E2E_DEV_Only_2026!' -C -Q 'SELECT 1' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Instalar ODBC e dependências
+        run: |
+          set -euo pipefail
+          bash .github/scripts/install-msodbc18-ci.sh
+          python -m pip install --disable-pip-version-check pyodbc pytest
+
+      - name: Provisionar banco sintético isolado
+        env:
+          SQL_SERVER: localhost,1433
+          SQL_DATABASE: ReqSysIntegrationDev
+          SQL_USER: sa
+          SQL_PASSWORD: ReqSys_E2E_DEV_Only_2026!
+        run: |
+          set -euo pipefail
+          mkdir -p audit/user-journey/excel-sql-sharepoint-dev/ephemeral
+          python - <<'PY'
+          import json, os, uuid
+          import pyodbc
+
+          dsn = (
+              "Driver={ODBC Driver 18 for SQL Server};"
+              f"Server={os.environ['SQL_SERVER']};Database=master;"
+              f"UID={os.environ['SQL_USER']};PWD={os.environ['SQL_PASSWORD']};"
+              "Encrypt=yes;TrustServerCertificate=yes;"
+          )
+          con = pyodbc.connect(dsn, autocommit=True, timeout=15)
+          cur = con.cursor()
+          cur.execute("IF DB_ID('ReqSysIntegrationDev') IS NULL CREATE DATABASE ReqSysIntegrationDev")
+          con.close()
+
+          dsn = dsn.replace("Database=master", "Database=ReqSysIntegrationDev")
+          con = pyodbc.connect(dsn, autocommit=True, timeout=15)
+          cur = con.cursor()
+          cur.execute("IF SCHEMA_ID('integration') IS NULL EXEC('CREATE SCHEMA integration')")
+          cur.execute("""IF OBJECT_ID('integration.E2EIdentificadores','U') IS NULL
+          CREATE TABLE integration.E2EIdentificadores(
+            Identificador nvarchar(64) NOT NULL PRIMARY KEY,
+            Descricao nvarchar(200) NOT NULL,
+            Synthetic bit NOT NULL DEFAULT(1))""")
+          fixture = "990000000000001"
+          cur.execute("""IF NOT EXISTS(SELECT 1 FROM integration.E2EIdentificadores WHERE Identificador=?)
+          INSERT integration.E2EIdentificadores(Identificador,Descricao,Synthetic)
+          VALUES(?,N'ReqSys E2E DEV fixture',1)""", fixture, fixture)
+          cur.execute("""CREATE OR ALTER PROCEDURE integration.usp_ConsultarPorIdentificadores
+            @IdsJson nvarchar(max), @CorrelationId uniqueidentifier AS
+          BEGIN SET NOCOUNT ON;
+            SELECT d.Identificador,d.Descricao,@CorrelationId CorrelationId
+            FROM OPENJSON(@IdsJson) j
+            JOIN integration.E2EIdentificadores d
+              ON d.Identificador=CONVERT(nvarchar(64),j.[value]);
+          END""")
+          corr=str(uuid.uuid4())
+          cur.execute("EXEC integration.usp_ConsultarPorIdentificadores @IdsJson=?,@CorrelationId=?",
+                      json.dumps([fixture]),corr)
+          positive=cur.fetchone()
+          cur.execute("EXEC integration.usp_ConsultarPorIdentificadores @IdsJson=?,@CorrelationId=?",
+                      json.dumps(["999999999999999"]),corr)
+          negative=cur.fetchone()
+          payload={
+            "schema_version":"1.0.0",
+            "environment":"dev-ephemeral",
+            "data_class":"synthetic",
+            "corporate_source_certified":False,
+            "procedure":"integration.usp_ConsultarPorIdentificadores",
+            "procedure_exists":True,
+            "positive_probe":"passed" if positive and str(positive[0])==fixture else "failed",
+            "negative_probe":"passed" if negative is None else "failed",
+            "secret_exposed":False,
+            "production_touched":False
+          }
+          assert payload["positive_probe"]=="passed"
+          assert payload["negative_probe"]=="passed"
+          open("audit/user-journey/excel-sql-sharepoint-dev/ephemeral/sql-evidence.json","w").write(
+              json.dumps(payload,ensure_ascii=False,indent=2)+"\n")
+          print(json.dumps(payload,ensure_ascii=False))
+          PY
+
+      - name: Publicar evidência sintética
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: excel-sql-sharepoint-ephemeral-sql-dev-${{ github.run_id }}
+          path: audit/user-journey/excel-sql-sharepoint-dev/ephemeral/sql-evidence.json
+          if-no-files-found: error
+          retention-days: 30
