@@ -14,8 +14,7 @@ dependência do projeto).
 - `MANIFEST.json` registra o SHA-256 de cada arquivo de cada versão. O
   runner recalcula o hash antes de aplicar e recusa rodar se divergir do
   manifesto — protege contra edição silenciosa de uma versão já "fechada".
-- `V<N>__rollback.sql` desfaz a versão `V<N>` inteira (idempotente: `DROP
-  VIEW IF EXISTS`, seguro mesmo se já não existir).
+- `V<N>__rollback.sql` desfaz o efeito da versão. Em V1 remove as views; em V2 restaura o contrato V1 de 0 linhas.
 
 ## Idempotência
 
@@ -45,6 +44,28 @@ hoje, mas sempre retorna 0 linhas). Cada arquivo tem, comentado, um exemplo
 de como o `SELECT` real provavelmente ficará — a equipe de dados só precisa
 descomentar/ajustar os nomes de tabela/coluna reais e remover o `WHERE 1 =
 0`, sem precisar tocar em versionamento, idempotência ou no runner.
+
+## Estado atual (V2) — fonte canônica real de DEV
+
+A V2 remove o stub das quatro views e passa a consultar tabelas persistentes
+do schema `movimento_src`. Para DEV/local, a infraestrutura é criada por
+`scripts/bootstrap_movimento_email_dev.py` e pelos arquivos em
+`sql/dev/`.
+
+Essa camada permite E2E real de banco sem inventar o schema do SSRS legado.
+Ela **não prova** que o datasource corporativo foi descoberto. Quando o
+`.rdl/.rds` ou `server + database` corporativos forem obtidos, a integração
+deve alimentar `movimento_src.*` ou fornecer um adaptador equivalente,
+preservando o contrato V2.
+
+### Bootstrap DEV
+
+```powershell
+python scripts/bootstrap_movimento_email_dev.py --seed-e2e
+```
+
+O padrão cria/reutiliza o banco `ReqSysMovimentoDev` no SQL Server local
+com autenticação integrada do Windows, sem usuário/senha no repositório.
 
 ## Como aplicar
 
