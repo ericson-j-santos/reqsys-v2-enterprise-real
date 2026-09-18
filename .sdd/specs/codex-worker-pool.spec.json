@@ -1,7 +1,15 @@
 {
-  "schema_version": "1.0.0",
-  "id": "codex-worker-pool",
-  "title": "Codex Worker Pool distribuído governado",
+  "feature_name": "codex-worker-pool",
+  "project": "ReqSys v2 Enterprise — Codex distribuído",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Consolida o pool governado de workers Codex distribuídos com heartbeat, fila idempotente, lease, recuperação, quarentena, isolamento por workspace e separação Builder/Validator.",
   "issues": [1767, 1768, 1769, 1770, 1771],
   "scope": "local-dev-pc24x7",
   "files": [
@@ -12,14 +20,12 @@
     "docker-compose.pc24x7-codex-worker-pool.yml",
     "docs/runbooks/codex-worker-pool.md"
   ],
-  "tests": [
-    "python -m pytest services/codex-worker-pool/tests -q"
-  ],
-  "evidence_contract": {
-    "positive": "Builder -> produced_sha -> Validator -> completed -> independent GET",
-    "negative": "ESTUDO/invalid lease/duplicate claim fail closed",
-    "replay": "same repository+issue+request_id preserves task_id",
-    "multi_host": "requires dual_host_preflight on both physical hosts at the exact rules SHA"
+  "sdd_gate": {
+    "tests": [
+      "services/codex-worker-pool/tests/test_store.py",
+      "services/codex-worker-pool/tests/test_api.py"
+    ],
+    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado fail-closed, replay idempotente, recuperação de lease e quarentena. A prova física multi-host exige dual_host_preflight nos dois hosts no SHA exato das regras."
   },
   "risk": {
     "production": false,
