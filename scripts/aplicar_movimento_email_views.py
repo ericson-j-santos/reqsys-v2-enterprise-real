@@ -64,7 +64,8 @@ def _carregar_manifest() -> dict:
 
 
 def _sha256(caminho: Path) -> str:
-    return hashlib.sha256(caminho.read_bytes()).hexdigest()
+    canonical = caminho.read_text(encoding='utf-8').replace('\r\n', '\n').replace('\r', '\n')
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 
 def _validar_checksums(manifest: dict) -> list[str]:

@@ -43,7 +43,9 @@ def test_manifest_v2_checksums_match_files() -> None:
     manifest = json.loads((VIEWS / "MANIFEST.json").read_text(encoding="utf-8"))
     v2 = next(item for item in manifest["versoes"] if item["versao"] == "V2")
     for entry in [*v2["arquivos"], v2["rollback"]]:
-        digest = hashlib.sha256((VIEWS / entry["arquivo"]).read_bytes()).hexdigest()
+        content = (VIEWS / entry["arquivo"]).read_text(encoding="utf-8")
+        canonical = content.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+        digest = hashlib.sha256(canonical).hexdigest()
         assert digest == entry["sha256"]
 
 
