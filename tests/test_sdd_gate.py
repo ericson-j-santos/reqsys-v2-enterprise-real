@@ -43,3 +43,25 @@ def test_blocks_missing_acceptance_criteria(tmp_path):
 
 def test_docs_only_does_not_require_spec(tmp_path):
     assert MODULE.validate(tmp_path, ["docs/readme.md"], "abc")[0] is True
+
+
+def test_deleted_spec_does_not_count_as_current_contract(tmp_path):
+    ok, detail = MODULE.validate(
+        tmp_path,
+        ["scripts/x.py", ".sdd/specs/removed.spec.json"],
+        "abc",
+    )
+    assert ok is False
+    assert "SDD_SPEC_REQUIRED" in detail
+
+
+def test_deleted_old_spec_is_ignored_when_new_spec_exists(tmp_path):
+    write_spec(tmp_path)
+    files = [
+        "scripts/x.py",
+        ".sdd/specs/removed.spec.json",
+        ".sdd/specs/feature.spec.json",
+    ]
+    ok, detail = MODULE.validate(tmp_path, files, "abc")
+    assert ok is True
+    assert "SDD_OK head=abc specs=1" in detail
