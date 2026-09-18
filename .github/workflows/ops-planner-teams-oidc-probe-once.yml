@@ -1,0 +1,123 @@
+name: Ops Planner Teams OIDC probe once
+
+on:
+  push:
+    branches:
+      - feat/planner-teams-oidc-20260918
+    paths:
+      - ".github/workflows/ops-planner-teams-oidc-probe-once.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 10
+    env:
+      DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
+      TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
+      CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
+      PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Autenticar ReqSys DEV por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Provar Graph Planner/Teams e Dataverse sem expor tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit/planner-teams-oidc
+          graph_token="$(az account get-access-token --resource https://graph.microsoft.com/ --query accessToken -o tsv)"
+          dataverse_token="$(az account get-access-token --resource "$DATAVERSE_URL/" --query accessToken -o tsv)"
+          test -n "$graph_token"
+          test -n "$dataverse_token"
+          echo "::add-mask::$graph_token"
+          echo "::add-mask::$dataverse_token"
+
+          planner_status="0"
+          if [ -n "${PLAN_ID:-}" ]; then
+            planner_status="$(curl -sS -o /tmp/planner.json -w '%{http_code}'               -H "Authorization: Bearer $graph_token"               -H 'Accept: application/json'               "https://graph.microsoft.com/v1.0/planner/plans/$PLAN_ID/tasks?$top=1")"
+          fi
+
+          teams_status="$(curl -sS -o /tmp/teams.json -w '%{http_code}'             -H "Authorization: Bearer $graph_token"             -H 'Accept: application/json'             "https://graph.microsoft.com/v1.0/teams/$TEAM_ID/channels/$CHANNEL_ID/messages?$top=1")"
+
+          created_name="ReqSys - Notificar Teams (Tarefa criada no Planner)"
+          completed_name="ReqSys - Notificar Teams (Tarefa concluída no Planner)"
+          python - <<'PY'
+          import urllib.parse, os
+          for key in ("created_name","completed_name"):
+              value=os.environ.get(key)
+          PY
+
+          created_filter="$(python - <<'PY'
+          import urllib.parse
+          print(urllib.parse.quote("category eq 5 and type eq 1 and name eq 'ReqSys - Notificar Teams (Tarefa criada no Planner)'", safe=""))
+          PY
+          )"
+          completed_filter="$(python - <<'PY'
+          import urllib.parse
+          print(urllib.parse.quote("category eq 5 and type eq 1 and name eq 'ReqSys - Notificar Teams (Tarefa concluída no Planner)'", safe=""))
+          PY
+          )"
+
+          curl -fsS             -H "Authorization: Bearer $dataverse_token"             -H 'Accept: application/json'             "$DATAVERSE_URL/api/data/v9.2/workflows?$select=workflowid,name,statecode,statuscode,category,type,clientdata&$filter=$created_filter"             > /tmp/created-flow.json
+          curl -fsS             -H "Authorization: Bearer $dataverse_token"             -H 'Accept: application/json'             "$DATAVERSE_URL/api/data/v9.2/workflows?$select=workflowid,name,statecode,statuscode,category,type,clientdata&$filter=$completed_filter"             > /tmp/completed-flow.json
+
+          PLANNER_STATUS="$planner_status" TEAMS_STATUS="$teams_status" python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          def flow_summary(path):
+              payload=json.loads(Path(path).read_text())
+              rows=payload.get("value") or []
+              summaries=[]
+              for row in rows:
+                  raw=row.get("clientdata") or ""
+                  try:
+                      cd=json.loads(raw)
+                  except Exception:
+                      cd={}
+                  props=cd.get("properties") if isinstance(cd,dict) else {}
+                  props=props if isinstance(props,dict) else {}
+                  refs=props.get("connectionReferences")
+                  refs=refs if isinstance(refs,dict) else {}
+                  summaries.append({
+                      "workflowid": row.get("workflowid"),
+                      "name": row.get("name"),
+                      "statecode": row.get("statecode"),
+                      "statuscode": row.get("statuscode"),
+                      "connection_reference_keys": sorted(refs.keys()),
+                      "clientdata_sha256": hashlib.sha256(raw.encode()).hexdigest() if raw else None,
+                  })
+              return summaries
+
+          result={
+              "schema_version":"1.0.0",
+              "environment":"dev",
+              "auth_mode":"github_oidc",
+              "planner_graph_http_status": int(os.environ["PLANNER_STATUS"]),
+              "teams_graph_http_status": int(os.environ["TEAMS_STATUS"]),
+              "created_flows": flow_summary("/tmp/created-flow.json"),
+              "completed_flows": flow_summary("/tmp/completed-flow.json"),
+          }
+          Path("audit/planner-teams-oidc/probe.json").write_text(json.dumps(result,indent=2)+"\n")
+          print(json.dumps(result))
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-teams-oidc-probe-${{ github.run_id }}
+          path: audit/planner-teams-oidc/probe.json
+          if-no-files-found: error
+          retention-days: 7
