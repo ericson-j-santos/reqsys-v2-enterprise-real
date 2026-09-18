@@ -318,11 +318,18 @@ def postboot_check(require_reboot: bool) -> tuple[int, dict[str, Any]]:
     baseline = int(metadata["baseline_boot_epoch"])
     current = windows_boot_epoch()
     restarted = reboot_observed(baseline, current)
+    previous_validated = int(metadata.get("last_validated_boot_epoch") or 0)
+    already_validated = (
+        restarted
+        and previous_validated > 0
+        and not reboot_observed(previous_validated, current)
+    )
     health = probe_agent()
     task = task_status()
     run_status = run_key_status()
     persistence_present = task.get("exists") is True or run_status.get("configured") is True
     ready = restarted and health is not None and persistence_present
+    newly_validated = ready and not already_validated
     payload = {
         "schema_version": "1",
         "generated_at": now_iso(),
@@ -336,7 +343,13 @@ def postboot_check(require_reboot: bool) -> tuple[int, dict[str, Any]]:
         "run_key": run_status,
         "persistence_present": persistence_present,
         "ready": ready,
+        "already_validated": already_validated,
+        "newly_validated": newly_validated,
     }
+    if newly_validated:
+        metadata["last_validated_boot_epoch"] = current
+        metadata["last_validated_at"] = now_iso()
+        atomic_json(meta_file, metadata)
     atomic_json(evidence_path(), payload)
     if require_reboot:
         if not restarted:
