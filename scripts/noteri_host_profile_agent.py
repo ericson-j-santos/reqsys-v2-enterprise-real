@@ -28,7 +28,7 @@ DEFAULT_ORIGINS = {
     "http://localhost:8084",
 }
 _ORIGIN_RE = re.compile(
-    r"\\Ahttps?://(?:localhost|127\\.0\\.0\\.1|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::[1-9][0-9]{0,4})?\\Z"
+    r"\Ahttps?://(?:localhost|127\.0\.0\.1|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::[1-9][0-9]{0,4})?\Z"
 )
 
 
