@@ -548,7 +548,8 @@ class TestCofreTokensEscopados:
         )
         token_id = criar.json()['data']['id']
         token = criar.json()['data']['token']
-        assert client.delete(f'/v1/cofre/tokens/{token_id}', headers=_admin_headers()).status_code == 200
+        revogar = client.delete(f'/v1/cofre/tokens/{token_id}', headers=_admin_headers())
+        assert revogar.status_code == 200
 
         resp = client.get('/v1/cofre/segredos/SCOPED_KEY_REVOKED', headers={'X-Vault-Token': token})
         assert resp.status_code == 401
