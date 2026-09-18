@@ -73,7 +73,7 @@ class ReqSysWeeklyAccomplishmentLogTests(unittest.TestCase):
             "items": [classify_item(pr(checks=[]))],
         }
         text = render_markdown(report)
-        self.assertIn("não representa percentual global", text.lower())
+        self.assertIn("não representam percentual global", text.lower())
         self.assertIn("baseline anterior não encontrado", text.lower())
         self.assertIn("checks_sem_sucesso_confirmado", text)
 
