@@ -1,0 +1,27 @@
+extends:
+  - spectral:oas
+
+rules:
+  info-contact: off
+  info-description: off
+  operation-operationId-unique: error
+  operation-tag-defined: warn
+  openapi-tags: warn
+  oas3-api-servers: warn
+  oas3-valid-schema-example: warn
+
+  reqsys-required-runtime-paths:
+    description: Paths críticos do runtime ReqSys devem existir no contrato governado
+    message: "{{description}}: {{property}}"
+    severity: error
+    given: $.paths
+    then:
+      field: /api/runtime/health
+      function: truthy
+  reqsys-required-requisitos-path:
+    description: Path de requisitos mockados deve existir
+    severity: error
+    given: $.paths
+    then:
+      field: /api/requisitos
+      function: truthy

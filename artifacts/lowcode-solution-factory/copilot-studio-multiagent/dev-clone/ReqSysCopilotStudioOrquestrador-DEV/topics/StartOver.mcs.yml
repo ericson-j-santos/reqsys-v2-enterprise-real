@@ -1,0 +1,15 @@
+mcs.metadata:
+  componentName: StartOver
+  description: This system topic resets the conversation.
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    triggerQueries:
+      - comecar de novo
+      - recomecar
+  actions:
+    - kind: SendActivity
+      id: sendMessage_reset
+      activity: Conversa reiniciada no agente reqsys_reqsyslowcodecopilot_orchestrator. Como posso ajudar com demandas, aprovacoes ou releases?

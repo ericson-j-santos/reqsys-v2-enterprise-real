@@ -1,0 +1,325 @@
+name: Fly Org Token Successor Probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      fly_org:
+        description: "Organização Fly real a validar"
+        required: true
+        type: string
+      validation_app:
+        description: "App usado somente para validar acesso do emissor e do sucessor"
+        required: true
+        default: "reqsys-api-dev"
+        type: string
+      confirm_org_probe:
+        description: "Confirmo a execução controlada A→B na organização informada"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: fly-org-token-successor-probe
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TRUST_ANCHOR_SECRET_NAME: reqsys-fly-control-plane-org-token
+  EVIDENCE_FILE: audit/fly-org-token-successor-probe.json
+
+jobs:
+  probe:
+    name: Provar emissão org A→B sem token pessoal
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar pré-condições
+        shell: bash
+        env:
+          FLY_ORG: ${{ inputs.fly_org }}
+          VALIDATION_APP: ${{ inputs.validation_app }}
+          CONFIRM_ORG_PROBE: ${{ inputs.confirm_org_probe }}
+          CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+          CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+        run: |
+          set -euo pipefail
+
+          if [ "$CONFIRM_ORG_PROBE" != "true" ]; then
+            echo "::error::Execução não confirmada. Marque confirm_org_probe=true."
+            exit 2
+          fi
+
+          for name in FLY_ORG VALIDATION_APP CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado. Probe permanece fail-closed."
+              exit 2
+            fi
+          done
+
+          if [ -n "${FLY_API_TOKEN:-}" ]; then
+            echo "::error::FLY_API_TOKEN já existe no ambiente antes da leitura do Key Vault. Abortando para evitar fallback implícito."
+            exit 2
+          fi
+
+      - name: Autenticar no Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Instalar flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Executar prova controlada A→B
+        id: probe
+        shell: bash
+        env:
+          FLY_ORG: ${{ inputs.fly_org }}
+          VALIDATION_APP: ${{ inputs.validation_app }}
+          REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          CORRELATION_ID: fly-org-successor-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -uo pipefail
+          umask 077
+          mkdir -p "$(dirname "$EVIDENCE_FILE")"
+
+          STATUS="INCONCLUSIVE"
+          STAGE="init"
+          EXIT_CODE=1
+          TOKEN_B_ID=""
+          CLEANUP_STATUS="NOT_REQUIRED"
+          A_APP_VALIDATION="FAIL"
+          A_ORG_LIST="NOT_RUN"
+          B_ORG_LIST="NOT_RUN"
+          B_APP_VALIDATION="NOT_RUN"
+          A_POSTCHECK="NOT_RUN"
+          CREATE_RC=0
+          ERROR_CLASS="none"
+          ERROR_HASH=""
+          CANDIDATE_NAME="reqsys-control-plane-next-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          STDERR_FILE="${RUNNER_TEMP}/fly-org-successor-stderr.txt"
+          : > "$STDERR_FILE"
+
+          write_evidence() {
+            export STATUS STAGE EXIT_CODE TOKEN_B_ID CLEANUP_STATUS A_APP_VALIDATION A_ORG_LIST B_ORG_LIST B_APP_VALIDATION A_POSTCHECK CREATE_RC ERROR_CLASS ERROR_HASH CANDIDATE_NAME
+            python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def value(name, default=""):
+              return os.environ.get(name, default)
+
+          payload = {
+              "schema_version": "1.0.0",
+              "issue": 1282,
+              "probe": "fly_org_token_successor",
+              "status": value("STATUS", "INCONCLUSIVE"),
+              "stage": value("STAGE", "unknown"),
+              "correlation_id": value("CORRELATION_ID"),
+              "timestamp_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "fly": {
+                  "organization": value("FLY_ORG"),
+                  "validation_app": value("VALIDATION_APP"),
+                  "candidate_name": value("CANDIDATE_NAME"),
+                  "candidate_token_id": value("TOKEN_B_ID") or None,
+                  "create_exit_code": int(value("CREATE_RC", "0") or 0),
+                  "error_class": value("ERROR_CLASS", "none"),
+                  "stderr_sha256": value("ERROR_HASH") or None,
+              },
+              "checks": {
+                  "issuer_a_app_access": value("A_APP_VALIDATION"),
+                  "issuer_a_org_token_list": value("A_ORG_LIST"),
+                  "successor_b_org_token_list": value("B_ORG_LIST"),
+                  "successor_b_app_access": value("B_APP_VALIDATION"),
+                  "candidate_cleanup": value("CLEANUP_STATUS"),
+                  "issuer_a_post_cleanup": value("A_POSTCHECK"),
+              },
+              "security": {
+                  "auth_source": "azure_key_vault_via_github_oidc",
+                  "trust_anchor_secret_name": value("TRUST_ANCHOR_SECRET_NAME"),
+                  "github_secret_fallback": False,
+                  "fly_auth_token_command_used": False,
+                  "personal_fly_token_used": False,
+                  "secret_values_exposed": False,
+                  "candidate_expiry": "1h",
+                  "canonical_trust_anchor_mutated": False,
+              },
+              "acceptance": {
+                  "decisive_condition": "issuer_a_created_successor_b_and_successor_b_accessed_validation_app",
+                  "org_token_list_is_diagnostic_only": True,
+              },
+              "exit_code": int(value("EXIT_CODE", "1") or 1),
+          }
+          Path(value("EVIDENCE_FILE")).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          }
+
+          finish() {
+            local rc="$1"
+            EXIT_CODE="$rc"
+            if [ -s "$STDERR_FILE" ]; then
+              ERROR_HASH="$(sha256sum "$STDERR_FILE" | awk '{print $1}')"
+            fi
+            rm -f "$STDERR_FILE"
+            unset TOKEN_A TOKEN_B CREATE_JSON LIST_JSON
+            write_evidence
+
+            {
+              echo "# Fly org token successor probe — #1282"
+              echo
+              echo "- Status: **$STATUS**"
+              echo "- Etapa final: **$STAGE**"
+              echo "- Emissor A acessou o app: **$A_APP_VALIDATION**"
+              echo "- Listagem org com A (diagnóstico): **$A_ORG_LIST**"
+              echo "- Listagem org com B (diagnóstico): **$B_ORG_LIST**"
+              echo "- Sucessor B acessou o app: **$B_APP_VALIDATION**"
+              echo "- Limpeza do candidato B: **$CLEANUP_STATUS**"
+              echo "- Emissor A permaneceu válido: **$A_POSTCHECK**"
+              echo "- Token pessoal usado: **não**"
+              echo "- Trust anchor canônico alterado: **não**"
+              echo "- Correlation ID: \`$CORRELATION_ID\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            exit "$rc"
+          }
+
+          STAGE="read_trust_anchor"
+          TOKEN_A="$(az keyvault secret show \
+            --vault-name "$REQSYS_KEY_VAULT_NAME" \
+            --name "$TRUST_ANCHOR_SECRET_NAME" \
+            --query value -o tsv 2>"$STDERR_FILE")"
+          if [ -z "$TOKEN_A" ]; then
+            ERROR_CLASS="trust_anchor_missing_or_unreadable"
+            STATUS="PRECONDITION_FAILED"
+            finish 2
+          fi
+          echo "::add-mask::$TOKEN_A"
+
+          STAGE="validate_issuer_a_app"
+          if FLY_API_TOKEN="$TOKEN_A" flyctl status --app "$VALIDATION_APP" --json >/dev/null 2>"$STDERR_FILE"; then
+            A_APP_VALIDATION="PASS"
+          else
+            ERROR_CLASS="issuer_a_cannot_access_validation_app"
+            STATUS="PRECONDITION_FAILED"
+            finish 2
+          fi
+
+          STAGE="diagnose_issuer_a_org_list"
+          if FLY_API_TOKEN="$TOKEN_A" flyctl tokens list --scope org --json >/dev/null 2>"$STDERR_FILE"; then
+            A_ORG_LIST="PASS"
+          else
+            A_ORG_LIST="FAIL_NON_BLOCKING"
+          fi
+
+          STAGE="create_successor_b"
+          CREATE_JSON="$(FLY_API_TOKEN="$TOKEN_A" flyctl tokens create org \
+            --org "$FLY_ORG" \
+            --expiry 1h \
+            --name "$CANDIDATE_NAME" \
+            --json 2>"$STDERR_FILE")"
+          CREATE_RC=$?
+
+          if [ "$CREATE_RC" -ne 0 ]; then
+            if grep -Eiq 'unauthorized|forbidden|permission|not allowed|denied|401|403' "$STDERR_FILE"; then
+              ERROR_CLASS="provider_permission_denied"
+              STATUS="PROVIDER_LIMITATION"
+            else
+              ERROR_CLASS="provider_create_failed_inconclusive"
+              STATUS="INCONCLUSIVE"
+            fi
+            finish 1
+          fi
+
+          TOKEN_B="$(jq -r 'if type == "object" then (.token // .Token // empty) elif type == "string" then . else empty end' <<<"$CREATE_JSON" 2>/dev/null)"
+          TOKEN_B_ID="$(jq -r 'if type == "object" then (.id // .ID // empty) else empty end' <<<"$CREATE_JSON" 2>/dev/null)"
+
+          if [ -z "$TOKEN_B" ] && [[ "$CREATE_JSON" == FlyV1\ * || "$CREATE_JSON" == fm2_* ]]; then
+            TOKEN_B="$CREATE_JSON"
+          fi
+          unset CREATE_JSON
+
+          if [ -z "$TOKEN_B" ]; then
+            ERROR_CLASS="provider_response_missing_token"
+            STATUS="INCONCLUSIVE"
+            finish 1
+          fi
+          echo "::add-mask::$TOKEN_B"
+
+          STAGE="validate_successor_b_app"
+          if FLY_API_TOKEN="$TOKEN_B" flyctl status --app "$VALIDATION_APP" --json >/dev/null 2>"$STDERR_FILE"; then
+            B_APP_VALIDATION="PASS"
+          else
+            ERROR_CLASS="successor_b_failed_app_validation"
+            STATUS="INCONCLUSIVE"
+          fi
+
+          STAGE="diagnose_successor_b_org_list"
+          if FLY_API_TOKEN="$TOKEN_B" flyctl tokens list --scope org --json >/dev/null 2>"$STDERR_FILE"; then
+            B_ORG_LIST="PASS"
+          else
+            B_ORG_LIST="FAIL_NON_BLOCKING"
+          fi
+
+          if [ -z "$TOKEN_B_ID" ]; then
+            STAGE="discover_successor_b_id"
+            LIST_JSON="$(FLY_API_TOKEN="$TOKEN_A" flyctl tokens list --scope org --json 2>"$STDERR_FILE")"
+            if [ $? -eq 0 ] && [ -n "$LIST_JSON" ]; then
+              TOKEN_B_ID="$(jq -r --arg name "$CANDIDATE_NAME" '.. | objects | select((.name? // .Name? // "") == $name) | (.id? // .ID? // empty)' <<<"$LIST_JSON" 2>/dev/null | head -n1)"
+            fi
+            unset LIST_JSON
+          fi
+
+          STAGE="cleanup_successor_b"
+          if [ -n "$TOKEN_B_ID" ]; then
+            if FLY_API_TOKEN="$TOKEN_A" flyctl tokens revoke "$TOKEN_B_ID" >/dev/null 2>"$STDERR_FILE"; then
+              CLEANUP_STATUS="PASS"
+            else
+              CLEANUP_STATUS="FAIL"
+              ERROR_CLASS="candidate_cleanup_failed"
+              STATUS="INCONCLUSIVE"
+            fi
+          else
+            CLEANUP_STATUS="FAIL_NO_TOKEN_ID_EXPIRES_1H"
+            ERROR_CLASS="candidate_id_missing_cleanup_not_possible"
+            STATUS="INCONCLUSIVE"
+          fi
+
+          STAGE="validate_issuer_a_post_cleanup"
+          if FLY_API_TOKEN="$TOKEN_A" flyctl status --app "$VALIDATION_APP" --json >/dev/null 2>"$STDERR_FILE"; then
+            A_POSTCHECK="PASS"
+          else
+            A_POSTCHECK="FAIL"
+            ERROR_CLASS="issuer_a_invalid_after_probe"
+            STATUS="INCONCLUSIVE"
+          fi
+
+          if [ "$B_APP_VALIDATION" = "PASS" ] && \
+             [ "$CLEANUP_STATUS" = "PASS" ] && \
+             [ "$A_POSTCHECK" = "PASS" ]; then
+            STATUS="PASS_CAPABILITY"
+            ERROR_CLASS="none"
+            STAGE="completed"
+            finish 0
+          fi
+
+          finish 1
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-org-token-successor-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: warn
+          retention-days: 30

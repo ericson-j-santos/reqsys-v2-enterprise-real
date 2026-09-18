@@ -1,0 +1,95 @@
+name: Executive Promotion Advisor Dashboard
+
+on:
+  pull_request:
+    paths:
+      - "scripts/inject_executive_promotion_advisor_card.py"
+      - "scripts/validate_executive_promotion_advisor_card.py"
+      - "tests/test_executive_promotion_advisor_card.py"
+      - ".github/workflows/executive-promotion-advisor-dashboard.yml"
+      - "docs/ci/executive-promotion-advisor-dashboard.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: executive-promotion-advisor-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate advisor card and packaged smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/inject_executive_promotion_advisor_card.py
+          python -m py_compile scripts/validate_executive_promotion_advisor_card.py
+          python -m unittest tests/test_executive_promotion_advisor_card.py
+
+      - name: Build synthetic advisor contract
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ops-dashboard/data
+          cp docs/ops-dashboard/index.html artifacts/ops-dashboard/index.html
+          cat > artifacts/ops-dashboard/data/runtime-executive-index.json <<'JSON'
+          {
+            "schema_version": "1.5.0",
+            "cards": {
+              "executive_promotion_advisor": {
+                "decision": "REVIEW",
+                "status": "yellow",
+                "confidence_percent": 70.0,
+                "mode": "report-only",
+                "production_blocker": false,
+                "human_approval_required": true,
+                "risk_domains": ["runtime"],
+                "recommendation": "Executar revisão humana dos domínios sem evidência suficiente."
+              }
+            }
+          }
+          JSON
+
+      - name: Inject advisor card into packaged dashboard
+        run: |
+          set -euo pipefail
+          python scripts/inject_executive_promotion_advisor_card.py \
+            --dashboard artifacts/ops-dashboard/index.html
+
+      - name: Smoke packaged advisor card
+        run: |
+          set -euo pipefail
+          python scripts/validate_executive_promotion_advisor_card.py \
+            --dashboard artifacts/ops-dashboard/index.html \
+            --runtime-index artifacts/ops-dashboard/data/runtime-executive-index.json \
+            --output artifacts/executive-promotion-advisor-dashboard-smoke/evidence.json
+
+      - name: Publish smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-dashboard-smoke
+          path: artifacts/executive-promotion-advisor-dashboard-smoke
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          {
+            echo "# Executive Promotion Advisor Dashboard"
+            echo ""
+            echo "- Card visual: validado"
+            echo "- Artifact empacotado: validado"
+            echo "- Modo: report-only"
+            echo "- Bloqueio automático de produção: não"
+            echo "- Aprovação humana: obrigatória"
+          } >> "$GITHUB_STEP_SUMMARY"

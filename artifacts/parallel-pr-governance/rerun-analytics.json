@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T20:16:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "rerun_analytics",
+  "purpose": "track reruns needed before a PR reaches green status",
+  "metrics": {
+    "rerun_count_total": null,
+    "rerun_count_by_workflow": null,
+    "rerun_count_by_lane": null,
+    "rerun_reason_distribution": null
+  },
+  "classification": [
+    {"reason": "transient_ci", "impact": "low", "action": "rerun once"},
+    {"reason": "syntax_or_contract_error", "impact": "medium", "action": "fix in same PR"},
+    {"reason": "merge_conflict", "impact": "high", "action": "rebase or recreate from main"},
+    {"reason": "shared_file_contention", "impact": "high", "action": "pause lane"}
+  ],
+  "target": "reduce avoidable reruns by preferring exclusive-path PRs"
+}

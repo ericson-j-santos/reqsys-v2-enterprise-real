@@ -1,0 +1,24 @@
+{
+  "dimension": "mutation",
+  "status": "passed",
+  "score": 100.0,
+  "duration_seconds": 1.24,
+  "summary": "mutation probe em 3 modulos criticos",
+  "details": {
+    "mode": "lightweight_probe",
+    "targets": [
+      "tests/test_public_smoke_routes.py",
+      "tests/test_runtime_evidence_ingestion_contract.py",
+      "tests/test_runtime_evidence_analytics.py"
+    ],
+    "pytest_summary": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "errors": 0
+    },
+    "exit_code": 0
+  },
+  "blockers": [],
+  "recommendations": []
+}

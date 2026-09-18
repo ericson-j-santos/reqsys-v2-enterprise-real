@@ -1,0 +1,155 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "ReqSysLowCodeConnector",
+    "description": "Custom connector for ReqSysLowCode Dataverse-backed operations.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "ReqSys",
+      "url": "https://make.powerapps.com",
+      "email": "ericsonjosedossantos@tieri659.onmicrosoft.com"
+    }
+  },
+  "x-ms-connector-metadata": [
+    {
+      "propertyName": "Website",
+      "propertyValue": "https://make.powerapps.com"
+    },
+    {
+      "propertyName": "Privacy policy",
+      "propertyValue": "https://make.powerapps.com"
+    },
+    {
+      "propertyName": "Categories",
+      "propertyValue": "Productivity"
+    }
+  ],
+  "host": "orga258f260.crm2.dynamics.com",
+  "basePath": "/api/data/v9.2",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "paths": {
+    "/reqsys_demandas": {
+      "get": {
+        "summary": "Listar demandas",
+        "description": "Lista demandas ReqSysLowCode armazenadas no Dataverse.",
+        "operationId": "ListDemandas",
+        "x-ms-visibility": "important",
+        "responses": {
+          "200": {
+            "description": "Demandas",
+            "schema": {
+              "$ref": "#/definitions/DataverseListResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Criar demanda",
+        "description": "Cria uma demanda ReqSysLowCode no Dataverse.",
+        "operationId": "CreateDemanda",
+        "x-ms-visibility": "important",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Demanda"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Demanda criada"
+          }
+        }
+      }
+    },
+    "/reqsys_requisitos": {
+      "get": {
+        "summary": "Listar requisitos",
+        "description": "Lista requisitos ReqSysLowCode armazenados no Dataverse.",
+        "operationId": "ListRequisitos",
+        "x-ms-visibility": "important",
+        "responses": {
+          "200": {
+            "description": "Requisitos",
+            "schema": {
+              "$ref": "#/definitions/DataverseListResponse"
+            }
+          }
+        }
+      }
+    },
+    "/reqsys_evidencias": {
+      "get": {
+        "summary": "Listar evidencias",
+        "description": "Lista evidencias ReqSysLowCode armazenadas no Dataverse.",
+        "operationId": "ListEvidencias",
+        "x-ms-visibility": "advanced",
+        "responses": {
+          "200": {
+            "description": "Evidencias",
+            "schema": {
+              "$ref": "#/definitions/DataverseListResponse"
+            }
+          }
+        }
+      }
+    },
+    "/reqsys_releases": {
+      "get": {
+        "summary": "Listar releases",
+        "description": "Lista releases ReqSysLowCode armazenadas no Dataverse.",
+        "operationId": "ListReleases",
+        "x-ms-visibility": "advanced",
+        "responses": {
+          "200": {
+            "description": "Releases",
+            "schema": {
+              "$ref": "#/definitions/DataverseListResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "DataverseListResponse": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "Demanda": {
+      "type": "object",
+      "properties": {
+        "reqsys_codigo": {
+          "type": "string",
+          "description": "Codigo da demanda"
+        },
+        "reqsys_demandatitulo": {
+          "type": "string",
+          "description": "Titulo da demanda"
+        },
+        "reqsys_resultado_esperado": {
+          "type": "string",
+          "description": "Resultado esperado"
+        },
+        "reqsys_score_priorizacao": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Score de priorizacao"
+        }
+      },
+      "required": ["reqsys_demandatitulo"]
+    }
+  }
+}

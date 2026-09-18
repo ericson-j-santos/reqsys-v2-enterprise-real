@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "local-real-evidence",
+  "captured_at": "2026-09-07T13:56:05Z",
+  "backend": {
+    "url": "http://127.0.0.1:8000",
+    "health_url": "http://127.0.0.1:8000/health",
+    "status_code": 200,
+    "response_preview": "{\"success\":true,\"data\":{\"status\":\"ok\",\"service\":\"reqsys-api\",\"database\":{\"status\":\"ok\",\"detail\":\"ok\"}},\"errors\":[],\"meta\":{\"correlation_id\":\"ba0b434d-8a3a-4fa7-b007-fdbd78252bd3\"}}"
+  },
+  "frontend": {
+    "url": "http://127.0.0.1:5173/",
+    "login_url": "http://127.0.0.1:5173/login",
+    "status_code": 200,
+    "response_preview": "<!DOCTYPE html>\r\n<html lang=\"pt-BR\">\r\n  <head>\n    <script type=\"module\" src=\"/@vite/client\"></script>\n\r\n    <meta charset=\"UTF-8\" />\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\r\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\r\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\r\n    <link href=\"https://fonts.googleapis.com",
+    "page_title": "ReqSys",
+    "page_url": "http://127.0.0.1:5173/login",
+    "screenshot_path": "artifacts\\real-evidence-local\\local-frontend-evidence.png"
+  },
+  "evidence_status": "captured"
+}

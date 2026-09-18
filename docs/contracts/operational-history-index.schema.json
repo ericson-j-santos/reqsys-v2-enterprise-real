@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/operational-history-index.schema.json",
+  "title": "ReqSys Governed Operational History Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "repository", "retention_policy", "snapshots", "summary"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.0\\.[0-9]+$" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+    "retention_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_retention_days", "long_term_storage", "write_mode"],
+      "properties": {
+        "artifact_retention_days": { "type": "integer", "minimum": 1 },
+        "long_term_storage": { "type": "string" },
+        "write_mode": { "type": "string", "enum": ["report_only", "governed_storage"] }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_count", "risk", "maturity_percent"],
+      "properties": {
+        "snapshot_count": { "type": "integer", "minimum": 0 },
+        "risk": { "type": "string", "enum": ["low", "medium_low", "medium", "high"] },
+        "maturity_percent": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "snapshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "generated_at", "source", "href", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "generated_at": { "type": "string", "format": "date-time" },
+          "source": { "type": "string" },
+          "href": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      }
+    }
+  }
+}

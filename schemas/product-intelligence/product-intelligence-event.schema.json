@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/schemas/product-intelligence-event.schema.json",
+  "title": "Product Intelligence Event",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "event_class",
+    "occurred_at",
+    "source",
+    "requirement",
+    "quality",
+    "traceability",
+    "governance"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "requirement.created",
+        "requirement.refined",
+        "requirement.approved",
+        "requirement.rejected",
+        "bdd.generated",
+        "risk.identified",
+        "traceability.linked",
+        "decision.recorded",
+        "quality.scored",
+        "gap.detected"
+      ]
+    },
+    "event_class": {
+      "type": "string",
+      "const": "PRODUCT_INTELLIGENCE"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "required": ["system", "channel", "actor_type", "actor_id"],
+      "properties": {
+        "system": {"type": "string"},
+        "channel": {"type": "string", "enum": ["ui", "api", "agent", "import", "workflow"]},
+        "actor_type": {"type": "string", "enum": ["user", "agent", "system"]},
+        "actor_id": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "requirement": {
+      "type": "object",
+      "required": ["id", "title", "type", "status", "priority", "confidence"],
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "type": {"type": "string", "enum": ["functional", "non_functional", "business_rule", "constraint"]},
+        "status": {"type": "string", "enum": ["draft", "refined", "approved", "implemented", "tested", "validated"]},
+        "priority": {"type": "string", "enum": ["must", "should", "could", "wont"]},
+        "confidence": {"type": "string", "enum": ["low", "medium", "high"]}
+      },
+      "additionalProperties": false
+    },
+    "quality": {
+      "type": "object",
+      "required": ["bdd_coverage", "ambiguity_score", "traceability_score", "risk_score", "readiness_score"],
+      "properties": {
+        "bdd_coverage": {"type": "number", "minimum": 0, "maximum": 100},
+        "ambiguity_score": {"type": "number", "minimum": 0, "maximum": 100},
+        "traceability_score": {"type": "number", "minimum": 0, "maximum": 100},
+        "risk_score": {"type": "number", "minimum": 0, "maximum": 100},
+        "readiness_score": {"type": "number", "minimum": 0, "maximum": 100}
+      },
+      "additionalProperties": false
+    },
+    "traceability": {
+      "type": "object",
+      "required": ["parent_ids", "linked_prs", "linked_tests", "linked_decisions", "linked_risks"],
+      "properties": {
+        "parent_ids": {"type": "array", "items": {"type": "string"}},
+        "linked_prs": {"type": "array", "items": {"type": "string"}},
+        "linked_tests": {"type": "array", "items": {"type": "string"}},
+        "linked_decisions": {"type": "array", "items": {"type": "string"}},
+        "linked_risks": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "governance": {
+      "type": "object",
+      "required": ["correlation_id", "pii_masked", "human_review_required", "ai_generated", "evidence_level"],
+      "properties": {
+        "correlation_id": {"type": "string"},
+        "pii_masked": {"type": "boolean"},
+        "human_review_required": {"type": "boolean"},
+        "ai_generated": {"type": "boolean"},
+        "evidence_level": {"type": "string", "enum": ["none", "partial", "complete"]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

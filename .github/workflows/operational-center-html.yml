@@ -1,0 +1,107 @@
+name: Operational Center HTML
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Quantidade de runs recentes para análise integrada"
+        required: false
+        default: "30"
+        type: string
+  schedule:
+    - cron: "05 11 * * 1-5"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: operational-center-html-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  operational-center-html:
+    name: Build operational center HTML
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect operational data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIMIT: ${{ inputs.limit || '30' }}
+        run: |
+          mkdir -p artifacts/operational-health artifacts/operational-ci-intelligence/input artifacts/failure-pattern-engine/input
+          gh pr list \
+            --repo "${{ github.repository }}" \
+            --state all \
+            --limit "$LIMIT" \
+            --json number,title,state,createdAt,updatedAt,mergedAt,isDraft,mergeStateStatus,reviewDecision,url,headRefName,baseRefName \
+            > artifacts/operational-health/prs.json
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --limit "$LIMIT" \
+            --json databaseId,name,workflowName,status,conclusion,event,headBranch,headSha,url,createdAt,updatedAt \
+            > artifacts/operational-health/runs.json
+          cp artifacts/operational-health/runs.json artifacts/operational-ci-intelligence/input/runs.json
+          cp artifacts/operational-health/runs.json artifacts/failure-pattern-engine/input/sample.txt
+
+      - name: Generate Operational Health
+        run: |
+          python scripts/reqsys_operational_health.py \
+            --prs artifacts/operational-health/prs.json \
+            --runs artifacts/operational-health/runs.json \
+            --out-dir artifacts/operational-health
+
+      - name: Generate Operational CI Intelligence
+        run: |
+          python scripts/operational_ci_intelligence.py \
+            --runs artifacts/operational-ci-intelligence/input/runs.json \
+            --knowledge-base config/ci-failure-knowledge-base.json \
+            --out-dir artifacts/operational-ci-intelligence
+
+      - name: Generate Failure Pattern report
+        run: |
+          python scripts/failure_pattern_engine.py \
+            --catalog config/failure-patterns.json \
+            --input artifacts/failure-pattern-engine/input/sample.txt \
+            --out-dir artifacts/failure-pattern-engine
+
+      - name: Build Operational Intelligence Hub
+        run: |
+          python scripts/operational_intelligence_hub.py \
+            --operational-health artifacts/operational-health/operational-health.json \
+            --operational-ci artifacts/operational-ci-intelligence/operational-ci-intelligence.json \
+            --failure-patterns artifacts/failure-pattern-engine/failure-pattern-report.json \
+            --deep-diagnostic artifacts/deep-diagnostic/deep-diagnostic.json \
+            --out-dir artifacts/operational-intelligence-hub
+
+      - name: Generate Operational Center HTML
+        run: |
+          python scripts/operational_center_html.py \
+            --input artifacts/operational-intelligence-hub/operational-intelligence-hub.json \
+            --out-dir artifacts/operational-center
+
+      - name: Publish executive summary
+        run: |
+          cat artifacts/operational-intelligence-hub/operational-intelligence-hub.md >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Operational Center HTML" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Arquivo navegável publicado em artifact: \`operational-center-html/index.html\`." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload operational center artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-center-html
+          path: |
+            artifacts/operational-center/index.html
+            artifacts/operational-intelligence-hub/
+            artifacts/operational-health/
+            artifacts/operational-ci-intelligence/
+            artifacts/failure-pattern-engine/
+          retention-days: 30

@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.1.0",
+  "contract": "public-runtime-evidence",
+  "generated_at": "2026-06-29T03:10:53.928259+00:00",
+  "status": "passed",
+  "strict_gate_passed": true,
+  "source": "padrao_ouro_maturity_consolidator"
+}

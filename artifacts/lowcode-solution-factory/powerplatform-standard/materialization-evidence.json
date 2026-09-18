@@ -1,0 +1,252 @@
+﻿{
+    "generated_at":  "2026-07-02T20:11:10.7405467Z",
+    "environment_url":  "https://orga258f260.crm2.dynamics.com",
+    "solution_name":  "ReqSysLowCode",
+    "tables":  [
+                   {
+                       "logical_name":  "reqsys_demanda",
+                       "schema_name":  "reqsys_Demanda",
+                       "status":  "created",
+                       "columns":  [
+                                       {
+                                           "name":  "reqsys_codigo",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_titulo",
+                                           "status":  "primary_name"
+                                       },
+                                       {
+                                           "name":  "reqsys_status",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_prioridade",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_origem",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_solicitante",
+                                           "status":  "skipped_lookup_p0"
+                                       },
+                                       {
+                                           "name":  "reqsys_resultado_esperado",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_score_priorizacao",
+                                           "status":  "created"
+                                       }
+                                   ]
+                   },
+                   {
+                       "logical_name":  "reqsys_requisito",
+                       "schema_name":  "reqsys_Requisito",
+                       "status":  "created",
+                       "columns":  [
+                                       {
+                                           "name":  "reqsys_codigo",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_titulo",
+                                           "status":  "primary_name"
+                                       },
+                                       {
+                                           "name":  "reqsys_status",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_prioridade",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_demanda_id",
+                                           "status":  "skipped_lookup_p0"
+                                       },
+                                       {
+                                           "name":  "reqsys_tipo",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_criterios_aceite",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_regra_negocio",
+                                           "status":  "created"
+                                       }
+                                   ]
+                   },
+                   {
+                       "logical_name":  "reqsys_aprovacao",
+                       "schema_name":  "reqsys_Aprovacao",
+                       "status":  "created",
+                       "columns":  [
+                                       {
+                                           "name":  "reqsys_codigo",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_titulo",
+                                           "status":  "primary_name"
+                                       },
+                                       {
+                                           "name":  "reqsys_status",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_prioridade",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_referencia",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_aprovador",
+                                           "status":  "skipped_lookup_p0"
+                                       },
+                                       {
+                                           "name":  "reqsys_parecer",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_decidido_em",
+                                           "status":  "created"
+                                       }
+                                   ]
+                   },
+                   {
+                       "logical_name":  "reqsys_evidencia",
+                       "schema_name":  "reqsys_Evidencia",
+                       "status":  "created",
+                       "columns":  [
+                                       {
+                                           "name":  "reqsys_codigo",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_titulo",
+                                           "status":  "primary_name"
+                                       },
+                                       {
+                                           "name":  "reqsys_status",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_prioridade",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_referencia",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_tipo_evidencia",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_url",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_conteudo",
+                                           "status":  "created"
+                                       }
+                                   ]
+                   },
+                   {
+                       "logical_name":  "reqsys_release",
+                       "schema_name":  "reqsys_Release",
+                       "status":  "created",
+                       "columns":  [
+                                       {
+                                           "name":  "reqsys_codigo",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_titulo",
+                                           "status":  "primary_name"
+                                       },
+                                       {
+                                           "name":  "reqsys_status",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_prioridade",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_versao",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_janela",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_rollback",
+                                           "status":  "created"
+                                       },
+                                       {
+                                           "name":  "reqsys_go_no_go",
+                                           "status":  "created"
+                                       }
+                                   ]
+                   }
+               ],
+    "roles":  [
+                  {
+                      "status":  "created",
+                      "name":  "ReqSys Solicitante",
+                      "id":  "aeca367e-5276-f111-ab0e-7ced8da7ea1a"
+                  },
+                  {
+                      "status":  "created",
+                      "name":  "ReqSys Aprovador",
+                      "id":  "baca367e-5276-f111-ab0e-7ced8da7ea1a"
+                  },
+                  {
+                      "status":  "created",
+                      "name":  "ReqSys Administrador Low-Code",
+                      "id":  "c6ca367e-5276-f111-ab0e-7ced8da7ea1a"
+                  },
+                  {
+                      "status":  "created",
+                      "name":  "ReqSys Auditor",
+                      "id":  "d2ca367e-5276-f111-ab0e-7ced8da7ea1a"
+                  }
+              ],
+    "web_resources":  [
+                          {
+                              "status":  "created",
+                              "name":  "reqsys_/lowcode/canvas.htm",
+                              "id":  "deca367e-5276-f111-ab0e-7ced8da7ea1a"
+                          },
+                          {
+                              "status":  "created",
+                              "name":  "reqsys_/lowcode/manifest.htm",
+                              "id":  "e1ca367e-5276-f111-ab0e-7ced8da7ea1a"
+                          },
+                          {
+                              "status":  "created",
+                              "name":  "reqsys_/lowcode/dataverse-schema.htm",
+                              "id":  "e4ca367e-5276-f111-ab0e-7ced8da7ea1a"
+                          },
+                          {
+                              "status":  "created",
+                              "name":  "reqsys_/lowcode/powerautomate-flows.htm",
+                              "id":  "e7ca367e-5276-f111-ab0e-7ced8da7ea1a"
+                          },
+                          {
+                              "status":  "created",
+                              "name":  "reqsys_/lowcode/copilot-security-alm.htm",
+                              "id":  "eaca367e-5276-f111-ab0e-7ced8da7ea1a"
+                          }
+                      ],
+    "publish":  "PublishAllXml completed"
+}

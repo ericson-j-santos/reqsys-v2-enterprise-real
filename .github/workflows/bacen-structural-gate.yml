@@ -1,0 +1,46 @@
+name: BACEN Structural Gate R1-R14
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/normative/**"
+      - "scripts/validate_bacen_structural_gate.py"
+      - "tests/test_validate_bacen_structural_gate.py"
+      - ".github/workflows/bacen-structural-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/normative/**"
+      - "scripts/validate_bacen_structural_gate.py"
+      - "tests/test_validate_bacen_structural_gate.py"
+      - ".github/workflows/bacen-structural-gate.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  structural-gate:
+    name: BACEN — invariantes estruturais R1-R14
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependências determinísticas
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+      - name: Compilar validador
+        run: python -m py_compile scripts/validate_bacen_structural_gate.py
+      - name: Executar testes unitários
+        run: python -m unittest tests.test_validate_bacen_structural_gate -v
+      - name: Validar R1-R14
+        run: python scripts/validate_bacen_structural_gate.py
+      - name: Publicar evidência
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-structural-gate-evidence
+          path: artifacts/bacen/bacen-structural-gate.json
+          retention-days: 90

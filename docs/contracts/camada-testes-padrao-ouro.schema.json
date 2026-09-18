@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/camada-testes-padrao-ouro.schema.json",
+  "title": "ReqSys Camada de Testes — Padrão Ouro Report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "layer_id",
+    "layer_name",
+    "mode",
+    "status",
+    "summary",
+    "layers",
+    "issues",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "layer_id": { "type": "string", "const": "camada-testes" },
+    "layer_name": { "type": "string" },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "status": { "type": "string", "enum": ["passed", "passed_with_warnings", "failed"] },
+    "summary": {
+      "type": "object",
+      "required": ["governance_ok", "layers_ok", "layers_total", "errors", "warnings"],
+      "properties": {
+        "governance_ok": { "type": "integer", "minimum": 0 },
+        "layers_ok": { "type": "integer", "minimum": 0 },
+        "layers_total": { "type": "integer", "minimum": 1 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "exists", "runner"],
+        "properties": {
+          "id": { "type": "string" },
+          "path": { "type": "string" },
+          "exists": { "type": "boolean" },
+          "runner": { "type": "string" },
+          "ci_gate": { "type": "boolean" }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "type", "target"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["error", "warning"] },
+          "type": { "type": "string" },
+          "target": { "type": "string" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "report": { "type": "string" },
+        "architecture_as_code": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,98 @@
+name: Executive Promotion Advisor Comparative Trend Public Smoke Sync
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Promotion Advisor Comparative Smoke Trend Dashboard
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente governado
+        required: true
+        type: choice
+        options: [DEV, STG, PROD]
+      public_url:
+        description: URL pública do Ops Dashboard
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: advisor-comparative-trend-public-smoke-sync-${{ github.event.inputs.environment || 'automatic' }}
+  cancel-in-progress: false
+
+jobs:
+  smoke-sync:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'PROD' }}
+      PUBLIC_URL: ${{ github.event.inputs.public_url || vars.REQSYS_OPS_DASHBOARD_PROD_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/smoke_executive_promotion_advisor_comparative_trend_public_sync.py
+          python -m unittest tests/test_smoke_executive_promotion_advisor_comparative_trend_public_sync.py
+
+      - name: Validate governed target
+        run: |
+          case "$ENVIRONMENT" in DEV|STG|PROD) ;; *) echo "Ambiente não governado: $ENVIRONMENT"; exit 1;; esac
+          test -n "$PUBLIC_URL" || { echo "URL pública não configurada"; exit 1; }
+
+      - name: Restore previous history
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          workflow: executive-promotion-advisor-comparative-trend-public-smoke-sync.yml
+          name: executive-promotion-advisor-comparative-trend-public-smoke-history
+          path: previous
+          branch: main
+          workflow_conclusion: success
+
+      - name: Run public smoke and synchronization check
+        run: |
+          mkdir -p evidence
+          HISTORY_ARG=""
+          if [ -f previous/history.json ]; then HISTORY_ARG="--history previous/history.json"; fi
+          python scripts/smoke_executive_promotion_advisor_comparative_trend_public_sync.py \
+            --index "$PUBLIC_URL/index.html" \
+            --runtime "$PUBLIC_URL/data/runtime-executive-index.json" \
+            --brief "$PUBLIC_URL/data/executive-brief.json" \
+            --environment "$ENVIRONMENT" \
+            $HISTORY_ARG \
+            --output evidence/result.json \
+            --history-output evidence/history.json
+
+      - name: Validate report-only guardrails
+        run: |
+          python - <<'PY'
+          import json
+          for path in ('evidence/result.json', 'evidence/history.json'):
+              data=json.load(open(path, encoding='utf-8'))
+              assert data['mode']=='report-only'
+              assert data['production_blocker'] is False
+              assert data['human_approval_required'] is True
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-comparative-trend-public-smoke-evidence-${{ env.ENVIRONMENT }}
+          path: evidence/result.json
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-comparative-trend-public-smoke-history
+          path: evidence/history.json
+          retention-days: 90

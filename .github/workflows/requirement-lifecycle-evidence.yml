@@ -1,0 +1,195 @@
+name: Requirement Lifecycle Evidence
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+  workflow_dispatch:
+    inputs:
+      requirement_code:
+        description: "Código canônico ReqSys (REQ-123456789)"
+        required: true
+        type: string
+      evidence_type:
+        description: "Tipo de evidência"
+        required: true
+        default: deploy
+        type: choice
+        options: [branch, pr, commit, deploy]
+      environment:
+        description: "Ambiente quando evidence_type=deploy"
+        required: false
+        default: dev
+        type: choice
+        options: [dev, staging, prod]
+      reference:
+        description: "Referência estável (PR, SHA, release ou deploy id)"
+        required: true
+        type: string
+      evidence_url:
+        description: "URL verificável da evidência"
+        required: false
+        type: string
+      title:
+        description: "Descrição curta da evidência"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      requirement_code:
+        required: true
+        type: string
+      evidence_type:
+        required: true
+        type: string
+      environment:
+        required: false
+        type: string
+      reference:
+        required: true
+        type: string
+      evidence_url:
+        required: false
+        type: string
+      title:
+        required: false
+        type: string
+    secrets:
+      lifecycle_service_token:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: requirement-lifecycle-${{ github.event_name }}-${{ github.event.pull_request.number || inputs.requirement_code || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  pull-request-evidence:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolver código do requisito sem executar conteúdo do evento
+        id: requirement
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, re
+          text = "\n".join([
+              os.environ.get("PR_TITLE", ""),
+              os.environ.get("PR_BODY", ""),
+              os.environ.get("PR_HEAD_REF", ""),
+          ])
+          match = re.search(r"\bREQ-[0-9]{9}\b", text, re.IGNORECASE)
+          print("requirement_code=" + (match.group(0).upper() if match else ""))
+          PY
+      - name: Registrar evidência de PR no ReqSys
+        if: steps.requirement.outputs.requirement_code != ''
+        env:
+          REQSYS_API_BASE_URL: ${{ vars.REQSYS_API_BASE_URL }}
+          REQSYS_LIFECYCLE_SERVICE_TOKEN: ${{ secrets.REQSYS_LIFECYCLE_SERVICE_TOKEN }}
+          REQUIREMENT_CODE: ${{ steps.requirement.outputs.requirement_code }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          CORRELATION_ID: lifecycle-pr-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          if [ -z "${REQSYS_API_BASE_URL:-}" ] || [ -z "${REQSYS_LIFECYCLE_SERVICE_TOKEN:-}" ]; then
+            echo "::warning::REQSYS_API_BASE_URL/REQSYS_LIFECYCLE_SERVICE_TOKEN ausentes; evidência não enviada."
+            exit 0
+          fi
+          python scripts/register_lifecycle_evidence.py \
+            --requirement-code "$REQUIREMENT_CODE" \
+            --type pr \
+            --repo "${{ github.repository }}" \
+            --reference "$PR_NUMBER" \
+            --url "$PR_URL" \
+            --title "$PR_TITLE" \
+            --output lifecycle-pr-evidence.json
+      - name: Registrar commit de merge no ReqSys
+        if: github.event.action == 'closed' && github.event.pull_request.merged == true && steps.requirement.outputs.requirement_code != ''
+        env:
+          REQSYS_API_BASE_URL: ${{ vars.REQSYS_API_BASE_URL }}
+          REQSYS_LIFECYCLE_SERVICE_TOKEN: ${{ secrets.REQSYS_LIFECYCLE_SERVICE_TOKEN }}
+          REQUIREMENT_CODE: ${{ steps.requirement.outputs.requirement_code }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          CORRELATION_ID: lifecycle-merge-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          if [ -z "${REQSYS_API_BASE_URL:-}" ] || [ -z "${REQSYS_LIFECYCLE_SERVICE_TOKEN:-}" ]; then
+            echo "::warning::REQSYS_API_BASE_URL/REQSYS_LIFECYCLE_SERVICE_TOKEN ausentes; commit não enviado."
+            exit 0
+          fi
+          python scripts/register_lifecycle_evidence.py \
+            --requirement-code "$REQUIREMENT_CODE" \
+            --type commit \
+            --repo "${{ github.repository }}" \
+            --reference "$MERGE_SHA" \
+            --url "${{ github.server_url }}/${{ github.repository }}/commit/$MERGE_SHA" \
+            --title "Merge da PR #${{ github.event.pull_request.number }}" \
+            --output lifecycle-merge-evidence.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: requirement-lifecycle-pr-evidence
+          path: lifecycle-*-evidence.json
+          if-no-files-found: ignore
+
+  explicit-evidence:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Registrar evidência explícita
+        env:
+          REQSYS_API_BASE_URL: ${{ vars.REQSYS_API_BASE_URL }}
+          REQSYS_LIFECYCLE_SERVICE_TOKEN: ${{ secrets.lifecycle_service_token || secrets.REQSYS_LIFECYCLE_SERVICE_TOKEN }}
+          REQUIREMENT_CODE: ${{ inputs.requirement_code }}
+          EVIDENCE_TYPE: ${{ inputs.evidence_type }}
+          EVIDENCE_ENVIRONMENT: ${{ inputs.environment }}
+          EVIDENCE_REFERENCE: ${{ inputs.reference }}
+          EVIDENCE_URL: ${{ inputs.evidence_url }}
+          EVIDENCE_TITLE: ${{ inputs.title }}
+          CORRELATION_ID: lifecycle-explicit-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          if [ -z "${REQSYS_API_BASE_URL:-}" ]; then
+            echo "REQSYS_API_BASE_URL não configurada" >&2
+            exit 1
+          fi
+          if [ -z "${REQSYS_LIFECYCLE_SERVICE_TOKEN:-}" ]; then
+            echo "REQSYS_LIFECYCLE_SERVICE_TOKEN não configurado" >&2
+            exit 1
+          fi
+
+          args=(
+            --requirement-code "$REQUIREMENT_CODE"
+            --type "$EVIDENCE_TYPE"
+            --repo "${{ github.repository }}"
+            --reference "$EVIDENCE_REFERENCE"
+            --output lifecycle-explicit-evidence.json
+          )
+          if [ -n "${EVIDENCE_URL:-}" ]; then args+=(--url "$EVIDENCE_URL"); fi
+          if [ -n "${EVIDENCE_TITLE:-}" ]; then args+=(--title "$EVIDENCE_TITLE"); fi
+          if [ "$EVIDENCE_TYPE" = "deploy" ]; then
+            args+=(--environment "$EVIDENCE_ENVIRONMENT")
+          fi
+          python scripts/register_lifecycle_evidence.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: requirement-lifecycle-explicit-evidence
+          path: lifecycle-explicit-evidence.json
+          if-no-files-found: error

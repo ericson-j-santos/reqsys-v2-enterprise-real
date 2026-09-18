@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReqSys Dashboard — Figma Drill-down Analítico</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg:#0b1220; --line:rgba(148,163,184,.28); --text:#e5e7eb; --muted:#94a3b8; --accent:#f39200; --green:#22c55e; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,sans-serif; background:#020617; color:var(--text); padding:24px; }
+    .wrap { max-width:1200px; margin:0 auto; }
+    .eyebrow { color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    h1 { margin:6px 0 18px; }
+    .flow { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    .node { border:1px solid var(--line); border-radius:16px; padding:16px; background:rgba(255,255,255,.02); min-height:160px; position:relative; }
+    .node.active { border-color:rgba(243,146,0,.55); box-shadow:0 0 0 3px rgba(243,146,0,.18); }
+    .node h3 { margin:0 0 6px; font-size:16px; }
+    .node p { margin:0; color:var(--muted); font-size:13px; }
+    .arrow { position:absolute; right:-18px; top:50%; transform:translateY(-50%); color:var(--accent); font-size:22px; font-weight:800; }
+    .example { margin-top:24px; border:1px solid var(--line); border-radius:16px; padding:18px; }
+    .route { font-family:ui-monospace,monospace; color:#7dd3fc; font-size:13px; }
+    .figma-label { position:fixed; top:12px; right:12px; background:#7c3aed; color:#fff; font-size:12px; font-weight:800; padding:6px 10px; border-radius:8px; }
+    @media (max-width:900px){ .flow{ grid-template-columns:1fr; } .arrow{ display:none; } }
+  </style>
+</head>
+<body>
+  <div class="figma-label">FIGMA · Drill-down Flow</div>
+  <div class="wrap" data-figma-frame="dashboard-drilldown-flow">
+    <p class="eyebrow">Analytics navegável · Padrão Ouro</p>
+    <h1>Fluxo de drill-down — Dashboard ReqSys</h1>
+
+    <div class="flow">
+      <article class="node active">
+        <h3>1. Indicador</h3>
+        <p>Card operacional com semáforo e valor consolidado no dashboard.</p>
+        <span class="arrow">→</span>
+      </article>
+      <article class="node">
+        <h3>2. Clique</h3>
+        <p>Usuário aciona card ou etapa do pipeline. Hint “Abrir analítico”.</p>
+        <span class="arrow">→</span>
+      </article>
+      <article class="node">
+        <h3>3. Analítico filtrado</h3>
+        <p>Rota SPA com query preservada: status, erro, estado crítico.</p>
+        <span class="arrow">→</span>
+      </article>
+      <article class="node">
+        <h3>4. Ação operacional</h3>
+        <p>Detalhe, exportação, correlation_id, reprocessamento ou issue.</p>
+      </article>
+    </div>
+
+    <section class="example">
+      <h2>Exemplos de rotas filtradas</h2>
+      <p class="route">/requisitos?status=em_analise</p>
+      <p class="route">/painel-integracao?status=erro</p>
+      <p class="route">/pipeline?status=error</p>
+      <p class="route">/analytics → hub executivo com runtime cards</p>
+      <p class="route">/monitoramento-operacional?estado=vermelho</p>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Strategic Governance Navigation</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --muted:#94a3b8; --blue:#38bdf8; --border:#334155; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:24px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,#111827,#1e293b); }
+    main { max-width:960px; margin:0 auto; padding:24px; }
+    h1 { margin:0 0 8px; }
+    p { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
+    .card { border:1px solid var(--border); background:var(--panel); border-radius:14px; padding:18px; }
+    a { color:var(--blue); text-decoration:none; font-weight:700; }
+    code { color:var(--text); background:#020617; padding:2px 5px; border-radius:6px; word-break:break-all; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Strategic Governance Navigation</h1>
+    <p>Entrada estática para navegação direta aos artifacts e dashboards de priorização estratégica.</p>
+  </header>
+  <main>
+    <div class="grid">
+      <div class="card">
+        <h2>Dashboard estratégico</h2>
+        <p>Cards de prioridade, próximo gargalo, ação recomendada e lanes.</p>
+        <a href="./strategic-governance.html">Abrir Strategic Governance</a>
+      </div>
+      <div class="card">
+        <h2>Contrato JSON</h2>
+        <p>Artifact consumível por UI, agentes e dashboards.</p>
+        <a href="./data/strategic-governance-index.json">Abrir strategic-governance-index.json</a>
+      </div>
+      <div class="card">
+        <h2>Ops Dashboard</h2>
+        <p>Dashboard operacional principal.</p>
+        <a href="./index.html">Abrir Ops Dashboard</a>
+      </div>
+      <div class="card">
+        <h2>Operational Evidence Hub</h2>
+        <p>Hub consolidado de evidências operacionais.</p>
+        <a href="../dashboard/operational-evidence-hub.html">Abrir Evidence Hub</a>
+      </div>
+    </div>
+    <p>Manifesto: <code>docs/ops-dashboard/strategic-governance-navigation.json</code></p>
+  </main>
+</body>
+</html>

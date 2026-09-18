@@ -1,0 +1,78 @@
+{
+  "title": "Diagramas de Arquitetura ReqSys",
+  "versao": "2.3.0",
+  "footer": "Gerado automaticamente por GitHub Copilot em 11/05/2026",
+  "ambientes": {
+    "dev": {
+      "nome": "Desenvolvimento",
+      "url_frontend": "http://localhost:8083",
+      "url_backend": "http://localhost:8211",
+      "url_publica": "https://tieridev.duckdns.org",
+      "usuario": "admin@demo.com",
+      "senha": "123456",
+      "compose": "docker-compose.dev.yml",
+      "db": "SQLite"
+    },
+    "prod": {
+      "nome": "Produção",
+      "url_frontend": "http://localhost:8081",
+      "url_backend": "http://localhost:8210",
+      "url_publica": "https://tieriprod.duckdns.org",
+      "usuario": "admin@demo.com",
+      "senha": "123456",
+      "compose": "docker-compose.prod.yml",
+      "db": "SQL Server"
+    },
+    "test": {
+      "nome": "Teste",
+      "url_frontend": "http://localhost:8084",
+      "url_backend": "http://localhost:8212",
+      "url_publica": "https://tierin.duckdns.org",
+      "usuario": "admin@demo.com",
+      "senha": "123456",
+      "compose": "docker-compose.test.yml",
+      "db": "SQLite"
+    }
+  },
+  "stack": {
+    "frontend": "Vue 3 + Vuetify (Nginx Proxy)",
+    "backend": "FastAPI (Python)",
+    "cache": "Redis + RQ",
+    "banco_dev": "SQLite",
+    "banco_prod": "SQL Server",
+    "infra": "Docker Compose (dev/prod/test)",
+    "proxy": "Nginx"
+  },
+  "integracoes": [
+    { "id": "powerbi",  "nome": "Power BI",              "descricao": "Relatórios BI via SSRS" },
+    { "id": "redmine",  "nome": "Python CLI / Redmine",  "descricao": "Pipeline de importação Redmine" },
+    { "id": "github",   "nome": "GitHub Publicador",     "descricao": "Publicação automática de repos" }
+  ],
+  "modelo_dados": {
+    "entidades": {
+      "USUARIO":     ["string email", "string senha", "string papel"],
+      "SESSAO":      ["string token", "datetime expiracao"],
+      "SOLICITACAO": ["int id", "string status", "datetime data_criacao", "string tipo"],
+      "ANEXO":       ["int id", "string nome_arquivo", "string caminho"],
+      "LOG":         ["int id", "string acao", "datetime data"]
+    },
+    "relacionamentos": [
+      { "de": "USUARIO",    "para": "SESSAO",      "tipo": "||--o{", "label": "acessa" },
+      { "de": "USUARIO",    "para": "SOLICITACAO", "tipo": "||--o{", "label": "cria"   },
+      { "de": "SOLICITACAO","para": "ANEXO",       "tipo": "||--o{", "label": "possui" },
+      { "de": "USUARIO",    "para": "LOG",         "tipo": "||--o{", "label": "gera"   }
+    ]
+  },
+  "deploy_flow": {
+    "estados": [
+      { "de": "[*]",             "para": "Iniciar",          "label": "" },
+      { "de": "Iniciar",         "para": "ValidarAmbiente",  "label": "Validar ambiente (.env, compose)" },
+      { "de": "ValidarAmbiente", "para": "SubirServicos",    "label": "docker-compose up" },
+      { "de": "SubirServicos",   "para": "TestarAcesso",     "label": "Testar URLs (dev/prod/test)" },
+      { "de": "TestarAcesso",    "para": "Login",            "label": "Login com credenciais demo" },
+      { "de": "Login",           "para": "[*]",              "label": "Acesso concedido" },
+      { "de": "Login",           "para": "Erro",             "label": "Falha de autenticacao" },
+      { "de": "Erro",            "para": "[*]",              "label": "" }
+    ]
+  }
+}

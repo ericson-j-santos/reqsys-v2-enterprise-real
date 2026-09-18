@@ -1,0 +1,43 @@
+name: User Experience Confidence Card Availability Trend
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 10 * * *'
+  pull_request:
+    paths:
+      - 'scripts/build_user_experience_confidence_card_availability_trend.py'
+      - 'tests/test_build_user_experience_confidence_card_availability_trend.py'
+      - '.github/workflows/user-experience-confidence-card-availability-trend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile scripts/build_user_experience_confidence_card_availability_trend.py
+      - name: Test
+        run: python -m unittest tests/test_build_user_experience_confidence_card_availability_trend.py
+      - name: Generate report-only evidence
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/history.json <<'JSON'
+          {"samples": []}
+          JSON
+          python scripts/build_user_experience_confidence_card_availability_trend.py \
+            --history artifacts/history.json \
+            --report-output artifacts/user-experience-confidence-card-availability-trend.json
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-confidence-card-availability-trend
+          path: artifacts/user-experience-confidence-card-availability-trend.json
+          retention-days: 90

@@ -1,0 +1,88 @@
+name: ML Requirement Classifier Gate
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/requisito_classifier.py'
+      - 'backend/app/services/requisito_ml.py'
+      - 'backend/data/ml/**'
+      - 'backend/tests/test_requisito_classifier.py'
+      - 'backend/tests/test_requisito_ml.py'
+      - 'scripts/avaliar_classificador_requisitos_ml.py'
+      - '.github/workflows/ml-requirement-classifier-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ml-requirement-classifier-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-promote:
+    name: Train, validate and enforce macro F1
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependência mínima de testes
+        run: python -m pip install --disable-pip-version-check pytest==9.0.3
+
+      - name: Validar contrato P1 e modelo supervisionado P2
+        working-directory: backend
+        run: |
+          PYTHONPATH=. pytest --noconftest -q \
+            tests/test_requisito_classifier.py \
+            tests/test_requisito_ml.py
+
+      - name: Treinar, comparar com baseline e aplicar gate fail-closed
+        run: |
+          python scripts/avaliar_classificador_requisitos_ml.py \
+            --output artifacts/ml-requirement-classifier/metrics.json \
+            --model-output artifacts/ml-requirement-classifier/model.json
+
+      - name: Resumo do gate
+        if: always()
+        run: |
+          if [ -f artifacts/ml-requirement-classifier/metrics.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("artifacts/ml-requirement-classifier/metrics.json").read_text(encoding="utf-8")
+          )
+          print("# ML Requirement Classifier Gate")
+          print()
+          print(f"**Status:** `{report['status']}`")
+          print(f"**Dataset SHA-256:** `{report['dataset_sha256']}`")
+          print(f"**Treino / validação:** `{report['quantidade_treino']} / {report['quantidade_validacao']}`")
+          print(f"**Baseline macro F1:** `{report['baseline']['macro_f1']:.4f}`")
+          print(f"**Modelo macro F1:** `{report['modelo']['macro_f1']:.4f}`")
+          print(f"**Ganho macro F1:** `{report['ganho_macro_f1']:.4f}`")
+          print()
+          print("| Critério | Resultado |")
+          print("|---|---|")
+          for nome, aprovado in report["criterios"].items():
+              print(f"| {nome} | {'PASS' if aprovado else 'FAIL'} |")
+          PY
+          else
+            echo "# ML Requirement Classifier Gate" >> "$GITHUB_STEP_SUMMARY"
+            echo "Evidência não gerada; gate permaneceu fail-closed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar métricas e modelo treinado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-requirement-classifier-evidence
+          path: artifacts/ml-requirement-classifier/
+          if-no-files-found: warn
+          retention-days: 30

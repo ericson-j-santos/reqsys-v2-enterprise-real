@@ -1,0 +1,136 @@
+name: Post-merge Evidence Index Summary
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/post-merge-evidence-index-summary.yml"
+      - "scripts/post_merge_evidence_index_summary.py"
+      - "tests/test_post_merge_evidence_index_summary.py"
+  workflow_dispatch:
+    inputs:
+      max_runs:
+        description: "Quantidade maxima de runs para indexar"
+        required: false
+        default: "30"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: post-merge-evidence-index-summary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build post-merge evidence index summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Validate contract tests
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/post_merge_evidence_index_summary.py
+          python -m pytest tests/test_post_merge_evidence_index_summary.py -q
+
+      - name: Collect recent main Actions runs and artifacts
+        uses: actions/github-script@v7
+        env:
+          MAX_RUNS: ${{ github.event.inputs.max_runs || '30' }}
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const maxRuns = Math.max(1, Math.min(100, Number(process.env.MAX_RUNS || '30')));
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              branch: 'main',
+              per_page: 100,
+            });
+            const selected = runs.slice(0, maxRuns);
+            const enriched = [];
+            for (const run of selected) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner,
+                repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              enriched.push({
+                id: run.id,
+                name: run.name,
+                event: run.event,
+                status: run.status,
+                conclusion: run.conclusion,
+                head_branch: run.head_branch,
+                head_sha: run.head_sha,
+                html_url: run.html_url,
+                created_at: run.created_at,
+                updated_at: run.updated_at,
+                artifacts: artifacts.map((artifact) => ({
+                  id: artifact.id,
+                  name: artifact.name,
+                  expired: artifact.expired,
+                  size_in_bytes: artifact.size_in_bytes,
+                  digest: artifact.digest || null,
+                  created_at: artifact.created_at,
+                  expires_at: artifact.expires_at,
+                  archive_download_url: artifact.archive_download_url,
+                })),
+              });
+            }
+            fs.mkdirSync('artifacts/post-merge-evidence-index-summary', { recursive: true });
+            fs.writeFileSync(
+              'artifacts/post-merge-evidence-index-summary/runs.json',
+              JSON.stringify({ repository: `${owner}/${repo}`, branch: 'main', collected_at: new Date().toISOString(), runs: enriched }, null, 2),
+            );
+
+      - name: Build post-merge evidence index summary
+        run: |
+          set -euo pipefail
+          python scripts/post_merge_evidence_index_summary.py \
+            --input artifacts/post-merge-evidence-index-summary/runs.json \
+            --repo "${GITHUB_REPOSITORY}" \
+            --branch main \
+            --github-run-id "${GITHUB_RUN_ID}" \
+            --output-dir artifacts/post-merge-evidence-index-summary
+
+      - name: Summary
+        if: always()
+        run: |
+          set -euo pipefail
+          summary="artifacts/post-merge-evidence-index-summary/summary.md"
+          if [[ -f "${summary}" ]]; then
+            cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Post-merge evidence index summary unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload post-merge evidence index summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-evidence-index-summary
+          path: artifacts/post-merge-evidence-index-summary/
+          if-no-files-found: error
+          retention-days: 30

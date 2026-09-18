@@ -1,0 +1,50 @@
+name: BACEN Vendor Exit Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/VENDOR-DPA-READINESS.yaml"
+      - "scripts/generate_bacen_vendor_exit_readiness.py"
+      - ".github/workflows/bacen-vendor-exit-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/VENDOR-DPA-READINESS.yaml"
+      - "scripts/generate_bacen_vendor_exit_readiness.py"
+      - ".github/workflows/bacen-vendor-exit-readiness.yml"
+  schedule:
+    - cron: "31 9 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-vendor-exit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assess:
+    name: BACEN-05 Vendor Exit Readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML
+      - run: python -m py_compile scripts/generate_bacen_vendor_exit_readiness.py
+      - name: Generate exit-readiness evidence
+        run: |
+          python scripts/generate_bacen_vendor_exit_readiness.py \
+            --manifest governance/bacen/VENDOR-DPA-READINESS.yaml \
+            --output artifacts/bacen/bacen-05-vendor-exit-readiness.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bacen-05-vendor-exit-readiness
+          path: artifacts/bacen/bacen-05-vendor-exit-readiness.json
+          if-no-files-found: error
+          retention-days: 365

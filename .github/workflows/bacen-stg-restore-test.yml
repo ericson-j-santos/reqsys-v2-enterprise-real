@@ -1,0 +1,330 @@
+name: BACEN STG Isolated Restore Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/run_bacen_stg_restore_test.py"
+      - "scripts/build_bacen_backup_observability.py"
+      - "tests/test_build_bacen_backup_observability.py"
+      - ".github/workflows/bacen-stg-restore-test.yml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/run_bacen_stg_restore_test.py"
+      - "scripts/build_bacen_backup_observability.py"
+      - "tests/test_build_bacen_backup_observability.py"
+      - ".github/workflows/bacen-stg-restore-test.yml"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+  schedule:
+    # Primeiro dia de cada trimestre, 06:17 no horário de Brasília (09:17 UTC).
+    - cron: "17 9 1 1,4,7,10 *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  BACKUP_DASHBOARD_ISSUE_NUMBER: "1156"
+  TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+  TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+  PYTHONUNBUFFERED: "1"
+
+concurrency:
+  group: bacen-stg-restore-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-stg-restore:
+    name: Real PostgreSQL Restore in Isolated STG
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: stg
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_restore
+          POSTGRES_PASSWORD: bacen-stg-isolated-password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_restore -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: reqsys_restore
+      PGPASSWORD: bacen-stg-isolated-password
+      PGDATABASE: postgres
+      BACEN_RESTORE_ENVIRONMENT: stg-isolated
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client
+
+      - name: Validate backup observability code
+        run: |
+          python -m py_compile \
+            scripts/run_bacen_stg_restore_test.py \
+            scripts/build_bacen_backup_observability.py \
+            tests/test_build_bacen_backup_observability.py
+          python -m unittest -v tests/test_build_bacen_backup_observability.py
+
+      - name: Execute real isolated backup and restore
+        id: restore
+        continue-on-error: true
+        env:
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python scripts/run_bacen_stg_restore_test.py \
+            --asset-id reqsys-postgresql-stg-isolated \
+            --output artifacts/bacen/bacen-04-stg-restore-evidence.json
+
+      - name: Validate evidence contract and thresholds
+        id: evidence
+        if: always()
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-04-stg-restore-evidence.json")
+          if not path.is_file():
+              raise SystemExit("evidência BACEN-04 não foi gerada")
+          report = json.loads(path.read_text(encoding="utf-8"))
+          assert report["control_id"] == "BACEN-04"
+          assert report["evidence_class"] == "isolated_stg_restore_test"
+          assert report["environment"] == "stg-isolated"
+          assert report["production_touched"] is False
+          assert report["production_restore_claimed"] is False
+          assert report["integrity_match"] is True
+          assert report["rpo_minutes"] <= report["rpo_target_minutes"]
+          assert report["rto_seconds"] <= report["rto_target_seconds"]
+          assert report["result"] == "passed"
+          assert len(report["backup_sha256"]) == 64
+          print("BACEN-04 isolated STG restore evidence: valid")
+          PY
+
+      - name: Resolve operational status and next schedule
+        id: state
+        if: always()
+        env:
+          RESTORE_OUTCOME: ${{ steps.restore.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+        run: |
+          if [[ "${RESTORE_OUTCOME}" == "success" && "${EVIDENCE_OUTCOME}" == "success" ]]; then
+            echo "workflow_status=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "workflow_status=failure" >> "$GITHUB_OUTPUT"
+          fi
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          from datetime import UTC, datetime
+
+          now = datetime.now(UTC)
+          candidates = [(1, 1), (4, 1), (7, 1), (10, 1)]
+          year = now.year
+          for month, day in candidates:
+              candidate = datetime(year, month, day, 9, 17, tzinfo=UTC)
+              if candidate > now:
+                  print(f"next_scheduled_at={candidate.isoformat().replace('+00:00', 'Z')}")
+                  break
+          else:
+              candidate = datetime(year + 1, 1, 1, 9, 17, tzinfo=UTC)
+              print(f"next_scheduled_at={candidate.isoformat().replace('+00:00', 'Z')}")
+          PY
+
+      - name: Build dashboard and Teams card
+        id: dashboard
+        if: always()
+        env:
+          WORKFLOW_STATUS: ${{ steps.state.outputs.workflow_status || 'unknown' }}
+          NEXT_SCHEDULED_AT: ${{ steps.state.outputs.next_scheduled_at || 'unavailable' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python scripts/build_bacen_backup_observability.py \
+            --evidence artifacts/bacen/bacen-04-stg-restore-evidence.json \
+            --workflow-status "${WORKFLOW_STATUS}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${EVIDENCE_SHA}" \
+            --run-url "${RUN_URL}" \
+            --next-scheduled-at "${NEXT_SCHEDULED_AT}" \
+            --json-output artifacts/bacen/dashboard/backup-restore-latest.json \
+            --markdown-output artifacts/bacen/dashboard/backup-restore-latest.md \
+            --html-output artifacts/bacen/dashboard/index.html \
+            --card-output artifacts/bacen/dashboard/teams-adaptive-card.json
+
+      - name: Validate Teams configuration
+        id: teams-config
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          if [[ -z "${TEAMS_WEBHOOK_URL}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret TEAMS_WEBHOOK_URL ausente" >> "$GITHUB_OUTPUT"
+          elif [[ -z "${TEAMS_WEBHOOK_RECIPIENT}" || "${TEAMS_WEBHOOK_RECIPIENT}" != *"@"* ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "reason=configuração disponível" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send backup status to Teams
+        id: notify
+        if: >-
+          always() &&
+          github.event_name != 'pull_request' &&
+          steps.dashboard.outcome == 'success' &&
+          steps.teams-config.outputs.configured == 'true'
+        continue-on-error: true
+        env:
+          WORKFLOW_STATUS: ${{ steps.state.outputs.workflow_status || 'unknown' }}
+        run: |
+          python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
+          python tools/geradores/teams_graph_gateway_autocontido.py self-test
+          python tools/geradores/teams_graph_gateway_autocontido.py send-webhook \
+            --title "ReqSys — BACEN-04 ${WORKFLOW_STATUS}" \
+            --message "Resultado do backup e restauração BACEN-04: ${WORKFLOW_STATUS}. Consulte o cartão e a execução vinculada." \
+            --adaptive-card-file artifacts/bacen/dashboard/teams-adaptive-card.json
+
+      - name: Publish operational evidence and dashboard
+        if: always() && steps.dashboard.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-04-backup-restore-dashboard
+          path: |
+            artifacts/bacen/bacen-04-stg-restore-evidence.json
+            artifacts/bacen/dashboard/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Update central dashboard issue
+        if: >-
+          always() &&
+          github.event_name != 'pull_request' &&
+          steps.dashboard.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          NOTIFY_OUTCOME: ${{ steps.notify.outcome || 'skipped' }}
+          TEAMS_CONFIGURED: ${{ steps.teams-config.outputs.configured || 'false' }}
+          TEAMS_REASON: ${{ steps.teams-config.outputs.reason || 'não avaliado' }}
+        with:
+          script: |
+            const fs = require('fs');
+            const issueNumber = Number(process.env.BACKUP_DASHBOARD_ISSUE_NUMBER);
+            let body = fs.readFileSync(
+              'artifacts/bacen/dashboard/backup-restore-latest.md',
+              'utf8'
+            );
+            body += '\n## Mensagens de acompanhamento\n\n';
+            body += `- Teams configurado: **${process.env.TEAMS_CONFIGURED}**\n`;
+            body += `- Resultado do envio: **${process.env.NOTIFY_OUTCOME}**\n`;
+            body += `- Diagnóstico: ${process.env.TEAMS_REASON}\n`;
+            body += '\n## Fontes de evidência\n\n';
+            body += `- [Execução atual](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n`;
+            body += `- Artifact: \`bacen-04-backup-restore-dashboard\`\n`;
+            const evidencePath = 'artifacts/bacen/bacen-04-stg-restore-evidence.json';
+            const dashboardPath = 'artifacts/bacen/dashboard/backup-restore-latest.json';
+            const evidence = fs.existsSync(evidencePath)
+              ? fs.readFileSync(evidencePath, 'utf8')
+              : JSON.stringify({error: 'evidência não gerada'}, null, 2);
+            const dashboard = fs.readFileSync(dashboardPath, 'utf8');
+            body += '\n## Retenção e auditoria\n\n';
+            body += '- Artifact operacional: retenção de 90 dias, limitada pela configuração atual do GitHub.\n';
+            body += '- Histórico durável: um comentário imutável é registrado por execução neste dashboard.\n';
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body,
+            });
+            const history = [
+              `## Evidência BACEN-04 — execução ${context.runId}`,
+              '',
+              `- Data UTC: ${new Date().toISOString()}`,
+              `- Evento: ${context.eventName}`,
+              `- SHA: ${context.sha}`,
+              `- Teams: ${process.env.NOTIFY_OUTCOME}`,
+              `- [Abrir execução](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              '',
+              '<details><summary>Dashboard JSON</summary>',
+              '',
+              '```json',
+              dashboard.trim(),
+              '```',
+              '</details>',
+              '',
+              '<details><summary>Evidência operacional JSON</summary>',
+              '',
+              '```json',
+              evidence.trim(),
+              '```',
+              '</details>',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: history,
+            });
+
+      - name: Append executive summary
+        if: always() && steps.dashboard.outcome == 'success'
+        env:
+          NOTIFY_OUTCOME: ${{ steps.notify.outcome || 'skipped' }}
+          TEAMS_CONFIGURED: ${{ steps.teams-config.outputs.configured || 'false' }}
+          TEAMS_REASON: ${{ steps.teams-config.outputs.reason || 'não avaliado' }}
+        run: |
+          cat artifacts/bacen/dashboard/backup-restore-latest.md >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo
+            echo "## Mensagens de acompanhamento"
+            echo "- Teams configurado: **${TEAMS_CONFIGURED}**"
+            echo "- Resultado do envio: **${NOTIFY_OUTCOME}**"
+            echo "- Diagnóstico: ${TEAMS_REASON}"
+            echo "- Dashboard central: https://github.com/${GITHUB_REPOSITORY}/issues/${BACKUP_DASHBOARD_ISSUE_NUMBER}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce operational gate
+        if: always()
+        env:
+          RESTORE_OUTCOME: ${{ steps.restore.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+          DASHBOARD_OUTCOME: ${{ steps.dashboard.outcome }}
+          TEAMS_CONFIGURED: ${{ steps.teams-config.outputs.configured || 'false' }}
+          NOTIFY_OUTCOME: ${{ steps.notify.outcome || 'skipped' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          failures=()
+          [[ "${RESTORE_OUTCOME}" == "success" ]] || failures+=("backup/restauração")
+          [[ "${EVIDENCE_OUTCOME}" == "success" ]] || failures+=("contrato de evidência")
+          [[ "${DASHBOARD_OUTCOME}" == "success" ]] || failures+=("dashboard")
+          if [[ "${EVENT_NAME}" != "pull_request" ]]; then
+            [[ "${TEAMS_CONFIGURED}" == "true" ]] || failures+=("configuração Teams")
+            [[ "${NOTIFY_OUTCOME}" == "success" ]] || failures+=("envio Teams")
+          fi
+          if (( ${#failures[@]} > 0 )); then
+            printf 'Gate BACEN-04 falhou: %s\n' "${failures[*]}" >&2
+            exit 1
+          fi
+          echo "Gate BACEN-04 concluído com backup, restauração, dashboard e acompanhamento válidos."

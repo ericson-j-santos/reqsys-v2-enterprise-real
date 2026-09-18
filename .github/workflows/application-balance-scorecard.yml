@@ -1,0 +1,25 @@
+name: Application Balance Scorecard
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ops-dashboard/application-balance-scorecard.md'
+      - 'docs/ops-dashboard/data/application-balance-scorecard-v0.1.0.json'
+      - 'scripts/validate_application_balance_scorecard.py'
+      - '.github/workflows/application-balance-scorecard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-application-balance-scorecard:
+    name: Validate Application Balance Scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate scorecard artifacts
+        run: python3 scripts/validate_application_balance_scorecard.py

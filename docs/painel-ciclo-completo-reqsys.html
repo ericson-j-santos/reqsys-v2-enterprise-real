@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ReqSys - Painel do Ciclo Completo</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f6f8fb;color:#182033}header{background:#0d233d;color:#fff;padding:28px clamp(16px,4vw,48px)}main{padding:22px clamp(16px,4vw,48px)}.grid{display:grid;gap:14px}.cards{grid-template-columns:repeat(4,minmax(0,1fr))}.card{background:#fff;border:1px solid #d9e1ee;border-radius:16px;padding:16px;box-shadow:0 8px 20px rgba(15,42,77,.08)}.badge{display:inline-block;border-radius:999px;padding:4px 9px;font-size:.76rem;font-weight:700;border:1px solid}.ok{color:#0a7a43;background:#eaf7ef}.warn{color:#9a6700;background:#fff6df}.info{color:#2459a9;background:#eef5ff}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #d9e1ee;padding:10px;text-align:left;vertical-align:top}.scroll{overflow-x:auto}.progress{height:10px;background:#e7edf7;border-radius:999px;overflow:hidden}.progress span{display:block;height:100%;background:#0f4c81;width:var(--w)}@media(max-width:800px){.cards{grid-template-columns:1fr}.scroll table{min-width:760px}}
+  </style>
+</head>
+<body>
+<header><div>REQ-CYCLE#001 - v0.2.2</div><h1>ReqSys - Painel de Acompanhamento do Ciclo Completo</h1><p>Visão única para PRs, CI, gates, evidências, deploy, validação pública e operação.</p></header>
+<main>
+  <section class="grid cards" id="metricas"></section>
+  <section class="card" style="margin-top:14px"><h2>Decisão atual</h2><p id="decisao"></p></section>
+  <section class="card" style="margin-top:14px"><h2>Gates bloqueantes</h2><div id="gates"></div></section>
+  <section class="card" style="margin-top:14px"><h2>Frentes de trabalho</h2><div class="scroll"><table><thead><tr><th>ID</th><th>Frente</th><th>Status</th><th>Progresso</th><th>PR</th><th>Pendência</th><th>Decisão</th></tr></thead><tbody id="frentes"></tbody></table></div></section>
+  <section class="card" style="margin-top:14px"><h2>Checks</h2><div class="scroll"><table><thead><tr><th>Check</th><th>Status</th><th>Evidência</th></tr></thead><tbody id="checks"></tbody></table></div></section>
+</main>
+<script id="estado-ciclo" type="application/json">
+{
+  "produto":"ReqSys v2 Enterprise Real",
+  "visao_executiva":{"id":"REQ-CYCLE#001","status":"em_evolucao","progresso_percentual":78,"decisao_atual":"Encerrar PR #18/#20 e priorizar atualização e validação do PR #19.","proxima_decisao_recomendada":"Atualizar PR #19 contra a main atual, validar CI completo e decidir merge.","gates_bloqueantes":["Auth desligada em produção","CORS wildcard em produção","JWT sem issuer/audience","JWT_EXP_MINUTES inválido","Login demo em produção","Resposta sem fonte","Ingestão sem permissão","Log com dado sensível","Auditoria sem correlation_id","Admin exposto sem autorização"]},
+  "indicadores":{"prs_relevantes":3,"prs_concluidos":2,"prs_abertos_prioritarios":1,"ci_verdes_confirmados":2,"frontend_responsive_e2e_verde":true},
+  "frentes":[
+    {"id":"REQ#018","titulo":"Production Security Gates","status":"concluido","progresso":100,"pr":18,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/18","pendencia":"Validar acesso público.","decisao":"Encerrado."},
+    {"id":"REQ#020","titulo":"Evidências pós-merge","status":"concluido","progresso":100,"pr":20,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/20","pendencia":"Validar acesso público.","decisao":"Encerrado."},
+    {"id":"REQ#019","titulo":"Cobertura de testes backend","status":"em_validacao","progresso":72,"pr":19,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/19","pendencia":"Atualizar contra main e reexecutar CI.","decisao":"Merge se CI verde."},
+    {"id":"REQ#021","titulo":"Validação pública","status":"pendente","progresso":35,"pr":null,"url":"","pendencia":"Gerar artifact.","decisao":"Bloquear declaração final sem artifact."},
+    {"id":"REQ#022","titulo":"Painel de ciclo","status":"em_versionamento","progresso":60,"pr":null,"url":"","pendencia":"Abrir PR e validar CI.","decisao":"Adotar como SSOT visual."}
+  ],
+  "checks":[
+    {"nome":"Backend Lint & Security","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
+    {"nome":"Backend Tests + Coverage","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
+    {"nome":"Frontend Build + Security Audit","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
+    {"nome":"Frontend Responsive E2E","status":"verde","evidencia":"PR #18 run #72"},
+    {"nome":"Validação de Acessos Públicos","status":"pendente","evidencia":"Artifact pendente"}
+  ]
+}
+</script>
+<script>
+const estado=JSON.parse(document.getElementById('estado-ciclo').textContent);const $=id=>document.getElementById(id);function cls(s){return ['concluido','verde'].includes(String(s))?'ok':['em_validacao','em_versionamento'].includes(String(s))?'warn':'info'}function badge(s){return `<span class="badge ${cls(s)}">${String(s).replaceAll('_',' ')}</span>`}const i=estado.indicadores;$('metricas').innerHTML=[['Progresso',estado.visao_executiva.progresso_percentual+'%'],['PRs concluídos',i.prs_concluidos+'/'+i.prs_relevantes],['PR prioritário',i.prs_abertos_prioritarios],['E2E',i.frontend_responsive_e2e_verde?'Verde':'Pendente']].map(x=>`<article class="card"><small>${x[0]}</small><h2>${x[1]}</h2></article>`).join('');$('decisao').textContent=estado.visao_executiva.decisao_atual+' '+estado.visao_executiva.proxima_decisao_recomendada;$('gates').innerHTML=estado.visao_executiva.gates_bloqueantes.map(g=>`<p>${badge('bloqueante')} ${g}</p>`).join('');$('frentes').innerHTML=estado.frentes.map(f=>`<tr><td>${f.id}</td><td>${f.titulo}</td><td>${badge(f.status)}</td><td>${f.progresso}%<div class="progress"><span style="--w:${f.progresso}%"></span></div></td><td>${f.pr?`<a href="${f.url}">#${f.pr}</a>`:'-'}</td><td>${f.pendencia}</td><td>${f.decisao}</td></tr>`).join('');$('checks').innerHTML=estado.checks.map(c=>`<tr><td>${c.nome}</td><td>${badge(c.status)}</td><td>${c.evidencia}</td></tr>`).join('');
+</script>
+</body>
+</html>

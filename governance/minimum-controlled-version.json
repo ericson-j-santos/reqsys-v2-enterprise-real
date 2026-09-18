@@ -1,0 +1,28 @@
+{
+  "reqsys_schema": "1.0",
+  "version": "0.1.0",
+  "maturity": "MINIMUM_CONTROLLED",
+  "controls": {
+    "versioning": "PASS",
+    "artifact_manifest": "PASS",
+    "environment_configuration": "PASS",
+    "secret_scanning": "PASS",
+    "input_validation": "PASS",
+    "error_handling": "PASS",
+    "structured_logging": "PASS",
+    "automated_tests": "PASS",
+    "ci": "PASS",
+    "changelog": "PASS",
+    "execution_instructions": "PASS",
+    "rollback": "PASS",
+    "evidence": "PASS"
+  },
+  "contextual_controls": {
+    "idempotency": {"status": "NOT_APPLICABLE", "justification": "manifesto de governança sem operação mutável"},
+    "retry": {"status": "NOT_APPLICABLE", "justification": "validação local determinística sem dependência remota"},
+    "queue": {"status": "NOT_APPLICABLE", "justification": "validação síncrona sem processamento assíncrono"},
+    "jwt": {"status": "NOT_APPLICABLE", "justification": "artefato de política sem endpoint exposto"},
+    "cors": {"status": "NOT_APPLICABLE", "justification": "artefato de política sem navegador ou API"}
+  },
+  "release_allowed": true
+}

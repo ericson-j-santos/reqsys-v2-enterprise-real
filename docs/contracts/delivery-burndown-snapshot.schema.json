@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/delivery-burndown-snapshot.schema.json",
+  "title": "ReqSys Delivery Burndown Snapshot Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "repository", "run_id", "event_name", "total_gap_pp", "largest_gap", "dimensions", "mode"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "run_id": { "type": "string" },
+    "event_name": { "type": "string" },
+    "total_gap_pp": { "type": "number" },
+    "largest_gap": { "type": "object" },
+    "dimensions": { "type": "array", "items": { "type": "object" } },
+    "mode": { "type": "string", "enum": ["report_only"] }
+  }
+}

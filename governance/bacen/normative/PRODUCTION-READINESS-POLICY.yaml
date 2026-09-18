@@ -1,0 +1,48 @@
+schema_version: 1.0.0
+gate: bacen_production_readiness_gate_2
+mode: promotion_only
+
+semantics:
+  regulatory_compliance_claim: false
+  production_readiness_claim: true
+  main_branch_blocked_by_institutional_debt: false
+  automatic_override_allowed: false
+
+expected_obligations: 57
+
+family_applicability:
+  allowed_decisions:
+    - applicable
+    - not_applicable
+  pending_decision_blocks_production: true
+  not_applicable_requires:
+    - decided_by
+    - decided_at
+    - rationale
+
+obligation_readiness:
+  production_acceptable_statuses:
+    - evidenciado
+    - nao_aplicavel
+  implementation_without_valid_evidence_blocks: true
+  partial_implementation_blocks: true
+  not_evaluated_blocks: true
+  gap_blocks: true
+
+referenced_documents:
+  require_fresh_check: true
+  require_hash_captured: true
+  freshness_uses_checked_at_plus_cycle_days: true
+
+institutional_formal_gate:
+  required: true
+  delegate: scripts/validate_bacen_production_gate.py
+  controls:
+    - BACEN-01
+    - BACEN-08
+
+execution:
+  production_stage: PRODUCTION
+  non_production_enforcement: advisory
+  explicit_as_of_required: true
+  fail_closed_on_invalid_evidence: true

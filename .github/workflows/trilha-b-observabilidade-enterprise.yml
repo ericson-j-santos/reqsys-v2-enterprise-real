@@ -1,0 +1,49 @@
+name: Trilha B — Observabilidade Enterprise
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilha-b-observabilidade-enterprise.yml'
+      - 'scripts/trilha_b_observabilidade_enterprise.py'
+      - 'docs/architecture/trilha-b/**'
+      - 'docs/adr/ADR-037-trilha-b-observabilidade-enterprise.md'
+      - 'docs/runbooks/trilha-b-observabilidade-enterprise.md'
+      - 'backend/app/middleware/observability.py'
+      - 'backend/app/core/feature_metrics.py'
+      - 'backend/tests/test_observability_enterprise.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilha-b-observabilidade-enterprise.yml'
+      - 'scripts/trilha_b_observabilidade_enterprise.py'
+
+concurrency:
+  group: trilha-b-observabilidade-enterprise-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-trilha-b:
+    name: Validate Trilha B — Observabilidade Enterprise (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar Trilha B
+        run: python scripts/trilha_b_observabilidade_enterprise.py
+
+      - name: Upload Trilha B report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trilha-b-observabilidade-enterprise-${{ github.run_id }}
+          path: audit/trilha-b/
+          retention-days: 30

@@ -1,0 +1,40 @@
+FROM python:3.12-slim
+
+ARG GITHUB_SHA=unknown
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8000 \
+    GITHUB_SHA=${GITHUB_SHA}
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        poppler-utils \
+        tesseract-ocr \
+        tesseract-ocr-por \
+        unixodbc \
+        unixodbc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY backend/app /app/app
+COPY backend/ocr_evidencia /app/ocr_evidencia
+COPY backend/diagram_generator_portable /app/diagram_generator_portable
+COPY governance/notifications/teams-recipient-policies.json /app/governance/notifications/teams-recipient-policies.json
+COPY config/external-sources-registry.json /config/external-sources-registry.json
+COPY scripts/fly_boot.sh /app/fly_boot.sh
+
+RUN sed -i 's/\r$//' /app/fly_boot.sh \
+    && chmod +x /app/fly_boot.sh
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${PORT:-8000}/health" || exit 1
+
+ENTRYPOINT ["/app/fly_boot.sh"]

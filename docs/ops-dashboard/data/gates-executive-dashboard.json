@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T21:30:00-03:00",
+  "scope": "gates_executive_dashboard",
+  "runtime_impact": "none",
+  "overall_status": "green",
+  "overall_status_color": "green",
+  "decision": "continue_parallel_incremental_delivery",
+  "executive_summary": {
+    "title": "ReqSys Gates Executive Dashboard",
+    "description": "Painel executivo consolidado para leitura rápida dos gates de PR paralelo, CI verde, escrita em produção, evidência por correlation_id e preflight de conflitos.",
+    "progress_percentage": 100,
+    "risk_level": "low",
+    "parallel_capacity_recommended": 5,
+    "safe_to_continue": true
+  },
+  "cards": [
+    {
+      "id": "parallel_pr_capacity",
+      "title": "Capacidade de PR Paralelo",
+      "status": "green",
+      "color": "green",
+      "score": 100,
+      "source": "parallel-pr-capacity-policy.json",
+      "next_action": "permitir_prs_documentais_e_incrementos_baixo_risco"
+    },
+    {
+      "id": "ci_green_release_gate",
+      "title": "CI Green Release Gate",
+      "status": "green",
+      "color": "green",
+      "score": 100,
+      "source": "ci-green-release-gate.json",
+      "next_action": "tratar_ready_green_como_pronto_para_merge"
+    },
+    {
+      "id": "production_write_guardrails",
+      "title": "Guardrails de Escrita em Produção",
+      "status": "green",
+      "color": "green",
+      "score": 100,
+      "source": "production-write-guardrails.json",
+      "next_action": "manter_read_first_e_aprovacao_para_prod_write"
+    },
+    {
+      "id": "correlation_evidence_contract",
+      "title": "Contrato de Evidência por Correlation ID",
+      "status": "green",
+      "color": "green",
+      "score": 100,
+      "source": "correlation-evidence-contract.json",
+      "next_action": "propagar_correlation_id_em_logs_artifacts_e_relatorios"
+    },
+    {
+      "id": "conflict_preflight_check",
+      "title": "Conflict Preflight Check",
+      "status": "green",
+      "color": "green",
+      "score": 100,
+      "source": "conflict-preflight-check.json",
+      "next_action": "comparar_arquivos_alterados_antes_de_novo_pr"
+    }
+  ],
+  "traffic_light": {
+    "green": {
+      "count": 5,
+      "meaning": "gate pronto ou seguro para continuidade"
+    },
+    "yellow": {
+      "count": 0,
+      "meaning": "gate requer atencao ou serializacao parcial"
+    },
+    "red": {
+      "count": 0,
+      "meaning": "gate bloqueado ou conflito deterministico"
+    }
+  },
+  "recommended_sequence": [
+    "validar_ci_do_pr_atual",
+    "continuar_incrementos_pequenos_e_independentes",
+    "evitar_alteracoes_paralelas_em_workflows_e_backend_runtime",
+    "fechar_prs_obsoletos_apos_confirmar_estado"
+  ],
+  "rollback": "remover_este_arquivo"
+}

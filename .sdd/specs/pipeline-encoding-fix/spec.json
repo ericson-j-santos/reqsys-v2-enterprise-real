@@ -1,0 +1,21 @@
+{
+  "feature_name": "pipeline-encoding-fix",
+  "project": "ReqSys v2 Enterprise — backend/app/api/pipeline.py (Python/FastAPI)",
+  "created_at": "2026-06-14",
+  "updated_at": "2026-08-16",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Elimina mojibake (UTF-8 mal decodificado, ex.: 'IntegraÃ§Ã£o') nas respostas de erro da API de pipeline/backlog e adiciona verificacao anti-mojibake obrigatoria no CI.",
+  "reconstruction_note": "Este spec.json foi RECONSTRUIDO em 2026-08-16 a partir de evidencia real no repositorio (commits e codigo atual), nao recuperado do original. O diretorio .sdd/specs/pipeline-encoding-fix citado no commit 0c4365b7 nunca foi versionado no git (confirmado via 'git log -- .sdd' sem resultados) e nao pode ser recuperado. Qualquer item sem lastro em commit/codigo foi omitido em vez de inventado (ADR-008).",
+  "evidence": [
+    "commit 6404238d (2026-06-14): ci: verificacao anti-mojibake UTF-8 e scripts de manutencao Redmine — adiciona step em .github/workflows/ci.yml e scripts/check_encoding.py",
+    "commit 0c4365b7 (2026-06-15): fix(tests): remover classe TestEncodingRegressao duplicada em test_pipeline.py — cita explicitamente '.sdd/specs/pipeline-encoding-fix/tasks.md' e 'tasks 2.1 e 2.2'",
+    "backend/tests/test_pipeline.py:304-340 — classe TestEncodingRegressao ativa com 4 testes de regressao UTF-8",
+    "scripts/check_encoding.py executado em 2026-08-16: OK — 137 arquivos verificados, nenhum mojibake encontrado",
+    ".github/workflows/ci.yml:251-258 — step 'Verificar encoding UTF-8 (anti-mojibake)' ativo no pipeline de CI"
+  ]
+}

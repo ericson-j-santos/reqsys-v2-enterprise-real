@@ -1,0 +1,48 @@
+{
+  "dimension": "contract",
+  "status": "passed",
+  "score": 100.0,
+  "duration_seconds": 1.25,
+  "summary": "10 contract test file(s), 3 check(s)",
+  "details": {
+    "checks": [
+      {
+        "name": "backend_contract_tests",
+        "status": "passed",
+        "tests": [
+          "tests/test_power_automate_provisioning_workflow_contract.py",
+          "tests/test_runtime_evidence_ingestion_contract.py"
+        ],
+        "summary": {
+          "passed": 4,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0
+        }
+      },
+      {
+        "name": "artifact_contract_validator",
+        "status": "passed",
+        "exit_code": 0
+      },
+      {
+        "name": "operational_json_artifact_schema",
+        "status": "passed"
+      }
+    ],
+    "contract_test_files": [
+      "backend/tests/test_power_automate_provisioning_workflow_contract.py",
+      "backend/tests/test_runtime_evidence_ingestion_contract.py",
+      "tests/test_autonomous_delivery_cycle_contract.py",
+      "tests/test_dev_environment_readiness_contract.py",
+      "tests/test_environments_validation_dashboard_contract.py",
+      "tests/test_operational_observability_hub_contract_hydration.py",
+      "tests/test_strategic_governance_dashboard_contract.py",
+      "tests/test_strategic_governance_navigation_contract.py",
+      "tests/test_strategic_governance_trend_dashboard_contract.py",
+      "tests/test_validate_openapi_contract.py"
+    ]
+  },
+  "blockers": [],
+  "recommendations": []
+}

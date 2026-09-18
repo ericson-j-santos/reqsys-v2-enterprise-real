@@ -1,0 +1,489 @@
+# REQSYS_PRODUCTION_GOVERNANCE_GATE
+name: Fly Automatic Environment Promotion
+
+on:
+  workflow_run:
+    workflows: ["Post-merge Main Runtime Validator"]
+    types: [completed]
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact current main SHA; empty resolves current main
+        required: false
+        type: string
+        default: ""
+      promote_prod:
+        description: Evaluate and promote production when BACEN authorizes it
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: read
+
+concurrency:
+  group: fly-automatic-environment-promotion
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve immutable promotion SHA
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.resolve.outputs.should_run }}
+      expected_sha: ${{ steps.resolve.outputs.expected_sha }}
+      promote_prod: ${{ steps.resolve.outputs.promote_prod }}
+      dev_provider: ${{ steps.resolve.outputs.dev_provider }}
+      reason: ${{ steps.resolve.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve current main, provider and source event
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          WORKFLOW_EVENT: ${{ github.event.workflow_run.event || '' }}
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch || '' }}
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          INPUT_SHA: ${{ inputs.expected_sha || '' }}
+          INPUT_PROMOTE_PROD: ${{ inputs.promote_prod }}
+          CONFIGURED_DEV_PROVIDER: ${{ vars.REQSYS_DEV_RUNTIME_PROVIDER || 'fly' }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          current_sha="$(git rev-parse origin/main)"
+          candidate_sha="$current_sha"
+          promote_prod="true"
+          dev_provider="${CONFIGURED_DEV_PROVIDER,,}"
+          reason="current_main"
+
+          case "$dev_provider" in
+            fly|pc24x7) ;;
+            *)
+              echo "::error::REQSYS_DEV_RUNTIME_PROVIDER deve ser fly ou pc24x7; recebido: $dev_provider"
+              exit 1
+              ;;
+          esac
+
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            if [ "$WORKFLOW_CONCLUSION" != "success" ] || [ "$WORKFLOW_EVENT" != "push" ] || [ "$WORKFLOW_BRANCH" != "main" ]; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "expected_sha=$current_sha" >> "$GITHUB_OUTPUT"
+              echo "promote_prod=true" >> "$GITHUB_OUTPUT"
+              echo "dev_provider=$dev_provider" >> "$GITHUB_OUTPUT"
+              echo "reason=source_workflow_not_eligible" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            candidate_sha="$WORKFLOW_SHA"
+            reason="successful_post_merge_validator"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            candidate_sha="${INPUT_SHA:-$current_sha}"
+            promote_prod="${INPUT_PROMOTE_PROD:-true}"
+            reason="manual_governed_dispatch"
+          else
+            reason="scheduled_reconciliation"
+          fi
+
+          if [ "$candidate_sha" != "$current_sha" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "expected_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+            echo "promote_prod=$promote_prod" >> "$GITHUB_OUTPUT"
+            echo "dev_provider=$dev_provider" >> "$GITHUB_OUTPUT"
+            echo "reason=stale_sha_superseded_by_main" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "expected_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "promote_prod=$promote_prod" >> "$GITHUB_OUTPUT"
+          echo "dev_provider=$dev_provider" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+  capture-dev:
+    name: Capture DEV via Fly
+    needs: resolve
+    if: needs.resolve.outputs.should_run == 'true' && needs.resolve.outputs.dev_provider == 'fly'
+    uses: ./.github/workflows/fly-environment-evidence-capture.yml
+    with:
+      environment: dev
+      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
+      phase: read_only
+      strict: false
+    secrets: inherit
+
+  promote-dev:
+    name: Promote DEV via Fly when drifted
+    needs: [resolve, capture-dev]
+    if: needs.resolve.outputs.should_run == 'true' && needs.resolve.outputs.dev_provider == 'fly' && needs.capture-dev.outputs.ready != 'true'
+    uses: ./.github/workflows/fly-environment-promotion-stage.yml
+    with:
+      environment: dev
+      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
+    secrets: inherit
+
+  validate-dev-pc24x7:
+    name: Validate DEV via PC24x7 public tunnel
+    runs-on: ubuntu-latest
+    needs: resolve
+    if: needs.resolve.outputs.should_run == 'true' && needs.resolve.outputs.dev_provider == 'pc24x7'
+    outputs:
+      ready: ${{ steps.verified.outputs.ready }}
+      decision: ${{ steps.verified.outputs.decision }}
+    steps:
+      - name: Checkout exact immutable SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.expected_sha }}
+          fetch-depth: 1
+
+      - name: Validate PC24x7 public configuration
+        shell: bash
+        env:
+          PC24X7_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
+          PC24X7_FRONTEND_URL: ${{ vars.PC24X7_DEV_FRONTEND_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PC24X7_BASE_URL" ]; then
+            echo "::error::PC24X7_DEV_BASE_URL não configurada"
+            exit 1
+          fi
+          if [ -z "$PC24X7_FRONTEND_URL" ]; then
+            echo "::error::PC24X7_DEV_FRONTEND_URL não configurada"
+            exit 1
+          fi
+          case "$PC24X7_BASE_URL" in https://*) ;; *) echo "::error::PC24X7_DEV_BASE_URL deve usar HTTPS"; exit 1 ;; esac
+          case "$PC24X7_FRONTEND_URL" in https://*) ;; *) echo "::error::PC24X7_DEV_FRONTEND_URL deve usar HTTPS"; exit 1 ;; esac
+
+      - name: Validate PC24x7 runtime health
+        shell: bash
+        env:
+          PC24X7_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          base = os.environ["PC24X7_BASE_URL"].rstrip("/")
+          for path in ("/api/health", "/api/runtime/health"):
+              url = f"{base}{path}"
+              request = Request(url, headers={"Accept": "application/json", "User-Agent": "reqsys-pc24x7-external-gate/1.0"})
+              try:
+                  with urlopen(request, timeout=20) as response:
+                      body = response.read(262_144)
+                      if not 200 <= int(response.status) < 300:
+                          raise SystemExit(f"{url}: status={response.status}")
+              except (HTTPError, URLError, TimeoutError) as exc:
+                  raise SystemExit(f"{url}: unavailable: {exc}") from exc
+              try:
+                  payload = json.loads(body.decode("utf-8"))
+              except Exception as exc:
+                  raise SystemExit(f"{url}: invalid_json: {exc}") from exc
+              if not isinstance(payload, dict):
+                  raise SystemExit(f"{url}: payload_not_object")
+              print(f"{url}: ok")
+          PY
+
+      - name: Validate PC24x7 same-SHA publication
+        shell: bash
+        env:
+          PC24X7_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
+          PC24X7_FRONTEND_URL: ${{ vars.PC24X7_DEV_FRONTEND_URL }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pc24x7-dev
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = {
+              "canonical_environments": ["dev"],
+              "environments": {
+                  "dev": {
+                      "api_url": os.environ["PC24X7_BASE_URL"].rstrip("/"),
+                      "frontend_url": os.environ["PC24X7_FRONTEND_URL"].rstrip("/"),
+                      "health_path": "/api/health",
+                      "frontend_required": True,
+                  }
+              },
+          }
+          Path("artifacts/pc24x7-dev/runtime-manifest.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          python scripts/validate_publication_sync.py \
+            --manifest artifacts/pc24x7-dev/runtime-manifest.json \
+            --environment dev \
+            --expected-sha "$EXPECTED_SHA" \
+            --timeout 20 \
+            --output artifacts/pc24x7-dev/publication-sync.json
+
+      - name: Mark PC24x7 DEV verified
+        id: verified
+        run: |
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "decision=pc24x7_externally_verified" >> "$GITHUB_OUTPUT"
+
+      - name: Upload PC24x7 DEV evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-dev-runtime-evidence
+          path: artifacts/pc24x7-dev
+          if-no-files-found: warn
+          retention-days: 90
+
+  dev-result:
+    name: DEV promotion result
+    runs-on: ubuntu-latest
+    needs: [resolve, capture-dev, promote-dev, validate-dev-pc24x7]
+    if: always() && needs.resolve.outputs.should_run == 'true'
+    outputs:
+      ready: ${{ steps.result.outputs.ready }}
+      decision: ${{ steps.result.outputs.decision }}
+    steps:
+      - id: result
+        shell: bash
+        env:
+          DEV_PROVIDER: ${{ needs.resolve.outputs.dev_provider }}
+          CAPTURE_READY: ${{ needs.capture-dev.outputs.ready || 'false' }}
+          PROMOTION_RESULT: ${{ needs.promote-dev.result }}
+          PROMOTION_READY: ${{ needs.promote-dev.outputs.ready || 'false' }}
+          PC24X7_RESULT: ${{ needs.validate-dev-pc24x7.result }}
+          PC24X7_READY: ${{ needs.validate-dev-pc24x7.outputs.ready || 'false' }}
+        run: |
+          set -euo pipefail
+          if [ "$DEV_PROVIDER" = "pc24x7" ]; then
+            if [ "$PC24X7_RESULT" = "success" ] && [ "$PC24X7_READY" = "true" ]; then
+              echo "ready=true" >> "$GITHUB_OUTPUT"
+              echo "decision=pc24x7_externally_verified" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "decision=pc24x7_validation_failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          if [ "$CAPTURE_READY" = "true" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "decision=already_synchronized" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$PROMOTION_RESULT" = "success" ] && [ "$PROMOTION_READY" = "true" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "decision=promoted_and_verified" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "decision=dev_promotion_failed" >> "$GITHUB_OUTPUT"
+          exit 1
+
+  capture-stg:
+    name: Capture STG
+    needs: [resolve, dev-result]
+    if: needs.dev-result.result == 'success'
+    uses: ./.github/workflows/fly-environment-evidence-capture.yml
+    with:
+      environment: hml
+      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
+      phase: read_only
+      strict: false
+    secrets: inherit
+
+  promote-stg:
+    name: Promote STG when drifted
+    needs: [resolve, capture-stg]
+    if: needs.capture-stg.outputs.ready != 'true'
+    uses: ./.github/workflows/fly-environment-promotion-stage.yml
+    with:
+      environment: hml
+      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
+    secrets: inherit
+
+  stg-result:
+    name: STG promotion result
+    runs-on: ubuntu-latest
+    needs: [resolve, capture-stg, promote-stg]
+    if: always() && needs.capture-stg.result != 'skipped'
+    outputs:
+      ready: ${{ steps.result.outputs.ready }}
+      decision: ${{ steps.result.outputs.decision }}
+    steps:
+      - id: result
+        shell: bash
+        env:
+          CAPTURE_READY: ${{ needs.capture-stg.outputs.ready || 'false' }}
+          PROMOTION_RESULT: ${{ needs.promote-stg.result }}
+          PROMOTION_READY: ${{ needs.promote-stg.outputs.ready || 'false' }}
+        run: |
+          set -euo pipefail
+          if [ "$CAPTURE_READY" = "true" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "decision=already_synchronized" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$PROMOTION_RESULT" = "success" ] && [ "$PROMOTION_READY" = "true" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "decision=promoted_and_verified" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "decision=stg_promotion_failed" >> "$GITHUB_OUTPUT"
+          exit 1
+
+  bacen-production:
+    name: Evaluate BACEN production authorization
+    needs: [resolve, stg-result]
+    if: needs.stg-result.result == 'success' && needs.resolve.outputs.promote_prod == 'true'
+    uses: ./.github/workflows/bacen-production-hard-gate.yml
+    with:
+      enforce: false
+
+  capture-prod:
+    name: Capture PROD
+    needs: [resolve, stg-result]
+    if: needs.stg-result.result == 'success' && needs.resolve.outputs.promote_prod == 'true'
+    uses: ./.github/workflows/fly-environment-evidence-capture.yml
+    with:
+      environment: prod
+      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
+      phase: read_only
+      strict: false
+    secrets: inherit
+
+  promote-prod:
+    name: Promote PROD when authorized and drifted
+    needs: [resolve, bacen-production, capture-prod]
+    if: >-
+      needs.capture-prod.outputs.ready != 'true' &&
+      needs.bacen-production.outputs.production_allowed == 'true'
+    uses: ./.github/workflows/fly-environment-promotion-stage.yml
+    with:
+      environment: prod
+      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
+    secrets: inherit
+
+  prod-result:
+    name: PROD promotion result
+    runs-on: ubuntu-latest
+    needs: [resolve, bacen-production, capture-prod, promote-prod]
+    if: always() && needs.resolve.outputs.should_run == 'true'
+    outputs:
+      ready: ${{ steps.result.outputs.ready }}
+      decision: ${{ steps.result.outputs.decision }}
+    steps:
+      - id: result
+        shell: bash
+        env:
+          PROMOTE_PROD: ${{ needs.resolve.outputs.promote_prod }}
+          CAPTURE_RESULT: ${{ needs.capture-prod.result }}
+          CAPTURE_READY: ${{ needs.capture-prod.outputs.ready || 'false' }}
+          BACEN_ALLOWED: ${{ needs.bacen-production.outputs.production_allowed || 'false' }}
+          PROMOTION_RESULT: ${{ needs.promote-prod.result }}
+          PROMOTION_READY: ${{ needs.promote-prod.outputs.ready || 'false' }}
+        run: |
+          set -euo pipefail
+          if [ "$PROMOTE_PROD" != "true" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "decision=production_promotion_disabled" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$CAPTURE_READY" = "true" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "decision=already_synchronized" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$BACEN_ALLOWED" != "true" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "decision=blocked_by_bacen_policy" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$PROMOTION_RESULT" = "success" ] && [ "$PROMOTION_READY" = "true" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "decision=promoted_and_verified" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "decision=production_promotion_failed" >> "$GITHUB_OUTPUT"
+          exit 1
+
+  summary:
+    name: Automatic promotion evidence summary
+    runs-on: ubuntu-latest
+    needs: [resolve, dev-result, stg-result, bacen-production, prod-result]
+    if: always()
+    steps:
+      - name: Build immutable summary
+        env:
+          SHOULD_RUN: ${{ needs.resolve.outputs.should_run || 'false' }}
+          REASON: ${{ needs.resolve.outputs.reason || 'unknown' }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.expected_sha || '' }}
+          DEV_PROVIDER: ${{ needs.resolve.outputs.dev_provider || 'unknown' }}
+          DEV_RESULT: ${{ needs.dev-result.result }}
+          DEV_DECISION: ${{ needs.dev-result.outputs.decision || 'not_run' }}
+          STG_RESULT: ${{ needs.stg-result.result }}
+          STG_DECISION: ${{ needs.stg-result.outputs.decision || 'not_run' }}
+          BACEN_ALLOWED: ${{ needs.bacen-production.outputs.production_allowed || 'false' }}
+          PROD_RESULT: ${{ needs.prod-result.result }}
+          PROD_DECISION: ${{ needs.prod-result.outputs.decision || 'not_run' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/fly-automatic-promotion
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from pathlib import Path
+
+          payload = {
+              "schema_version": "1.1.0",
+              "contract": "fly-automatic-environment-promotion",
+              "generated_at_epoch": int(time.time()),
+              "should_run": os.environ["SHOULD_RUN"] == "true",
+              "reason": os.environ["REASON"],
+              "expected_sha": os.environ["EXPECTED_SHA"],
+              "dev_provider": os.environ["DEV_PROVIDER"],
+              "stages": {
+                  "dev": {"job_result": os.environ["DEV_RESULT"], "decision": os.environ["DEV_DECISION"]},
+                  "stg": {"job_result": os.environ["STG_RESULT"], "decision": os.environ["STG_DECISION"]},
+                  "prod": {"job_result": os.environ["PROD_RESULT"], "decision": os.environ["PROD_DECISION"]},
+              },
+              "bacen_production_allowed": os.environ["BACEN_ALLOWED"] == "true",
+              "automatic_order": ["dev", "hml", "prod"],
+              "stale_sha_promotion_allowed": False,
+              "production_gate_bypass_allowed": False,
+          }
+          path = Path("artifacts/fly-automatic-promotion/report.json")
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+          {
+            echo "## Fly Automatic Environment Promotion"
+            echo "- SHA: \`$EXPECTED_SHA\`"
+            echo "- Resolver: \`$REASON\`"
+            echo "- DEV provider: \`$DEV_PROVIDER\`"
+            echo "- DEV: \`$DEV_DECISION\`"
+            echo "- STG: \`$STG_DECISION\`"
+            echo "- BACEN production allowed: \`$BACEN_ALLOWED\`"
+            echo "- PROD: \`$PROD_DECISION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload automatic promotion report
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-automatic-environment-promotion
+          path: artifacts/fly-automatic-promotion/report.json
+          if-no-files-found: error
+          retention-days: 365

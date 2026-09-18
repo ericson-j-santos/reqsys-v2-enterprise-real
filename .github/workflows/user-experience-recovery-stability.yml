@@ -1,0 +1,63 @@
+name: User Experience Recovery Stability
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_recovery_stability.py"
+      - "tests/test_build_ux_recovery_stability.py"
+      - ".github/workflows/user-experience-recovery-stability.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_ux_recovery_stability.py"
+      - "tests/test_build_ux_recovery_stability.py"
+      - ".github/workflows/user-experience-recovery-stability.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-recovery-stability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_ux_recovery_stability.py
+          python -m unittest tests/test_build_ux_recovery_stability.py -v
+      - name: Build deterministic stability evidence
+        run: |
+          mkdir -p .tmp/ux-stability
+          cat > .tmp/ux-stability/history.json <<'JSON'
+          [
+            {"generated_at":"2026-07-15T10:00:00Z","recovery_rate":50,"average_recovery_seconds":35,"ux_100_ready":false},
+            {"generated_at":"2026-07-15T11:00:00Z","recovery_rate":75,"average_recovery_seconds":28,"ux_100_ready":true},
+            {"generated_at":"2026-07-15T12:00:00Z","recovery_rate":85,"average_recovery_seconds":22,"ux_100_ready":true}
+          ]
+          JSON
+          python scripts/build_ux_recovery_stability.py \
+            --history .tmp/ux-stability/history.json \
+            --output .tmp/ux-stability/ux-recovery-stability.json
+          python - <<'PY'
+          import json
+          report = json.load(open('.tmp/ux-stability/ux-recovery-stability.json', encoding='utf-8'))
+          assert report['standard_gold_ready'] is True
+          assert report['mode'] == 'advisory'
+          assert report['production_blocker'] is False
+          assert report['human_approval_required'] is True
+          print('ux recovery stability smoke: OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-recovery-stability
+          path: .tmp/ux-stability
+          retention-days: 90

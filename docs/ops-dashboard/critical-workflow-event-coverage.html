@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ReqSys — Cobertura Merge Queue</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;background:#0f172a;color:#e5e7eb}main{max-width:1100px;margin:auto;padding:24px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:#111827;border:1px solid #334155;border-radius:14px;padding:18px}.label{color:#94a3b8;font-size:12px;text-transform:uppercase}.value{font-size:28px;font-weight:700;margin-top:8px}.high,.blocked{color:#ef4444}.low,.allowed{color:#22c55e}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:12px;border-bottom:1px solid #334155;text-align:left}th{color:#94a3b8}code{color:#38bdf8}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body><main>
+  <h1>Cobertura dos workflows críticos</h1>
+  <p>Validação governada de <code>pull_request</code> + <code>merge_group</code>. O paralelismo só pode aumentar quando o estado for <code>COVERAGE_COMPLETE</code>.</p>
+  <div class="grid">
+    <div class="card"><div class="label">Estado</div><div id="status" class="value">Carregando</div></div>
+    <div class="card"><div class="label">Cobertura</div><div id="coverage" class="value">-</div></div>
+    <div class="card"><div class="label">Risco</div><div id="risk" class="value">-</div></div>
+    <div class="card"><div class="label">Aumento de throughput</div><div id="throughput" class="value">-</div></div>
+  </div>
+  <section class="card" style="margin-top:18px"><table><thead><tr><th>Workflow</th><th>pull_request</th><th>merge_group</th><th>Gap</th></tr></thead><tbody id="rows"></tbody></table></section>
+<script>
+fetch('./data/critical-workflow-event-coverage.json').then(r=>r.json()).then(d=>{
+ const ok=d.status==='COVERAGE_COMPLETE';
+ status.textContent=d.status; status.className='value '+(ok?'low':'high');
+ coverage.textContent=`${d.coverage_percent}% (${d.complete_workflow_count}/${d.critical_workflow_count})`;
+ risk.textContent=d.risk; risk.className='value '+d.risk;
+ throughput.textContent=d.throughput_increase_allowed?'LIBERADO':'BLOQUEADO'; throughput.className='value '+(d.throughput_increase_allowed?'allowed':'blocked');
+ rows.innerHTML=d.workflows.map(w=>`<tr><td>${w.workflow}</td><td>${w.pull_request?'OK':'NÃO'}</td><td>${w.merge_group?'OK':'NÃO'}</td><td>${w.gap_reason||'-'}</td></tr>`).join('');
+}).catch(e=>{status.textContent='EVIDÊNCIA INDISPONÍVEL';status.className='value high';console.error(e)});
+</script></main></body></html>

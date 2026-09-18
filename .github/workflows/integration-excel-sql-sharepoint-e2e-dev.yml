@@ -1,0 +1,345 @@
+name: Integration Excel SQL SharePoint — DEV E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_hint:
+        description: "Trecho opcional do nome/URL do site SharePoint DEV"
+        required: false
+        default: ""
+      file_hint:
+        description: "Trecho opcional do nome do workbook DEV"
+        required: false
+        default: ""
+      power_platform_environment_hint:
+        description: "Trecho opcional do nome/ID do ambiente Power Platform DEV"
+        required: false
+        default: ""
+      excel_connection_hint:
+        description: "Trecho opcional do nome da conexão Excel DEV"
+        required: false
+        default: ""
+      sql_connection_hint:
+        description: "Trecho opcional do nome da conexão SQL DEV"
+        required: false
+        default: ""
+      sharepoint_connection_hint:
+        description: "Trecho opcional do nome da conexão SharePoint DEV"
+        required: false
+        default: ""
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml"
+      - ".github/scripts/install-msodbc18-ci.sh"
+      - "backend/app/services/integration_excel_sql_sharepoint_flow.py"
+      - "backend/app/services/integration_profile_provisioning.py"
+      - "scripts/integration_excel_sql_sharepoint_discovery.py"
+      - "scripts/integration_excel_sql_sharepoint_e2e.py"
+      - "scripts/integration_excel_sql_sharepoint_readiness.py"
+      - "scripts/normalize_msal_storage_state.py"
+      - "scripts/msal_device_code.mjs"
+      - "scripts/msal_device_code_prepare.mjs"
+      - "scripts/msal_device_code_complete.mjs"
+      - "scripts/resolve_integration_e2e_sql_dsn.py"
+      - "tests/msal_device_code_complete.test.mjs"
+      - "tests/test_resolve_integration_e2e_sql_dsn.py"
+      - "tests/test_integration_excel_sql_sharepoint_discovery.py"
+      - "tests/test_integration_excel_sql_sharepoint_flow.py"
+      - "tests/test_integration_excel_sql_sharepoint_e2e.py"
+      - "tests/test_integration_excel_sql_sharepoint_readiness.py"
+      - "tests/test_normalize_msal_storage_state.py"
+      - "docs/integrations/integration-generator/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-excel-sql-sharepoint-e2e-dev
+  cancel-in-progress: false
+
+env:
+  INTEGRATION_E2E_ENVIRONMENT: dev
+  INTEGRATION_E2E_SQL_VALIDATION_MODE: power_platform_gateway
+  INTEGRATION_E2E_SQL_FIXTURE_ID: "990000000000001"
+  EVIDENCE_DIR: audit/user-journey/excel-sql-sharepoint-dev
+
+jobs:
+  e2e:
+    name: E2E real DEV — Excel → SQL Server → SharePoint
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Instalar dependências mínimas
+        run: |
+          set -euo pipefail
+          bash .github/scripts/install-msodbc18-ci.sh
+          python -m pip install --upgrade pip
+          pip install httpx pyodbc openpyxl pytest
+
+      - name: Validar harness, autenticação móvel e definição do fluxo
+        env:
+          PYTHONPATH: backend
+        run: |
+          set -euo pipefail
+          node --test tests/msal_device_code_complete.test.mjs
+          python -m pytest \
+            tests/test_resolve_integration_e2e_sql_dsn.py \
+            tests/test_integration_excel_sql_sharepoint_discovery.py \
+            tests/test_integration_excel_sql_sharepoint_readiness.py \
+            tests/test_integration_excel_sql_sharepoint_flow.py \
+            tests/test_integration_excel_sql_sharepoint_e2e.py \
+            tests/test_normalize_msal_storage_state.py \
+            tests/test_integration_profile_provisioning.py \
+            -q
+          python -m py_compile \
+            scripts/resolve_integration_e2e_sql_dsn.py \
+            scripts/integration_excel_sql_sharepoint_discovery.py \
+            scripts/integration_excel_sql_sharepoint_e2e.py \
+            scripts/normalize_msal_storage_state.py \
+            backend/app/services/integration_excel_sql_sharepoint_flow.py
+
+      - name: Inicializar correlação da execução
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "E2E_CORRELATION_ID=excel-sql-sharepoint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Resolver DSN SQL DEV por fonte segura validada
+        if: github.event_name == 'workflow_dispatch' && env.INTEGRATION_E2E_SQL_VALIDATION_MODE == 'direct_dsn'
+        env:
+          INTEGRATION_E2E_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+          MOVIMENTO_EMAIL_SOURCE_DSN: ${{ secrets.MOVIMENTO_EMAIL_SOURCE_DSN }}
+          COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
+          VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+          INTEGRATION_E2E_SQL_PROCEDURE: integration.usp_ConsultarPorIdentificadores
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python scripts/resolve_integration_e2e_sql_dsn.py \
+            --github-env "$GITHUB_ENV" \
+            --evidence "$EVIDENCE_DIR/sql-dsn-resolution.json" \
+            --procedure "$INTEGRATION_E2E_SQL_PROCEDURE"
+
+      - name: Preparar sessão Microsoft para autorização móvel
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente; é necessário ao menos o client_id legado para iniciar a autorização por código de dispositivo."
+            exit 1
+          fi
+          state="$RUNNER_TEMP/msal-storage-state.json"
+          device_private="$RUNNER_TEMP/excel-sql-sharepoint-device-code-private.json"
+          device_public="$EVIDENCE_DIR/device-login.json"
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s' "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$state"
+          chmod 600 "$state"
+          python scripts/normalize_msal_storage_state.py --path "$state"
+          echo "MSAL_STORAGE_STATE_PATH=$state" >> "$GITHUB_ENV"
+          echo "DEVICE_CODE_PRIVATE_PATH=$device_private" >> "$GITHUB_ENV"
+          echo "DEVICE_CODE_PUBLIC_PATH=$device_public" >> "$GITHUB_ENV"
+
+      - name: Gerar código Microsoft para o celular somente quando necessário
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+        run: node scripts/msal_device_code_prepare.mjs
+
+      - name: Exibir instruções de autorização no resumo da execução
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ["DEVICE_CODE_PUBLIC_PATH"]).read_text(encoding="utf-8"))
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if payload.get("required"):
+              uri = payload.get("verification_uri") or "https://microsoft.com/devicelogin"
+              code = payload.get("user_code") or ""
+              expires = payload.get("expires_in_seconds") or ""
+              with summary.open("a", encoding="utf-8") as handle:
+                  handle.write("## Autorizar Microsoft pelo celular\n\n")
+                  handle.write(f"1. Abra [{uri}]({uri}) no celular.\n")
+                  handle.write(f"2. Informe o código **`{code}`**.\n")
+                  handle.write("3. Conclua login e MFA na Microsoft.\n")
+                  handle.write(f"4. Esta tentativa expira em aproximadamente {expires} segundos.\n\n")
+                  handle.write("O workflow continuará automaticamente após a autorização.\n")
+              print(f"DEVICE_LOGIN_URI={uri}")
+              print(f"DEVICE_USER_CODE={code}")
+          else:
+              with summary.open("a", encoding="utf-8") as handle:
+                  handle.write("## Autorização Microsoft\n\nSessão existente ainda válida; nenhum login pelo celular foi necessário.\n")
+              print("DEVICE_LOGIN_NOT_REQUIRED=true")
+          PY
+
+      - name: Publicar somente instrução pública temporária para uso no celular
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-device-login-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ env.DEVICE_CODE_PUBLIC_PATH }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Aguardar autorização Microsoft e criar sessão efêmera
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+        run: node scripts/msal_device_code_complete.mjs
+
+      - name: Descobrir referências não secretas DEV
+        if: github.event_name == 'workflow_dispatch'
+        id: discovery
+        continue-on-error: true
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          INTEGRATION_E2E_SITE_HINT: ${{ inputs.site_hint }}
+          INTEGRATION_E2E_FILE_HINT: ${{ inputs.file_hint }}
+          INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_HINT: ${{ inputs.power_platform_environment_hint }}
+          INTEGRATION_E2E_EXCEL_CONNECTION_HINT: ${{ inputs.excel_connection_hint }}
+          INTEGRATION_E2E_SQL_CONNECTION_HINT: ${{ inputs.sql_connection_hint }}
+          INTEGRATION_E2E_SHAREPOINT_CONNECTION_HINT: ${{ inputs.sharepoint_connection_hint }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python scripts/integration_excel_sql_sharepoint_discovery.py \
+            --output "$EVIDENCE_DIR/discovery.json" \
+            --github-env "$GITHUB_ENV" \
+            --msal-state "$MSAL_STORAGE_STATE_PATH" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$E2E_CORRELATION_ID"
+
+      - name: Carregar referências persistidas no diagnóstico de push
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          PERSISTED_DRIVE_ID: ${{ vars.INTEGRATION_E2E_DRIVE_ID }}
+          PERSISTED_FILE_ID: ${{ vars.INTEGRATION_E2E_FILE_ID }}
+          PERSISTED_SITE_ID: ${{ vars.INTEGRATION_E2E_SITE_ID }}
+          PERSISTED_LIST_ID: ${{ vars.INTEGRATION_E2E_LIST_ID }}
+          PERSISTED_SQL_PROCEDURE: ${{ vars.INTEGRATION_E2E_SQL_PROCEDURE }}
+          PERSISTED_POWER_PLATFORM_ENVIRONMENT_ID: ${{ vars.INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID }}
+          PERSISTED_EXCEL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_EXCEL_CONNECTION_ID }}
+          PERSISTED_SQL_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SQL_CONNECTION_ID }}
+          PERSISTED_SHAREPOINT_CONNECTION_ID: ${{ vars.INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID }}
+          PERSISTED_SQL_DSN: ${{ secrets.INTEGRATION_E2E_SQL_DSN }}
+        run: |
+          set -euo pipefail
+          set_if_present() {
+            local target="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              printf '%s=%s\n' "$target" "$value" >> "$GITHUB_ENV"
+            fi
+          }
+          set_if_present INTEGRATION_E2E_DRIVE_ID "$PERSISTED_DRIVE_ID"
+          set_if_present INTEGRATION_E2E_FILE_ID "$PERSISTED_FILE_ID"
+          set_if_present INTEGRATION_E2E_SITE_ID "$PERSISTED_SITE_ID"
+          set_if_present INTEGRATION_E2E_LIST_ID "$PERSISTED_LIST_ID"
+          set_if_present INTEGRATION_E2E_SQL_PROCEDURE "$PERSISTED_SQL_PROCEDURE"
+          set_if_present INTEGRATION_E2E_POWER_PLATFORM_ENVIRONMENT_ID "$PERSISTED_POWER_PLATFORM_ENVIRONMENT_ID"
+          set_if_present INTEGRATION_E2E_EXCEL_CONNECTION_ID "$PERSISTED_EXCEL_CONNECTION_ID"
+          set_if_present INTEGRATION_E2E_SQL_CONNECTION_ID "$PERSISTED_SQL_CONNECTION_ID"
+          set_if_present INTEGRATION_E2E_SHAREPOINT_CONNECTION_ID "$PERSISTED_SHAREPOINT_CONNECTION_ID"
+          set_if_present INTEGRATION_E2E_SQL_DSN "$PERSISTED_SQL_DSN"
+
+      - name: Readiness DEV no mesmo SHA
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          strict_args=()
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            strict_args+=(--strict)
+          fi
+          python scripts/integration_excel_sql_sharepoint_readiness.py \
+            "${strict_args[@]}" \
+            --output "$EVIDENCE_DIR/readiness.json" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$E2E_CORRELATION_ID"
+
+      - name: Registrar E2E não executado no push
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence_dir = Path(os.environ["EVIDENCE_DIR"])
+          readiness_path = evidence_dir / "readiness.json"
+          readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+          payload = {
+              "schema_version": "1.0.0",
+              "feature": "excel_sql_sharepoint_sync",
+              "status": "not_executed",
+              "reason": "workflow_dispatch_required_for_real_e2e",
+              "environment": "dev",
+              "source_sha": os.environ.get("GITHUB_SHA", ""),
+              "correlation_id": os.environ.get("E2E_CORRELATION_ID", ""),
+              "readiness_ready": bool(readiness.get("ready")),
+              "readiness_blockers": readiness.get("blockers", []),
+          }
+          (evidence_dir / "e2e.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps({"status": payload["status"], "reason": payload["reason"]}))
+          PY
+
+      - name: Provisionar fluxo e executar aceite real
+        if: github.event_name == 'workflow_dispatch' && success()
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          python scripts/integration_excel_sql_sharepoint_e2e.py \
+            --output "$EVIDENCE_DIR/e2e.json" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$E2E_CORRELATION_ID" \
+            --msal-state "$MSAL_STORAGE_STATE_PATH" \
+            --wait-seconds 420
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-excel-sql-sharepoint-e2e-${{ github.run_id }}
+          path: |
+            ${{ env.EVIDENCE_DIR }}/sql-dsn-resolution.json
+            ${{ env.EVIDENCE_DIR }}/device-login.json
+            ${{ env.EVIDENCE_DIR }}/discovery.json
+            ${{ env.EVIDENCE_DIR }}/readiness.json
+            ${{ env.EVIDENCE_DIR }}/e2e.json
+          if-no-files-found: warn
+          retention-days: 30

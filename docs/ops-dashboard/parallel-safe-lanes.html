@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Parallel Safe Lanes</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --blue:#38bdf8; --green:#22c55e; --yellow:#f59e0b; --red:#ef4444; --border:#334155; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:24px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,#111827,#1e293b); }
+    main { max-width:1180px; margin:0 auto; padding:24px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
+    .card { border:1px solid var(--border); background:var(--panel); border-radius:14px; padding:18px; box-shadow:0 10px 24px rgba(0,0,0,.25); }
+    .label, .small { color:var(--muted); }
+    .value { font-size:24px; font-weight:700; margin:8px 0; }
+    .status { display:inline-block; padding:5px 9px; border-radius:999px; font-weight:700; font-size:12px; }
+    .safe, .low, .active { background:rgba(34,197,94,.16); color:var(--green); border:1px solid rgba(34,197,94,.45); }
+    .medium, .controlled, .safe_with_contract_guard { background:rgba(245,158,11,.16); color:var(--yellow); border:1px solid rgba(245,158,11,.45); }
+    .high { background:rgba(239,68,68,.16); color:var(--red); border:1px solid rgba(239,68,68,.45); }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { border-bottom:1px solid var(--border); padding:12px; text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; }
+    code { color:#dbeafe; }
+    a { color:var(--blue); }
+    pre { white-space:pre-wrap; word-break:break-word; background:#020617; padding:12px; border-radius:10px; border:1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Parallel Safe Lanes</h1>
+    <p class="small">Visualização estática do contrato <code>parallel-safe-lanes-governance.json</code> para acelerar frentes paralelas com baixo risco de conflito.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card"><div class="label">Status</div><div id="status" class="value">-</div></div>
+      <div class="card"><div class="label">PRs paralelos recomendados</div><div id="max-prs" class="value">-</div></div>
+      <div class="card"><div class="label">Lanes seguras</div><div id="safe-count" class="value">-</div></div>
+      <div class="card"><div class="label">Regras de conflito</div><div id="rules-count" class="value">-</div></div>
+    </section>
+    <section class="card">
+      <h2>Lanes</h2>
+      <table><thead><tr><th>Lane</th><th>Paralelismo</th><th>Risco</th><th>Allowed paths</th><th>Avoid paths</th></tr></thead><tbody id="lanes"></tbody></table>
+    </section>
+    <section class="card">
+      <h2>Contrato bruto</h2>
+      <pre id="raw">{}</pre>
+    </section>
+  </main>
+  <script>
+    const DATA_PATH = './data/parallel-safe-lanes-governance.json';
+    const fallback = { overall_status:'unknown', policy:{ max_parallel_prs_recommended:0 }, safe_lanes:[], conflict_rules:[] };
+    function badge(value) { const v = String(value || 'unknown'); return `<span class="status ${v}">${v}</span>`; }
+    async function loadData() {
+      try { const response = await fetch(DATA_PATH, { cache:'no-store' }); if (!response.ok) throw new Error('HTTP ' + response.status); return { available:true, data: await response.json(), error:null }; }
+      catch (error) { return { available:false, data:fallback, error:error.message }; }
+    }
+    async function render() {
+      const result = await loadData();
+      const payload = result.data || fallback;
+      const lanes = payload.safe_lanes || [];
+      document.getElementById('status').innerHTML = badge(payload.overall_status);
+      document.getElementById('max-prs').textContent = payload.policy?.max_parallel_prs_recommended ?? '-';
+      document.getElementById('safe-count').textContent = lanes.length;
+      document.getElementById('rules-count').textContent = (payload.conflict_rules || []).length;
+      document.getElementById('lanes').innerHTML = lanes.map((lane) => `<tr><td><code>${lane.id}</code><div class="small">${lane.title || ''}</div></td><td>${badge(lane.parallelism)}</td><td>${badge(lane.risk)}</td><td>${(lane.allowed_paths || []).map((p) => `<code>${p}</code>`).join('<br>')}</td><td>${(lane.avoid_paths || []).map((p) => `<code>${p}</code>`).join('<br>')}</td></tr>`).join('') || '<tr><td colspan="5">Nenhuma lane publicada.</td></tr>';
+      document.getElementById('raw').textContent = JSON.stringify({ available: result.available, error: result.error, payload }, null, 2);
+    }
+    render();
+  </script>
+</body>
+</html>

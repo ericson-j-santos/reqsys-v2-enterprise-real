@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T20:00:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "governance": {
+    "owner": "ReqSys Architecture Governance",
+    "mode": "report_only",
+    "canonical_runbook": "docs/runbooks/living-architecture-traceability.md"
+  },
+  "workflows": [
+    {
+      "id": "ci",
+      "name": "CI — ReqSys v2 Enterprise",
+      "path": ".github/workflows/ci.yml",
+      "purpose": "Gate principal de backend, frontend, segurança e evidências mínimas de CI.",
+      "artifacts": ["ci-evidence"],
+      "runbooks": ["docs/runbooks/main-smoke-ci.md"]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "ci-evidence",
+      "name": "CI Evidence",
+      "producer_workflow": "ci",
+      "contract": "docs/contracts/living-architecture-map.schema.json",
+      "consumer_dashboards": ["docs/padrao-ouro/living-architecture-index.json"],
+      "retention_days": 30
+    }
+  ],
+  "schemas": [
+    {
+      "id": "living-architecture-map",
+      "path": "docs/contracts/living-architecture-map.schema.json",
+      "domain": "traceability",
+      "version": "1.0.0"
+    }
+  ],
+  "dashboards": [
+    {
+      "id": "living-architecture-index",
+      "path": "docs/padrao-ouro/living-architecture-index.json",
+      "data_sources": ["docs/traceability/living-architecture-map.json"],
+      "runbooks": ["docs/runbooks/living-architecture-traceability.md"]
+    }
+  ],
+  "runbooks": [
+    {
+      "id": "living-architecture-traceability",
+      "path": "docs/runbooks/living-architecture-traceability.md",
+      "covers": ["ci", "living-architecture"]
+    }
+  ],
+  "recent_prs": [],
+  "ci_evidence": [
+    {
+      "id": "ci-evidence",
+      "path": "schema-governance-report.json",
+      "source_workflow": "Schema Governance Gate"
+    }
+  ],
+  "validation": {
+    "workflow": "Schema Governance Gate",
+    "mode": "enforced",
+    "checks": ["schema_contract_gate"]
+  },
+  "campo_nao_permitido": true
+}

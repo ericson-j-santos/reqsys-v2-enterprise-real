@@ -1,0 +1,72 @@
+name: BACEN Access Control Baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "scripts/generate_bacen_access_control_baseline.py"
+      - ".github/workflows/bacen-access-control-baseline.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "scripts/generate_bacen_access_control_baseline.py"
+      - ".github/workflows/bacen-access-control-baseline.yml"
+  schedule:
+    - cron: "17 10 1 */3 *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-access-control-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assess:
+    name: BACEN-02 Access Control Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: python -m py_compile scripts/generate_bacen_access_control_baseline.py
+
+      - name: Generate technical baseline
+        run: |
+          python scripts/generate_bacen_access_control_baseline.py \
+            --env-file .env.example \
+            --output artifacts/bacen/bacen-02-access-control-baseline.json
+
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/bacen/bacen-02-access-control-baseline.json").read_text())
+          assert report["control_id"] == "BACEN-02"
+          assert len(report["source_sha256"]) == 64
+          assert report["technical_baseline_passed"] is True
+          assert report["production_touched"] is False
+          assert report["control_maturity"] == "partial_pending_mfa_and_access_review_evidence"
+          print("BACEN-02 access control baseline evidence: valid")
+          PY
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-02-access-control-baseline
+          path: artifacts/bacen/bacen-02-access-control-baseline.json
+          if-no-files-found: error
+          retention-days: 90

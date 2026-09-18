@@ -1,0 +1,86 @@
+name: BACEN External Evidence Consolidation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/consolidate_bacen_external_evidence.py"
+      - "tests/test_consolidate_bacen_external_evidence.py"
+      - ".github/workflows/bacen-external-evidence-consolidation.yml"
+  workflow_dispatch:
+    inputs:
+      mfa_run_id:
+        description: Run ID da ingestão governada BACEN-02
+        required: true
+        type: string
+      dpa_run_id:
+        description: Run ID da ingestão governada BACEN-05
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: bacen-external-evidence-consolidation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Compile consolidator
+        run: python -m py_compile scripts/consolidate_bacen_external_evidence.py
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_consolidate_bacen_external_evidence.py
+
+  consolidate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download normalized BACEN-02 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: bacen-02-governed-mfa-ingestion
+          path: artifacts/source/bacen-02
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.mfa_run_id }}
+      - name: Download normalized BACEN-05 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: bacen-05-governed-dpa-ingestion
+          path: artifacts/source/bacen-05
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.dpa_run_id }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Consolidate normalized references without changing regulatory status
+        run: |
+          python scripts/consolidate_bacen_external_evidence.py \
+            --mfa-report artifacts/source/bacen-02/bacen-02-governed-mfa-ingestion.json \
+            --dpa-report artifacts/source/bacen-05/bacen-05-governed-dpa-ingestion.json \
+            --mfa-source-ref "run:${{ inputs.mfa_run_id }}" \
+            --dpa-source-ref "run:${{ inputs.dpa_run_id }}" \
+            --output artifacts/bacen/bacen-external-evidence-consolidation.json \
+            --strict
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bacen-external-evidence-consolidation
+          path: artifacts/bacen/bacen-external-evidence-consolidation.json
+          if-no-files-found: error
+          retention-days: 365

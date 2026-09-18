@@ -1,0 +1,51 @@
+name: Runtime Operational Correlation Timeline
+
+on:
+  pull_request:
+    paths:
+      - 'tools/product_intelligence/**'
+      - 'scripts/operational_observability_hub.py'
+      - 'scripts/operational_multi_environment_evidence.py'
+      - 'artifacts/operational-observability-hub/**'
+      - 'artifacts/operational-multi-environment/**'
+      - 'docs/operations/**'
+      - 'docs/evidence/**'
+      - '.github/workflows/runtime-operational-correlation-timeline.yml'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/product_intelligence/**'
+      - '.github/workflows/runtime-operational-correlation-timeline.yml'
+
+jobs:
+  runtime-operational-correlation-timeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate timeline
+        run: python tools/product_intelligence/generate_runtime_operational_correlation_timeline.py
+      - name: Validate timeline
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('reports/github-runtime-analytics/runtime-operational-correlation-timeline.json').read_text(encoding='utf-8'))
+          assert payload['mode'] in {'review_only', 'report_only'}, payload
+          assert payload['runtime_state'] in {
+              'TIMELINE_READY',
+              'TIMELINE_HYDRATED',
+              'TIMELINE_FALLBACK',
+          }, payload
+          assert payload['timeline_event_count'] >= 3, payload
+          if payload['runtime_state'] == 'TIMELINE_FALLBACK':
+              assert payload['confidence_percent'] >= 40, payload
+          else:
+              assert payload['confidence_percent'] >= 85, payload
+          assert 0 <= payload['risk_percent'] <= 100, payload
+          assert payload.get('correlation_id'), payload
+          PY

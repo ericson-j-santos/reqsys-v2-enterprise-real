@@ -1,0 +1,11 @@
+# CodeRabbit desativado operacionalmente.
+#
+# Decisao: substituido por workflow proprio `PR Quality Review`.
+# Motivo: remover dependencia externa, limite de quota e ruido operacional.
+# Fonte de verdade atual:
+# - .github/workflows/pr-quality-review.yml
+# - scripts/pr_quality_review.py
+#
+# Observacao: manter este arquivo vazio/documental evita reintroducao silenciosa
+# de configuracao ativa no repositorio. A desinstalacao definitiva do App
+# CodeRabbit deve ser feita nas configuracoes do GitHub, se ainda estiver instalado.

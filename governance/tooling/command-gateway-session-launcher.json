@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "tool": "chatgpt-command-gateway",
+  "minimum_rules_version": "1.6.0",
+  "required_entrypoint": "session_launcher.py",
+  "required_result": "SESSION_LAUNCH_OK",
+  "require_expected_head": true,
+  "require_materialized_worktree": true,
+  "require_state_validated": true,
+  "forbid_direct_terminal": true,
+  "scope": "chatgpt-triggered-repository-operations"
+}

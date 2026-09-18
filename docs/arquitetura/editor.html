@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Editor — Arquitetura ReqSys</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:    #1a237e;
+      --blue-lt: #e8eaf6;
+      --green:   #388e3c;
+      --red:     #c62828;
+      --border:  #e0e0e0;
+      --bg:      #f0f2f5;
+      --card-bg: #ffffff;
+    }
+
+    body { font-family: system-ui, Arial, sans-serif; background: var(--bg); color: #222; }
+
+    /* ── Topbar ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--blue); color: #fff;
+      padding: 0 1.5rem;
+      height: 52px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    .topbar-title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+    .topbar-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.45rem 0.9rem; border: none; border-radius: 6px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      text-decoration: none; transition: filter 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { filter: brightness(0.9); }
+    .btn-primary  { background: #43a047; color: #fff; }
+    .btn-ghost    { background: rgba(255,255,255,.15); color: #fff; }
+    .btn-outline  { background: transparent; border: 1.5px solid var(--blue); color: var(--blue); }
+    .btn-outline:hover { background: var(--blue-lt); }
+    .btn-danger   { background: #ef5350; color: #fff; }
+    .btn-sm       { padding: 0.28rem 0.6rem; font-size: 0.78rem; }
+    .btn-icon     { padding: 0.28rem 0.5rem; }
+
+    /* ── Layout ── */
+    .layout { display: flex; height: calc(100vh - 52px); }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 190px; flex-shrink: 0;
+      background: #fff; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 0.75rem 0;
+    }
+    .sidebar-sep { font-size: 0.68rem; font-weight: 700; color: #aaa;
+                   text-transform: uppercase; letter-spacing: .08em;
+                   padding: 0.75rem 1.1rem 0.3rem; }
+    .sidebar-item {
+      display: flex; align-items: center; gap: 0.55rem;
+      padding: 0.6rem 1.1rem; cursor: pointer;
+      font-size: 0.84rem; color: #555;
+      border-left: 3px solid transparent;
+      transition: all .12s;
+    }
+    .sidebar-item:hover { background: #f5f5f5; color: var(--blue); }
+    .sidebar-item.active { background: var(--blue-lt); color: var(--blue); font-weight: 700; border-left-color: var(--blue); }
+    .sidebar-item .icon { width: 18px; text-align: center; font-size: 1rem; }
+
+    /* ── Content ── */
+    .content { flex: 1; overflow-y: auto; padding: 1.5rem 2rem; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: 0.9rem; font-weight: 700; color: var(--blue);
+      margin-bottom: 1rem; padding-bottom: 0.6rem;
+      border-bottom: 2px solid var(--blue-lt);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 0.85rem; }
+    .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.85rem; }
+
+    label {
+      display: block; font-size: 0.73rem; font-weight: 700;
+      color: #666; margin-bottom: 0.3rem;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    input[type="text"], select, textarea {
+      width: 100%; padding: 0.48rem 0.7rem;
+      border: 1.5px solid #d0d0d0; border-radius: 7px;
+      font-size: 0.875rem; font-family: inherit;
+      background: #fafafa; color: #222;
+      transition: border-color .15s, background .15s;
+    }
+    input[type="text"]:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--blue); background: #fff;
+    }
+    textarea { min-height: 90px; resize: vertical; font-family: monospace; font-size: 0.82rem; line-height: 1.6; }
+
+    /* ── Env tabs ── */
+    .env-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .env-tab {
+      padding: 0.38rem 1rem; border-radius: 20px; cursor: pointer;
+      font-size: 0.82rem; font-weight: 600;
+      border: 2px solid transparent; transition: all .12s;
+    }
+    .env-tab.dev  { background: #e3f2fd; color: #1565c0; }
+    .env-tab.dev.active  { border-color: #1565c0; }
+    .env-tab.prod { background: #fce4ec; color: #880e4f; }
+    .env-tab.prod.active { border-color: #880e4f; }
+    .env-tab.test { background: #f3e5f5; color: #6a1b9a; }
+    .env-tab.test.active { border-color: #6a1b9a; }
+    .env-pane { display: none; }
+    .env-pane.active { display: block; }
+
+    /* ── List items (integrations / deploy rows) ── */
+    .list-item {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.55rem 0.7rem; margin-bottom: 0.45rem;
+      background: #f8f9fb; border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .list-item input { flex: 1; border: none; background: transparent; font-size: 0.875rem; color: #222; }
+    .list-item input:focus { outline: 1px solid var(--blue); border-radius: 4px; background: #fff; padding: 0 2px; }
+    .list-item .sep { color: #bbb; font-weight: 700; flex-shrink: 0; }
+
+    /* ── Entity cards ── */
+    .entity-card { margin-bottom: 0.9rem; }
+    .entity-header {
+      background: var(--blue-lt); padding: 0.5rem 0.85rem;
+      border-radius: 8px 8px 0 0; font-weight: 700;
+      font-size: 0.85rem; color: var(--blue);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .entity-body {
+      border: 1px solid var(--border); border-top: none;
+      border-radius: 0 0 8px 8px; padding: 0.6rem;
+    }
+
+    /* ── Conexão checks ── */
+    .check-item {
+      display: flex; gap: 0.75rem;
+      padding: 0.85rem 1rem; border-radius: 8px;
+      margin-bottom: 0.55rem; font-size: 0.875rem;
+    }
+    .check-ok   { background: #e8f5e9; }
+    .check-warn { background: #fff8e1; }
+    .check-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+    .check-text strong { display: block; margin-bottom: 0.2rem; font-size: 0.875rem; }
+
+    /* ── Status bar ── */
+    .statusbar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 0.5rem 1.5rem; font-size: 0.82rem; font-weight: 600;
+      z-index: 300; transition: opacity .3s;
+    }
+    .statusbar.hidden  { opacity: 0; pointer-events: none; }
+    .statusbar.success { background: #43a047; color: #fff; }
+    .statusbar.error   { background: #e53935; color: #fff; }
+    .statusbar.warn    { background: #fb8c00; color: #fff; }
+
+    /* ── Tab panes ── */
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.82rem; }
+    .hint { font-size: 0.78rem; color: #999; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+
+<!-- ── Topbar ── -->
+<div class="topbar">
+  <div class="topbar-title">
+    &#9998; Editor de Arquitetura ReqSys
+  </div>
+  <div class="topbar-actions">
+    <a href="index.html" class="btn btn-ghost" target="_blank">&#128065; Visualizar</a>
+    <button class="btn btn-primary" onclick="saveConfig()">&#128190; Salvar config.json</button>
+  </div>
+</div>
+
+<!-- ── Layout ── -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-sep">Configuração</div>
+    <div class="sidebar-item active" onclick="showTab('geral', this)">
+      <span class="icon">&#128203;</span> Geral
+    </div>
+    <div class="sidebar-item" onclick="showTab('ambientes', this)">
+      <span class="icon">&#127760;</span> Ambientes
+    </div>
+    <div class="sidebar-item" onclick="showTab('stack', this)">
+      <span class="icon">&#128295;</span> Stack
+    </div>
+    <div class="sidebar-item" onclick="showTab('integracoes', this)">
+      <span class="icon">&#128279;</span> Integrações
+    </div>
+    <div class="sidebar-sep">Diagramas</div>
+    <div class="sidebar-item" onclick="showTab('modelo', this)">
+      <span class="icon">&#128451;</span> Modelo de Dados
+    </div>
+    <div class="sidebar-item" onclick="showTab('deploy', this)">
+      <span class="icon">&#128640;</span> Deploy Flow
+    </div>
+    <div class="sidebar-sep">Análise</div>
+    <div class="sidebar-item" onclick="showTab('conexao', this)">
+      <span class="icon">&#128269;</span> Conexão ReqSys
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- ── TAB: GERAL ── -->
+    <div class="tab-pane active" id="tab-geral">
+      <div class="card">
+        <div class="card-title">Informações Gerais</div>
+        <div class="form-group">
+          <label>Título da Página</label>
+          <input type="text" id="cfg-title" placeholder="Diagramas de Arquitetura ReqSys"/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Versão do Sistema</label>
+            <input type="text" id="cfg-versao" placeholder="2.3.0"/>
+          </div>
+          <div class="form-group">
+            <label>Texto do Rodapé</label>
+            <input type="text" id="cfg-footer" placeholder="Gerado automaticamente…"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: AMBIENTES ── -->
+    <div class="tab-pane" id="tab-ambientes">
+      <div class="env-tabs">
+        <div class="env-tab dev active" onclick="showEnv('dev', this)">&#128309; Desenvolvimento</div>
+        <div class="env-tab prod"       onclick="showEnv('prod', this)">&#128308; Produção</div>
+        <div class="env-tab test"       onclick="showEnv('test', this)">&#128311; Teste</div>
+      </div>
+
+      <!-- Dev -->
+      <div class="env-pane active" id="env-dev">
+        <div class="card">
+          <div class="card-title">Ambiente de Desenvolvimento</div>
+          <div class="form-group"><label>URL Pública (DuckDNS / Externo)</label>
+            <input type="text" id="dev-url_publica" placeholder="https://tieridev.duckdns.org"/></div>
+          <div class="form-row">
+            <div class="form-group"><label>URL Frontend (local)</label>
+              <input type="text" id="dev-url_frontend" placeholder="http://localhost:8083"/></div>
+            <div class="form-group"><label>URL Backend (API local)</label>
+              <input type="text" id="dev-url_backend" placeholder="http://localhost:8211"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Usuário Demo</label>
+              <input type="text" id="dev-usuario" placeholder="admin@demo.com"/></div>
+            <div class="form-group"><label>Senha Demo</label>
+              <input type="text" id="dev-senha" placeholder="123456"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Arquivo Docker Compose</label>
+              <input type="text" id="dev-compose" placeholder="docker-compose.dev.yml"/></div>
+            <div class="form-group"><label>Banco de Dados</label>
+              <select id="dev-db">
+                <option value="SQLite">SQLite</option>
+                <option value="SQL Server">SQL Server</option>
+                <option value="PostgreSQL">PostgreSQL</option>
+                <option value="MySQL">MySQL</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prod -->
+      <div class="env-pane" id="env-prod">
+        <div class="card">
+          <div class="card-title">Ambiente de Produção</div>
+          <div class="form-group"><label>URL Pública (DuckDNS / Externo)</label>
+            <input type="text" id="prod-url_publica" placeholder="https://tieriprod.duckdns.org"/></div>
+          <div class="form-row">
+            <div class="form-group"><label>URL Frontend (local)</label>
+              <input type="text" id="prod-url_frontend" placeholder="http://localhost:8081"/></div>
+            <div class="form-group"><label>URL Backend (API local)</label>
+              <input type="text" id="prod-url_backend" placeholder="http://localhost:8210"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Usuário Demo</label>
+              <input type="text" id="prod-usuario" placeholder="admin@demo.com"/></div>
+            <div class="form-group"><label>Senha Demo</label>
+              <input type="text" id="prod-senha" placeholder="123456"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Arquivo Docker Compose</label>
+              <input type="text" id="prod-compose" placeholder="docker-compose.prod.yml"/></div>
+            <div class="form-group"><label>Banco de Dados</label>
+              <select id="prod-db">
+                <option value="SQLite">SQLite</option>
+                <option value="SQL Server">SQL Server</option>
+                <option value="PostgreSQL">PostgreSQL</option>
+                <option value="MySQL">MySQL</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test -->
+      <div class="env-pane" id="env-test">
+        <div class="card">
+          <div class="card-title">Ambiente de Teste</div>
+          <div class="form-group"><label>URL Pública (DuckDNS / Externo)</label>
+            <input type="text" id="test-url_publica" placeholder="https://tierin.duckdns.org"/></div>
+          <div class="form-row">
+            <div class="form-group"><label>URL Frontend (local)</label>
+              <input type="text" id="test-url_frontend" placeholder="http://localhost:8084"/></div>
+            <div class="form-group"><label>URL Backend (API local)</label>
+              <input type="text" id="test-url_backend" placeholder="http://localhost:8212"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Usuário Demo</label>
+              <input type="text" id="test-usuario" placeholder="admin@demo.com"/></div>
+            <div class="form-group"><label>Senha Demo</label>
+              <input type="text" id="test-senha" placeholder="123456"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Arquivo Docker Compose</label>
+              <input type="text" id="test-compose" placeholder="docker-compose.test.yml"/></div>
+            <div class="form-group"><label>Banco de Dados</label>
+              <select id="test-db">
+                <option value="SQLite">SQLite</option>
+                <option value="SQL Server">SQL Server</option>
+                <option value="PostgreSQL">PostgreSQL</option>
+                <option value="MySQL">MySQL</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: STACK ── -->
+    <div class="tab-pane" id="tab-stack">
+      <div class="card">
+        <div class="card-title">Tecnologias Utilizadas</div>
+        <div class="form-row">
+          <div class="form-group"><label>Frontend</label>
+            <input type="text" id="stack-frontend" placeholder="Vue 3 + Vuetify (Nginx Proxy)"/></div>
+          <div class="form-group"><label>Backend</label>
+            <input type="text" id="stack-backend" placeholder="FastAPI (Python)"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Cache / Fila</label>
+            <input type="text" id="stack-cache" placeholder="Redis + RQ"/></div>
+          <div class="form-group"><label>Proxy / Gateway</label>
+            <input type="text" id="stack-proxy" placeholder="Nginx"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Banco Dev/Test</label>
+            <input type="text" id="stack-banco_dev" placeholder="SQLite"/></div>
+          <div class="form-group"><label>Banco Produção</label>
+            <input type="text" id="stack-banco_prod" placeholder="SQL Server"/></div>
+        </div>
+        <div class="form-group"><label>Infraestrutura / Orquestração</label>
+          <input type="text" id="stack-infra" placeholder="Docker Compose (dev/prod/test)"/></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: INTEGRAÇÕES ── -->
+    <div class="tab-pane" id="tab-integracoes">
+      <div class="card">
+        <div class="card-title">
+          Integrações Externas
+          <button class="btn btn-outline btn-sm" onclick="addIntegracao()">+ Adicionar</button>
+        </div>
+        <p class="hint">Cada integração aparece como nó no Diagrama 1 (Arquitetura Geral).</p>
+        <div id="integracoes-list"></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: MODELO DE DADOS ── -->
+    <div class="tab-pane" id="tab-modelo">
+      <div class="card">
+        <div class="card-title">Entidades do Modelo de Dados</div>
+        <p class="hint">Um campo por linha no formato <code>tipo nome</code> — ex: <code>string email</code>, <code>datetime expiracao</code></p>
+        <div id="entidades-list"></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: DEPLOY FLOW ── -->
+    <div class="tab-pane" id="tab-deploy">
+      <div class="card">
+        <div class="card-title">
+          Fluxo de Deploy (State Diagram)
+          <button class="btn btn-outline btn-sm" onclick="addTransicao()">+ Adicionar</button>
+        </div>
+        <p class="hint">Use <code>[*]</code> para estado inicial/final. Rótulo é opcional.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:0.5rem;margin-bottom:0.5rem;font-size:0.72rem;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.05em">
+          <span style="padding:0 0.7rem">De</span>
+          <span style="padding:0 0.7rem">Para</span>
+          <span style="padding:0 0.7rem">Rótulo (opcional)</span>
+          <span></span>
+        </div>
+        <div id="deploy-list"></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: CONEXÃO REQSYS ── -->
+    <div class="tab-pane" id="tab-conexao">
+      <div class="card">
+        <div class="card-title">Verificação de Conexão com ReqSys v2 Enterprise</div>
+        <div id="conexao-checks"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Status bar -->
+<div class="statusbar hidden" id="statusbar"></div>
+
+<script>
+  /* ══════════════════════════════════════════════════════
+     State
+  ══════════════════════════════════════════════════════ */
+  let cfg = null;
+
+  /* ══════════════════════════════════════════════════════
+     Boot
+  ══════════════════════════════════════════════════════ */
+  (async function init() {
+    try {
+      const r = await fetch('./config.json');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      cfg = await r.json();
+    } catch {
+      cfg = defaultConfig();
+      status('config.json não encontrado — usando dados padrão. Abra via Live Server.', 'warn');
+    }
+    populateForm();
+  })();
+
+  /* ══════════════════════════════════════════════════════
+     Default config (mirrors config.json)
+  ══════════════════════════════════════════════════════ */
+  function defaultConfig() {
+    return {
+      title: 'Diagramas de Arquitetura ReqSys', versao: '2.3.0',
+      footer: 'Gerado automaticamente por GitHub Copilot em 11/05/2026',
+      ambientes: {
+        dev:  { nome:'Desenvolvimento', url_publica:'https://tieridev.duckdns.org',  url_frontend:'http://localhost:8083', url_backend:'http://localhost:8211', usuario:'admin@demo.com', senha:'123456', compose:'docker-compose.dev.yml',  db:'SQLite'    },
+        prod: { nome:'Produção',        url_publica:'https://tieriprod.duckdns.org', url_frontend:'http://localhost:8081', url_backend:'http://localhost:8210', usuario:'admin@demo.com', senha:'123456', compose:'docker-compose.prod.yml', db:'SQL Server' },
+        test: { nome:'Teste',           url_publica:'https://tierin.duckdns.org',    url_frontend:'http://localhost:8084', url_backend:'http://localhost:8212', usuario:'admin@demo.com', senha:'123456', compose:'docker-compose.test.yml', db:'SQLite'    }
+      },
+      stack: {
+        frontend:'Vue 3 + Vuetify (Nginx Proxy)', backend:'FastAPI (Python)',
+        cache:'Redis + RQ', banco_dev:'SQLite', banco_prod:'SQL Server',
+        infra:'Docker Compose (dev/prod/test)', proxy:'Nginx'
+      },
+      integracoes: [
+        { id:'powerbi', nome:'Power BI',             descricao:'Relatórios BI via SSRS'            },
+        { id:'redmine', nome:'Python CLI / Redmine', descricao:'Pipeline de importação Redmine'    },
+        { id:'github',  nome:'GitHub Publicador',    descricao:'Publicação automática de repos'    }
+      ],
+      modelo_dados: {
+        entidades: {
+          USUARIO:     ['string email','string senha','string papel'],
+          SESSAO:      ['string token','datetime expiracao'],
+          SOLICITACAO: ['int id','string status','datetime data_criacao','string tipo'],
+          ANEXO:       ['int id','string nome_arquivo','string caminho'],
+          LOG:         ['int id','string acao','datetime data']
+        },
+        relacionamentos: [
+          { de:'USUARIO',    para:'SESSAO',      tipo:'||--o{', label:'acessa' },
+          { de:'USUARIO',    para:'SOLICITACAO', tipo:'||--o{', label:'cria'   },
+          { de:'SOLICITACAO',para:'ANEXO',       tipo:'||--o{', label:'possui' },
+          { de:'USUARIO',    para:'LOG',         tipo:'||--o{', label:'gera'   }
+        ]
+      },
+      deploy_flow: {
+        estados: [
+          { de:'[*]',             para:'Iniciar',         label:'' },
+          { de:'Iniciar',         para:'ValidarAmbiente', label:'Validar ambiente (.env, compose)' },
+          { de:'ValidarAmbiente', para:'SubirServicos',   label:'docker-compose up' },
+          { de:'SubirServicos',   para:'TestarAcesso',    label:'Testar URLs (dev/prod/test)' },
+          { de:'TestarAcesso',    para:'Login',           label:'Login com credenciais demo' },
+          { de:'Login',           para:'[*]',             label:'Acesso concedido' },
+          { de:'Login',           para:'Erro',            label:'Falha de autenticacao' },
+          { de:'Erro',            para:'[*]',             label:'' }
+        ]
+      }
+    };
+  }
+
+  /* ══════════════════════════════════════════════════════
+     Populate form from cfg
+  ══════════════════════════════════════════════════════ */
+  function populateForm() {
+    set('cfg-title',  cfg.title);
+    set('cfg-versao', cfg.versao);
+    set('cfg-footer', cfg.footer);
+
+    for (const env of ['dev','prod','test']) {
+      const a = cfg.ambientes[env];
+      set(`${env}-url_publica`,  a.url_publica  || '');
+      set(`${env}-url_frontend`, a.url_frontend);
+      set(`${env}-url_backend`,  a.url_backend);
+      set(`${env}-usuario`,      a.usuario);
+      set(`${env}-senha`,        a.senha);
+      set(`${env}-compose`,      a.compose);
+      setSelect(`${env}-db`,     a.db);
+    }
+
+    for (const key of Object.keys(cfg.stack)) {
+      set(`stack-${key}`, cfg.stack[key]);
+    }
+
+    renderIntegracoes();
+    renderEntidades();
+    renderDeploy();
+    renderConexao();
+  }
+
+  function set(id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; }
+  function setSelect(id, v) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    [...el.options].forEach(o => o.selected = o.value === v);
+  }
+
+  /* ══════════════════════════════════════════════════════
+     Read form → cfg
+  ══════════════════════════════════════════════════════ */
+  function collectForm() {
+    cfg.title  = g('cfg-title');
+    cfg.versao = g('cfg-versao');
+    cfg.footer = g('cfg-footer');
+
+    for (const env of ['dev','prod','test']) {
+      cfg.ambientes[env].url_publica  = g(`${env}-url_publica`);
+      cfg.ambientes[env].url_frontend = g(`${env}-url_frontend`);
+      cfg.ambientes[env].url_backend  = g(`${env}-url_backend`);
+      cfg.ambientes[env].usuario      = g(`${env}-usuario`);
+      cfg.ambientes[env].senha        = g(`${env}-senha`);
+      cfg.ambientes[env].compose      = g(`${env}-compose`);
+      cfg.ambientes[env].db           = document.getElementById(`${env}-db`).value;
+    }
+
+    for (const key of Object.keys(cfg.stack)) {
+      const el = document.getElementById(`stack-${key}`);
+      if (el) cfg.stack[key] = el.value;
+    }
+    // integracoes, entidades, deploy updated via oninput
+  }
+
+  function g(id) { return (document.getElementById(id) || {}).value || ''; }
+
+  /* ══════════════════════════════════════════════════════
+     Integrações
+  ══════════════════════════════════════════════════════ */
+  function renderIntegracoes() {
+    document.getElementById('integracoes-list').innerHTML =
+      cfg.integracoes.map((integ, i) => `
+        <div class="list-item">
+          <input type="text" value="${esc(integ.nome)}"     placeholder="Nome"      oninput="cfg.integracoes[${i}].nome     = this.value"/>
+          <span class="sep">—</span>
+          <input type="text" value="${esc(integ.descricao)}" placeholder="Descrição" oninput="cfg.integracoes[${i}].descricao = this.value"/>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="removeIntegracao(${i})" title="Remover">✕</button>
+        </div>`).join('');
+  }
+
+  function addIntegracao() {
+    cfg.integracoes.push({ id: 'integ_' + Date.now(), nome: '', descricao: '' });
+    renderIntegracoes();
+  }
+  function removeIntegracao(i) { cfg.integracoes.splice(i,1); renderIntegracoes(); }
+
+  /* ══════════════════════════════════════════════════════
+     Modelo de Dados
+  ══════════════════════════════════════════════════════ */
+  function renderEntidades() {
+    document.getElementById('entidades-list').innerHTML =
+      Object.entries(cfg.modelo_dados.entidades).map(([nome, campos]) => `
+        <div class="entity-card">
+          <div class="entity-header"><span>${nome}</span></div>
+          <div class="entity-body">
+            <textarea rows="${Math.max(3, campos.length + 1)}"
+                      placeholder="string campo1&#10;datetime campo2"
+                      oninput="updateEntidade('${nome}', this.value)">${campos.join('\n')}</textarea>
+          </div>
+        </div>`).join('');
+  }
+
+  function updateEntidade(nome, text) {
+    cfg.modelo_dados.entidades[nome] = text.split('\n').filter(l => l.trim());
+  }
+
+  /* ══════════════════════════════════════════════════════
+     Deploy Flow
+  ══════════════════════════════════════════════════════ */
+  function renderDeploy() {
+    document.getElementById('deploy-list').innerHTML =
+      cfg.deploy_flow.estados.map((e, i) => `
+        <div class="list-item" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:0.5rem;align-items:center">
+          <input type="text" value="${esc(e.de)}"    placeholder="De"               oninput="cfg.deploy_flow.estados[${i}].de    = this.value"/>
+          <input type="text" value="${esc(e.para)}"  placeholder="Para"             oninput="cfg.deploy_flow.estados[${i}].para  = this.value"/>
+          <input type="text" value="${esc(e.label)}" placeholder="Rótulo (opcional)" oninput="cfg.deploy_flow.estados[${i}].label = this.value"/>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="removeTransicao(${i})" title="Remover">✕</button>
+        </div>`).join('');
+  }
+
+  function addTransicao()      { cfg.deploy_flow.estados.push({ de:'', para:'', label:'' }); renderDeploy(); }
+  function removeTransicao(i) { cfg.deploy_flow.estados.splice(i,1); renderDeploy(); }
+
+  /* ══════════════════════════════════════════════════════
+     Conexão ReqSys
+  ══════════════════════════════════════════════════════ */
+  function renderConexao() {
+    const checks = [
+      { ok: true,  title: 'Stack tecnológica alinhada',
+        detail: 'Vue 3 + Vuetify, FastAPI, Redis, SQLite/SQL Server, Nginx — todos confirmados no projeto <code>reqsys-v2-enterprise-real</code>.' },
+
+      { ok: true,  title: 'Integrações mapeadas no backend',
+        detail: 'Redmine → <code>POST /v1/backlog/publicar-redmine/{id}</code> · GitHub → <code>POST /v1/integracoes/github/issues</code> · SSRS/Power BI → <code>GET /v1/relatorios/ssrs</code>' },
+
+      { ok: true,  title: 'Modelo de dados consistente',
+        detail: 'Entidades USUARIO, SESSAO, SOLICITACAO, ANEXO, LOG confirmadas nas rotas do backend FastAPI e documentação.' },
+
+      { ok: true,  title: 'Fluxo de deploy compatível com README',
+        detail: 'Sequência <em>Validar .env → docker-compose up → Testar URLs → Login</em> bate com o CHECKLIST_OPERACIONAL e README do projeto.' },
+
+      { ok: false, title: 'Portas Dev divergem do docker-compose.dev.yml',
+        detail: 'Os diagramas indicam frontend:<strong>8083</strong> e backend:<strong>8211</strong> para Dev, mas <code>docker-compose.dev.yml</code> usa <code>${GATEWAY_PORT:-8081}</code> e <code>${BACKEND_PORT:-8210}</code> — mesmo valor do <code>.env</code> de produção. Verifique se existe um <code>.env.dev</code> sobrescrevendo essas portas, ou corrija os diagramas.' },
+
+      { ok: false, title: 'Credenciais demo não encontradas no .env',
+        detail: '<code>admin@demo.com / 123456</code> não constam no <code>.env</code> do projeto. Provavelmente são credenciais de seed do banco — documente onde são criadas (script de seed ou migration).' },
+
+      { ok: true,  title: 'Ambientes Prod e Test consistentes',
+        detail: 'Prod (8081/8210) e Test (8084/8212) batem com os docker-compose files e a matriz de ambientes do README.' }
+    ];
+
+    document.getElementById('conexao-checks').innerHTML = checks.map(c => `
+      <div class="check-item ${c.ok ? 'check-ok' : 'check-warn'}">
+        <span class="check-icon">${c.ok ? '✅' : '⚠️'}</span>
+        <div class="check-text">
+          <strong>${c.title}</strong>
+          <span>${c.detail}</span>
+        </div>
+      </div>`).join('');
+  }
+
+  /* ══════════════════════════════════════════════════════
+     Save
+  ══════════════════════════════════════════════════════ */
+  async function saveConfig() {
+    collectForm();
+    const json = JSON.stringify(cfg, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+
+    if ('showSaveFilePicker' in window) {
+      try {
+        const fh = await window.showSaveFilePicker({
+          suggestedName: 'config.json',
+          types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+        });
+        const w = await fh.createWritable();
+        await w.write(blob);
+        await w.close();
+        status('✅ config.json salvo! Recarregue o visualizador para ver as mudanças.', 'success');
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+      }
+    }
+
+    // Fallback: download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'config.json'; a.click();
+    URL.revokeObjectURL(url);
+    status('⬇️ config.json baixado — substitua o arquivo em docs/arquitetura/ e recarregue.', 'warn');
+  }
+
+  /* ══════════════════════════════════════════════════════
+     Navigation
+  ══════════════════════════════════════════════════════ */
+  function showTab(name, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    el.classList.add('active');
+  }
+
+  function showEnv(name, el) {
+    document.querySelectorAll('.env-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.env-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('env-' + name).classList.add('active');
+    el.classList.add('active');
+  }
+
+  /* ══════════════════════════════════════════════════════
+     Helpers
+  ══════════════════════════════════════════════════════ */
+  function esc(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  let _st;
+  function status(msg, type) {
+    const bar = document.getElementById('statusbar');
+    bar.innerHTML = msg;
+    bar.className = 'statusbar ' + type;
+    clearTimeout(_st);
+    _st = setTimeout(() => bar.className = 'statusbar hidden', 5000);
+  }
+</script>
+</body>
+</html>

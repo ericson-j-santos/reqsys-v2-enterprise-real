@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Environment Observability DEV
+    orgId: 1
+    folder: DEV
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

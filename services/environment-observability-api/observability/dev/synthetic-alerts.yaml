@@ -1,0 +1,14 @@
+groups:
+  - name: environment-observability-dev-synthetic
+    interval: 5s
+    rules:
+      - alert: EnvironmentObservabilityApiUnavailableDev
+        expr: up{job="environment-observability-api",environment="development"} == 0
+        for: 10s
+        labels:
+          severity: critical
+          environment: development
+          synthetic: "true"
+        annotations:
+          summary: API de observabilidade indisponível em DEV
+          description: Alerta sintético usado pelo CI para comprovar disparo e recuperação do pipeline de alertas.

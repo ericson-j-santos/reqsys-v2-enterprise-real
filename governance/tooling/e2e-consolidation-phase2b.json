@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "phase": "2B",
+  "status": "implemented",
+  "as_of": "2026-08-25",
+  "objective": "Remover fisicamente os frontends legados após a Fase 2A comprovar ausência de consumidores operacionais.",
+  "canonical_frontend": "frontend",
+  "deleted_paths": [
+    "frontend-angular",
+    "frontend-vuetify"
+  ],
+  "preconditions": {
+    "phase_2a_merged": true,
+    "phase_2a_merge_commit": "ca8905ad869d857084127356cba36bb4edc69a9e",
+    "blocking_dependencies": [],
+    "operational_references": 0
+  },
+  "removal": {
+    "commit": "170fdcc972ea395f71fd22ead3285f6229adfa6d",
+    "strategy": "git-tree deletion of both legacy directories in one atomic commit"
+  },
+  "rollback": {
+    "source_commit": "ca8905ad869d857084127356cba36bb4edc69a9e",
+    "strategy": "restore only the removed directories on a recovery branch; do not rewrite main history",
+    "command": "git restore --source=ca8905ad869d857084127356cba36bb4edc69a9e -- frontend-angular frontend-vuetify"
+  },
+  "guardrails": [
+    "CI fails if frontend-angular or frontend-vuetify reappears physically.",
+    "CI fails if an operational workflow, root package, Playwright config or quality script references a legacy frontend.",
+    "Historical documentation may retain references because it is non-executable evidence."
+  ],
+  "done_criteria": [
+    "Both legacy directories are absent from the branch tree.",
+    "The canonical frontend remains frontend/.",
+    "Legacy operational references remain zero.",
+    "CI Enterprise Fast, full CI, evidence and governed merge gates are green before merge."
+  ]
+}

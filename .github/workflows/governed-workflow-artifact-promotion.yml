@@ -1,0 +1,320 @@
+name: Governed Workflow Artifact Promotion
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/governed-workflow-artifact-promotion.yml"
+      - "scripts/plan_governed_workflow_artifact_promotion.py"
+      - "tests/test_plan_governed_workflow_artifact_promotion.py"
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: "Criar branches e PRs finais após todas as validações"
+        required: true
+        type: boolean
+        default: false
+      expected_base_sha:
+        description: "SHA exato esperado para main; não aceita avanço implícito"
+        required: true
+        type: string
+        default: "fded6ca9f33adf4ea0a4429c48304b65b9d2dce2"
+      homologation_run_id:
+        description: "Run que contém homologation-bacen-gate-generated"
+        required: true
+        type: string
+        default: "30627389870"
+      padrao_ouro_run_id:
+        description: "Run que contém padrao-ouro-bacen-gate-generated"
+        required: true
+        type: string
+        default: "30627734204"
+      homologation_sha256:
+        description: "SHA-256 do workflow de homologação gerado"
+        required: true
+        type: string
+        default: "570133cbad7799c4e8c66906825145ead276f05a6ea7d4b00967401ca61851e9"
+      padrao_delivery_sha256:
+        description: "SHA-256 do Padrão Ouro Delivery gerado"
+        required: true
+        type: string
+        default: "ef1e32366beedd38cd803a40f291d79a6ef3e031372a87bb4bc0333f7b11bfcf"
+      bacen_gate_sha256:
+        description: "SHA-256 do reusable BACEN gate gerado"
+        required: true
+        type: string
+        default: "a243f2a872bccd4f59f6942d185db7b08be49cc5c5c5b68abbece2e0c933c3a9"
+      issue_number:
+        description: "Issue canônica para registrar o resultado"
+        required: true
+        type: string
+        default: "1130"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: governed-workflow-artifact-promotion
+  cancel-in-progress: false
+
+env:
+  HOMOLOGATION_RUN_ID: ${{ inputs.homologation_run_id || '30627389870' }}
+  PADRAO_OURO_RUN_ID: ${{ inputs.padrao_ouro_run_id || '30627734204' }}
+  EXPECTED_BASE_SHA: ${{ inputs.expected_base_sha || 'fded6ca9f33adf4ea0a4429c48304b65b9d2dce2' }}
+  HOMOLOGATION_SHA256: ${{ inputs.homologation_sha256 || '570133cbad7799c4e8c66906825145ead276f05a6ea7d4b00967401ca61851e9' }}
+  PADRAO_DELIVERY_SHA256: ${{ inputs.padrao_delivery_sha256 || 'ef1e32366beedd38cd803a40f291d79a6ef3e031372a87bb4bc0333f7b11bfcf' }}
+  BACEN_GATE_SHA256: ${{ inputs.bacen_gate_sha256 || 'a243f2a872bccd4f59f6942d185db7b08be49cc5c5c5b68abbece2e0c933c3a9' }}
+
+jobs:
+  plan:
+    name: Validate immutable promotion bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Download homologation generated artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: homologation-bacen-gate-generated
+          path: downloaded/homologation
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.HOMOLOGATION_RUN_ID }}
+
+      - name: Download Padrão Ouro generated artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: padrao-ouro-bacen-gate-generated
+          path: downloaded/padrao
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.PADRAO_OURO_RUN_ID }}
+
+      - name: Validate hashes, allowlist and governance contracts
+        run: |
+          python scripts/plan_governed_workflow_artifact_promotion.py \
+            --homologation-dir downloaded/homologation \
+            --padrao-dir downloaded/padrao \
+            --homologation-sha256 "$HOMOLOGATION_SHA256" \
+            --padrao-delivery-sha256 "$PADRAO_DELIVERY_SHA256" \
+            --bacen-gate-sha256 "$BACEN_GATE_SHA256" \
+            --expected-base-sha "$EXPECTED_BASE_SHA" \
+            --tests-dir generated-tests \
+            --output artifacts/governance/workflow-promotion-plan.json
+
+      - name: Run focused planner tests
+        run: python -m pytest -q tests/test_plan_governed_workflow_artifact_promotion.py
+
+      - name: Publish immutable promotion bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-workflow-promotion-bundle
+          path: |
+            downloaded
+            generated-tests
+            artifacts/governance/workflow-promotion-plan.json
+          if-no-files-found: error
+          retention-days: 365
+
+  promote:
+    name: Create allowlisted final pull requests
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && inputs.execute == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      homologation_pr_url: ${{ steps.promote.outputs.homologation_pr_url }}
+      padrao_pr_url: ${{ steps.promote.outputs.padrao_pr_url }}
+    steps:
+      - name: Download validated bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: governed-workflow-promotion-bundle
+          path: bundle
+
+      - name: Verify governed GitHub credential
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_PAT_ACTIONS is not configured."
+            exit 1
+          fi
+          gh api user --silent >/dev/null
+          gh api "repos/${REPOSITORY}" --silent >/dev/null
+
+      - name: Promote allowlisted files to isolated branches
+        id: promote
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          set +x
+
+          plan="bundle/artifacts/governance/workflow-promotion-plan.json"
+          test -f "$plan"
+
+          current_main="$(gh api "repos/${REPOSITORY}/commits/main" --jq .sha)"
+          if [ "$current_main" != "$EXPECTED_BASE_SHA" ]; then
+            echo "::error::main advanced: expected=${EXPECTED_BASE_SHA} observed=${current_main}"
+            exit 1
+          fi
+
+          homologation_branch="agent/homologation-bacen-prod-gate-final-v1"
+          padrao_branch="agent/padrao-ouro-bacen-prod-gate-final-v1"
+
+          create_branch() {
+            local branch="$1"
+            if gh api "repos/${REPOSITORY}/git/ref/heads/${branch}" --silent >/dev/null 2>&1; then
+              echo "::error::branch already exists: ${branch}"
+              exit 1
+            fi
+            gh api --method POST "repos/${REPOSITORY}/git/refs" \
+              -f ref="refs/heads/${branch}" \
+              -f sha="$EXPECTED_BASE_SHA" --silent
+          }
+
+          create_branch "$homologation_branch"
+          create_branch "$padrao_branch"
+
+          python - "$plan" > promotion-updates.tsv <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          plan = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if plan.get("decision") != "validated":
+              raise SystemExit("promotion plan is not validated")
+          for update in plan["updates"]:
+              print(update["lane"], update["source"], update["target"], update["sha256"], sep="\t")
+          PY
+
+          while IFS=$'\t' read -r lane source target expected_sha; do
+            source="bundle/${source}"
+            test -f "$source"
+            actual_sha="$(sha256sum "$source" | awk '{print $1}')"
+            if [ "$actual_sha" != "$expected_sha" ]; then
+              echo "::error::bundle changed after validation: ${target}"
+              exit 1
+            fi
+
+            if [ "$lane" = "homologation" ]; then
+              branch="$homologation_branch"
+            elif [ "$lane" = "padrao_ouro" ]; then
+              branch="$padrao_branch"
+            else
+              echo "::error::non-allowlisted lane: ${lane}"
+              exit 1
+            fi
+
+            existing_sha="$(gh api "repos/${REPOSITORY}/contents/${target}?ref=${EXPECTED_BASE_SHA}" --jq .sha 2>/dev/null || true)"
+            python - "$source" "$branch" "$existing_sha" > request.json <<'PY'
+          import base64
+          import json
+          import sys
+          from pathlib import Path
+
+          source, branch, existing_sha = sys.argv[1:]
+          payload = {
+              "message": "feat(compliance): aplicar gate BACEN produtivo",
+              "content": base64.b64encode(Path(source).read_bytes()).decode("ascii"),
+              "branch": branch,
+          }
+          if existing_sha:
+              payload["sha"] = existing_sha
+          print(json.dumps(payload))
+          PY
+            gh api --method PUT "repos/${REPOSITORY}/contents/${target}" --input request.json --silent
+          done < promotion-updates.tsv
+
+          create_pr_payload() {
+            local branch="$1"
+            local title="$2"
+            local body="$3"
+            python - "$branch" "$title" "$body" > pr-request.json <<'PY'
+          import json
+          import sys
+          branch, title, body = sys.argv[1:]
+          print(json.dumps({"title": title, "head": branch, "base": "main", "body": body}))
+          PY
+            gh api --method POST "repos/${REPOSITORY}/pulls" --input pr-request.json --jq .html_url
+          }
+
+          homologation_pr_url="$(create_pr_payload \
+            "$homologation_branch" \
+            "feat(compliance): gate BACEN na homologação Fly" \
+            "Artifact validado do run ${HOMOLOGATION_RUN_ID}; SHA-256 ${HOMOLOGATION_SHA256}. Gate antes de environment/secrets/deploy. production_touched=false")"
+          padrao_pr_url="$(create_pr_payload \
+            "$padrao_branch" \
+            "feat(compliance): gate BACEN no Padrão Ouro Delivery" \
+            "Artifact validado do run ${PADRAO_OURO_RUN_ID}; gate reutilizável e jobs produtivos condicionados. production_touched=false")"
+
+          echo "homologation_pr_url=${homologation_pr_url}" >> "$GITHUB_OUTPUT"
+          echo "padrao_pr_url=${padrao_pr_url}" >> "$GITHUB_OUTPUT"
+
+  record:
+    name: Record explicit promotion decision
+    needs: [plan, promote]
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comment canonical issue
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EXECUTE: ${{ inputs.execute }}
+          PLAN_RESULT: ${{ needs.plan.result }}
+          PROMOTE_RESULT: ${{ needs.promote.result }}
+          HOMOLOGATION_PR_URL: ${{ needs.promote.outputs.homologation_pr_url }}
+          PADRAO_PR_URL: ${{ needs.promote.outputs.padrao_pr_url }}
+        with:
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            let decision = 'blocked';
+            if (process.env.PLAN_RESULT === 'success' && process.env.EXECUTE !== 'true') {
+              decision = 'governed_skip';
+            } else if (process.env.PLAN_RESULT === 'success' && process.env.PROMOTE_RESULT === 'success') {
+              decision = 'validated';
+            }
+
+            const body = [
+              '## Governed Workflow Artifact Promotion',
+              '',
+              `- Decision: \`${decision}\``,
+              `- Plan: \`${process.env.PLAN_RESULT}\``,
+              `- Promotion: \`${process.env.PROMOTE_RESULT}\``,
+              `- Homologation PR: ${process.env.HOMOLOGATION_PR_URL || 'not_created'}`,
+              `- Padrão Ouro PR: ${process.env.PADRAO_PR_URL || 'not_created'}`,
+              `- Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '- Force push: `false`',
+              '- Direct main write: `false`',
+              '- production_touched: `false`',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body,
+            });
+
+            if (decision === 'blocked') {
+              core.setFailed('Governed workflow promotion is blocked.');
+            }

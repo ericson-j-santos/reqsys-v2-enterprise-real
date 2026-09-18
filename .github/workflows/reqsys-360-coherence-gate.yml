@@ -1,0 +1,140 @@
+name: ReqSys 360 Coherence Gate
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'backend-dotnet/**'
+      - 'runtime/**'
+      - 'services/**'
+      - 'governance/reqsys-360/**'
+      - 'scripts/reqsys_360_*.py'
+      - 'tests/test_reqsys_360_*.py'
+      - '.github/workflows/reqsys-360-coherence-gate.yml'
+      - 'docs/roadmaps/reqsys-360.md'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'backend-dotnet/**'
+      - 'runtime/**'
+      - 'services/**'
+      - 'governance/reqsys-360/**'
+      - 'scripts/reqsys_360_*.py'
+      - 'tests/test_reqsys_360_*.py'
+      - '.github/workflows/reqsys-360-coherence-gate.yml'
+      - 'docs/roadmaps/reqsys-360.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reqsys-360-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: ReqSys 360 coherence audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Test navigation audit contract
+        working-directory: frontend
+        run: node --test scripts/reqsys-360-audit.test.mjs
+
+      - name: Validate navigation catalog contracts
+        working-directory: frontend
+        run: npx vitest run src/constants/navCatalog.test.js src/constants/navCatalog.reqsys360.test.js
+
+      - name: Test repository and regression audit contracts
+        run: python -m unittest tests/test_reqsys_360_repository_audit.py tests/test_reqsys_360_regression_guard.py -v
+
+      - name: Generate navigation evidence
+        working-directory: frontend
+        run: |
+          node scripts/reqsys-360-audit.mjs
+          cat artifacts/reqsys-360/reqsys-360.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate repository evidence
+        run: |
+          python scripts/reqsys_360_repository_audit.py
+          cat artifacts/reqsys-360/repository-audit.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce ReqSys 360 regression baseline
+        run: |
+          python scripts/reqsys_360_regression_guard.py
+          cat artifacts/reqsys-360/regression.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate linguagem simples
+        working-directory: frontend
+        run: npm run quality:linguagem-simples
+
+      - name: Validate accessibility contracts
+        working-directory: frontend
+        run: npm run quality:acessibilidade
+
+      - name: Validate design system
+        working-directory: frontend
+        run: npm run quality:design-system
+
+      - name: Install Chromium for focused E2E
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start frontend for focused E2E
+        working-directory: frontend
+        env:
+          VITE_API_URL: /api
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/reqsys-360-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              echo "Vite disponível"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/reqsys-360-vite.log || true
+          exit 1
+
+      - name: Execute focused ReqSys 360 E2E
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://127.0.0.1:5173
+        run: npx playwright test tests/e2e/reqsys-360-navigation.spec.js --reporter=line
+
+      - name: Upload ReqSys 360 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-360-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            frontend/artifacts/reqsys-360/
+            artifacts/reqsys-360/
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: warn
+          retention-days: 90

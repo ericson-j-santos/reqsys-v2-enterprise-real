@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.example.com/contracts/observability-correlation-report.schema.json",
+  "title": "ReqSys Observability Correlation Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_mode", "generated_at", "repository", "branch", "commit_sha", "scope", "summary", "correlations", "guardrails"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "report_mode": { "const": "report-only" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "branch": { "type": "string" },
+    "commit_sha": { "type": "string" },
+    "scope": {
+      "type": "array",
+      "items": { "enum": ["runtime_health", "delivery_evidence", "readiness", "completion", "burndown"] },
+      "minItems": 5,
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mapped_sources", "mapped_artifacts", "category_coverage", "maturity_percent", "operational_risk", "confidence_level"],
+      "properties": {
+        "mapped_sources": { "type": "integer", "minimum": 0 },
+        "mapped_artifacts": { "type": "integer", "minimum": 0 },
+        "category_coverage": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "maturity_percent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "operational_risk": { "enum": ["low", "medium", "high"] },
+        "confidence_level": { "enum": ["low", "medium", "high"] }
+      }
+    },
+    "correlations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_type", "categories", "status", "operational_risk", "confidence_level"],
+        "properties": {
+          "source_type": { "enum": ["workflow", "dashboard_or_doc", "script", "artifact"] },
+          "artifact_name": { "type": ["string", "null"] },
+          "path": { "type": ["string", "null"] },
+          "categories": { "type": "array", "items": { "type": "string" } },
+          "correlation_id": { "type": ["string", "null"] },
+          "workflow_run_id": { "type": ["string", "null"] },
+          "commit_sha": { "type": ["string", "null"] },
+          "branch": { "type": ["string", "null"] },
+          "pr": { "type": ["string", "null"] },
+          "status": { "type": ["string", "number", "boolean", "null"] },
+          "maturity_percent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+          "operational_risk": { "enum": ["low", "medium", "high"] },
+          "confidence_level": { "enum": ["low", "medium", "high"] }
+        }
+      }
+    },
+    "guardrails": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+  }
+}

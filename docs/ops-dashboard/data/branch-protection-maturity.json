@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T18:30:00-03:00",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "domain": "branch_protection",
+  "dashboard_scope": "operational_governance",
+  "state": "partial",
+  "maturity_percent": 70,
+  "confidence_level": "medium",
+  "operational_risk": "medium",
+  "target_state": "passed",
+  "target_maturity_percent": 95,
+  "evidence": [
+    {
+      "id": "branch_protection_baseline",
+      "path": "docs/governance/branch-protection-enterprise-baseline.md",
+      "status": "passed",
+      "available": true
+    },
+    {
+      "id": "branch_protection_audit_artifact",
+      "path": "artifacts/branch-protection-audit/branch-protection-audit.json",
+      "status": "passed",
+      "available": true
+    },
+    {
+      "id": "branch_protection_summary",
+      "path": "artifacts/branch-protection-audit/summary.md",
+      "status": "passed",
+      "available": true
+    },
+    {
+      "id": "governed_merge_queue",
+      "path": ".github/workflows/governed-merge-queue.yml",
+      "status": "passed",
+      "available": true
+    }
+  ],
+  "missing_evidence": [
+    {
+      "id": "github_ruleset_api_snapshot",
+      "path": "artifacts/branch-protection-audit/ruleset-api-snapshot.json",
+      "status": "missing",
+      "available": false,
+      "reason": "requires GitHub ruleset or branch protection API evidence"
+    }
+  ],
+  "required_checks_recommended": [
+    "Governança Padrão Ouro",
+    "Governance Quality Gates",
+    "CI — ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "Branch Protection Audit",
+    "Governed Merge Queue"
+  ],
+  "safe_parallel_pr_capacity": {
+    "current_recommended_range": "4-7",
+    "aggressive_governed_range": "8-12",
+    "risk_limit": "avoid shared contracts, runtime bootstrap and global dependency changes in parallel",
+    "safe_domains": [
+      "observability",
+      "analytics",
+      "documentation",
+      "tests",
+      "evidence artifacts",
+      "operational dashboards"
+    ]
+  },
+  "next_required_actions": [
+    "Capture GitHub ruleset or branch protection API snapshot",
+    "Surface branch_protection maturity in the operational dashboard UI",
+    "Block high-risk parallel PRs when branch protection evidence is stale",
+    "Track merge queue eligibility and auto-merge adoption per PR"
+  ]
+}

@@ -1,0 +1,10 @@
+mcs.metadata:
+  componentName: ReqSysLowCode Copilot
+kind: GptComponentMetadata
+instructions: Atue como orquestrador low-code do ReqSys. Converta pedidos em demandas Dataverse, explique status e sempre confirme antes de acoes externas.
+gptCapabilities:
+  webBrowsing: true
+
+aISettings:
+  model:
+    modelNameHint: GPT5Chat

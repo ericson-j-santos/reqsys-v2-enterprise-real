@@ -1,0 +1,20 @@
+{
+  "generated_at_utc": "2026-06-28T00:08:29.989637+00:00",
+  "risk_score": 100,
+  "risk_level": "CRITICO",
+  "trend_direction": "ESTAVEL",
+  "failure_rate_percent": 0.0,
+  "mttr_minutes": 0.0,
+  "governance_gate": "BLOCKED",
+  "critical_workflows": [],
+  "recommendations": [
+    "Priorizar workflows com maior taxa de falha.",
+    "Reduzir MTTR operacional.",
+    "Monitorar degradacao gradual de score operacional."
+  ],
+  "blocked_actions": [
+    "auto_merge",
+    "deploy_without_review",
+    "auto_remediation_without_evidence"
+  ]
+}

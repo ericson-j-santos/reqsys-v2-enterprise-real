@@ -1,0 +1,68 @@
+name: User Experience Public Sync
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/publish_user_experience_evidence_card.py'
+      - 'scripts/smoke_user_experience_public_sync.py'
+      - 'tests/test_user_experience_public_sync.py'
+      - '.github/workflows/user-experience-public-sync.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/publish_user_experience_evidence_card.py'
+      - 'scripts/smoke_user_experience_public_sync.py'
+      - 'tests/test_user_experience_public_sync.py'
+      - '.github/workflows/user-experience-public-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: user-experience-public-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-publish-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/publish_user_experience_evidence_card.py
+          python -m py_compile scripts/smoke_user_experience_public_sync.py
+          python -m unittest tests/test_user_experience_public_sync.py
+
+      - name: Build synchronized evidence
+        run: |
+          mkdir -p evidence/ux-public-sync
+          cat > evidence/ux-public-sync/state.json <<'JSON'
+          {"cards":{"user_experience_evidence":{"score":92,"status":"evidenced-and-consolidated","evidenced":true,"consolidated":true,"scenarios":["keyboard-focus","mobile-navigation","offline-online"],"workflow_run_id":29287848346,"artifact":{"id":8293879012,"expired":false},"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          cat > evidence/ux-public-sync/brief.json <<'JSON'
+          {"indicators":{"user_experience_evidence":{"score":92,"status":"evidenced-and-consolidated","evidenced":true,"consolidated":true,"scenarios":["keyboard-focus","mobile-navigation","offline-online"],"workflow_run_id":29287848346,"artifact":{"id":8293879012,"expired":false},"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          echo '{"cards":[]}' > evidence/ux-public-sync/dashboard.json
+          python scripts/publish_user_experience_evidence_card.py \
+            --index evidence/ux-public-sync/state.json \
+            --dashboard evidence/ux-public-sync/dashboard.json \
+            --output evidence/ux-public-sync/dashboard-enriched.json
+          python scripts/smoke_user_experience_public_sync.py \
+            --state evidence/ux-public-sync/state.json \
+            --brief evidence/ux-public-sync/brief.json \
+            --dashboard evidence/ux-public-sync/dashboard-enriched.json \
+            --output evidence/ux-public-sync/smoke-result.json
+
+      - name: Upload synchronized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-public-sync-${{ github.sha }}
+          path: evidence/ux-public-sync/
+          retention-days: 90

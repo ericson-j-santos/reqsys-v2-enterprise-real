@@ -1,0 +1,79 @@
+name: Testes Monitorador APIs Python
+
+on:
+  pull_request:
+    paths:
+      - "examples/monitorador_apis_python/**"
+      - ".github/workflows/testes-monitorador-apis-python.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "examples/monitorador_apis_python/**"
+      - ".github/workflows/testes-monitorador-apis-python.yml"
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    defaults:
+      run:
+        working-directory: examples/monitorador_apis_python
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Executar testes e gerar cobertura
+        run: |
+          pytest \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov
+
+      - name: Resumir cobertura no job
+        if: always()
+        run: |
+          echo "## Cobertura — Monitorador APIs Python" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f coverage.xml ]; then
+            python -c "import xml.etree.ElementTree as ET; root = ET.parse('coverage.xml').getroot(); line_rate = float(root.attrib.get('line-rate', 0)) * 100; branch_rate = float(root.attrib.get('branch-rate', 0)) * 100; print(f'- Line coverage: {line_rate:.2f}%'); print(f'- Branch coverage: {branch_rate:.2f}%'); print('- Limiar obrigatório: 60.00%'); print('- Arquivos gerados localmente: \`coverage.xml\` e \`htmlcov/\`')" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- coverage.xml não foi gerado; verificar falha antes da coleta de cobertura." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Validar cobertura mínima
+        run: |
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          
+          LIMIAR = 60.0
+          root = ET.parse('coverage.xml').getroot()
+          line_rate = float(root.attrib.get('line-rate', 0)) * 100
+          print(f"Cobertura de linhas apurada: {line_rate:.2f}%")
+          print(f"Limiar obrigatório: {LIMIAR:.2f}%")
+          if line_rate < LIMIAR:
+              print(f"Cobertura insuficiente: {line_rate:.2f}% < {LIMIAR:.2f}%")
+              sys.exit(1)
+          print("Cobertura mínima atendida.")
+          PY
+
+      - name: Validar import FastAPI
+        run: |
+          python -c "from app.api import app; print(app.title)"
+
+      - name: Validar Docker build
+        run: |
+          docker build -t monitorador-apis-python:test .

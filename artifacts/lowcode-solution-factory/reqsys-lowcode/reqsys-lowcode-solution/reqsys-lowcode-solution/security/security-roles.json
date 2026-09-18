@@ -1,0 +1,101 @@
+[
+  {
+    "name": "ReqSys Solicitante",
+    "description": "Cria demandas e consulta itens proprios.",
+    "privileges": {
+      "reqsys_demanda": [
+        "read_own",
+        "create_own",
+        "append_own"
+      ],
+      "reqsys_requisito": [
+        "read_own",
+        "create_own",
+        "append_own"
+      ]
+    }
+  },
+  {
+    "name": "ReqSys Aprovador",
+    "description": "Avalia demandas e requisitos em aprovacao.",
+    "privileges": {
+      "reqsys_demanda": [
+        "read_org",
+        "write_assigned",
+        "append_org"
+      ],
+      "reqsys_requisito": [
+        "read_org",
+        "write_assigned",
+        "append_org"
+      ],
+      "reqsys_aprovacao": [
+        "read_org",
+        "write_assigned",
+        "append_org"
+      ]
+    }
+  },
+  {
+    "name": "ReqSys Administrador Low-Code",
+    "description": "Administra a solution low-code e suas configuracoes.",
+    "privileges": {
+      "reqsys_demanda": [
+        "create_org",
+        "read_org",
+        "write_org",
+        "delete_org",
+        "append_org"
+      ],
+      "reqsys_requisito": [
+        "create_org",
+        "read_org",
+        "write_org",
+        "delete_org",
+        "append_org"
+      ],
+      "reqsys_aprovacao": [
+        "create_org",
+        "read_org",
+        "write_org",
+        "delete_org",
+        "append_org"
+      ],
+      "reqsys_evidencia": [
+        "create_org",
+        "read_org",
+        "write_org",
+        "delete_org",
+        "append_org"
+      ],
+      "reqsys_release": [
+        "create_org",
+        "read_org",
+        "write_org",
+        "delete_org",
+        "append_org"
+      ]
+    }
+  },
+  {
+    "name": "ReqSys Auditor",
+    "description": "Consulta evidencias, aprovacoes e releases sem alterar dados.",
+    "privileges": {
+      "reqsys_demanda": [
+        "read_org"
+      ],
+      "reqsys_requisito": [
+        "read_org"
+      ],
+      "reqsys_aprovacao": [
+        "read_org"
+      ],
+      "reqsys_evidencia": [
+        "read_org"
+      ],
+      "reqsys_release": [
+        "read_org"
+      ]
+    }
+  }
+]

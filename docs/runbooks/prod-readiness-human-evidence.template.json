@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "source": "prod-readiness-human-evidence",
+  "environment": "production",
+  "validated_at": "YYYY-MM-DDTHH:MM:SSZ",
+  "change_reference": "CHANGE-REQSYS-FLYIO-PROD-YYYYMMDD",
+  "entra_redirect_uri_registered": {
+    "status": "pending",
+    "owner": "operador-azure",
+    "registered_redirect_uri": "https://reqsys-app.fly.dev/auth/callback.html",
+    "evidence_url": ""
+  },
+  "fly_secrets_reviewed": {
+    "status": "pending",
+    "owner": "operador-fly-ops",
+    "checked_app": "reqsys-api",
+    "checked_keys": [
+      "APP_ENV",
+      "ALLOW_DEMO_LOGIN",
+      "JWT_SECRET",
+      "JWT_ISSUER",
+      "JWT_AUDIENCE",
+      "APP_PUBLIC_URL",
+      "API_PUBLIC_URL",
+      "AZURE_TENANT_ID",
+      "AZURE_CLIENT_ID"
+    ],
+    "sensitive_values_recorded": false,
+    "evidence_url": ""
+  },
+  "qa_approval": {
+    "status": "pending",
+    "owner": "qa",
+    "evidence_url": ""
+  },
+  "ops_approval": {
+    "status": "pending",
+    "owner": "ops",
+    "evidence_url": ""
+  },
+  "rollback_plan_documented": {
+    "status": "pending",
+    "owner": "ops",
+    "evidence_url": ""
+  },
+  "deployment_window_approved": {
+    "status": "pending",
+    "owner": "gestao-ops",
+    "evidence_url": ""
+  }
+}

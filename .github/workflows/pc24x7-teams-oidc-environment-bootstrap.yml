@@ -1,0 +1,63 @@
+name: PC24x7 Teams OIDC Environment Bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: pc24x7-teams-oidc-environment-bootstrap-dev
+  cancel-in-progress: false
+
+jobs:
+  bootstrap-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validar configuração governada
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado."
+              exit 2
+            fi
+          done
+
+      - name: Login Azure OIDC pela identidade mutadora já federada à main
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Criar ou revalidar somente a FIC do Environment development
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/bootstrap_pc24x7_teams_oidc_environment.py \
+            --confirm CRIAR-FIC-PC24X7-TEAMS-DEV \
+            --tenant-id "$CCP_AZURE_TENANT_ID" \
+            --mutator-client-id "$CCP_AZURE_CLIENT_ID" \
+            | tee pc24x7-teams-oidc-environment-bootstrap.json
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-teams-oidc-environment-bootstrap-${{ github.run_id }}
+          path: pc24x7-teams-oidc-environment-bootstrap.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,55 @@
+name: Teams Recipient Policy Drift Guard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/notifications/teams-recipient-policies.json"
+      - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
+      - "scripts/audit_teams_recipient_policy_drift.py"
+      - "tests/scripts/test_audit_teams_recipient_policy_drift.py"
+  push:
+    branches: [main]
+    paths:
+      - "governance/notifications/teams-recipient-policies.json"
+      - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-recipient-policy-drift-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Compile drift auditor
+        run: python -m py_compile scripts/audit_teams_recipient_policy_drift.py
+      - name: Run focused tests
+        if: github.event_name == 'pull_request'
+        run: python -m pytest -q tests/scripts/test_audit_teams_recipient_policy_drift.py
+      - name: Audit policy references and active destinations
+        run: |
+          python scripts/audit_teams_recipient_policy_drift.py \
+            --config governance/notifications/teams-recipient-policies.json \
+            --workflows .github/workflows \
+            --output artifacts/teams/recipient-policy-drift-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teams-recipient-policy-drift-audit
+          path: artifacts/teams/recipient-policy-drift-audit.json
+          if-no-files-found: warn
+          retention-days: 365

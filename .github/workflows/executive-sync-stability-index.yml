@@ -1,0 +1,62 @@
+name: Executive Sync Stability Index
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Promotion Advisor Comparative Trend Public Smoke Sync
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-index:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_executive_sync_stability_index.py
+          python -m unittest tests/test_build_executive_sync_stability_index.py
+
+      - name: Prepare governed inputs
+        run: |
+          mkdir -p out
+          cat > out/history.json <<'JSON'
+          {"environments":{"DEV":{"samples":[]},"STG":{"samples":[]},"PROD":{"samples":[]}}}
+          JSON
+          echo '{"production_ready":false,"cards":{}}' > out/runtime-executive-index.json
+          echo '{"production_ready":false,"indicators":{}}' > out/executive-brief.json
+
+      - name: Build report-only index
+        run: |
+          python scripts/build_executive_sync_stability_index.py \
+            --history out/history.json \
+            --runtime out/runtime-executive-index.json \
+            --brief out/executive-brief.json \
+            | tee out/executive-sync-stability-index.json
+
+      - name: Validate guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('out/executive-sync-stability-index.json').read_text())
+          assert data['mode'] == 'report-only'
+          assert data['production_blocker'] is False
+          assert data['human_approval_required'] is True
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: executive-sync-stability-index
+          path: out/
+          retention-days: 90

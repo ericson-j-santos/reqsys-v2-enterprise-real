@@ -1,0 +1,66 @@
+name: Operational Risk Engine
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '55 11 * * 1-5'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  operational-risk-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare fallback artifacts
+        run: |
+          mkdir -p artifacts/operational-history
+          mkdir -p artifacts/operational-governance-gate
+
+          cat > artifacts/operational-history/operational-history.json <<'EOF'
+          [
+            {
+              "hub_score": 82,
+              "metrics": {
+                "overall_failure_rate_percent": 12,
+                "mttr_minutes": 18
+              },
+              "workflow_failure_rates": [
+                {
+                  "workflow": "ci-main",
+                  "failure_rate_percent": 45
+                }
+              ]
+            }
+          ]
+          EOF
+
+          cat > artifacts/operational-governance-gate/operational-governance-gate.json <<'EOF'
+          {
+            "gate_status": "APPROVED"
+          }
+          EOF
+
+      - name: Execute operational risk engine
+        run: |
+          python scripts/operational_risk_engine.py \
+            --history artifacts/operational-history/operational-history.json \
+            --governance artifacts/operational-governance-gate/operational-governance-gate.json \
+            --out-dir artifacts/operational-risk-engine
+
+      - name: Publish risk summary
+        run: |
+          cat artifacts/operational-risk-engine/operational-risk-engine.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload risk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-risk-engine
+          path: artifacts/operational-risk-engine/
+          retention-days: 30

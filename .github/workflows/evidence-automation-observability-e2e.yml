@@ -1,0 +1,128 @@
+name: Evidence Automation Observability E2E
+
+on:
+  workflow_run:
+    workflows:
+      - Public Runtime Evidence Gate
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      public_url:
+        description: "URL pública da API ReqSys"
+        required: true
+        default: "https://reqsys-api.fly.dev"
+      strict:
+        description: "Falhar o workflow se o gate observability E2E falhar"
+        required: true
+        type: boolean
+        default: true
+      skip_precondition:
+        description: "Pular verificação strict precondition (somente wire/diagnóstico)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  observability-e2e:
+    name: Observability E2E gate
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve inputs
+        id: inputs
+        env:
+          INPUT_PUBLIC_URL: ${{ inputs.public_url }}
+          INPUT_STRICT: ${{ inputs.strict }}
+          INPUT_SKIP_PRECONDITION: ${{ inputs.skip_precondition }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            public_url="${INPUT_PUBLIC_URL}"
+            strict="${INPUT_STRICT}"
+            skip_precondition="${INPUT_SKIP_PRECONDITION}"
+          else
+            public_url="https://reqsys-api.fly.dev"
+            strict="true"
+            skip_precondition="false"
+          fi
+          mkdir -p artifacts/runtime
+          echo "public_url=${public_url}" >> "$GITHUB_OUTPUT"
+          echo "strict=${strict}" >> "$GITHUB_OUTPUT"
+          echo "skip_precondition=${skip_precondition}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "upstream_workflow=Public Runtime Evidence Gate" >> "$GITHUB_OUTPUT"
+          else
+            echo "upstream_workflow=workflow_dispatch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate observability E2E
+        id: e2e
+        continue-on-error: true
+        run: |
+          args=(
+            --base-url "${{ steps.inputs.outputs.public_url }}"
+            --environment prod
+            --output artifacts/runtime/observability-e2e-validation.json
+          )
+          if [ "${{ steps.inputs.outputs.skip_precondition }}" = "true" ]; then
+            args+=(--skip-precondition)
+          fi
+          python scripts/validate_observability_e2e.py "${args[@]}"
+
+      - name: Persist observability E2E evidence
+        if: always()
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+          UPSTREAM: ${{ steps.inputs.outputs.upstream_workflow }}
+        run: |
+          if [ ! -f artifacts/runtime/observability-e2e-validation.json ]; then
+            echo '{"gate_passed":false,"precondition_ok":false,"blocking_issues":["validation artifact ausente"]}' \
+              > artifacts/runtime/observability-e2e-validation.json
+          fi
+          python scripts/persist_observability_e2e_evidence.py \
+            --validation artifacts/runtime/observability-e2e-validation.json \
+            --output-dir audit/runtime \
+            --repository "${REPOSITORY}" \
+            --run-id "${RUN_ID}" \
+            --event-name "${EVENT_NAME}" \
+            --sha "${SHA}" \
+            --upstream-workflow "${UPSTREAM}"
+
+      - name: Upload observability E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-e2e-evidence
+          path: |
+            artifacts/runtime/observability-e2e-validation.json
+            audit/runtime/observability-e2e-validation.json
+            audit/runtime/observability-e2e-evidence-index.json
+            audit/runtime/observability-e2e-evidence.md
+          if-no-files-found: error
+
+      - name: Enforce strict gate
+        if: ${{ always() && steps.inputs.outputs.strict == 'true' && steps.e2e.outcome != 'success' }}
+        run: |
+          echo "Observability E2E gate failed in strict mode."
+          exit 1

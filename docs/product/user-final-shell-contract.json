@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "product": "ReqSys",
+  "contract": "user-final-shell",
+  "status": "proposed",
+  "navigation": [
+    { "id": "home", "label": "Início", "route": "/home", "required_for_mvp": true },
+    { "id": "workspace", "label": "Workspace", "route": "/workspace", "required_for_mvp": true },
+    { "id": "analytics", "label": "Analytics", "route": "/analytics", "required_for_mvp": false },
+    { "id": "ajuda", "label": "Ajuda", "route": "/ajuda", "required_for_mvp": true }
+  ],
+  "ui_states": ["loading", "empty", "error", "success", "unauthorized"],
+  "environments": ["DEV", "HML", "PRD"],
+  "guardrails": {
+    "no_deploy": true,
+    "no_production_promotion": true,
+    "no_secret_exposure": true,
+    "correlation_id_required_for_audit": true
+  },
+  "drilldown_contract": {
+    "source": "dashboard-card",
+    "metric": "string",
+    "filters": {},
+    "correlation_id": "optional"
+  }
+}

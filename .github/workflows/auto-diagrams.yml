@@ -1,0 +1,72 @@
+# .github/workflows/auto-diagrams.yml
+name: Auto-Generate Diagrams
+
+on:
+  push:
+    paths:
+      - "**/*.py"
+      - "!.diagrams/**"
+    branches:
+      - feat/**
+      - main
+  pull_request:
+    paths:
+      - "**/*.py"
+
+jobs:
+  generate-diagrams:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+
+      - name: Generate diagrams
+        run: |
+          python scripts/diagram_generator.py --path backend/app --type all --correlation-id "ci-${{ github.run_id }}"
+
+      - name: Check for changes
+        id: check
+        run: |
+          if git diff --quiet .diagrams/; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push diagrams
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "Diagram Bot"
+          git config user.email "bot@reqsys.local"
+          git add .diagrams/
+          git commit -m "chore(diagrams): auto-generated diagrams [ADR-001, ADR-003] [${{ github.run_id }}]"
+          git push
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.check.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '📊 **Diagramas Atualizados**\n\nOs seguintes diagramas foram gerados automaticamente:\n\n```\n' + 
+                    require('fs').readFileSync('.diagrams/manifest.json', 'utf8') + 
+                    '\n```'
+            })

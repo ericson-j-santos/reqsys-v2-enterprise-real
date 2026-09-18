@@ -1,0 +1,55 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {},
+      "triggers": {
+        "manual": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "codigo_ou_titulo": {
+                  "type": "string"
+                },
+                "correlation_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "correlation_id"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Resposta_Governada": {
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "resultado": "Consulta recebida pelo workflow nativo Power Automate.",
+              "workflow": "ReqSys - Consulta de status",
+              "audit_event": "copilot_status_consultado",
+              "correlation_id": "@{triggerBody()?['correlation_id']}",
+              "status": "materialized_native_p0"
+            }
+          },
+          "runAfter": {}
+        }
+      },
+      "outputs": {}
+    },
+    "templateName": null
+  },
+  "schemaVersion": "1.0.0.0"
+}

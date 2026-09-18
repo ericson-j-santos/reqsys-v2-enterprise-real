@@ -1,0 +1,86 @@
+name: Unified Executive Integration Index
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: unified-executive-integration-index
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_unified_executive_integration_index.py
+          python -m unittest tests/test_build_unified_executive_integration_index.py -v
+
+      - name: Restore latest executive sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/unified-executive
+          cp docs/ops-dashboard/data/runtime-executive-index.json .tmp/unified-executive/runtime.json 2>/dev/null || echo '{}' > .tmp/unified-executive/runtime.json
+          cp docs/ops-dashboard/data/merge-intelligence-index.json .tmp/unified-executive/quality.json 2>/dev/null || echo '{}' > .tmp/unified-executive/quality.json
+
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=reqsys-parallelism-effect-index&per_page=10" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/unified-executive/parallelism.zip
+            unzip -q .tmp/unified-executive/parallelism.zip -d .tmp/unified-executive/parallelism
+            file="$(find .tmp/unified-executive/parallelism -name '*parallelism*index*.json' -print -quit)"
+            [ -n "$file" ] && cp "$file" .tmp/unified-executive/parallelism.json || echo '{}' > .tmp/unified-executive/parallelism.json
+          else
+            echo '{}' > .tmp/unified-executive/parallelism.json
+          fi
+
+      - name: Build unified executive index
+        run: |
+          python scripts/build_unified_executive_integration_index.py \
+            --parallelism .tmp/unified-executive/parallelism.json \
+            --runtime .tmp/unified-executive/runtime.json \
+            --quality .tmp/unified-executive/quality.json \
+            --output .tmp/unified-executive/unified-executive-integration-index.json
+
+      - name: Validate governance invariants
+        run: |
+          jq -e '.production.promotion_allowed == false and .production.human_approval_required == true' .tmp/unified-executive/unified-executive-integration-index.json >/dev/null
+
+      - name: Publish summary
+        shell: bash
+        run: |
+          file=.tmp/unified-executive/unified-executive-integration-index.json
+          {
+            echo "# Unified Executive Integration Index"
+            echo ""
+            echo "| Indicator | Value |"
+            echo "|---|---:|"
+            echo "| Status | \`$(jq -r '.status' "$file")\` |"
+            echo "| Risk | \`$(jq -r '.risk' "$file")\` |"
+            echo "| Throughput decision | \`$(jq -r '.indicators.throughput.decision' "$file")\` |"
+            echo "| Average lead time | \`$(jq -r '.indicators.lead_time.average_minutes' "$file") min\` |"
+            echo "| CI stable | \`$(jq -r '.indicators.ci_stability.stable' "$file")\` |"
+            echo "| Quality | \`$(jq -r '.indicators.quality.status' "$file")\` |"
+            echo "| Runtime | \`$(jq -r '.indicators.runtime.status' "$file")\` |"
+            echo "| Next action | \`$(jq -r '.next_safe_action' "$file")\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-unified-executive-integration-index
+          path: .tmp/unified-executive/unified-executive-integration-index.json
+          retention-days: 90

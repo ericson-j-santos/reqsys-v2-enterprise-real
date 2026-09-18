@@ -1,0 +1,48 @@
+name: User Experience Empty State Indicator
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_empty_state_telemetry_indicator.py"
+      - "tests/test_build_empty_state_telemetry_indicator.py"
+      - ".github/workflows/user-experience-empty-state-indicator.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-empty-state-indicator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_empty_state_telemetry_indicator.py
+          python -m unittest tests/test_build_empty_state_telemetry_indicator.py -v
+      - name: Generate governed evidence
+        run: |
+          mkdir -p .tmp/empty-state
+          printf '%s\n' '[{"context":"govbi-results","event":"view"},{"context":"govbi-results","event":"primary_action"},{"context":"operational-dashboard","event":"view"},{"context":"operational-dashboard","event":"secondary_action"},{"context":"operational-dashboard","event":"view"}]' > .tmp/empty-state/telemetry.json
+          printf '%s\n' '{}' > .tmp/empty-state/state.json
+          printf '%s\n' '{}' > .tmp/empty-state/brief.json
+          printf '%s\n' '{"cards":[]}' > .tmp/empty-state/dashboard.json
+          python scripts/build_empty_state_telemetry_indicator.py \
+            --telemetry .tmp/empty-state/telemetry.json \
+            --state .tmp/empty-state/state.json \
+            --brief .tmp/empty-state/brief.json \
+            --dashboard .tmp/empty-state/dashboard.json \
+            --output-dir .tmp/empty-state/output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-empty-state-indicator
+          path: .tmp/empty-state/output
+          retention-days: 90

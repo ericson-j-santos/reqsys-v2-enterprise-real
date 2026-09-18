@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/fly-environment-state-capture.schema.json",
+  "title": "Fly Environment State Capture",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "contract",
+    "generated_at_epoch",
+    "environment",
+    "phase",
+    "expected_sha",
+    "ready",
+    "api",
+    "frontend",
+    "blocking_issues",
+    "secret_values_persisted",
+    "production_touched"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract": {"const": "fly-environment-state-capture"},
+    "environment": {"enum": ["dev", "hml", "prod"]},
+    "phase": {"enum": ["read_only", "pre_deploy", "post_deploy"]},
+    "expected_sha": {"type": "string", "minLength": 7},
+    "ready": {"type": "boolean"},
+    "secret_values_persisted": {"const": false},
+    "production_touched": {"type": "boolean"},
+    "blocking_issues": {"type": "array", "items": {"type": "string"}}
+  }
+}

@@ -1,0 +1,24 @@
+<fetch>
+  <entity name="workflow">
+    <attribute name="workflowid" />
+    <attribute name="name" />
+    <attribute name="statecode" />
+    <attribute name="statuscode" />
+    <attribute name="modifiedon" />
+    <filter>
+      <condition attribute="category" operator="eq" value="5" />
+    </filter>
+    <link-entity name="solutioncomponent" from="objectid" to="workflowid" alias="sc">
+      <attribute name="solutioncomponentid" />
+      <filter>
+        <condition attribute="componenttype" operator="eq" value="29" />
+      </filter>
+      <link-entity name="solution" from="solutionid" to="solutionid" alias="s">
+        <attribute name="uniquename" />
+        <filter>
+          <condition attribute="uniquename" operator="eq" value="ReqSysLowCodeCopilot" />
+        </filter>
+      </link-entity>
+    </link-entity>
+  </entity>
+</fetch>

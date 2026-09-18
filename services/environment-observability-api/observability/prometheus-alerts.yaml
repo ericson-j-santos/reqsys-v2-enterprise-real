@@ -1,0 +1,88 @@
+groups:
+  - name: environment-observability-api
+    interval: 30s
+    rules:
+      - alert: EnvironmentObservabilityApiHighErrorRate
+        expr: |
+          sum(rate(environment_observability_http_errors_total[5m]))
+          /
+          clamp_min(sum(rate(environment_observability_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: environment-observability-api
+        annotations:
+          summary: "Taxa de erro HTTP acima de 5%"
+          description: "A API manteve taxa de erro superior a 5% por 10 minutos."
+
+      - alert: EnvironmentObservabilityApiHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(environment_observability_http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: environment-observability-api
+        annotations:
+          summary: "Latência p95 acima de 1 segundo"
+          description: "A latência p95 permaneceu acima de 1 segundo por 10 minutos."
+
+      - alert: EnvironmentObservabilityApiNoTraffic
+        expr: sum(rate(environment_observability_http_requests_total[15m])) == 0
+        for: 15m
+        labels:
+          severity: info
+          service: environment-observability-api
+        annotations:
+          summary: "API sem tráfego"
+          description: "Nenhuma requisição foi observada nos últimos 15 minutos."
+
+  - name: environment-observability-collector
+    interval: 30s
+    rules:
+      - alert: OtelCollectorExporterFailures
+        expr: sum(rate(otelcol_exporter_send_failed_spans[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: environment-observability-collector
+        annotations:
+          summary: "Collector falhando ao exportar spans"
+          description: "Há perda ou retenção prolongada de spans no exporter."
+
+      - alert: OtelCollectorReceiverRefusedSpans
+        expr: sum(rate(otelcol_receiver_refused_spans[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: environment-observability-collector
+        annotations:
+          summary: "Collector recusando spans"
+          description: "O receiver recusou spans durante cinco minutos."
+
+      - alert: OtelCollectorQueueNearCapacity
+        expr: |
+          max(otelcol_exporter_queue_size)
+          /
+          clamp_min(max(otelcol_exporter_queue_capacity), 1)
+          > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: environment-observability-collector
+        annotations:
+          summary: "Fila do Collector acima de 80%"
+          description: "A fila persistente está próxima da capacidade e pode começar a perder telemetria."
+
+      - alert: OtelCollectorDown
+        expr: up{job="environment-observability-collector"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: environment-observability-collector
+        annotations:
+          summary: "OpenTelemetry Collector indisponível"
+          description: "O endpoint de métricas do Collector está indisponível há cinco minutos."

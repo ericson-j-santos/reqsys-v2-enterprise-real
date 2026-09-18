@@ -1,0 +1,92 @@
+name: Executive Final Sync History State Dashboard
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Final Sync History State
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: executive-final-sync-history-state-dashboard
+  cancel-in-progress: false
+
+jobs:
+  publish-card:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/inject_executive_final_sync_history_state_card.py
+          python -m py_compile scripts/validate_executive_final_sync_history_state_card.py
+          python -m unittest tests/test_executive_final_sync_history_state_dashboard.py
+
+      - name: Download latest canonical dashboard
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ops-dashboard.yml
+          name: ops-dashboard-static
+          path: dist/ops-dashboard-static
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: fail
+
+      - name: Download latest final synchronization state
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-final-sync-history-state.yml
+          name: executive-final-sync-history-state
+          path: evidence/final-state
+          workflow_conclusion: success
+          branch: main
+          if_no_artifact_found: fail
+
+      - name: Resolve runtime contract
+        run: |
+          set -euo pipefail
+          runtime=$(find evidence/final-state -type f -name 'runtime-executive-index.json' | head -n 1)
+          test -n "$runtime"
+          mkdir -p dist/ops-dashboard-static/data evidence/dashboard
+          cp "$runtime" dist/ops-dashboard-static/data/runtime-executive-index.json
+
+      - name: Inject and validate card
+        run: |
+          python scripts/inject_executive_final_sync_history_state_card.py \
+            --html dist/ops-dashboard-static/index.html \
+            --runtime-index dist/ops-dashboard-static/data/runtime-executive-index.json
+          python scripts/validate_executive_final_sync_history_state_card.py \
+            --html dist/ops-dashboard-static/index.html \
+            --runtime-index dist/ops-dashboard-static/data/runtime-executive-index.json \
+            --evidence evidence/dashboard/validation.json
+
+      - name: Publish canonical dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: dist/ops-dashboard-static
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-sync-history-state-dashboard-evidence
+          path: evidence/dashboard
+          retention-days: 90
+          if-no-files-found: error

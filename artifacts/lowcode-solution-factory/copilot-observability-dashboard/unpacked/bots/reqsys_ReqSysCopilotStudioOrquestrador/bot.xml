@@ -1,0 +1,10 @@
+<bot schemaname="reqsys_ReqSysCopilotStudioOrquestrador">
+  <authenticationmode>2</authenticationmode>
+  <authenticationtrigger>1</authenticationtrigger>
+  <iscustomizable>0</iscustomizable>
+  <language>1033</language>
+  <name>ReqSys Copilot Studio Orquestrador</name>
+  <runtimeprovider>0</runtimeprovider>
+  <template>default-2.1.0</template>
+  <timezoneruleversionnumber>4</timezoneruleversionnumber>
+</bot>

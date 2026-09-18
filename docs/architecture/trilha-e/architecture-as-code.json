@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0.0",
+  "trail_id": "trilha-e",
+  "trail_name": "Arquitetura Viva",
+  "updated_at": "2026-06-27T18:00:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "report_only",
+  "governance": {
+    "owner": "ReqSys Architecture Governance",
+    "adr": "docs/adr/ADR-035-trilha-e-arquitetura-viva.md",
+    "runbook": "docs/runbooks/trilha-e-arquitetura-viva.md",
+    "workflow": ".github/workflows/trilha-e-arquitetura-viva.yml"
+  },
+  "capabilities": {
+    "diagramas_vivos": {
+      "status": "active",
+      "canonical": "docs/architecture/trilha-e/diagrams.json",
+      "legacy_viewer": "docs/arquitetura/index.html",
+      "legacy_config": "docs/arquitetura/config.json"
+    },
+    "adrs": {
+      "status": "active",
+      "canonical_index": "docs/architecture/trilha-e/inventory.json",
+      "directory": "docs/adr/"
+    },
+    "runtime_topology": {
+      "status": "active",
+      "static_manifest": "docs/architecture/trilha-e/runtime-topology.json",
+      "runtime_api": "/api/runtime/dashboard",
+      "analytics_api": "/api/runtime/analytics"
+    },
+    "fluxo_navegavel": {
+      "status": "active",
+      "graph": "docs/architecture/trilha-e/fluxo-navegavel.json",
+      "hub_html": "docs/architecture/trilha-e/index.html"
+    },
+    "inventory": {
+      "status": "active",
+      "manifest": "docs/architecture/trilha-e/inventory.json"
+    },
+    "architecture_as_code": {
+      "status": "active",
+      "manifest": "docs/architecture/trilha-e/architecture-as-code.json",
+      "schema": "docs/contracts/trilha-e-arquitetura-viva.schema.json",
+      "generator": "scripts/trilha_e_arquitetura_viva.py"
+    }
+  },
+  "artifacts": {
+    "report": "audit/trilha-e/trilha-e-arquitetura-viva-report.json",
+    "artifact_name": "trilha-e-arquitetura-viva-${{ github.run_id }}"
+  },
+  "validation": {
+    "checks": [
+      "json_loadable",
+      "required_capabilities",
+      "internal_paths_exist",
+      "diagram_mermaid_present",
+      "fluxo_edges_navigable",
+      "inventory_adr_paths_exist",
+      "topology_runtime_alignment"
+    ]
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "source_sync": "SYNC-20260908T214853Z",
+  "generated_from": "Backlog WSJF — relatório e solução atualizados — 2026-09-08",
+  "items": [
+    {
+      "id": "P0-1",
+      "priority": "P0",
+      "wsjf": 8,
+      "title": "Bot da Central IA/Teams",
+      "status": "awaiting_human_action",
+      "owner_role": "entra_teams_admin",
+      "blocking": true,
+      "dependency": "Administrador Entra/Teams e acesso ao cofre DEV.",
+      "requested_actions": [
+        "Criar a identidade dedicada do Bot no Microsoft Entra.",
+        "Guardar a credencial exclusivamente no cofre DEV, sem expor o valor em log, arquivo ou evidência.",
+        "Após o provisionamento automático, instalar/liberar o pacote do aplicativo no Teams DEV/TEST."
+      ],
+      "required_evidence": ["app_registration_id", "vault_secret_reference", "bootstrap_run_id", "teams_installation_evidence", "e2e_correlation_id"],
+      "completion_rules": [
+        {"kind": "not_equals", "field": "bootstrap_blocker", "value": "TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED", "description": "A execução não pode permanecer bloqueada por TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED."},
+        {"kind": "equals", "field": "bot_provisioned", "value": true, "description": "Bot provisionado."},
+        {"kind": "equals", "field": "teams_package_installed", "value": true, "description": "Pacote Teams instalado/liberado."},
+        {"kind": "equals", "field": "bidirectional_conversation_verified", "value": true, "description": "ReqSys → IA → Teams → mesma conversa validado ponta a ponta."}
+      ],
+      "verification": "Execução sem TEAMS_BOT_IDENTITY_BOOTSTRAP_REQUIRED e teste ReqSys → IA → Teams → mesma conversa aprovado."
+    },
+    {
+      "id": "P0-2", "priority": "P0", "wsjf": 34, "title": "Decisão BACEN", "status": "awaiting_human_action", "owner_role": "autoridade_conformidade", "blocking": true,
+      "dependency": "Autoridade jurídica/conformidade e evidências da entidade real.",
+      "requested_actions": ["Encaminhar a simulação e as 57 obrigações à autoridade institucional real.", "Obter decisão formal de aplicabilidade.", "Confirmar o 11º pilar e os aprovadores de ADR no registro oficial interno."],
+      "required_evidence": ["decision_source", "decision_date", "decision_owner", "decision_value", "pillar_11_confirmation", "adr_approvers_reference"],
+      "completion_rules": [{"kind": "present", "field": "decision_value", "description": "Decisão institucional formal deve estar materializada."}],
+      "verification": "Registro deixa pending_decision com fonte, data, responsável e decisão comprovada; produção continua bloqueada até as demais evidências."
+    },
+    {
+      "id": "P0-3", "priority": "P0", "wsjf": 10.5, "title": "GitLab/Cofre", "status": "awaiting_human_action", "owner_role": "gitlab_vault_admin", "blocking": true,
+      "dependency": "Identidade do token e autorização sobre a main protegida.",
+      "requested_actions": ["Executar autenticação e atestado de identidade do espelho GitLab.", "Aplicar somente a permissão indicada pelo atestador."],
+      "required_evidence": ["identity_attestation", "authorized_permission", "governance_run_id", "vault_persistence_evidence", "github_sha", "gitlab_sha"],
+      "completion_rules": [{"kind": "equals", "field": "require_authorized", "value": true, "description": "Validação deve executar com require_authorized=true."}, {"kind": "equals", "field": "mirror_sha_match", "value": true, "description": "SHA GitHub deve ser igual ao SHA GitLab."}],
+      "verification": "Execução autorizada, persistência/reinício/limpeza do cofre validados e SHAs do GitHub/GitLab iguais."
+    },
+    {
+      "id": "P0-4", "priority": "P0", "wsjf": 11.33, "title": "SSRS real", "status": "awaiting_human_action", "owner_role": "ssrs_infra_admin", "blocking": true,
+      "dependency": "Ambiente SSRS real, conta de serviço, dois aprovadores independentes e infraestrutura TLS.",
+      "requested_actions": ["Disponibilizar endpoint e autenticação de homologação.", "Indicar dois aprovadores independentes.", "Liberar host Linux e certificado para o proxy."],
+      "required_evidence": ["ssrs_endpoint_reference", "service_identity_reference", "approver_1", "approver_2", "tls_certificate_reference", "soap_test_run_id", "baseline_export_reference"],
+      "completion_rules": [{"kind": "equals", "field": "soap_controlled_change_verified", "value": true, "description": "Leitura/alteração controlada de assinatura via SOAP deve ser comprovada."}, {"kind": "equals", "field": "rollback_verified", "value": true, "description": "Reversão deve estar comprovada."}],
+      "verification": "Sintaxe, operação SOAP controlada, auditoria, reversão e exportação da configuração-base aprovadas."
+    },
+    {
+      "id": "P0-5", "priority": "P0", "wsjf": 9.67, "title": "SQL/RDL e Microsoft Graph", "status": "awaiting_human_action", "owner_role": "dba_m365_admin", "blocking": true,
+      "dependency": "RDL/RDS reais sem segredos, DBA e administrador Microsoft 365.",
+      "requested_actions": ["Fornecer RDL/RDS reais sem segredos.", "Solicitar ao DBA autorização da identidade SQL.", "Solicitar ao administrador Microsoft 365 Mail.Send restrito."],
+      "required_evidence": ["rdl_rds_reference", "sql_identity_authorization", "mail_send_authorization", "discovery_report_reference", "mail_correlation_id"],
+      "completion_rules": [{"kind": "equals", "field": "sql_discovery_verified", "value": true, "description": "Servidor, banco e objetos devem ser descobertos."}, {"kind": "equals", "field": "controlled_mail_verified", "value": true, "description": "Envio controlado via Graph deve estar registrado."}],
+      "verification": "Descoberta SQL validada, identidade autorizada e envio controlado registrado com identificador de correlação."
+    },
+    {
+      "id": "P0-6", "priority": "P0", "wsjf": 11.33, "title": "Correção de CVEs", "status": "awaiting_human_action", "owner_role": "corporate_devsecops_operator", "blocking": true,
+      "dependency": "Máquina corporativa, rede e repositório atualizado.",
+      "requested_actions": ["Executar remediação na máquina corporativa.", "Regenerar o arquivo de dependências dentro da rede corporativa."],
+      "required_evidence": ["npm_audit_reference", "npm_ci_reference", "dependency_diff_reference", "ci_run_id"],
+      "completion_rules": [{"kind": "equals", "field": "npm_audit_acceptable", "value": true, "description": "npm audit deve atender ao gate definido."}, {"kind": "equals", "field": "ci_green", "value": true, "description": "Controles de CI devem estar verdes."}],
+      "verification": "npm audit, npm ci, diferença do arquivo de dependências e controles de CI anexados."
+    },
+    {
+      "id": "P0-7", "priority": "P0", "wsjf": 7, "title": "Auditoria WCAG", "status": "awaiting_human_action", "owner_role": "wcag_human_auditor", "blocking": true,
+      "dependency": "Auditor, contas de teste e matriz WCAG 2.2 A/AA.",
+      "requested_actions": ["Executar ou designar auditor humano para avaliar as 37 rotas autenticadas."],
+      "required_evidence": ["auditor_identity", "audit_matrix_reference", "route_coverage_reference", "manual_approval_reference"],
+      "completion_rules": [{"kind": "equals", "field": "all_37_routes_reviewed", "value": true, "description": "As 37 rotas autenticadas devem ter evidência manual."}, {"kind": "equals", "field": "manual_audit_approved", "value": true, "description": "Aprovação humana deve estar registrada."}],
+      "verification": "Evidência por critério registrada e pending_manual_audit alterado somente após aprovação."
+    },
+    {
+      "id": "P0-8", "priority": "P0", "wsjf": 5.8, "title": "OCR institucional", "status": "awaiting_human_action", "owner_role": "ocr_data_owner_reviewer", "blocking": true,
+      "dependency": "Autorização de uso, proteção de dados e amostra representativa.",
+      "requested_actions": ["Disponibilizar corpus real com autorização explícita.", "Designar revisor humano."],
+      "required_evidence": ["corpus_authorization_reference", "reviewer_identity", "ocr_metrics_report_reference", "human_approval_reference"],
+      "completion_rules": [{"kind": "equals", "field": "real_corpus_used", "value": true, "description": "A prova deve usar corpus institucional autorizado."}, {"kind": "equals", "field": "human_review_approved", "value": true, "description": "Revisão humana deve aprovar o resultado."}],
+      "verification": "Relatório com CER, correspondência exata e falsos AUTO acompanhado da aprovação humana."
+    },
+    {
+      "id": "P1-1", "priority": "P1", "wsjf": 19, "title": "Inventário de arquivos", "status": "awaiting_human_action", "owner_role": "private_storage_operator", "blocking": false,
+      "dependency": "Acesso às pastas privadas.",
+      "requested_actions": ["Executar inventario.py nas pastas reais."],
+      "required_evidence": ["inventory_json_reference", "inventory_log_reference", "file_count", "inventory_sha256"],
+      "completion_rules": [{"kind": "present", "field": "inventory_sha256", "description": "Inventário deve possuir SHA-256 rastreável."}],
+      "verification": "inventario.json, log, quantidade de arquivos e SHA-256 anexados."
+    },
+    {
+      "id": "P1-2", "priority": "P1", "wsjf": "13/12/5", "title": "Decisões de governança", "status": "awaiting_human_action", "owner_role": "governance_owner", "blocking": false,
+      "dependency": "Política de auditoria e acesso ao Redmine.",
+      "requested_actions": ["Escolher organização dos ADRs; recomendação: pasta e índice, sem renumeração.", "Informar o ID Redmine que substituirá REQSYS-XXX.", "Confirmar nome, e-mail e assinatura canônicos dos commits."],
+      "required_evidence": ["adr_organization_decision", "redmine_id", "canonical_commit_identity_reference"],
+      "completion_rules": [{"kind": "present", "field": "redmine_id", "description": "ID Redmine real deve substituir REQSYS-XXX."}, {"kind": "equals", "field": "git_log_policy_verified", "value": true, "description": "git log deve aderir à política registrada."}],
+      "verification": "Decisões registradas em ADR, ausência de REQSYS-XXX e git log aderente à política."
+    },
+    {
+      "id": "P1-3", "priority": "P1", "wsjf": 9, "title": "Modelo analítico", "status": "awaiting_human_action", "owner_role": "data_product_owner", "blocking": false,
+      "dependency": "Responsáveis pelos dados e definições dos indicadores.",
+      "requested_actions": ["Fornecer tabelas/campos, PK/FK e granularidade.", "Fornecer regras de qualidade, fórmulas dos indicadores e filtros esperados."],
+      "required_evidence": ["data_model_spec_reference", "pk_fk_definition", "grain_definition", "quality_rules_reference", "indicator_formulas_reference", "filter_definition"],
+      "completion_rules": [{"kind": "equals", "field": "semantic_model_spec_sufficient", "value": true, "description": "Especificação deve ser suficiente para iniciar o modelo semântico."}],
+      "verification": "Especificação validada e suficiente para iniciar o modelo semântico."
+    },
+    {
+      "id": "P1-4", "priority": "P1", "wsjf": 7, "title": "Relatório e tarefa horária", "status": "awaiting_human_action", "owner_role": "product_owner", "blocking": false,
+      "dependency": "Decisões do responsável pela demanda.",
+      "requested_actions": ["Registrar o que ficou ruim no relatório, destinatário e escopo da versão elevada.", "Definir objetivo, comando, entradas, saídas, tempo máximo, retenção e tratamento de falha da tarefa horária."],
+      "required_evidence": ["report_feedback_reference", "report_recipient_scope", "hourly_task_contract_reference"],
+      "completion_rules": [{"kind": "equals", "field": "automation_contract_versioned", "value": true, "description": "Contrato da automação deve estar versionado."}],
+      "verification": "Respostas vinculadas à demanda e contrato da automação versionado."
+    },
+    {
+      "id": "P1-5", "priority": "P1", "wsjf": 5.8, "title": "Power Platform/IA", "status": "awaiting_human_action", "owner_role": "power_platform_entra_admin", "blocking": false,
+      "dependency": "Administrador Power Platform/Entra e conexão TEST existente.",
+      "requested_actions": ["Informar environment_id, URL e referência da conexão TEST sem segredos.", "Solicitar autorização da conexão gerenciada por identidade de aplicativo."],
+      "required_evidence": ["environment_id", "environment_url", "test_connection_reference", "managed_identity_authorization", "test_promotion_run_id"],
+      "completion_rules": [{"kind": "equals", "field": "test_promotion_verified", "value": true, "description": "Promoção automatizada deve ser aprovada em TEST."}, {"kind": "equals", "field": "production_out_of_scope", "value": true, "description": "Produção deve permanecer fora do escopo."}],
+      "verification": "Promoção automatizada e teste real aprovados em TEST; produção permanece fora do escopo."
+    },
+    {
+      "id": "P2-1", "priority": "P2", "wsjf": 6, "title": "Central de Pesquisas", "status": "awaiting_human_action", "owner_role": "site_publisher", "blocking": false,
+      "dependency": "Site correto e permissão de edição/publicação.",
+      "requested_actions": ["Liberar acesso de edição ao site existente.", "Autorizar publicação da versão 13.1."],
+      "required_evidence": ["site_edit_access_reference", "publication_authorization", "published_version_reference"],
+      "completion_rules": [{"kind": "equals", "field": "version_13_1_published", "value": true, "description": "Versão 13.1 deve estar publicada."}, {"kind": "equals", "field": "production_navigation_sources_verified", "value": true, "description": "Navegação e fontes devem estar verificadas em produção."}],
+      "verification": "Versão publicada, navegação e fontes verificadas em produção."
+    },
+    {
+      "id": "P2-2", "priority": "P2", "wsjf": 5, "title": "Pentaho PDI", "status": "awaiting_human_action", "owner_role": "pdi_infra_operator", "blocking": false,
+      "dependency": "Infraestrutura Pentaho PDI 7.1/Java 8 e credenciais operacionais.",
+      "requested_actions": ["Indicar e liberar o ambiente-alvo PDI 7.1/Java 8.", "Disponibilizar dados controlados para o teste."],
+      "required_evidence": ["pdi_environment_reference", "controlled_test_data_reference", "pdi_test_run_id", "pdi_log_reference", "pdi_artifact_sha256"],
+      "completion_rules": [{"kind": "equals", "field": "retry_verified", "value": true, "description": "Retentativas devem estar comprovadas."}, {"kind": "equals", "field": "idempotency_verified", "value": true, "description": "Idempotência deve estar comprovada."}, {"kind": "equals", "field": "rollback_verified", "value": true, "description": "Reversão deve estar comprovada."}],
+      "verification": "Teste completo com logs, SHA-256, retentativas, idempotência e reversão comprovados."
+    }
+  ]
+}

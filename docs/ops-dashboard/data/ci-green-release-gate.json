@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T13:30:00-03:00",
+  "scope": "ci_green_release_gate",
+  "runtime_impact": "none",
+  "states": [
+    {
+      "id": "ready_green",
+      "description": "CI green, mergeable and no conflict",
+      "recommended_action": "share clickable link and mark merge ready"
+    },
+    {
+      "id": "waiting_ci",
+      "description": "CI pending or running",
+      "recommended_action": "wait or revalidate without manual escalation"
+    },
+    {
+      "id": "needs_fix",
+      "description": "CI failed or conflict detected",
+      "recommended_action": "create objective correction before dependent work"
+    },
+    {
+      "id": "blocked",
+      "description": "critical change without minimum evidence",
+      "recommended_action": "block merge until evidence exists"
+    }
+  ],
+  "minimum_evidence": [
+    "mergeability",
+    "ci_status",
+    "diff_scope",
+    "rollback_path",
+    "functional_impact"
+  ]
+}

@@ -1,0 +1,295 @@
+name: Teams Commit Notification
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "ops-dashboard/data/teams-notification-slo.json"
+      - "ops-dashboard/data/teams-notification-slo.md"
+  schedule:
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+    inputs:
+      message:
+        description: Mensagem opcional para validar o canal do Teams
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  notify-teams:
+    name: Enviar commit ao Teams
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar gateway
+        run: |
+          python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
+          python tools/geradores/teams_graph_gateway_autocontido.py self-test
+
+      - name: Validar configuração do Teams
+        id: teams-config
+        shell: bash
+        run: |
+          if [[ -z "${TEAMS_WEBHOOK_URL}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret TEAMS_WEBHOOK_URL ausente" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_URL ausente; envio foi ignorado sem invalidar o CI."
+          elif [[ -z "${TEAMS_WEBHOOK_RECIPIENT}" || "${TEAMS_WEBHOOK_RECIPIENT}" != *"@"* ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido (precisa ser e-mail/UPN); envio foi ignorado sem invalidar o CI."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "reason=configuração disponível" >> "$GITHUB_OUTPUT"
+            echo "Secrets TEAMS_WEBHOOK_URL/TEAMS_WEBHOOK_RECIPIENT disponíveis; notificação será enviada."
+          fi
+
+      - name: Enviar notificação
+        if: steps.teams-config.outputs.configured == 'true'
+        id: notify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+          MANUAL_MESSAGE: ${{ inputs.message }}
+          EVENT_PATH: ${{ github.event_path }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["EVENT_PATH"]).read_text(encoding="utf-8"))
+          repository = os.environ["REPOSITORY"]
+          sha = os.environ["SHA"]
+          short_sha = sha[:7]
+          server_url = os.environ["SERVER_URL"]
+          commit_url = f"{server_url}/{repository}/commit/{sha}"
+          run_url = f"{server_url}/{repository}/actions/runs/{os.environ['RUN_ID']}"
+          repository_url = f"{server_url}/{repository}"
+          event_name = os.environ["EVENT_NAME"]
+
+          if event_name == "push":
+              head = event.get("head_commit") or {}
+              commit_message = str(head.get("message") or "Commit sem mensagem").splitlines()[0]
+              author = (head.get("author") or {}).get("name") or os.environ["ACTOR"]
+              compare_url = event.get("compare") or commit_url
+              commits = event.get("commits") or []
+              commit_count = len(commits) or 1
+              title = "ReqSys — novo commit"
+              subtitle = commit_message
+              facts = [
+                  {"title": "Repositório", "value": repository},
+                  {"title": "Branch", "value": os.environ["REF_NAME"]},
+                  {"title": "Commit", "value": short_sha},
+                  {"title": "Autor", "value": author},
+                  {"title": "Commits no push", "value": str(commit_count)},
+              ]
+              actions = [
+                  {"type": "Action.OpenUrl", "title": "Ver alterações", "url": compare_url},
+                  {"type": "Action.OpenUrl", "title": "Abrir workflow", "url": run_url},
+              ]
+              message = (
+                  f"**{title}**\n\n"
+                  f"{commit_message}\n\n"
+                  f"**Repositório:** {repository}\n\n"
+                  f"**Branch:** {os.environ['REF_NAME']}\n\n"
+                  f"**Commit:** {short_sha}\n\n"
+                  f"**Autor:** {author}\n\n"
+                  f"[Ver alterações]({compare_url}) · [Abrir workflow]({run_url})"
+              )
+          elif event_name == "schedule":
+              title = "ReqSys — canário Teams"
+              subtitle = "Validação semanal da integração GitHub → Teams"
+              facts = [
+                  {"title": "Repositório", "value": repository},
+                  {"title": "Branch monitorada", "value": "main"},
+                  {"title": "Commit atual", "value": short_sha},
+                  {"title": "Status", "value": "Canário executado"},
+              ]
+              actions = [
+                  {"type": "Action.OpenUrl", "title": "Abrir workflow", "url": run_url},
+                  {"type": "Action.OpenUrl", "title": "Abrir repositório", "url": repository_url},
+              ]
+              message = f"**{title}**\n\n{subtitle}\n\n[ Abrir workflow ]({run_url})"
+          else:
+              manual = os.environ.get("MANUAL_MESSAGE", "").strip()
+              title = "ReqSys — teste de notificação"
+              subtitle = manual or "Teste manual da integração GitHub → Teams"
+              facts = [
+                  {"title": "Repositório", "value": repository},
+                  {"title": "Executado por", "value": os.environ["ACTOR"]},
+                  {"title": "Commit", "value": short_sha},
+                  {"title": "Status", "value": "Teste solicitado"},
+              ]
+              actions = [
+                  {"type": "Action.OpenUrl", "title": "Abrir workflow", "url": run_url},
+                  {"type": "Action.OpenUrl", "title": "Abrir repositório", "url": repository_url},
+              ]
+              message = f"**{title}**\n\n{subtitle}\n\n[Abrir workflow]({run_url})"
+
+          card = {
+              "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+              "type": "AdaptiveCard",
+              "version": "1.2",
+              "msteams": {"width": "Full"},
+              "body": [
+                  {
+                      "type": "Container",
+                      "style": "emphasis",
+                      "bleed": True,
+                      "items": [
+                          {
+                              "type": "ColumnSet",
+                              "columns": [
+                                  {
+                                      "type": "Column",
+                                      "width": "stretch",
+                                      "items": [
+                                          {
+                                              "type": "TextBlock",
+                                              "text": title,
+                                              "weight": "Bolder",
+                                              "size": "Large",
+                                              "wrap": True,
+                                          },
+                                          {
+                                              "type": "TextBlock",
+                                              "text": subtitle,
+                                              "spacing": "Small",
+                                              "isSubtle": True,
+                                              "wrap": True,
+                                              "maxLines": 3,
+                                          },
+                                      ],
+                                  },
+                                  {
+                                      "type": "Column",
+                                      "width": "auto",
+                                      "verticalContentAlignment": "Center",
+                                      "items": [
+                                          {
+                                              "type": "TextBlock",
+                                              "text": "✓",
+                                              "weight": "Bolder",
+                                              "size": "ExtraLarge",
+                                              "color": "Good",
+                                              "horizontalAlignment": "Right",
+                                          }
+                                      ],
+                                  },
+                              ],
+                          }
+                      ],
+                  },
+                  {
+                      "type": "FactSet",
+                      "spacing": "Medium",
+                      "facts": facts,
+                  },
+                  {
+                      "type": "TextBlock",
+                      "text": "Entrega automatizada pelo ReqSys",
+                      "spacing": "Medium",
+                      "isSubtle": True,
+                      "size": "Small",
+                      "wrap": True,
+                  },
+              ],
+              "actions": actions,
+          }
+
+          with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as card_file:
+              json.dump(card, card_file, ensure_ascii=False)
+              card_path = card_file.name
+
+          completed = subprocess.run(
+              [
+                  sys.executable,
+                  "tools/geradores/teams_graph_gateway_autocontido.py",
+                  "send-webhook",
+                  "--title",
+                  title,
+                  "--message",
+                  message,
+                  "--adaptive-card-file",
+                  card_path,
+              ],
+              text=True,
+              capture_output=True,
+              check=False,
+          )
+          Path(card_path).unlink(missing_ok=True)
+          if completed.stdout:
+              print(completed.stdout)
+          if completed.stderr:
+              print(completed.stderr, file=sys.stderr)
+          if completed.returncode != 0:
+              raise SystemExit(completed.returncode)
+
+          result = json.loads(completed.stdout)
+          if not result.get("success"):
+              raise SystemExit(f"Teams Gateway não confirmou envio: {result}")
+          status_code = result.get("status_code")
+          if status_code is not None and not 200 <= int(status_code) < 300:
+              raise SystemExit(f"Teams retornou HTTP inesperado: {status_code}")
+
+          correlation_id = result.get("correlation_id", "n/a")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"correlation_id={correlation_id}\n")
+              output.write(f"status_code={status_code or 'accepted'}\n")
+          PY
+
+      - name: Registrar evidência
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Teams Commit Notification"
+            echo "- Evento: ${{ github.event_name }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Layout: Adaptive Card 1.5 com fallback Markdown"
+            echo "- Modo: estrito"
+            if [[ "${{ steps.teams-config.outputs.configured }}" != "true" ]]; then
+              echo "- Status: ignorado"
+              echo "- Motivo: ${{ steps.teams-config.outputs.reason }}"
+              echo "- Ação manual: Settings → Secrets and variables → Actions"
+            elif [[ "${{ steps.notify.outcome }}" == "success" ]]; then
+              echo "- Status: entregue/aceito"
+              echo "- HTTP: ${{ steps.notify.outputs.status_code }}"
+              echo "- Correlation ID: ${{ steps.notify.outputs.correlation_id }}"
+            else
+              echo "- Status: degradado — entrega não confirmada"
+              echo "- Resultado da etapa: ${{ steps.notify.outcome }}"
+              echo "- Workflow falhou: sim"
+              echo "- Ação: validar o contrato/execução do fluxo Power Automate e repetir via workflow_dispatch"
+              echo "::warning title=Entrega ao Teams não confirmada::A integração falhou e a execução permanece visivelmente degradada."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

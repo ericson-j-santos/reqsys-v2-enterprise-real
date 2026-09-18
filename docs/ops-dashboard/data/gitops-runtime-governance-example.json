@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "gate": "gitops_runtime_governance",
+  "mudanca": {
+    "id": "REQSYS-GITOPS-EXEMPLO-001",
+    "ambiente": "homologacao",
+    "commit": "<sha>",
+    "pr": "<numero_pr>",
+    "correlation_id": "REQSYS-GITOPS-EXEMPLO-001"
+  },
+  "intencao": {
+    "status": "passed",
+    "evidencia": "PR aprovado com objetivo, escopo, risco, plano de teste e rollback documentados."
+  },
+  "mudanca_git": {
+    "status": "passed",
+    "evidencia": "Commit versionado, diff revisável, contrato ou manifesto atualizado."
+  },
+  "execucao": {
+    "status": "passed",
+    "evidencia": "Sync/deploy aplicado no ambiente alvo com versão identificável."
+  },
+  "observabilidade": {
+    "status": "passed",
+    "evidencia": "Health check, smoke test, logs, métricas ou traces confirmaram comportamento esperado."
+  },
+  "recuperacao": {
+    "status": "passed",
+    "evidencia": "Rollback, restore, feature flag, reversão de manifesto ou plano de recuperação validável registrado."
+  },
+  "resultado": {
+    "classificacao": "valor",
+    "observacao": "A mudança só deve ser consolidada após execução real observada."
+  }
+}

@@ -1,0 +1,56 @@
+schema_version: 1.0.0
+record: bacen_family_applicability_decision
+uid: applicability-cmn4893-current
+family: CMN-4893
+
+# Única fonte autoritativa para a decisão institucional da família regulatória.
+# O ReqSys não pode inferir nem promover esta decisão automaticamente.
+decision: pending_decision
+
+decided_by: null
+decided_at: null
+rationale: null
+approval_reference: null
+
+institutional_scope:
+  legal_entity: null
+  entity_type: null
+  regulator_scope: null
+  rsfn_connection: unknown
+  pix_participant: unknown
+  str_participant: unknown
+  smf_scope: unknown
+
+regulatory_basis:
+  - regulation: CMN-4893-2021
+    role: base
+  - regulation: CMN-5274-2025
+    role: amendment
+
+constraints:
+  human_authority_required: true
+  automatic_inference_allowed: false
+  automatic_override_allowed: false
+  final_decisions:
+    - applicable
+    - not_applicable
+  final_decision_requires:
+    - decided_by
+    - decided_at
+    - rationale
+    - approval_reference
+    - institutional_scope.legal_entity
+    - institutional_scope.entity_type
+
+notes:
+  - >-
+    pending_decision é o único estado válido enquanto não existir decisão
+    institucional formal e rastreável.
+  - >-
+    A decisão applicable torna a família CMN-4893 aplicável ao escopo
+    institucional, mas não presume automaticamente a aplicabilidade dos
+    requisitos condicionais de RSFN, Pix, STR ou SMF; estes continuam sujeitos
+    a decisões por obrigação no registro de evidências.
+  - >-
+    A decisão not_applicable exige a mesma trilha de autoridade e evidência de
+    aprovação; ausência de informação nunca é convertida em não aplicabilidade.

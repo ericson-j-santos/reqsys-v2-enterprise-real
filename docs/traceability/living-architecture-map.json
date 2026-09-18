@@ -1,0 +1,235 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T20:00:00Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "governance": {
+    "owner": "ReqSys Architecture Governance",
+    "mode": "report_only",
+    "canonical_runbook": "docs/runbooks/living-architecture-traceability.md"
+  },
+  "workflows": [
+    {
+      "id": "ci",
+      "name": "CI — ReqSys v2 Enterprise",
+      "path": ".github/workflows/ci.yml",
+      "purpose": "Gate principal de backend, frontend, segurança e evidências mínimas de CI.",
+      "artifacts": ["ci-evidence"],
+      "runbooks": ["docs/runbooks/main-smoke-ci.md", "docs/runbooks/pr-evidence-gate.md"]
+    },
+    {
+      "id": "operational-artifact-schema-validation",
+      "name": "Operational Artifact Schema Validation",
+      "path": ".github/workflows/operational-artifact-schema-validation.yml",
+      "purpose": "Validação report-only dos contratos dos artifacts operacionais.",
+      "artifacts": ["operational-artifact-schema-validation"],
+      "runbooks": ["docs/runbooks/operational-artifact-schema-validation.md"]
+    },
+    {
+      "id": "operational-artifact-discovery-index",
+      "name": "Operational Artifact Discovery Index",
+      "path": ".github/workflows/operational-artifact-discovery-index.yml",
+      "purpose": "Descoberta e indexação de artifacts operacionais publicados pelos workflows.",
+      "artifacts": ["operational-artifact-discovery-index"],
+      "runbooks": ["docs/runbooks/operational-artifact-discovery-index.md"]
+    },
+    {
+      "id": "living-architecture-traceability",
+      "name": "Living Architecture Traceability",
+      "path": ".github/workflows/living-architecture-traceability.yml",
+      "purpose": "Validação report-only de links internos principais e artifacts declarados sem contrato.",
+      "artifacts": ["living-architecture-traceability-report"],
+      "runbooks": ["docs/runbooks/living-architecture-traceability.md"]
+    },
+    {
+      "id": "trilha-e-arquitetura-viva",
+      "name": "Trilha E — Arquitetura Viva",
+      "path": ".github/workflows/trilha-e-arquitetura-viva.yml",
+      "purpose": "Validação report-only de diagramas vivos, ADRs, topology, inventory e architecture-as-code.",
+      "artifacts": ["trilha-e-arquitetura-viva-report"],
+      "runbooks": ["docs/runbooks/trilha-e-arquitetura-viva.md"]
+    },
+    {
+      "id": "trilhas-padrao-ouro",
+      "name": "Trilhas — Padrão Ouro Consolidado",
+      "path": ".github/workflows/trilhas-padrao-ouro.yml",
+      "purpose": "Consolida maturidade padrão ouro das trilhas A–E.",
+      "artifacts": ["trilhas-padrao-ouro-evidence"],
+      "runbooks": ["docs/runbooks/trilhas-padrao-ouro.md"]
+    },
+    {
+      "id": "trilha-a-runtime-publico",
+      "name": "Trilha A — Runtime Público",
+      "path": ".github/workflows/trilha-a-runtime-publico.yml",
+      "purpose": "Validação report-only de boot resiliente, healthcheck e runtime público Fly.io.",
+      "artifacts": ["trilha-a-runtime-publico-report"],
+      "runbooks": ["docs/runbooks/trilha-a-runtime-publico.md"]
+    },
+    {
+      "id": "trilha-b-observabilidade-enterprise",
+      "name": "Trilha B — Observabilidade Enterprise",
+      "path": ".github/workflows/trilha-b-observabilidade-enterprise.yml",
+      "purpose": "Validação report-only de correlation_id, métricas e telemetria operacional.",
+      "artifacts": ["trilha-b-observabilidade-enterprise-report"],
+      "runbooks": ["docs/runbooks/trilha-b-observabilidade-enterprise.md"]
+    },
+    {
+      "id": "trilha-c-ux-operacional",
+      "name": "Trilha C — UX Operacional",
+      "path": ".github/workflows/trilha-c-ux-operacional.yml",
+      "purpose": "Validação report-only de semáforo, drill-down e UX operacional.",
+      "artifacts": ["trilha-c-ux-operacional-report"],
+      "runbooks": ["docs/runbooks/trilha-c-ux-operacional.md"]
+    },
+    {
+      "id": "runtime-operational-evidence-graph",
+      "name": "Runtime Operational Evidence Graph",
+      "path": ".github/workflows/runtime-operational-evidence-graph.yml",
+      "purpose": "Grafo review-only conectando workflows, PRs, artifacts, métricas e dashboards.",
+      "artifacts": ["runtime-operational-evidence-graph"],
+      "runbooks": ["docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md", "docs/operations/RUNTIME_OPERATIONAL_EVIDENCE_GRAPH.md"]
+    },
+    {
+      "id": "trilha-d-qualidade-governanca",
+      "name": "Trilha D — Qualidade e Governança",
+      "path": ".github/workflows/trilha-d-qualidade-governanca.yml",
+      "purpose": "Matrix paralelizável de qualidade e governança.",
+      "artifacts": ["trilha-d-qualidade-governanca-evidence"],
+      "runbooks": ["docs/runbooks/trilha-d-qualidade-governanca.md"]
+    },
+    {
+      "id": "operational-observability-hub",
+      "name": "Operational Observability Hub",
+      "path": ".github/workflows/operational-observability-hub.yml",
+      "purpose": "Evidência multiambiente, drift dev/hml/prod, SLO, analytics longitudinal e correlação CI↔runtime.",
+      "artifacts": ["operational-observability-hub", "operational-slo-evidence", "environment-drift-analyzer"],
+      "runbooks": ["docs/padrao-ouro/RUNTIME_EVIDENCE_GRAPH.md"]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "operational-artifact-schema-validation",
+      "name": "operational-artifact-schema-validation-${{ github.run_id }}",
+      "producer_workflow": "operational-artifact-schema-validation",
+      "contract": "docs/contracts/contract-validation-report.schema.json",
+      "consumer_dashboards": ["operational-command-center"],
+      "retention_days": 30
+    },
+    {
+      "id": "operational-artifact-discovery-index",
+      "name": "operational-artifact-discovery-index-${{ github.run_id }}",
+      "producer_workflow": "operational-artifact-discovery-index",
+      "contract": "docs/contracts/operational-artifact-discovery-index.schema.json",
+      "consumer_dashboards": ["operational-command-center"],
+      "retention_days": 30
+    },
+    {
+      "id": "ci-evidence",
+      "name": "ci-evidence-${{ github.run_id }}",
+      "producer_workflow": "ci",
+      "contract": "docs/contracts/delivery-evidence-report.schema.json",
+      "consumer_dashboards": ["command-center-evidence-index"],
+      "retention_days": 30
+    },
+    {
+      "id": "living-architecture-traceability-report",
+      "name": "living-architecture-traceability-${{ github.run_id }}",
+      "producer_workflow": "living-architecture-traceability",
+      "contract": "docs/contracts/living-architecture-map.schema.json",
+      "consumer_dashboards": ["command-center-navigation-map"],
+      "retention_days": 30
+    },
+    {
+      "id": "trilha-e-arquitetura-viva-report",
+      "name": "trilha-e-arquitetura-viva-${{ github.run_id }}",
+      "producer_workflow": "trilha-e-arquitetura-viva",
+      "contract": "docs/contracts/trilha-e-arquitetura-viva.schema.json",
+      "consumer_dashboards": ["trilha-e-hub"],
+      "retention_days": 30
+    },
+    {
+      "id": "trilhas-padrao-ouro-evidence",
+      "name": "trilhas-padrao-ouro-evidence-${{ github.run_id }}",
+      "producer_workflow": "trilhas-padrao-ouro",
+      "contract": "docs/contracts/trilhas-padrao-ouro.schema.json",
+      "consumer_dashboards": ["trilhas-hub"],
+      "retention_days": 30
+    },
+    {
+      "id": "trilha-a-runtime-publico-report",
+      "name": "trilha-a-runtime-publico-${{ github.run_id }}",
+      "producer_workflow": "trilha-a-runtime-publico",
+      "contract": "docs/contracts/trilha-a-runtime-publico.schema.json",
+      "consumer_dashboards": ["trilhas-hub"],
+      "retention_days": 30
+    },
+    {
+      "id": "trilha-b-observabilidade-enterprise-report",
+      "name": "trilha-b-observabilidade-enterprise-${{ github.run_id }}",
+      "producer_workflow": "trilha-b-observabilidade-enterprise",
+      "contract": "docs/contracts/trilha-b-observabilidade-enterprise.schema.json",
+      "consumer_dashboards": ["trilhas-hub"],
+      "retention_days": 30
+    },
+    {
+      "id": "trilha-c-ux-operacional-report",
+      "name": "trilha-c-ux-operacional-${{ github.run_id }}",
+      "producer_workflow": "trilha-c-ux-operacional",
+      "contract": "docs/contracts/trilha-c-ux-operacional.schema.json",
+      "consumer_dashboards": ["trilhas-hub"],
+      "retention_days": 30
+    },
+    {
+      "id": "runtime-operational-evidence-graph",
+      "name": "runtime-operational-evidence-graph-${{ github.run_id }}",
+      "producer_workflow": "runtime-operational-evidence-graph",
+      "contract": "docs/contracts/operational-json-artifact.schema.json",
+      "consumer_dashboards": ["operational-evidence-hub", "ops-dashboard"],
+      "retention_days": 30
+    }
+  ],
+  "schemas": [
+    { "id": "living-architecture-map", "path": "docs/contracts/living-architecture-map.schema.json", "domain": "traceability", "version": "1.0.0" },
+    { "id": "trilha-e-arquitetura-viva", "path": "docs/contracts/trilha-e-arquitetura-viva.schema.json", "domain": "architecture", "version": "1.0.0" },
+    { "id": "trilhas-padrao-ouro", "path": "docs/contracts/trilhas-padrao-ouro.schema.json", "domain": "governance", "version": "1.0.0" },
+    { "id": "trilha-a-runtime-publico", "path": "docs/contracts/trilha-a-runtime-publico.schema.json", "domain": "runtime", "version": "1.0.0" },
+    { "id": "trilha-b-observabilidade-enterprise", "path": "docs/contracts/trilha-b-observabilidade-enterprise.schema.json", "domain": "observability", "version": "1.0.0" },
+    { "id": "trilha-c-ux-operacional", "path": "docs/contracts/trilha-c-ux-operacional.schema.json", "domain": "ux", "version": "1.0.0" },
+    { "id": "trilha-d-qualidade-governanca", "path": "docs/contracts/trilha-d-qualidade-governanca.schema.json", "domain": "quality", "version": "1.0.0" },
+    { "id": "product-intelligence-event", "path": "schemas/product-intelligence/product-intelligence-event.schema.json", "domain": "product-intelligence", "version": "1.0.0" },
+    { "id": "operational-health-dashboard", "path": "docs/operations/operational-health-dashboard.schema.json", "domain": "operations", "version": "1.0.0" },
+    { "id": "coordenador-status", "path": "docs/contracts/coordenador-status.schema.json", "domain": "governance", "version": "1.0.0" },
+    { "id": "operational-slo-evidence", "path": "docs/contracts/operational-slo-evidence.schema.json", "domain": "operations", "version": "1.0.0" }
+  ],
+  "dashboards": [
+    { "id": "operational-command-center", "path": "docs/dashboard/operational-command-center.md", "data_sources": ["operational-artifact-schema-validation", "operational-artifact-discovery-index"], "runbooks": ["docs/runbooks/operational-governance-dashboard.md"] },
+    { "id": "command-center-evidence-index", "path": "docs/dashboard/command-center-evidence-index.md", "data_sources": ["ci-evidence"], "runbooks": ["docs/runbooks/delivery-evidence-index.md"] },
+    { "id": "command-center-navigation-map", "path": "docs/dashboard/command-center-navigation-map.md", "data_sources": ["living-architecture-traceability-report"], "runbooks": ["docs/runbooks/living-architecture-traceability.md"] },
+    { "id": "ops-dashboard", "path": "docs/ops-dashboard/index.html", "data_sources": ["docs/ops-dashboard/data/health.json"], "runbooks": ["docs/runbooks/ops-dashboard.md"] },
+    { "id": "operational-evidence-hub", "path": "docs/dashboard/operational-evidence-hub.html", "data_sources": ["delivery-readiness", "delivery-completion", "delivery-finalization", "delivery-maturity", "observability-correlation", "artifact-contract-validation", "dashboard-regression", "living-architecture-traceability"], "runbooks": ["docs/runbooks/operational-evidence-hub.md"] },
+    { "id": "live-operational-dashboard", "path": "docs/dashboard/live-operational-dashboard.dynamic.html", "data_sources": ["audit/ci-lead-time-analytics.json", "audit/delivery-readiness/delivery-readiness-report.json"], "runbooks": ["docs/runbooks/dashboard-regression-validation.md"] },
+    { "id": "trilha-e-hub", "path": "docs/architecture/trilha-e/index.html", "data_sources": ["docs/architecture/trilha-e/architecture-as-code.json", "docs/architecture/trilha-e/inventory.json", "docs/architecture/trilha-e/diagrams.json"], "runbooks": ["docs/runbooks/trilha-e-arquitetura-viva.md"] },
+    { "id": "trilhas-hub", "path": "docs/architecture/trilhas/index.html", "data_sources": ["docs/architecture/trilhas/trilhas-registry.json", "audit/trilhas/trilhas-padrao-ouro-report.json"], "runbooks": ["docs/runbooks/trilhas-padrao-ouro.md"] }
+  ],
+  "runbooks": [
+    { "id": "living-architecture-traceability", "path": "docs/runbooks/living-architecture-traceability.md", "covers": ["workflows", "artifacts", "schemas", "dashboards", "runbooks", "recent_prs", "ci_evidence"] },
+    { "id": "operational-artifact-schema-validation", "path": "docs/runbooks/operational-artifact-schema-validation.md", "covers": ["artifacts", "schemas"] },
+    { "id": "operational-evidence-hub", "path": "docs/runbooks/operational-evidence-hub.md", "covers": ["delivery-readiness", "delivery-completion", "delivery-finalization", "maturity-snapshot", "observability-correlation", "artifact-contract-validation", "dashboard-regression", "living-architecture-traceability"] },
+    { "id": "trilha-e-arquitetura-viva", "path": "docs/runbooks/trilha-e-arquitetura-viva.md", "covers": ["diagramas-vivos", "adrs", "runtime-topology", "fluxo-navegavel", "inventory", "architecture-as-code"] },
+    { "id": "trilhas-padrao-ouro", "path": "docs/runbooks/trilhas-padrao-ouro.md", "covers": ["trilha-a", "trilha-b", "trilha-c", "trilha-d", "trilha-e", "gold-standard"] },
+    { "id": "padrao-ouro-tier1-hub", "path": "docs/padrao-ouro/README.md", "covers": ["living-architecture-index", "adr-index", "runtime-evidence-graph", "contract-catalog", "engineering-playbooks"] },
+    { "id": "agent-increment-gate", "path": "docs/runbooks/agent-increment-gate.md", "covers": ["new_front", "gap_fix", "close_duplicate", "hotfix", "consolidate"] }
+  ],
+  "recent_prs": [
+    { "id": "PR145", "url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/145", "evidence": ["docs/evidence/pr145-clean-replacement-evidence.md", "docs/audit/pr145-clean-replacement-audit.md"] },
+    { "id": "PR225", "url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/225", "evidence": ["docs/evidence/pr225-evidence-navigation-ui-sync.md", "docs/product-intelligence/PR225_SUPERSEDED_BY_MAIN.md"] }
+  ],
+  "ci_evidence": [
+    { "id": "ci-evidence-refresh-2026-06-25", "path": "docs/operations/ci-evidence-refresh-2026-06-25.md", "source_workflow": "ci" },
+    { "id": "post-merge-ci-fix-2026-06-23", "path": "docs/POST_MERGE_CI_FIX_2026_06_23.md", "source_workflow": "ci" }
+  ],
+  "validation": {
+    "workflow": ".github/workflows/living-architecture-traceability.yml",
+    "mode": "report_only",
+    "checks": ["json_loadable", "required_top_level_sections", "internal_paths_exist", "artifact_contracts_exist", "declared_workflow_paths_exist"]
+  }
+}

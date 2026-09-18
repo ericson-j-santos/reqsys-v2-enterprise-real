@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/fly-automatic-environment-promotion.schema.json",
+  "title": "Fly Automatic Environment Promotion Report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "contract",
+    "generated_at_epoch",
+    "should_run",
+    "reason",
+    "expected_sha",
+    "stages",
+    "bacen_production_allowed",
+    "automatic_order",
+    "stale_sha_promotion_allowed",
+    "production_gate_bypass_allowed"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract": {"const": "fly-automatic-environment-promotion"},
+    "generated_at_epoch": {"type": "integer", "minimum": 1},
+    "should_run": {"type": "boolean"},
+    "reason": {"type": "string", "minLength": 1},
+    "expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "stages": {
+      "type": "object",
+      "required": ["dev", "stg", "prod"],
+      "properties": {
+        "dev": {"$ref": "#/$defs/stage"},
+        "stg": {"$ref": "#/$defs/stage"},
+        "prod": {"$ref": "#/$defs/stage"}
+      }
+    },
+    "bacen_production_allowed": {"type": "boolean"},
+    "automatic_order": {"const": ["dev", "hml", "prod"]},
+    "stale_sha_promotion_allowed": {"const": false},
+    "production_gate_bypass_allowed": {"const": false}
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "required": ["job_result", "decision"],
+      "properties": {
+        "job_result": {"type": "string"},
+        "decision": {"type": "string"}
+      }
+    }
+  }
+}

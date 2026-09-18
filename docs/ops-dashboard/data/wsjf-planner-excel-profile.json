@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "capability": "wsjf_planner_excel_simples",
+  "status": "implemented_pending_ci_and_dev_acceptance",
+  "source_of_truth": "Planner",
+  "direction": "Planner -> Excel",
+  "excel_table": "tbDemandas",
+  "flow_count": 1,
+  "recurrence": "PT1H",
+  "writes_back_to_planner": false,
+  "target_environment": "dev",
+  "current_solution_touched": false,
+  "copilot_memory_touched": false,
+  "next_evidence": "CI verde + aceite real em DEV com conexoes Planner/Excel autorizadas"
+}

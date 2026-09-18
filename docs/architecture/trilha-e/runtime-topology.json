@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T18:00:00Z",
+  "trail_id": "trilha-e",
+  "alignment": {
+    "runtime_builder": "backend/app/core/runtime_analytics.py::build_runtime_topology",
+    "dashboard_section": "runtime-topology-preview",
+    "correlation_graph": "docs/architecture/runtime-correlation-graph.md"
+  },
+  "runtime_nodes": [
+    { "id": "reqsys-api", "type": "service", "path": "backend/app/main.py", "health": "/api/runtime/health" },
+    { "id": "ops-dashboard", "type": "dashboard", "path": "docs/ops-dashboard/index.html", "health": null },
+    { "id": "runtime-evidence-store", "type": "evidence", "path": "audit/", "health": null },
+    { "id": "incident-timeline", "type": "incident_timeline", "path": "docs/operations/RUNTIME_OPERATIONAL_CORRELATION_TIMELINE.md", "health": null },
+    { "id": "trilha-e-hub", "type": "architecture", "path": "docs/architecture/trilha-e/index.html", "health": null }
+  ],
+  "workflow_dependencies": [
+    { "from": "runtime-health", "to": "runtime-readiness", "relationship": "feeds", "href": "docs/runbooks/runtime-health-validator.md" },
+    { "from": "runtime-readiness", "to": "runtime-dashboard", "relationship": "publishes", "href": "/api/runtime/dashboard" },
+    { "from": "runtime-dashboard", "to": "runtime-analytics", "relationship": "correlates", "href": "/api/runtime/analytics" },
+    { "from": "runtime-evidence", "to": "runtime-analytics", "relationship": "enriches", "href": "docs/dashboard/operational-evidence-hub.html" },
+    { "from": "trilha-e-validator", "to": "trilha-e-hub", "relationship": "publishes", "href": "docs/architecture/trilha-e/index.html" }
+  ],
+  "environment_dependencies": [
+    { "environment": "dev", "depends_on": ["reqsys-api", "runtime-dashboard", "trilha-e-hub"], "status": "observed", "compose": "docker-compose.dev.yml" },
+    { "environment": "staging", "depends_on": ["reqsys-api", "runtime-dashboard"], "status": "declared", "compose": "docker-compose.test.yml" },
+    { "environment": "prod", "depends_on": ["reqsys-api", "runtime-dashboard", "evidence-artifacts"], "status": "declared", "compose": "docker-compose.prod.yml" }
+  ],
+  "evidence_graph_relationships": [
+    { "from": "runtime-health-report.json", "to": "runtime-observability-report.json", "relationship": "source" },
+    { "from": "runtime-correlation-report.json", "to": "runtime-observability-report.json", "relationship": "consolidates" },
+    { "from": "trilha-e-arquitetura-viva-report.json", "to": "living-architecture-traceability-report.json", "relationship": "extends" }
+  ],
+  "trace_chain": [
+    "request",
+    "runtime-health",
+    "runtime-dashboard",
+    "runtime-analytics",
+    "trilha-e-hub",
+    "evidence",
+    "incident-timeline"
+  ],
+  "coverage": {
+    "runtime_nodes": 5,
+    "workflow_dependencies": 5,
+    "environment_dependencies": 3,
+    "evidence_relationships": 3
+  }
+}

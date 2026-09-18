@@ -1,0 +1,126 @@
+name: Executive Promotion Advisor Homologation State
+
+on:
+  workflow_run:
+    workflows:
+      - "Executive Promotion Advisor Post Artifact Homologation"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID da homologação pós-artifact"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: advisor-homologation-state-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    name: Propagate homologation trend to State and Brief
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/enrich_executive_promotion_advisor_homologation_trend.py
+          python -m unittest tests/test_enrich_executive_promotion_advisor_homologation_trend.py
+
+      - name: Resolve source run
+        id: source
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_RUN_ID"
+          echo "run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download homologation history
+        uses: actions/download-artifact@v4
+        with:
+          name: executive-promotion-advisor-homologation-history
+          path: artifacts/executive-promotion-advisor-homologation-history
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Prepare canonical State contracts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-promotion-advisor-homologation-state
+          cp docs/ops-dashboard/data/runtime-executive-index.json \
+            artifacts/executive-promotion-advisor-homologation-state/runtime-executive-index.json
+          cp docs/ops-dashboard/data/executive-brief.json \
+            artifacts/executive-promotion-advisor-homologation-state/executive-brief.json
+
+      - name: Propagate homologation trend
+        run: |
+          set -euo pipefail
+          python scripts/enrich_executive_promotion_advisor_homologation_trend.py \
+            --history artifacts/executive-promotion-advisor-homologation-history/history.json \
+            --runtime-index artifacts/executive-promotion-advisor-homologation-state/runtime-executive-index.json \
+            --executive-brief artifacts/executive-promotion-advisor-homologation-state/executive-brief.json
+
+      - name: Validate report-only State contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/executive-promotion-advisor-homologation-state')
+          runtime = json.loads((root / 'runtime-executive-index.json').read_text())
+          brief = json.loads((root / 'executive-brief.json').read_text())
+          card = runtime['cards']['executive_promotion_advisor_homologation_trend']
+          assert card['mode'] == 'report-only'
+          assert card['production_blocker'] is False
+          assert card['human_approval_required'] is True
+          assert 'executive_promotion_advisor_homologation_trend' in brief['evidencias']
+          PY
+
+      - name: Publish consolidated State evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-homologation-state
+          path: artifacts/executive-promotion-advisor-homologation-state
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize trend
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          runtime = json.loads(Path(
+              'artifacts/executive-promotion-advisor-homologation-state/runtime-executive-index.json'
+          ).read_text())
+          card = runtime['cards']['executive_promotion_advisor_homologation_trend']
+          print('# Executive Promotion Advisor — tendência de homologação')
+          print()
+          print(f"- Amostras: {card['sample_count']}")
+          print(f"- Taxa completa: {card['full_homologation_rate_percent']}%")
+          print(f"- Sequência estável: {card['stable_streak']}")
+          print(f"- Tendência: {card['trend']}")
+          print(f"- Elegível para revisão humana: {card['eligible_for_gate_review']}")
+          print('- Modo: report-only')
+          print('- Bloqueio automático de produção: não')
+          PY

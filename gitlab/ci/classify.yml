@@ -1,0 +1,23 @@
+classify_changes:
+  stage: classify
+  image: python:3.12-slim
+  script:
+    - mkdir -p audit
+    - python gitlab/scripts/classify_issue.py --mode pipeline --output audit/change-classification.json
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/change-classification.json
+
+semantic_pipeline_routing:
+  stage: classify
+  image: python:3.12-slim
+  script:
+    - mkdir -p audit
+    - python gitlab/scripts/generate_semantic_pipeline_report.py --output audit/semantic-pipeline-routing.json
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - audit/semantic-pipeline-routing.json

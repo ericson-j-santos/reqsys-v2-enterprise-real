@@ -1,0 +1,104 @@
+name: Executive Final Sync History State
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Sync Stability Index Public Trend Sync State Final Smoke
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: executive-final-sync-history-state
+  cancel-in-progress: false
+
+jobs:
+  enrich-state:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/enrich_executive_final_sync_history_state.py
+          python -m unittest tests/test_enrich_executive_final_sync_history_state.py
+
+      - name: Download latest final sync histories
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: executive-sync-stability-index-public-trend-sync-state-final-smoke.yml
+          workflow_conclusion: success
+          branch: main
+          path: input
+          name_is_regexp: true
+          name: executive-final-sync-history-(dev|stg|prod)
+          if_no_artifact_found: fail
+
+      - name: Resolve environment histories
+        run: |
+          set -euo pipefail
+          mkdir -p input/resolved output
+          for env in dev stg prod; do
+            history=$(find input -type f -path "*${env}*" -name '*history*.json' | head -n 1)
+            test -n "$history"
+            cp "$history" "input/resolved/${env}.json"
+          done
+
+      - name: Prepare canonical state copies
+        run: |
+          cp docs/ops-dashboard/data/runtime-executive-index.json output/runtime-executive-index.json
+          if [ -f docs/ops-dashboard/data/executive-brief.json ]; then
+            cp docs/ops-dashboard/data/executive-brief.json output/executive-brief.json
+          elif [ -f docs/executive-brief.json ]; then
+            cp docs/executive-brief.json output/executive-brief.json
+          else
+            echo '{}' > output/executive-brief.json
+          fi
+
+      - name: Enrich Estado Unico and Executive Brief
+        run: |
+          python scripts/enrich_executive_final_sync_history_state.py \
+            --dev-history input/resolved/dev.json \
+            --stg-history input/resolved/stg.json \
+            --prod-history input/resolved/prod.json \
+            --runtime-index output/runtime-executive-index.json \
+            --executive-brief output/executive-brief.json
+
+      - name: Validate report-only guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          key = 'executive_final_sync_history_state'
+          runtime = json.loads(Path('output/runtime-executive-index.json').read_text())
+          brief = json.loads(Path('output/executive-brief.json').read_text())
+          card = runtime['cards'][key]
+          assert card['mode'] == 'report-only'
+          assert card['production_blocker'] is False
+          assert card['human_approval_required'] is True
+          assert brief[key]['mode'] == 'report-only'
+          assert brief[key]['production_blocker'] is False
+          assert brief[key]['human_approval_required'] is True
+          PY
+
+      - name: Publish final synchronized history state
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-sync-history-state
+          path: output
+          retention-days: 90
+          if-no-files-found: error

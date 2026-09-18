@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Gaps operacionais documentados com referência OPS-GAP-* para gate de incremento e hotfix governado.",
+  "gaps": [
+    {
+      "id": "OPS-GAP-FLY-DEMO-LOGIN",
+      "title": "Demo login Fly dev ausente após deploy",
+      "status": "resolved",
+      "scope": "fly-enterprise-sync",
+      "detail": "Secrets Fly sobrescrevem fly.dev.toml; deploy dev deve garantir ALLOW_DEMO_LOGIN=true antes do smoke de login.",
+      "reference_pr": 589,
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-PAGES-SHOWCASE",
+      "title": "GitHub Pages showcase com validação ou publicação inconsistente",
+      "status": "resolved",
+      "scope": "github-pages",
+      "detail": "Deploy ReqSys Public Showcase verde em 2026-06-30; scan de termos restrito a index.html/assets (#614).",
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-MAIN-OPERATIONAL-HEALTH",
+      "title": "Main Operational Health degradado",
+      "status": "resolved",
+      "scope": "ci-evidence",
+      "detail": "Validação imediata via Main Operational Validation Fast em push main; schedule diário como fallback.",
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-MESH-NOISE",
+      "title": "Ruído operacional na runtime intelligence mesh",
+      "status": "resolved",
+      "scope": "operational-mesh",
+      "detail": "Cascata workflow_run substituída por Main Operational Validation Fast (job único, segundos).",
+      "allowed_increment_types": ["hotfix", "gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-OCR-REDMINE-ATTACHMENTS",
+      "title": "OCR não ingere anexos originados no Redmine",
+      "status": "resolved",
+      "scope": "ocr-redmine-integration",
+      "detail": "Adaptador governado para anexos Redmine entregue nas PRs #1687 e #1689, com validação de origem e tamanho, deduplicação SHA-256, quarentena, retentativas, circuit breaker e lease distribuído por job.",
+      "reference_pr": 1689,
+      "allowed_increment_types": ["gap_fix", "hotfix"]
+    },
+    {
+      "id": "OPS-GAP-1677",
+      "title": "E2E positivo do Agent Task branch-first ainda não validado",
+      "status": "open",
+      "scope": "pending-development-orchestrator",
+      "detail": "A issue #1677 deve comprovar o ciclo execute -> Agent Task -> branch copilot/* -> READY_FOR_PR -> PR draft no SHA vigente, com replay idempotente e sem merge automático.",
+      "reference_issue": 1677,
+      "allowed_increment_types": ["gap_fix"]
+    }
+  ]
+}

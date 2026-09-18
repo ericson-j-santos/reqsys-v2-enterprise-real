@@ -1,0 +1,95 @@
+name: Copilot HITL Solution Materialization
+
+on:
+  pull_request:
+    paths:
+      - 'artifacts/lowcode-solution-factory/copilot-hitl-agent-network/**'
+      - 'scripts/materialize_copilot_hitl_solution.py'
+      - 'backend/tests/test_materialize_copilot_hitl_solution.py'
+      - '.github/workflows/copilot-hitl-solution-materialization.yml'
+  workflow_dispatch:
+    inputs:
+      validate_with_pac:
+        description: 'Executar validação PAC CLI do pacote'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copilot-hitl-solution-materialization-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    name: Materialize and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OUTPUT_DIR: artifacts/lowcode-solution-factory/copilot-hitl-agent-network/generated
+      PYTHONPATH: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Run contract tests
+        run: python -m pytest backend/tests/test_materialize_copilot_hitl_solution.py -q
+
+      - name: Install Power Platform CLI
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_with_pac }}
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Materialize solution without PAC
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.validate_with_pac }}
+        run: python scripts/materialize_copilot_hitl_solution.py --output "$OUTPUT_DIR"
+
+      - name: Materialize and validate with PAC
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_with_pac }}
+        run: python scripts/materialize_copilot_hitl_solution.py --output "$OUTPUT_DIR" --validate-with-pac
+
+      - name: Validate generated contracts
+        run: |
+          python - <<'PY'
+          import json
+          import zipfile
+          from pathlib import Path
+
+          output = Path('artifacts/lowcode-solution-factory/copilot-hitl-agent-network/generated')
+          manifest = json.loads((output / 'materialization-manifest.json').read_text(encoding='utf-8'))
+          assert manifest['requires_human_approval'] is True
+          assert manifest['production_import_blocked_by_default'] is True
+          package = output / 'ReqSysCopilotHITL_unmanaged.zip'
+          assert package.exists()
+          with zipfile.ZipFile(package) as archive:
+              names = set(archive.namelist())
+              assert 'Other/Solution.xml' in names
+              assert 'customizations.xml' in names
+          PY
+
+      - name: Publish unmanaged solution artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-copilot-hitl-unmanaged-solution
+          path: |
+            ${{ env.OUTPUT_DIR }}/ReqSysCopilotHITL_unmanaged.zip
+            ${{ env.OUTPUT_DIR }}/deployment-settings.json
+            ${{ env.OUTPUT_DIR }}/connection-references.json
+            ${{ env.OUTPUT_DIR }}/environment-variables.json
+            ${{ env.OUTPUT_DIR }}/materialization-manifest.json
+          retention-days: 30
+          if-no-files-found: error
