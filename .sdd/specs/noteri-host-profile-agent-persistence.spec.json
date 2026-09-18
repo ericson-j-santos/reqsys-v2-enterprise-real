@@ -1,0 +1,19 @@
+{
+  "feature_name": "noteri-host-profile-agent-persistence",
+  "project": "ReqSys v2 Enterprise — Noteri NORMAL/ESTUDO",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Persiste o agente local NORMAL/ESTUDO do Noteri após reinício sem armazenar senha, preferindo Task Scheduler S4U AtStartup e usando fallback seguro HKCU Run quando houver Access Denied.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_host_profile_agent_persistence.py"
+    ],
+    "evidence_contract": "A conclusão exige CI no SHA corrente e evidência pós-reboot real no Noteri; o fallback HKCU Run é explicitamente pós-logon e não prova operação headless."
+  }
+}
