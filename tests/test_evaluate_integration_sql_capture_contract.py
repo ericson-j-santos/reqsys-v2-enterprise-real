@@ -68,7 +68,7 @@ def test_gateway_mode_does_not_require_the_legacy_dsn_secret() -> None:
     assert report["dsn_resolved"] is False
     assert report["connectivity_validation"] == "deferred_to_real_flow"
     assert report["procedure_validation"] == "deferred_to_real_flow"
-    assert report["deferred_to"] == "integration-excel-sql-sharepoint-e2e-dev.yml"
+    assert report["deferred_to"] == "integration-excel-sql-sharepoint-oidc-dev.yml"
 
 
 def test_gateway_mode_blocks_when_legacy_dsn_is_still_consumed() -> None:
