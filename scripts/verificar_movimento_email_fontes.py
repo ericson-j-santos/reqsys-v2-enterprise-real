@@ -29,17 +29,31 @@ scripts/configurar_redmine_sync_queue.py).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_ROOT / 'backend'))
 
-from dotenv import load_dotenv  # noqa: E402
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
-load_dotenv(_ROOT / '.env', override=False)
+if load_dotenv is not None:
+    load_dotenv(_ROOT / '.env', override=False)
 
-from app.core.config import Settings  # noqa: E402
+
+def _source_dsn() -> str:
+    return os.environ.get('MOVIMENTO_EMAIL_SOURCE_DSN', '').strip()
+
+
+def _query_timeout_seconds() -> float:
+    raw = os.environ.get('MOVIMENTO_EMAIL_QUERY_TIMEOUT_SECONDS', '30').strip() or '30'
+    try:
+        return float(raw)
+    except ValueError:
+        return 30.0
 
 _PADROES_CANDIDATOS = ('prospec', 'movimento', 'pendenc', 'fechamento', 'consignado', 'portabilidade')
 
@@ -66,8 +80,7 @@ def _titulo(texto: str) -> None:
 
 def cmd_status(_args: argparse.Namespace) -> int:
     _titulo('Status — origem de dados do e-mail Prospecção Movimento (#2861)')
-    cfg = Settings()
-    dsn = cfg.movimento_email_source_dsn
+    dsn = _source_dsn()
     if dsn:
         _linha(f'  [OK]     MOVIMENTO_EMAIL_SOURCE_DSN configurado ({len(dsn)} caracteres)')
         _linha('  Rode "verificar" para confirmar os nomes reais das views contra o SQL Server.')
@@ -109,8 +122,8 @@ def _colunas_de(cursor, nome_view: str) -> list[str] | None:
 
 
 def cmd_verificar(_args: argparse.Namespace) -> int:
-    cfg = Settings()
-    if not cfg.movimento_email_source_dsn:
+    dsn = _source_dsn()
+    if not dsn:
         _titulo('Bloqueado')
         _linha('  MOVIMENTO_EMAIL_SOURCE_DSN não configurado — rode "status" para instruções.')
         return 1
@@ -124,7 +137,7 @@ def cmd_verificar(_args: argparse.Namespace) -> int:
 
     _titulo('Conectando no SQL Server de origem')
     try:
-        conexao = pyodbc.connect(cfg.movimento_email_source_dsn, timeout=cfg.movimento_email_query_timeout_seconds)
+        conexao = pyodbc.connect(dsn, timeout=_query_timeout_seconds())
     except pyodbc.Error as exc:
         _linha(f'  [ERRO]   Falha ao conectar: {exc}')
         return 1
