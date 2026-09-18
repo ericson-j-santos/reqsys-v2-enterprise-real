@@ -72,3 +72,37 @@ def test_cleanup_falha_fechado_para_item_sem_correlation_e2e(monkeypatch):
             "list",
             "990000000000001",
         )
+
+
+def test_cleanup_aceita_fixture_e2e_legada_por_titulo(monkeypatch):
+    calls = {"list": 0, "deleted": []}
+    stale = {
+        "id": "5",
+        "fields": {
+            "Title": "ReqSys E2E DEV fixture",
+            "ChaveIntegracao": "990000000000001",
+            "CorrelationId": "5FC9E1E7-2B51-4119-B480-0D868CC42ECE",
+        },
+    }
+
+    def fake_list_items(*args, **kwargs):
+        calls["list"] += 1
+        return [stale] if calls["list"] == 1 else []
+
+    monkeypatch.setattr(module, "list_items", fake_list_items)
+    monkeypatch.setattr(
+        module,
+        "delete_sharepoint_item",
+        lambda *args, **kwargs: calls["deleted"].append(args[-1]),
+    )
+
+    removed = cleanup_stale_fixture_items(
+        httpx.Client(),
+        "token",
+        "site",
+        "list",
+        "990000000000001",
+    )
+
+    assert removed == 1
+    assert calls["deleted"] == ["5"]
