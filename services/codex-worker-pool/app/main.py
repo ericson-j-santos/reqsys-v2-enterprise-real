@@ -20,12 +20,14 @@ TOKEN_FILE = os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
 HEARTBEAT_TTL_SECONDS = int(os.getenv("CODEX_WORKER_POOL_HEARTBEAT_TTL_SECONDS", "90"))
 LEASE_SECONDS = int(os.getenv("CODEX_WORKER_POOL_LEASE_SECONDS", "120"))
 MAX_ATTEMPTS = int(os.getenv("CODEX_WORKER_POOL_MAX_ATTEMPTS", "3"))
+EXPECTED_RULES_SHA = os.getenv("CODEX_WORKER_POOL_EXPECTED_RULES_SHA", "").strip().lower() or None
 
 store = WorkerPoolStore(
     DB_PATH,
     heartbeat_ttl_seconds=HEARTBEAT_TTL_SECONDS,
     default_lease_seconds=LEASE_SECONDS,
     default_max_attempts=MAX_ATTEMPTS,
+    expected_rules_sha=EXPECTED_RULES_SHA,
 )
 
 logger = logging.getLogger(SERVICE_NAME)
@@ -110,7 +112,7 @@ class TaskCreate(BaseModel):
     request_id: str = Field(min_length=1, max_length=256)
     correlation_id: str = Field(min_length=1, max_length=128)
     priority: int = Field(default=100, ge=0, le=10000)
-    base_sha: str | None = Field(default=None, min_length=40, max_length=40)
+    base_sha: str = Field(min_length=40, max_length=40)
     max_attempts: int | None = Field(default=None, ge=1, le=20)
 
 
@@ -166,12 +168,15 @@ def _error_response(code: int, detail: str):
 @app.get("/health")
 def health(response: Response) -> dict[str, Any]:
     auth_configured = bool(_read_api_token())
-    if not auth_configured:
+    rules_sha_configured = bool(EXPECTED_RULES_SHA)
+    ready = auth_configured and rules_sha_configured
+    if not ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return {
-        "status": "healthy" if auth_configured else "not_ready",
+        "status": "healthy" if ready else "not_ready",
         "service": SERVICE_NAME,
         "auth_configured": auth_configured,
+        "expected_rules_sha_configured": rules_sha_configured,
         "db_path_configured": bool(str(DB_PATH)),
     }
 
