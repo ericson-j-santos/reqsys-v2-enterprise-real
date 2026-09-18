@@ -20,7 +20,7 @@ jobs:
       DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
       TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
       CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
-      PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -31,86 +31,143 @@ jobs:
           tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           allow-no-subscriptions: true
 
-      - name: Provar Graph Planner/Teams e Dataverse sem expor tokens
+      - name: Obter tokens efêmeros
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p audit/planner-teams-oidc
           graph_token="$(az account get-access-token --resource https://graph.microsoft.com/ --query accessToken -o tsv)"
           dataverse_token="$(az account get-access-token --resource "$DATAVERSE_URL/" --query accessToken -o tsv)"
           test -n "$graph_token"
           test -n "$dataverse_token"
           echo "::add-mask::$graph_token"
           echo "::add-mask::$dataverse_token"
+          echo "GRAPH_TOKEN=$graph_token" >> "$GITHUB_ENV"
+          echo "DATAVERSE_TOKEN=$dataverse_token" >> "$GITHUB_ENV"
 
-          planner_status="0"
-          if [ -n "${PLAN_ID:-}" ]; then
-            planner_status="$(curl -sS -o /tmp/planner.json -w '%{http_code}'               -H "Authorization: Bearer $graph_token"               -H 'Accept: application/json'               "https://graph.microsoft.com/v1.0/planner/plans/$PLAN_ID/tasks?$top=1")"
-          fi
-
-          teams_status="$(curl -sS -o /tmp/teams.json -w '%{http_code}'             -H "Authorization: Bearer $graph_token"             -H 'Accept: application/json'             "https://graph.microsoft.com/v1.0/teams/$TEAM_ID/channels/$CHANNEL_ID/messages?$top=1")"
-
-          created_name="ReqSys - Notificar Teams (Tarefa criada no Planner)"
-          completed_name="ReqSys - Notificar Teams (Tarefa concluída no Planner)"
+      - name: Provar Graph Planner/Teams e Dataverse sem mutação
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit/planner-teams-oidc
           python - <<'PY'
-          import urllib.parse, os
-          for key in ("created_name","completed_name"):
-              value=os.environ.get(key)
-          PY
-
-          created_filter="$(python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import urllib.error
           import urllib.parse
-          print(urllib.parse.quote("category eq 5 and type eq 1 and name eq 'ReqSys - Notificar Teams (Tarefa criada no Planner)'", safe=""))
-          PY
-          )"
-          completed_filter="$(python - <<'PY'
-          import urllib.parse
-          print(urllib.parse.quote("category eq 5 and type eq 1 and name eq 'ReqSys - Notificar Teams (Tarefa concluída no Planner)'", safe=""))
-          PY
-          )"
-
-          curl -fsS             -H "Authorization: Bearer $dataverse_token"             -H 'Accept: application/json'             "$DATAVERSE_URL/api/data/v9.2/workflows?$select=workflowid,name,statecode,statuscode,category,type,clientdata&$filter=$created_filter"             > /tmp/created-flow.json
-          curl -fsS             -H "Authorization: Bearer $dataverse_token"             -H 'Accept: application/json'             "$DATAVERSE_URL/api/data/v9.2/workflows?$select=workflowid,name,statecode,statuscode,category,type,clientdata&$filter=$completed_filter"             > /tmp/completed-flow.json
-
-          PLANNER_STATUS="$planner_status" TEAMS_STATUS="$teams_status" python - <<'PY'
-          import hashlib, json, os
+          import urllib.request
           from pathlib import Path
 
-          def flow_summary(path):
-              payload=json.loads(Path(path).read_text())
-              rows=payload.get("value") or []
-              summaries=[]
-              for row in rows:
-                  raw=row.get("clientdata") or ""
+          graph_token=os.environ["GRAPH_TOKEN"]
+          dataverse_token=os.environ["DATAVERSE_TOKEN"]
+          dataverse_url=os.environ["DATAVERSE_URL"].rstrip("/")
+          team_id=os.environ["TEAM_ID"]
+          channel_id=os.environ["CHANNEL_ID"]
+
+          def get_json(url, token):
+              req=urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/json",
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      return response.status, json.loads(response.read().decode("utf-8"))
+              except urllib.error.HTTPError as exc:
                   try:
-                      cd=json.loads(raw)
+                      payload=json.loads(exc.read().decode("utf-8"))
                   except Exception:
-                      cd={}
-                  props=cd.get("properties") if isinstance(cd,dict) else {}
-                  props=props if isinstance(props,dict) else {}
-                  refs=props.get("connectionReferences")
-                  refs=refs if isinstance(refs,dict) else {}
-                  summaries.append({
-                      "workflowid": row.get("workflowid"),
-                      "name": row.get("name"),
-                      "statecode": row.get("statecode"),
-                      "statuscode": row.get("statuscode"),
-                      "connection_reference_keys": sorted(refs.keys()),
-                      "clientdata_sha256": hashlib.sha256(raw.encode()).hexdigest() if raw else None,
-                  })
-              return summaries
+                      payload={}
+                  return exc.code, payload
+
+          def dataverse_flow(name):
+              query=urllib.parse.urlencode({
+                  "$select":"workflowid,name,statecode,statuscode,category,type,clientdata",
+                  "$filter":f"category eq 5 and type eq 1 and name eq '{name.replace(chr(39), chr(39)*2)}'",
+              })
+              status,payload=get_json(f"{dataverse_url}/api/data/v9.2/workflows?{query}", dataverse_token)
+              if status != 200:
+                  raise RuntimeError(f"dataverse_http_{status}")
+              rows=payload.get("value") or []
+              if len(rows) != 1:
+                  raise RuntimeError(f"dataverse_flow_ambiguo:{name}:{len(rows)}")
+              return rows[0]
+
+          def parse_flow(row):
+              raw=row.get("clientdata") or ""
+              try:
+                  clientdata=json.loads(raw)
+              except Exception:
+                  clientdata={}
+              props=clientdata.get("properties") if isinstance(clientdata,dict) else {}
+              props=props if isinstance(props,dict) else {}
+              refs=props.get("connectionReferences")
+              refs=refs if isinstance(refs,dict) else {}
+              definition=props.get("definition")
+              definition=definition if isinstance(definition,dict) else {}
+              triggers=definition.get("triggers")
+              triggers=triggers if isinstance(triggers,dict) else {}
+              trigger=next(iter(triggers.values()), {})
+              params=((trigger.get("inputs") or {}).get("parameters") or {}) if isinstance(trigger,dict) else {}
+              return {
+                  "workflowid": row.get("workflowid"),
+                  "name": row.get("name"),
+                  "statecode": row.get("statecode"),
+                  "statuscode": row.get("statuscode"),
+                  "connection_reference_keys": sorted(refs.keys()),
+                  "clientdata_sha256": hashlib.sha256(raw.encode()).hexdigest() if raw else None,
+                  "plan_id": str(params.get("id") or ""),
+              }
+
+          created=parse_flow(dataverse_flow("ReqSys - Notificar Teams (Tarefa criada no Planner)"))
+          completed=parse_flow(dataverse_flow("ReqSys - Notificar Teams (Tarefa concluída no Planner)"))
+          plan_ids=sorted({x["plan_id"] for x in (created,completed) if x["plan_id"]})
+          if len(plan_ids) != 1:
+              raise RuntimeError(f"planner_plan_id_ambiguo:{len(plan_ids)}")
+          plan_id=plan_ids[0]
+
+          planner_query=urllib.parse.urlencode({"$top":"1"})
+          planner_status,_=get_json(
+              f"https://graph.microsoft.com/v1.0/planner/plans/{urllib.parse.quote(plan_id,safe='')}/tasks?{planner_query}",
+              graph_token,
+          )
+          teams_query=urllib.parse.urlencode({"$top":"1"})
+          teams_status,teams_payload=get_json(
+              "https://graph.microsoft.com/v1.0/teams/"
+              + urllib.parse.quote(team_id,safe="")
+              + "/channels/"
+              + urllib.parse.quote(channel_id,safe="")
+              + "/messages?"
+              + teams_query,
+              graph_token,
+          )
+          teams_error=(teams_payload.get("error") or {}) if isinstance(teams_payload,dict) else {}
+
+          for item in (created,completed):
+              item.pop("plan_id",None)
 
           result={
               "schema_version":"1.0.0",
               "environment":"dev",
               "auth_mode":"github_oidc",
-              "planner_graph_http_status": int(os.environ["PLANNER_STATUS"]),
-              "teams_graph_http_status": int(os.environ["TEAMS_STATUS"]),
-              "created_flows": flow_summary("/tmp/created-flow.json"),
-              "completed_flows": flow_summary("/tmp/completed-flow.json"),
+              "planner_graph_http_status": planner_status,
+              "teams_graph_http_status": teams_status,
+              "teams_graph_error_code": str(teams_error.get("code") or "")[:120] or None,
+              "created_flow": created,
+              "completed_flow": completed,
           }
-          Path("audit/planner-teams-oidc/probe.json").write_text(json.dumps(result,indent=2)+"\n")
-          print(json.dumps(result))
+          Path("audit/planner-teams-oidc/probe.json").write_text(
+              json.dumps(result,indent=2,ensure_ascii=False)+"\n",
+              encoding="utf-8",
+          )
+          print(json.dumps({
+              "planner_graph_http_status":planner_status,
+              "teams_graph_http_status":teams_status,
+              "teams_graph_error_code":result["teams_graph_error_code"],
+              "created_flow_found":bool(created["workflowid"]),
+              "completed_flow_found":bool(completed["workflowid"]),
+              "created_refs":created["connection_reference_keys"],
+              "completed_refs":completed["connection_reference_keys"],
+          }))
           PY
 
       - name: Publicar evidência
