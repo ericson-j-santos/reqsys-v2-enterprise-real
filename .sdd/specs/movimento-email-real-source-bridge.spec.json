@@ -1,7 +1,15 @@
 {
-  "id": "movimento-email-real-source-bridge",
-  "version": "1.0.0",
-  "environment": "dev",
+  "feature_name": "movimento-email-real-source-bridge",
+  "project": "ReqSys v2 Enterprise — Prospecção Movimento / PC24x7",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Substitui a alimentação por seed sintético por leitura somente leitura da origem SQL corporativa, com promoção idempotente para movimento_src no banco DEV persistente executado no PC24x7.",
   "runtime_target": "pc24x7",
   "source": {
     "type": "sql_server_corporate",
@@ -18,15 +26,14 @@
     "source_tls_required": true,
     "source_trust_server_certificate": false,
     "target_database_suffix": "Dev",
-    "idempotency": "payload_sha256",
+    "idempotency": "payload_sha256_plus_target_fingerprint",
     "source_tag": "CORPORATE_SQL",
     "production_enabled": false
   },
-  "acceptance": [
-    "dry_run_no_write",
-    "apply_to_canonical_layer",
-    "independent_view_read",
-    "repeat_no_write",
-    "sanitized_evidence"
-  ]
+  "sdd_gate": {
+    "tests": [
+      "tests/test_movimento_email_corporate_sync.py"
+    ],
+    "evidence_contract": "A prova real deve vincular branch/SHA/correlation_id, dry-run sem escrita, apply, leitura independente das views, repetição noop e synthetic=false. Não pode expor DSN nem linhas de negócio."
+  }
 }
