@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "purpose": "physical_24x7_e2e_transport_only",
+  "source_repository": "ericson-j-santos/reqsys-engineering-orchestrator",
+  "source_sha": "89045052da00f3d6b29ed7dc9cff2a63f2974bfb",
+  "target_base_sha": "e8f217f5e7b599f73e8e7e31c68dd0aca4ce5ae6",
+  "merge_intent": false,
+  "copied_files": [
+    "orchestrator/__init__.py",
+    "orchestrator/__main__.py",
+    "orchestrator/core.py",
+    "orchestrator/persistence.py",
+    "orchestrator/server.py",
+    "orchestrator/worker_agent.py",
+    "orchestrator/workers.py",
+    "scripts/__init__.py",
+    "scripts/control_plane_client.py",
+    "scripts/install_windows_autostart.py",
+    "scripts/service_supervisor.py",
+    "scripts/supervisor_control.py",
+    "scripts/windows_managed_process.py"
+  ]
+}
