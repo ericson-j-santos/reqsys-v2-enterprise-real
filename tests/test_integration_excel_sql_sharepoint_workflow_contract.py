@@ -3,6 +3,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OIDC_WORKFLOW = ROOT / ".github/workflows/integration-excel-sql-sharepoint-oidc-dev.yml"
 LEGACY_WORKFLOW = ROOT / ".github/workflows/integration-excel-sql-sharepoint-e2e-dev.yml"
+FUNCTIONAL_WORKFLOW = (
+    ROOT / ".github/workflows/integration-excel-sql-sharepoint-functional-evidence-dev.yml"
+)
+CANONICAL_WORKFLOW_REF = "./.github/workflows/integration-excel-sql-sharepoint-oidc-dev.yml"
 
 
 def _workflow_trigger_block(text: str) -> str:
@@ -11,10 +15,11 @@ def _workflow_trigger_block(text: str) -> str:
     return text[start:end]
 
 
-def test_oidc_e_canonico_na_main_e_tem_disparo_manual():
+def test_oidc_e_canonico_na_main_manual_e_reutilizavel():
     text = OIDC_WORKFLOW.read_text(encoding="utf-8")
     trigger = _workflow_trigger_block(text)
 
+    assert "workflow_call:" in trigger
     assert "workflow_dispatch:" in trigger
     assert "push:" in trigger
     assert "- main" in trigger
@@ -36,11 +41,28 @@ def test_oidc_automatico_nao_depende_de_device_code():
     assert "device_code" not in text
 
 
-def test_legado_device_code_fica_somente_manual():
+def test_alias_manual_legado_reusa_oidc_sem_device_code():
     text = LEGACY_WORKFLOW.read_text(encoding="utf-8")
     trigger = _workflow_trigger_block(text)
 
     assert "workflow_dispatch:" in trigger
     assert "push:" not in trigger
     assert "pull_request:" not in trigger
-    assert "msal_device_code" in text
+    assert CANONICAL_WORKFLOW_REF in text
+    assert "secrets: inherit" in text
+    assert "id-token: write" in text
+    assert "msal_device_code" not in text.lower()
+    assert "device_code" not in text.lower()
+
+
+def test_evidencia_funcional_preserva_check_e_reusa_oidc_sem_device_code():
+    text = FUNCTIONAL_WORKFLOW.read_text(encoding="utf-8")
+    trigger = _workflow_trigger_block(text)
+
+    assert "pull_request:" in trigger
+    assert "workflow_dispatch:" in trigger
+    assert CANONICAL_WORKFLOW_REF in text
+    assert "secrets: inherit" in text
+    assert "cancel-in-progress: false" in text
+    assert "msal_device_code" not in text.lower()
+    assert "device_code" not in text.lower()
