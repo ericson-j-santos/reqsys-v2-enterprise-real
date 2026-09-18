@@ -37,5 +37,9 @@
       "ApplicationIntent=ReadOnly",
       "no_user_password"
     ]
+  },
+  "runtime_compatibility": {
+    "target_framework": "net8.0",
+    "validated_runtime": "Noteri .NET SDK 8.0.421"
   }
 }
