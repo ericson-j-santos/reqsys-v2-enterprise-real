@@ -114,6 +114,14 @@ def test_governed_classifier_allows_public_pc24x7_token_broker_compose() -> None
     assert compose.is_sensitive is False
 
 
+def test_governed_classifier_allows_sdd_spec_with_token_in_name() -> None:
+    spec = governed_changed_file(
+        ".sdd/specs/auto-public-runtime-evidence-native-token.spec.json"
+    )
+
+    assert spec.is_sensitive is False
+
+
 def test_governed_classifier_keeps_real_token_config_sensitive() -> None:
     token_config = governed_changed_file("config/access-token.json")
 
