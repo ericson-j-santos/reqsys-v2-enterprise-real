@@ -125,7 +125,7 @@ def evaluate(
             {
                 "connectivity_validation": "deferred_to_real_flow",
                 "procedure_validation": "deferred_to_real_flow",
-                "deferred_to": "integration-excel-sql-sharepoint-e2e-dev.yml",
+                "deferred_to": "integration-excel-sql-sharepoint-oidc-dev.yml",
             }
         )
     return payload

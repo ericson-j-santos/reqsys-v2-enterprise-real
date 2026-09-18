@@ -33,7 +33,12 @@ Execuções do E2E DEV devem ser serializadas sem cancelar uma execução em and
 
 
 ## Requisito 7 — canonicidade operacional
-O workflow OIDC deve ser o caminho automático de DEV na `main` e também aceitar `workflow_dispatch`. O workflow legado com Device Code deve permanecer apenas como fallback manual, sem gatilho automático em `push` ou `pull_request`.
+O workflow OIDC deve ser o caminho automático de DEV na `main`, aceitar `workflow_dispatch` e `workflow_call`. Os workflows históricos de E2E e evidência funcional devem preservar seus nomes/checks apenas como wrappers de compatibilidade e reutilizar o workflow OIDC canônico.
 
-## Critério adicional de aceite
-7. O teste de contrato comprova que o workflow OIDC contém `workflow_dispatch` + `push` na `main`, enquanto o workflow legado não contém gatilho automático.
+## Requisito 8 — retirada do Device Code desta integração
+Nenhum workflow Excel → SQL Server → SharePoint pode invocar `msal_device_code`, `device_code` ou depender de sessão MSAL delegada. Os módulos compartilhados de Device Code só podem permanecer no repositório enquanto outras jornadas independentes ainda os consumirem.
+
+## Critérios adicionais de aceite
+7. O teste de contrato comprova `workflow_dispatch` + `push` na `main` + `workflow_call` no workflow OIDC.
+8. O alias manual e o workflow de evidência funcional chamam `integration-excel-sql-sharepoint-oidc-dev.yml`, usam `secrets: inherit` e não contêm referências a Device Code.
+9. Contratos de captura SQL em modo `power_platform_gateway` deferem a validação real para `integration-excel-sql-sharepoint-oidc-dev.yml`.

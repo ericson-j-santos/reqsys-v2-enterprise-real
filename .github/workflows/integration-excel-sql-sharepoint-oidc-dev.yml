@@ -1,6 +1,7 @@
 name: Integration Excel SQL SharePoint - DEV OIDC E2E
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches:
