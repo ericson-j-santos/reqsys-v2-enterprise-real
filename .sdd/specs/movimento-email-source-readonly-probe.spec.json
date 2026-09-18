@@ -1,0 +1,19 @@
+{
+  "feature_name": "movimento-email-source-readonly-probe",
+  "project": "ReqSys v2 Enterprise — Prospecção Movimento",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Probe governado, sem segredo e somente leitura para validar candidatos de servidor/banco da origem SQL corporativa antes do provisionamento do DSN.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_probe_movimento_email_source_readonly.py"
+    ],
+    "evidence_contract": "A evidência deve registrar conexão, hashes de servidor/banco, autenticação integrada, TLS, ApplicationIntent=ReadOnly e objeto/candidatos encontrados; nunca DSN, usuário, senha ou linha de negócio."
+  }
+}
