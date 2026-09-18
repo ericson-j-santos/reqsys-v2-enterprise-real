@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
+  <DataSources>
+    <DataSource Name="MovimentoEmailSourceDev">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>Data Source=localhost;Initial Catalog=ReqSysMovimentoSourceDev</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="FechamentoDiario"><Query><DataSourceName>MovimentoEmailSourceDev</DataSourceName><CommandText>SELECT indicador, valor, observacao, data_referencia FROM legacy_ssrs.fechamento_diario WHERE data_referencia = @data_referencia</CommandText></Query></DataSet>
+    <DataSet Name="PendenciasCadastro"><Query><DataSourceName>MovimentoEmailSourceDev</DataSourceName><CommandText>SELECT protocolo, cliente, cpf, pendencia, dias_em_aberto, responsavel, data_referencia FROM legacy_ssrs.pendencias_cadastro WHERE data_referencia = @data_referencia</CommandText></Query></DataSet>
+    <DataSet Name="PendenciasHistoricas"><Query><DataSourceName>MovimentoEmailSourceDev</DataSourceName><CommandText>SELECT periodo_referencia, pendencia, quantidade, percentual, data_referencia FROM legacy_ssrs.pendencias_historicas WHERE data_referencia = @data_referencia</CommandText></Query></DataSet>
+    <DataSet Name="PendenciasObservacao"><Query><DataSourceName>MovimentoEmailSourceDev</DataSourceName><CommandText>SELECT protocolo, tipo_inconsistencia, descricao, etapa, data_referencia FROM legacy_ssrs.pendencias_observacao WHERE data_referencia = @data_referencia</CommandText></Query></DataSet>
+  </DataSets>
+</Report>
