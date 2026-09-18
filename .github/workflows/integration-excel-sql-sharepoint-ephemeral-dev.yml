@@ -96,7 +96,7 @@ jobs:
                       json.dumps(["999999999999999"]),corr)
           negative=cur.fetchone()
           payload={
-            "schema_version":"1.1.0",
+            "schema_version":"1.2.0",
             "environment":"dev-ephemeral",
             "data_class":"synthetic",
             "corporate_source_certified":False,
@@ -106,7 +106,13 @@ jobs:
             "negative_probe":"passed" if negative is None else "failed",
             "credential_strategy":"runtime_random_masked",
             "secret_exposed":False,
-            "production_touched":False
+            "production_touched":False,
+            "result":{
+              "ChaveIntegracao":str(positive[0]) if positive else None,
+              "Identificador":str(positive[0]) if positive else None,
+              "Descricao":str(positive[1]) if positive else None,
+              "CorrelationId":str(positive[2]) if positive else None
+            }
           }
           assert payload["positive_probe"]=="passed"
           assert payload["negative_probe"]=="passed"
