@@ -24,6 +24,10 @@ def test_movimento_email_dsn_bootstrap_uses_governed_oidc_identity() -> None:
     assert "uses: azure/login@v2" in workflow
     assert "client-secret:" not in workflow
 
+    bootstrap = workflow.split("  bootstrap:\n", 1)[1]
+    assert "environment: development" in bootstrap
+    assert bootstrap.index("environment: development") < bootstrap.index("- name: Login Azure por OIDC")
+
 
 def test_movimento_email_dsn_bootstrap_fails_closed_before_azure_login() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")

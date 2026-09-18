@@ -2,19 +2,19 @@
   "feature_name": "movimento-email-dsn-oidc",
   "project": "ReqSys v2 Enterprise — Prospecção Movimento",
   "created_at": "2026-09-17",
-  "updated_at": "2026-09-17",
+  "updated_at": "2026-09-18",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Preserva o bootstrap OIDC governado do DSN e torna o verificador SQL da Prospecção Movimento executável de forma independente do backend, lendo configuração operacional diretamente do ambiente sem expor credenciais.",
+  "description": "Preserva o bootstrap OIDC governado do DSN, usa o environment GitHub development para reaproveitar o subject federado DEV já autorizado e mantém o verificador SQL da Prospecção Movimento independente do backend, sem expor credenciais.",
   "sdd_gate": {
     "tests": [
       "tests/test_movimento_email_dsn_bootstrap_workflow.py",
       "tests/test_verificar_movimento_email_fontes.py"
     ],
-    "evidence_contract": "A evidência pode registrar somente nomes de controles, presença/ausência e status; nunca valores de IDs, tokens, usuário, senha ou MOVIMENTO_EMAIL_SOURCE_DSN. A validação estática não substitui o E2E contra SQL Server real."
+    "evidence_contract": "A evidência pode registrar somente nomes de controles, presença/ausência, subject federado esperado e status; nunca valores de tokens, usuário, senha ou MOVIMENTO_EMAIL_SOURCE_DSN. A validação estática não substitui o E2E contra SQL Server real."
   }
 }
