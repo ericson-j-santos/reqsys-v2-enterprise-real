@@ -5,6 +5,8 @@ O workflow `Movimento Email DSN Bootstrap` deve autenticar no Azure por OIDC reu
 
 Não deve ser introduzido `client secret` para substituir OIDC.
 
+O job `bootstrap` deve usar o environment GitHub `development`, preservando o subject federado já autorizado para essa identidade (`repo:ericson-j-santos/reqsys-v2-enterprise-real:environment:development`). Não deve ser criado um novo vínculo federado apenas para `refs/heads/main` quando o vínculo governado de DEV já atende ao fluxo.
+
 ## Requisito 2 — falhar fechado antes do login
 Antes de `azure/login`, o workflow deve verificar apenas a presença dos parâmetros obrigatórios e interromper a execução quando estiverem ausentes, sem imprimir seus valores.
 
@@ -30,3 +32,4 @@ O valor do DSN nunca deve ser impresso. Timeout ausente, vazio ou inválido deve
 6. A homologação real do DSN continua bloqueada até servidor, banco e segredos SQL autorizados estarem disponíveis; testes estáticos não podem ser tratados como evidência de conexão real.
 7. O comando `status` do verificador deve funcionar sem importar o backend e deve diferenciar DSN ausente de DSN configurado.
 8. O teste `tests/test_verificar_movimento_email_fontes.py` deve validar leitura das variáveis, fallback do timeout e não exposição do DSN.
+9. O job `bootstrap` deve declarar `environment: development`, de modo que o token OIDC use o subject federado já autorizado em DEV.
