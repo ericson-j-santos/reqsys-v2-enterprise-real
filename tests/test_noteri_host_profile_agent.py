@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import socket
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -14,6 +15,7 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "noteri_host_pro
 SPEC = importlib.util.spec_from_file_location("noteri_host_profile_agent", MODULE_PATH)
 assert SPEC and SPEC.loader
 agent = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = agent
 SPEC.loader.exec_module(agent)
 
 
