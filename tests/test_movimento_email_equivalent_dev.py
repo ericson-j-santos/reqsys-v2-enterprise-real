@@ -54,3 +54,10 @@ def test_source_schema_is_separate_from_target_schema() -> None:
     assert "legacy_ssrs.pendencias_historicas" in sql
     assert "legacy_ssrs.pendencias_observacao" in sql
     assert "movimento_src." not in sql
+
+
+def test_source_tag_compatibility_is_preserved() -> None:
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert "_source_has_column" in script
+    assert "WHERE source_tag = ? AND data_referencia = ?" in script
+    assert "EQUIVALENT_DEV" in script
