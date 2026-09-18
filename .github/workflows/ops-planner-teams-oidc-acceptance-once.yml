@@ -1,0 +1,17 @@
+name: Ops Planner Teams OIDC acceptance once
+
+on:
+  push:
+    branches:
+      - feat/planner-teams-oidc-20260918
+    paths:
+      - ".github/workflows/ops-planner-teams-oidc-acceptance-once.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  acceptance:
+    uses: ./.github/workflows/runtime-e2e-continuous.yml
+    secrets: inherit
