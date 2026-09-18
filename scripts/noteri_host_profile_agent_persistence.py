@@ -19,11 +19,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import winreg
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 TASK_NAME = "ReqSys-NoteriHostProfileAgent"
+RUN_VALUE_NAME = "ReqSysNoteriHostProfileAgent"
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 SERVICE_NAME = "noteri-host-profile-agent"
 DEFAULT_PORT = 8765
 REBOOT_TOLERANCE_SECONDS = 120
@@ -122,6 +125,33 @@ def _scheduler():
     return service
 
 
+def run_key_status() -> dict[str, Any]:
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ) as key:
+            value, value_type = winreg.QueryValueEx(key, RUN_VALUE_NAME)
+    except FileNotFoundError:
+        return {"configured": False, "value_name": RUN_VALUE_NAME}
+    return {
+        "configured": bool(str(value).strip()),
+        "value_name": RUN_VALUE_NAME,
+        "value_type": int(value_type),
+    }
+
+
+def install_user_logon_autostart(command_line: str) -> None:
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, RUN_VALUE_NAME, 0, winreg.REG_SZ, command_line)
+
+
+def _is_access_denied(exc: BaseException) -> bool:
+    text = repr(exc).casefold()
+    return (
+        "-2147024891" in text
+        or "access is denied" in text
+        or "acesso negado" in text
+    )
+
+
 def task_status() -> dict[str, Any]:
     service = _scheduler()
     root = service.GetFolder("\\")
@@ -178,6 +208,9 @@ def install(repo_root: Path) -> dict[str, Any]:
     shutil.copy2(source_agent, target_agent)
     shutil.copy2(source_control, target_control)
 
+    persistence_mode = "task_at_startup_s4u"
+    requires_user_logon = False
+    task_registration_error = None
     service = _scheduler()
     root = service.GetFolder("\\")
     definition = service.NewTask(0)
@@ -203,17 +236,25 @@ def install(repo_root: Path) -> dict[str, Any]:
     principal.LogonType = TASK_LOGON_S4U
     principal.RunLevel = TASK_RUNLEVEL_LUA
 
-    root.RegisterTaskDefinition(
-        TASK_NAME,
-        definition,
-        TASK_CREATE_OR_UPDATE,
-        principal.UserId,
-        "",
-        TASK_LOGON_S4U,
-    )
-
-    registered = root.GetTask(TASK_NAME)
-    registered.Run("")
+    try:
+        root.RegisterTaskDefinition(
+            TASK_NAME,
+            definition,
+            TASK_CREATE_OR_UPDATE,
+            principal.UserId,
+            "",
+            TASK_LOGON_S4U,
+        )
+        registered = root.GetTask(TASK_NAME)
+        registered.Run("")
+    except Exception as exc:
+        if not _is_access_denied(exc):
+            raise
+        command_line = f'"{sys.executable}" "{target_control}" start --host Noteri'
+        install_user_logon_autostart(command_line)
+        persistence_mode = "hkcu_run_at_logon"
+        requires_user_logon = True
+        task_registration_error = "access_denied"
 
     deadline = time.monotonic() + 12.0
     health = probe_agent()
@@ -235,20 +276,26 @@ def install(repo_root: Path) -> dict[str, Any]:
         "s4u": True,
         "password_used": False,
         "run_level": "limited",
+        "persistence_mode": persistence_mode,
+        "requires_user_logon": requires_user_logon,
+        "task_registration_error": task_registration_error,
     }
     atomic_json(metadata_path(), metadata)
     status = task_status()
-    ok = (
-        health is not None
-        and status.get("exists") is True
+    run_status = run_key_status()
+    task_ok = (
+        status.get("exists") is True
         and status.get("principal_logon_type") == TASK_LOGON_S4U
         and any(item.get("type") == TASK_TRIGGER_BOOT for item in status.get("triggers", []))
     )
+    persistence_ok = task_ok or run_status.get("configured") is True
+    ok = health is not None and persistence_ok
     return {
         "ok": ok,
         "result": "NOTERI_AGENT_AUTOSTART_INSTALLED" if ok else "NOTERI_AGENT_AUTOSTART_INCOMPLETE",
         "health": health,
         "task": status,
+        "run_key": run_status,
         "metadata": metadata,
     }
 
@@ -265,7 +312,9 @@ def postboot_check(require_reboot: bool) -> tuple[int, dict[str, Any]]:
     restarted = reboot_observed(baseline, current)
     health = probe_agent()
     task = task_status()
-    ready = restarted and health is not None and task.get("exists") is True
+    run_status = run_key_status()
+    persistence_present = task.get("exists") is True or run_status.get("configured") is True
+    ready = restarted and health is not None and persistence_present
     payload = {
         "schema_version": "1",
         "generated_at": now_iso(),
@@ -276,6 +325,8 @@ def postboot_check(require_reboot: bool) -> tuple[int, dict[str, Any]]:
         "agent_healthy": health is not None,
         "health": health,
         "task": task,
+        "run_key": run_status,
+        "persistence_present": persistence_present,
         "ready": ready,
     }
     atomic_json(evidence_path(), payload)
@@ -284,7 +335,7 @@ def postboot_check(require_reboot: bool) -> tuple[int, dict[str, Any]]:
             return 4, payload
         if health is None:
             return 5, payload
-        if task.get("exists") is not True:
+        if not persistence_present:
             return 6, payload
     return 0 if (not require_reboot or ready) else 1, payload
 
@@ -311,6 +362,7 @@ def main() -> int:
             payload = {
                 "ok": True,
                 "task": task_status(),
+                "run_key": run_key_status(),
                 "metadata_exists": metadata_path().is_file(),
                 "agent_healthy": probe_agent() is not None,
             }
