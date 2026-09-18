@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
+  <DataSources>
+    <DataSource Name="MovimentoEmailDev">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>Data Source=localhost;Initial Catalog=ReqSysMovimentoDev</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="FechamentoDiario">
+      <Query>
+        <DataSourceName>MovimentoEmailDev</DataSourceName>
+        <CommandText>SELECT indicador, valor, observacao, data_referencia FROM dbo.vw_prospeccao_movimento_fechamento_diario WHERE data_referencia = @data_referencia</CommandText>
+      </Query>
+    </DataSet>
+    <DataSet Name="PendenciasCadastro">
+      <Query>
+        <DataSourceName>MovimentoEmailDev</DataSourceName>
+        <CommandText>SELECT protocolo, cliente, cpf, pendencia, dias_em_aberto, responsavel, data_referencia FROM dbo.vw_prospeccao_movimento_pendencias_cadastro WHERE data_referencia = @data_referencia</CommandText>
+      </Query>
+    </DataSet>
+    <DataSet Name="PendenciasHistoricas">
+      <Query>
+        <DataSourceName>MovimentoEmailDev</DataSourceName>
+        <CommandText>SELECT periodo_referencia, pendencia, quantidade, percentual, data_referencia FROM dbo.vw_prospeccao_movimento_pendencias_historicas WHERE data_referencia = @data_referencia</CommandText>
+      </Query>
+    </DataSet>
+    <DataSet Name="PendenciasObservacao">
+      <Query>
+        <DataSourceName>MovimentoEmailDev</DataSourceName>
+        <CommandText>SELECT protocolo, tipo_inconsistencia, descricao, etapa, data_referencia FROM dbo.vw_prospeccao_movimento_pendencias_observacao WHERE data_referencia = @data_referencia</CommandText>
+      </Query>
+    </DataSet>
+  </DataSets>
+</Report>

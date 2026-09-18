@@ -37,11 +37,13 @@ _MANIFEST_PATH = _VIEWS_DIR / 'MANIFEST.json'
 
 sys.path.insert(0, str(_ROOT / 'backend'))
 
-from dotenv import load_dotenv  # noqa: E402
 
-load_dotenv(_ROOT / '.env', override=False)
-
-from app.core.config import Settings  # noqa: E402
+def _settings():
+    """Carrega configuração somente quando a operação precisa conectar."""
+    from dotenv import load_dotenv
+    load_dotenv(_ROOT / '.env', override=False)
+    from app.core.config import Settings
+    return Settings()
 
 
 def _linha(texto: str = '') -> None:
@@ -131,7 +133,7 @@ def cmd_aplicar(args: argparse.Namespace) -> int:
         _linha('\n  --dry-run: nada foi conectado nem executado.')
         return 0
 
-    cfg = Settings()
+    cfg = _settings()
     if not cfg.movimento_email_source_dsn:
         _linha('\n  [ERRO] MOVIMENTO_EMAIL_SOURCE_DSN não configurado — rode com --dry-run para só validar, '
                'ou configure o DSN (ver scripts/verificar_movimento_email_fontes.py status).')
@@ -188,7 +190,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         _linha('  --dry-run: nada foi conectado nem executado.')
         return 0
 
-    cfg = Settings()
+    cfg = _settings()
     if not cfg.movimento_email_source_dsn:
         _linha('  [ERRO] MOVIMENTO_EMAIL_SOURCE_DSN não configurado.')
         return 1
