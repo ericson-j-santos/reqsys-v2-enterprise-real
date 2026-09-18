@@ -244,9 +244,14 @@ class TestCofreResolver:
         resp = client.post('/v1/cofre/resolver', json={'key': 'K'}, headers={'X-Vault-Token': 'errado'})
         assert resp.status_code == 401
 
-    def test_vault_api_token_nao_configurado_retorna_503(self, monkeypatch):
+    def test_token_apresentado_sem_fallback_global_retorna_401(self, monkeypatch):
         monkeypatch.setattr(_settings, 'vault_api_token', '')
         resp = client.post('/v1/cofre/resolver', json={'key': 'K'}, headers={'X-Vault-Token': 'qualquer'})
+        assert resp.status_code == 401
+
+    def test_sem_token_e_sem_fallback_global_retorna_503(self, monkeypatch):
+        monkeypatch.setattr(_settings, 'vault_api_token', '')
+        resp = client.post('/v1/cofre/resolver', json={'key': 'K'})
         assert resp.status_code == 503
 
     def test_chave_reservada_retorna_400(self, monkeypatch):
@@ -314,9 +319,14 @@ class TestCofreGetSegredo:
         resp = client.get('/v1/cofre/segredos/KEY', headers={'X-Vault-Token': 'errado'})
         assert resp.status_code == 401
 
-    def test_vault_api_token_nao_configurado_retorna_503(self, monkeypatch):
+    def test_token_apresentado_sem_fallback_global_retorna_401(self, monkeypatch):
         monkeypatch.setattr(_settings, 'vault_api_token', '')
         resp = client.get('/v1/cofre/segredos/KEY', headers={'X-Vault-Token': 'qualquer'})
+        assert resp.status_code == 401
+
+    def test_sem_token_e_sem_fallback_global_retorna_503(self, monkeypatch):
+        monkeypatch.setattr(_settings, 'vault_api_token', '')
+        resp = client.get('/v1/cofre/segredos/KEY')
         assert resp.status_code == 503
 
     def test_chave_reservada_retorna_400(self, monkeypatch):
@@ -525,6 +535,22 @@ class TestCofreTokensEscopados:
         assert revogar.status_code == 200
 
         resp = client.get('/v1/cofre/segredos/SCOPED_KEY_2', headers={'X-Vault-Token': token})
+        assert resp.status_code == 401
+
+    def test_token_revogado_sem_fallback_global_retorna_401(self, monkeypatch):
+        fk = _vault_patch(monkeypatch)
+        monkeypatch.setattr(_settings, 'vault_api_token', '')
+        _setup_vault_secret(fk, 'SCOPED_KEY_REVOKED', 'valor')
+        criar = client.post(
+            '/v1/cofre/tokens',
+            json={'label': 'consumidor-revogado-sem-fallback', 'key_patterns': ['SCOPED_KEY_*']},
+            headers=_admin_headers(),
+        )
+        token_id = criar.json()['data']['id']
+        token = criar.json()['data']['token']
+        assert client.delete(f'/v1/cofre/tokens/{token_id}', headers=_admin_headers()).status_code == 200
+
+        resp = client.get('/v1/cofre/segredos/SCOPED_KEY_REVOKED', headers={'X-Vault-Token': token})
         assert resp.status_code == 401
 
     def test_revogar_token_inexistente_404(self):
