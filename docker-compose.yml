@@ -22,6 +22,8 @@ services:
       - JWT_SECRET=${JWT_SECRET:-trocar-em-producao}
       - JWT_ISSUER=${JWT_ISSUER:-reqsys-api}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-reqsys-frontend}
+      - COFRE_KEYRING_PASSPHRASE=${COFRE_KEYRING_PASSPHRASE:-}
+      - REQSYS_DATA_DIR=${REQSYS_DATA_DIR:-/data}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081},https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
       - SSRS_BASE_URL=${SSRS_BASE_URL:-}
       - SSRS_REPORTS_PATH=${SSRS_REPORTS_PATH:-ReqSys}
@@ -48,6 +50,7 @@ services:
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
     volumes:
       - ${SDD_SPECS_HOST_PATH:-../../my-first-spec-project/.sdd}:/sdd:ro
+      - reqsys-cofre-data:/data
     healthcheck:
       test:
         [
@@ -152,3 +155,4 @@ networks:
 volumes:
   kb-data:
   reqsys-db-data:
+  reqsys-cofre-data:
