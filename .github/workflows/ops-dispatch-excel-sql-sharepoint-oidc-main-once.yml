@@ -1,0 +1,29 @@
+name: Ops dispatch Excel SQL SharePoint OIDC main once
+
+on:
+  push:
+    branches:
+      - ops/dispatch-excel-sql-sharepoint-oidc-main-20260918
+    paths:
+      - ".github/workflows/ops-dispatch-excel-sql-sharepoint-oidc-main-once.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Disparar E2E OIDC canônico na main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/integration-excel-sql-sharepoint-oidc-dev.yml/dispatches" \
+            -f ref=main
+          echo "dispatch_status=accepted"
