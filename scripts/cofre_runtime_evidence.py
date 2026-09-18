@@ -59,7 +59,7 @@ class ApiClient:
             "User-Agent": "reqsys-cofre-runtime-evidence/1.1",
         }
         if self.admin_jwt:
-            headers["X-Service-Token"] = self.admin_jwt
+            headers["Authorization"] = f"Bearer {self.admin_jwt}"
         if vault_token:
             headers["X-Vault-Token"] = vault_token
         body = None
@@ -135,6 +135,77 @@ def _decrypt_state(path: Path, key: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise GateError("Estado transitório descriptografado não é objeto")
     return value
+
+
+def _load_admin_jwt_from_reader(
+    base_url: str,
+    environment: str,
+    reader_token_file: str,
+    timeout: int,
+    correlation_id: str,
+) -> str:
+    path = Path(reader_token_file)
+    if not path.exists():
+        raise GateError(f"Token de leitura do Cofre não encontrado: {path}")
+    vault_token = path.read_text(encoding="utf-8").strip()
+    if not vault_token:
+        raise GateError("Token de leitura do Cofre está vazio")
+
+    client = ApiClient(base_url, "", timeout, correlation_id)
+    data = _data(
+        client.request(
+            "GET",
+            f"/v1/cofre/segredos/human_admin_jwt:{environment}",
+            vault_token=vault_token,
+        )
+    )
+    try:
+        stored = json.loads(str(data["value"]))
+        token = str(stored["token"]).strip()
+        exp = int(stored["exp"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise GateError("human_admin_jwt armazenado no Cofre é inválido") from exc
+    if not token:
+        raise GateError("human_admin_jwt armazenado no Cofre está vazio")
+    if exp <= int(time.time()) + 120:
+        raise GateError("human_admin_jwt expirado ou próximo da expiração")
+    return token
+
+
+def _resolve_runtime_credentials(args: argparse.Namespace) -> None:
+    if not args.admin_jwt.strip():
+        if not args.admin_jwt_reader_token_file:
+            raise GateError(
+                "--admin-jwt/COFRE_ADMIN_JWT ou --admin-jwt-reader-token-file é obrigatório"
+            )
+        args.admin_jwt = _load_admin_jwt_from_reader(
+            args.base_url,
+            args.environment,
+            args.admin_jwt_reader_token_file,
+            args.timeout,
+            args.correlation_id,
+        )
+
+    if args.state_key.strip():
+        return
+    if not args.state_key_file:
+        raise GateError(
+            "--state-key/COFRE_STATE_FERNET_KEY ou --state-key-file é obrigatório"
+        )
+
+    key_path = Path(args.state_key_file)
+    if key_path.exists():
+        args.state_key = key_path.read_text(encoding="ascii").strip()
+    elif args.phase == "before-restart":
+        args.state_key = Fernet.generate_key().decode("ascii")
+        _write_private_bytes(key_path, (args.state_key + "\n").encode("ascii"))
+    else:
+        raise GateError("Arquivo de chave Fernet efêmera não encontrado para fase pós-restart")
+
+    try:
+        Fernet(args.state_key.encode("ascii"))
+    except (ValueError, TypeError) as exc:
+        raise GateError("Chave Fernet efêmera inválida") from exc
 
 
 def _check_audit(client: ApiClient, actions: set[str]) -> dict[str, Any]:
@@ -295,7 +366,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--environment", required=True, choices=("dev", "stg"))
     parser.add_argument("--admin-jwt", default=os.getenv("COFRE_ADMIN_JWT", ""))
+    parser.add_argument(
+        "--admin-jwt-reader-token-file",
+        default=None,
+        help="Arquivo local com token escopado que só lê human_admin_jwt:<ambiente>.",
+    )
     parser.add_argument("--state-key", default=os.getenv("COFRE_STATE_FERNET_KEY", ""))
+    parser.add_argument(
+        "--state-key-file",
+        default=None,
+        help="Arquivo efêmero da chave Fernet; é criado no before-restart e removido após sucesso.",
+    )
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--state-file", required=True)
     parser.add_argument("--evidence-file", required=True)
@@ -304,10 +385,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-attempt", default=os.getenv("GITHUB_RUN_ATTEMPT", "1"))
     parser.add_argument("--workflow-sha", default=os.getenv("GITHUB_SHA", "local"))
     args = parser.parse_args(argv)
-    if not args.admin_jwt.strip():
-        parser.error("--admin-jwt ou COFRE_ADMIN_JWT é obrigatório")
-    if not args.state_key.strip():
-        parser.error("--state-key ou COFRE_STATE_FERNET_KEY é obrigatório")
     if args.timeout < 1 or args.timeout > 120:
         parser.error("--timeout deve estar entre 1 e 120 segundos")
     return args
@@ -317,8 +394,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     evidence_path = Path(args.evidence_file)
     try:
+        _resolve_runtime_credentials(args)
         result = before_restart(args) if args.phase == "before-restart" else after_restart(args)
         _write_public_json(evidence_path, build_evidence(args, result))
+        if args.phase == "after-restart" and args.state_key_file:
+            Path(args.state_key_file).unlink(missing_ok=True)
         print(json.dumps({"ok": True, "phase": result["phase"], "evidence_file": str(evidence_path)}))
         return 0
     except Exception as exc:
