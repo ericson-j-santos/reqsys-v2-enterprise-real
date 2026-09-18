@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "feature": "excel_sql_sharepoint_sync",
+  "environment": "dev",
+  "source_sha": "3f2336ec3aa088c4fb01251487d6747444ebfe1f",
+  "correlation_id": "list-crud-35294242980-1",
+  "data_class": "synthetic",
+  "corporate_source_certified": false,
+  "source": {
+    "site_id": "tieri659.sharepoint.com,f72be222-7b9b-42e0-8f91-29b7b8db35e0,5e24e819-4dcf-475d-b0e9-5b8f83c30a2c",
+    "site_name": "ReqSys WSJF DEV",
+    "site_url": "https://tieri659.sharepoint.com/sites/reqsys-wsjf-dev",
+    "workbook": "ReqSys-Excel-SQL-SharePoint-DEV.xlsx",
+    "identifier": "990000000000001",
+    "identifier_present": true
+  },
+  "destination": {
+    "list_id": "4eeb6036-c3a2-4912-8a67-b5e172b15bf8",
+    "list_name": "ResultadoConsulta",
+    "required_columns": [
+      "Title",
+      "ChaveIntegracao",
+      "CorrelationId"
+    ],
+    "item_id": "5"
+  },
+  "sql": {
+    "run_id": 35291883815,
+    "sha": "238443260c1e4c57f75c8e8307bd9371843f7942",
+    "correlation_id": "5FC9E1E7-2B51-4119-B480-0D868CC42ECE"
+  },
+  "acceptance": {
+    "create_performed": true,
+    "create_read_back": "passed",
+    "update_same_item": "passed",
+    "independent_read": "passed",
+    "duplicate_count": 1,
+    "repeat_idempotent": "passed",
+    "repeat_action": "already_present_no_write",
+    "expected": {
+      "Title": "ReqSys E2E DEV fixture",
+      "ChaveIntegracao": "990000000000001",
+      "CorrelationId": "5FC9E1E7-2B51-4119-B480-0D868CC42ECE"
+    },
+    "observed": {
+      "Title": "ReqSys E2E DEV fixture",
+      "ChaveIntegracao": "990000000000001",
+      "CorrelationId": "5FC9E1E7-2B51-4119-B480-0D868CC42ECE"
+    }
+  },
+  "github_actions": {
+    "run_id": 35294242980,
+    "artifact_id": 10527610457,
+    "artifact_digest": "sha256:606f9594993e0185bb7192ec289f14bc1ccb38d24d26a5938a481b7b32fcbd82"
+  },
+  "production_touched": false,
+  "secret_exposed": false,
+  "passed": true
+}
