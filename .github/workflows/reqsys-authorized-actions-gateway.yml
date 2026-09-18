@@ -21,7 +21,8 @@ jobs:
       (
         github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev' ||
         github.event.comment.body == '/reqsys run runtime-e2e-dev' ||
-        github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch'
+        github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
+        github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -42,6 +43,9 @@ jobs:
               ;;
             '/reqsys run pending-agent-pr-permission-watch')
               target='pending-development-agent-pr-permission-watch.yml'
+              ;;
+            '/reqsys run bacen-57-simulation-assessment')
+              target='bacen-57-simulation-assessment.yml'
               ;;
             *)
               echo 'command_not_allowlisted' >&2
@@ -69,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           gh workflow run "$TARGET_WORKFLOW" \
