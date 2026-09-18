@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -114,6 +115,14 @@ def install(
 
 
 def start_supervisor(install_root: Path, supervisor_path: Path) -> int:
+    pid_file = install_root / "supervisor.pid"
+    if pid_file.exists():
+        control_dir = install_root / "data" / "control"
+        control_dir.mkdir(parents=True, exist_ok=True)
+        shutdown = control_dir / "shutdown.request"
+        shutdown.write_text("upgrade\n", encoding="utf-8")
+        time.sleep(2)
+
     logs = install_root / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     log_path = logs / "supervisor.log"
