@@ -152,10 +152,11 @@ def wait_health(timeout_seconds: int = 180) -> int:
     while time.monotonic() < deadline:
         try:
             status, _ = request_json("GET", "/health", expected=(200,), timeout=5)
-            if status == 200:
-                return status
         except E2EError:
-            pass
+            time.sleep(2)
+            continue
+        if status == 200:
+            return status
         time.sleep(2)
     raise E2EError("health_timeout")
 
