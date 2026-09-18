@@ -145,3 +145,20 @@ def test_bind_externo_e_recusado(monkeypatch, capsys):
     )
     assert agent.main() == 2
     assert "loopback" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://example.invalid\r\nX-Injected: true",
+        "https://example.invalid/path",
+        "javascript:alert(1)",
+    ],
+)
+def test_normalize_origin_rejeita_valores_inseguros(origin: str):
+    with pytest.raises(ValueError, match="origin HTTP/HTTPS inválida"):
+        agent.normalize_origin(origin)
+
+
+def test_normalize_origin_preserva_origem_permitida():
+    assert agent.normalize_origin("https://reqsys.example/") == "https://reqsys.example"
