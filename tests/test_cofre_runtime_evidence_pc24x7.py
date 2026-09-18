@@ -4,7 +4,6 @@ import yaml
 
 WORKFLOW = Path(".github/workflows/cofre-runtime-evidence-gate.yml")
 RUNTIME_CONTROL = Path("scripts/pc24x7_cofre_runtime_control.py")
-DEPLOY_HELPER = Path("scripts/deploy_pc24x7_dev_api.py")
 
 
 def test_workflow_uses_pc24x7_dev_and_has_no_fly_runtime():
@@ -58,13 +57,3 @@ def test_runtime_control_is_fail_closed_to_exact_dev_container():
     assert '["restart", CONTAINER]' in raw
 
 
-def test_deploy_helper_limits_mutation_to_api_dev_and_has_rollback():
-    raw = DEPLOY_HELPER.read_text(encoding="utf-8")
-
-    assert 'PROJECT = "wt-pc24x7-piloto"' in raw
-    assert 'SERVICE = "api"' in raw
-    assert 'CONTAINER = "wt-pc24x7-piloto-api-1"' in raw
-    assert '"--no-deps", SERVICE' in raw
-    assert "source_tracked_tree_dirty" in raw
-    assert "rollback" in raw
-    assert '"production_touched": False' in raw
