@@ -9,10 +9,11 @@
     "design": true,
     "tasks": true
   },
-  "description": "Corrige a autenticação Azure do bootstrap do DSN reutilizando a identidade OIDC governada já existente no ReqSys, com validação fail-closed e sem introduzir segredo de cliente.",
+  "description": "Preserva o bootstrap OIDC governado do DSN e torna o verificador SQL da Prospecção Movimento executável de forma independente do backend, lendo configuração operacional diretamente do ambiente sem expor credenciais.",
   "sdd_gate": {
     "tests": [
-      "tests/test_movimento_email_dsn_bootstrap_workflow.py"
+      "tests/test_movimento_email_dsn_bootstrap_workflow.py",
+      "tests/test_verificar_movimento_email_fontes.py"
     ],
     "evidence_contract": "A evidência pode registrar somente nomes de controles, presença/ausência e status; nunca valores de IDs, tokens, usuário, senha ou MOVIMENTO_EMAIL_SOURCE_DSN. A validação estática não substitui o E2E contra SQL Server real."
   }

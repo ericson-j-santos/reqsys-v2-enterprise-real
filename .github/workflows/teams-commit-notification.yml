@@ -19,10 +19,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: teams-commit-notification-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   notify-teams:
     name: Enviar commit ao Teams
@@ -68,7 +64,6 @@ jobs:
       - name: Enviar notificação
         if: steps.teams-config.outputs.configured == 'true'
         id: notify
-        continue-on-error: ${{ github.event_name == 'push' }}
         env:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
@@ -281,7 +276,7 @@ jobs:
             echo "- Evento: ${{ github.event_name }}"
             echo "- Commit: ${{ github.sha }}"
             echo "- Layout: Adaptive Card 1.5 com fallback Markdown"
-            echo "- Modo: $([[ '${{ github.event_name }}' == 'push' ]] && echo 'report-only' || echo 'estrito')"
+            echo "- Modo: estrito"
             if [[ "${{ steps.teams-config.outputs.configured }}" != "true" ]]; then
               echo "- Status: ignorado"
               echo "- Motivo: ${{ steps.teams-config.outputs.reason }}"
@@ -293,8 +288,8 @@ jobs:
             else
               echo "- Status: degradado — entrega não confirmada"
               echo "- Resultado da etapa: ${{ steps.notify.outcome }}"
-              echo "- CI bloqueado: $([[ '${{ github.event_name }}' == 'push' ]] && echo 'não' || echo 'sim')"
+              echo "- Workflow falhou: sim"
               echo "- Ação: validar o contrato/execução do fluxo Power Automate e repetir via workflow_dispatch"
-              echo "::warning title=Entrega ao Teams não confirmada::A integração falhou; em push o evento é report-only e não bloqueia o CI."
+              echo "::warning title=Entrega ao Teams não confirmada::A integração falhou e a execução permanece visivelmente degradada."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
