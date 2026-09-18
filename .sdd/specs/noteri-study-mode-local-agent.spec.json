@@ -1,0 +1,16 @@
+{
+  "feature_name": "noteri-study-mode-local-agent",
+  "project": "ReqSys v2 Enterprise — Centralizadora / Task Console",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Adiciona ao Task Console um canal local e restrito para alternar o Noteri entre NORMAL e ESTUDO com leitura independente e falha fechada.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_host_profile_agent.py",
+      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js"
+    ],
+    "evidence_contract": "O agente permanece em loopback, não expõe execução genérica e a UI somente confirma alteração após readback coerente do Noteri."
+  }
+}
