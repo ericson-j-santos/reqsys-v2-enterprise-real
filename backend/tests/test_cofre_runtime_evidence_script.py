@@ -85,6 +85,37 @@ def test_transient_state_is_encrypted_and_private(tmp_path: Path):
         assert stat.S_IMODE(state_path.stat().st_mode) == 0o600
 
 
+def test_api_client_uses_bearer_for_admin_jwt(monkeypatch):
+    captured = {}
+
+    class _Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{}'
+
+    def _fake_urlopen(request, timeout):
+        captured["authorization"] = request.get_header("Authorization")
+        captured["service_token"] = request.get_header("X-service-token")
+        captured["timeout"] = timeout
+        return _Response()
+
+    monkeypatch.setattr(module, "urlopen", _fake_urlopen)
+    client = module.ApiClient("https://example.test", "jwt-admin", 7, "corr-auth")
+    response = client.request("GET", "/v1/cofre/status")
+
+    assert response.status == 200
+    assert captured["authorization"] == "Bearer jwt-admin"
+    assert captured["service_token"] is None
+    assert captured["timeout"] == 7
+
+
 def test_invalid_state_key_is_rejected(tmp_path: Path):
     state_path = tmp_path / "state.bin"
     valid_key = Fernet.generate_key().decode("ascii")
