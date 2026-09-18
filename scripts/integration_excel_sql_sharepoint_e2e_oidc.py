@@ -29,7 +29,6 @@ from scripts.integration_excel_sql_sharepoint_dataverse import (
 from scripts.integration_excel_sql_sharepoint_e2e import (
     build_e2e_workbook,
     current_correlation_items,
-    delete_sharepoint_item,
     derive_excel_source,
     download_workbook,
     graph_request,
