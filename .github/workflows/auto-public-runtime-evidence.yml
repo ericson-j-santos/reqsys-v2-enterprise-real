@@ -3,7 +3,7 @@ name: Auto Public Runtime Evidence
 on:
   workflow_run:
     workflows:
-      - ReqSys Fly Runtime P0
+      - Fly Automatic Environment Promotion
     types:
       - completed
   workflow_dispatch:
@@ -69,19 +69,46 @@ jobs:
       - name: Resolve inputs
         id: inputs
         if: steps.ctx.outputs.should_dispatch == 'true'
+        env:
+          DEV_RUNTIME_PROVIDER: ${{ vars.REQSYS_DEV_RUNTIME_PROVIDER || 'fly' }}
+          PC24X7_DEV_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "public_url=${{ inputs.public_url }}" >> "$GITHUB_OUTPUT"
             echo "strict=${{ inputs.strict }}" >> "$GITHUB_OUTPUT"
             echo "publish_comment=${{ inputs.publish_comment }}" >> "$GITHUB_OUTPUT"
             echo "issue_number=${{ inputs.issue_number }}" >> "$GITHUB_OUTPUT"
             echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
+            echo "provider=manual" >> "$GITHUB_OUTPUT"
           else
-            echo "public_url=https://reqsys-api.fly.dev" >> "$GITHUB_OUTPUT"
-            echo "strict=false" >> "$GITHUB_OUTPUT"
+            provider="${DEV_RUNTIME_PROVIDER,,}"
+            case "$provider" in
+              fly)
+                public_url="https://reqsys-api.fly.dev"
+                ;;
+              pc24x7)
+                if [ -z "${PC24X7_DEV_BASE_URL:-}" ]; then
+                  echo "::error::PC24X7_DEV_BASE_URL não configurada para provider=pc24x7"
+                  exit 1
+                fi
+                case "$PC24X7_DEV_BASE_URL" in
+                  https://*) ;;
+                  *) echo "::error::PC24X7_DEV_BASE_URL deve usar HTTPS"; exit 1 ;;
+                esac
+                public_url="${PC24X7_DEV_BASE_URL%/}"
+                ;;
+              *)
+                echo "::error::REQSYS_DEV_RUNTIME_PROVIDER deve ser fly ou pc24x7; recebido: $provider"
+                exit 1
+                ;;
+            esac
+            echo "public_url=${public_url}" >> "$GITHUB_OUTPUT"
+            echo "strict=true" >> "$GITHUB_OUTPUT"
             echo "publish_comment=false" >> "$GITHUB_OUTPUT"
             echo "issue_number=" >> "$GITHUB_OUTPUT"
             echo "ref=main" >> "$GITHUB_OUTPUT"
+            echo "provider=${provider}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Provar token efêmero nativo antes do dispatch
@@ -114,7 +141,13 @@ jobs:
           ISSUE_NUMBER: ${{ steps.inputs.outputs.issue_number }}
           TARGET_REF: ${{ steps.inputs.outputs.ref }}
         run: |
-          gh workflow run public-runtime-evidence.yml             -R "${REPOSITORY}"             --ref "${TARGET_REF}"             -f "public_url=${PUBLIC_URL}"             -f "strict=${STRICT}"             -f "publish_comment=${PUBLISH_COMMENT}"             -f "issue_number=${ISSUE_NUMBER}"
+          gh workflow run public-runtime-evidence.yml \
+            -R "${REPOSITORY}" \
+            --ref "${TARGET_REF}" \
+            -f "public_url=${PUBLIC_URL}" \
+            -f "strict=${STRICT}" \
+            -f "publish_comment=${PUBLISH_COMMENT}" \
+            -f "issue_number=${ISSUE_NUMBER}"
 
       - name: Show latest public runtime evidence runs
         if: steps.ctx.outputs.should_dispatch == 'true'
@@ -122,4 +155,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          gh run list             -R "${REPOSITORY}"             --workflow="public-runtime-evidence.yml"             -L 5
+          gh run list \
+            -R "${REPOSITORY}" \
+            --workflow="public-runtime-evidence.yml" \
+            -L 5
