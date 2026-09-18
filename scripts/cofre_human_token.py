@@ -163,30 +163,40 @@ def _set_token(environment: str, base_url_override: str | None, admin_jwt: str) 
     return exp
 
 
-def cmd_bootstrap_reader(args: argparse.Namespace) -> None:
-    base_url = _base_url(args.environment, args.base_url)
-    admin_jwt = args.token or input("Cole o JWT admin (login real Azure AD): ").strip()
-    _decode_jwt_exp(admin_jwt)  # valida formato cedo
-
+def _bootstrap_reader_with_token(
+    environment: str,
+    base_url_override: str | None,
+    admin_jwt: str,
+) -> Path:
+    """Cria o leitor escopado sem imprimir nem persistir o JWT administrativo."""
+    base_url = _base_url(environment, base_url_override)
+    _decode_jwt_exp(admin_jwt)
     resp = _http_request(
         "POST",
         f"{base_url}/v1/cofre/tokens",
         headers={"Authorization": f"Bearer {admin_jwt}"},
         body={
-            "label": f"human-jwt-reader-{args.environment}",
-            "key_patterns": [f"human_admin_jwt:{args.environment}"],
+            "label": f"human-jwt-reader-{environment}",
+            "key_patterns": [f"human_admin_jwt:{environment}"],
         },
     )
-    scoped_token = resp["data"]["token"]
+    scoped_token = str(resp["data"]["token"]).strip()
+    if not scoped_token:
+        raise CofreTokenError("Cofre não retornou token de leitura escopado.")
 
     VAULT_TOKEN_DIR.mkdir(parents=True, exist_ok=True)
-    path = _vault_token_path(args.environment)
+    path = _vault_token_path(environment)
     path.write_text(scoped_token + "\n", encoding="utf-8")
     try:
         os.chmod(path, 0o600)
     except OSError:
         pass
+    return path
 
+
+def cmd_bootstrap_reader(args: argparse.Namespace) -> None:
+    admin_jwt = args.token or input("Cole o JWT admin (login real Azure AD): ").strip()
+    path = _bootstrap_reader_with_token(args.environment, args.base_url, admin_jwt)
     print(f"Token de leitura escopado criado e salvo em {path} (fora do git).")
     print("Esse token só consegue ler a chave "
           f"'human_admin_jwt:{args.environment}' — guarde-o, não será mostrado de novo pelo Cofre.")
@@ -313,9 +323,16 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
                     raise CofreTokenError("campo 'token' vazio")
 
                 exp = _set_token(environment, base_url_override, token)
+                reader_path = _bootstrap_reader_with_token(
+                    environment,
+                    base_url_override,
+                    token,
+                )
                 remaining_min = max(0, (exp - int(time.time())) // 60)
 
                 result["done"] = True
+                result["reader_ready"] = True
+                result["reader_path"] = str(reader_path)
                 result["ok"] = True
                 result["expires_in_min"] = remaining_min
                 self._reply_json(200, {"ok": True, "expires_in_min": remaining_min})
@@ -335,9 +352,11 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
 
 def cmd_listen(args: argparse.Namespace) -> None:
     _base_url(args.environment, args.base_url)  # valida ambiente/--base-url cedo
-    allowed_origin = FRONTEND_ORIGINS.get(args.environment)
+    allowed_origin = (args.frontend_origin or FRONTEND_ORIGINS.get(args.environment) or "").rstrip("/")
     if not allowed_origin:
-        raise CofreTokenError(f"Sem origem de frontend mapeada para '{args.environment}'.")
+        raise CofreTokenError(
+            f"Sem origem de frontend para '{args.environment}'. Use --frontend-origin explicitamente."
+        )
 
     print("Cole este bookmarklet como URL de um novo favorito no navegador:\n")
     print(_build_bookmarklet(args.port))
@@ -345,7 +364,14 @@ def cmd_listen(args: argparse.Namespace) -> None:
     print(f"Escutando em http://127.0.0.1:{args.port}/capture — timeout em {args.timeout_seconds}s, "
           "aceita só a origem do frontend acima, desliga sozinho após a 1a captura.\n")
 
-    result = {"done": False, "ok": False, "erro": None, "expires_in_min": None}
+    result = {
+        "done": False,
+        "ok": False,
+        "erro": None,
+        "expires_in_min": None,
+        "reader_ready": False,
+        "reader_path": None,
+    }
     handler_cls = _make_capture_handler(args.environment, args.base_url, allowed_origin, result)
     server = HTTPServer(("127.0.0.1", args.port), handler_cls)
     server.timeout = 1.0
@@ -362,7 +388,10 @@ def cmd_listen(args: argparse.Namespace) -> None:
     if not result["ok"]:
         raise CofreTokenError(f"Captura falhou: {result['erro']}")
 
-    print(f"JWT capturado e guardado no Cofre ({args.environment}). Expira em ~{result['expires_in_min']}min.")
+    print(
+        f"JWT capturado no Cofre ({args.environment}); leitor escopado preparado. "
+        f"Expira em ~{result['expires_in_min']}min."
+    )
 
 
 def main() -> None:
@@ -391,6 +420,11 @@ def main() -> None:
     )
     p_listen.add_argument("--port", type=int, default=LISTEN_DEFAULT_PORT)
     p_listen.add_argument("--timeout-seconds", type=int, default=LISTEN_DEFAULT_TIMEOUT_SECONDS)
+    p_listen.add_argument(
+        "--frontend-origin",
+        default=None,
+        help="Origem exata do frontend autorizado, por exemplo http://localhost:8081.",
+    )
     p_listen.set_defaults(func=cmd_listen)
 
     args = parser.parse_args()
