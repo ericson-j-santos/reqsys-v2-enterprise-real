@@ -1,0 +1,82 @@
+name: Planner Teams Delegated Identity Bootstrap DEV
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: planner-teams-delegated-identity-bootstrap-dev
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Materializar identidade delegada DEV
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      IDENTITY_EVIDENCE: audit/planner-teams-delegated-identity-bootstrap.json
+      OIDC_EVIDENCE: audit/planner-teams-acceptance-keyvault-oidc.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Falhar fechado fora da main ou sem configuração
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "::error::Bootstrap permitido somente na main confiável."
+            exit 2
+          }
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado."
+              exit 2
+            fi
+          done
+
+      - name: Autenticar identidade mutadora por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Criar ou revalidar identidade delegada sem client secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/bootstrap_planner_teams_delegated_identity.py             --confirm CRIAR-IDENTIDADE-PLANNER-TEAMS-DEV             --tenant-id "$CCP_AZURE_TENANT_ID"             --vault-name "$REQSYS_KEY_VAULT_NAME"             --output "$IDENTITY_EVIDENCE"
+
+      - name: Autorizar OIDC do ambiente de aceite ao Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/bootstrap_pc24x7_teams_oidc_environment.py             --confirm CRIAR-FIC-PC24X7-TEAMS-DEV             --tenant-id "$CCP_AZURE_TENANT_ID"             --mutator-client-id "$CCP_AZURE_CLIENT_ID"             --repository ericson-j-santos/reqsys-v2-enterprise-real             --environment reqsys-power-platform-dev             --credential-name reqsys-planner-teams-acceptance-keyvault             | tee "$OIDC_EVIDENCE"
+
+      - name: Revalidar somente metadados no Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          az keyvault secret show             --vault-name "$REQSYS_KEY_VAULT_NAME"             --name reqsys-planner-teams-delegated-client-id-dev             --query '{enabled:attributes.enabled,contentType:contentType,tags:tags}'             --output json             --only-show-errors >/dev/null
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-teams-delegated-identity-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.IDENTITY_EVIDENCE }}
+            ${{ env.OIDC_EVIDENCE }}
+          if-no-files-found: warn
+          retention-days: 30
