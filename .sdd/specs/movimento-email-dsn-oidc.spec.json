@@ -9,12 +9,12 @@
     "design": true,
     "tasks": true
   },
-  "description": "Preserva o bootstrap OIDC governado do DSN, usa o environment GitHub development para reaproveitar o subject federado DEV já autorizado e mantém o verificador SQL da Prospecção Movimento independente do backend, sem expor credenciais.",
+  "description": "Preserva o bootstrap OIDC governado do DSN, usa o environment GitHub development para reaproveitar o subject federado DEV já autorizado, mantém nomes padrão seguros para os segredos SQL quando não houver override e mantém o verificador SQL independente do backend, sem expor credenciais.",
   "sdd_gate": {
     "tests": [
       "tests/test_movimento_email_dsn_bootstrap_workflow.py",
       "tests/test_verificar_movimento_email_fontes.py"
     ],
-    "evidence_contract": "A evidência pode registrar somente nomes de controles, presença/ausência, subject federado esperado e status; nunca valores de tokens, usuário, senha ou MOVIMENTO_EMAIL_SOURCE_DSN. A validação estática não substitui o E2E contra SQL Server real."
+    "evidence_contract": "A evidência pode registrar somente nomes de controles, presença/ausência, nomes padrão de segredo, subject federado esperado e status; nunca valores de tokens, usuário, senha ou MOVIMENTO_EMAIL_SOURCE_DSN. Servidor e banco permanecem dependências externas obrigatórias. A validação estática não substitui o E2E contra SQL Server real."
   }
 }
