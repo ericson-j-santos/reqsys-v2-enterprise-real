@@ -45,3 +45,23 @@ def test_manifest_v2_checksums_match_files() -> None:
     for entry in [*v2["arquivos"], v2["rollback"]]:
         digest = hashlib.sha256((VIEWS / entry["arquivo"]).read_bytes()).hexdigest()
         assert digest == entry["sha256"]
+
+
+def test_dev_ssrs_rdl_rds_are_safe_and_point_to_dev_database() -> None:
+    ssrs = ROOT / "backend" / "app" / "services" / "movimento_email" / "ssrs" / "dev"
+    rds = (ssrs / "MovimentoEmailDev.rds").read_text(encoding="utf-8")
+    rdl = (ssrs / "ProspecaoMovimentoDev.rdl").read_text(encoding="utf-8")
+    combined = (rds + "\n" + rdl).lower()
+
+    assert "data source=localhost" in combined
+    assert "initial catalog=reqsysmovimentodev" in combined
+    assert "integratedsecurity>true" in combined.replace(" ", "")
+    assert "password=" not in combined
+    assert "pwd=" not in combined
+    assert "user id=" not in combined
+    for table in EXPECTED_TABLES.values():
+        view_name = table.replace("movimento_src.", "vw_prospeccao_movimento_")
+        assert view_name not in rdl  # evita confundir tabela-fonte com nome da view
+    for filename in EXPECTED_TABLES:
+        view = filename.removeprefix("V2__").removesuffix(".sql")
+        assert f"dbo.{view}" in rdl
