@@ -39,6 +39,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: validate-contract
     runs-on: ubuntu-latest
+    environment: development
     timeout-minutes: 15
     env:
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
