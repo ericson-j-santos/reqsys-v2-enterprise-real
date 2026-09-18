@@ -1,1 +1,0 @@
-Pendente: CI do SHA atual, provisionamento DEV e E2E real Excel → SQL → SharePoint.
