@@ -1,23 +1,32 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/planner-teams-notify-dev-acceptance.yml"
+ACCEPTANCE = ROOT / ".github/workflows/planner-teams-notify-dev-acceptance.yml"
+RUNTIME = ROOT / ".github/workflows/runtime-e2e-continuous.yml"
 
 
-def test_acceptance_uses_pc24x7_runtime_fail_closed() -> None:
-    source = WORKFLOW.read_text(encoding="utf-8")
-    assert "API_URL: ${{ vars.PC24X7_DEV_BASE_URL }}" in source
-    assert "https://reqsys-api-dev.fly.dev" not in source
-    assert "PC24X7_DEV_BASE_URL não configurada" in source
-    assert "PC24X7_DEV_BASE_URL deve usar HTTPS" in source
-    assert "Planner Teams DEV Acceptance não pode usar Fly.io" in source
-    assert '${API_URL%/}/api/runtime/health' in source
+def test_acceptance_reuses_oidc_runtime_without_device_code() -> None:
+    source = ACCEPTANCE.read_text(encoding="utf-8")
+    assert "uses: ./.github/workflows/runtime-e2e-continuous.yml" in source
+    assert "secrets: inherit" in source
+    assert "id-token: write" in source
+    assert "msal_device_code" not in source.lower()
+    assert "device_code" not in source.lower()
+    assert "WSJF_MSAL_STORAGE_STATE_B64" not in source
+    assert "POWER_PLATFORM_CLIENT_SECRET" not in source
 
 
-def test_acceptance_renews_device_code_without_restarting_run() -> None:
-    source = WORKFLOW.read_text(encoding="utf-8")
-    assert "scripts/msal_device_code_complete.mjs" in source
-    assert "DEVICE_CODE_TOTAL_WAIT_MINUTES: '50'" in source
-    assert "Aguardar autorização Microsoft com renovação automática" in source
-    assert "Se expirar, o job renovará automaticamente" in source
-    assert "timeout-minutes: 70" in source
+def test_runtime_is_reusable_and_oidc_only() -> None:
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert "workflow_call:" in source
+    assert "azure/login@v2" in source
+    assert "id-token: write" in source
+    assert "POWER_PLATFORM_GRAPH_ACCESS_TOKEN" in source
+    assert "planner_teams_runtime_e2e.mjs" in source
+    assert "planner_teams_flow_state_oidc.py" in source
+    assert "PLANNER_TEAMS_DATAVERSE_URL" in source
+    assert "POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN" in source
+    assert "PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS: '15'" in source
+    assert "Aguardar aquecimento dos gatilhos Planner" in source
+    assert "msal_device_code" not in source.lower()
+    assert "device_code" not in source.lower()
