@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "id": "codex-worker-pool",
+  "title": "Codex Worker Pool distribuído governado",
+  "issues": [1767, 1768, 1769, 1770, 1771],
+  "scope": "local-dev-pc24x7",
+  "files": [
+    "services/codex-worker-pool/app/store.py",
+    "services/codex-worker-pool/app/main.py",
+    "services/codex-worker-pool/tests/test_store.py",
+    "services/codex-worker-pool/tests/test_api.py",
+    "docker-compose.pc24x7-codex-worker-pool.yml",
+    "docs/runbooks/codex-worker-pool.md"
+  ],
+  "tests": [
+    "python -m pytest services/codex-worker-pool/tests -q"
+  ],
+  "evidence_contract": {
+    "positive": "Builder -> produced_sha -> Validator -> completed -> independent GET",
+    "negative": "ESTUDO/invalid lease/duplicate claim fail closed",
+    "replay": "same repository+issue+request_id preserves task_id",
+    "multi_host": "requires dual_host_preflight on both physical hosts at the exact rules SHA"
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false
+  }
+}
