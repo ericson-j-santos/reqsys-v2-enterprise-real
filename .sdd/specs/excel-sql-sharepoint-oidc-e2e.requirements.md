@@ -30,3 +30,10 @@ Execuções do E2E DEV devem ser serializadas sem cancelar uma execução em and
 4. O cleanup comprova fluxo desligado, `clientdata` restaurado, workbook restaurado por hash e ausência de resíduo SharePoint.
 5. A concorrência do workflow usa fila com `cancel-in-progress: false`.
 6. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato com `behind_by=0`.
+
+
+## Requisito 7 — canonicidade operacional
+O workflow OIDC deve ser o caminho automático de DEV na `main` e também aceitar `workflow_dispatch`. O workflow legado com Device Code deve permanecer apenas como fallback manual, sem gatilho automático em `push` ou `pull_request`.
+
+## Critério adicional de aceite
+7. O teste de contrato comprova que o workflow OIDC contém `workflow_dispatch` + `push` na `main`, enquanto o workflow legado não contém gatilho automático.

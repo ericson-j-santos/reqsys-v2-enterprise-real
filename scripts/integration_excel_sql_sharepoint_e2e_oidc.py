@@ -30,6 +30,7 @@ from scripts.integration_excel_sql_sharepoint_e2e import (
     build_e2e_workbook,
     current_correlation_items,
     derive_excel_source,
+    delete_sharepoint_item,
     download_workbook,
     graph_request,
     list_items,
@@ -40,6 +41,8 @@ from scripts.integration_excel_sql_sharepoint_e2e import (
 
 TABLE = "tbEntrada"
 DEFAULT_WAIT_SECONDS = 420
+E2E_CORRELATION_PREFIX = "excel-sql-sharepoint-"
+E2E_FIXTURE_TITLE = "ReqSys E2E DEV fixture"
 
 
 class OidcE2EError(RuntimeError):
@@ -55,6 +58,51 @@ def required_env(name: str) -> str:
 
 def item_version(item: dict[str, Any]) -> str:
     return str(item.get("eTag") or item.get("lastModifiedDateTime") or "").strip()
+
+def cleanup_stale_fixture_items(
+    client: httpx.Client,
+    token: str,
+    site_id: str,
+    list_id: str,
+    fixture_id: str,
+) -> int:
+    stale = matching_items(
+        list_items(client, token, site_id, list_id),
+        fixture_id,
+    )
+    if not stale:
+        return 0
+
+    for item in stale:
+        fields = item.get("fields") or {}
+        correlation_id = str(fields.get("CorrelationId") or "").strip()
+        title = str(fields.get("Title") or "").strip()
+        recognized_e2e = (
+            correlation_id.startswith(E2E_CORRELATION_PREFIX)
+            or title == E2E_FIXTURE_TITLE
+        )
+        if not recognized_e2e:
+            raise OidcE2EError("baseline_sharepoint_non_e2e_data_detectado")
+        if not str(item.get("id") or "").strip():
+            raise OidcE2EError("baseline_sharepoint_item_id_ausente")
+
+    for item in stale:
+        delete_sharepoint_item(
+            client,
+            token,
+            site_id,
+            list_id,
+            str(item["id"]),
+        )
+
+    remaining = matching_items(
+        list_items(client, token, site_id, list_id),
+        fixture_id,
+    )
+    if remaining:
+        raise OidcE2EError("baseline_sharepoint_residual_nao_removido")
+    return len(stale)
+
 
 def latest_workbook_version_id(
     client: httpx.Client,
@@ -276,10 +324,21 @@ def main() -> int:
             state_tmp.replace(args.cleanup_state)
             evidence["cleanup"]["state_captured"] = True
 
-            baseline = list_items(client, graph_token, site_id, list_id)
-            if matching_items(baseline, fixture_id):
-                raise OidcE2EError("baseline_sharepoint_residual_detectado")
+            stale_removed = cleanup_stale_fixture_items(
+                client,
+                graph_token,
+                site_id,
+                list_id,
+                fixture_id,
+            )
             evidence["checks"]["baseline_sharepoint_absent"] = "passed"
+            evidence["checks"]["stale_e2e_fixture_cleanup"] = {
+                "removed": stale_removed,
+                "guard": {
+                    "correlation_prefix": E2E_CORRELATION_PREFIX,
+                    "fixture_title": E2E_FIXTURE_TITLE,
+                },
+            }
 
             upload_workbook(
                 client,

@@ -1,11 +1,26 @@
 name: Integration Excel SQL SharePoint - DEV OIDC E2E
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - feat/e2e-powerplatform-oidc-20260917
+      - main
     paths:
       - ".github/workflows/integration-excel-sql-sharepoint-oidc-dev.yml"
+      - "backend/app/services/integration_excel_sql_sharepoint_flow.py"
+      - "scripts/integration_excel_sql_sharepoint_dataverse.py"
+      - "scripts/integration_excel_sql_sharepoint_oidc_discovery.py"
+      - "scripts/integration_excel_sql_sharepoint_e2e_oidc.py"
+      - "scripts/integration_excel_sql_sharepoint_e2e_cleanup_oidc.py"
+      - "scripts/integration_excel_sql_sharepoint_e2e.py"
+      - "tests/test_integration_excel_sql_sharepoint_dataverse.py"
+      - "tests/test_integration_excel_sql_sharepoint_oidc_discovery.py"
+      - "tests/test_integration_excel_sql_sharepoint_e2e_oidc.py"
+      - "tests/test_integration_excel_sql_sharepoint_e2e_cleanup_oidc.py"
+      - "tests/test_integration_excel_sql_sharepoint_flow.py"
+      - "tests/test_integration_excel_sql_sharepoint_workflow_contract.py"
+      - ".sdd/specs/excel-sql-sharepoint-oidc-e2e.spec.json"
+      - ".sdd/specs/excel-sql-sharepoint-oidc-e2e.requirements.md"
 
 permissions:
   contents: read
@@ -48,7 +63,8 @@ jobs:
             tests/test_integration_excel_sql_sharepoint_oidc_discovery.py \
             tests/test_integration_excel_sql_sharepoint_e2e_oidc.py \
             tests/test_integration_excel_sql_sharepoint_e2e_cleanup_oidc.py \
-            tests/test_integration_excel_sql_sharepoint_flow.py
+            tests/test_integration_excel_sql_sharepoint_flow.py \
+            tests/test_integration_excel_sql_sharepoint_workflow_contract.py
 
       - name: Autenticar identidade ReqSys DEV por OIDC
         uses: azure/login@v2
