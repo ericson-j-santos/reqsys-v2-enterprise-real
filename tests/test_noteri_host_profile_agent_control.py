@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import socket
 import sys
 from pathlib import Path
 
@@ -16,16 +15,17 @@ SPEC.loader.exec_module(control)
 
 
 def test_build_command_mantem_loopback_e_script_fixo():
+    origin = "https://reqsys.example"
     command = control.build_command(
         host="Noteri",
         port=8765,
-        origins=["https://reqsys.example"],
+        origins=[origin],
     )
     assert command[0] == sys.executable
     assert Path(command[1]).name == "noteri_host_profile_agent.py"
     assert command[command.index("--bind") + 1] == "127.0.0.1"
     assert command[command.index("--host") + 1] == "Noteri"
-    assert "https://reqsys.example" in command
+    assert command[command.index("--allow-origin") + 1] == origin
 
 
 @pytest.mark.parametrize("origin", ["*", "https://*.example.com", "file:///tmp/test"])
