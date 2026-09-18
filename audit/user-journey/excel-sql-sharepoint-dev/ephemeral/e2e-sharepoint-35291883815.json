@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "feature": "excel_sql_sharepoint_sync",
+  "environment": "dev",
+  "data_class": "synthetic",
+  "corporate_source_certified": false,
+  "source": {
+    "sharepoint_workbook": "ReqSys-Excel-SQL-SharePoint-DEV.xlsx",
+    "identifier": "990000000000001"
+  },
+  "sql": {
+    "run_id": 35291883815,
+    "sha": "238443260c1e4c57f75c8e8307bd9371843f7942",
+    "procedure": "integration.usp_ConsultarPorIdentificadores",
+    "positive_probe": "passed",
+    "negative_probe": "passed",
+    "result": {
+      "ChaveIntegracao": "990000000000001",
+      "Identificador": "990000000000001",
+      "Descricao": "ReqSys E2E DEV fixture",
+      "CorrelationId": "5FC9E1E7-2B51-4119-B480-0D868CC42ECE"
+    }
+  },
+  "sharepoint": {
+    "mode": "document_library_transport_proof",
+    "canonical_list_target": "ResultadoConsulta",
+    "canonical_list_item_crud_proven": false,
+    "item_id": "01BKUFDMSCYM6ZHY6C45DKIRAGLLMOZBRU",
+    "file_name": "ResultadoConsulta-DEV.json",
+    "create_proven": true,
+    "update_same_item_proven": true,
+    "independent_reread_proven": true,
+    "second_pass": "already_present_no_write",
+    "duplicate_count": 1,
+    "stable_updated_at": "2026-09-18T00:37:48Z"
+  },
+  "production_touched": false,
+  "secret_exposed": false
+}
