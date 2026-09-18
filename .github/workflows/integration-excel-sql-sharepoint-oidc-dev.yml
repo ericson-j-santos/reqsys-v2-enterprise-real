@@ -15,7 +15,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       INTEGRATION_E2E_ENVIRONMENT: dev
       INTEGRATION_E2E_DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
@@ -72,6 +72,7 @@ jobs:
           echo "E2E_CORRELATION_ID=excel-sql-sharepoint-oidc-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
 
       - name: Descobrir recursos DEV sem Power Platform Admin API
+        id: discovery
         run: |
           mkdir -p audit/integration-e2e
           python scripts/integration_excel_sql_sharepoint_oidc_discovery.py \
@@ -81,12 +82,23 @@ jobs:
             --correlation-id "$E2E_CORRELATION_ID"
 
       - name: Executar aceite real OIDC
+        id: acceptance
+        timeout-minutes: 16
         run: |
           python scripts/integration_excel_sql_sharepoint_e2e_oidc.py \
             --output audit/integration-e2e/e2e-oidc.json \
+            --cleanup-state "$RUNNER_TEMP/e2e-cleanup-state.json" \
             --source-sha "$GITHUB_SHA" \
             --correlation-id "$E2E_CORRELATION_ID" \
             --wait-seconds 420
+
+      - name: Restaurar ambiente DEV e validar cleanup
+        if: always() && steps.discovery.outcome == 'success'
+        timeout-minutes: 15
+        run: |
+          python scripts/integration_excel_sql_sharepoint_e2e_cleanup_oidc.py \
+            --state "$RUNNER_TEMP/e2e-cleanup-state.json" \
+            --output audit/integration-e2e/cleanup-oidc.json
 
       - name: Publicar evidencias
         if: always()
