@@ -15,5 +15,11 @@ Criar uma origem SQL local e persistente, contratualmente equivalente à origem 
 9. Toda evidência deve registrar `equivalent_source=true`, `synthetic=true` e `corporate_source_validated=false`.
 10. Nunca apresentar a equivalência DEV como prova da origem corporativa.
 
+## Critérios de aceite
+1. O comando `python scripts/movimento_email_equivalent_dev.py run` deve finalizar com `status=passed`.
+2. O primeiro sync deve aplicar ou reconhecer estado equivalente válido; a repetição deve retornar `noop` e `already_present_no_write=true`.
+3. As quatro views V2 devem retornar as contagens esperadas `2/1/1/1` para a data de equivalência.
+4. A evidência deve permanecer com `equivalent_source=true`, `synthetic=true`, `corporate_source_validated=false` e `production_touched=false`.
+
 ## Critério de conclusão
 O comando `python scripts/movimento_email_equivalent_dev.py run` deve executar bootstrap → sync → repetição → validação das views com estado final `passed`, sem tocar produção.
