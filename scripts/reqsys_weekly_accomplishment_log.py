@@ -160,9 +160,9 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines = [
         "# ReqSys — Log semanal de realizações",
         "",
-        f"- Repositório: \`{report['repository']}\`",
-        f"- Janela: \`{report['window']['start']}\` a \`{report['window']['end']}\`",
-        f"- Gerado em: \`{report['generated_at']}\`",
+        f"- Repositório: `{report['repository']}`",
+        f"- Janela: `{report['window']['start']}` a `{report['window']['end']}`",
+        f"- Gerado em: `{report['generated_at']}`",
         "",
         "## Resumo por evidência",
         "",
@@ -208,7 +208,7 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"{_mark(item['validated'])} | {_mark(item['evidenced'])} | "
             f"{_mark(item['consolidated'])} | {_mark(item['governed'])} |"
         )
-        lines.append(f"| ↳ SHA \`{item['head_sha'][:12] or 'ausente'}\` |  |  |  |  |  |")
+        lines.append(f"| ↳ SHA `{item['head_sha'][:12] or 'ausente'}` |  |  |  |  |  |")
 
     lines += ["", "## Evidências técnicas", ""]
     if not report["items"]:
@@ -224,7 +224,7 @@ def render_markdown(report: dict[str, Any]) -> str:
                 else:
                     check_parts.append(f"{name}={conclusion}")
             checks_text = "; ".join(check_parts) if check_parts else "checks não encontrados"
-            lines.append(f"- PR #{item['number']} — SHA \`{item['head_sha'] or 'ausente'}\` — {checks_text}")
+            lines.append(f"- PR #{item['number']} — SHA `{item['head_sha'] or 'ausente'}` — {checks_text}")
 
     gaps = [item for item in report["items"] if item["evidence_gaps"]]
     lines += ["", "## Pendências de evidência", ""]
@@ -243,8 +243,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         "- **Implementado:** Pull Request mesclada na janela.",
         "- **Validado:** ao menos um check concluído com sucesso e nenhum check concluído em falha.",
         "- **Evidenciado:** PR, SHA do head e link de check disponíveis.",
-        "- **Consolidado:** alteração em \`CHANGELOG.md\`, \`docs/\`, \`audit/\`, \`evidence/\` ou \`reports/\`.",
-        "- **Governado:** validado e com alteração em \`.sdd/\`, \`governance/\`, \`.github/workflows/\` ou \`config/\`.",
+        "- **Consolidado:** alteração em `CHANGELOG.md`, `docs/`, `audit/`, `evidence/` ou `reports/`.",
+        "- **Governado:** validado e com alteração em `.sdd/`, `governance/`, `.github/workflows/` ou `config/`.",
         "",
     ]
     return "\n".join(lines)
