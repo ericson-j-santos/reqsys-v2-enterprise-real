@@ -1,0 +1,25 @@
+name: Ops dispatch OIDC main once
+
+on:
+  push:
+    branches:
+      - ops/dispatch-oidc-main-20260918-1424
+    paths:
+      - ".github/workflows/ops-dispatch-oidc-main-once.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar E2E OIDC canônico na main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api             --method POST             -H "Accept: application/vnd.github+json"             "/repos/$REPOSITORY/actions/workflows/integration-excel-sql-sharepoint-oidc-dev.yml/dispatches"             -f ref=main
+          echo "dispatch=accepted"
