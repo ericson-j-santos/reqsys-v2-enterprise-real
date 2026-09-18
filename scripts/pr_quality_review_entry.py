@@ -39,6 +39,9 @@ _SAFE_AUTOMATION_PREFIXES = (
     ".github/actions/",
     ".github/workflows/",
 )
+_SAFE_GOVERNANCE_PREFIXES = (
+    ".sdd/specs/",
+)
 _SENSITIVE_EXTENSIONS = {".key", ".p12", ".pfx", ".pem"}
 _SENSITIVE_CONFIG_EXTENSIONS = {"", ".conf", ".ini", ".json", ".toml", ".yaml", ".yml"}
 _EXACT_SENSITIVE_NAMES = {
@@ -76,6 +79,10 @@ def _is_sensitive(self: review.ChangedFile) -> bool:
     suffix = Path(name).suffix.lower()
 
     if lowered.startswith(_SAFE_AUTOMATION_PREFIXES):
+        return False
+    # Especificações SDD são contratos de governança versionados e públicos no
+    # repositório. Palavras como "token" descrevem o requisito, não um segredo.
+    if lowered.startswith(_SAFE_GOVERNANCE_PREFIXES):
         return False
     if lowered in _SAFE_PUBLIC_ARTIFACTS:
         return False

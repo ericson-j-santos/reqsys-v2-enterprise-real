@@ -1,9 +1,8 @@
-"""Contract tests for the governed credential of Auto Public Runtime Evidence (P0-B).
+"""Contract tests for the Auto Public Runtime Evidence ephemeral credential.
 
-The workflow used to consume the long-lived ``GH_PAT_ACTIONS`` secret directly.
-It must now mint an ephemeral GitHub App installation token, fail closed when
-the governed identity is incomplete, and prove the credential with an
-authenticated read before any dispatch.
+The workflow must use only the native per-job GITHUB_TOKEN with the minimum
+permissions needed to dispatch another workflow. Long-lived PATs and GitHub App
+private keys are intentionally excluded from this path.
 """
 
 from __future__ import annotations
@@ -23,8 +22,12 @@ def raw() -> str:
 
 
 @pytest.fixture(scope="module")
-def steps(raw: str) -> list[dict]:
-    document = yaml.safe_load(raw)
+def document(raw: str) -> dict:
+    return yaml.safe_load(raw)
+
+
+@pytest.fixture(scope="module")
+def steps(document: dict) -> list[dict]:
     jobs = document["jobs"]
     assert len(jobs) == 1, "contrato assume um único job"
     job = next(iter(jobs.values()))
@@ -37,71 +40,59 @@ def _step(steps: list[dict], name_fragment: str) -> dict:
     return matches[0]
 
 
-def test_legacy_pat_is_not_referenced(raw: str) -> None:
+def test_long_lived_or_app_credentials_are_not_referenced(raw: str) -> None:
     assert "GH_PAT_ACTIONS" not in raw
+    assert "REQSYS_STACK_REBASE_APP_ID" not in raw
+    assert "REQSYS_STACK_REBASE_PRIVATE_KEY" not in raw
+    assert "create-github-app-token" not in raw
 
 
-def test_ephemeral_app_token_is_minted_with_least_privilege(steps: list[dict]) -> None:
-    step = _step(steps, "Emitir token efêmero")
-
-    assert step["uses"].startswith("actions/create-github-app-token@")
-    with_block = step["with"]
-    assert with_block["app-id"] == "${{ vars.REQSYS_STACK_REBASE_APP_ID }}"
-    assert with_block["private-key"] == (
-        "${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}"
-    )
-    assert with_block["repositories"] == "reqsys-v2-enterprise-real"
-    # dispatch exige actions:write; nada além de leitura de conteúdo é concedido
-    assert with_block["permission-actions"] == "write"
-    assert with_block["permission-contents"] == "read"
-    assert not any(
-        key.startswith("permission-") and value == "write"
-        for key, value in with_block.items()
-        if key != "permission-actions"
-    )
+def test_native_token_has_only_required_permissions(document: dict) -> None:
+    permissions = document["permissions"]
+    assert permissions == {
+        "actions": "write",
+        "contents": "read",
+    }
 
 
-def test_missing_identity_fails_closed(steps: list[dict]) -> None:
-    step = _step(steps, "Validar pré-condição da identidade governada")
-    body = step["run"]
-
-    assert "vars.REQSYS_STACK_REBASE_APP_ID" in body
-    assert "secrets.REQSYS_STACK_REBASE_PRIVATE_KEY" in body
-    assert "exit 1" in body
-    assert "set -euo pipefail" in body
-
-
-def test_invalid_credential_is_detected_before_dispatch(steps: list[dict]) -> None:
+def test_native_token_is_proved_before_dispatch(steps: list[dict]) -> None:
     names = [str(item.get("name", "")) for item in steps]
-    probe_index = next(
-        index for index, name in enumerate(names) if "Provar token" in name
-    )
-    dispatch_index = next(
-        index for index, name in enumerate(names) if "Dispatch Public Runtime" in name
-    )
+    probe_index = next(index for index, name in enumerate(names) if "Provar token efêmero nativo" in name)
+    dispatch_index = next(index for index, name in enumerate(names) if "Dispatch Public Runtime" in name)
     assert probe_index < dispatch_index, "a prova do token deve preceder o dispatch"
 
     probe = steps[probe_index]
-    assert probe["env"]["GH_TOKEN"] == "${{ steps.app-token.outputs.token }}"
+    assert probe["env"]["GH_TOKEN"] == "${{ github.token }}"
     body = probe["run"]
-    assert "gh api" in body, "a prova precisa de leitura autenticada independente"
+    assert "gh api" in body
     assert "public-runtime-evidence.yml" in body
     assert "exit 1" in body
 
 
-def test_every_gh_token_comes_from_the_ephemeral_step(steps: list[dict]) -> None:
+def test_every_authenticated_gh_call_uses_native_token(steps: list[dict]) -> None:
     tokens = [
         item["env"]["GH_TOKEN"]
         for item in steps
         if isinstance(item.get("env"), dict) and "GH_TOKEN" in item["env"]
     ]
     assert tokens, "nenhum passo autenticado encontrado"
-    assert all(value == "${{ steps.app-token.outputs.token }}" for value in tokens)
+    assert all(value == "${{ github.token }}" for value in tokens)
 
 
-def test_no_secret_value_is_echoed(steps: list[dict]) -> None:
+def test_dispatch_contract_is_preserved(steps: list[dict]) -> None:
+    dispatch = _step(steps, "Dispatch Public Runtime")
+    body = dispatch["run"]
+
+    assert "gh workflow run public-runtime-evidence.yml" in body
+    assert '--ref "${TARGET_REF}"' in body
+    assert 'public_url=${PUBLIC_URL}' in body
+    assert 'strict=${STRICT}' in body
+    assert 'publish_comment=${PUBLISH_COMMENT}' in body
+    assert 'issue_number=${ISSUE_NUMBER}' in body
+
+
+def test_no_token_value_is_echoed(steps: list[dict]) -> None:
     for step in steps:
         body = str(step.get("run", ""))
-        assert "echo \"${GOVERNED_APP_PRIVATE_KEY" not in body
         assert "echo $GH_TOKEN" not in body
-        assert "echo \"${GH_TOKEN" not in body
+        assert 'echo "${GH_TOKEN' not in body
