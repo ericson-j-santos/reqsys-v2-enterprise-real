@@ -153,6 +153,17 @@ def _execute_file(cursor, path: Path) -> None:
     cursor.execute(path.read_text(encoding="utf-8"))
 
 
+def _source_has_column(conn, dataset: str, column: str) -> bool:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA='legacy_ssrs' AND TABLE_NAME=? AND COLUMN_NAME=?",
+        dataset,
+        column,
+    )
+    return int(cur.fetchone()[0]) == 1
+
+
 def bootstrap(server: str, source_db: str, target_db: str) -> dict[str, Any]:
     _create_database(server, source_db)
     _create_database(server, target_db)
@@ -162,11 +173,22 @@ def bootstrap(server: str, source_db: str, target_db: str) -> dict[str, Any]:
         cur = source.cursor()
         cur.execute(SOURCE_SCHEMA_SQL)
         for name, cfg in DATASETS.items():
-            cur.execute(f"DELETE FROM legacy_ssrs.{name} WHERE data_referencia = ?", DATA_REFERENCIA)
-            cols = ", ".join(cfg["columns"])
-            marks = ", ".join("?" for _ in cfg["columns"])
+            has_source_tag = _source_has_column(source, name, "source_tag")
+            if has_source_tag:
+                cur.execute(
+                    f"DELETE FROM legacy_ssrs.{name} WHERE source_tag = ? AND data_referencia = ?",
+                    SOURCE_TAG,
+                    DATA_REFERENCIA,
+                )
+                insert_columns = [*cfg["columns"], "source_tag"]
+            else:
+                cur.execute(f"DELETE FROM legacy_ssrs.{name} WHERE data_referencia = ?", DATA_REFERENCIA)
+                insert_columns = list(cfg["columns"])
+            cols = ", ".join(insert_columns)
+            marks = ", ".join("?" for _ in insert_columns)
             for row in cfg["rows"]:
-                cur.execute(f"INSERT INTO legacy_ssrs.{name} ({cols}) VALUES ({marks})", *row)
+                values = (*row, SOURCE_TAG) if has_source_tag else row
+                cur.execute(f"INSERT INTO legacy_ssrs.{name} ({cols}) VALUES ({marks})", *values)
         source.commit()
     except Exception:
         source.rollback()
@@ -211,10 +233,18 @@ def bootstrap(server: str, source_db: str, target_db: str) -> dict[str, Any]:
 def _read_source(conn, dataset: str, columns: list[str]) -> list[tuple[Any, ...]]:
     cols = ", ".join(columns)
     cur = conn.cursor()
-    cur.execute(
-        f"SELECT {cols} FROM legacy_ssrs.{dataset} WHERE data_referencia = ? ORDER BY 1, 2",
-        DATA_REFERENCIA,
-    )
+    if _source_has_column(conn, dataset, "source_tag"):
+        cur.execute(
+            f"SELECT {cols} FROM legacy_ssrs.{dataset} "
+            "WHERE source_tag = ? AND data_referencia = ? ORDER BY 1, 2",
+            SOURCE_TAG,
+            DATA_REFERENCIA,
+        )
+    else:
+        cur.execute(
+            f"SELECT {cols} FROM legacy_ssrs.{dataset} WHERE data_referencia = ? ORDER BY 1, 2",
+            DATA_REFERENCIA,
+        )
     return [tuple(row) for row in cur.fetchall()]
 
 
