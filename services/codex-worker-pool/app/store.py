@@ -125,8 +125,10 @@ class WorkerPoolStore:
             db.close()
 
     def _init(self) -> None:
-        with self._init_lock, self._db() as db:
-            db.executescript("""
+        with self._init_lock:
+            db = self._db()
+            try:
+                db.executescript("""
             CREATE TABLE IF NOT EXISTS workers(
               worker_id TEXT PRIMARY KEY, host TEXT NOT NULL,
               role TEXT NOT NULL CHECK(role IN ('builder','validator')),
@@ -169,6 +171,8 @@ class WorkerPoolStore:
               ON tasks(repository,workspace_key)
               WHERE state IN ('leased','running','validating');
             """)
+            finally:
+                db.close()
 
     @staticmethod
     def _d(row: sqlite3.Row | None) -> dict[str, Any]:

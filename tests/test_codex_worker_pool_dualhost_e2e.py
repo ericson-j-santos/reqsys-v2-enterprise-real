@@ -47,7 +47,6 @@ def test_full_dualhost_scenario_on_loopback(tmp_path: Path) -> None:
     thread.join(timeout=5)
 
     assert result["ok"] is True
-    assert result["results"]["validate_positive"]["positive_sha"] if False else True
     assert result["results"]["validate_positive"]["state"] == "completed"
     assert result["results"]["replay_positive"]["created"] is False
     assert result["results"]["duplicate_claim"]["claimed"] is False
