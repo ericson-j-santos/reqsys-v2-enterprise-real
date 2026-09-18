@@ -19,7 +19,6 @@ import sys
 import time
 import urllib.error
 import urllib.request
-import winreg
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -125,7 +124,15 @@ def _scheduler():
     return service
 
 
+def _winreg():
+    if os.name != "nt":
+        raise RuntimeError("registro de autostart exige Windows")
+    import winreg
+    return winreg
+
+
 def run_key_status() -> dict[str, Any]:
+    winreg = _winreg()
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ) as key:
             value, value_type = winreg.QueryValueEx(key, RUN_VALUE_NAME)
@@ -139,6 +146,7 @@ def run_key_status() -> dict[str, Any]:
 
 
 def install_user_logon_autostart(command_line: str) -> None:
+    winreg = _winreg()
     with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
         winreg.SetValueEx(key, RUN_VALUE_NAME, 0, winreg.REG_SZ, command_line)
 
