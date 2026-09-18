@@ -481,7 +481,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
                         headers=admin_headers(admin_token, correlation_id),
                     )
                 except Exception:
-                    pass
+                    cleanup["secret_cleanup_failed"] = True
             if token_id is not None and not cleanup["token_revoked"]:
                 try:
                     request_json(
@@ -490,7 +490,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
                         headers=admin_headers(admin_token, correlation_id),
                     )
                 except Exception:
-                    pass
+                    cleanup["token_cleanup_failed"] = True
 
 
 def self_test() -> int:
@@ -566,15 +566,20 @@ def main() -> int:
         }))
         return 0
     except Exception as exc:
-        failure_path = Path(args.evidence_file)
-        failure_path.parent.mkdir(parents=True, exist_ok=True)
-        failure_path.write_text(json.dumps({
+        failure = {
             "ok": False,
-            "error": str(exc),
+            "error": "e2e_execution_failed",
+            "error_type": type(exc).__name__,
             "sensitive_values_exposed": False,
             "production_touched": False,
-        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(json.dumps({"ok": False, "error": str(exc), "production_touched": False}), file=sys.stderr)
+        }
+        failure_path = Path(args.evidence_file)
+        failure_path.parent.mkdir(parents=True, exist_ok=True)
+        failure_path.write_text(
+            json.dumps(failure, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(failure), file=sys.stderr)
         return 1
 
 
