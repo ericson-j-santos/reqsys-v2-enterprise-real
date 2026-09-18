@@ -30,3 +30,8 @@ def test_task_contract_is_boot_s4u_limited() -> None:
     assert module.TASK_LOGON_S4U == 2
     assert module.TASK_RUNLEVEL_LUA == 0
     assert module.TASK_NAME == "ReqSys-NoteriHostProfileAgent"
+
+
+def test_access_denied_detection_recognizes_windows_hresult() -> None:
+    exc = RuntimeError("pywintypes.com_error nested -2147024891")
+    assert module._is_access_denied(exc) is True
