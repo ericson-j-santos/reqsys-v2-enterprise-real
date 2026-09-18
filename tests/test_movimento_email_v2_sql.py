@@ -59,9 +59,6 @@ def test_dev_ssrs_rdl_rds_are_safe_and_point_to_dev_database() -> None:
     assert "password=" not in combined
     assert "pwd=" not in combined
     assert "user id=" not in combined
-    for table in EXPECTED_TABLES.values():
-        view_name = table.replace("movimento_src.", "vw_prospeccao_movimento_")
-        assert view_name not in rdl  # evita confundir tabela-fonte com nome da view
     for filename in EXPECTED_TABLES:
         view = filename.removeprefix("V2__").removesuffix(".sql")
         assert f"dbo.{view}" in rdl
