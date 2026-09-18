@@ -37,6 +37,7 @@ jobs:
     environment: reqsys-power-platform-dev
     timeout-minutes: 70
     env:
+      DEVICE_CODE_TOTAL_WAIT_MINUTES: '50'
       API_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
       POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
       POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
