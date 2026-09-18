@@ -42,6 +42,7 @@ from scripts.integration_excel_sql_sharepoint_e2e import (
 TABLE = "tbEntrada"
 DEFAULT_WAIT_SECONDS = 420
 E2E_CORRELATION_PREFIX = "excel-sql-sharepoint-"
+E2E_FIXTURE_TITLE = "ReqSys E2E DEV fixture"
 
 
 class OidcE2EError(RuntimeError):
@@ -75,7 +76,12 @@ def cleanup_stale_fixture_items(
     for item in stale:
         fields = item.get("fields") or {}
         correlation_id = str(fields.get("CorrelationId") or "").strip()
-        if not correlation_id.startswith(E2E_CORRELATION_PREFIX):
+        title = str(fields.get("Title") or "").strip()
+        recognized_e2e = (
+            correlation_id.startswith(E2E_CORRELATION_PREFIX)
+            or title == E2E_FIXTURE_TITLE
+        )
+        if not recognized_e2e:
             raise OidcE2EError("baseline_sharepoint_non_e2e_data_detectado")
         if not str(item.get("id") or "").strip():
             raise OidcE2EError("baseline_sharepoint_item_id_ausente")
@@ -328,7 +334,10 @@ def main() -> int:
             evidence["checks"]["baseline_sharepoint_absent"] = "passed"
             evidence["checks"]["stale_e2e_fixture_cleanup"] = {
                 "removed": stale_removed,
-                "guard": E2E_CORRELATION_PREFIX,
+                "guard": {
+                    "correlation_prefix": E2E_CORRELATION_PREFIX,
+                    "fixture_title": E2E_FIXTURE_TITLE,
+                },
             }
 
             upload_workbook(
