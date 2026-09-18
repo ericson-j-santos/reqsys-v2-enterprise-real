@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from backend.app.services.integration_excel_sql_sharepoint_flow import (
     EXCEL_API,
     SHAREPOINT_API,
@@ -37,6 +39,10 @@ def test_gera_fluxo_real_com_operacoes_esperadas():
     assert validar_definicao_real(definition) == []
     assert definition["parameters"]["CORRELATION_ID"]["defaultValue"] == "corr-e2e-test"
 
+    sql_correlation = definition["parameters"]["SQL_CORRELATION_ID"]["defaultValue"]
+    assert str(UUID(sql_correlation)) == sql_correlation
+    assert gerar_definicao(payload())["parameters"]["SQL_CORRELATION_ID"]["defaultValue"] == sql_correlation
+
     operations = {
         (
             action["inputs"]["host"]["apiId"],
@@ -59,6 +65,7 @@ def test_rejeita_antes_do_sql_e_propaga_correlation_id():
     assert "Rejeitar_identificador_invalido" in raw
     assert "rejected_before_sql" in raw
     assert "CORRELATION_ID" in raw
+    assert "SQL_CORRELATION_ID" in raw
     assert "ChaveIntegracao" in raw
 
 
@@ -76,7 +83,7 @@ def test_sql_v2_usa_parametros_seguros():
     assert parameters["database"] == "default"
     assert parameters["procedure"] == "integration.usp_ConsultarPorIdentificadores"
     assert "parameters/IdsJson" in parameters
-    assert parameters["parameters/CorrelationId"] == "@parameters('CORRELATION_ID')"
+    assert parameters["parameters/CorrelationId"] == "@parameters('SQL_CORRELATION_ID')"
 
 
 def test_bloqueia_fora_de_dev():

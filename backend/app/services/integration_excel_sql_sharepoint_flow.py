@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Iterator
+from uuid import NAMESPACE_URL, uuid5
 
 SCHEMA = "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#"
 EXCEL_API = "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness"
@@ -63,6 +64,9 @@ def gerar_definicao(payload: dict[str, Any]) -> dict[str, Any]:
     sharepoint_site = _required(payload, "sharepoint_site")
     sharepoint_list = _required(payload, "sharepoint_list")
     correlation_id = _required(payload, "correlation_id")
+    sql_correlation_id = str(
+        uuid5(NAMESPACE_URL, f"reqsys:excel-sql-sharepoint:{correlation_id}")
+    )
 
     row_value = "string(items('Para_cada_linha')?['Identificador'])"
     normalized = f"trim({row_value})"
@@ -98,7 +102,7 @@ def gerar_definicao(payload: dict[str, Any]) -> dict[str, Any]:
             "database": "default",
             "procedure": sql_procedure,
             "parameters/IdsJson": "@concat('[\"', string(items('Para_cada_linha')?['Identificador']), '\"]')",
-            "parameters/CorrelationId": "@parameters('CORRELATION_ID')",
+            "parameters/CorrelationId": "@parameters('SQL_CORRELATION_ID')",
         },
     )
 
@@ -194,6 +198,10 @@ def gerar_definicao(payload: dict[str, Any]) -> dict[str, Any]:
             "$authentication": {"defaultValue": {}, "type": "SecureObject"},
             "$connections": {"defaultValue": {}, "type": "Object"},
             "CORRELATION_ID": {"defaultValue": correlation_id, "type": "String"},
+            "SQL_CORRELATION_ID": {
+                "defaultValue": sql_correlation_id,
+                "type": "String",
+            },
         },
         "triggers": {
             "Recorrencia": {
@@ -246,7 +254,13 @@ def validar_definicao_real(definition: dict[str, Any]) -> list[str]:
         errors.append("validacao_numerica_ausente")
 
     raw = repr(definition)
-    for marker in ("CORRELATION_ID", "ChaveIntegracao", "ResultSets", "Table1"):
+    for marker in (
+        "CORRELATION_ID",
+        "SQL_CORRELATION_ID",
+        "ChaveIntegracao",
+        "ResultSets",
+        "Table1",
+    ):
         if marker not in raw:
             errors.append(f"marcador_ausente:{marker}")
 
