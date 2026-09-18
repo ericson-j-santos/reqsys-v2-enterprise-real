@@ -66,6 +66,36 @@ jobs:
           echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
           echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
 
+  sdd-contract:
+    name: SDD — contrato da mudança no SHA do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: resolve-context
+    steps:
+      - name: Checkout do SHA exato do PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-context.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Validar contrato SDD contra a base real do PR
+        env:
+          HEAD_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+          BASE_REF: ${{ needs.resolve-context.outputs.base_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git check-ref-format --branch "$BASE_REF" >/dev/null
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          python scripts/sdd_gate.py \
+            --base-ref "$BASE_REF" \
+            --head-sha "$HEAD_SHA"
+
   isolated-validation:
     name: Validação isolada do PR
     runs-on: ubuntu-latest
@@ -292,7 +322,7 @@ jobs:
     name: Gate de merge governado
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [resolve-context, isolated-validation, temporary-integration, current-sha-stability]
+    needs: [resolve-context, sdd-contract, isolated-validation, temporary-integration, current-sha-stability]
     if: always()
     outputs:
       eligible: ${{ steps.policy.outputs.eligible }}
@@ -374,6 +404,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/governed-merge-queue
 
+          SDD="${{ needs.sdd-contract.result }}"
           ISOLATED="${{ needs.isolated-validation.result }}"
           INTEGRATION="${{ needs.temporary-integration.result }}"
           STABILITY="${{ needs.current-sha-stability.result }}"
@@ -381,7 +412,7 @@ jobs:
           RUNTIME_SMOKE="green"
           CONTRACTS="green"
 
-          if [ "$ISOLATED" != "success" ] || [ "$STABILITY" != "success" ]; then
+          if [ "$SDD" != "success" ] || [ "$ISOLATED" != "success" ] || [ "$STABILITY" != "success" ]; then
             CI_STATUS="red"
           fi
           if [ "$INTEGRATION" != "success" ]; then
@@ -423,6 +454,7 @@ jobs:
             --arg eligible "$ELIGIBLE" \
             --arg allow_auto_merge "$ALLOW_AUTO_MERGE" \
             --arg native_auto_merge_available "$NATIVE_AUTO_MERGE" \
+            --arg sdd_contract_result "$SDD" \
             --arg isolated_result "$ISOLATED" \
             --arg integration_result "$INTEGRATION" \
             --arg stability_result "$STABILITY" \
@@ -443,6 +475,7 @@ jobs:
               runtime_merge_queue_gate: $runtime_gate[0],
               preview_environment_contract: "progressive-required-via-workflow",
               validation_results: {
+                sdd_contract: $sdd_contract_result,
                 isolated_validation: $isolated_result,
                 temporary_integration: $integration_result,
                 current_sha_stability: $stability_result
@@ -466,6 +499,7 @@ jobs:
           |---|---|
           | Base real do PR | \`${{ needs.resolve-context.outputs.base_ref }}\` |
           | Base SHA | \`${{ needs.resolve-context.outputs.base_sha }}\` |
+          | SDD no SHA do PR | \`$SDD\` |
           | Validação isolada | \`$ISOLATED\` |
           | Integração temporária | \`$INTEGRATION\` |
           | Estabilidade do SHA atual | \`$STABILITY\` |
