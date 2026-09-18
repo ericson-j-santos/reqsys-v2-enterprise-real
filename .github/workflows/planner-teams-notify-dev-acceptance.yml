@@ -15,7 +15,6 @@ permissions:
   contents: read
 
 env:
-  API_URL: https://reqsys-api-dev.fly.dev
   EVIDENCE_PATH: audit/user-journey/planner-teams-dev/acceptance.json
   DEVICE_CODE_PUBLIC_PATH: audit/user-journey/planner-teams-dev/device-login.json
   PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
@@ -37,6 +36,7 @@ jobs:
     environment: reqsys-power-platform-dev
     timeout-minutes: 30
     env:
+      API_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
       POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
       POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
       POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
@@ -53,6 +53,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Validar runtime DEV PC24x7
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${API_URL:-}" ]; then
+            echo "::error::PC24X7_DEV_BASE_URL não configurada"
+            exit 1
+          fi
+          case "$API_URL" in
+            https://*) ;;
+            *) echo "::error::PC24X7_DEV_BASE_URL deve usar HTTPS"; exit 1 ;;
+          esac
+          case "$API_URL" in
+            *.fly.dev|*.fly.dev/*)
+              echo "::error::Planner Teams DEV Acceptance não pode usar Fly.io"
+              exit 1
+              ;;
+          esac
+          curl --fail --silent --show-error --max-time 15 "${API_URL%/}/api/runtime/health" >/dev/null
 
       - name: Restaurar sessão Microsoft real sem expor credenciais
         shell: bash
