@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Automatiza o E2E DEV Excel → SQL Server → SharePoint com GitHub OIDC, Graph e Dataverse, elimina Device Code de todos os workflows desta integração e garante cleanup determinístico.",
+  "description": "Automatiza o E2E DEV Excel → SQL Server → SharePoint com GitHub OIDC, Graph e Dataverse, elimina Device Code e sessão MSAL delegada desta integração, remove o normalizador MSAL órfão e garante cleanup determinístico.",
   "sdd_gate": {
     "tests": [
       "tests/test_integration_excel_sql_sharepoint_dataverse.py",
@@ -19,6 +19,10 @@
       "tests/test_integration_excel_sql_sharepoint_flow.py",
       "tests/test_integration_excel_sql_sharepoint_workflow_contract.py"
     ],
-    "evidence_contract": "READY_FOR_PR exige HEAD exato e behind_by=0. O aceite funcional exige OIDC sem Device Code, efeito real Excel→SQL→SharePoint, caso negativo, idempotência e cleanup restaurado. O workflow canônico deve ser reutilizável por workflow_call; aliases manuais e evidência funcional devem reutilizar o mesmo workflow OIDC, sem referências a msal_device_code."
+    "evidence_contract": "READY_FOR_PR exige HEAD exato e behind_by=0. O aceite funcional exige OIDC sem Device Code, efeito real Excel→SQL→SharePoint, caso negativo, idempotência e cleanup restaurado. O workflow canônico deve ser reutilizável por workflow_call; aliases manuais e evidência funcional devem reutilizar o mesmo workflow OIDC, sem referências a msal_device_code ou normalize_msal_storage_state. Módulos msal_device_code compartilhados podem permanecer apenas enquanto jornadas independentes, como Planner→Teams, ainda os consumirem.",
+    "retired_artifacts": [
+      "scripts/normalize_msal_storage_state.py",
+      "tests/test_normalize_msal_storage_state.py"
+    ]
   }
 }
