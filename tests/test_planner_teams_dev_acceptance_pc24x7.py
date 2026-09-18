@@ -21,3 +21,25 @@ def test_acceptance_renews_device_code_without_restarting_run() -> None:
     assert "Aguardar autorização Microsoft com renovação automática" in source
     assert "Se expirar, o job renovará automaticamente" in source
     assert "timeout-minutes: 70" in source
+
+
+def test_acceptance_restores_and_persists_delegated_session_in_key_vault() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    assert "id-token: write" in source
+    assert "azure/login@v2" in source
+    assert "REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}" in source
+    assert "planner_teams_delegated_session_store.py load" in source
+    assert "planner_teams_delegated_session_store.py persist" in source
+    assert "MSAL_BOOTSTRAP_CLIENT_ID" not in source  # produzido pelo loader, nunca hardcoded
+    assert "base64 --decode" not in source
+    assert "DELEGATED_SESSION_EVIDENCE_PATH" in source
+
+
+def test_legacy_session_is_only_transitional_input() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    assert "WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}" in source
+    restore_block = source.split("- name: Restaurar sessão Microsoft do Azure Key Vault", 1)[1].split(
+        "- name: Preparar autorização Microsoft", 1
+    )[0]
+    assert "WSJF_MSAL_STORAGE_STATE_B64" not in restore_block
+    assert "base64" not in restore_block
