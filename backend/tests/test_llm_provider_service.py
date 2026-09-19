@@ -7,6 +7,7 @@ import requests
 
 from app.services.llm_provider import (
     LLMGateway,
+    RetryableProviderHTTPError,
     _post_json,
     extrair_resposta_gemini,
     extrair_resposta_textual,
@@ -148,6 +149,85 @@ def test_post_json_tenta_novamente_apos_falha_transitoria_de_rede():
     assert resultado == {'output_text': 'ok'}
     assert chamadas['n'] == 3
     assert len(sonos) == 2
+
+
+def test_post_json_retenta_http_502_e_recupera():
+    chamadas = {'n': 0}
+    sonos = []
+
+    def fake_post(url, json, headers, timeout):
+        chamadas['n'] += 1
+        if chamadas['n'] < 3:
+            resp = MagicMock()
+            resp.status_code = 502
+            erro = requests.HTTPError('502 Bad Gateway', response=resp)
+            resp.raise_for_status.side_effect = erro
+            resp.json.return_value = {'error': {'message': 'upstream temporariamente indisponivel'}}
+            resp.text = ''
+            return resp
+        return _fake_response({'output_text': 'ok apos retry'})
+
+    with patch('app.services.llm_provider.requests.post', side_effect=fake_post):
+        resultado = _post_json(
+            'https://generativelanguage.googleapis.com/v1beta/models/x:generateContent',
+            {},
+            sleep=sonos.append,
+        )
+
+    assert resultado == {'output_text': 'ok apos retry'}
+    assert chamadas['n'] == 3
+    assert sonos == [0.5, 1.0]
+
+
+def test_post_json_429_persistente_esgota_tentativas_e_preserva_status():
+    chamadas = {'n': 0}
+
+    def fake_post(url, json, headers, timeout):
+        chamadas['n'] += 1
+        resp = MagicMock()
+        resp.status_code = 429
+        erro = requests.HTTPError('429 Too Many Requests', response=resp)
+        resp.raise_for_status.side_effect = erro
+        resp.json.return_value = {'error': {'message': 'rate limited'}}
+        resp.text = ''
+        return resp
+
+    with patch('app.services.llm_provider.requests.post', side_effect=fake_post):
+        with pytest.raises(RetryableProviderHTTPError) as exc:
+            _post_json(
+                'https://api.openai.com/v1/chat/completions',
+                {},
+                sleep=lambda _s: None,
+            )
+
+    assert chamadas['n'] == 3
+    assert exc.value.response.status_code == 429
+
+
+def test_post_json_403_nao_retenta():
+    chamadas = {'n': 0}
+
+    def fake_post(url, json, headers, timeout):
+        chamadas['n'] += 1
+        resp = MagicMock()
+        resp.status_code = 403
+        erro = requests.HTTPError('403 Forbidden', response=resp)
+        resp.raise_for_status.side_effect = erro
+        resp.json.return_value = {'error': {'message': 'invalid key'}}
+        resp.text = ''
+        return resp
+
+    with patch('app.services.llm_provider.requests.post', side_effect=fake_post):
+        with pytest.raises(requests.HTTPError) as exc:
+            _post_json(
+                'https://api.groq.com/openai/v1/chat/completions',
+                {},
+                sleep=lambda _s: None,
+            )
+
+    assert chamadas['n'] == 1
+    assert not isinstance(exc.value, RetryableProviderHTTPError)
+    assert exc.value.response.status_code == 403
 
 
 def test_post_json_nao_retenta_erro_http_definitivo():

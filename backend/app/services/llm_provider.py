@@ -16,6 +16,12 @@ LLM_MAX_RETRIES = 3
 LLM_RETRY_BACKOFF_SECONDS = 0.5
 LLM_CIRCUIT_FAILURE_THRESHOLD = 3
 LLM_CIRCUIT_COOLDOWN_SECONDS = 60
+RETRYABLE_PROVIDER_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+
+
+class RetryableProviderHTTPError(requests.HTTPError):
+    """Erro HTTP transitório de provider elegível para retry governado."""
+
 
 _circuits: dict[str, CircuitBreaker] = {}
 
@@ -67,9 +73,13 @@ def _do_post(url: str, payload: dict[str, Any], headers: dict[str, str] | None, 
         resposta.raise_for_status()
     except requests.HTTPError as exc:
         detalhe = _resumo_corpo_erro(resposta)
-        if detalhe:
-            raise requests.HTTPError(f'{exc} | {detalhe}', response=resposta, request=exc.request) from exc
-        raise
+        mensagem = f'{exc} | {detalhe}' if detalhe else str(exc)
+        error_type = (
+            RetryableProviderHTTPError
+            if resposta.status_code in RETRYABLE_PROVIDER_HTTP_STATUS
+            else requests.HTTPError
+        )
+        raise error_type(mensagem, response=resposta, request=exc.request) from exc
     return resposta.json()
 
 
@@ -87,7 +97,7 @@ def _post_json(
             lambda: _do_post(url, payload, headers, timeout),
             max_retries=max_retries,
             backoff_seconds=LLM_RETRY_BACKOFF_SECONDS,
-            retry_on=(requests.ConnectionError, requests.Timeout),
+            retry_on=(requests.ConnectionError, requests.Timeout, RetryableProviderHTTPError),
             sleep=sleep,
             circuit=_circuit_for(url),
         )
