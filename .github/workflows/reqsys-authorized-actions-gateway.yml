@@ -20,6 +20,7 @@ jobs:
       github.event.comment.user.login == 'ericson-j-santos' &&
       (
         github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev' ||
+        github.event.comment.body == '/reqsys run fly-dev-fast-deploy' ||
         github.event.comment.body == '/reqsys run runtime-e2e-dev' ||
         github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
         github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
@@ -39,6 +40,9 @@ jobs:
           case "$COMMENT_BODY" in
             '/reqsys run bootstrap-wsjf-m365-dev')
               target='bootstrap-wsjf-m365-dev.yml'
+              ;;
+            '/reqsys run fly-dev-fast-deploy')
+              target='fly-dev-fast-deploy.yml'
               ;;
             '/reqsys run runtime-e2e-dev')
               target='runtime-e2e-continuous.yml'
@@ -81,10 +85,15 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
-          if [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
+          if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
+            gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f deploy=true
+          elif [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
             gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
