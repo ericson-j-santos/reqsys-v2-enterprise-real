@@ -123,6 +123,7 @@ def chamar_ollama(prompt: str) -> str:
         model=settings.codex_ollama_model,
         prompt=prompt,
         fallback_model=settings.codex_ollama_fallback_model,
+        fallback_timeout=settings.codex_ollama_fallback_timeout_seconds,
     )
 
 
