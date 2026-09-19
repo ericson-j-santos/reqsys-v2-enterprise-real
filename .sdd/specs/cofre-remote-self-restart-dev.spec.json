@@ -1,0 +1,30 @@
+{
+  "feature_name": "cofre-remote-self-restart-dev",
+  "project": "ReqSys v2 Enterprise — Cofre",
+  "issue": 1760,
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Remove self-hosted runner e login local do Cofre Runtime Evidence Gate, usando restart autenticado da própria API DEV e prova de novo boot no mesmo SHA.",
+  "security": {
+    "environment": "dev-only",
+    "authentication": "cofre:runtime_evidence",
+    "host_credentials": false,
+    "docker_socket": false,
+    "production_touched": false,
+    "secrets_exposed": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_cofre_runtime_control_api.py",
+      "tests/test_cofre_remote_runtime_control.py",
+      "tests/test_cofre_runtime_evidence_pc24x7.py"
+    ],
+    "evidence_contract": "inspect exact-SHA -> before -> authenticated self-restart -> boot_id changed on same SHA -> readiness -> persistence -> cleanup"
+  }
+}

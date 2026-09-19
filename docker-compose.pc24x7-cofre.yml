@@ -2,6 +2,8 @@ services:
   api:
     environment:
       REQSYS_DATA_DIR: "/data"
+      REQSYS_RUNTIME_ENVIRONMENT: "dev"
+      COFRE_RUNTIME_SELF_RESTART_ENABLED: "1"
     secrets:
       - cofre_keyring_passphrase
     volumes:
