@@ -69,6 +69,20 @@ def task_query(task_name: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def task_end(task_name: str) -> subprocess.CompletedProcess[str]:
+    if task_name not in ALLOWED_TASKS:
+        raise RecoveryError("task_name não allowlisted")
+    return subprocess.run(
+        [str(schtasks_path()), "/End", "/TN", task_name],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+
+
 def task_run(task_name: str) -> subprocess.CompletedProcess[str]:
     if task_name not in ALLOWED_TASKS:
         raise RecoveryError("task_name não allowlisted")
@@ -81,6 +95,15 @@ def task_run(task_name: str) -> subprocess.CompletedProcess[str]:
         timeout=20,
         check=False,
     )
+
+
+def restart_task(task_name: str) -> dict[str, int]:
+    end_result = task_end(task_name)
+    run_result = task_run(task_name)
+    return {
+        "end_returncode": end_result.returncode,
+        "run_returncode": run_result.returncode,
+    }
 
 
 def validate_headless_source() -> dict[str, Any]:
@@ -112,9 +135,9 @@ def recover(confirm: str, correlation_id: str) -> dict[str, Any]:
     attempts: list[dict[str, Any]] = []
 
     if headless_source.get("governed") and task_available(TASK_HEADLESS):
-        result = task_run(TASK_HEADLESS)
-        attempts.append({"owner": "headless", "task": TASK_HEADLESS, "returncode": result.returncode})
-        if result.returncode == 0:
+        restart = restart_task(TASK_HEADLESS)
+        attempts.append({"owner": "headless", "task": TASK_HEADLESS, **restart})
+        if restart["run_returncode"] == 0:
             return {
                 "ok": True,
                 "host": host,
@@ -130,9 +153,9 @@ def recover(confirm: str, correlation_id: str) -> dict[str, Any]:
             }
 
     if interactive_source.get("governed") and task_available(TASK_INTERACTIVE):
-        result = task_run(TASK_INTERACTIVE)
-        attempts.append({"owner": "interactive", "task": TASK_INTERACTIVE, "returncode": result.returncode})
-        if result.returncode == 0:
+        restart = restart_task(TASK_INTERACTIVE)
+        attempts.append({"owner": "interactive", "task": TASK_INTERACTIVE, **restart})
+        if restart["run_returncode"] == 0:
             return {
                 "ok": True,
                 "host": host,
