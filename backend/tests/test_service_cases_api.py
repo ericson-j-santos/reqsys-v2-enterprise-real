@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.service_cases import (
     ServiceCaseEventRecord,
     ServiceCaseRecord,
+    _safe_log_value,
     require_service_case_auth,
 )
 from app.core.service_tokens import ServiceAuthContext
@@ -219,3 +220,102 @@ def test_invalid_idempotency_key_fails_before_persistence(service_id):
     payload['idempotency_key'] = 'not-a-sha256'
     response = client.post('/v1/service-cases', json=payload)
     assert response.status_code == 422
+
+def test_log_value_removes_line_breaks():
+    assert _safe_log_value('corr\r\nforged') == 'corrforged'
+
+
+def test_create_rejects_missing_service():
+    payload = _create_payload(str(uuid4()), f'missing-service-{uuid4()}')
+    response = client.post('/v1/service-cases', json=payload)
+    assert response.status_code == 404
+
+
+def test_create_rejects_inactive_service():
+    value = str(uuid4())
+    db = TestingSession()
+    try:
+        db.add(
+            ServicoTI(
+                servico_id=value,
+                codigo=f'RSM_{value[:8].upper()}',
+                nome='Servico RSM inativo',
+                criticidade='media',
+                responsavel_tecnico='rsm-test',
+                responsavel_negocio='rsm-test',
+                ativo=False,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    payload = _create_payload(value, f'inactive-service-{uuid4()}')
+    response = client.post('/v1/service-cases', json=payload)
+    assert response.status_code == 409
+
+
+def test_get_case_returns_persisted_case_and_events(service_id):
+    payload = _create_payload(service_id, f'get-case-{uuid4()}')
+    created = client.post('/v1/service-cases', json=payload)
+    assert created.status_code == 200
+    case_id = created.json()['data']['case']['case_id']
+
+    response = client.get(f'/v1/service-cases/{case_id}')
+    assert response.status_code == 200
+    body = response.json()['data']
+    assert body['case_id'] == case_id
+    assert body['state'] == 'NEW'
+    assert len(body['events']) == 1
+    assert body['events'][0]['event_type'] == 'CASE_CREATED'
+    assert body['events'][0]['to_state'] == 'NEW'
+
+
+def test_get_case_missing_returns_404():
+    response = client.get(f'/v1/service-cases/{uuid4()}')
+    assert response.status_code == 404
+
+
+def test_transition_replay_is_idempotent_and_conflicting_reuse_fails(service_id):
+    payload = _create_payload(service_id, f'transition-replay-{uuid4()}')
+    created = client.post('/v1/service-cases', json=payload)
+    assert created.status_code == 200
+    case = created.json()['data']['case']
+    event_id = str(uuid4())
+    body = {
+        'target_state': 'TRIAGE',
+        'expected_version': case['version'],
+        'event_id': event_id,
+    }
+
+    first = client.post(f"/v1/service-cases/{case['case_id']}/transitions", json=body)
+    assert first.status_code == 200
+    assert first.json()['data']['duplicate'] is False
+
+    replay = client.post(f"/v1/service-cases/{case['case_id']}/transitions", json=body)
+    assert replay.status_code == 200
+    assert replay.json()['data']['duplicate'] is True
+    assert replay.json()['data']['case']['version'] == 2
+
+    conflicting = dict(body)
+    conflicting['target_state'] = 'CANCELED'
+    conflicting['expected_version'] = 2
+    conflict = client.post(f"/v1/service-cases/{case['case_id']}/transitions", json=conflicting)
+    assert conflict.status_code == 409
+
+    db = TestingSession()
+    try:
+        assert db.query(ServiceCaseEventRecord).filter_by(case_id=case['case_id']).count() == 2
+    finally:
+        db.close()
+
+
+def test_transition_missing_case_returns_404():
+    body = {
+        'target_state': 'TRIAGE',
+        'expected_version': 1,
+        'event_id': str(uuid4()),
+    }
+    response = client.post(f'/v1/service-cases/{uuid4()}/transitions', json=body)
+    assert response.status_code == 404
+

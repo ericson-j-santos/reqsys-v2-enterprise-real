@@ -32,6 +32,10 @@ router = APIRouter(prefix='/v1/service-cases', tags=['ReqSys Service Management'
 require_service_case_auth = require_admin_or_service_token('service_cases:write')
 
 
+def _safe_log_value(value: object) -> str:
+    return str(value).replace('\r', '').replace('\n', '')
+
+
 class ServiceCaseRecord(Base):
     __tablename__ = 'rsm_service_cases'
 
@@ -167,9 +171,9 @@ def create_service_case(
     if existing is not None:
         logger.info(
             'rsm_case_replay case_id=%s correlation_id=%s source=%s',
-            existing.case_id,
-            correlation_id,
-            payload.source,
+            _safe_log_value(existing.case_id),
+            _safe_log_value(correlation_id),
+            _safe_log_value(payload.source),
         )
         return existing, True
 
@@ -223,9 +227,9 @@ def create_service_case(
     db.refresh(record)
     logger.info(
         'rsm_case_created case_id=%s correlation_id=%s source=%s',
-        record.case_id,
-        correlation_id,
-        record.source,
+        _safe_log_value(record.case_id),
+        _safe_log_value(correlation_id),
+        _safe_log_value(record.source),
     )
     return record, False
 
@@ -306,11 +310,11 @@ def transition_service_case(
     assert refreshed is not None
     logger.info(
         'rsm_case_transitioned case_id=%s from_state=%s to_state=%s version=%s correlation_id=%s',
-        case_id,
-        from_state,
-        refreshed.state,
+        _safe_log_value(case_id),
+        _safe_log_value(from_state),
+        _safe_log_value(refreshed.state),
         refreshed.version,
-        correlation_id,
+        _safe_log_value(correlation_id),
     )
     return refreshed, False
 
