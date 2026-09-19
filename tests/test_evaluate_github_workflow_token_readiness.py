@@ -24,6 +24,7 @@ def test_ready_decision_is_sanitized() -> None:
     "stage",
     [
         "missing_secret",
+        "app_workflows_permission_missing",
         "authentication_failed",
         "repository_access_failed",
         "workflow_write_failed",
