@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from scripts.evaluate_github_workflow_token_readiness import evaluate
@@ -43,3 +45,12 @@ def test_failure_stages_remain_blocked(stage: str) -> None:
 def test_rejects_unknown_stage() -> None:
     with pytest.raises(ValueError, match="invalid readiness stage"):
         evaluate("unknown", probe_branch="probe", run_url="run")
+
+
+def test_readiness_watch_uses_ephemeral_github_app_not_pat() -> None:
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/github-workflow-permission-readiness-watch.yml").read_text(encoding="utf-8")
+    assert "GH_PAT_ACTIONS" not in workflow
+    assert "actions/create-github-app-token@v2" in workflow
+    assert "permission-contents: write" in workflow
+    assert "permission-workflows: write" in workflow
+    assert "REQSYS_STACK_REBASE_PRIVATE_KEY" in workflow
