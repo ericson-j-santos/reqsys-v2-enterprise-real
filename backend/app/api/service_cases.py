@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Callable, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -109,6 +109,19 @@ class ServiceCaseNotFoundError(LookupError):
 
 class ServiceCaseConflictError(RuntimeError):
     pass
+
+
+TransitionGuard = Callable[[Session, 'ServiceCaseRecord', ServiceCaseState], None]
+
+# Pré-condições adicionais de transição registradas por adaptadores (ex.: portão de
+# aprovação do RSM-04). Mantém este módulo sem dependência dos módulos que o estendem.
+TRANSITION_GUARDS: list[TransitionGuard] = []
+
+
+def register_transition_guard(guard: TransitionGuard) -> None:
+    """Registra uma pré-condição de transição de forma idempotente."""
+    if guard not in TRANSITION_GUARDS:
+        TRANSITION_GUARDS.append(guard)
 
 
 def _serialize(record: ServiceCaseRecord) -> dict:
@@ -269,6 +282,9 @@ def transition_service_case(
             uri=payload.evidence_uri,
             sha256=payload.evidence_sha256,
         )
+
+    for guard in TRANSITION_GUARDS:
+        guard(db, record, target)
 
     from_state = record.state
     updated = domain.transition_to(target)

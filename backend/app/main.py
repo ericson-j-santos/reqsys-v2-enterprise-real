@@ -42,6 +42,7 @@ from app.api import (
     relatorios,
     requisitos,
     runtime_analytics,
+    service_case_operations,
     service_cases,
     service_catalog,
     service_tokens,
@@ -131,6 +132,7 @@ app.include_router(cofre.router)
 app.include_router(service_tokens.router)
 app.include_router(service_cases.router)
 app.include_router(service_catalog.router)
+app.include_router(service_case_operations.router)
 app.include_router(connectors.router)
 app.include_router(ia.router)
 app.include_router(incidentes.router)
