@@ -2,7 +2,7 @@
   "feature_name": "codex-worker-pool",
   "project": "ReqSys v2 Enterprise — Codex distribuído",
   "created_at": "2026-09-18",
-  "updated_at": "2026-09-18",
+  "updated_at": "2026-09-19",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -10,7 +10,13 @@
     "tasks": true
   },
   "description": "Consolida o pool governado de workers Codex distribuídos com heartbeat, fila idempotente, lease, recuperação, quarentena, isolamento por workspace e separação Builder/Validator.",
-  "issues": [1767, 1768, 1769, 1770, 1771],
+  "issues": [
+    1767,
+    1768,
+    1769,
+    1770,
+    1771
+  ],
   "scope": "local-dev-pc24x7",
   "files": [
     "services/codex-worker-pool/app/store.py",
@@ -18,14 +24,20 @@
     "services/codex-worker-pool/tests/test_store.py",
     "services/codex-worker-pool/tests/test_api.py",
     "docker-compose.pc24x7-codex-worker-pool.yml",
-    "docs/runbooks/codex-worker-pool.md"
+    "docs/runbooks/codex-worker-pool.md",
+    "scripts/pc24x7_network_probe.py",
+    "scripts/codex_worker_pool_dualhost_e2e.py",
+    "tests/test_pc24x7_network_probe.py",
+    "tests/test_codex_worker_pool_dualhost_e2e.py"
   ],
   "sdd_gate": {
     "tests": [
       "services/codex-worker-pool/tests/test_store.py",
-      "services/codex-worker-pool/tests/test_api.py"
+      "services/codex-worker-pool/tests/test_api.py",
+      "tests/test_pc24x7_network_probe.py",
+      "tests/test_codex_worker_pool_dualhost_e2e.py"
     ],
-    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado fail-closed, replay idempotente, recuperação de lease e quarentena. A prova física multi-host exige dual_host_preflight nos dois hosts no SHA exato das regras."
+    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado/correlation_id divergente fail-closed, replay idempotente, recuperação de lease e quarentena. A prova física multi-host exige dual_host_preflight nos dois hosts no mesmo SHA canônico das regras e no mesmo SHA do ReqSys, seguida de handshake de rede governado e E2E Desktop Builder -> Noteri Validator com leitura final independente."
   },
   "risk": {
     "production": false,

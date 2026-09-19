@@ -84,3 +84,20 @@ Quando uma dependência como DSN, segredo, permissão administrativa ou identida
 ## Limite de evidência atual
 
 Os testes determinísticos podem provar o contrato em processo único/SQLite e HTTP. A prova física Desktop + Noteri só conta quando ambos passarem `dual_host_preflight` no mesmo SHA das regras e o Noteri estiver online. Nenhum teste simulado deve ser registrado como prova física de dois hosts.
+
+
+## E2E físico dual-host
+
+A prova física só é válida quando Desktop e Noteri passam `dual_host_preflight` no mesmo SHA canônico de regras e no mesmo SHA do ReqSys.
+
+Fluxo:
+
+1. executar `scripts/pc24x7_network_probe.py local` no host servidor para obter IPv4 elegível;
+2. iniciar `serve-once` no Desktop com marcador/correlation_id único e timeout finito;
+3. executar `connect` no Noteri e exigir `marker_matched=true`;
+4. iniciar `scripts/codex_worker_pool_dualhost_e2e.py server` no Desktop;
+5. executar o cliente no Noteri com o mesmo `correlation_id`;
+6. exigir `overall_passed=true` e confirmar no resultado: Builder/Validator distintos, SHA produzido exato, replay sem nova task, claim duplicado bloqueado, lease expirado recuperado pelo segundo Builder e leitura final independente;
+7. executar controle negativo com `correlation_id` incorreto e exigir rejeição.
+
+O probe e o E2E não alteram firewall, não leem segredos e usam somente SQLite temporário para o cenário. Nenhum resultado loopback substitui a prova física entre hosts.
