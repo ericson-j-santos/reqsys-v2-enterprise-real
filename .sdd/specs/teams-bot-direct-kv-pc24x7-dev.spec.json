@@ -14,6 +14,19 @@
     "requirements": ".sdd/specs/teams-bot-direct-kv-pc24x7-dev.requirements.md",
     "provisioning": "scripts/provision_pc24x7_teams_bot_runtime.py",
     "runtime_override": "config/pc24x7-teams-bot-runtime.override.yml",
-    "issues": [1532, 993]
+    "issues": [
+      1532,
+      993
+    ]
+  },
+  "implementation_constraints": {
+    "teams_bot_credentials_transport": "compose_environment_pass_through",
+    "inline_secret_literal_forbidden": true,
+    "fail_closed_owner": "scripts/provision_pc24x7_teams_bot_runtime.py",
+    "ollama_runtime_url": "http://host.docker.internal:11434"
+  },
+  "validation": {
+    "enterprise_runtime_governance": "required",
+    "compose_pass_through_test": "tests/test_provision_pc24x7_teams_bot_runtime.py::test_compose_passes_teams_credentials_without_inline_secret_literal"
   }
 }

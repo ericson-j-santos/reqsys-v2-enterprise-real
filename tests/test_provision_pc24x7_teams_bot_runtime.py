@@ -83,3 +83,17 @@ def test_teams_bot_reuses_secret_without_exposing_it(monkeypatch, tmp_path: Path
     assert seen_secret_values[0] == "super-secret-test-value"
     assert seen_secret_values[1] == ""
     assert "super-secret-test-value" not in args.evidence_file.read_text(encoding="utf-8")
+
+
+def test_compose_passes_teams_credentials_without_inline_secret_literal() -> None:
+    override = (
+        Path(__file__).resolve().parents[1]
+        / "config"
+        / "pc24x7-teams-bot-runtime.override.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "- TEAMS_BOT_APP_ID" in override
+    assert "- TEAMS_BOT_APP_TENANT_ID" in override
+    assert "- TEAMS_BOT_SECRET" in override
+    assert "TEAMS_BOT_SECRET:" not in override
+    assert "AI_CONVERSATION_OLLAMA_BASE_URL=http://host.docker.internal:11434" in override
