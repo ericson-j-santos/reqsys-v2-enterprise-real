@@ -44,6 +44,33 @@ def load_report(path: Path) -> dict[str, Any]:
     return payload
 
 
+def direct_report(
+    repository: str,
+    issue_number: int,
+    base_branch: str,
+    correlation_id: str,
+) -> dict[str, Any]:
+    repository = repository.strip()
+    base_branch = base_branch.strip()
+    correlation_id = correlation_id.strip()
+    if "/" not in repository or issue_number < 1 or not base_branch or not correlation_id:
+        raise BridgeError("orchestrator_identity_invalid")
+    return {
+        "schema_version": "1.0.0",
+        "correlation_id": correlation_id,
+        "repository": repository,
+        "base_branch": base_branch,
+        "decisions": [
+            {
+                "kind": "issue",
+                "number": issue_number,
+                "route": LOCAL_CODEX_ROUTE,
+                "status": "dispatched",
+            }
+        ],
+    }
+
+
 def local_codex_decisions(report: dict[str, Any]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for item in report.get("decisions") or []:
@@ -80,7 +107,9 @@ def validate_pool_url(value: str) -> str:
     return raw
 
 
-def read_token(path: Path) -> str:
+def read_token(path: Path | None) -> str:
+    if path is None:
+        raise BridgeError("worker_pool_token_file_not_configured")
     try:
         token = path.read_text(encoding="utf-8").strip()
     except OSError as exc:
@@ -235,10 +264,15 @@ def write_evidence(path: Path, payload: dict[str, Any]) -> None:
 
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description="Handoff local Codex para o Worker Pool governado")
-    root.add_argument("--report-json", type=Path, required=True)
+    source = root.add_mutually_exclusive_group(required=True)
+    source.add_argument("--report-json", type=Path)
+    source.add_argument("--issue-number", type=int)
+    root.add_argument("--repository", default=os.getenv("GITHUB_REPOSITORY", ""))
+    root.add_argument("--base-branch", default="main")
+    root.add_argument("--correlation-id", default=os.getenv("GITHUB_RUN_ID", "worker-pool-handoff"))
     root.add_argument("--base-sha", default=os.getenv("GITHUB_SHA", ""))
     root.add_argument("--pool-url", default=os.getenv("CODEX_WORKER_POOL_URL", "http://127.0.0.1:8097"))
-    root.add_argument("--token-file", type=Path, default=Path(os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "")))
+    root.add_argument("--token-file", type=Path)
     root.add_argument("--output", type=Path, default=Path("artifacts/pending-development-worker-pool/evidence.json"))
     root.add_argument("--probe-only", action="store_true")
     return root
@@ -247,27 +281,30 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
-        report = load_report(args.report_json)
+        if args.report_json is not None:
+            report = load_report(args.report_json)
+        else:
+            report = direct_report(
+                args.repository,
+                int(args.issue_number or 0),
+                args.base_branch,
+                args.correlation_id,
+            )
         if args.probe_only:
             print("true" if local_codex_decisions(report) else "false")
             return 0
-        if not local_codex_decisions(report):
-            result = enqueue_local_work(
-                report,
-                base_sha=args.base_sha,
-                pool_url=args.pool_url,
-                token="not-used",
-            )
-        else:
-            if not str(args.token_file):
-                raise BridgeError("worker_pool_token_file_not_configured")
-            token = read_token(args.token_file)
-            result = enqueue_local_work(
-                report,
-                base_sha=args.base_sha,
-                pool_url=args.pool_url,
-                token=token,
-            )
+
+        token_path = args.token_file
+        if token_path is None:
+            configured = os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
+            token_path = Path(configured) if configured else None
+        token = read_token(token_path)
+        result = enqueue_local_work(
+            report,
+            base_sha=args.base_sha,
+            pool_url=args.pool_url,
+            token=token,
+        )
         write_evidence(args.output, result)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
