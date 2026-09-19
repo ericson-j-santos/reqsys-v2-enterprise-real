@@ -13,10 +13,10 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .maintenance import recover_rdc
+from .maintenance import reboot_once, recover_rdc
 
 VALID_PROFILES = {"NORMAL", "ESTUDO"}
-SAFE_TASK_TYPES = {"orchestrator.selftest", "host.rdc.recover.v1"}
+SAFE_TASK_TYPES = {"orchestrator.selftest", "host.rdc.recover.v1", "host.reboot.once.v1"}
 
 
 def utc_iso() -> str:
@@ -182,6 +182,22 @@ class WorkerAgent:
                     "worker_id": self.config.worker_id,
                     "device_name": self.device_name,
                     "correlation_id": item.get("correlation_id"),
+                    "observed_at": utc_iso(),
+                }
+            )
+            return result
+        if task_type == "host.reboot.once.v1":
+            payload = item.get("payload") or {}
+            result = reboot_once(
+                action_id=payload.get("action_id"),
+                target_host=payload.get("target_host"),
+                correlation_id=item.get("correlation_id") or "",
+                delay_seconds=payload.get("delay_seconds", 10),
+            )
+            result.update(
+                {
+                    "worker_id": self.config.worker_id,
+                    "device_name": self.device_name,
                     "observed_at": utc_iso(),
                 }
             )
