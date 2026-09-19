@@ -49,6 +49,63 @@ APPROVAL_PATTERNS = (
     r"\baprovo\b", r"\bautorizo\b", r"\bapproved\b", r"\bauthorized\b",
 )
 
+# Pendências conhecidas em que o texto histórico da issue já não representa
+# necessariamente o gate humano vigente. A automação continua dinâmica; estes
+# overrides só tornam a notificação residual precisa quando a remediação
+# automática terminou bloqueada.
+HUMAN_GATE_OVERRIDES: dict[int, dict[str, str]] = {
+    1130: {
+        "decision": "Aprovar a permissão Workflows: read/write da GitHub App reqsys-stack-rebase na instalação restrita ao ReqSys.",
+        "reason": "Alterar permissões de uma GitHub App exige uma conta administradora em sudo mode; a rotina usa token efêmero e não pode autoelevar a própria instalação.",
+        "impact": "Sem essa permissão, a promoção governada de arquivos em .github/workflows permanece fail-closed.",
+        "environment": "GitHub / repositório ReqSys",
+        "risk": "alto",
+        "deadline": "antes da próxima promoção governada que altere workflow",
+        "automatable": "Sim. Após a aprovação única da permissão, emissão do token efêmero, prova de escrita, limpeza e promoção voltam a ser automáticas.",
+        "action": "GitHub admin: aprovar somente Workflows: read/write para a App reqsys-stack-rebase instalada no ReqSys. Não gerar nem colar PAT.",
+    },
+    1520: {
+        "decision": "Disponibilizar a origem SQL corporativa autorizada com TLS confiável, ou materializar a cadeia de confiança aprovada no SQL DEV quando esse for o alvo válido.",
+        "reason": "O ReqSys pode descobrir, montar DSN, armazenar no Key Vault e validar automaticamente, mas não pode escolher a fonte corporativa nem emitir/aceitar um certificado não confiável em nome da Infra/Dados.",
+        "impact": "Bloqueia a prova real de leitura da fonte Movimento sem permitir fallback inseguro com TrustServerCertificate.",
+        "environment": "DEV / origem SQL corporativa",
+        "risk": "alto",
+        "deadline": "antes do próximo E2E real de Prospecção Movimento",
+        "automatable": "Sim. Assim que host/banco/segredos referenciados e TLS confiável existirem, o bootstrap e a validação são retomados automaticamente.",
+        "action": "Infra/Dados: disponibilizar a origem SQL aprovada e TLS confiável; registrar somente referências/nomes de secrets no fluxo governado, sem publicar credenciais.",
+    },
+    1521: {
+        "decision": "Definir a caixa técnica remetente e aprovar Mail.Send de aplicação para a identidade Entra do ReqSys, restrita à caixa autorizada.",
+        "reason": "Consentimento administrativo Microsoft 365 e escolha da caixa técnica são atos externos de autoridade; o software não pode conceder a si próprio Mail.Send nem inferir qual mailbox institucional deve representar o serviço.",
+        "impact": "Bloqueia somente o envio Graph real; dry-run, fila e adapter continuam automatizados.",
+        "environment": "Microsoft 365 / DEV",
+        "risk": "alto",
+        "deadline": "antes do primeiro envio controlado",
+        "automatable": "Sim. Após consentimento e identificação da caixa, readiness, dry-run, envio controlado, correlation_id e validação podem seguir automaticamente.",
+        "action": "Administrador M365/Entra: confirmar a mailbox técnica autorizada e conceder Mail.Send Application com escopo mínimo para essa caixa; não enviar segredo pelo GitHub.",
+    },
+    1532: {
+        "decision": "Instalar o pacote Teams DEV já gerado e iniciar a primeira conversa com o bot para materializar a conversationReference.",
+        "reason": "A instalação no cliente/usuário e a primeira interação originada por uma pessoa são efeitos externos do Teams; a automação de Azure Bot/Fly não deve fabricar uma conversa de usuário.",
+        "impact": "Sem a primeira interação, o gateway não possui conversationReference real para provar o E2E ReqSys ↔ Teams.",
+        "environment": "Microsoft Teams / DEV",
+        "risk": "médio",
+        "deadline": "após o provisionamento automático do bot ficar verde",
+        "automatable": "Sim. Depois da primeira conversationReference real, persistência, replay, health/readiness e mensagens subsequentes podem ser automáticos.",
+        "action": "No Teams DEV, instalar o pacote publicado pelo workflow Teams Bot DEV Provision e enviar uma mensagem ao bot; não copiar tokens ou segredos.",
+    },
+    1649: {
+        "decision": "Concluir a autenticação delegada Microsoft por device code/MFA quando o E2E Power Platform solicitar consentimento interativo.",
+        "reason": "O fluxo atual depende de token delegado para service.flow.microsoft.com/api.powerplatform.com; MFA/consentimento do usuário não pode ser simulado, armazenado como senha ou contornado por credencial de aplicação.",
+        "impact": "Bloqueia a evidência funcional real Excel → SQL Server → SharePoint, sem afetar os testes contratuais.",
+        "environment": "Power Platform / DEV",
+        "risk": "alto",
+        "deadline": "na próxima janela de E2E funcional",
+        "automatable": "Parcial. O workflow, a espera, a retomada, a coleta de evidência e o replay são automáticos; somente o desafio MFA permanece humano enquanto a arquitetura exigir token delegado.",
+        "action": "Quando o workflow exibir o device code Microsoft, concluir o login/MFA na conta autorizada. Não compartilhar código, token ou senha no GitHub.",
+    },
+}
+
 @dataclass
 class Finding:
     issue_number: int
@@ -174,12 +231,26 @@ def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categor
         reason = "Aprovação humana foi capturada, mas aprovação não substitui documento, corpus, MFA, contrato, permissão ou efeito externo real."
         evidence = refs[-1]
 
+    override = HUMAN_GATE_OVERRIDES.get(number)
+    if override:
+        decision = override["decision"]
+        reason = override["reason"]
+        impact = override["impact"]
+        environment = override["environment"]
+        risk = override["risk"]
+        deadline = override["deadline"]
+        automatable = override["automatable"]
+        action = override["action"]
+        if refs:
+            evidence = refs[-1]
+
     raw_signature = json.dumps({
         "n": number,
         "title": title,
         "body_sha256": hashlib.sha256(raw_body.encode("utf-8")).hexdigest(),
         "categories": sorted(categories),
         "refs": refs,
+        "override": HUMAN_GATE_OVERRIDES.get(number),
     }, sort_keys=True, ensure_ascii=False)
     signature = hashlib.sha256(raw_signature.encode("utf-8")).hexdigest()[:16]
 
@@ -283,13 +354,41 @@ def already_notified(comments: list[dict[str, Any]], finding: Finding) -> bool:
     return any(marker in (comment.get("body") or "") for comment in comments)
 
 
-def run(token: str, repo: str, dry_run: bool, output: str, scope: str = "nonprod") -> int:
+def load_auto_remediation_suppression(path: str | None) -> set[int]:
+    if not path or not os.path.isfile(path):
+        return set()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return {
+        int(item["issue_number"])
+        for item in payload.get("results", [])
+        if item.get("suppress_human") is True
+        and item.get("state") in {"in_progress", "recent_success", "dispatched"}
+        and str(item.get("issue_number", "")).isdigit()
+    }
+
+
+def run(
+    token: str,
+    repo: str,
+    dry_run: bool,
+    output: str,
+    scope: str = "nonprod",
+    remediation_file: str | None = None,
+) -> int:
     if scope not in VALID_SCOPES:
         raise ValueError(f"scope inválido: {scope}")
     gh = GitHub(token, repo)
+    suppressed = load_auto_remediation_suppression(remediation_file)
     findings: list[Finding] = []
     notifications = 0
     for issue in gh.open_issues():
+        issue_number = int(issue["number"])
+        if issue_number in suppressed:
+            continue
         if should_defer_notification(issue, scope):
             continue
         categories = classify(issue.get("title", ""), issue.get("body", ""))
@@ -308,6 +407,7 @@ def run(token: str, repo: str, dry_run: bool, output: str, scope: str = "nonprod
         "repository": repo,
         "dry_run": dry_run,
         "scope": scope,
+        "suppressed_by_auto_remediation": sorted(suppressed),
         "human_findings": [asdict(item) for item in findings],
         "notification_count": notifications,
     }
@@ -324,12 +424,20 @@ def main() -> int:
     parser.add_argument("--token", default=os.environ.get("GITHUB_TOKEN", ""))
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--scope", choices=sorted(VALID_SCOPES), default="nonprod")
+    parser.add_argument("--remediation-file", default="")
     parser.add_argument("--output", default="artifacts/human-pending-satellite/evidence.json")
     args = parser.parse_args()
     if not args.repo or not args.token:
         print("repo/token required", file=sys.stderr)
         return 2
-    return run(args.token, args.repo, args.dry_run, args.output, args.scope)
+    return run(
+        args.token,
+        args.repo,
+        args.dry_run,
+        args.output,
+        args.scope,
+        args.remediation_file or None,
+    )
 
 
 if __name__ == "__main__":
