@@ -370,13 +370,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
       SOURCE_RUN_ID: ${{ needs.evaluate-dev.outputs.source_run_id }}
     steps:
+      - name: Emitir token efêmero para proposta STG
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
       - name: Prepare idempotent STG enablement proposal
         id: prepare
         shell: bash
@@ -440,10 +451,11 @@ jobs:
       - name: Ensure governed STG rollout PR exists
         if: steps.prepare.outputs.has_changes == 'true'
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ steps.prepare.outputs.branch }}
         run: |
           set -euo pipefail
-          [[ -n "${GH_TOKEN:-}" ]] || { echo "::error::GH_PAT_ACTIONS não configurado."; exit 2; }
+          [[ -n "${GH_TOKEN:-}" ]] || { echo "::error::Token efêmero da GitHub App não emitido."; exit 2; }
           existing=$(gh pr list --state open --base main --head "$BRANCH" --json number --jq '.[0].number // empty')
           if [[ -n "$existing" ]]; then
             echo "PR #$existing already exists for $BRANCH" >> "$GITHUB_STEP_SUMMARY"
@@ -476,14 +488,25 @@ jobs:
     timeout-minutes: 8
     environment: production
     env:
-      GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
       SOURCE_RUN_ID: ${{ needs.evaluate-stg.outputs.source_run_id }}
       SOURCE_ARTIFACT_DIGEST: ${{ needs.evaluate-stg.outputs.source_artifact_digest }}
     steps:
+      - name: Emitir token efêmero para proposta PROD
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
       - name: Prepare idempotent PROD enablement proposal
         id: prepare
         shell: bash
@@ -552,10 +575,11 @@ jobs:
       - name: Ensure governed PROD rollout PR exists
         if: steps.prepare.outputs.has_changes == 'true'
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ steps.prepare.outputs.branch }}
         run: |
           set -euo pipefail
-          [[ -n "${GH_TOKEN:-}" ]] || { echo "::error::GH_PAT_ACTIONS não configurado."; exit 2; }
+          [[ -n "${GH_TOKEN:-}" ]] || { echo "::error::Token efêmero da GitHub App não emitido."; exit 2; }
           existing=$(gh pr list --state open --base main --head "$BRANCH" --json number --jq '.[0].number // empty')
           if [[ -n "$existing" ]]; then
             echo "PR #$existing already exists for $BRANCH" >> "$GITHUB_STEP_SUMMARY"
