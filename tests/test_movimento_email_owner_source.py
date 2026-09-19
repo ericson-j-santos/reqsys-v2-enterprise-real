@@ -103,7 +103,7 @@ def test_owner_source_has_no_embedded_business_seed() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     assert "CLIENTE DEMO" not in text
     assert "EQUIV-" not in text
-    assert "synthetic": True" not in text
+    assert '"synthetic": true' not in text.casefold()
 
 
 def test_schema_contains_owner_contract_without_login_or_user_creation() -> None:
