@@ -143,24 +143,35 @@ jobs:
           name: governed-workflow-promotion-bundle
           path: bundle
 
-      - name: Verify governed GitHub credential
+      - name: Gerar token efêmero da GitHub App para promoção governada
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Verify governed GitHub App token
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           set +x
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::GH_PAT_ACTIONS is not configured."
+          test -n "${GH_TOKEN:-}" || {
+            echo "::error::GitHub App token was not issued."
             exit 1
-          fi
-          gh api user --silent >/dev/null
+          }
           gh api "repos/${REPOSITORY}" --silent >/dev/null
 
       - name: Promote allowlisted files to isolated branches
         id: promote
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
         run: |
