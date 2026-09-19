@@ -31,8 +31,11 @@ def cmd_intake(args: argparse.Namespace) -> None:
         "payload": {
             "repository": args.repository,
             **({"target_host": args.target_host} if args.target_host else {}),
+            **({"action_id": args.action_id} if args.action_id else {}),
+            **({"delay_seconds": args.delay_seconds} if args.delay_seconds is not None else {}),
         },
         "risk": args.risk,
+        "max_attempts": args.max_attempts,
         "lease_seconds": args.lease_seconds,
     }
     status, response = request_json(
@@ -114,7 +117,10 @@ def main() -> None:
     intake.add_argument("--task-type", required=True)
     intake.add_argument("--repository", default="reqsys-v2-enterprise-real")
     intake.add_argument("--target-host")
+    intake.add_argument("--action-id")
+    intake.add_argument("--delay-seconds", type=int)
     intake.add_argument("--risk", type=int, default=1)
+    intake.add_argument("--max-attempts", type=int, default=3)
     intake.add_argument("--lease-seconds", type=int, default=60)
     intake.add_argument("--expect-worker")
     intake.add_argument("--expect-no-dispatch", action="store_true")
