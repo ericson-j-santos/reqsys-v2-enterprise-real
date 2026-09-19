@@ -265,3 +265,142 @@ def test_patch_clientdata_falha_fechado_sem_etag():
 
     with pytest.raises(FlowStateError, match="flow_etag_ausente"):
         patch_clientdata("https://org.crm.dynamics.com", "token", source, '{"x":1}')
+
+
+class FakeDataverse:
+    """Dataverse minimo que recusa PATCH de clientdata em flow ativado."""
+
+    def __init__(self, source, *, reject_card_patch=False):
+        self.row = copy.deepcopy(source)
+        self.reject_card_patch = reject_card_patch
+        self.calls = []
+
+    def request(self, method, url, token, body=None, *, if_match=None):
+        self.calls.append((method, body))
+        if method == "GET":
+            return 200, copy.deepcopy(self.row)
+        if method != "PATCH":
+            raise AssertionError(f"metodo inesperado: {method}")
+
+        if "clientdata" in body:
+            if int(self.row["statecode"]) == 1:
+                return 400, {
+                    "error": {
+                        "code": "0x80040203",
+                        "message": "Invalid Argument\nworkflow ativado",
+                    }
+                }
+            if self.reject_card_patch:
+                return 400, {"error": {"code": "0x80040203", "message": "recusado"}}
+            self.row["clientdata"] = body["clientdata"]
+            return 204, {}
+
+        self.row["statecode"] = body["statecode"]
+        self.row["statuscode"] = body["statuscode"]
+        return 204, {}
+
+    def state_patches(self):
+        return [
+            (body["statecode"], body["statuscode"])
+            for method, body in self.calls
+            if method == "PATCH" and "statecode" in body
+        ]
+
+
+def _install(monkeypatch, fake):
+    monkeypatch.setattr(mod, "request_json", fake.request)
+    monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
+
+
+def test_reconcile_flow_card_desativa_flow_ativo_antes_do_patch(monkeypatch):
+    fake = FakeDataverse(row(statecode=1))
+    _install(monkeypatch, fake)
+
+    after, evidence = mod.reconcile_flow_card(
+        "https://org.crm.dynamics.com",
+        "token",
+        copy.deepcopy(fake.row),
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
+
+    assert evidence["card_reconciled"] is True
+    assert evidence["flow_deactivated_for_patch"] is True
+    # desativa (0,1) antes do patch e devolve o flow ao estado ativado (1,2).
+    assert fake.state_patches() == [(0, 1), (1, 2)]
+    assert int(after["statecode"]) == 1
+    assert int(after["statuscode"]) == 2
+    assert evidence["card_after"]["has_plan_fact"] is False
+    assert evidence["card_after"]["has_open_planner"] is True
+
+
+def test_reconcile_flow_card_nao_desativa_flow_ja_inativo(monkeypatch):
+    fake = FakeDataverse(row(statecode=0))
+    _install(monkeypatch, fake)
+
+    _after, evidence = mod.reconcile_flow_card(
+        "https://org.crm.dynamics.com",
+        "token",
+        copy.deepcopy(fake.row),
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
+
+    assert evidence["flow_deactivated_for_patch"] is False
+    assert fake.state_patches() == []
+
+
+def test_reconcile_flow_card_reativa_flow_quando_patch_falha(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), reject_card_patch=True)
+    _install(monkeypatch, fake)
+
+    with pytest.raises(FlowStateError, match="dataverse_card_patch_http_400"):
+        mod.reconcile_flow_card(
+            "https://org.crm.dynamics.com",
+            "token",
+            copy.deepcopy(fake.row),
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+        )
+
+    # falhar nunca pode deixar o flow DEV desativado.
+    assert fake.state_patches() == [(0, 1), (1, 2)]
+    assert int(fake.row["statecode"]) == 1
+    assert int(fake.row["statuscode"]) == 2
+
+
+def test_reconcile_flow_card_sem_mudanca_nao_toca_no_estado(monkeypatch):
+    source = row(statecode=1, message_body=mod.desired_card(
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)"
+    ))
+    fake = FakeDataverse(source)
+    _install(monkeypatch, fake)
+
+    _after, evidence = mod.reconcile_flow_card(
+        "https://org.crm.dynamics.com",
+        "token",
+        copy.deepcopy(source),
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
+
+    assert evidence["card_reconciled"] is False
+    assert evidence["flow_deactivated_for_patch"] is False
+    assert fake.calls == []
+
+
+def test_patch_clientdata_propaga_mensagem_do_dataverse(monkeypatch):
+    fake = FakeDataverse(row(statecode=1))
+    _install(monkeypatch, fake)
+
+    with pytest.raises(
+        FlowStateError,
+        match=r"dataverse_card_patch_http_400:0x80040203:Invalid Argument workflow ativado",
+    ):
+        patch_clientdata(
+            "https://org.crm.dynamics.com",
+            "token",
+            row(statecode=1),
+            '{"x":1}',
+        )
+
+
+def test_error_detail_sem_mensagem_mantem_apenas_o_codigo():
+    assert mod.error_detail({"error": {"code": "0x80040203"}}) == "0x80040203"
+    assert mod.error_detail({}) == ""
