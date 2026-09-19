@@ -231,17 +231,39 @@ def consume_authorization(
     return consumed
 
 
+def shutdown_executable() -> Path:
+    root = os.environ.get("SystemRoot") or os.environ.get("WINDIR") or r"C:\\Windows"
+    return Path(root) / "System32" / "shutdown.exe"
+
+
+def shutdown_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    root = env.get("SystemRoot") or env.get("WINDIR") or r"C:\\Windows"
+    if not env.get("SystemRoot"):
+        env["SystemRoot"] = root
+    if not env.get("WINDIR"):
+        env["WINDIR"] = root
+    if not env.get("ComSpec"):
+        env["ComSpec"] = str(Path(root) / "System32" / "cmd.exe")
+    return env
+
+
 def submit_reboot(delay_seconds: int) -> subprocess.CompletedProcess[str]:
     if os.name != "nt":
         raise HostPowerError("reboot governado suportado somente no Windows")
     if delay_seconds < 5 or delay_seconds > 60:
         raise HostPowerError("delay de reboot deve estar entre 5 e 60 segundos")
+    executable = shutdown_executable()
+    if not executable.is_file():
+        raise HostPowerError("shutdown.exe não encontrado no System32")
     return subprocess.run(
         [
-            "shutdown.exe",
+            str(executable),
             "/r",
             "/t",
             str(delay_seconds),
+            "/d",
+            "p:4:1",
             "/c",
             "ReqSys governed one-time reboot validation",
         ],
@@ -252,6 +274,7 @@ def submit_reboot(delay_seconds: int) -> subprocess.CompletedProcess[str]:
         shell=False,
         timeout=15,
         check=False,
+        env=shutdown_environment(),
     )
 
 
