@@ -1,14 +1,32 @@
 """Testes unitários para app.core.keyring_backend (FileEncryptedKeyring)."""
 from __future__ import annotations
 
+import json
+import os
+
 import keyring.errors
 import pytest
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from app.core.keyring_backend import FileEncryptedKeyring
+from app.core.keyring_backend import (
+    _NONCE_BYTES,
+    _derive_key,
+    FileEncryptedKeyring,
+)
 
 
 def _backend(tmp_path, passphrase: str = 'senha-de-teste-bem-forte') -> FileEncryptedKeyring:
     return FileEncryptedKeyring(path=str(tmp_path), passphrase=passphrase)
+
+
+def _write_legacy_file(tmp_path, passphrase: str, data: dict) -> bytes:
+    nonce = os.urandom(_NONCE_BYTES)
+    plaintext = json.dumps(data).encode('utf-8')
+    ciphertext = AESGCM(_derive_key(passphrase)).encrypt(nonce, plaintext, None)
+    raw = nonce + ciphertext
+    (tmp_path / 'cofre-keyring.enc').write_bytes(raw)
+    return raw
 
 
 def test_get_password_sem_arquivo_retorna_none(tmp_path):
@@ -90,9 +108,52 @@ def test_delete_password_mantem_outras_entradas_do_mesmo_servico(tmp_path):
     assert backend.get_password('svc', 'user-b') == 'valor-b'
 
 
-def test_set_password_com_arquivo_corrompido_reinicia_vault(tmp_path):
+def test_set_password_com_arquivo_corrompido_falha_sem_sobrescrever(tmp_path):
     backend = _backend(tmp_path)
     backend._path.parent.mkdir(parents=True, exist_ok=True)
-    backend._path.write_bytes(b'lixo-nao-decifravel-0123456789ab')
-    backend.set_password('svc', 'user', 'valor-novo')
-    assert backend.get_password('svc', 'user') == 'valor-novo'
+    original = b'lixo-nao-decifravel-0123456789ab'
+    backend._path.write_bytes(original)
+
+    with pytest.raises(InvalidTag):
+        backend.set_password('svc', 'user', 'valor-novo')
+
+    assert backend._path.read_bytes() == original
+
+
+def test_legado_crlf_e_lido_com_passphrase_sem_cr(tmp_path):
+    _write_legacy_file(
+        tmp_path,
+        'senha-legada\r',
+        {'svc': {'user': 'valor-legado'}},
+    )
+    backend = _backend(tmp_path, passphrase='senha-legada')
+    assert backend.get_password('svc', 'user') == 'valor-legado'
+
+
+def test_legado_crlf_e_lido_quando_runtime_preserva_cr(tmp_path):
+    _write_legacy_file(
+        tmp_path,
+        'senha-legada\r',
+        {'svc': {'user': 'valor-legado'}},
+    )
+    backend = _backend(tmp_path, passphrase='senha-legada\r')
+    assert backend.get_password('svc', 'user') == 'valor-legado'
+
+
+def test_primeira_gravacao_migra_legado_crlf_para_forma_canonica(tmp_path):
+    _write_legacy_file(
+        tmp_path,
+        'senha-legada\r',
+        {'svc': {'user': 'valor-legado'}},
+    )
+
+    backend = _backend(tmp_path, passphrase='senha-legada\r')
+    backend.set_password('svc', 'novo', 'valor-novo')
+
+    raw = backend._path.read_bytes()
+    nonce, ciphertext = raw[:_NONCE_BYTES], raw[_NONCE_BYTES:]
+    plaintext = AESGCM(_derive_key('senha-legada')).decrypt(nonce, ciphertext, None)
+    data = json.loads(plaintext.decode('utf-8'))
+
+    assert data['svc']['user'] == 'valor-legado'
+    assert data['svc']['novo'] == 'valor-novo'
