@@ -3,7 +3,13 @@
   "purpose": "noteri_one_time_reboot_transport_only",
   "source_repository": "ericson-j-santos/chatgpt-operational-rules",
   "source_pr": 73,
-  "source_sha": "90d5ca10db54327bb28ee184d23fdf82343283fd",
+  "source_sha": "82a048cfe75400b38b638513f96a06ed589d474d",
   "authorized_in_chat": true,
-  "merge_intent": false
+  "merge_intent": false,
+  "source_ci_run": 35408174478,
+  "previous_physical_attempt": {
+    "result": "blocked_after_submit_failure",
+    "windows_exit_code": 203,
+    "authorization_consumed": true
+  }
 }
