@@ -164,52 +164,15 @@ jobs:
 
       - name: Consolidar evidência sanitizada
         if: always()
-        shell: python
+        shell: bash
         run: |
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["ARTIFACT_DIR"])
-          def load(name):
-              path = root / name
-              return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
-
-          before = load("before-restart.json")
-          after = load("after-restart.json")
-          restart = load("runtime-restart.json")
-          verified = load("runtime-restart-verified.json")
-          ok = all(
-              item is not None and item.get("ok") is True
-              for item in (before, after, restart, verified)
-          ) and verified.get("boot_id_changed") is True
-          payload = {
-              "schema_version": "3.0.0",
-              "contract": "reqsys-cofre-runtime-evidence-summary",
-              "ok": ok,
-              "environment": "dev",
-              "runtime_target": "pc24x7",
-              "control_plane": "authenticated_remote_self_restart",
-              "base_url": os.environ["BASE_URL"],
-              "workflow_sha": os.environ["GITHUB_SHA"],
-              "run_id": os.environ["GITHUB_RUN_ID"],
-              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
-              "correlation_id": os.environ["CORRELATION_ID"],
-              "restart_runtime": True,
-              "boot_id_changed": bool(verified and verified.get("boot_id_changed")),
-              "transient_state_encrypted": True,
-              "production_touched": False,
-              "sensitive_values_exposed": False,
-              "phases": {"before-restart": before, "after-restart": after},
-              "runtime_control": restart,
-              "runtime_restart_verification": verified,
-          }
-          (root / "summary.json").write_text(
-              json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-              encoding="utf-8",
-          )
-          if not ok:
-              raise SystemExit("Evidência consolidada incompleta ou com falha.")
+          python scripts/consolidate_cofre_runtime_evidence.py \
+            --artifact-dir "$ARTIFACT_DIR" \
+            --base-url "$BASE_URL" \
+            --workflow-sha "${{ github.sha }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --correlation-id "$CORRELATION_ID"
 
       - name: Remover estado sensível residual
         if: always()
