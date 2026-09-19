@@ -13,7 +13,7 @@ class OllamaClient:
         self._settings = settings
         self._base_url = settings.ollama_base_url.rstrip('/')
 
-    def generate(self, model: str, prompt: str) -> tuple[str, int]:
+    def generate(self, model: str, prompt: str, timeout_seconds: int | None = None) -> tuple[str, int]:
         payload: dict[str, Any] = {
             'model': model,
             'prompt': prompt,
@@ -21,7 +21,8 @@ class OllamaClient:
             'options': {'temperature': 0.1},
         }
         inicio = time.perf_counter()
-        with httpx.Client(timeout=self._settings.ollama_timeout_seconds) as client:
+        timeout = timeout_seconds if timeout_seconds is not None else self._settings.ollama_timeout_seconds
+        with httpx.Client(timeout=timeout) as client:
             resposta = client.post(f'{self._base_url}/api/generate', json=payload)
             resposta.raise_for_status()
             data = resposta.json()
@@ -43,6 +44,10 @@ class OllamaClient:
             fallback = (fallback_model or '').strip()
             if not fallback or fallback == model:
                 raise
-            response, _ = self.generate(fallback, prompt)
+            response, _ = self.generate(
+                fallback,
+                prompt,
+                timeout_seconds=self._settings.ollama_fallback_timeout_seconds,
+            )
             total_ms = int((time.perf_counter() - started) * 1000)
             return response, total_ms, fallback, True
