@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.ai_provider_router import AIProviderRouter, AIProviderRouterError
+from app.services.ai_provider_router import AIProviderRouter, AIProviderRouterError, _safe_log_value
 
 
 class FakeGateway:
@@ -105,3 +105,13 @@ def test_provider_desconhecido_e_bloqueado() -> None:
             provider='provider-inventado',
             prompt='teste',
         )
+
+
+def test_safe_log_value_remove_quebras_e_limita_tamanho() -> None:
+    malicious = 'corr-ok\r\nforged-entry=admin' + ('x' * 300)
+    sanitized = _safe_log_value(malicious)
+
+    assert '\r' not in sanitized
+    assert '\n' not in sanitized
+    assert 'forged-entry=admin' in sanitized
+    assert len(sanitized) == 200
