@@ -56,8 +56,7 @@ def test_default_route_usa_ollama_gateway_e_propaga_fallback() -> None:
 
 def test_provider_explicito_openai_continua_disponivel() -> None:
     gateway = FakeGateway()
-    env = {'AI_OPENAI_ENDPOINT': 'https://api.openai.com/v1/chat/completions'}
-    result = AIProviderRouter(gateway=gateway, env=env).generate_text(
+    result = AIProviderRouter(gateway=gateway, env={}).generate_text(
         provider='openai',
         model='gpt-test',
         prompt='teste',
@@ -68,7 +67,10 @@ def test_provider_explicito_openai_continua_disponivel() -> None:
 
     assert result.provider == 'openai'
     assert result.text == 'openai ok'
-    assert gateway.calls[0][1]['endpoint'].startswith('https://api.openai.com/')
+    assert gateway.calls[0][0] == 'openai'
+    assert gateway.calls[0][1]['api_key'] == 'synthetic-test-key'
+    assert gateway.calls[0][1]['model'] == 'gpt-test'
+    assert 'endpoint' not in gateway.calls[0][1]
 
 
 def test_ollama_direto_permanece_fallback_explicito() -> None:
