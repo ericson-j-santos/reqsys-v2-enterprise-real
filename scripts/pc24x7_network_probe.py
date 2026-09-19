@@ -10,7 +10,6 @@ import argparse
 import ipaddress
 import json
 import socket
-import sys
 from typing import Any
 
 
