@@ -39,11 +39,41 @@ def test_bacen08_development_defers_human_action_without_false_promotion() -> No
 
     readiness = build_evidence(REPORT, DESIGNATION)
     assert readiness["technical_readiness_passed"] is True
+    assert readiness["authenticated_designation_evidence_structurally_valid"] is True
+    reference = readiness["authenticated_designation_evidence_reference"]
+    assert reference["comment_url"].endswith("#issuecomment-5415495880")
+    assert len(reference["comment_sha256"]) == 64
+    assert reference["decision"] == "approved"
+    assert reference["personal_or_sensitive_content_replicated"] is False
+    assert readiness["formal_designation_present"] is False
     assert readiness["formal_governance_complete"] is False
+    assert readiness["remaining_formal_blockers"] == [
+        "formal_executive_designation",
+        "annual_report_formal_signoff",
+    ]
     assert readiness["readiness_status"] == "deferred_until_institutionalization"
     assert readiness["human_action_required"] is False
     assert readiness["automatic_blocking"] is False
     assert readiness["control_status"] == "partial"
+    assert readiness["automatic_status_promotion_allowed"] is False
+
+
+def test_bacen08_invalid_authenticated_evidence_fails_closed(tmp_path: Path) -> None:
+    designation = load_yaml(DESIGNATION)
+    designation["decision_evidence"]["comment_sha256"] = "invalid"
+    invalid_designation = tmp_path / "EXECUTIVE-DESIGNATION.yaml"
+    invalid_designation.write_text(
+        yaml.safe_dump(designation, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+    readiness = build_evidence(REPORT, invalid_designation)
+    assert readiness["authenticated_designation_evidence_structurally_valid"] is False
+    assert "decision_evidence_comment_sha256_invalid" in readiness["structural_findings"]
+    assert readiness["technical_readiness_passed"] is False
+    assert readiness["automatic_blocking"] is True
+    assert readiness["control_status"] == "partial"
+    assert readiness["automatic_status_promotion_allowed"] is False
 
 
 def test_bacen08_production_gate_blocks_without_formal_governance(tmp_path: Path) -> None:
@@ -65,10 +95,12 @@ def test_bacen08_production_gate_blocks_without_formal_governance(tmp_path: Path
     assert "formal_executive_designation_required_for_current_stage" in lifecycle["findings"]
 
     readiness = build_evidence(REPORT, production_designation)
+    assert readiness["authenticated_designation_evidence_structurally_valid"] is True
     assert readiness["human_action_required"] is True
     assert readiness["automatic_blocking"] is True
     assert readiness["readiness_status"] == "formal_governance_required"
     assert "institutional_governance_required_for_current_stage" in readiness["findings"]
+    assert readiness["control_status"] == "partial"
 
 
 def test_matrix_keeps_deferred_controls_partial_until_production_gate() -> None:
