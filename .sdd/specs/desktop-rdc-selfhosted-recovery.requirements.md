@@ -18,11 +18,15 @@ Recuperar o Remote Desktop Commander do DESKTOP-PDQK954 sem depender do próprio
 10. Publicar evidência sanitizada como artifact.
 11. O Authorized Actions Gateway deve aceitar somente o comando exato /reqsys run desktop-rdc-recovery, restrito à issue #1705 e ao ator ericson-j-santos.
 12. O gateway deve fixar ref=main; nenhuma branch, ref ou workflow arbitrário pode vir do comentário.
+13. O runner headless deve aceitar somente os marcadores governados `RDC_HEADLESS_V2_PRIMARY_OWNER` e `RDC_HEADLESS_V3_READY_CLAIM`.
+14. O launcher interativo deve aceitar somente os marcadores governados `RDC_LAUNCHER_V3_RESILIENT`, `RDC_LAUNCHER_V4_ARBITRATED` e `RDC_LAUNCHER_V5_READY_CLAIM`; qualquer marcador desconhecido deve permanecer fail-closed.
 
 ## Critérios de aceite
 
 - testes positivos comprovam preferência por headless e fallback interativo;
 - testes negativos recusam host ou task não allowlisted;
+- teste de compatibilidade comprova aceitação explícita dos marcadores físicos atuais Headless V3 e Launcher V5;
+- marcadores não allowlisted permanecem recusados antes da execução de qualquer tarefa;
 - workflow usa exclusivamente o runner PC24x7;
 - gateway mantém a allowlist estática;
 - após integração, comentário exato em #1705 cria um novo workflow_dispatch no SHA atual da main;
