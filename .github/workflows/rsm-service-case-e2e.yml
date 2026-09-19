@@ -50,7 +50,7 @@ jobs:
       APP_ENV: development
       PUBLIC_ENVIRONMENT: development
       ALLOW_DEMO_LOGIN: "true"
-      REQSYS_ROLE_BINDINGS: '{"rsm-e2e@example.invalid":"admin"}'
+      REQSYS_ROLE_BINDINGS: '{"rsm-e2e@example.com":"admin"}'
       DATABASE_URL: postgresql+psycopg2://reqsys_app:rsm_e2e_password@127.0.0.1:5432/reqsys
       JWT_SECRET: reqsys-rsm-e2e-secret-with-minimum-safe-length
       JWT_ISSUER: reqsys-api
