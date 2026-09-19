@@ -33,7 +33,7 @@ POLICIES = (
         issue_number=1130,
         workflow="github-workflow-permission-readiness-watch.yml",
         cooldown_minutes=70,
-        inputs={"enforce": False},
+        inputs={"enforce": "false"},
     ),
     RemediationPolicy(
         issue_number=1520,
@@ -45,7 +45,7 @@ POLICIES = (
         issue_number=1532,
         workflow="teams-bot-dev-provision.yml",
         cooldown_minutes=70,
-        inputs={"force_runtime_sync": False},
+        inputs={"force_runtime_sync": "false"},
         # Um provisionamento verde ainda exige a primeira interação do usuário
         # no Teams para materializar conversationReference.
         suppress_human_on_success=False,
@@ -128,7 +128,7 @@ class GitHub:
                 "User-Agent": "reqsys-human-pending-auto-remediation",
             },
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - GitHub API base is fixed
             raw = response.read().decode("utf-8")
             return json.loads(raw) if raw else {}
 
