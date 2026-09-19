@@ -108,8 +108,7 @@ def test_invalid_present_dsn_is_not_masked_by_equivalent_fallback() -> None:
     )
     assert decision["selected_source"] is None
     assert decision["fallback_used"] is False
-    assert decision["hard_block"]
-    assert "source_dsn_requires_encrypt" in decision["hard_block"]
+    assert decision["hard_block"] == "corporate_source_configuration_invalid"
 
 
 def test_router_source_never_promotes_equivalent_to_corporate() -> None:
