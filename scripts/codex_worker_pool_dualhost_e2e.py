@@ -284,7 +284,15 @@ def run_server(bind_host: str, port: int, scenario: Scenario, timeout: float) ->
         emit({"ok": True, "mode": "server", "state": "listening", "bind_host": bind_host, "port": port})
         handled = 0
         while not scenario.done and handled < 10:
-            conn, peer = server.accept()
+            try:
+                conn, peer = server.accept()
+            except TimeoutError:
+                return {
+                    "ok": False,
+                    "mode": "server",
+                    "state": "timeout",
+                    "handled": handled,
+                }
             with conn:
                 conn.settimeout(timeout)
                 raw = conn.recv(MAX_MESSAGE)

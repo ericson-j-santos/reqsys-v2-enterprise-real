@@ -67,9 +67,13 @@ def test_wrong_correlation_is_rejected(tmp_path: Path) -> None:
         lease_seconds=1,
     )
 
+    holder: dict[str, object] = {}
+
+    def serve() -> None:
+        holder["server"] = e2e.run_server("127.0.0.1", port, scenario, 0.5)
+
     thread = threading.Thread(
-        target=e2e.run_server,
-        args=("127.0.0.1", port, scenario, 2.0),
+        target=serve,
         daemon=True,
     )
     thread.start()
@@ -82,3 +86,12 @@ def test_wrong_correlation_is_rejected(tmp_path: Path) -> None:
         timeout=1.0,
     )
     assert response == {"ok": False, "error": "correlation_id_mismatch"}
+
+    thread.join(timeout=2)
+    assert thread.is_alive() is False
+    assert holder["server"] == {
+        "ok": False,
+        "mode": "server",
+        "state": "timeout",
+        "handled": 1,
+    }
