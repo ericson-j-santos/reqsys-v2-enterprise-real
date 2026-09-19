@@ -16,6 +16,11 @@ on:
         required: true
         type: boolean
         default: false
+      runner_admin_probe:
+        description: "Probe sanitizado de Administration:write para runner DEV"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,6 +31,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  runner-admin-probe:
+    if: github.event_name == 'workflow_dispatch' && inputs.runner_admin_probe == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe repository runner administration without exposing token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_PAT_ACTIONS_missing"
+            exit 21
+          fi
+          payload="$(gh api --method POST "repos/${REPOSITORY}/actions/runners/registration-token" 2>/dev/null)" || {
+            echo "::error::runner_admin_token_probe_failed"
+            exit 23
+          }
+          printf '%s' "$payload" | python -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("token") and d.get("expires_at") else 1)'
+          unset payload
+          echo "runner_admin_registration_token_capability=true" >> "$GITHUB_STEP_SUMMARY"
+          echo "secret_value_exposed=false" >> "$GITHUB_STEP_SUMMARY"
+          echo "production_touched=false" >> "$GITHUB_STEP_SUMMARY"
+
   contract-tests:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -43,7 +75,7 @@ jobs:
         run: python -m pytest -q tests/test_evaluate_github_workflow_token_readiness.py
 
   probe:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.runner_admin_probe != true)
     runs-on: ubuntu-latest
     timeout-minutes: 7
     outputs:
