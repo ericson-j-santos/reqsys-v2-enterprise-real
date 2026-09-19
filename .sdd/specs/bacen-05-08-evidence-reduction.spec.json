@@ -1,0 +1,20 @@
+{
+  "feature_name": "bacen-05-08-evidence-reduction",
+  "project": "ReqSys v2 Enterprise — governança BACEN",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Fortalece a verificabilidade das evidências existentes de BACEN-05 e BACEN-08 sem promover controles, tocar produção ou criar evidência institucional.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_validate_bacen_prod_third_party_scope.py",
+      "tests/test_bacen_deferred_executive_governance.py"
+    ],
+    "evidence_contract": "BACEN-05 deve falhar fechado para referências locais inexistentes, absolutas ou fora do repositório e manter 11 fornecedores UNVERIFIED até evidência real. BACEN-08 deve separar evidência autenticada de autodesignação da designação formal, manter control_status=partial e automatic_status_promotion_allowed=false enquanto designação formal e sign-off anual estiverem pendentes. production_touched deve permanecer false e nenhum deploy PROD ou bypass Fly é permitido."
+  }
+}
