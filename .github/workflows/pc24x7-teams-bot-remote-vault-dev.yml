@@ -1,0 +1,115 @@
+name: PC24x7 Teams Bot Remote Vault DEV
+
+on:
+  push:
+    branches:
+      - ops/pc24x7-teams-bot-remote-vault-0649ef8-20260919
+    paths:
+      - '.github/workflows/pc24x7-teams-bot-remote-vault-dev.yml'
+      - 'scripts/materialize_pc24x7_teams_bot_remote.py'
+      - 'scripts/pc24x7_teams_ephemeral_e2e.py'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: pc24x7-teams-bot-remote-vault-dev
+  cancel-in-progress: false
+
+jobs:
+  materialize-and-prove:
+    name: Materialize Bot and prove E2E on PC24x7 DEV
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 20
+    env:
+      EXPECTED_RUNTIME_SHA: 0649ef8ee9b533b44ee05f15c9158856fefd8ad7
+      BOT_SECRET_NAME: reqsys-teams-bot-dev-secret
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      PC24X7_DEV_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+      CORRELATION_ID: teams-bot-remote-vault-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout immutable operational SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Validate operational helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/materialize_pc24x7_teams_bot_remote.py
+          python -m py_compile scripts/pc24x7_teams_ephemeral_e2e.py
+          test -n "${REQSYS_KEY_VAULT_NAME:-}"
+          test -n "${CCP_AZURE_CLIENT_ID:-}"
+          test -n "${CCP_AZURE_TENANT_ID:-}"
+          test -n "${CCP_AZURE_SUBSCRIPTION_ID:-}"
+          test -n "${PC24X7_DEV_BASE_URL:-}"
+          case "${PC24X7_DEV_BASE_URL}" in
+            https://*) ;;
+            *) echo "::error::PC24X7_DEV_BASE_URL deve usar HTTPS"; exit 2 ;;
+          esac
+          case "${PC24X7_DEV_BASE_URL,,}" in
+            *fly.io*|*fly.dev*) echo "::error::Fly.io é proibido como runtime alvo"; exit 2 ;;
+          esac
+
+      - name: Login Azure by governed OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Reuse existing Bot credential and prove runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          enabled="$(az keyvault secret show             --vault-name "$REQSYS_KEY_VAULT_NAME"             --name "$BOT_SECRET_NAME"             --query attributes.enabled             --output tsv             --only-show-errors)"
+          test "$enabled" = "true"
+
+          bot_app_id="$(az keyvault secret show             --vault-name "$REQSYS_KEY_VAULT_NAME"             --name "$BOT_SECRET_NAME"             --query 'tags."app-id"'             --output tsv             --only-show-errors)"
+          test -n "$bot_app_id"
+
+          bot_secret="$(az keyvault secret show             --vault-name "$REQSYS_KEY_VAULT_NAME"             --name "$BOT_SECRET_NAME"             --query value             --output tsv             --only-show-errors)"
+          test -n "$bot_secret"
+
+          echo "::add-mask::$bot_secret"
+          echo "::add-mask::$bot_app_id"
+
+          mkdir -p artifacts/pc24x7-teams-bot-remote
+          BOT_APP_ID="$bot_app_id"           BOT_TENANT_ID="$CCP_AZURE_TENANT_ID"           BOT_SECRET="$bot_secret"           python scripts/materialize_pc24x7_teams_bot_remote.py             --api-base "$PC24X7_DEV_BASE_URL"             --expected-sha "$EXPECTED_RUNTIME_SHA"             --correlation-id "$CORRELATION_ID"             --evidence-file artifacts/pc24x7-teams-bot-remote/evidence.json
+
+          unset bot_secret
+          unset bot_app_id
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-teams-bot-remote-${{ github.run_id }}
+          path: artifacts/pc24x7-teams-bot-remote/evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## PC24x7 Teams Bot Remote Vault DEV"
+            echo "- Runtime SHA alvo: `$EXPECTED_RUNTIME_SHA`"
+            echo "- Executor: GitHub-hosted"
+            echo "- Credencial: Azure Key Vault existente; sem rotação"
+            echo "- Destino: Cofre persistente do PC24x7 DEV"
+            echo "- Produção tocada: não"
+            echo "- Valor sensível publicado: não"
+            echo "- Correlation ID: `$CORRELATION_ID`"
+          } >> "$GITHUB_STEP_SUMMARY"
