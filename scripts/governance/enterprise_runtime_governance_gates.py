@@ -54,6 +54,14 @@ BLOCKING_SEVERITIES = {"HIGH"}
 OPERATIONAL_CODE_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".cs", ".go"}
 BLOCKING_RUNTIME_PREFIXES = ("backend/app/", "app/", "api/", "services/", "config/", "configs/", "deploy/", "deployment/", "infra/")
 BLOCKING_RUNTIME_FILENAMES = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "fly.toml", "nginx.conf"}
+DYNAMIC_SECRET_REFERENCE = re.compile(
+    r"""(?ix)
+    \b(?:password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*
+    (?P<quote>['"])
+    \$\{[A-Z_][A-Z0-9_]*(?::?\?[^}]*)?\}
+    (?P=quote)
+    """
+)
 
 
 @dataclass(frozen=True)
@@ -155,6 +163,8 @@ def scan_content(path: Path, content: str) -> list[Finding]:
         if is_allowlisted(relative, line):
             continue
         for severity, code, pattern, message in RULES:
+            if code == "SEC_SECRET_HARDCODED" and DYNAMIC_SECRET_REFERENCE.search(line):
+                continue
             if pattern.search(line):
                 findings.append(Finding(effective_severity(relative, severity), code, relative, line_number, message))
     return findings
