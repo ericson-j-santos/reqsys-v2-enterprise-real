@@ -61,6 +61,7 @@ def chat(
     auditar('chat_inicio', {
         'correlation_id': correlation_id,
         'model': body.model,
+        'fallback_model': body.fallback_model or settings.ollama_fallback_model or None,
         'task_type': body.task_type,
         'source': body.source,
         'prompt': body.prompt,
@@ -69,7 +70,11 @@ def chat(
     inicio = time.perf_counter()
     try:
         client = OllamaClient(settings)
-        resposta, latencia_ollama = client.generate(body.model, body.prompt)
+        resposta, latencia_ollama, actual_model, fallback_used = client.generate_with_fallback(
+            body.model,
+            body.prompt,
+            body.fallback_model or settings.ollama_fallback_model,
+        )
     except Exception as exc:
         auditar('chat_erro', {'correlation_id': correlation_id, 'erro': str(exc)[:200]})
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Falha ao consultar Ollama') from exc
@@ -77,13 +82,17 @@ def chat(
     latencia_ms = max(latencia_ollama, int((time.perf_counter() - inicio) * 1000))
     resultado = ChatResponse(
         response=resposta,
-        model=body.model,
+        model=actual_model,
+        requested_model=body.model,
+        fallback_used=fallback_used,
         correlation_id=correlation_id,
         latency_ms=latencia_ms,
     )
     auditar('chat_concluido', {
         'correlation_id': correlation_id,
-        'model': body.model,
+        'requested_model': body.model,
+        'model': actual_model,
+        'fallback_used': fallback_used,
         'latency_ms': latencia_ms,
         'response': resposta,
     })
