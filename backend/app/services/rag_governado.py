@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.pii_masking import mascarar_pii
 from app.models.rag_chunk_embedding import RagChunkEmbedding
+from app.services.ai_provider_router import AIProviderRouter, AIProviderRouterError
 from app.services.llm_provider import LLMGateway
 
 logger = logging.getLogger('reqsys.rag')
@@ -306,28 +307,26 @@ def _montar_prompt_llm(pergunta: str, fontes: list[FonteRAG]) -> str:
 
 
 def gerar_resposta_llm(pergunta: str, fontes: list[FonteRAG], *, gateway: LLMGateway | None = None) -> str | None:
-    """Gera a resposta em linguagem natural via LLM externo, se REQSYS_RAG_LLM_PROVIDER/_API_KEY estiverem configurados.
+    """Gera resposta governada pelo AI Provider Router.
 
-    Retorna None (nunca levanta) quando não há credencial, o provider não é suportado ou a
-    chamada falha — o chamador deve cair para a resposta determinística por fontes nesse caso.
+    O provider padrão é ollama_gateway. Providers externos continuam disponíveis quando
+    configurados e autorizados. Em qualquer falha, o chamador preserva o fallback
+    determinístico baseado nas fontes recuperadas.
     """
-    provider = (settings.reqsys_rag_llm_provider or '').strip().lower()
-    api_key = settings.reqsys_rag_llm_api_key
-    if not provider or not api_key or not fontes:
+    if not fontes:
         return None
-    metodo = _METODOS_LLM_POR_PROVIDER.get(provider)
-    if metodo is None:
-        logger.warning('rag_llm_provider_nao_suportado provider=%s', provider)
-        return None
-    gw = gateway or LLMGateway()
+    provider = (settings.reqsys_rag_llm_provider or settings.ai_default_provider or 'ollama_gateway').strip().lower()
     try:
-        return getattr(gw, metodo)(
-            api_key=api_key,
+        result = AIProviderRouter(gateway=gateway).generate_text(
+            provider=provider,
             model=settings.reqsys_rag_llm_model or '',
             prompt=_montar_prompt_llm(pergunta, fontes),
             system_prompt=_SYSTEM_PROMPT_LLM_RAG,
+            correlation_id=gerar_correlation_id('rag-llm'),
+            api_key=settings.reqsys_rag_llm_api_key or None,
         )
-    except (RuntimeError, requests.RequestException, KeyError, IndexError) as exc:
+        return result.text
+    except (AIProviderRouterError, RuntimeError, requests.RequestException, KeyError, IndexError) as exc:
         logger.warning('rag_llm_geracao_falhou provider=%s erro=%s', provider, exc)
         return None
 
@@ -340,7 +339,7 @@ def _montar_resposta(pergunta_mascarada: str, fontes: list[FonteRAG], *, correla
     bullets = '\n'.join(f'- [{fonte.score:.4f}] {fonte.trecho}' for fonte in fontes)
     resposta_llm = gerar_resposta_llm(pergunta_mascarada, fontes)
     if resposta_llm:
-        provider = (settings.reqsys_rag_llm_provider or '').strip().lower()
+        provider = (settings.reqsys_rag_llm_provider or settings.ai_default_provider or 'ollama_gateway').strip().lower()
         resposta = f'{resposta_llm}\n\nFontes utilizadas:\n{bullets}'
         engine_final = f'{engine}+llm-{provider}'
         avisos = ['Modo governado: resposta gerada por LLM exclusivamente a partir das fontes recuperadas.', f'Provider: {provider}.']
