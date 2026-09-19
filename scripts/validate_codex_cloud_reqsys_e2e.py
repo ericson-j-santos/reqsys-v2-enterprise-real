@@ -189,14 +189,13 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
     backend = root / "backend"
     gateway_src = root / "docs" / "ollama-local-gateway" / "bootstrap-files" / "src"
 
-    with tempfile.TemporaryDirectory(prefix="reqsys-codex-cloud-e2e-") as temp_raw:
-        temp = Path(temp_raw)
-        env = _stack_env(profile, temp / "e2e.db")
-        gateway_log = (temp / "gateway.log").open("w", encoding="utf-8")
-        backend_log = (temp / "backend.log").open("w", encoding="utf-8")
-        gateway: subprocess.Popen[Any] | None = None
-        api: subprocess.Popen[Any] | None = None
-        try:
+    temp = Path(tempfile.mkdtemp(prefix="reqsys-codex-cloud-e2e-"))
+    env = _stack_env(profile, temp / "e2e.db")
+    gateway_log = (temp / "gateway.log").open("w", encoding="utf-8")
+    backend_log = (temp / "backend.log").open("w", encoding="utf-8")
+    gateway: subprocess.Popen[Any] | None = None
+    api: subprocess.Popen[Any] | None = None
+    try:
             gateway = subprocess.Popen(
                 [
                     sys.executable,
@@ -285,7 +284,8 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
             if quality.get("passed") != quality.get("total"):
                 raise E2EError("resposta E2E não passou o rubric 4/4")
 
-            return {
+        return {
+                "evidence_dir": str(temp),
                 "gateway_health": gateway_health,
                 "backend_health": backend_health,
                 "codex_status": status.json()["data"],
@@ -298,11 +298,11 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
                 "response_excerpt": response[:900],
                 "published_to_reqsys": bool((data.get("reqsys_publicacao") or {}).get("publicado")),
             }
-        finally:
-            _terminate(api)
-            _terminate(gateway)
-            backend_log.close()
-            gateway_log.close()
+    finally:
+        _terminate(api)
+        _terminate(gateway)
+        backend_log.close()
+        gateway_log.close()
 
 
 def main() -> int:
