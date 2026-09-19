@@ -264,6 +264,7 @@ def transition_service_case(
             sha256=payload.evidence_sha256,
         )
 
+    from_state = record.state
     updated = domain.transition_to(target)
     stmt = (
         update(ServiceCaseRecord)
@@ -287,7 +288,7 @@ def transition_service_case(
             event_id=str(payload.event_id),
             case_id=case_id,
             event_type='STATE_TRANSITIONED',
-            from_state=record.state,
+            from_state=from_state,
             to_state=updated.state.value,
             correlation_id=correlation_id,
             evidence_uri=payload.evidence_uri,
@@ -304,7 +305,7 @@ def transition_service_case(
     logger.info(
         'rsm_case_transitioned case_id=%s from_state=%s to_state=%s version=%s correlation_id=%s',
         case_id,
-        record.state,
+        from_state,
         refreshed.state,
         refreshed.version,
         correlation_id,
