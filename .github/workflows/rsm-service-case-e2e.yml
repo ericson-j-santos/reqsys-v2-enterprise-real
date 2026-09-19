@@ -55,9 +55,12 @@ jobs:
       JWT_SECRET: reqsys-rsm-e2e-secret-with-minimum-safe-length
       JWT_ISSUER: reqsys-api
       JWT_AUDIENCE: reqsys-frontend
+      RSM_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RSM_EXPECTED_SHA }}
 
       - uses: actions/setup-python@v5
         with:
@@ -69,7 +72,7 @@ jobs:
       - name: Iniciar API real
         working-directory: backend
         run: |
-          python -m uvicorn app.main:app --host 127.0.0.1 --port 8210 > ../rsm-api.log 2>&1 &
+          GITHUB_SHA="$RSM_EXPECTED_SHA" python -m uvicorn app.main:app --host 127.0.0.1 --port 8210 > ../rsm-api.log 2>&1 &
           echo $! > ../rsm-api.pid
 
       - name: Aguardar health
@@ -89,7 +92,11 @@ jobs:
 
       - name: Executar E2E HTTP -> PostgreSQL
         run: |
-          python scripts/rsm_service_case_e2e.py             --base-url http://127.0.0.1:8210             --database-url "$DATABASE_URL"             --output artifacts/rsm/rsm-service-case-e2e.json
+          python scripts/rsm_service_case_e2e.py \
+            --base-url http://127.0.0.1:8210 \
+            --database-url "$DATABASE_URL" \
+            --expected-sha "$RSM_EXPECTED_SHA" \
+            --output artifacts/rsm/rsm-service-case-e2e.json
 
       - name: Testes direcionados
         working-directory: backend
@@ -103,7 +110,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rsm-service-case-e2e-${{ github.sha }}
+          name: rsm-service-case-e2e-${{ env.RSM_EXPECTED_SHA }}
           path: artifacts/rsm/rsm-service-case-e2e.json
           if-no-files-found: warn
           retention-days: 30
