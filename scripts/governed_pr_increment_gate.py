@@ -8,6 +8,8 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -135,6 +137,55 @@ def _increment_from_text_heuristics(title: str, body: str, head_ref: str) -> tup
     return None
 
 
+GITHUB_API_TIMEOUT_SECONDS = 30
+
+
+def _github_get(url: str, token: str, *, timeout: int = GITHUB_API_TIMEOUT_SECONDS) -> Any:
+    request = Request(
+        url,
+        method="GET",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - controlled GitHub API URL.
+            body = response.read().decode("utf-8")
+            return json.loads(body) if body else {}
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:200]
+        raise RuntimeError(f"GitHub API error {exc.code} for GET {url}: {detail}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"GitHub API connection error for GET {url}: {exc}") from exc
+
+
+def fetch_live_pr_context(
+    repo: str,
+    pr_number: int,
+    token: str,
+    *,
+    fetcher: Any = None,
+) -> dict[str, Any]:
+    """Le titulo/corpo/labels/head_ref do estado ATUAL do PR.
+
+    O payload do evento `pull_request: opened` e congelado no instante da abertura.
+    Fluxos que criam o PR e so depois preenchem corpo/label faziam o gate inferir
+    `new_front` por ausencia de sinal, e nao por intencao real do incremento.
+    """
+    get = fetcher or (lambda url: _github_get(url, token))
+    payload = get(f"https://api.github.com/repos/{repo}/pulls/{pr_number}")
+    labels = [item.get("name", "") for item in (payload.get("labels") or []) if item.get("name")]
+    return {
+        "title": payload.get("title") or "",
+        "body": payload.get("body") or "",
+        "labels": labels,
+        "head_ref": ((payload.get("head") or {}).get("ref")) or "",
+        "number": payload.get("number"),
+    }
+
+
 def infer_increment_from_pr(
     title: str = "",
     body: str = "",
@@ -164,6 +215,7 @@ def evaluate_pr_increment_gate(
     pr_number: int | None = None,
     increment_type: str | None = None,
     reference: str | None = None,
+    pr_context_source: str = "event_payload",
 ) -> dict[str, Any]:
     inferred = infer_increment_from_pr(title=title, body=body, labels=labels, head_ref=head_ref)
     resolved_type = increment_type or inferred["increment_type"]
@@ -177,6 +229,7 @@ def evaluate_pr_increment_gate(
         "increment_type": resolved_type,
         "reference": resolved_reference or None,
         "inference": inferred,
+        "pr_context_source": pr_context_source,
         "increment_gate": gate,
         "new_front_allowed": gate.get("new_front_allowed"),
         "blockers": gate.get("blockers") or [],
@@ -198,6 +251,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--increment-type", default="", choices=[*sorted(VALID_INCREMENT_TYPES), ""])
     parser.add_argument("--reference", default="")
     parser.add_argument("--pr-json", default="")
+    parser.add_argument(
+        "--refresh-pr",
+        action="store_true",
+        help="Rele titulo/corpo/labels do PR via API antes de inferir (payload de 'opened' e congelado).",
+    )
+    parser.add_argument(
+        "--github-token",
+        default=os.environ.get("GITHUB_TOKEN", ""),
+        help="Token usado apenas quando --refresh-pr estiver ativo.",
+    )
     parser.add_argument("--status-json", default="")
     parser.add_argument("--orchestrator-json", default="")
     parser.add_argument("--health-json", default="")
@@ -237,6 +300,23 @@ def main(argv: list[str] | None = None) -> int:
         if pr_payload.get("number") is not None:
             pr_number = int(pr_payload["number"])
 
+    pr_context_source = "event_payload"
+    if args.refresh_pr:
+        if not (args.repo and pr_number and args.github_token):
+            pr_context_source = "live_api_skipped:missing_repo_pr_or_token"
+        else:
+            try:
+                live = fetch_live_pr_context(args.repo, int(pr_number), args.github_token)
+            except RuntimeError as exc:
+                print(f"[warn] refresh do PR falhou, usando payload do evento: {exc}", file=sys.stderr)
+                pr_context_source = "live_api_failed"
+            else:
+                title = live["title"] or title
+                body = live["body"] or body
+                labels = live["labels"] or labels
+                head_ref = live["head_ref"] or head_ref
+                pr_context_source = "live_api"
+
     gate_args = argparse.Namespace(
         status_json=args.status_json,
         orchestrator_json=args.orchestrator_json,
@@ -266,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
         pr_number=pr_number,
         increment_type=args.increment_type or None,
         reference=args.reference or None,
+        pr_context_source=pr_context_source,
     )
     (output_dir / "governed-pr-increment-gate.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",

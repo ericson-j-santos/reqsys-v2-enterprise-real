@@ -109,6 +109,8 @@ jobs:
             --labels "${PR_LABELS}" \
             --head-ref "${HEAD_REF}" \
             --pr-number "${PR_NUMBER}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --refresh-pr \
             --status-json artifacts/coordenador-status/coordenador-status.json \
             --output-dir artifacts/governed-pr-increment-gate \
             --json | tee artifacts/governed-pr-increment-gate/decision.json
@@ -185,6 +187,7 @@ jobs:
               '',
               `- \`new_front_allowed\`: \`${decision.new_front_allowed}\``,
               `- Tipo inferido: \`${decision.increment_type}\` (${decision.inference?.inference_source || 'n/a'})`,
+              `- Fonte do contexto do PR: \`${decision.pr_context_source || 'event_payload'}\``,
               `- Blockers: \`${blockers}\``,
               `- Tipos permitidos agora: \`${allowedTypes}\``,
               '',
