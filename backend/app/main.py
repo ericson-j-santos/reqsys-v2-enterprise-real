@@ -16,6 +16,7 @@ from app.api import (
     auth,
     codex_governado,
     cofre,
+    cofre_runtime_control,
     connectors,
     dashboard,
     diagramas,
@@ -129,6 +130,7 @@ app.include_router(processos.router)
 app.include_router(wiki.router)
 app.include_router(specs.router)
 app.include_router(cofre.router)
+app.include_router(cofre_runtime_control.router)
 app.include_router(service_tokens.router)
 app.include_router(service_cases.router)
 app.include_router(service_catalog.router)
