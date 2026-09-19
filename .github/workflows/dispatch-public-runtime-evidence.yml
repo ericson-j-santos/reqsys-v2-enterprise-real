@@ -27,6 +27,7 @@ on:
         default: "main"
 
 permissions:
+  actions: write
   contents: read
 
 defaults:
@@ -38,18 +39,9 @@ jobs:
     name: Dispatch public runtime evidence
     runs-on: ubuntu-latest
     steps:
-      - name: Validate governed token
-        env:
-          GH_PAT_ACTIONS: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          if [ -z "${GH_PAT_ACTIONS}" ]; then
-            echo "Secret GH_PAT_ACTIONS não configurado."
-            exit 1
-          fi
-
       - name: Dispatch Public Runtime Evidence Gate
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           PUBLIC_URL: ${{ inputs.public_url }}
           STRICT: ${{ inputs.strict }}
@@ -70,7 +62,7 @@ jobs:
 
       - name: Show dispatched runs
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
           gh run list \
