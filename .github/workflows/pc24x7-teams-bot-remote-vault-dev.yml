@@ -30,7 +30,7 @@ jobs:
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
-      PC24X7_DEV_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
+      PC24X7_DEV_BASE_URL: https://software-pursuit-simulations-authors.trycloudflare.com
       COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
       CORRELATION_ID: teams-bot-remote-vault-${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -105,11 +105,11 @@ jobs:
         run: |
           {
             echo "## PC24x7 Teams Bot Remote Vault DEV"
-            echo "- Runtime SHA alvo: `$EXPECTED_RUNTIME_SHA`"
+            echo "- Runtime SHA alvo: $EXPECTED_RUNTIME_SHA"
             echo "- Executor: GitHub-hosted"
             echo "- Credencial: Azure Key Vault existente; sem rotação"
             echo "- Destino: Cofre persistente do PC24x7 DEV"
             echo "- Produção tocada: não"
             echo "- Valor sensível publicado: não"
-            echo "- Correlation ID: `$CORRELATION_ID`"
+            echo "- Correlation ID: $CORRELATION_ID"
           } >> "$GITHUB_STEP_SUMMARY"
