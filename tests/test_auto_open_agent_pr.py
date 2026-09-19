@@ -32,10 +32,18 @@ def test_is_permission_error_detects_403():
     assert is_permission_error(RuntimeError('GitHub API POST /pulls failed (403): {"message":"forbidden"}'))
 
 
-def test_resolve_token_prefers_gh_token_over_pat(monkeypatch):
-    monkeypatch.setenv("GH_PAT_ACTIONS", "pat-limitado")
+def test_resolve_token_uses_ephemeral_gh_token_and_ignores_legacy_pat(monkeypatch):
+    monkeypatch.setenv("GH_PAT_ACTIONS", "pat-legado-nao-deve-ser-usado")
     monkeypatch.setenv("GH_TOKEN", "token-workflow")
     assert resolve_token() == "token-workflow"
+
+
+def test_resolve_token_rejects_pat_only(monkeypatch):
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setenv("GH_PAT_ACTIONS", "pat-legado-nao-deve-ser-usado")
+    with pytest.raises(RuntimeError, match="efêmero ausente"):
+        resolve_token()
 
 
 def test_find_existing_pr_url_encodes_branch_com_barra():
