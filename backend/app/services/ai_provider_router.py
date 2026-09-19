@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from app.core.config import settings
 from app.services.ai_provider_config import (
     AIProviderRuntimeConfigError,
-    resolve_endpoint,
     resolve_provider_config,
 )
 from app.services.llm_provider import LLMGateway
