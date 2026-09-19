@@ -20,6 +20,9 @@ from .core import (
 
 AUTO_WORKER_ROLES = ALLOWED_WORKERS - {"human-gate"}
 VALID_PROFILES = {"NORMAL", "ESTUDO"}
+RDC_RECOVERY_TASK = "host.rdc.recover.v1"
+REBOOT_ONCE_TASK = "host.reboot.once.v1"
+LOCAL_MAINTENANCE_TASKS = {RDC_RECOVERY_TASK, REBOOT_ONCE_TASK}
 
 
 @dataclass(frozen=True)
@@ -277,6 +280,9 @@ class WorkerRegistry:
         conn: sqlite3.Connection,
         role: str,
         now: datetime,
+        *,
+        required_device_name: str | None = None,
+        required_task_type: str | None = None,
     ) -> list[tuple[WorkerInfo, int]]:
         active_counts = {
             row["lease_owner"]: row["count"]
@@ -295,6 +301,18 @@ class WorkerRegistry:
             worker = self._row_to_worker(row)
             if role not in worker.roles:
                 continue
+            if (
+                required_device_name is not None
+                and worker.device_name.casefold() != required_device_name.casefold()
+            ):
+                continue
+            if required_task_type is not None:
+                safe_task_types = worker.capabilities.get("safe_task_types", [])
+                if (
+                    not isinstance(safe_task_types, list)
+                    or required_task_type not in safe_task_types
+                ):
+                    continue
             state = self.worker_payload(worker, now)
             if not state["eligible"]:
                 continue
@@ -315,7 +333,23 @@ class WorkerRegistry:
         role = row["target_worker"]
         if role == "human-gate":
             return None
-        candidates = self._eligible_candidates(conn, role, now_dt)
+        required_device_name = None
+        required_task_type = None
+        if row["task_type"] in LOCAL_MAINTENANCE_TASKS:
+            payload = json.loads(row["payload_json"])
+            target_host = payload.get("target_host")
+            if not isinstance(target_host, str) or not target_host.strip():
+                return None
+            required_device_name = target_host.strip()
+            required_task_type = row["task_type"]
+
+        candidates = self._eligible_candidates(
+            conn,
+            role,
+            now_dt,
+            required_device_name=required_device_name,
+            required_task_type=required_task_type,
+        )
         if not candidates:
             return None
 
