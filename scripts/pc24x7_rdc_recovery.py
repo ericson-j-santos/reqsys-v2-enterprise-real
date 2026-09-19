@@ -83,7 +83,7 @@ def validate_headless_source() -> dict[str, Any]:
     if not HEADLESS_RUNNER.is_file():
         return {"exists": False, "governed": False}
     text = HEADLESS_RUNNER.read_text(encoding="utf-8-sig", errors="replace")
-    return {"exists": True, "governed": HEADLESS_MARKER in text}
+    marker = next((value for value in HEADLESS_MARKERS if value in text), None)\n    return {"exists": True, "governed": marker is not None, "marker": marker}
 
 
 def validate_interactive_source() -> dict[str, Any]:
