@@ -1,0 +1,19 @@
+{
+  "feature_name": "figma-public-runtime-evidence",
+  "project": "ReqSys v2 Enterprise — Figma/GitHub e evidência de runtime",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Estende o validador público existente, somente leitura, para coletar evidência dos endpoints Figma/GitHub e registrar correlation_id sem alterar configuração, segredos, deploy ou produção.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_validate_public_runtime_figma_evidence.py"
+    ],
+    "evidence_contract": "Com --include-optional-evidence, o artifact deve incluir GET /v1/integracoes/figma-github/config e GET /v1/integracoes/figma-github/status, preservando o correlation_id retornado no envelope ou em headers de rastreabilidade. Nenhum POST /sync é executado."
+  }
+}
