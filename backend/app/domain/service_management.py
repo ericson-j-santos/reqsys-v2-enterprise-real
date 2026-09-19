@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 SCHEMA_VERSION = '1.0.0'
 SHA256_RE = re.compile(r'^[a-f0-9]{64}$')
+GIT_COMMIT_SHA_RE = re.compile(r'^(?:[a-f0-9]{40}|[a-f0-9]{64})$')
 SERVICE_CODE_RE = re.compile(r'^[A-Z0-9][A-Z0-9_-]+$')
 
 
@@ -72,6 +73,7 @@ class ApprovalStatus(str, Enum):
 
 class ExternalReferenceType(str, Enum):
     REQUIREMENT = 'REQUIREMENT'
+    SDD = 'SDD'
     PULL_REQUEST = 'PULL_REQUEST'
     WORKFLOW_RUN = 'WORKFLOW_RUN'
     DEPLOYMENT = 'DEPLOYMENT'
@@ -137,6 +139,15 @@ def _aware(value: datetime, field_name: str) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ServiceManagementValidationError(f'{field_name} deve possuir timezone')
     return value
+
+
+def _commit_sha(value: str, field_name: str) -> str:
+    normalized = _text(value, field_name, max_length=64).lower()
+    if not GIT_COMMIT_SHA_RE.fullmatch(normalized):
+        raise ServiceManagementValidationError(
+            f'{field_name} deve ser SHA completo hexadecimal de 40 ou 64 caracteres'
+        )
+    return normalized
 
 
 def calculate_priority(impact: Impact, urgency: Urgency) -> ServiceCasePriority:
@@ -254,6 +265,39 @@ class EvidenceReference:
         object.__setattr__(self, 'uri', _text(self.uri, 'uri', max_length=1000))
         if self.sha256 is not None and not SHA256_RE.fullmatch(self.sha256):
             raise ServiceManagementValidationError('sha256 de evidência deve ser hexadecimal minúsculo com 64 caracteres')
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeTraceability:
+    """Vínculos canônicos mínimos de um CHANGE com engenharia/CI."""
+
+    requirement: ExternalReference
+    sdd: ExternalReference
+    pull_request: ExternalReference
+    head_sha: str
+
+    def __post_init__(self) -> None:
+        if self.requirement.kind is not ExternalReferenceType.REQUIREMENT:
+            raise ServiceManagementValidationError('requirement deve referenciar REQUIREMENT')
+        if self.sdd.kind is not ExternalReferenceType.SDD:
+            raise ServiceManagementValidationError('sdd deve referenciar SDD')
+        if self.pull_request.kind is not ExternalReferenceType.PULL_REQUEST:
+            raise ServiceManagementValidationError('pull_request deve referenciar PULL_REQUEST')
+        object.__setattr__(self, 'head_sha', _commit_sha(self.head_sha, 'head_sha'))
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeCiEvidence:
+    """Evidência de CI sempre vinculada ao SHA exato observado."""
+
+    head_sha: str
+    run_id: str
+    conclusion: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'head_sha', _commit_sha(self.head_sha, 'head_sha'))
+        object.__setattr__(self, 'run_id', _text(self.run_id, 'run_id', max_length=120))
+        object.__setattr__(self, 'conclusion', _text(self.conclusion, 'conclusion', max_length=40).lower())
 
 
 @dataclass(frozen=True, slots=True)
@@ -375,3 +419,23 @@ class ServiceCase:
         if target not in self.allowed_transitions():
             raise InvalidStateTransition(f'transição não permitida: {self.state.value} -> {target.value}')
         return replace(self, state=target)
+
+
+def validate_change_ci(
+    case: ServiceCase,
+    traceability: ChangeTraceability,
+    evidence: ChangeCiEvidence | None,
+) -> None:
+    """Valida elegibilidade de CI sem alterar estado nem disparar merge/deploy."""
+    if case.case_type is not ServiceCaseType.CHANGE:
+        raise ServiceManagementValidationError('validação de CHANGE aceita somente case_type CHANGE')
+    if not isinstance(traceability, ChangeTraceability):
+        raise ServiceManagementValidationError('traceability inválida para CHANGE')
+    if evidence is None:
+        raise ServiceManagementValidationError('evidência de CI é obrigatória para CHANGE')
+    if not isinstance(evidence, ChangeCiEvidence):
+        raise ServiceManagementValidationError('evidência de CI inválida para CHANGE')
+    if evidence.head_sha != traceability.head_sha:
+        raise ServiceManagementValidationError('CI verde de outro SHA não pode avançar CHANGE')
+    if evidence.conclusion != 'success':
+        raise ServiceManagementValidationError('CI do SHA atual deve concluir com success')
