@@ -51,3 +51,27 @@ def test_merge_reutiliza_pr_number_validado_do_dispatch() -> None:
     assert 'PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}' in merge_block
     assert 'Number(process.env.PR_NUMBER_INPUT)' in merge_block
     assert "core.getInput('pr_number')" not in merge_block
+
+
+def test_ci_driven_automerge_dispara_quando_fila_governada_conclui() -> None:
+    text = _text()
+
+    assert 'workflow_run:' in text
+    assert '      - Governed Merge Queue' in text
+    assert "github.event.workflow_run.conclusion == 'success'" in text
+    assert "github.event.workflow_run.event == 'pull_request'" in text
+    assert 'schedule:' not in text
+
+
+def test_ci_driven_automerge_e_fail_closed_por_head_sha() -> None:
+    text = _text()
+
+    marker = 'auto-merge-after-governed-queue:'
+    block = text.split(marker, maxsplit=1)[1]
+    assert 'context.payload.workflow_run.head_sha' in block
+    assert 'pr.head.sha !== triggerHeadSha' in block
+    assert 'current.head.sha !== triggerHeadSha' in block
+    assert "labelNames.includes('merge-queue:eligible')" in block
+    assert "merge_method: 'squash'" in block
+    assert 'sha: triggerHeadSha' in block
+    assert 'Deploy/promoção: não executados por este workflow.' in block
