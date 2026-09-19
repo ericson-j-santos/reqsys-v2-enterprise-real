@@ -34,6 +34,8 @@ Antes de criar tarefas de prova, o E2E deve localizar os dois flows Planner→Te
 
 A reconciliação deve falhar fechada se o alvo não for exatamente `shared_teams/PostCardToConversation`, usar o `@odata.etag` corrente para concorrência otimista, preservar destinatário, conexões e todo o restante do `clientdata`, reler o flow após o PATCH e validar independentemente o contrato do cartão. Se a leitura pós-PATCH divergir, deve tentar restaurar o `clientdata` original antes de falhar.
 
+O Dataverse recusa alteração de `clientdata` enquanto o flow está ativado (`HTTP 400 0x80040203`). Quando houver drift em flow ativado, a reconciliação deve desativar o flow, aplicar o PATCH e devolvê-lo a `statecode=1/statuscode=2`. Nenhuma saída — sucesso, falha do PATCH ou falha da verificação — pode deixar o flow desativado; se a reativação também falhar, o erro deve declarar as duas causas. Os erros do Dataverse devem propagar código e mensagem para diagnóstico.
+
 O cartão corrente deve:
 - usar o título operacional do evento;
 - destacar o título da tarefa;

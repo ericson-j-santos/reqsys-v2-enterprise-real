@@ -74,6 +74,15 @@ def request_json(
         return exc.code, payload
 
 
+def error_detail(payload: dict[str, Any]) -> str:
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return ""
+    code = str(error.get("code") or "")[:120]
+    message = " ".join(str(error.get("message") or "").split())[:200]
+    return f"{code}:{message}" if message else code
+
+
 def select_flow(rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
     matches = [
         row
@@ -330,8 +339,7 @@ def patch_clientdata(
         if_match=etag,
     )
     if status != 204:
-        code = str(((payload.get("error") or {}).get("code") or ""))[:120]
-        raise FlowStateError(f"dataverse_card_patch_http_{status}:{code}")
+        raise FlowStateError(f"dataverse_card_patch_http_{status}:{error_detail(payload)}")
 
 
 def reconcile_flow_card(
@@ -349,13 +357,69 @@ def reconcile_flow_card(
     if not changed:
         return row, {
             "card_reconciled": False,
+            "flow_deactivated_for_patch": False,
             "clientdata_before_sha256": before_hash,
             "card_before": before_contract,
             "card_after": desired_contract,
         }
 
+    workflow_id = str(row.get("workflowid") or "").strip()
+    if not workflow_id:
+        raise FlowStateError("workflowid_ausente")
+
+    # O Dataverse recusa alteracao de `clientdata` enquanto o flow esta ativado
+    # (HTTP 400 0x80040203). Desativa antes do PATCH e devolve o flow ao estado
+    # original em qualquer saida, para nao deixar o DEV sem notificacao.
+    deactivated = False
+    if int(row.get("statecode", -1)) == 1:
+        deactivate(base, token, workflow_id)
+        deactivated = True
+        row = get_flow(base, token, workflow_id)
+
+    try:
+        after, observed_contract = _patch_and_verify(
+            base,
+            token,
+            row,
+            workflow_id,
+            desired_raw,
+            desired_contract,
+            raw_before,
+            before_hash,
+        )
+    except Exception as patch_error:
+        if deactivated:
+            try:
+                ensure_active(base, token, get_flow(base, token, workflow_id))
+            except Exception as reactivation_error:
+                raise FlowStateError(
+                    f"flow_card_reativacao_falhou:{patch_error}:{reactivation_error}"
+                ) from patch_error
+        raise
+
+    if deactivated:
+        after = ensure_active(base, token, after)
+
+    return after, {
+        "card_reconciled": True,
+        "flow_deactivated_for_patch": deactivated,
+        "clientdata_before_sha256": before_hash,
+        "card_before": before_contract,
+        "card_after": observed_contract,
+    }
+
+
+def _patch_and_verify(
+    base: str,
+    token: str,
+    row: dict[str, Any],
+    workflow_id: str,
+    desired_raw: str,
+    desired_contract: dict[str, Any],
+    raw_before: str,
+    before_hash: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     patch_clientdata(base, token, row, desired_raw)
-    workflow_id = str(row.get("workflowid") or "")
     after = get_flow(base, token, workflow_id)
 
     try:
@@ -377,12 +441,7 @@ def reconcile_flow_card(
             ) from verify_error
         raise FlowStateError("flow_card_patch_invalido_rollback_aplicado") from verify_error
 
-    return after, {
-        "card_reconciled": True,
-        "clientdata_before_sha256": before_hash,
-        "card_before": before_contract,
-        "card_after": observed_contract,
-    }
+    return after, observed_contract
 
 
 def activate(base: str, token: str, workflow_id: str) -> None:
@@ -393,8 +452,18 @@ def activate(base: str, token: str, workflow_id: str) -> None:
         {"statecode": 1, "statuscode": 2},
     )
     if status != 204:
-        code = str(((payload.get("error") or {}).get("code") or ""))[:120]
-        raise FlowStateError(f"dataverse_activate_http_{status}:{code}")
+        raise FlowStateError(f"dataverse_activate_http_{status}:{error_detail(payload)}")
+
+
+def deactivate(base: str, token: str, workflow_id: str) -> None:
+    status, payload = request_json(
+        "PATCH",
+        workflow_url(base, workflow_id),
+        token,
+        {"statecode": 0, "statuscode": 1},
+    )
+    if status != 204:
+        raise FlowStateError(f"dataverse_deactivate_http_{status}:{error_detail(payload)}")
 
 
 def ensure_active(
