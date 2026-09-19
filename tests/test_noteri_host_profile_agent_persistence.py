@@ -35,3 +35,48 @@ def test_task_contract_is_boot_s4u_limited() -> None:
 def test_access_denied_detection_recognizes_windows_hresult() -> None:
     exc = RuntimeError("pywintypes.com_error nested -2147024891")
     assert module._is_access_denied(exc) is True
+
+
+def test_headless_preconditions_accept_explicit_admin_authorization() -> None:
+    module.validate_headless_preconditions(
+        host="Noteri",
+        platform="nt",
+        elevated=True,
+        confirm=module.HEADLESS_CONFIRM,
+    )
+
+
+def test_headless_preconditions_fail_closed_without_admin() -> None:
+    try:
+        module.validate_headless_preconditions(
+            host="Noteri",
+            platform="nt",
+            elevated=False,
+            confirm=module.HEADLESS_CONFIRM,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "admin_elevation_required"
+    else:
+        raise AssertionError("headless deve exigir elevação administrativa")
+
+
+def test_headless_preconditions_require_exact_confirmation() -> None:
+    try:
+        module.validate_headless_preconditions(
+            host="Noteri",
+            platform="nt",
+            elevated=True,
+            confirm="INVALID",
+        )
+    except RuntimeError as exc:
+        assert "confirmação headless inválida" in str(exc)
+    else:
+        raise AssertionError("confirmação inválida deve falhar")
+
+
+def test_control_arguments_pin_runtime_paths(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    args = module.control_arguments(tmp_path / "noteri_host_profile_agent_control.py")
+    assert f'--profile-path "{module.profile_path()}"' in args
+    assert f'--audit-path "{module.audit_path()}"' in args
+    assert f'--state-path "{module.agent_state_path()}"' in args
