@@ -27,10 +27,7 @@ from app.services.ai_history_protection import (
     estimate_tokens,
     record_usage,
 )
-from app.services.ai_provider_config import (
-    AIProviderRuntimeConfigError,
-    resolve_provider_config,
-)
+from app.services.ai_provider_router import AIProviderRouter, AIProviderRouterError
 from app.services.llm_provider import LLMGateway
 from app.services.teams_notifications import criar_item_fila
 
@@ -105,12 +102,15 @@ def _classification_lock(conversation_id: str, data_classification: str) -> str:
 
 def status_provedores(env: Mapping[str, str] | None = None) -> dict[str, dict[str, bool]]:
     status: dict[str, dict[str, bool]] = {}
-    for provider in ('openai', 'claude', 'gemini', 'groq'):
+    router = AIProviderRouter(env=env)
+    for provider in ('ollama_gateway', 'openai', 'claude', 'gemini', 'groq'):
         try:
-            resolve_provider_config(provider, env=env)
+            router.check_configured(provider)
             status[provider] = {'configurado': True}
-        except AIProviderRuntimeConfigError:
+        except AIProviderRouterError:
             status[provider] = {'configurado': False}
+    # Readiness mede configuração explícita, não o default localhost usado
+    # internamente pelo Codex em desenvolvimento.
     status['ollama'] = {
         'configurado': bool(
             _env_value(env, 'AI_CONVERSATION_OLLAMA_BASE_URL', 'CODEX_OLLAMA_BASE_URL', 'OLLAMA_BASE_URL')
@@ -302,54 +302,29 @@ def _chamar_provider(
     correlation_id: str,
 ) -> str:
     _validar_politica_persistida(conversa, correlation_id=correlation_id, env=env)
-    provider = conversa.provider
-    model = conversa.model
     timeout = _env_int(env, 'AI_CONVERSATION_TIMEOUT_SECONDS', DEFAULT_TIMEOUT_SECONDS)
     system_prompt = _env_value(env, 'AI_CONVERSATION_SYSTEM_PROMPT') or DEFAULT_SYSTEM_PROMPT
     try:
-        if provider in {'openai', 'claude', 'gemini', 'groq'}:
-            runtime = resolve_provider_config(provider, env=env)
-            common = {
-                'api_key': runtime.secret,
-                'model': model,
-                'prompt': prompt,
-                'system_prompt': system_prompt,
-                'timeout': timeout,
-                'endpoint': runtime.endpoint,
-                'auth_mode': runtime.auth_mode,
-            }
-            if provider == 'openai':
-                resposta = gateway.gerar_openai(**common)
-            elif provider == 'claude':
-                resposta = gateway.gerar_claude(**common)
-            elif provider == 'gemini':
-                resposta = gateway.gerar_gemini(**common)
-            else:
-                resposta = gateway.gerar_groq(**common)
-        elif provider == 'ollama':
-            base_url = _env_value(env, 'AI_CONVERSATION_OLLAMA_BASE_URL', 'CODEX_OLLAMA_BASE_URL', 'OLLAMA_BASE_URL')
-            if not base_url:
-                raise AIProviderConfigurationError('Provedor Ollama não configurado.')
-            resposta = gateway.gerar_ollama(
-                base_url=base_url,
-                model=model,
-                prompt=f'{system_prompt}\n\n{prompt}',
-                timeout=timeout,
-            )
-        else:
-            raise AIProviderConfigurationError(f'Provedor não suportado: {provider}.')
-    except AIProviderRuntimeConfigError as exc:
-        raise AIProviderConfigurationError(str(exc)) from None
-    except AIProviderConfigurationError:
-        raise
+        result = AIProviderRouter(gateway=gateway, env=env).generate_text(
+            provider=conversa.provider,
+            model=conversa.model,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            correlation_id=correlation_id,
+            timeout=timeout,
+        )
+    except AIProviderRouterError as exc:
+        message = str(exc)
+        if 'configur' in message.lower() or 'suportado' in message.lower():
+            raise AIProviderConfigurationError(message) from None
+        raise AIProviderExecutionError(
+            f'Falha ao executar o provedor {conversa.provider}: {message}'
+        ) from None
     except Exception as exc:
         raise AIProviderExecutionError(
-            f'Falha ao executar o provedor {provider}: {type(exc).__name__}.'
+            f'Falha ao executar o provedor {conversa.provider}: {type(exc).__name__}.'
         ) from None
-    resposta_normalizada = str(resposta or '').strip()
-    if not resposta_normalizada:
-        raise AIProviderExecutionError(f'O provedor {provider} retornou resposta vazia.')
-    return resposta_normalizada
+    return result.text
 
 
 def construir_adaptive_card(

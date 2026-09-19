@@ -1,0 +1,39 @@
+{
+  "feature_name": "ai-provider-router-ollama-first",
+  "project": "ReqSys v2 Enterprise — AI Provider Routing",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Centraliza geração textual de IA no AIProviderRouter, usa ollama_gateway como default, preserva multi-provider explícito e bloqueia novos bypasses diretos.",
+  "scope": "ai-provider-routing",
+  "files": [
+    "backend/app/core/config.py",
+    "backend/app/schemas/ai_conversation.py",
+    "backend/app/services/ai_conversation.py",
+    "backend/app/services/ai_corporate_policy.py",
+    "backend/app/services/ai_provider_router.py",
+    "backend/app/services/codex_governado.py",
+    "backend/app/services/gemini.py",
+    "backend/app/services/rag_governado.py",
+    "backend/tests/test_ai_provider_router.py",
+    "backend/tests/test_ai_provider_architecture.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_ai_provider_router.py",
+      "backend/tests/test_ai_provider_architecture.py"
+    ],
+    "evidence_contract": "Provar default ollama_gateway, fallback configurado, providers explícitos, falha fechada e anti-bypass no HEAD exato."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false
+  }
+}

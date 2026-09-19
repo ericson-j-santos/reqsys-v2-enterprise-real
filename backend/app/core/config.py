@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     reqsys_rag_documents_path: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_DOCUMENTS_PATH', '') or '')
     reqsys_rag_vector_store: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_VECTOR_STORE', 'in_memory') or 'in_memory')
     reqsys_rag_require_sources: bool = Field(default_factory=lambda: _bool_secret('REQSYS_RAG_REQUIRE_SOURCES', 'true'))
-    reqsys_rag_llm_provider: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_PROVIDER', '') or '')
+    reqsys_rag_llm_provider: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_PROVIDER', 'ollama_gateway') or 'ollama_gateway')
     reqsys_rag_llm_api_key: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_API_KEY', '') or '')
     reqsys_rag_llm_model: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_LLM_MODEL', '') or '')
     reqsys_rag_embedding_provider: str = Field(default_factory=lambda: get_secret('REQSYS_RAG_EMBEDDING_PROVIDER', '') or '')
@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     # Groq IA — fallback gratuito (llama-3.3-70b: 30 req/min, 14.400 req/dia)
     groq_api_key: str = Field(default_factory=lambda: get_secret('GROQ_API_KEY', '') or '')
     groq_model: str = Field(default_factory=lambda: get_secret('GROQ_MODEL', 'llama-3.3-70b-versatile') or 'llama-3.3-70b-versatile')
+
+    # Roteamento canônico de IA — Ollama Gateway por padrão; providers externos permanecem explícitos/políticos.
+    ai_default_provider: str = Field(default_factory=lambda: get_secret('AI_DEFAULT_PROVIDER', 'ollama_gateway') or 'ollama_gateway')
 
     # Codex Governado — providers opcionais
     codex_ollama_base_url: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_BASE_URL', 'http://localhost:11434') or 'http://localhost:11434')

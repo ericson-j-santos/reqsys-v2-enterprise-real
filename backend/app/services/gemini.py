@@ -11,6 +11,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
+from app.services.ai_provider_router import AIProviderRouter
 from app.services.llm_provider import LLMGateway
 from app.services.llm_provider import _post_json as _llm_post_json
 from app.services.llm_telemetry import registrar_evento_llm
@@ -136,6 +137,10 @@ def _gateway() -> LLMGateway:
     return LLMGateway(post_json=_post_json)
 
 
+def _router() -> AIProviderRouter:
+    return AIProviderRouter(gateway=_gateway())
+
+
 def _is_quota_error(msg: str) -> bool:
     msg_lower = msg.lower()
     return (
@@ -202,11 +207,12 @@ def _gerar(api_key: str, model: str, prompt: str) -> str:
 
 def _gerar_gemini_modelo(api_key: str, model: str, prompt: str) -> str:
     try:
-        texto = _gateway().gerar_gemini(
-            api_key=api_key,
+        texto = _router().generate_text(
+            provider='gemini',
             model=model,
             prompt=prompt,
-        )
+            api_key=api_key,
+        ).text
         _gemini_tracker.registrar()
         registrar_evento_llm('gemini', 'sucesso')
         return texto.strip()
@@ -256,11 +262,12 @@ def _gerar_groq(api_key: str, model: str, prompt: str) -> str:
 
 def _gerar_groq_modelo(api_key: str, model: str, prompt: str) -> str:
     try:
-        texto = _gateway().gerar_groq(
-            api_key=api_key,
+        texto = _router().generate_text(
+            provider='groq',
             model=model,
             prompt=prompt,
-        )
+            api_key=api_key,
+        ).text
         _groq_tracker.registrar()
         registrar_evento_llm('groq', 'sucesso')
         return texto.strip()

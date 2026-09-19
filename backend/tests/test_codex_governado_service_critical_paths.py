@@ -92,19 +92,19 @@ def test_executar_provider_desconhecido():
 @patch('app.services.codex_governado.chamar_ollama', return_value='ollama via provider')
 def test_executar_provider_ollama(mock_ollama):
     assert svc.executar_provider('ollama', 'p', 'c', 'e', 'corr') == 'ollama via provider'
-    mock_ollama.assert_called_once_with('p')
+    mock_ollama.assert_called_once_with('p', 'corr')
 
 
 @patch('app.services.codex_governado.chamar_groq', return_value='groq via provider')
 def test_executar_provider_groq(mock_groq):
     assert svc.executar_provider('groq', 'p', 'c', 'e', 'corr') == 'groq via provider'
-    mock_groq.assert_called_once_with('p')
+    mock_groq.assert_called_once_with('p', 'corr')
 
 
 @patch('app.services.codex_governado.chamar_gemini', return_value='gemini via provider')
 def test_executar_provider_gemini(mock_gemini):
     assert svc.executar_provider('gemini', 'p', 'c', 'e', 'corr') == 'gemini via provider'
-    mock_gemini.assert_called_once_with('p')
+    mock_gemini.assert_called_once_with('p', 'corr')
 
 
 @patch('app.services.codex_governado._post_json', return_value={'data': {'resposta': 'gateway ok'}})
