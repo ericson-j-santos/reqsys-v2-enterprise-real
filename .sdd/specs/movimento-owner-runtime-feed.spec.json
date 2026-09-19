@@ -38,7 +38,7 @@
     "source_runtime": "http://DESKTOP-PDQK954:8081",
     "default_interval_seconds": 900,
     "persistence": "HKCU Run + detached pythonw",
-    "owner_gateway": "local_not eri".replace(" ", "")
+    "owner_gateway": "local_noteri"
   },
   "controls": {
     "explicit_non_business_label": true,
