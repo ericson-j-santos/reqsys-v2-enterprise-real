@@ -17,10 +17,14 @@ TASK_HEADLESS = r"\Automation\RemoteDesktopCommanderHeadless"
 TASK_INTERACTIVE = r"\Automation\RemoteDesktopCommander"
 HEADLESS_RUNNER = Path(r"C:\ProgramData\ReqSys\RdcSvc\rdc-headless-runner.cjs")
 INTERACTIVE_LAUNCHER = Path(r"C:\RemoteDesktopCommander\start-remote-desktop-commander.cmd")
-HEADLESS_MARKER = "// RDC_HEADLESS_V2_PRIMARY_OWNER"
+HEADLESS_MARKERS = (
+    "// RDC_HEADLESS_V2_PRIMARY_OWNER",
+    "// RDC_HEADLESS_V3_READY_CLAIM",
+)
 INTERACTIVE_MARKERS = (
     "REM RDC_LAUNCHER_V3_RESILIENT",
     "REM RDC_LAUNCHER_V4_ARBITRATED",
+    "REM RDC_LAUNCHER_V5_READY_CLAIM",
 )
 CONFIRM = "RECOVER-GOVERNED-RDC"
 ALLOWED_TASKS = (TASK_HEADLESS, TASK_INTERACTIVE)
@@ -83,7 +87,8 @@ def validate_headless_source() -> dict[str, Any]:
     if not HEADLESS_RUNNER.is_file():
         return {"exists": False, "governed": False}
     text = HEADLESS_RUNNER.read_text(encoding="utf-8-sig", errors="replace")
-    return {"exists": True, "governed": HEADLESS_MARKER in text}
+    marker = next((value for value in HEADLESS_MARKERS if value in text), None)
+    return {"exists": True, "governed": marker is not None, "marker": marker}
 
 
 def validate_interactive_source() -> dict[str, Any]:

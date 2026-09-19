@@ -5,6 +5,18 @@
   "approvals": {
     "requirements": true
   },
+  "marker_compatibility": {
+    "headless_allowed": [
+      "// RDC_HEADLESS_V2_PRIMARY_OWNER",
+      "// RDC_HEADLESS_V3_READY_CLAIM"
+    ],
+    "interactive_allowed": [
+      "REM RDC_LAUNCHER_V3_RESILIENT",
+      "REM RDC_LAUNCHER_V4_ARBITRATED",
+      "REM RDC_LAUNCHER_V5_READY_CLAIM"
+    ],
+    "unknown_marker_policy": "fail_closed"
+  },
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
