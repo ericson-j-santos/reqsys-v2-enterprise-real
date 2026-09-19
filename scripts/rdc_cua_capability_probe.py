@@ -15,7 +15,12 @@ def main() -> int:
         print(json.dumps(out, sort_keys=True))
         return 0
     out["sha256"] = hashlib.sha256(BIN.read_bytes()).hexdigest()
-    for args, key in [(["--help"], "help"), (["serve", "--help"], "serve_help")]:
+    for args, key in [
+        (["status", "--json"], "status"),
+        (["list-tools"], "list_tools"),
+        (["call", "--help"], "call_help"),
+        (["describe", "--help"], "describe_help"),
+    ]:
         cp = subprocess.run([str(BIN), *args], capture_output=True, text=True, errors="replace", timeout=15, check=False)
         out[key] = {
             "exit_code": cp.returncode,
