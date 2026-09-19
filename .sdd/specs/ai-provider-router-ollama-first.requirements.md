@@ -17,7 +17,8 @@ Centralizar o roteamento textual de IA do ReqSys em um único `AIProviderRouter`
 9. Falhar fechado para provider desconhecido ou Ollama Gateway sem configuração mínima.
 10. Impedir novas integrações diretas com endpoints/SDKs de providers fora das portas canônicas por teste arquitetural.
 11. Se o provider de geração RAG falhar, preservar o fallback determinístico baseado nas fontes recuperadas.
-12. Não realizar deploy, promoção de ambiente, mutação de segredo ou merge neste incremento.
+12. Sanitizar campos dinâmicos antes de escrevê-los em logs para impedir log injection/forging por CR/LF.
+13. Não realizar deploy, promoção de ambiente, mutação de segredo ou merge neste incremento.
 
 ## Critérios de aceite
 
@@ -29,6 +30,7 @@ Centralizar o roteamento textual de IA do ReqSys em um único `AIProviderRouter`
 - Ollama Gateway sem URL configurada é bloqueado;
 - Codex, conversas, RAG e IA Assistente usam o router único para geração textual;
 - teste arquitetural falha se novo código de backend introduzir endpoint/SDK direto de provider fora de `ai_provider_config.py` e `llm_provider.py`;
+- campos dinâmicos de auditoria do router não preservam CR/LF e possuem limite de tamanho antes do `logger`;
 - testes direcionados do incremento ficam verdes;
 - `Pre-PR Readiness Gate` fica verde no HEAD exato;
 - branch permanece `behind_by=0` antes da abertura da PR.
