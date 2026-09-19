@@ -47,3 +47,8 @@ Registrar, no maior escopo executável:
 - leitura independente;
 - Builder e Validator distintos;
 - bloqueio explícito quando o Desktop/Worker Pool não estiver disponível.
+## Compatibilidade do gate após avanço da main
+
+- referência dinâmica de segredo por variável de ambiente (`${VAR}` ou `${VAR:?mensagem}`/`${VAR?mensagem}`) não deve ser classificada como segredo hardcoded;
+- fallback literal (`${VAR:-valor}`) continua bloqueado como possível segredo hardcoded;
+- a correção deve possuir testes positivo e negativos e não adicionar allowlist por arquivo.
