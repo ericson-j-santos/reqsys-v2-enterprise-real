@@ -103,12 +103,19 @@ def _classification_lock(conversation_id: str, data_classification: str) -> str:
 def status_provedores(env: Mapping[str, str] | None = None) -> dict[str, dict[str, bool]]:
     status: dict[str, dict[str, bool]] = {}
     router = AIProviderRouter(env=env)
-    for provider in ('ollama_gateway', 'ollama', 'openai', 'claude', 'gemini', 'groq'):
+    for provider in ('ollama_gateway', 'openai', 'claude', 'gemini', 'groq'):
         try:
             router.check_configured(provider)
             status[provider] = {'configurado': True}
         except AIProviderRouterError:
             status[provider] = {'configurado': False}
+    # Readiness mede configuração explícita, não o default localhost usado
+    # internamente pelo Codex em desenvolvimento.
+    status['ollama'] = {
+        'configurado': bool(
+            _env_value(env, 'AI_CONVERSATION_OLLAMA_BASE_URL', 'CODEX_OLLAMA_BASE_URL', 'OLLAMA_BASE_URL')
+        )
+    }
     return status
 
 
@@ -312,6 +319,10 @@ def _chamar_provider(
             raise AIProviderConfigurationError(message) from None
         raise AIProviderExecutionError(
             f'Falha ao executar o provedor {conversa.provider}: {message}'
+        ) from None
+    except Exception as exc:
+        raise AIProviderExecutionError(
+            f'Falha ao executar o provedor {conversa.provider}: {type(exc).__name__}.'
         ) from None
     return result.text
 
