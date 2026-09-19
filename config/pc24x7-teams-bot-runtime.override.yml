@@ -1,8 +1,8 @@
 services:
   api:
     environment:
-      TEAMS_BOT_APP_ID: "${TEAMS_BOT_APP_ID:?TEAMS_BOT_APP_ID required}"
-      TEAMS_BOT_APP_TENANT_ID: "${TEAMS_BOT_APP_TENANT_ID:?TEAMS_BOT_APP_TENANT_ID required}"
-      TEAMS_BOT_SECRET: "${TEAMS_BOT_SECRET:?TEAMS_BOT_SECRET required}" # placeholder seguro; valor vem do Key Vault em runtime
-      AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID: "0099abe2-63d9-4855-b087-364d1fbc9c30"
-      AI_CONVERSATION_OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      - TEAMS_BOT_APP_ID
+      - TEAMS_BOT_APP_TENANT_ID
+      - TEAMS_BOT_SECRET
+      - AI_CONVERSATION_TEAMS_USER_AAD_OBJECT_ID=0099abe2-63d9-4855-b087-364d1fbc9c30
+      - AI_CONVERSATION_OLLAMA_BASE_URL=http://host.docker.internal:11434
