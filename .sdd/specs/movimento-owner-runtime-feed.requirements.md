@@ -12,10 +12,12 @@ Alimentar automaticamente a fonte `owner_movimento` com dados reais produzidos p
 4. Marcar explicitamente que a captura é operacional DEV e não representa transação comercial.
 5. Manter `pendencias_cadastro`, `pendencias_historicas` e `pendencias_observacao` vazios até existir fonte semanticamente compatível.
 6. Falhar fechado se qualquer métrica obrigatória estiver ausente.
-7. Enviar o payload ao owner source pelo relay autenticado, sem expor owner token no Desktop.
-8. Reaproveitar a idempotência SHA-256 já existente do owner source.
-9. Não coletar PII.
-10. Não tocar PROD.
+7. Executar o worker no Noteri, lendo o runtime do Desktop por `http://DESKTOP-PDQK954:8081` e chamando o Owner Gateway local no próprio Noteri.
+8. Manter o owner token somente no Noteri; não copiar o token para o Desktop.
+9. Reaproveitar a idempotência SHA-256 já existente do owner source.
+10. Instalar persistência do worker por `HKCU\\...\\Run`, com intervalo padrão de 900 segundos e sem exigir privilégio administrativo.
+11. Não coletar PII.
+12. Não tocar PROD.
 
 ## Critérios de aceite
 
@@ -25,5 +27,7 @@ Alimentar automaticamente a fonte `owner_movimento` com dados reais produzidos p
 4. O primeiro sync DEV reflete as linhas ingeridas.
 5. O replay do mesmo estado retorna `noop`.
 6. Leitura independente confirma igualdade entre fonte e destino para a data.
-7. Testes direcionados passam integralmente.
-8. Pre-PR Readiness passa no HEAD exato com `behind_by=0`.
+7. O bootstrap persistente retorna `worker_running=true` e `autostart_registered=true`.
+8. Uma execução `--once` do worker no Noteri conclui `status=passed` usando o runtime real do Desktop.
+9. Testes direcionados passam integralmente.
+10. Pre-PR Readiness passa no HEAD exato com `behind_by=0`.
