@@ -37,7 +37,7 @@
       "tests/test_pc24x7_network_probe.py",
       "tests/test_codex_worker_pool_dualhost_e2e.py"
     ],
-    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado/correlation_id divergente fail-closed, replay idempotente, recuperação de lease e quarentena. A prova física multi-host exige dual_host_preflight nos dois hosts no mesmo SHA canônico das regras e no mesmo SHA do ReqSys, seguida de handshake de rede governado e E2E Desktop Builder -> Noteri Validator com leitura final independente."
+    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado/correlation_id divergente fail-closed, replay idempotente, recuperação de lease e quarentena. O snapshot de observabilidade deve omitir lease_token e sanitizar marcadores sensíveis brutos; o teste negativo de vazamento precisa falhar se qualquer valor bruto aparecer. A prova física multi-host exige dual_host_preflight nos dois hosts no mesmo SHA canônico das regras e no mesmo SHA do ReqSys, seguida de handshake de rede governado e E2E Desktop Builder -> Noteri Validator com leitura final independente."
   },
   "risk": {
     "production": false,
