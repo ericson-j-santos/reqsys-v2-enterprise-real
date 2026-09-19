@@ -9,11 +9,12 @@
     "design": true,
     "tasks": true
   },
-  "description": "Mantém Ollama, gateway e backend Codex em loopback no Desktop PC24x7, com autostart Windows sem senha, recuperação automática, smoke ReqSys→IA e evidência pós-reboot.",
+  "description": "Mantém Ollama, gateway e backend Codex em loopback no Desktop PC24x7, com autostart Windows sem senha, launcher UAC governado, recuperação automática, smoke ReqSys→IA e evidência pós-reboot.",
   "sdd_gate": {
     "tests": [
-      "tests/test_codex_pc24x7_supervisor.py"
+      "tests/test_codex_pc24x7_supervisor.py",
+      "tests/test_codex_pc24x7_headless_uac_launcher.py"
     ],
-    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato. O runtime deve comprovar 11434/8008/8000 saudáveis, smoke sem publicação e modelo efetivo observável. Persistência AtStartup deve ser distinguida de fallback AtLogon. E2E pós-reboot só pode ser marcado concluído após reboot real e postboot-check verde."
+    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato. O launcher UAC só pode elevar register-task-com da release imutável instalada e só remover HKCU Run após leitura independente de AtStartup+S4U. O runtime deve comprovar 11434/8008/8000 saudáveis, smoke sem publicação e modelo efetivo observável. E2E pós-reboot só pode ser marcado concluído após reboot real e postboot-check verde."
   }
 }
