@@ -2,7 +2,7 @@
 """Configura o provider Ollama do ReqSys no perfil do usuário Windows.
 
 Não lê nem grava .env e não manipula credenciais. Persistência fica em
-HKCU\Environment e vale para processos iniciados após a alteração.
+HKCU\\Environment e vale para processos iniciados após a alteração.
 """
 from __future__ import annotations
 
