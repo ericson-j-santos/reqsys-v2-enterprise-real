@@ -1,0 +1,59 @@
+{
+  "feature_name": "movimento-email-source-satellite",
+  "project": "ReqSys v2 Enterprise — Prospecção Movimento / PC24x7",
+  "created_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Satélite portátil e somente leitura para descobrir e validar a origem SQL corporativa sem depender de DSN manual, credencial embutida ou criação prévia das quatro views canônicas.",
+  "runtime_target": "windows_host_with_corporate_route",
+  "discovery": {
+    "sources": [
+      "MOVIMENTO_EMAIL_SOURCE_CANDIDATES",
+      "ODBC registry HKCU",
+      "ODBC registry HKLM 64-bit",
+      "ODBC registry HKLM 32-bit",
+      "candidate explícito para execução governada"
+    ],
+    "historical_endpoint_is_authoritative": false
+  },
+  "source_controls": {
+    "auth": "windows_integrated",
+    "tls_required": true,
+    "trust_server_certificate": false,
+    "application_intent": "ReadOnly",
+    "business_rows_read": false,
+    "metadata_only": true,
+    "broad_write_role_blocks_acceptance": true
+  },
+  "metadata_contract": {
+    "expected_function": "CNS.PROSPECCAO_FN001_PAINEL_FLUXO_INTRADIA",
+    "discovers_candidate_objects": true,
+    "discovers_function_columns": true,
+    "publishes_server_database_as_hash_only": true
+  },
+  "fail_closed": [
+    "no_candidates",
+    "dns_unresolved",
+    "tcp_unreachable",
+    "sql_connection_failed",
+    "broad_write_privilege_detected",
+    "no_expected_function_or_candidate_objects"
+  ],
+  "integration": {
+    "source_bridge": "scripts/sincronizar_movimento_email_corporate.py",
+    "source_integrated_auth_supported": true,
+    "target_local_dev_default": "localhost/ReqSysMovimentoDev",
+    "production_enabled": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_movimento_email_source_satellite.py",
+      "tests/test_movimento_email_corporate_sync.py"
+    ],
+    "evidence_contract": "Vincular branch/SHA/correlation_id; registrar apenas hashes de servidor/banco, metadados de objetos/colunas e estados de rede/permissão. Nunca registrar DSN, usuário, senha ou linhas de negócio."
+  }
+}
