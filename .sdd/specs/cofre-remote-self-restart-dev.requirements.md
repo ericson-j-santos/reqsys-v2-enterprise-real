@@ -46,6 +46,6 @@ O gate deve conseguir provar o ciclo completo no SHA corrente usando apenas:
 - runtime volta em outro SHA => gate falha;
 - replay da mesma solicitação => não agenda segundo restart.
 
-## Critério de conclusão
+## Critérios de aceite
 
 A implementação está pronta para integração quando testes unitários/contrato, YAML, SDD, Pre-PR Readiness e controles negativos estiverem verdes. A conclusão operacional da #1760 exige, após integração e publicação deste SHA no DEV, um novo run oficial do Cofre verde no SHA então vigente.
