@@ -29,8 +29,9 @@ def scan(folder, path: str, out: list[dict]) -> None:
                 actions.append(item)
                 hay.extend(str(v or "") for v in item.values())
             text = " ".join(hay).casefold()
-            relevant = any(k in text for k in KEYWORDS)
-            non_microsoft_elevated = int(p.RunLevel) == 1 and not path.casefold().startswith(r"\\microsoft\\windows")
+            microsoft = path.casefold().startswith(r"\microsoft\windows")
+            relevant = any(k in text for k in KEYWORDS) and not microsoft
+            non_microsoft_elevated = int(p.RunLevel) == 1 and not microsoft
             if relevant or non_microsoft_elevated:
                 out.append({
                     "folder": path,
