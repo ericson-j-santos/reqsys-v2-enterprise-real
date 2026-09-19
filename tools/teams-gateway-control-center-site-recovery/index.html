@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ReqSys · Teams Gateway Control Center · Autocontido</title>
+<style>
+:root{--bg:#09101f;--p:#111a2e;--p2:#16223b;--line:#2d3d61;--text:#edf3ff;--muted:#a9b7d0;--ok:#45d89a;--warn:#ffca57;--err:#ff6e83;--info:#76c9ff;--accent:#7ea5ff}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#09101f,#101a31);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.wrap{max-width:1380px;margin:auto;padding:22px}h1,h2,h3{margin:0}h1{font-size:27px}.muted{color:var(--muted)}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
+.card{background:var(--p);border:1px solid var(--line);border-radius:14px;margin:14px 0;overflow:hidden}.hd{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.bd{padding:16px}
+.grid{display:grid;gap:12px}.stats{grid-template-columns:repeat(5,1fr)}.two{grid-template-columns:1fr 1fr}.stat{padding:15px;background:var(--p2);border:1px solid var(--line);border-radius:12px}.stat b{font-size:27px;display:block}
+.btn{border:1px solid var(--line);background:#1b2b4a;color:var(--text);border-radius:9px;padding:9px 12px;cursor:pointer}.btn.small{padding:5px 8px;font-size:12px}.btn.warn{background:#503d16}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:12px}.pill.ok{color:var(--ok);border-color:#2a7659}.pill.err{color:var(--err);border-color:#7d3444}.pill.info{color:var(--info);border-color:#326883}.pill.warn{color:var(--warn);border-color:#7d6325}
+table{width:100%;border-collapse:collapse;min-width:850px}th,td{padding:9px;border-bottom:1px solid #253557;text-align:left}th{color:var(--muted);font-size:12px;background:#0e172a;position:sticky;top:0}.table{overflow:auto}
+input,select{background:#0b1426;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:9px;width:100%}label{color:var(--muted);font-size:12px;display:block;margin-bottom:4px}.form{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+pre{background:#080f1d;border:1px solid var(--line);border-radius:10px;padding:13px;overflow:auto;white-space:pre-wrap;word-break:break-word;max-height:520px}code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.progress{height:10px;background:#08101e;border:1px solid var(--line);border-radius:20px;overflow:hidden}.progress div{width:15.3%;height:100%;background:linear-gradient(90deg,var(--ok),var(--warn))}
+.notice{padding:10px 12px;border:1px solid #536aa0;background:#142240;border-radius:10px}details summary{cursor:pointer;font-weight:700;padding:5px 0}
+.modal{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:18px;z-index:9}.modalBox{width:min(800px,100%);background:var(--p);border:1px solid var(--line);border-radius:14px;padding:16px}
+@media(max-width:950px){.stats{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.stats,.form{grid-template-columns:1fr}.wrap{padding:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1>Teams Gateway Control Center</h1><div class="muted">Versão autocontida com dados pré-carregados e código-fonte recuperado do ReqSys.</div></div>
+    <span class="pill ok">Dados embutidos no HTML</span>
+  </div>
+
+  <div class="notice">
+    <strong>Estado dos dados:</strong> os valores operacionais abaixo são <strong>amostras demonstrativas</strong>, para o painel nunca abrir vazio.
+    O inventário de endpoints e o código em “Código recuperado” são derivados da implementação real versionada do ReqSys.
+    Nenhuma credencial está embutida.
+  </div>
+
+  <div class="grid stats">
+    <div class="stat"><span class="muted">Eventos</span><b id="sTotal">3</b></div>
+    <div class="stat"><span class="muted">Sucessos</span><b id="sOk">2</b></div>
+    <div class="stat"><span class="muted">Erros</span><b id="sErr">1</b></div>
+    <div class="stat"><span class="muted">Teams</span><b id="sTeams">2</b></div>
+    <div class="stat"><span class="muted">Último estado</span><b style="font-size:20px">sucesso</b></div>
+  </div>
+
+  <div class="grid two">
+    <section class="card">
+      <div class="hd"><h3>Status incorporado</h3><span class="pill ok">estrutura real</span></div>
+      <div class="bd"><pre>{
+  &quot;service&quot;: &quot;reqsys-teams-gateway&quot;,
+  &quot;webhook_configured&quot;: &quot;depende do ambiente&quot;,
+  &quot;graph_configured&quot;: &quot;depende do ambiente&quot;,
+  &quot;routes&quot;: [
+    &quot;webhook&quot;,
+    &quot;graph_delegated_chat&quot;,
+    &quot;graph_app_channel&quot;
+  ],
+  &quot;capabilities&quot;: [
+    &quot;plain_text&quot;,
+    &quot;adaptive_card_1_5&quot;
+  ]
+}</pre></div>
+    </section>
+    <section class="card">
+      <div class="hd"><h3>Capacidade Flow Bot — demonstração</h3><span class="pill info">amostra</span></div>
+      <div class="bd">
+        <div class="progress"><div></div></div>
+        <p><strong>1.840</strong> de <strong>12.000</strong> ações usadas · <strong>15,3%</strong> · ~<strong>5.080</strong> mensagens restantes.</p>
+        <table><thead><tr><th>Proprietário demonstrativo</th><th>Mensagens</th><th>Sucessos</th><th>Erros</th><th>Ações</th></tr></thead>
+        <tbody><tr><td>owner-a@empresa.invalid</td><td>423</td><td>419</td><td>4</td><td>920/6000</td></tr>
+        <tr><td>owner-b@empresa.invalid</td><td>412</td><td>410</td><td>2</td><td>920/6000</td></tr></tbody></table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="hd"><h3>Inventário funcional da implementação</h3><span class="pill ok">ReqSys real</span></div>
+    <div class="bd table"><table><thead><tr><th>Método</th><th>Endpoint</th><th>Finalidade</th></tr></thead><tbody><tr><td><span class='pill info'>GET</span></td><td><code>/v1/teams-gateway/status</code></td><td>Status e capacidades do gateway</td></tr>
+<tr><td><span class='pill info'>GET</span></td><td><code>/v1/teams-gateway/identity-status</code></td><td>Estado da identidade usada pelo gateway</td></tr>
+<tr><td><span class='pill info'>POST</span></td><td><code>/v1/teams-gateway/routes</code></td><td>Simulação/seleção de rota</td></tr>
+<tr><td><span class='pill info'>POST</span></td><td><code>/v1/teams-gateway/messages</code></td><td>Envio pelo contrato unificado</td></tr>
+<tr><td><span class='pill info'>POST</span></td><td><code>/v1/teams-gateway/messages/webhook</code></td><td>Envio explícito via webhook</td></tr>
+<tr><td><span class='pill info'>GET</span></td><td><code>/v1/hub-lowcode/integracoes/historico?limit=100</code></td><td>Histórico de integrações</td></tr>
+<tr><td><span class='pill info'>GET</span></td><td><code>/v1/hub-lowcode/integracoes/flow-bot/uso-hoje</code></td><td>Uso diário do Flow Bot</td></tr>
+<tr><td><span class='pill info'>GET</span></td><td><code>/v1/hub-lowcode/planner/publish?limit=100</code></td><td>Publicações governadas</td></tr>
+<tr><td><span class='pill info'>POST</span></td><td><code>/v1/hub-lowcode/planner/publish/{attempt_id}/reprocessar</code></td><td>Reprocessamento</td></tr></tbody></table></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h3>Publicações governadas</h3><span class="pill info">2 amostras embutidas</span></div>
+    <div class="bd table"><table><thead><tr><th>ID</th><th>Data</th><th>Situação</th><th>Título</th><th>Source ID</th><th>Solicitante</th><th>Tentativas</th><th>Ação</th></tr></thead><tbody><tr>
+      <td>101</td><td>2026-09-03 01:10:00 UTC</td>
+      <td><span class="pill ok">publicado</span></td>
+      <td>Atualizar evidência BACEN</td><td>BACEN-57</td><td>reqsys</td>
+      <td>1</td><td>—</td>
+    </tr>
+<tr>
+      <td>102</td><td>2026-09-03 01:30:00 UTC</td>
+      <td><span class="pill err">falhou_integracao</span></td>
+      <td>Reprocessar notificação operacional</td><td>OPS-1358</td><td>reqsys</td>
+      <td>2</td><td><button class="btn warn small" onclick="demoReprocess(this)">Reprocessar</button></td>
+    </tr></tbody></table></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h3>Histórico de integrações</h3><span id="countLabel" class="pill info">3 de 3</span></div>
+    <div class="bd">
+      <div class="form">
+        <div><label>Origem</label><select id="fType"><option value="">Todas</option><option>teams</option><option>planner</option></select></div>
+        <div><label>Situação</label><select id="fStatus"><option value="">Todas</option><option>sucesso</option><option>erro</option></select></div>
+        <div style="grid-column:span 2"><label>Busca</label><input id="fSearch" placeholder="Título, autor, correlation_id..."></div>
+        <div><label>&nbsp;</label><button class="btn" style="width:100%" onclick="clearFilters()">Limpar</button></div>
+      </div>
+      <div class="table" style="margin-top:12px"><table><thead><tr><th>Data</th><th>Origem</th><th>Situação</th><th>Título</th><th>Autor</th><th>Correlation ID</th><th>Total</th><th>Ação</th></tr></thead><tbody id="histBody"><tr data-type="teams" data-status="sucesso" data-search="{&quot;id&quot;: 1, &quot;criado_em&quot;: &quot;2026-09-03t01:40:00z&quot;, &quot;tipo&quot;: &quot;teams&quot;, &quot;status&quot;: &quot;sucesso&quot;, &quot;titulo&quot;: &quot;canary control center&quot;, &quot;autor&quot;: &quot;github-actions&quot;, &quot;correlation_id&quot;: &quot;demo-001&quot;, &quot;total&quot;: 1, &quot;mensagem&quot;: &quot;mensagem demonstrativa entregue.&quot;, &quot;detalhes&quot;: {&quot;teams_notificado&quot;: true, &quot;route&quot;: &quot;webhook&quot;, &quot;status_code&quot;: 202}}">
+      <td>2026-09-03 01:40:00 UTC</td>
+      <td><span class="pill info">teams</span></td>
+      <td><span class="pill ok">sucesso</span></td>
+      <td>Canary Control Center</td><td>github-actions</td>
+      <td><code>demo-001</code></td><td>1</td>
+      <td><button class="btn small" onclick='showJson("{\"id\": 1, \"criado_em\": \"2026-09-03T01:40:00Z\", \"tipo\": \"teams\", \"status\": \"sucesso\", \"titulo\": \"Canary Control Center\", \"autor\": \"github-actions\", \"correlation_id\": \"demo-001\", \"total\": 1, \"mensagem\": \"Mensagem demonstrativa entregue.\", \"detalhes\": {\"teams_notificado\": true, \"route\": \"webhook\", \"status_code\": 202}}")'>Detalhes</button></td>
+    </tr>
+<tr data-type="planner" data-status="sucesso" data-search="{&quot;id&quot;: 2, &quot;criado_em&quot;: &quot;2026-09-03t01:20:00z&quot;, &quot;tipo&quot;: &quot;planner&quot;, &quot;status&quot;: &quot;sucesso&quot;, &quot;titulo&quot;: &quot;publicação governada&quot;, &quot;autor&quot;: &quot;reqsys&quot;, &quot;correlation_id&quot;: &quot;demo-002&quot;, &quot;total&quot;: 3, &quot;detalhes&quot;: {&quot;published&quot;: true}}">
+      <td>2026-09-03 01:20:00 UTC</td>
+      <td><span class="pill info">planner</span></td>
+      <td><span class="pill ok">sucesso</span></td>
+      <td>Publicação governada</td><td>reqsys</td>
+      <td><code>demo-002</code></td><td>3</td>
+      <td><button class="btn small" onclick='showJson("{\"id\": 2, \"criado_em\": \"2026-09-03T01:20:00Z\", \"tipo\": \"planner\", \"status\": \"sucesso\", \"titulo\": \"Publica\u00e7\u00e3o governada\", \"autor\": \"reqsys\", \"correlation_id\": \"demo-002\", \"total\": 3, \"detalhes\": {\"published\": true}}")'>Detalhes</button></td>
+    </tr>
+<tr data-type="teams" data-status="erro" data-search="{&quot;id&quot;: 3, &quot;criado_em&quot;: &quot;2026-09-03t00:50:00z&quot;, &quot;tipo&quot;: &quot;teams&quot;, &quot;status&quot;: &quot;erro&quot;, &quot;titulo&quot;: &quot;falha transitória de flow bot&quot;, &quot;autor&quot;: &quot;reqsys&quot;, &quot;correlation_id&quot;: &quot;demo-003&quot;, &quot;total&quot;: 1, &quot;mensagem&quot;: &quot;retentativas esgotadas — dado demonstrativo.&quot;, &quot;detalhes&quot;: {&quot;teams_notificado&quot;: false, &quot;error&quot;: &quot;simulado&quot;}}">
+      <td>2026-09-03 00:50:00 UTC</td>
+      <td><span class="pill info">teams</span></td>
+      <td><span class="pill err">erro</span></td>
+      <td>Falha transitória de Flow Bot</td><td>reqsys</td>
+      <td><code>demo-003</code></td><td>1</td>
+      <td><button class="btn small" onclick='showJson("{\"id\": 3, \"criado_em\": \"2026-09-03T00:50:00Z\", \"tipo\": \"teams\", \"status\": \"erro\", \"titulo\": \"Falha transit\u00f3ria de Flow Bot\", \"autor\": \"reqsys\", \"correlation_id\": \"demo-003\", \"total\": 1, \"mensagem\": \"Retentativas esgotadas \u2014 dado demonstrativo.\", \"detalhes\": {\"teams_notificado\": false, \"error\": \"simulado\"}}")'>Detalhes</button></td>
+    </tr></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h3>Código recuperado</h3><span class="pill ok">main · teamsGateway.js</span></div>
+    <div class="bd">
+      <details open><summary>frontend/src/services/teamsGateway.js</summary><pre>import { api } from &#x27;./api&#x27;
+import { acquireTeamsGraphToken } from &#x27;../auth/msal&#x27;
+
+export async function obterStatusTeamsGateway() {
+  const { data } = await api.get(&#x27;/v1/teams-gateway/status&#x27;)
+  return data.data
+}
+
+export async function obterStatusIdentidadeTeamsGateway() {
+  const { data } = await api.get(&#x27;/v1/teams-gateway/identity-status&#x27;)
+  return data.data
+}
+
+export async function simularRotaTeamsGateway(payload) {
+  const { data } = await api.post(&#x27;/v1/teams-gateway/routes&#x27;, payload)
+  return data.data
+}
+
+export async function enviarMensagemTeamsGateway(payload) {
+  const { data } = await api.post(&#x27;/v1/teams-gateway/messages&#x27;, payload)
+  return data.data
+}
+
+export async function enviarChatDelegadoTeamsGateway({
+  chatId,
+  texto,
+  contentType = &#x27;text&#x27;,
+  autor = &#x27;reqsys&#x27;,
+  metadata = {},
+}) {
+  const usuarioAccessToken = await acquireTeamsGraphToken()
+  return enviarMensagemTeamsGateway({
+    destino_tipo: &#x27;chat&#x27;,
+    modo: &#x27;graph_delegado&#x27;,
+    destino_id: chatId,
+    texto,
+    content_type: contentType,
+    usuario_access_token: usuarioAccessToken,
+    autor,
+    metadata,
+  })
+}
+
+export async function enviarWebhookTeamsGateway({
+  texto,
+  webhookUrl,
+  autor = &#x27;reqsys&#x27;,
+  metadata = {},
+}) {
+  const { data } = await api.post(&#x27;/v1/teams-gateway/messages/webhook&#x27;, {
+    destino_tipo: &#x27;canal&#x27;,
+    texto,
+    webhook_url: webhookUrl,
+    autor,
+    metadata,
+  })
+  return data.data
+}
+</pre></details>
+      <details><summary>Arquitetura recuperada</summary><pre>Teams Gateway
+├── graph_delegado
+├── webhook
+├── graph_app_only
+├── bot
+└── flow_bot
+
+Resiliência observada no projeto:
+├── correlation_id
+├── retentativas
+├── circuit breaker
+├── failover por proprietário
+└── validação de contrato de resposta</pre></details>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h3>Conectar à API real</h3><span class="pill warn">opcional</span></div>
+    <div class="bd">
+      <p class="muted">Esta versão prioriza dados visíveis offline. Para consultar o ambiente real, informe a base da API. A chamada depende de CORS/autenticação do seu ambiente.</p>
+      <div class="form">
+        <div style="grid-column:span 3"><label>Base da API</label><input id="apiBase" placeholder="https://reqsys-api..."></div>
+        <div><label>&nbsp;</label><button class="btn" style="width:100%" onclick="loadReal()">Consultar status</button></div>
+        <div><label>&nbsp;</label><button class="btn" style="width:100%" onclick="exportData()">Exportar JSON</button></div>
+      </div>
+      <pre id="realResult">Nenhuma consulta real executada.</pre>
+    </div>
+  </section>
+</div>
+
+<div id="modal" class="modal"><div class="modalBox"><button class="btn" style="float:right" onclick="closeModal()">Fechar</button><h3>Detalhes</h3><pre id="modalPre"></pre></div></div>
+
+<script>
+const DEMO_HISTORY=[{"id": 1, "criado_em": "2026-09-03T01:40:00Z", "tipo": "teams", "status": "sucesso", "titulo": "Canary Control Center", "autor": "github-actions", "correlation_id": "demo-001", "total": 1, "mensagem": "Mensagem demonstrativa entregue.", "detalhes": {"teams_notificado": true, "route": "webhook", "status_code": 202}}, {"id": 2, "criado_em": "2026-09-03T01:20:00Z", "tipo": "planner", "status": "sucesso", "titulo": "Publicação governada", "autor": "reqsys", "correlation_id": "demo-002", "total": 3, "detalhes": {"published": true}}, {"id": 3, "criado_em": "2026-09-03T00:50:00Z", "tipo": "teams", "status": "erro", "titulo": "Falha transitória de Flow Bot", "autor": "reqsys", "correlation_id": "demo-003", "total": 1, "mensagem": "Retentativas esgotadas — dado demonstrativo.", "detalhes": {"teams_notificado": false, "error": "simulado"}}];
+function applyFilters(){
+  const t=document.getElementById('fType').value.toLowerCase();
+  const s=document.getElementById('fStatus').value.toLowerCase();
+  const q=document.getElementById('fSearch').value.toLowerCase();
+  const rows=[...document.querySelectorAll('#histBody tr')]; let n=0;
+  rows.forEach(r=>{const ok=(!t||r.dataset.type===t)&&(!s||r.dataset.status===s)&&(!q||(r.dataset.search||'').includes(q));r.style.display=ok?'':'none';if(ok)n++});
+  document.getElementById('countLabel').textContent=n+' de '+rows.length;
+}
+['fType','fStatus','fSearch'].forEach(id=>document.getElementById(id).addEventListener('input',applyFilters));
+function clearFilters(){document.getElementById('fType').value='';document.getElementById('fStatus').value='';document.getElementById('fSearch').value='';applyFilters()}
+function showJson(raw){document.getElementById('modalPre').textContent=JSON.stringify(JSON.parse(raw),null,2);document.getElementById('modal').style.display='flex'}
+function closeModal(){document.getElementById('modal').style.display='none'}
+function demoReprocess(btn){const tr=btn.closest('tr');tr.children[2].innerHTML='<span class="pill ok">publicado</span>';tr.children[6].textContent=String(Number(tr.children[6].textContent||0)+1);tr.children[7].textContent='—'}
+async function loadReal(){
+  const base=document.getElementById('apiBase').value.trim().replace(/\/+$/,'');
+  const out=document.getElementById('realResult');
+  if(!base){out.textContent='Informe a base da API.';return}
+  out.textContent='Consultando...';
+  try{const r=await fetch(base+'/v1/teams-gateway/status',{headers:{Accept:'application/json'}});const txt=await r.text();out.textContent=txt}
+  catch(e){out.textContent='Falha na consulta: '+e.message+'\n\nO HTML continua funcional com os dados incorporados.'}
+}
+function exportData(){
+  const payload={tipo:'teams-gateway-control-center-autocontido',gerado_em:new Date().toISOString(),observacao:'dados operacionais abaixo são demonstrativos',history:DEMO_HISTORY,endpoints:[{"method": "GET", "path": "/v1/teams-gateway/status", "description": "Status e capacidades do gateway"}, {"method": "GET", "path": "/v1/teams-gateway/identity-status", "description": "Estado da identidade usada pelo gateway"}, {"method": "POST", "path": "/v1/teams-gateway/routes", "description": "Simulação/seleção de rota"}, {"method": "POST", "path": "/v1/teams-gateway/messages", "description": "Envio pelo contrato unificado"}, {"method": "POST", "path": "/v1/teams-gateway/messages/webhook", "description": "Envio explícito via webhook"}, {"method": "GET", "path": "/v1/hub-lowcode/integracoes/historico?limit=100", "description": "Histórico de integrações"}, {"method": "GET", "path": "/v1/hub-lowcode/integracoes/flow-bot/uso-hoje", "description": "Uso diário do Flow Bot"}, {"method": "GET", "path": "/v1/hub-lowcode/planner/publish?limit=100", "description": "Publicações governadas"}, {"method": "POST", "path": "/v1/hub-lowcode/planner/publish/{attempt_id}/reprocessar", "description": "Reprocessamento"}]};
+  const b=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='teams_gateway_dados_embutidos.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)
+}
+</script>
+</body></html>
