@@ -9,12 +9,14 @@
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
-    ]
+    ],
+    "evidence_contract": "Authorized Actions Gateway must persist runner pickup status/error and fail closed with SELF_HOSTED_RUNNER_UNAVAILABLE when desktop-rdc-recovery remains queued."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-rdc-selfhosted-recovery.requirements.md",
     "workflow": ".github/workflows/desktop-rdc-recovery.yml",
     "recovery_script": "scripts/pc24x7_rdc_recovery.py",
-    "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+    "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "runner_pickup_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml"
   }
 }
