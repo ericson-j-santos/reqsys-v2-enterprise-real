@@ -167,7 +167,7 @@ class LLMGateway:
 
     def gerar_ollama(
         self, *, base_url: str, model: str, prompt: str, timeout: int = 45,
-        fallback_model: str = '',
+        fallback_model: str = '', fallback_timeout: int | None = None,
     ) -> str:
         base = (base_url or 'http://localhost:11434').rstrip('/')
 
@@ -187,7 +187,19 @@ class LLMGateway:
             fallback = (fallback_model or '').strip()
             if not fallback or fallback == model:
                 raise
-            return _gerar(fallback)
+            fallback_payload = {
+                'model': fallback,
+                'prompt': prompt,
+                'stream': False,
+                'options': {'temperature': 0.1},
+            }
+            data = self._post_json(
+                f'{base}/api/generate',
+                fallback_payload,
+                headers=None,
+                timeout=max(1, int(fallback_timeout or timeout)),
+            )
+            return str(data.get('response') or '')
 
     def gerar_ollama_gateway(
         self, *, base_url: str, model: str, prompt: str, contexto: str, entrada: str,
