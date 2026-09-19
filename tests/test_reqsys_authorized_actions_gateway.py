@@ -94,3 +94,14 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
+
+
+def test_gateway_desktop_rdc_falha_fechado_sem_runner_e_preserva_evidencia() -> None:
+    content = _workflow()
+
+    assert "Validate desktop recovery runner pickup" in content
+    assert 'gh run view "$TARGET_RUN_ID"' in content
+    assert "runner_pickup_status" in content
+    assert "runner_pickup_error" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "steps.pickup.outputs.status == 'queued'" in content
