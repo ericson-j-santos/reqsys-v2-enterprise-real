@@ -96,4 +96,8 @@ def test_workflow_contract_is_fixed_to_pc24x7_desktop():
     assert "workflow_call:" not in workflow
     assert "inputs:" not in workflow
     assert "production_touched" not in workflow.lower()
-\n\ndef test_current_rdc_markers_are_allowlisted():\n    assert "// RDC_HEADLESS_V3_READY_CLAIM" in m.HEADLESS_MARKERS\n    assert "REM RDC_LAUNCHER_V5_READY_CLAIM" in m.INTERACTIVE_MARKERS\n
+
+
+def test_current_rdc_markers_are_allowlisted():
+    assert "// RDC_HEADLESS_V3_READY_CLAIM" in m.HEADLESS_MARKERS
+    assert "REM RDC_LAUNCHER_V5_READY_CLAIM" in m.INTERACTIVE_MARKERS
