@@ -27,3 +27,22 @@ class OllamaClient:
             data = resposta.json()
         latencia_ms = int((time.perf_counter() - inicio) * 1000)
         return str(data.get('response') or ''), latencia_ms
+
+
+    def generate_with_fallback(
+        self,
+        model: str,
+        prompt: str,
+        fallback_model: str = '',
+    ) -> tuple[str, int, str, bool]:
+        started = time.perf_counter()
+        try:
+            response, latency_ms = self.generate(model, prompt)
+            return response, latency_ms, model, False
+        except httpx.HTTPError:
+            fallback = (fallback_model or '').strip()
+            if not fallback or fallback == model:
+                raise
+            response, _ = self.generate(fallback, prompt)
+            total_ms = int((time.perf_counter() - started) * 1000)
+            return response, total_ms, fallback, True
