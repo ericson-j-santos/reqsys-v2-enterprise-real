@@ -1,0 +1,93 @@
+name: Ops Diagnose Teams Bot Contract 20260919
+
+on:
+  push:
+    branches:
+      - ops/diag-teams-bot-contract-20260919
+    paths:
+      - ".github/workflows/ops-diag-teams-bot-contract-20260919.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      BOT_SECRET_VAULT_NAME: reqsys-teams-bot-dev-secret
+      BOT_NAME: reqsys-teams-bot-dev-1228361750
+      RESOURCE_GROUP: rg-reqsys-teams-bot-dev
+      TARGET_ENDPOINT: https://reqsys-api-dev.fly.dev/v1/teams-gateway/ai-conversations/bot/messages
+      EVIDENCE_FILE: audit/teams-bot-contract-diagnostic.json
+      AZURE_CORE_OUTPUT: none
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Diagnosticar contrato sem mutação
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          secret_json="$(az keyvault secret show             --vault-name "$REQSYS_KEY_VAULT_NAME"             --name "$BOT_SECRET_VAULT_NAME"             --query '{enabled:attributes.enabled,tags:tags}'             --output json --only-show-errors)"
+          expected_app_id="$(jq -r '.tags["app-id"] // empty' <<<"$secret_json")"
+
+          bot_json="$(az bot show             --name "$BOT_NAME"             --resource-group "$RESOURCE_GROUP"             --query '{appId:properties.msaAppId,endpoint:properties.endpoint,tenantId:properties.msaAppTenantId,sku:sku.name}'             --output json --only-show-errors)"
+
+          EXPECTED_APP_ID="$expected_app_id" BOT_JSON="$bot_json" python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          expected_app_id=os.environ["EXPECTED_APP_ID"]
+          bot=json.loads(os.environ["BOT_JSON"])
+          current_app_id=str(bot.get("appId") or "")
+          current_endpoint=str(bot.get("endpoint") or "")
+          target=os.environ["TARGET_ENDPOINT"]
+          tenant=str(bot.get("tenantId") or "")
+          sku=str(bot.get("sku") or "")
+
+          payload={
+              "schema_version":"1.0.0",
+              "environment":"dev",
+              "status":"diagnosed",
+              "app_id_matches": current_app_id == expected_app_id,
+              "endpoint_matches": current_endpoint.rstrip("/") == target.rstrip("/"),
+              "sku_matches": sku == "F0",
+              "tenant_id_configured": bool(tenant),
+              "current_endpoint": current_endpoint,
+              "expected_endpoint": target,
+              "current_sku": sku,
+              "current_app_id_sha256": hashlib.sha256(current_app_id.encode()).hexdigest() if current_app_id else None,
+              "expected_app_id_sha256": hashlib.sha256(expected_app_id.encode()).hexdigest() if expected_app_id else None,
+              "mutation_executed": False,
+          }
+          Path(os.environ["EVIDENCE_FILE"]).write_text(json.dumps(payload,indent=2)+"\n")
+          print(json.dumps({
+              "app_id_matches":payload["app_id_matches"],
+              "endpoint_matches":payload["endpoint_matches"],
+              "sku_matches":payload["sku_matches"],
+              "tenant_id_configured":payload["tenant_id_configured"],
+              "current_endpoint":payload["current_endpoint"],
+              "current_sku":payload["current_sku"],
+          }))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teams-bot-contract-diagnostic-${{ github.run_id }}
+          path: audit/teams-bot-contract-diagnostic.json
+          if-no-files-found: error
+          retention-days: 7
