@@ -13,7 +13,7 @@ encerrar a issue quando a evidência chegar e limpar o ambiente local com segura
 
 | # | Ação | Automatizável? | O que passou a existir |
 |---|---|---|---|
-| 1 | Renovar `GH_PAT_ACTIONS` | ⛔ Gerar/colar o token — parcial no aceite | Watcher horário já validava a credencial mas **só comentava** na #1130; agora **encerra a issue** (`github-workflow-permission-readiness-watch.yml`) |
+| 1 | Permissão para promover workflows | ⚠️ Aprovação administrativa única | `GH_PAT_ACTIONS` foi removido deste fluxo; watcher e promoção usam token efêmero da GitHub App `reqsys-stack-rebase` com `Workflows: write` |
 | 2 | Remover 11 worktrees órfãos | ✅ Totalmente | `scripts/limpar-worktrees-orfaos.ps1` — idempotente, sem `--force`, com evidência JSON |
 | 3 | Definir ambientes TEST/PROD | ⛔ A escolha — ✅ o registro | `config/power-platform/environments.json` + validador + gate de CI |
 | 4 | Autorizar conexão Teams | ⛔ OAuth interativo | Os 3 valores exigidos viram campos validados no registro (GUID, nome lógico) |
@@ -21,28 +21,16 @@ encerrar a issue quando a evidência chegar e limpar o ambiente local com segura
 | 6 | Segundo proprietário do flow | ⛔ Power Automate UI | Nada a automatizar; passo a passo permanece no blueprint |
 | 7 | Assinatura Azure (tenant `tieri659`) | ⚪ Adiado | Só relevante se `flow_bot` migrar para Azure Bot Service |
 
-## 1. `GH_PAT_ACTIONS` — o que mudou no aceite
+## 1. GitHub App — promoção de workflows sem PAT
 
-O critério de conclusão da issue #1130 diz: *"watcher publica evidência e encerra esta
-issue"*. O watcher publicava a evidência e comentava, mas **não encerrava** — o aceite ficava
-manual para sempre. O passo `Record first validated credential readiness` agora:
+A dependência de `GH_PAT_ACTIONS` foi removida do watcher de prontidão e da promoção governada. Ambos emitem token temporário da GitHub App `reqsys-stack-rebase` e pedem somente as permissões necessárias.
 
-1. comenta uma única vez (marcador `<!-- reqsys-gh-workflow-token-ready -->`);
-2. lê o estado atual da issue;
-3. encerra com `state_reason: completed` se ainda estiver aberta.
+- watcher: `contents: write` + `workflows: write`;
+- promoção: `contents: write` + `workflows: write` + `pull-requests: write`;
+- private key permanece no secret store e nunca é exibida;
+- o token expira/revoga automaticamente ao fim do job.
 
-Nenhum valor de segredo é lido, impresso ou alterado. A parte humana continua sendo gerar o
-token fine-grained (Contents/Issues/Workflows → *Read and write*, escopo apenas
-`reqsys-v2-enterprise-real`) e colá-lo em **Settings → Secrets and variables → Actions**.
-
-Depois de salvar o segredo, não espere a próxima hora cheia:
-
-```
-Actions → GitHub Workflow Permission Readiness Watch → Run workflow → enforce: true
-```
-
-Verde nesse run = autenticação, criação/escrita/remoção da branch efêmera e permissão de
-workflow validadas, evidência publicada e #1130 encerrada. Segredo salvo, sozinho, não conta.
+Se a instalação da App ainda não tiver `Workflows: read/write`, o watcher retorna `app_workflows_permission_missing` e permanece fail-closed. A ação humana é apenas aprovar a nova permissão da instalação em sudo mode. Depois disso, a prova efêmera cria uma branch de teste, grava um workflow inerte, remove a branch e encerra a #1130 automaticamente.
 
 ## 2. Worktrees órfãos — automatizado
 
