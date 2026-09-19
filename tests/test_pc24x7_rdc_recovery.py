@@ -29,6 +29,8 @@ def test_task_name_is_strictly_allowlisted():
     with pytest.raises(m.RecoveryError, match="não allowlisted"):
         m.task_query(r"\Automation\ArbitraryTask")
     with pytest.raises(m.RecoveryError, match="não allowlisted"):
+        m.task_end(r"\Automation\ArbitraryTask")
+    with pytest.raises(m.RecoveryError, match="não allowlisted"):
         m.task_run(r"\Automation\ArbitraryTask")
 
 
@@ -42,13 +44,19 @@ def test_prefers_governed_headless_task(monkeypatch):
     )
     monkeypatch.setattr(m, "task_available", lambda task: True)
     observed = []
-    monkeypatch.setattr(m, "task_run", lambda task: observed.append(task) or completed(0))
+    monkeypatch.setattr(
+        m,
+        "restart_task",
+        lambda task: observed.append(task) or {"end_returncode": 0, "run_returncode": 0},
+    )
 
     result = m.recover(m.CONFIRM, "corr-test-headless")
 
     assert result["ok"] is True
     assert result["owner"] == "headless"
     assert observed == [m.TASK_HEADLESS]
+    assert result["attempts"][0]["end_returncode"] == 0
+    assert result["attempts"][0]["run_returncode"] == 0
 
 
 def test_falls_back_to_governed_interactive_task(monkeypatch):
@@ -61,13 +69,30 @@ def test_falls_back_to_governed_interactive_task(monkeypatch):
     )
     monkeypatch.setattr(m, "task_available", lambda task: task == m.TASK_INTERACTIVE)
     observed = []
-    monkeypatch.setattr(m, "task_run", lambda task: observed.append(task) or completed(0))
+    monkeypatch.setattr(
+        m,
+        "restart_task",
+        lambda task: observed.append(task) or {"end_returncode": 1, "run_returncode": 0},
+    )
 
     result = m.recover(m.CONFIRM, "corr-test-interactive")
 
     assert result["ok"] is True
     assert result["owner"] == "interactive"
     assert observed == [m.TASK_INTERACTIVE]
+    assert result["attempts"][0]["end_returncode"] == 1
+    assert result["attempts"][0]["run_returncode"] == 0
+
+
+def test_restart_task_runs_even_when_end_reports_not_running(monkeypatch):
+    observed = []
+    monkeypatch.setattr(m, "task_end", lambda task: observed.append(("end", task)) or completed(1))
+    monkeypatch.setattr(m, "task_run", lambda task: observed.append(("run", task)) or completed(0))
+
+    result = m.restart_task(m.TASK_INTERACTIVE)
+
+    assert observed == [("end", m.TASK_INTERACTIVE), ("run", m.TASK_INTERACTIVE)]
+    assert result == {"end_returncode": 1, "run_returncode": 0}
 
 
 def test_fails_closed_when_sources_are_not_governed(monkeypatch):
