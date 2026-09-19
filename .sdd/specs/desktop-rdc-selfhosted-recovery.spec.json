@@ -17,6 +17,18 @@
     ],
     "unknown_marker_policy": "fail_closed"
   },
+  "recovery_execution": {
+    "task_restart_sequence": [
+      "end",
+      "run"
+    ],
+    "end_failure_policy": "continue_when_task_not_running",
+    "run_failure_policy": "fail_closed",
+    "evidence_fields": [
+      "end_returncode",
+      "run_returncode"
+    ]
+  },
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
