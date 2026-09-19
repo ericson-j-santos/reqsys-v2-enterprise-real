@@ -557,6 +557,66 @@ def current_user_id() -> str:
     return f"{socket.gethostname()}\\\\{getpass.getuser()}"
 
 
+def runner_service_status() -> dict[str, Any]:
+    require_windows_desktop()
+    try:
+        import win32service  # type: ignore
+    except ImportError as exc:
+        raise SupervisorError("pywin32 indisponível no Python base") from exc
+
+    scm = win32service.OpenSCManager(
+        None,
+        None,
+        win32service.SC_MANAGER_CONNECT | win32service.SC_MANAGER_ENUMERATE_SERVICE,
+    )
+    matches: list[dict[str, Any]] = []
+    try:
+        services = win32service.EnumServicesStatusEx(
+            scm,
+            win32service.SERVICE_WIN32,
+            win32service.SERVICE_STATE_ALL,
+        )
+        for item in services:
+            service_name = str(item[0])
+            display_name = str(item[1])
+            haystack = f"{service_name} {display_name}".casefold()
+            if "actions.runner" not in haystack and "github actions runner" not in haystack:
+                continue
+            handle = win32service.OpenService(
+                scm,
+                service_name,
+                win32service.SERVICE_QUERY_CONFIG | win32service.SERVICE_QUERY_STATUS,
+            )
+            try:
+                config = win32service.QueryServiceConfig(handle)
+                status = win32service.QueryServiceStatus(handle)
+                matches.append(
+                    {
+                        "service_name": service_name,
+                        "display_name": display_name,
+                        "start_type": int(config[1]),
+                        "automatic": int(config[1]) == int(win32service.SERVICE_AUTO_START),
+                        "service_account": str(config[7]),
+                        "current_state": int(status[1]),
+                        "running": int(status[1]) == int(win32service.SERVICE_RUNNING),
+                    }
+                )
+            finally:
+                win32service.CloseServiceHandle(handle)
+    finally:
+        win32service.CloseServiceHandle(scm)
+
+    return {
+        "ok": bool(matches),
+        "host": socket.gethostname(),
+        "runner_services": matches,
+        "automatic_runner_present": any(item["automatic"] for item in matches),
+        "automatic_runner_running": any(
+            item["automatic"] and item["running"] for item in matches
+        ),
+    }
+
+
 def register_task_com(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
     require_windows_desktop()
     try:
@@ -955,6 +1015,8 @@ def main() -> int:
         p = sub.add_parser(name)
         p.add_argument("--metadata", type=Path, required=True)
 
+    sub.add_parser("runner-service-status")
+
     register = sub.add_parser("register-task-com")
     register.add_argument("--python-executable", type=Path, required=True)
     register.add_argument("--launcher", type=Path, required=True)
@@ -974,6 +1036,10 @@ def main() -> int:
             )
             print(json.dumps(result, ensure_ascii=True, sort_keys=True))
             return 0
+        if args.command == "runner-service-status":
+            result = runner_service_status()
+            print(json.dumps(result, ensure_ascii=True, sort_keys=True))
+            return 0 if result.get("automatic_runner_present") else 3
         if args.command == "register-task-com":
             result = register_task_com(
                 python_executable=args.python_executable.resolve(),
