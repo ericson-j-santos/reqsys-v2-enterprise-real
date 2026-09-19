@@ -149,6 +149,7 @@ def chamar_openai(prompt: str, correlation_id: str = '') -> str:
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
         correlation_id=correlation_id,
+        api_key=settings.codex_openai_key,
     ).text
 
 
@@ -159,6 +160,7 @@ def chamar_claude(prompt: str, correlation_id: str = '') -> str:
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
         correlation_id=correlation_id,
+        api_key=settings.codex_claude_key,
     ).text
 
 
@@ -169,6 +171,7 @@ def chamar_groq(prompt: str, correlation_id: str = '') -> str:
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
         correlation_id=correlation_id,
+        api_key=settings.groq_api_key,
     ).text
 
 
@@ -179,6 +182,7 @@ def chamar_gemini(prompt: str, correlation_id: str = '') -> str:
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
         correlation_id=correlation_id,
+        api_key=settings.gemini_api_key,
     ).text
 
 
