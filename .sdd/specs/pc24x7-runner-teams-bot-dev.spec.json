@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PC24x7 Runner Recovery and Teams Bot DEV",
+  "status": "ready_for_validation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_github_runner_recovery.py",
+      "tests/test_provision_pc24x7_teams_bot_runtime.py"
+    ]
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-runner-teams-bot-dev.requirements.md",
+    "runner_recovery": "scripts/pc24x7_github_runner_recovery.py",
+    "teams_provisioning": "scripts/provision_pc24x7_teams_bot_runtime.py",
+    "teams_dispatch": "scripts/dispatch_pc24x7_teams_bot_runtime.py",
+    "workflow": ".github/workflows/parallel-development-acceleration.yml",
+    "issues": [
+      1770,
+      1532,
+      993,
+      1705
+    ]
+  }
+}
