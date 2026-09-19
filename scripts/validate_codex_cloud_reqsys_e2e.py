@@ -28,8 +28,9 @@ from typing import Any
 import requests
 
 MODEL_KEYS = ("CODEX_OLLAMA_MODEL", "CODEX_OLLAMA_GATEWAY_MODEL")
+FALLBACK_MODEL_KEY = "CODEX_OLLAMA_FALLBACK_MODEL"
 BASE_URL_KEY = "CODEX_OLLAMA_BASE_URL"
-PROFILE_KEYS = (*MODEL_KEYS, BASE_URL_KEY)
+PROFILE_KEYS = (*MODEL_KEYS, FALLBACK_MODEL_KEY, BASE_URL_KEY)
 CODE_PROMPT = """Você é um revisor sênior de Python. Corrija a função abaixo e proponha testes mínimos.
 
 def normalize_ids(values):
@@ -69,7 +70,7 @@ def _read_windows_profile() -> dict[str, str | None]:
     return result
 
 
-def _load_profile_into_env(expected_model: str) -> dict[str, str]:
+def _load_profile_into_env(expected_model: str, expected_fallback_model: str) -> dict[str, str]:
     values = _read_windows_profile()
     missing = [name for name, value in values.items() if not value]
     if missing:
@@ -80,6 +81,8 @@ def _load_profile_into_env(expected_model: str) -> dict[str, str]:
         raise E2EError("CODEX_OLLAMA_MODEL diverge do modelo esperado")
     if resolved["CODEX_OLLAMA_GATEWAY_MODEL"] != expected_model:
         raise E2EError("CODEX_OLLAMA_GATEWAY_MODEL diverge do modelo esperado")
+    if resolved["CODEX_OLLAMA_FALLBACK_MODEL"] != expected_fallback_model:
+        raise E2EError("CODEX_OLLAMA_FALLBACK_MODEL diverge do fallback esperado")
     base = resolved["CODEX_OLLAMA_BASE_URL"].rstrip("/")
     if base not in {"http://127.0.0.1:11434", "http://localhost:11434"}:
         raise E2EError("CODEX_OLLAMA_BASE_URL não aponta para loopback esperado")
@@ -175,6 +178,7 @@ def _stack_env(profile: dict[str, str], temp_db: Path) -> dict[str, str]:
             "REQSYS_ENV": "dev",
             "REQSYS_AUTH_REQUIRED": "false",
             "REQSYS_OLLAMA_BASE_URL": profile["CODEX_OLLAMA_BASE_URL"],
+            "REQSYS_OLLAMA_FALLBACK_MODEL": profile["CODEX_OLLAMA_FALLBACK_MODEL"],
             "REQSYS_OLLAMA_TIMEOUT_SECONDS": "60",
             "COFRE_API_URL": "",
             "COFRE_SERVICE_TOKEN": "",
@@ -218,6 +222,27 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
             text=True,
         )
         gateway_health = _wait_http("http://127.0.0.1:8008/health", gateway, 30)
+
+        fallback_probe = requests.post(
+            "http://127.0.0.1:8008/v1/chat",
+            json={
+                "model": "__reqsys_cloud_unavailable__",
+                "fallback_model": profile["CODEX_OLLAMA_FALLBACK_MODEL"],
+                "task_type": "code",
+                "prompt": "Responda somente com FALLBACK_OK.",
+                "contexto": "negative-control",
+                "entrada": "fallback",
+                "correlation_id": "codex-cloud-fallback-20260919",
+                "source": "reqsys-codex-e2e",
+            },
+            timeout=90,
+        )
+        fallback_probe.raise_for_status()
+        fallback_data = fallback_probe.json()
+        if not fallback_data.get("fallback_used"):
+            raise E2EError("negative control não acionou fallback")
+        if fallback_data.get("model") != profile["CODEX_OLLAMA_FALLBACK_MODEL"]:
+            raise E2EError("negative control usou modelo de fallback inesperado")
 
         api = subprocess.Popen(
             [
@@ -287,6 +312,13 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
         return {
             "evidence_dir": str(temp),
             "gateway_health": gateway_health,
+            "fallback_probe": {
+                "requested_model": fallback_data.get("requested_model"),
+                "model": fallback_data.get("model"),
+                "fallback_used": fallback_data.get("fallback_used"),
+                "latency_ms": fallback_data.get("latency_ms"),
+                "response_excerpt": str(fallback_data.get("response") or "")[:200],
+            },
             "backend_health": backend_health,
             "codex_status": status.json()["data"],
             "provider": data.get("provider"),
@@ -307,12 +339,13 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validação E2E ReqSys -> Ollama cloud")
     parser.add_argument("--expected-model", default="gemma4:31b-cloud")
+    parser.add_argument("--expected-fallback-model", default="gemma4:26b-q8-code")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     args = parser.parse_args()
 
     root = args.root.resolve()
     try:
-        profile = _load_profile_into_env(args.expected_model)
+        profile = _load_profile_into_env(args.expected_model, args.expected_fallback_model)
         probe = _load_probe(root)
         direct = _direct_provider(root, probe)
         full = _full_endpoint(root, profile, probe)
@@ -320,6 +353,7 @@ def main() -> int:
             "result": "E2E_OK",
             "root": str(root),
             "expected_model": args.expected_model,
+            "expected_fallback_model": args.expected_fallback_model,
             "profile": profile,
             "direct_provider": direct,
             "full_endpoint": full,
