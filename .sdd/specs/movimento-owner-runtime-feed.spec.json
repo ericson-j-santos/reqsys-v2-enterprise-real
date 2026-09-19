@@ -8,7 +8,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Projeta telemetria operacional real do runtime ReqSys DEV para owner_movimento.fechamento_diario, sem fabricar pendências de negócio.",
+  "description": "No Noteri, coleta periodicamente telemetria operacional real do runtime ReqSys DEV no Desktop e grava em owner_movimento.fechamento_diario pelo Owner Gateway local, sem fabricar pendências de negócio.",
   "source": {
     "runtime_base": "http://127.0.0.1:8081",
     "endpoints": [
@@ -33,10 +33,19 @@
     "pendencias_historicas": "empty_until_semantic_source_exists",
     "pendencias_observacao": "empty_until_semantic_source_exists"
   },
+  "runtime_feed": {
+    "executor_host": "Noteri",
+    "source_runtime": "http://DESKTOP-PDQK954:8081",
+    "default_interval_seconds": 900,
+    "persistence": "HKCU Run + detached pythonw",
+    "owner_gateway": "local_not eri".replace(" ", "")
+  },
   "controls": {
     "explicit_non_business_label": true,
     "fail_closed_on_missing_metric": true,
     "owner_ingest_idempotent_sha256": true,
+    "owner_token_remains_on_noteri": true,
+    "no_new_inbound_port_required": true,
     "no_pii": true,
     "production_enabled": false
   },
