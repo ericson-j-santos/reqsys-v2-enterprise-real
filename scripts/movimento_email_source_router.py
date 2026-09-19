@@ -124,9 +124,10 @@ def select_route(
         source_dsn = module.read_secret("MOVIMENTO_EMAIL_SOURCE_DSN")
         module.validate_source_dsn(source_dsn)
         host = _dsn_host(source_dsn, module)
-    except Exception as exc:
-        # DSN presente porém inválido não deve ser mascarado por fallback.
-        result["hard_block"] = type(exc).__name__ + ":" + str(exc).splitlines()[0][:160]
+    except Exception:
+        # Não propagar mensagem da exceção: ela pode conter DSN/credencial.
+        # O código estável preserva o fail-closed sem expor material sensível.
+        result["hard_block"] = "corporate_source_configuration_invalid"
         return result
 
     if not dns_resolver(host):
