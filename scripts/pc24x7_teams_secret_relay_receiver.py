@@ -167,6 +167,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--evidence-file", type=Path, required=True)
     parser.add_argument("--e2e-detail", type=Path, required=True)
+    parser.add_argument("--handshake-file", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -245,7 +246,7 @@ def main() -> int:
 
     server = ThreadingHTTPServer((args.listen_host, args.listen_port), Handler)
     server.timeout = 2
-    print(json.dumps({
+    handshake = {
         "status": "ready",
         "listen_port": args.listen_port,
         "relay_path": relay_path,
@@ -254,7 +255,13 @@ def main() -> int:
         "expected_tenant_id": args.expected_tenant_id,
         "secret_value_exposed": False,
         "production_touched": False,
-    }, sort_keys=True), flush=True)
+    }
+    args.handshake_file.parent.mkdir(parents=True, exist_ok=True)
+    args.handshake_file.write_text(
+        json.dumps(handshake, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(handshake, sort_keys=True), flush=True)
 
     deadline = time.monotonic() + args.timeout_seconds
     while time.monotonic() < deadline and not state["done"]:
