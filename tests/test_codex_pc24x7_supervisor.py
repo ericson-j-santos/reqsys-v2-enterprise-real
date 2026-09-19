@@ -122,3 +122,8 @@ def test_postboot_requires_real_reboot_for_headless_evidence(monkeypatch, tmp_pa
     assert code == 4
     assert payload["reboot_observed"] is False
     assert payload["ready_postboot"] is False
+
+
+def test_windows_encoding_dependency_is_imported() -> None:
+    assert hasattr(m, "locale")
+    assert callable(m.locale.getpreferredencoding)
