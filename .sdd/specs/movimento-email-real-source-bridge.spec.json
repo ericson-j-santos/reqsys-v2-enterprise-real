@@ -2,7 +2,7 @@
   "feature_name": "movimento-email-real-source-bridge",
   "project": "ReqSys v2 Enterprise — Prospecção Movimento / PC24x7",
   "created_at": "2026-09-18",
-  "updated_at": "2026-09-18",
+  "updated_at": "2026-09-19",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -14,17 +14,25 @@
   "source": {
     "type": "sql_server_corporate",
     "access": "read_only",
-    "secret": "MOVIMENTO_EMAIL_SOURCE_DSN",
+    "connection_modes": [
+      "MOVIMENTO_EMAIL_SOURCE_DSN[_FILE]",
+      "MOVIMENTO_EMAIL_SOURCE_SERVER + MOVIMENTO_EMAIL_SOURCE_DATABASE com Windows Integrated Auth"
+    ],
     "synthetic": false
   },
   "target": {
     "type": "sql_server_dev_persistent",
-    "secret": "MOVIMENTO_EMAIL_TARGET_DSN",
+    "connection_modes": [
+      "MOVIMENTO_EMAIL_TARGET_DSN[_FILE]",
+      "localhost/ReqSysMovimentoDev com Windows Integrated Auth por padrão"
+    ],
     "schema": "movimento_src"
   },
   "controls": {
     "source_tls_required": true,
     "source_trust_server_certificate": false,
+    "source_passwordless_integrated_supported": true,
+    "target_secretless_local_default": true,
     "target_database_suffix": "Dev",
     "idempotency": "payload_sha256_plus_target_fingerprint",
     "source_tag": "CORPORATE_SQL",
