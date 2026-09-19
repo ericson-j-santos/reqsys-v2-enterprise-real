@@ -10,6 +10,8 @@ from scripts import local_codex_textonly as textonly
 from scripts import pending_development_local_codex as local_codex
 from scripts import pending_development_orchestrator as core
 
+BASE_SHA = "a" * 40
+
 
 def issue(number: int = 1677) -> dict[str, Any]:
     return {
@@ -55,7 +57,7 @@ def agent_blocked(*args, **kwargs) -> core.Decision:
     )
 
 
-def test_missing_agent_token_is_queued_locally() -> None:
+def test_missing_agent_token_dispatches_worker_pool_before_marker() -> None:
     client = FakeClient()
     decision = local_codex.process_issue_with_local_fallback(
         client,
@@ -66,19 +68,55 @@ def test_missing_agent_token_is_queued_locally() -> None:
         dispatched_routes=set(),
         fallback=agent_blocked,
         enabled=True,
+        base_sha=BASE_SHA,
     )
     assert decision.route == local_codex.LOCAL_CODEX_ROUTE
     assert decision.status == "dispatched"
     assert decision.action_executed is True
-    assert decision.reason.startswith("agent_task_unavailable_local_codex_queued:")
-    assert len(client.requests) == 1
-    body = str(client.requests[0][2]["body"])
+    assert decision.reason.startswith("agent_task_unavailable_worker_pool_dispatched:")
+    assert [path for _method, path, _payload in client.requests] == [
+        "actions/workflows/codex-worker-pool-handoff.yml/dispatches",
+        "issues/1677/comments",
+    ]
+    dispatch = client.requests[0][2]
+    assert dispatch is not None
+    assert dispatch["ref"] == "main"
+    assert dispatch["inputs"]["base_sha"] == BASE_SHA
+    assert dispatch["inputs"]["request_id"] == local_codex.local_codex_request_id("owner/repo", 1677, "main")
+    body = str(client.requests[1][2]["body"])
     assert local_codex.local_codex_marker(1677) in body
+    assert local_codex.worker_pool_marker(1677) in body
     assert '"create_pull_request": false' in body
     assert '"execution_mode": "branch_first"' in body
+    assert '"executor": "codex_worker_pool"' in body
 
 
-def test_existing_local_marker_prevents_duplicate() -> None:
+def test_existing_local_and_pool_markers_prevent_duplicate() -> None:
+    client = FakeClient()
+    client.comments = [{
+        "body": (
+            local_codex.local_codex_marker(1677)
+            + "\n"
+            + local_codex.worker_pool_marker(1677)
+        )
+    }]
+    decision = local_codex.process_issue_with_local_fallback(
+        client,
+        issue(),
+        {},
+        execute=True,
+        base_branch="main",
+        dispatched_routes=set(),
+        fallback=agent_blocked,
+        enabled=True,
+        base_sha=BASE_SHA,
+    )
+    assert decision.status == "already_dispatched"
+    assert decision.reason == "local_codex_worker_pool_request_already_present"
+    assert client.requests == []
+
+
+def test_legacy_local_marker_recovers_worker_pool_handoff() -> None:
     client = FakeClient()
     client.comments = [{"body": local_codex.local_codex_marker(1677)}]
     decision = local_codex.process_issue_with_local_fallback(
@@ -90,10 +128,16 @@ def test_existing_local_marker_prevents_duplicate() -> None:
         dispatched_routes=set(),
         fallback=agent_blocked,
         enabled=True,
+        base_sha=BASE_SHA,
     )
-    assert decision.status == "already_dispatched"
-    assert decision.reason == "local_codex_request_already_present"
-    assert client.requests == []
+    assert decision.status == "dispatched"
+    assert decision.action_executed is True
+    assert decision.reason.startswith("legacy_local_codex_worker_pool_recovered:")
+    assert [path for _method, path, _payload in client.requests] == [
+        "actions/workflows/codex-worker-pool-handoff.yml/dispatches",
+        "issues/1677/comments",
+    ]
+    assert local_codex.worker_pool_marker(1677) in str(client.requests[1][2]["body"])
 
 
 def test_disabled_fallback_preserves_fail_closed() -> None:
@@ -107,13 +151,14 @@ def test_disabled_fallback_preserves_fail_closed() -> None:
         dispatched_routes=set(),
         fallback=agent_blocked,
         enabled=False,
+        base_sha=BASE_SHA,
     )
     assert decision.route == "copilot_agent_task_branch_first"
     assert decision.status == "blocked"
     assert client.requests == []
 
 
-def test_premium_quota_failure_is_queued_locally() -> None:
+def test_premium_quota_failure_dispatches_worker_pool() -> None:
     client = FakeClient(token="configured")
 
     def quota_fallback(*args, **kwargs) -> core.Decision:
@@ -142,10 +187,29 @@ def test_premium_quota_failure_is_queued_locally() -> None:
         dispatched_routes=set(),
         fallback=quota_fallback,
         enabled=True,
+        base_sha=BASE_SHA,
     )
     assert decision.route == local_codex.LOCAL_CODEX_ROUTE
     assert decision.status == "dispatched"
-    assert decision.reason.startswith("agent_task_quota_local_codex_queued:")
+    assert decision.reason.startswith("agent_task_quota_worker_pool_dispatched:")
+    assert client.requests[0][1].endswith("/dispatches")
+
+
+def test_invalid_base_sha_fails_before_marker() -> None:
+    client = FakeClient()
+    with pytest.raises(core.GitHubApiError, match="GITHUB_SHA inválido"):
+        local_codex.process_issue_with_local_fallback(
+            client,
+            issue(),
+            {},
+            execute=True,
+            base_branch="main",
+            dispatched_routes=set(),
+            fallback=agent_blocked,
+            enabled=True,
+            base_sha="bad",
+        )
+    assert client.requests == []
 
 
 def test_request_id_is_deterministic() -> None:
