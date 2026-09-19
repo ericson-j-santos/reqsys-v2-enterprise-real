@@ -1,0 +1,103 @@
+name: Codex Worker Pool Handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue de origem"
+        required: true
+        type: string
+      request_id:
+        description: "Request ID determinístico do orquestrador"
+        required: true
+        type: string
+      base_branch:
+        description: "Branch base governada"
+        required: true
+        default: "main"
+        type: string
+      base_sha:
+        description: "SHA exato usado como base da task"
+        required: true
+        type: string
+      correlation_id:
+        description: "Correlation ID do handoff"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-worker-pool-handoff-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  enqueue:
+    name: Enfileirar fallback local no Worker Pool
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      CODEX_WORKER_POOL_URL: http://127.0.0.1:8097
+      EVIDENCE_FILE: artifacts/pending-development-worker-pool/evidence.json
+
+    steps:
+      - name: Checkout SHA imutável
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_sha }}
+          fetch-depth: 1
+
+      - name: Handoff governado para o Worker Pool
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python scripts/pending_development_worker_pool_bridge.py `
+            --issue-number "${{ inputs.issue_number }}" `
+            --repository "$env:GITHUB_REPOSITORY" `
+            --base-branch "${{ inputs.base_branch }}" `
+            --correlation-id "${{ inputs.correlation_id }}" `
+            --base-sha "${{ inputs.base_sha }}" `
+            --output "$env:EVIDENCE_FILE"
+
+      - name: Validar request_id e evidência independente
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $evidence = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
+          if ($evidence.result -ne "WORKER_POOL_ENQUEUED") {
+            throw "Worker Pool handoff não concluiu com evidência positiva."
+          }
+          if ($evidence.enqueued -ne 1) {
+            throw "Quantidade inesperada de tasks enfileiradas."
+          }
+          $item = $evidence.items[0]
+          if ($item.request_id -ne "${{ inputs.request_id }}") {
+            throw "request_id divergente do handoff solicitado."
+          }
+          if ($item.base_sha -ne "${{ inputs.base_sha }}") {
+            throw "base_sha divergente do handoff solicitado."
+          }
+          if ($item.replay_created -ne $false -or $item.independent_readback -ne $true) {
+            throw "Replay idempotente ou leitura independente não comprovados."
+          }
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-worker-pool-handoff-${{ github.run_id }}
+          path: artifacts/pending-development-worker-pool/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumo
+        if: always()
+        shell: pwsh
+        run: |
+          "## Codex Worker Pool Handoff" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Issue: #${{ inputs.issue_number }}" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Base SHA: `${{ inputs.base_sha }}`" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Request ID: `${{ inputs.request_id }}`" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Merge/deploy: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Token exposto: não" | Add-Content $env:GITHUB_STEP_SUMMARY
