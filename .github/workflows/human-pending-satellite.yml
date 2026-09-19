@@ -24,7 +24,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
-  actions: read
+  actions: write
   checks: read
   deployments: read
 
@@ -50,8 +50,19 @@ jobs:
       - name: Instalar dependência de teste
         run: python -m pip install --disable-pip-version-check pytest==9.0.3
 
-      - name: Executar testes do classificador
-        run: python -m pytest -q tests/test_human_pending_satellite.py
+      - name: Executar testes do classificador e remediador
+        run: |
+          python -m pytest -q \
+            tests/test_human_pending_satellite.py \
+            tests/test_human_pending_auto_remediation.py
+
+      - name: Tentar remediação automática antes da escalada
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/human_pending_auto_remediation.py \
+            --output artifacts/human-pending-satellite/remediation.json
 
       - name: Executar rotina satélite
         env:
@@ -64,7 +75,9 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
             args+=(--dry-run)
           fi
-          python scripts/human_pending_satellite.py "${args[@]}"
+          python scripts/human_pending_satellite.py \
+            --remediation-file artifacts/human-pending-satellite/remediation.json \
+            "${args[@]}"
 
       - name: Resumo
         if: always()
@@ -91,6 +104,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: human-pending-satellite-${{ github.run_id }}
-          path: artifacts/human-pending-satellite/evidence.json
+          path: artifacts/human-pending-satellite/
           if-no-files-found: ignore
           retention-days: 30
