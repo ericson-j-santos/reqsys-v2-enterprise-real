@@ -13,8 +13,10 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .maintenance import recover_rdc
+
 VALID_PROFILES = {"NORMAL", "ESTUDO"}
-SAFE_TASK_TYPES = {"orchestrator.selftest"}
+SAFE_TASK_TYPES = {"orchestrator.selftest", "host.rdc.recover.v1"}
 
 
 def utc_iso() -> str:
@@ -172,6 +174,18 @@ class WorkerAgent:
                 "input": payload.get("input"),
                 "observed_at": utc_iso(),
             }
+        if task_type == "host.rdc.recover.v1":
+            payload = item.get("payload") or {}
+            result = recover_rdc(target_host=payload.get("target_host"))
+            result.update(
+                {
+                    "worker_id": self.config.worker_id,
+                    "device_name": self.device_name,
+                    "correlation_id": item.get("correlation_id"),
+                    "observed_at": utc_iso(),
+                }
+            )
+            return result
         raise RuntimeError("unreachable task type")
 
     def process_one(self) -> dict[str, Any] | None:
