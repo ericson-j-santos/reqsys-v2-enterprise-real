@@ -221,6 +221,7 @@ def test_invalid_idempotency_key_fails_before_persistence(service_id):
     response = client.post('/v1/service-cases', json=payload)
     assert response.status_code == 422
 
+
 def test_log_value_removes_line_breaks():
     assert _safe_log_value('corr\r\nforged') == 'corrforged'
 
