@@ -255,17 +255,24 @@ def wait_for_count(key: str, baseline: int, timeout: float) -> bool:
     return False
 
 
-def apply(confirm: str) -> dict:
+CURRENT_STAGE["value"] = "validate"
     validate(socket.gethostname(), os.name, confirm)
+    CURRENT_STAGE["value"] = "account_identity"
     user_id, sid = account_identity()
+    CURRENT_STAGE["value"] = "batch_rights"
     configure_batch_rights(sid)
+    CURRENT_STAGE["value"] = "runtime_acl"
     grant_runtime_acl(sid)
+    CURRENT_STAGE["value"] = "service_profile"
     profile = prepare_service_profile(sid)
+    CURRENT_STAGE["value"] = "service_wrapper"
     write_service_wrapper(profile)
     node = resolve_node()
 
     before = marker_counts()
+    CURRENT_STAGE["value"] = "register_task"
     folder, task = register_task(user_id, node)
+    CURRENT_STAGE["value"] = "start_task"
     task.Run("")
     if not wait_for_count("runner", before["runner"], 20):
         raise RuntimeError("headless_runner_did_not_start")
@@ -318,6 +325,7 @@ def main() -> int:
             json.dumps(
                 {
                     "ok": False,
+                    "stage": CURRENT_STAGE.get("value"),
                     "error": str(exc),
                     "error_type": type(exc).__name__,
                     "password_used": False,
