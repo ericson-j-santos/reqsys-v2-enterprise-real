@@ -56,7 +56,7 @@ BLOCKING_RUNTIME_PREFIXES = ("backend/app/", "app/", "api/", "services/", "confi
 BLOCKING_RUNTIME_FILENAMES = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "fly.toml", "nginx.conf"}
 DYNAMIC_SECRET_REFERENCE = re.compile(
     r"""(?ix)
-    \b(?:password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*
+    (?:password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*
     (?P<quote>['"])
     \$\{[A-Z_][A-Z0-9_]*(?::?\?[^}]*)?\}
     (?P=quote)
