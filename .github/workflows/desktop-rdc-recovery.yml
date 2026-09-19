@@ -1,0 +1,49 @@
+name: Desktop RDC Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-rdc-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Recover RDC on PC24x7 Desktop
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      CORRELATION_ID: rdc-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/desktop-rdc-recovery/evidence.json
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify exact host and recover governed RDC
+        shell: pwsh
+        run: python scripts/pc24x7_rdc_recovery.py --confirm RECOVER-GOVERNED-RDC --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Upload sanitized recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: desktop-rdc-recovery-${{ github.run_id }}
+          path: artifacts/desktop-rdc-recovery/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          "## Desktop RDC Recovery" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
