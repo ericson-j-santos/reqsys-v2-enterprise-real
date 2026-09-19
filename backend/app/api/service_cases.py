@@ -205,8 +205,10 @@ def create_service_case(
         to_state=domain.state.value,
         correlation_id=correlation_id,
     )
-    db.add_all([record, event])
+    db.add(record)
     try:
+        db.flush()
+        db.add(event)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
