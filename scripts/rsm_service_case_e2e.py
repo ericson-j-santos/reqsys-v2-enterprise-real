@@ -124,6 +124,7 @@ def run(base_url: str, database_url: str) -> dict:
     _assert(initial_db['state'] == 'NEW', 'estado inicial persistido não é NEW')
 
     transitions = []
+    stale_version_control = None
     for target in ('TRIAGE', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'):
         body = {
             'target_state': target,
@@ -140,8 +141,22 @@ def run(base_url: str, database_url: str) -> dict:
             correlation_id=correlation_id,
         )
         data = _data(response)
+        previous_version = case['version']
         case = data['case']
         transitions.append({'target': target, 'state': case['state'], 'version': case['version']})
+        if target == 'TRIAGE':
+            stale = _post(
+                session,
+                base_url.rstrip('/') + f"/v1/service-cases/{case['case_id']}/transitions",
+                json_body={
+                    'target_state': 'CANCELED',
+                    'expected_version': previous_version,
+                    'event_id': str(uuid4()),
+                },
+                correlation_id=correlation_id,
+            )
+            _assert(stale.status_code == 409, f'versão stale retornou HTTP {stale.status_code}')
+            stale_version_control = 'passed'
 
     terminal_db = _db_read(database_url, idempotency_key)
     _assert(terminal_db['state'] == 'CLOSED', 'leitura independente não confirmou CLOSED')
@@ -211,6 +226,7 @@ def run(base_url: str, database_url: str) -> dict:
         'independent_readback': 'postgresql',
         'positive': 'passed',
         'negative_control': 'passed',
+        'stale_version_control': stale_version_control,
         'replay': 'passed',
         'test_of_test': 'passed',
         'async_applicable': False,
