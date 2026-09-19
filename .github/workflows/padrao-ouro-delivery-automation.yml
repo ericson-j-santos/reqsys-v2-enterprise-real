@@ -75,9 +75,6 @@ jobs:
         run: |
           set -euo pipefail
           export GH_TOKEN="${GITHUB_TOKEN}"
-          if [ -n "${{ secrets.GH_PAT_ACTIONS }}" ]; then
-            echo "::notice::GH_PAT_ACTIONS ignorado neste job; usando GITHUB_TOKEN com pull-requests: write."
-          fi
           python scripts/auto_open_agent_pr.py
 
       - name: Publicar artifact de PR automático
@@ -458,6 +455,6 @@ jobs:
             echo "Correlation ID: `$CORRELATION_ID`"
             if [ "${{ needs.auto-open-pr.result }}" = "failure" ]; then
               echo ""
-              echo "> PR automático falhou: configure o secret `GH_PAT_ACTIONS` com escopo `repo` e permissão de PR."
+              echo "> PR automático falhou: verifique a permissão `pull-requests: write` do token efêmero usado pelo workflow."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
