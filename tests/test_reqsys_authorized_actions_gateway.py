@@ -90,7 +90,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
     assert "desktop-rdc-recovery.yml)" in content
-    assert "desktop-rdc-recovery.yml|" in content
+    assert "|desktop-rdc-recovery.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
