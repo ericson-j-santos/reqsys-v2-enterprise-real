@@ -11,12 +11,15 @@ from pathlib import Path
 TASK_FOLDER = r"\Automation"
 TASK_NAME = "ReqSysOrchestrator24x7"
 TASK_CREATE_OR_UPDATE = 6
+TASK_LOGON_S4U = 2
 TASK_LOGON_INTERACTIVE_TOKEN = 3
 TASK_RUNLEVEL_LUA = 0
+TASK_TRIGGER_BOOT = 8
 TASK_TRIGGER_LOGON = 9
 TASK_TRIGGER_DAILY = 2
 TASK_ACTION_EXEC = 0
 TASK_INSTANCES_IGNORE_NEW = 2
+VALID_LOGON_MODES = {"interactive", "s4u"}
 
 
 def identity() -> str:
@@ -45,7 +48,11 @@ def configure(
     service_config: Path,
     python_exe: Path,
     start_in_seconds: int,
-) -> None:
+    logon_mode: str = "interactive",
+) -> int:
+    if logon_mode not in VALID_LOGON_MODES:
+        raise ValueError("unsupported logon_mode")
+
     definition.RegistrationInfo.Description = (
         "Governed resilient ReqSys orchestrator supervisor"
     )
@@ -63,15 +70,22 @@ def configure(
     except Exception:
         pass
 
+    logon_type = (
+        TASK_LOGON_S4U if logon_mode == "s4u" else TASK_LOGON_INTERACTIVE_TOKEN
+    )
     principal = definition.Principal
     principal.UserId = identity()
-    principal.LogonType = TASK_LOGON_INTERACTIVE_TOKEN
+    principal.LogonType = logon_type
     principal.RunLevel = TASK_RUNLEVEL_LUA
 
     triggers = definition.Triggers
-    logon = triggers.Create(TASK_TRIGGER_LOGON)
-    logon.Enabled = True
-    logon.UserId = identity()
+    if logon_mode == "s4u":
+        boot = triggers.Create(TASK_TRIGGER_BOOT)
+        boot.Enabled = True
+    else:
+        logon = triggers.Create(TASK_TRIGGER_LOGON)
+        logon.Enabled = True
+        logon.UserId = identity()
 
     daily = triggers.Create(TASK_TRIGGER_DAILY)
     daily.Enabled = True
@@ -87,6 +101,7 @@ def configure(
     action.Path = str(python_exe)
     action.Arguments = f'-m scripts.service_supervisor --config "{service_config}"'
     action.WorkingDirectory = str(install_root)
+    return logon_type
 
 
 def snapshot(task) -> dict[str, object]:
@@ -117,6 +132,7 @@ def apply(
     python_exe: Path,
     start_in_seconds: int,
     run_now: bool,
+    logon_mode: str = "interactive",
 ) -> dict[str, object]:
     if not install_root.is_dir():
         raise FileNotFoundError(install_root)
@@ -129,12 +145,13 @@ def apply(
 
     service, folder = connect()
     definition = service.NewTask(0)
-    configure(
+    logon_type = configure(
         definition,
         install_root=install_root,
         service_config=service_config,
         python_exe=python_exe,
         start_in_seconds=start_in_seconds,
+        logon_mode=logon_mode,
     )
     task = folder.RegisterTaskDefinition(
         TASK_NAME,
@@ -142,7 +159,7 @@ def apply(
         TASK_CREATE_OR_UPDATE,
         identity(),
         None,
-        TASK_LOGON_INTERACTIVE_TOKEN,
+        logon_type,
     )
     state = snapshot(task)
     expected_args = f'-m scripts.service_supervisor --config "{service_config}"'
@@ -154,7 +171,7 @@ def apply(
         "multiple_instances": TASK_INSTANCES_IGNORE_NEW,
         "restart_count": 999,
         "restart_interval": "PT1M",
-        "principal_logon_type": TASK_LOGON_INTERACTIVE_TOKEN,
+        "principal_logon_type": logon_type,
         "trigger_count": 2,
         "action_count": 1,
         "action_path": str(python_exe),
@@ -173,6 +190,7 @@ def apply(
         instance = str(getattr(running, "InstanceGuid", ""))
     return {
         "result": "ORCHESTRATOR_TASK_AUTOSTART_APPLIED",
+        "logon_mode": logon_mode,
         "run_now": run_now,
         "running_instance": instance,
         **state,
@@ -185,6 +203,11 @@ def main() -> int:
     parser.add_argument("--service-config", required=True)
     parser.add_argument("--python-exe", default=sys.executable)
     parser.add_argument("--start-in-seconds", type=int, default=30)
+    parser.add_argument(
+        "--logon-mode",
+        choices=sorted(VALID_LOGON_MODES),
+        default="interactive",
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--run-now", action="store_true")
     args = parser.parse_args()
@@ -198,6 +221,7 @@ def main() -> int:
                 "install_root": args.install_root,
                 "service_config": args.service_config,
                 "python_exe": args.python_exe,
+                "logon_mode": args.logon_mode,
             }, sort_keys=True))
             return 0
         result = apply(
@@ -206,6 +230,7 @@ def main() -> int:
             python_exe=Path(args.python_exe),
             start_in_seconds=args.start_in_seconds,
             run_now=args.run_now,
+            logon_mode=args.logon_mode,
         )
         print(json.dumps(result, sort_keys=True))
         return 0
