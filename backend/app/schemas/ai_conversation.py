@@ -10,14 +10,14 @@ from app.services.ai_corporate_policy import (
     policy_mode,
 )
 
-AIProvider = Literal['openai', 'claude', 'gemini', 'groq', 'ollama']
+AIProvider = Literal['openai', 'claude', 'gemini', 'groq', 'ollama', 'ollama_gateway']
 AIDataClassification = Literal['public', 'internal', 'confidential', 'restricted']
 TeamsDestinationType = Literal['auto', 'chat', 'chat_1a1', 'canal', 'webhook']
 TeamsMode = Literal['auto', 'graph_delegado', 'webhook', 'graph_app_only', 'bot', 'flow_bot']
 
 
 class AIConversationCreateRequest(BaseModel):
-    provider: AIProvider
+    provider: AIProvider = 'ollama_gateway'
     model: str = Field(..., min_length=1, max_length=160)
     mensagem: str = Field(..., min_length=1, max_length=20000)
     data_classification: AIDataClassification = 'internal'
