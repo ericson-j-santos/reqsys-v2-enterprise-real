@@ -29,10 +29,25 @@ O nome histórico `Planner Teams Notify DEV Acceptance` permanece disponível po
 4. O E2E real Planner→Teams retorna `status=passed`, `auth_mode=oidc`, CT-01 negativo, CT-02 positivo e cleanup concluído.
 5. Os módulos Device Code são removidos somente após busca confirmar ausência de consumidores ativos.
 
-## Requisito 7 — flows ativos
-Antes de criar tarefas de prova, o E2E deve localizar os dois flows Planner→Teams no Dataverse, validar as referências `shared_planner` e `shared_teams`, ativar somente quando necessário e confirmar `statecode=1/statuscode=2` sem alterar o `clientdata`.
+## Requisito 7 — flows ativos e cartão reconciliado
+Antes de criar tarefas de prova, o E2E deve localizar os dois flows Planner→Teams no Dataverse, validar as referências `shared_planner` e `shared_teams` e reconciliar, quando houver drift, somente `Notificar_Teams.inputs.parameters["body/messageBody"]`.
 
+A reconciliação deve falhar fechada se o alvo não for exatamente `shared_teams/PostCardToConversation`, usar o `@odata.etag` corrente para concorrência otimista, preservar destinatário, conexões e todo o restante do `clientdata`, reler o flow após o PATCH e validar independentemente o contrato do cartão. Se a leitura pós-PATCH divergir, deve tentar restaurar o `clientdata` original antes de falhar.
+
+O cartão corrente deve:
+- usar o título operacional do evento;
+- destacar o título da tarefa;
+- expor somente `Progresso` e `Vencimento` na área principal;
+- não exibir o ID bruto do plano;
+- usar `Sem prazo` quando aplicável;
+- manter o ID da tarefa apenas como metadado secundário;
+- fornecer `Abrir no Planner` para a tarefa correta.
+
+Depois da reconciliação, o E2E deve ativar somente quando necessário, confirmar `statecode=1/statuscode=2` e comprovar que a ativação não alterou o `clientdata` reconciliado.
 
 ## Requisito 8 — aquecimento do gatilho
 Após confirmar os flows ativos, o workflow deve aguardar 15 segundos antes de criar as tarefas de prova, preservando a janela já usada pelo acceptance legado para evitar perda do primeiro evento do gatilho recém-ativado.
 
+
+## Requisito 9 — prova visual do cartão
+O controle positivo do Runtime E2E deve ler a mensagem real no Teams via Microsoft Graph e validar o Adaptive Card serializado no attachment. O run só pode passar quando o cartão observado contiver `Progresso` e `Vencimento`, não contiver `Plano` ou `Percentual` legados, expuser `Abrir no Planner` e o link apontar para o ID exato da tarefa criada no próprio run.

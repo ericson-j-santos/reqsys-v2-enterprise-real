@@ -9,12 +9,16 @@ on:
       - '.github/workflows/runtime-e2e-continuous.yml'
       - 'scripts/planner_teams_runtime_e2e.mjs'
       - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
+      - 'scripts/planner_teams_flow_state_oidc.py'
+      - 'tests/test_planner_teams_flow_state_oidc.py'
   pull_request:
     branches: [main]
     paths:
       - '.github/workflows/runtime-e2e-continuous.yml'
       - 'scripts/planner_teams_runtime_e2e.mjs'
       - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
+      - 'scripts/planner_teams_flow_state_oidc.py'
+      - 'tests/test_planner_teams_flow_state_oidc.py'
   schedule:
     # 09:15 BRT (UTC-3), dias úteis.
     - cron: '15 12 * * 1-5'
@@ -127,7 +131,7 @@ jobs:
           echo "POWER_PLATFORM_GRAPH_ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
           echo "POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN=$dataverse_token" >> "$GITHUB_ENV"
 
-      - name: Garantir flows Planner → Teams ativos via Dataverse
+      - name: Reconciliar cartão e garantir flows Planner → Teams ativos via Dataverse
         run: |
           python scripts/planner_teams_flow_state_oidc.py \
             --output "$PLANNER_TEAMS_FLOW_STATE_EVIDENCE_PATH"
@@ -181,4 +185,4 @@ jobs:
           echo '- Autenticação Graph exigida: GitHub OIDC / Workload Identity Federation.' >> "$GITHUB_STEP_SUMMARY"
           echo '- Timeout de observação: 900 s' >> "$GITHUB_STEP_SUMMARY"
           echo '- Política: tarefa normal é controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Sem login por device code e sem reprovisionamento de flow.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Sem login por device code; reconciliação limitada ao cartão do flow, sem reprovisionamento integral.' >> "$GITHUB_STEP_SUMMARY"

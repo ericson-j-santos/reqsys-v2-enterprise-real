@@ -36,9 +36,85 @@ export function messageContainsTitle(message, title) {
   return JSON.stringify(message).includes(title)
 }
 
-export function evaluateContract({ normalFound, e2eFound }) {
+function parseAttachmentContent(value) {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  if (typeof value !== 'string') return null
+  try { return JSON.parse(value) } catch { return null }
+}
+
+function findAdaptiveCard(value, depth = 0) {
+  if (!value || depth > 3) return null
+  const parsed = parseAttachmentContent(value)
+  if (!parsed || typeof parsed !== 'object') return null
+  if (parsed.type === 'AdaptiveCard') return parsed
+  if (parsed.content) {
+    const nested = findAdaptiveCard(parsed.content, depth + 1)
+    if (nested) return nested
+  }
+  return null
+}
+
+export function adaptiveCardFromMessage(message) {
+  for (const attachment of message?.attachments || []) {
+    const card = findAdaptiveCard(attachment?.content)
+    if (card) return card
+  }
+  return null
+}
+
+export function evaluatePlannerCard(message, taskId) {
+  const card = adaptiveCardFromMessage(message)
+  if (!card) {
+    return {
+      passed: false,
+      reason: 'ct03_adaptive_card_absent',
+      summary: { adaptive_card_found: false },
+    }
+  }
+
+  const body = Array.isArray(card.body) ? card.body : []
+  const title = String(body.find((item) => item?.type === 'TextBlock')?.text || '')
+  const facts = body
+    .filter((item) => item?.type === 'FactSet')
+    .flatMap((item) => Array.isArray(item.facts) ? item.facts : [])
+  const factMap = Object.fromEntries(
+    facts.map((fact) => [String(fact?.title || ''), String(fact?.value || '')]),
+  )
+  const factTitles = Object.keys(factMap).sort()
+  const openAction = (Array.isArray(card.actions) ? card.actions : []).find(
+    (item) => item?.type === 'Action.OpenUrl' && item?.title === 'Abrir no Planner',
+  )
+  const openUrl = String(openAction?.url || '')
+  const taskLinkMatches = Boolean(taskId) && openUrl.includes(String(taskId))
+  const passed = (
+    title === 'Nova tarefa no Planner'
+    && JSON.stringify(factTitles) === JSON.stringify(['Progresso', 'Vencimento'])
+    && factMap.Vencimento === 'Sem prazo'
+    && Boolean(openAction)
+    && taskLinkMatches
+  )
+
+  return {
+    passed,
+    reason: passed ? 'card_contract_satisfied' : 'ct03_card_contract_mismatch',
+    summary: {
+      adaptive_card_found: true,
+      title,
+      fact_titles: factTitles,
+      vencimento: factMap.Vencimento || null,
+      has_legacy_plan_fact: Object.hasOwn(factMap, 'Plano'),
+      has_legacy_percentual_fact: Object.hasOwn(factMap, 'Percentual'),
+      has_open_planner: Boolean(openAction),
+      task_link_matches: taskLinkMatches,
+    },
+  }
+}
+
+export function evaluateContract({ normalFound, e2eFound, cardPassed }) {
   if (e2eFound) return { passed: false, reason: 'ct01_e2e_message_observed' }
   if (!normalFound) return { passed: false, reason: 'ct02_normal_message_not_observed' }
+  if (!cardPassed) return { passed: false, reason: 'ct03_card_contract_not_satisfied' }
   return { passed: true, reason: 'contract_satisfied' }
 }
 
@@ -243,7 +319,7 @@ async function main() {
   }
 
   const evidence = {
-    schema_version: '1.2.0',
+    schema_version: '1.3.0',
     capability: 'planner-teams-runtime-e2e-continuous',
     mode: 'steady_state_black_box',
     environment: targetEnvironment,
@@ -261,6 +337,7 @@ async function main() {
     criteria: {
       ct01: 'tarefa REQSYS-E2E-* nao pode produzir mensagem no Teams',
       ct02: 'tarefa normal deve produzir mensagem no Teams',
+      ct03: 'cartao da tarefa normal deve usar contrato atual: Progresso/Vencimento, sem Plano bruto e com Abrir no Planner',
       positive_control_required: true,
     },
     timing: {
@@ -315,6 +392,7 @@ async function main() {
       settleSeconds,
     })
 
+    const normalCard = evaluatePlannerCard(observed.normalMessage, normalTask.id)
     evidence.observations = {
       polls: observed.polls,
       settle_polls: observed.settlePolls,
@@ -326,6 +404,7 @@ async function main() {
         id: String(observed.e2eMessage.id || ''),
         created_at: String(observed.e2eMessage.createdDateTime || ''),
       } : null,
+      normal_card: normalCard.summary,
       normal_observed_at: observed.normalObservedAt,
     }
 
@@ -337,6 +416,7 @@ async function main() {
     const contract = evaluateContract({
       normalFound: Boolean(observed.normalMessage),
       e2eFound: Boolean(observed.e2eMessage),
+      cardPassed: normalCard.passed,
     })
     evidence.contract = contract
     if (!contract.passed) throw new Error(contract.reason)
