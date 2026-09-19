@@ -35,7 +35,9 @@ TASK_ACTION_EXEC = 0
 TASK_LOGON_S4U = 2
 TASK_CREATE_OR_UPDATE = 6
 TASK_RUNLEVEL_LUA = 0
+TASK_RUNLEVEL_HIGHEST = 1
 TASK_INSTANCES_IGNORE_NEW = 2
+HEADLESS_CONFIRM = "ENABLE-NOTERI-HEADLESS-S4U"
 
 
 def now_iso() -> str:
@@ -59,6 +61,18 @@ def metadata_path() -> Path:
 
 def evidence_path() -> Path:
     return runtime_root() / "noteri-host-profile-postboot.json"
+
+
+def profile_path() -> Path:
+    return runtime_root() / "host-profile.json"
+
+
+def audit_path() -> Path:
+    return runtime_root() / "host-profile-audit.jsonl"
+
+
+def agent_state_path() -> Path:
+    return runtime_root() / "host-profile-agent.json"
 
 
 def atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -87,6 +101,26 @@ def windows_boot_epoch() -> int:
 
 def reboot_observed(baseline_boot_epoch: int, current_boot_epoch: int) -> bool:
     return abs(current_boot_epoch - baseline_boot_epoch) > REBOOT_TOLERANCE_SECONDS
+
+
+def is_admin() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
+
+
+def validate_headless_preconditions(*, host: str, platform: str, elevated: bool, confirm: str) -> None:
+    if host.casefold() != "noteri":
+        raise RuntimeError("instalação headless permitida somente no host Noteri")
+    if platform != "nt":
+        raise RuntimeError("instalação headless exige Windows")
+    if confirm != HEADLESS_CONFIRM:
+        raise RuntimeError("confirmação headless inválida")
+    if not elevated:
+        raise RuntimeError("admin_elevation_required")
 
 
 def current_user_id() -> str:
@@ -158,6 +192,54 @@ def _is_access_denied(exc: BaseException) -> bool:
         or "access is denied" in text
         or "acesso negado" in text
     )
+
+
+def control_arguments(target_control: Path) -> str:
+    return (
+        f'"{target_control}" start --host Noteri '
+        f'--profile-path "{profile_path()}" '
+        f'--audit-path "{audit_path()}" '
+        f'--state-path "{agent_state_path()}"'
+    )
+
+
+def register_s4u_boot_task(*, python_executable: str, target_control: Path) -> dict[str, Any]:
+    service = _scheduler()
+    root = service.GetFolder("\\")
+    definition = service.NewTask(0)
+    definition.RegistrationInfo.Description = "ReqSys Noteri NORMAL/ESTUDO headless autostart"
+    definition.Settings.Enabled = True
+    definition.Settings.StartWhenAvailable = True
+    definition.Settings.DisallowStartIfOnBatteries = False
+    definition.Settings.StopIfGoingOnBatteries = False
+    definition.Settings.MultipleInstances = TASK_INSTANCES_IGNORE_NEW
+    definition.Settings.ExecutionTimeLimit = "PT5M"
+
+    trigger = definition.Triggers.Create(TASK_TRIGGER_BOOT)
+    trigger.Enabled = True
+    trigger.Delay = "PT20S"
+
+    action = definition.Actions.Create(TASK_ACTION_EXEC)
+    action.Path = python_executable
+    action.Arguments = control_arguments(target_control)
+    action.WorkingDirectory = str(target_control.parent)
+
+    principal = definition.Principal
+    principal.UserId = current_user_id()
+    principal.LogonType = TASK_LOGON_S4U
+    principal.RunLevel = TASK_RUNLEVEL_LUA
+
+    root.RegisterTaskDefinition(
+        TASK_NAME,
+        definition,
+        TASK_CREATE_OR_UPDATE,
+        principal.UserId,
+        "",
+        TASK_LOGON_S4U,
+    )
+    registered = root.GetTask(TASK_NAME)
+    registered.Run("")
+    return task_status()
 
 
 def task_status() -> dict[str, Any]:
@@ -236,7 +318,7 @@ def install(repo_root: Path) -> dict[str, Any]:
 
     action = definition.Actions.Create(TASK_ACTION_EXEC)
     action.Path = sys.executable
-    action.Arguments = f'"{target_control}" start --host Noteri'
+    action.Arguments = control_arguments(target_control)
     action.WorkingDirectory = str(target)
 
     principal = definition.Principal
@@ -308,6 +390,79 @@ def install(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def install_headless(repo_root: Path, *, confirm: str) -> dict[str, Any]:
+    validate_headless_preconditions(
+        host=socket.gethostname(),
+        platform=os.name,
+        elevated=is_admin(),
+        confirm=confirm,
+    )
+
+    scripts_dir = repo_root / "scripts"
+    source_agent = scripts_dir / "noteri_host_profile_agent.py"
+    source_control = scripts_dir / "noteri_host_profile_agent_control.py"
+    if not source_agent.is_file() or not source_control.is_file():
+        raise FileNotFoundError("scripts do agente NORMAL/ESTUDO não encontrados")
+
+    target = stable_dir()
+    target.mkdir(parents=True, exist_ok=True)
+    target_agent = target / source_agent.name
+    target_control = target / source_control.name
+    shutil.copy2(source_agent, target_agent)
+    shutil.copy2(source_control, target_control)
+
+    status = register_s4u_boot_task(
+        python_executable=sys.executable,
+        target_control=target_control,
+    )
+
+    deadline = time.monotonic() + 12.0
+    health = probe_agent()
+    while health is None and time.monotonic() < deadline:
+        time.sleep(0.25)
+        health = probe_agent()
+
+    task_ok = (
+        status.get("exists") is True
+        and status.get("principal_logon_type") == TASK_LOGON_S4U
+        and status.get("principal_run_level") == TASK_RUNLEVEL_LUA
+        and any(item.get("type") == TASK_TRIGGER_BOOT for item in status.get("triggers", []))
+    )
+    boot_epoch = windows_boot_epoch()
+    metadata = {
+        "schema_version": "2",
+        "task_name": TASK_NAME,
+        "installed_at": now_iso(),
+        "host": socket.gethostname(),
+        "baseline_boot_epoch": boot_epoch,
+        "python": sys.executable,
+        "stable_dir": str(target),
+        "agent_sha256": sha256_file(target_agent),
+        "control_sha256": sha256_file(target_control),
+        "s4u": True,
+        "password_used": False,
+        "run_level": "limited",
+        "persistence_mode": "task_at_startup_s4u_headless",
+        "requires_user_logon": False,
+        "headless": True,
+        "profile_path": str(profile_path()),
+        "audit_path": str(audit_path()),
+        "agent_state_path": str(agent_state_path()),
+        "task_registration_error": None,
+    }
+    atomic_json(metadata_path(), metadata)
+    ok = task_ok and health is not None
+    return {
+        "ok": ok,
+        "result": "NOTERI_AGENT_HEADLESS_INSTALLED" if ok else "NOTERI_AGENT_HEADLESS_INCOMPLETE",
+        "health": health,
+        "task": status,
+        "run_key": run_key_status(),
+        "metadata": metadata,
+        "elevated": True,
+    }
+
+
 def postboot_check(require_reboot: bool) -> tuple[int, dict[str, Any]]:
     if socket.gethostname().casefold() != "noteri":
         raise RuntimeError("validação permitida somente no host Noteri")
@@ -368,6 +523,10 @@ def main() -> int:
     install_parser = sub.add_parser("install")
     install_parser.add_argument("--repo-root", type=Path, required=True)
 
+    headless_parser = sub.add_parser("install-headless")
+    headless_parser.add_argument("--repo-root", type=Path, required=True)
+    headless_parser.add_argument("--confirm", required=True)
+
     sub.add_parser("status")
 
     check_parser = sub.add_parser("postboot-check")
@@ -379,13 +538,26 @@ def main() -> int:
             result = install(args.repo_root.resolve())
             print(json.dumps(result, ensure_ascii=False, sort_keys=True))
             return 0 if result["ok"] else 2
+        if args.command == "install-headless":
+            result = install_headless(args.repo_root.resolve(), confirm=args.confirm)
+            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            return 0 if result["ok"] else 2
         if args.command == "status":
+            task = task_status()
+            headless_ready = (
+                task.get("exists") is True
+                and task.get("principal_logon_type") == TASK_LOGON_S4U
+                and task.get("principal_run_level") == TASK_RUNLEVEL_LUA
+                and any(item.get("type") == TASK_TRIGGER_BOOT for item in task.get("triggers", []))
+            )
             payload = {
                 "ok": True,
-                "task": task_status(),
+                "task": task,
                 "run_key": run_key_status(),
                 "metadata_exists": metadata_path().is_file(),
                 "agent_healthy": probe_agent() is not None,
+                "elevated": is_admin(),
+                "headless_ready": headless_ready,
             }
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0

@@ -70,7 +70,14 @@ def _validate_origin(origin: str) -> str:
     return value
 
 
-def build_command(*, host: str, port: int, origins: list[str]) -> list[str]:
+def build_command(
+    *,
+    host: str,
+    port: int,
+    origins: list[str],
+    profile_path: Path | None = None,
+    audit_path: Path | None = None,
+) -> list[str]:
     agent_script = Path(__file__).resolve().with_name("noteri_host_profile_agent.py")
     if not agent_script.is_file():
         raise FileNotFoundError(f"agente local ausente: {agent_script}")
@@ -84,12 +91,24 @@ def build_command(*, host: str, port: int, origins: list[str]) -> list[str]:
         "--host",
         host,
     ]
+    if profile_path is not None:
+        command.extend(["--profile-path", str(profile_path)])
+    if audit_path is not None:
+        command.extend(["--audit-path", str(audit_path)])
     for origin in origins:
         command.extend(["--allow-origin", _validate_origin(origin)])
     return command
 
 
-def start_agent(*, host: str, port: int, origins: list[str]) -> dict[str, Any]:
+def start_agent(
+    *,
+    host: str,
+    port: int,
+    origins: list[str],
+    profile_path: Path | None = None,
+    audit_path: Path | None = None,
+    state_file: Path | None = None,
+) -> dict[str, Any]:
     current_host = socket.gethostname()
     if current_host.casefold() != host.strip().casefold():
         raise RuntimeError(f"host atual não corresponde ao alvo: {current_host}")
@@ -107,7 +126,13 @@ def start_agent(*, host: str, port: int, origins: list[str]) -> dict[str, Any]:
             "loopback_only": True,
         }
 
-    command = build_command(host=host, port=port, origins=origins)
+    command = build_command(
+        host=host,
+        port=port,
+        origins=origins,
+        profile_path=profile_path,
+        audit_path=audit_path,
+    )
     kwargs: dict[str, Any] = {
         "cwd": str(Path(__file__).resolve().parents[1]),
         "stdin": subprocess.DEVNULL,
@@ -147,7 +172,11 @@ def start_agent(*, host: str, port: int, origins: list[str]) -> dict[str, Any]:
         "started_at_epoch": int(time.time()),
         "script": str(Path(command[1]).resolve()),
     }
-    _atomic_write(state_path(), state)
+    if profile_path is not None:
+        state["profile_path"] = str(profile_path)
+    if audit_path is not None:
+        state["audit_path"] = str(audit_path)
+    _atomic_write(state_file or state_path(), state)
     return {"ok": True, "status": "running", "reused": False, **state}
 
 
@@ -157,6 +186,9 @@ def main() -> int:
     parser.add_argument("--host", default="Noteri")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--allow-origin", action="append", default=[])
+    parser.add_argument("--profile-path", type=Path)
+    parser.add_argument("--audit-path", type=Path)
+    parser.add_argument("--state-path", type=Path)
     args = parser.parse_args()
 
     try:
@@ -167,7 +199,14 @@ def main() -> int:
                 return 3
             print(json.dumps({"ok": True, "status": "running", **health}, ensure_ascii=False, sort_keys=True))
             return 0
-        result = start_agent(host=args.host, port=args.port, origins=args.allow_origin)
+        result = start_agent(
+            host=args.host,
+            port=args.port,
+            origins=args.allow_origin,
+            profile_path=args.profile_path,
+            audit_path=args.audit_path,
+            state_file=args.state_path,
+        )
     except (OSError, ValueError, RuntimeError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, sort_keys=True))
         return 2
