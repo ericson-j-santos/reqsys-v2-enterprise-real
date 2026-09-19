@@ -94,8 +94,13 @@ há upsert por um id escolhido pelo cliente nessa API.
 2. `ReqSys - Notificar Teams (Tarefa concluída no Planner)` — trigger
    `OnCompleteTask_V3` do conector Planner.
 
-Cada um posta um Adaptive Card simples (título da tarefa, plano, percentual,
-vencimento) no canal escolhido.
+Cada um posta um Adaptive Card operacional no canal escolhido: título da tarefa em destaque, `Progresso`, `Vencimento`, ID da tarefa como metadado secundário e ação `Abrir no Planner`. O ID bruto do plano não é exibido no cartão.
+
+## Reconciliação de drift no runtime DEV
+
+O fluxo contínuo de aceite consulta os dois cloud flows no Dataverse antes da prova. Se o `body/messageBody` de `Notificar_Teams` divergir do contrato versionado, atualiza somente esse campo usando o `@odata.etag` corrente, relê o flow e valida o cartão observado. Destinatário, referências de conexão e demais ações são preservados.
+
+A prova de runtime não considera mais suficiente apenas encontrar a mensagem: o attachment do Teams é lido via Microsoft Graph e deve comprovar o cartão corrente, inclusive a ausência dos campos legados `Plano`/`Percentual` e o link `Abrir no Planner` apontando para a tarefa criada no próprio run.
 
 ## Segurança
 
