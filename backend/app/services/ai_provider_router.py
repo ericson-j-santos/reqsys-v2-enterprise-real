@@ -170,44 +170,54 @@ class AIProviderRouter:
         requested_provider = str(provider or '').strip().lower() or resolved
         timeout = max(1, int(timeout))
 
-        try:
-            if resolved == 'ollama_gateway':
-                base_url, effective_model, fallback_model, configured_key, configured_timeout = self._ollama_gateway_config(model)
-                text = self._gateway.gerar_ollama_gateway(
-                    base_url=base_url,
+        if resolved == 'ollama_gateway':
+            base_url, effective_model, fallback_model, configured_key, configured_timeout = self._ollama_gateway_config(model)
+            text = self._gateway.gerar_ollama_gateway(
+                base_url=base_url,
+                model=effective_model,
+                prompt=prompt,
+                contexto=context,
+                entrada=input_text,
+                correlation_id=correlation,
+                api_key=configured_key if api_key is None else api_key,
+                timeout=timeout if timeout != 60 else configured_timeout,
+                fallback_model=fallback_model,
+            )
+        elif resolved == 'ollama':
+            base_url, effective_model, fallback_model, fallback_timeout = self._ollama_config(model)
+            text = self._gateway.gerar_ollama(
+                base_url=base_url,
+                model=effective_model,
+                prompt=f'{system_prompt}\n\n{prompt}' if system_prompt else prompt,
+                timeout=timeout,
+                fallback_model=fallback_model,
+                fallback_timeout=fallback_timeout,
+            )
+        else:
+            effective_model = str(model or '').strip()
+            if not effective_model:
+                raise AIProviderRouterError(f'Modelo não configurado para {resolved}.')
+            method = getattr(self._gateway, f'gerar_{resolved}')
+
+            # Compatibilidade: consumidores legados que já resolvem a credencial
+            # continuam usando a assinatura mínima do LLMGateway. Assim preservamos
+            # semântica de exceções/model fallback e mantemos o router apenas como
+            # camada de seleção/rastreabilidade.
+            if api_key is not None and endpoint is None and auth_mode is None:
+                text = method(
+                    api_key=str(api_key or ''),
                     model=effective_model,
                     prompt=prompt,
-                    contexto=context,
-                    entrada=input_text,
-                    correlation_id=correlation,
-                    api_key=configured_key if api_key is None else api_key,
-                    timeout=timeout if timeout != 60 else configured_timeout,
-                    fallback_model=fallback_model,
-                )
-            elif resolved == 'ollama':
-                base_url, effective_model, fallback_model, fallback_timeout = self._ollama_config(model)
-                text = self._gateway.gerar_ollama(
-                    base_url=base_url,
-                    model=effective_model,
-                    prompt=f'{system_prompt}\n\n{prompt}' if system_prompt else prompt,
-                    timeout=timeout,
-                    fallback_model=fallback_model,
-                    fallback_timeout=fallback_timeout,
+                    system_prompt=system_prompt,
                 )
             else:
-                if api_key is None and endpoint is None and auth_mode is None:
+                try:
                     runtime = resolve_provider_config(resolved, env=self._env)
-                    effective_key = runtime.secret
-                    effective_endpoint = runtime.endpoint
-                    effective_auth_mode = runtime.auth_mode
-                else:
-                    effective_key = str(api_key or '')
-                    effective_endpoint = endpoint or resolve_endpoint(resolved, env=self._env)
-                    effective_auth_mode = auth_mode or ('bearer' if resolved in {'openai', 'groq'} else 'api_key')
-                effective_model = str(model or '').strip()
-                if not effective_model:
-                    raise AIProviderRouterError(f'Modelo não configurado para {resolved}.')
-                method = getattr(self._gateway, f'gerar_{resolved}')
+                    effective_key = runtime.secret if api_key is None else str(api_key or '')
+                    effective_endpoint = endpoint or runtime.endpoint
+                    effective_auth_mode = auth_mode or runtime.auth_mode
+                except AIProviderRuntimeConfigError as exc:
+                    raise AIProviderRouterError(str(exc)) from None
                 text = method(
                     api_key=effective_key,
                     model=effective_model,
@@ -217,14 +227,6 @@ class AIProviderRouter:
                     endpoint=effective_endpoint,
                     auth_mode=effective_auth_mode,
                 )
-        except AIProviderRouterError:
-            raise
-        except (AIProviderRuntimeConfigError, ValueError) as exc:
-            raise AIProviderRouterError(str(exc)) from None
-        except Exception as exc:
-            raise AIProviderRouterError(
-                f'Falha no provider {resolved}: {type(exc).__name__}.'
-            ) from exc
 
         normalized = str(text or '').strip()
         if not normalized:
