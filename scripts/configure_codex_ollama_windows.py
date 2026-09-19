@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 ENV_KEY = r"Environment"
 MODEL_KEYS = ("CODEX_OLLAMA_MODEL", "CODEX_OLLAMA_GATEWAY_MODEL")
+FALLBACK_MODEL_KEY = "CODEX_OLLAMA_FALLBACK_MODEL"
 BASE_URL_KEY = "CODEX_OLLAMA_BASE_URL"
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
@@ -42,12 +43,18 @@ def validate_base_url(value: str) -> str:
     return value.rstrip("/")
 
 
-def desired_values(model: str, base_url: str) -> dict[str, str]:
+def desired_values(
+    model: str,
+    base_url: str,
+    fallback_model: str = "gemma4:26b-q8-code",
+) -> dict[str, str]:
     model = validate_model(model)
+    fallback_model = validate_model(fallback_model)
     base_url = validate_base_url(base_url)
     return {
         "CODEX_OLLAMA_MODEL": model,
         "CODEX_OLLAMA_GATEWAY_MODEL": model,
+        "CODEX_OLLAMA_FALLBACK_MODEL": fallback_model,
         "CODEX_OLLAMA_BASE_URL": base_url,
     }
 
@@ -72,9 +79,9 @@ def read_user_values() -> dict[str, str | None]:
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, ENV_KEY, 0, winreg.KEY_READ)
     except FileNotFoundError:
-        return {name: None for name in (*MODEL_KEYS, BASE_URL_KEY)}
+        return {name: None for name in (*MODEL_KEYS, FALLBACK_MODEL_KEY, BASE_URL_KEY)}
     with key:
-        for name in (*MODEL_KEYS, BASE_URL_KEY):
+        for name in (*MODEL_KEYS, FALLBACK_MODEL_KEY, BASE_URL_KEY):
             try:
                 value, _ = winreg.QueryValueEx(key, name)
                 result[name] = str(value)
@@ -128,8 +135,8 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def apply(model: str, base_url: str) -> dict[str, Any]:
-    desired = desired_values(model, base_url)
+def apply(model: str, base_url: str, fallback_model: str) -> dict[str, Any]:
+    desired = desired_values(model, base_url, fallback_model)
     before = read_user_values()
     path = backup_path()
     _atomic_json(
@@ -197,6 +204,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", required=True)
     apply_parser = sub.add_parser("apply")
     apply_parser.add_argument("--model", required=True)
+    apply_parser.add_argument("--fallback-model", default="gemma4:26b-q8-code")
     apply_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     sub.add_parser("status")
     sub.add_parser("rollback")
@@ -207,7 +215,7 @@ def main() -> int:
     args = build_parser().parse_args()
     try:
         if args.action == "apply":
-            result = apply(args.model, args.base_url)
+            result = apply(args.model, args.base_url, args.fallback_model)
         elif args.action == "rollback":
             result = rollback()
         else:

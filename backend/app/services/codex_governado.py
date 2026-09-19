@@ -122,6 +122,8 @@ def chamar_ollama(prompt: str) -> str:
         base_url=settings.codex_ollama_base_url or 'http://localhost:11434',
         model=settings.codex_ollama_model,
         prompt=prompt,
+        fallback_model=settings.codex_ollama_fallback_model,
+        fallback_timeout=settings.codex_ollama_fallback_timeout_seconds,
     )
 
 
@@ -136,6 +138,7 @@ def chamar_ollama_gateway(prompt: str, contexto: str, entrada: str, correlation_
         correlation_id=correlation_id,
         api_key=settings.codex_ollama_gateway_api_key,
         timeout=settings.codex_ollama_gateway_timeout_seconds,
+        fallback_model=settings.codex_ollama_fallback_model,
     )
 
 

@@ -165,21 +165,53 @@ class LLMGateway:
     def __init__(self, post_json: PostJsonFn = _post_json) -> None:
         self._post_json = post_json
 
-    def gerar_ollama(self, *, base_url: str, model: str, prompt: str, timeout: int = 45) -> str:
+    def gerar_ollama(
+        self, *, base_url: str, model: str, prompt: str, timeout: int = 45,
+        fallback_model: str = '', fallback_timeout: int | None = None,
+    ) -> str:
         base = (base_url or 'http://localhost:11434').rstrip('/')
-        payload = {'model': model, 'prompt': prompt, 'stream': False, 'options': {'temperature': 0.1}}
-        data = self._post_json(f'{base}/api/generate', payload, headers=None, timeout=timeout)
-        return str(data.get('response') or '')
+
+        def _gerar(selected_model: str) -> str:
+            payload = {
+                'model': selected_model,
+                'prompt': prompt,
+                'stream': False,
+                'options': {'temperature': 0.1},
+            }
+            data = self._post_json(f'{base}/api/generate', payload, headers=None, timeout=timeout)
+            return str(data.get('response') or '')
+
+        try:
+            return _gerar(model)
+        except requests.RequestException:
+            fallback = (fallback_model or '').strip()
+            if not fallback or fallback == model:
+                raise
+            fallback_payload = {
+                'model': fallback,
+                'prompt': prompt,
+                'stream': False,
+                'options': {'temperature': 0.1},
+            }
+            data = self._post_json(
+                f'{base}/api/generate',
+                fallback_payload,
+                headers=None,
+                timeout=max(1, int(fallback_timeout or timeout)),
+            )
+            return str(data.get('response') or '')
 
     def gerar_ollama_gateway(
         self, *, base_url: str, model: str, prompt: str, contexto: str, entrada: str,
         correlation_id: str, api_key: str = '', timeout: int = 60,
+        fallback_model: str = '',
     ) -> str:
         if not base_url:
             raise RuntimeError('CODEX_OLLAMA_GATEWAY_URL ausente')
         base = base_url.rstrip('/')
         payload = {
-            'model': model, 'task_type': 'code', 'prompt': prompt, 'contexto': contexto,
+            'model': model, 'fallback_model': fallback_model or None,
+            'task_type': 'code', 'prompt': prompt, 'contexto': contexto,
             'entrada': entrada, 'correlation_id': correlation_id, 'source': 'reqsys-codex-local-online',
         }
         headers = {'Content-Type': 'application/json'}
