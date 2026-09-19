@@ -22,6 +22,9 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 14. O serviço não executa merge, deploy, alteração de segredo ou permissão administrativa.
 15. Toda task deve informar `base_sha` explícito antes de ser aceita.
 16. O SQLite é estado de coordenação local/DEV do pool e não substitui `OperationalQueue`/Redis Streams como transporte durável corporativo em STG/PROD.
+17. A prova física dual-host deve executar somente após `dual_host_preflight` aprovar ambos os hosts no mesmo SHA canônico de regras e no mesmo SHA do ReqSys.
+18. O probe de conectividade entre hosts deve usar código Python versionado, sem shell, sem leitura de credenciais e sem alteração de firewall.
+19. O E2E físico deve provar Builder no Desktop -> `produced_sha` -> Validator no Noteri, replay idempotente, claim duplicado bloqueado, expiração/recuperação de lease e leitura final independente.
 
 ## Requisitos de qualidade
 
@@ -31,7 +34,8 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 - configuração por ambiente;
 - persistência em volume;
 - bind PC24x7 somente em loopback por padrão;
-- testes positivos, negativos, concorrência, replay, recuperação e leitura independente.
+- testes positivos, negativos, concorrência, replay, recuperação e leitura independente;
+- probe dual-host limitado a listener efêmero e uma conexão, com `correlation_id` único e timeout finito.
 
 ## Critérios de aceite
 
@@ -43,4 +47,7 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 - Builder/Validator diferentes fecham o fluxo pelo mesmo `produced_sha`;
 - leitura HTTP independente confirma estado final;
 - `lease_token` não aparece em leitura normal/snapshot;
-- E2E físico multi-host permanece `PARCIAL/BLOQUEADO` enquanto um host não estiver elegível.
+- E2E físico multi-host permanece `PARCIAL/BLOQUEADO` enquanto um host não estiver elegível;
+- com ambos elegíveis, `scripts/codex_worker_pool_dualhost_e2e.py` deve terminar `overall_passed=true` no SHA exato da execução;
+- teste negativo com `correlation_id` incorreto deve ser rejeitado;
+- a mesma task de controle não pode ser adquirida pelo segundo Builder antes do lease expirar e deve ser recuperável após a expiração.

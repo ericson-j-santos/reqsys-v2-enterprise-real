@@ -69,6 +69,27 @@ def enqueue(store: WorkerPoolStore, request_id: str = "req-1", *, max_attempts: 
     )
 
 
+def test_init_closes_connection(tmp_path: Path, monkeypatch) -> None:
+    class InitConnection:
+        def __init__(self) -> None:
+            self.closed = False
+            self.script_executed = False
+
+        def executescript(self, _script: str) -> None:
+            self.script_executed = True
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = InitConnection()
+    monkeypatch.setattr(WorkerPoolStore, "_db", lambda _self: connection)
+
+    WorkerPoolStore(tmp_path / "init-close.db")
+
+    assert connection.script_executed is True
+    assert connection.closed is True
+
+
 def test_enqueue_is_idempotent(store: WorkerPoolStore) -> None:
     first, created_first = enqueue(store)
     second, created_second = enqueue(store)

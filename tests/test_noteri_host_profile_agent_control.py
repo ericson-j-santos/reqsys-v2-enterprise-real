@@ -56,3 +56,17 @@ def test_start_recusa_execucao_em_host_diferente(monkeypatch):
     monkeypatch.setattr(control.socket, "gethostname", lambda: "DESKTOP-PDQK954")
     with pytest.raises(RuntimeError, match="host atual não corresponde"):
         control.start_agent(host="Noteri", port=8765, origins=[])
+
+
+def test_build_command_explicita_paths_headless(tmp_path: Path):
+    profile = tmp_path / "host-profile.json"
+    audit = tmp_path / "host-profile-audit.jsonl"
+    command = control.build_command(
+        host="Noteri",
+        port=8765,
+        origins=[],
+        profile_path=profile,
+        audit_path=audit,
+    )
+    assert command[command.index("--profile-path") + 1] == str(profile)
+    assert command[command.index("--audit-path") + 1] == str(audit)

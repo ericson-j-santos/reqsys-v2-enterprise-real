@@ -64,7 +64,7 @@
 
     <v-card class="table-card mb-4" data-testid="noteri-study-mode-card">
       <v-card-title class="panel-title">
-        <span>Modo do Noteri</span>
+        <span>Usar o Noteri para estudo</span>
         <v-chip
           size="small"
           :color="noteriAgentReady ? (noteriProfile === 'ESTUDO' ? 'amber' : 'green') : 'grey'"
@@ -75,7 +75,7 @@
       </v-card-title>
       <v-card-text>
         <p class="muted mb-3">
-          ESTUDO impede novas tarefas de desenvolvimento neste computador. Controle e monitoramento continuam disponíveis.
+          Quando você quiser estudar neste notebook, clique em “Quero estudar agora”. O Noteri deixa de receber novas tarefas de desenvolvimento e o Desktop continua trabalhando. Ao terminar, clique em “Voltar ao desenvolvimento”.
         </p>
         <div class="d-flex flex-wrap gap-2">
           <v-btn
@@ -86,7 +86,7 @@
             :disabled="!noteriAgentReady || noteriProfileLoading || noteriProfile === 'ESTUDO'"
             @click="alterarModoNoteri('ESTUDO')"
           >
-            Ativar estudo
+            Quero estudar agora
           </v-btn>
           <v-btn
             color="green"
