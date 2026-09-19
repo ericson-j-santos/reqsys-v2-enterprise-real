@@ -17,7 +17,7 @@ TASK_HEADLESS = r"\Automation\RemoteDesktopCommanderHeadless"
 TASK_INTERACTIVE = r"\Automation\RemoteDesktopCommander"
 HEADLESS_RUNNER = Path(r"C:\ProgramData\ReqSys\RdcSvc\rdc-headless-runner.cjs")
 INTERACTIVE_LAUNCHER = Path(r"C:\RemoteDesktopCommander\start-remote-desktop-commander.cmd")
-HEADLESS_MARKER = "// RDC_HEADLESS_V2_PRIMARY_OWNER"
+HEADLESS_MARKERS = (\n    "// RDC_HEADLESS_V2_PRIMARY_OWNER",\n    "// RDC_HEADLESS_V3_READY_CLAIM",\n)
 INTERACTIVE_MARKERS = (
     "REM RDC_LAUNCHER_V3_RESILIENT",
     "REM RDC_LAUNCHER_V4_ARBITRATED",
