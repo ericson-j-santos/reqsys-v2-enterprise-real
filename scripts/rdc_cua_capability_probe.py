@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""Probe somente leitura do CUA driver já instalado."""
+"""Probe somente leitura da sintaxe cua-driver call."""
 from __future__ import annotations
-
-import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -11,33 +9,15 @@ BIN = Path(r"C:\Users\Windows\AppData\Local\Programs\Cua\cua-driver\bin\cua-driv
 
 
 def main() -> int:
-    out = {"exists": BIN.is_file(), "path": str(BIN)}
-    if not BIN.is_file():
-        print(json.dumps(out, sort_keys=True))
-        return 0
-
-    out["sha256"] = hashlib.sha256(BIN.read_bytes()).hexdigest()
-    probes = [
-        (["call", "--help"], "call_help"),
-        (["describe", "get_desktop_state"], "describe_desktop"),
-        (["describe", "click"], "describe_click"),
-    ]
-    for args, key in probes:
-        cp = subprocess.run(
-            [str(BIN), *args],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=15,
-            check=False,
-        )
-        out[key] = {
-            "exit_code": cp.returncode,
-            "stdout": (cp.stdout or "")[:8000],
-            "stderr": (cp.stderr or "")[:2000],
-        }
-
-    print(json.dumps(out, sort_keys=True))
+    cp = subprocess.run(
+        [str(BIN), "call", "--help"],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=15,
+        check=False,
+    )
+    print(json.dumps({"exit_code": cp.returncode, "stdout": cp.stdout or "", "stderr": cp.stderr or ""}, sort_keys=True))
     return 0
 
 
