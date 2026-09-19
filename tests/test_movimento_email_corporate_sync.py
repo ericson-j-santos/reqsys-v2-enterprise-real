@@ -90,3 +90,97 @@ def test_read_secret_rejects_ambiguous_sources(monkeypatch: pytest.MonkeyPatch, 
 
     with pytest.raises(RuntimeError, match="ambiguous"):
         module.read_secret("MOVIMENTO_EMAIL_SOURCE_DSN")
+
+def test_integrated_source_dsn_is_tls_readonly_and_passwordless() -> None:
+    dsn = module.build_integrated_dsn(
+        "sql-corp\\instance",
+        "DB7008_CEPOC",
+        driver="ODBC Driver 18 for SQL Server",
+        source=True,
+    )
+
+    assert "Trusted_Connection=yes" in dsn
+    assert "Encrypt=yes" in dsn
+    assert "TrustServerCertificate=no" in dsn
+    assert "ApplicationIntent=ReadOnly" in dsn
+    assert "UID=" not in dsn and "PWD=" not in dsn
+    module.validate_source_dsn(dsn)
+
+
+def test_resolve_source_dsn_supports_integrated_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MOVIMENTO_EMAIL_SOURCE_DSN", raising=False)
+    monkeypatch.delenv("MOVIMENTO_EMAIL_SOURCE_DSN_FILE", raising=False)
+    monkeypatch.setenv("MOVIMENTO_EMAIL_SOURCE_SERVER", "sql-corp")
+    monkeypatch.setenv("MOVIMENTO_EMAIL_SOURCE_DATABASE", "DB7008_CEPOC")
+    monkeypatch.setattr(module, "choose_driver", lambda: "ODBC Driver 18 for SQL Server")
+
+    dsn = module.resolve_source_dsn()
+
+    assert "Server=sql-corp" in dsn
+    assert "Database=DB7008_CEPOC" in dsn
+    assert "ApplicationIntent=ReadOnly" in dsn
+
+
+def test_resolve_source_dsn_rejects_incomplete_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MOVIMENTO_EMAIL_SOURCE_DSN", raising=False)
+    monkeypatch.delenv("MOVIMENTO_EMAIL_SOURCE_DSN_FILE", raising=False)
+    monkeypatch.setenv("MOVIMENTO_EMAIL_SOURCE_SERVER", "sql-corp")
+    monkeypatch.delenv("MOVIMENTO_EMAIL_SOURCE_DATABASE", raising=False)
+
+    with pytest.raises(RuntimeError, match="source_integrated_endpoint_incomplete"):
+        module.resolve_source_dsn()
+
+
+def test_target_dsn_defaults_to_local_dev_without_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "MOVIMENTO_EMAIL_TARGET_DSN",
+        "MOVIMENTO_EMAIL_TARGET_DSN_FILE",
+        "MOVIMENTO_EMAIL_TARGET_SERVER",
+        "MOVIMENTO_EMAIL_TARGET_DATABASE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(module, "choose_driver", lambda: "ODBC Driver 18 for SQL Server")
+
+    dsn = module.resolve_target_dsn()
+
+    assert "Server=localhost" in dsn
+    assert "Database=ReqSysMovimentoDev" in dsn
+    assert "Trusted_Connection=yes" in dsn
+    assert "UID=" not in dsn and "PWD=" not in dsn
+
+
+def test_target_integrated_endpoint_rejects_remote_or_non_dev() -> None:
+    with pytest.raises(RuntimeError, match="must_be_local"):
+        module.build_integrated_dsn(
+            "remote-sql",
+            "ReqSysMovimentoDev",
+            driver="ODBC Driver 18 for SQL Server",
+            source=False,
+        )
+    with pytest.raises(RuntimeError, match="must_end_with_dev"):
+        module.build_integrated_dsn(
+            "localhost",
+            "ReqSysMovimentoProd",
+            driver="ODBC Driver 18 for SQL Server",
+            source=False,
+        )
+
+
+def test_source_configuration_rejects_mixed_explicit_and_integrated(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MOVIMENTO_EMAIL_SOURCE_DSN", "Driver=X;Encrypt=yes;TrustServerCertificate=no")
+    monkeypatch.delenv("MOVIMENTO_EMAIL_SOURCE_DSN_FILE", raising=False)
+    monkeypatch.setenv("MOVIMENTO_EMAIL_SOURCE_SERVER", "sql-corp")
+    monkeypatch.setenv("MOVIMENTO_EMAIL_SOURCE_DATABASE", "db")
+
+    with pytest.raises(RuntimeError, match="source_configuration_ambiguous"):
+        module.resolve_source_dsn()
+
+
+def test_target_configuration_rejects_mixed_explicit_and_integrated(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MOVIMENTO_EMAIL_TARGET_DSN", "Driver=X;Database=ReqSysMovimentoDev")
+    monkeypatch.delenv("MOVIMENTO_EMAIL_TARGET_DSN_FILE", raising=False)
+    monkeypatch.setenv("MOVIMENTO_EMAIL_TARGET_SERVER", "localhost")
+
+    with pytest.raises(RuntimeError, match="target_configuration_ambiguous"):
+        module.resolve_target_dsn()
+
