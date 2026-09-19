@@ -2,18 +2,19 @@
   "schema_version": "1",
   "purpose": "physical_24x7_e2e_transport_with_rdc_and_reboot_once_adapters",
   "source_repository": "ericson-j-santos/reqsys-engineering-orchestrator",
-  "source_sha": "32b8a76406512f0cc6b1cfe02045529cfbaf5657",
+  "source_sha": "8c9122e7ff89750c6410d59956713a2a9d46084e",
   "source_ci_run": 35406173178,
   "parent_snapshot_sha": "84b7b6be956b257c9672aa2058c54411b1ca85a1",
   "merge_intent": false,
   "hardening_pr": 3,
   "source_ci_runs": [
-    35467202076
+    35467820638
   ],
   "maintenance_adapter": "host.rdc.recover.v1",
-  "source_pr": 6,
+  "source_pr": 7,
   "maintenance_adapters": [
     "host.rdc.recover.v1",
     "host.reboot.once.v1"
-  ]
+  ],
+  "autostart": "task-scheduler-resilient"
 }
