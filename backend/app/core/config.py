@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     # Codex Governado — providers opcionais
     codex_ollama_base_url: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_BASE_URL', 'http://localhost:11434') or 'http://localhost:11434')
     codex_ollama_model: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_MODEL', 'qwen2.5-coder:7b') or 'qwen2.5-coder:7b')
+    codex_ollama_fallback_model: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_FALLBACK_MODEL', '') or '')
     codex_ollama_gateway_url: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_GATEWAY_URL', '') or '')
     codex_ollama_gateway_api_key: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_GATEWAY_API_KEY', '') or '')
     codex_ollama_gateway_model: str = Field(default_factory=lambda: get_secret('CODEX_OLLAMA_GATEWAY_MODEL', '') or '')
