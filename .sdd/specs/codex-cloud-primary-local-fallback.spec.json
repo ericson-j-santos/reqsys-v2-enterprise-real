@@ -1,0 +1,21 @@
+{
+  "feature_name": "codex-cloud-primary-local-fallback",
+  "project": "ReqSys v2 Enterprise — Codex Local / Ollama",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Promove gemma4:31b-cloud como modelo primário do Codex no Desktop e usa gemma4:26b-q8-code como fallback local automático, com evidência do modelo efetivamente utilizado.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_codex_ollama_fallback.py",
+      "docs/ollama-local-gateway/bootstrap-files/tests/test_fallback.py",
+      "tests/test_configure_codex_ollama_fallback.py"
+    ],
+    "evidence_contract": "O ReqSys deve propagar o fallback ao gateway; falha HTTP do modelo primário pode acionar um único fallback local; a resposta do gateway deve informar requested_model, model efetivo e fallback_used; nenhuma promoção ou deploy de produção faz parte deste incremento."
+  }
+}
