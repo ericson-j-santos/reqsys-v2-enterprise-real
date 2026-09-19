@@ -286,7 +286,7 @@ def write_pr_request_artifact(
         "pr_number": pr_number,
         "pr_url": pr_url,
         "error": error,
-        "required_secret": "GH_PAT_ACTIONS",
+        "required_secret": None,
         "repo_setting": "Allow GitHub Actions to create and approve pull requests",
     }
     path = out_dir / "auto-pr-request.json"
@@ -295,12 +295,12 @@ def write_pr_request_artifact(
 
 
 def resolve_token() -> str:
-    # GH_TOKEN/GITHUB_TOKEN do workflow têm escopo explícito (pull-requests: write).
-    for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_PAT_ACTIONS"):
+    # O chamador deve fornecer token efêmero do workflow ou da GitHub App.
+    for key in ("GH_TOKEN", "GITHUB_TOKEN"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
-    raise RuntimeError("Token GitHub ausente (GH_TOKEN/GITHUB_TOKEN/GH_PAT_ACTIONS)")
+    raise RuntimeError("Token GitHub efêmero ausente (GH_TOKEN/GITHUB_TOKEN)")
 
 
 def add_labels_best_effort(client: GitHubClient, number: int, labels: list[str]) -> None:
