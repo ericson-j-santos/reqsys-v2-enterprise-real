@@ -85,7 +85,7 @@ jobs:
           echo "::add-mask::$bot_app_id"
 
           mkdir -p artifacts/pc24x7-teams-bot-remote
-          BOT_APP_ID="$bot_app_id"           BOT_TENANT_ID="$CCP_AZURE_TENANT_ID"           BOT_SECRET="$bot_secret"           python scripts/materialize_pc24x7_teams_bot_remote.py             --api-base "$PC24X7_DEV_BASE_URL"             --expected-sha "$EXPECTED_RUNTIME_SHA"             --correlation-id "$CORRELATION_ID"             --evidence-file artifacts/pc24x7-teams-bot-remote/evidence.json
+          BOT_APP_ID="$bot_app_id"           BOT_TENANT_ID="$CCP_AZURE_TENANT_ID"           BOT_SECRET="$bot_secret"           python scripts/materialize_pc24x7_teams_bot_remote.py             --api-base "$PC24X7_DEV_BASE_URL/api"             --expected-sha "$EXPECTED_RUNTIME_SHA"             --correlation-id "$CORRELATION_ID"             --evidence-file artifacts/pc24x7-teams-bot-remote/evidence.json
 
           unset bot_secret
           unset bot_app_id
