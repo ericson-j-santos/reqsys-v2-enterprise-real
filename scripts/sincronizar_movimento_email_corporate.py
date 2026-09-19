@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 OBJECT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
+SQL_ENDPOINT_RE = re.compile(r"^[A-Za-z0-9_.\\\\-]+$")
+LOCAL_SQL_SERVERS = {"localhost", "127.0.0.1", ".", "(local)"}
 SOURCE_TAG = "CORPORATE_SQL"
 DEFAULT_MAPPING = {
     "fechamento_diario": {
@@ -75,6 +77,80 @@ def dsn_value(dsn: str, key: str) -> str:
         if k.strip().casefold() == wanted:
             return value.strip()
     return ""
+
+
+def choose_driver() -> str:
+    import pyodbc
+
+    installed = set(pyodbc.drivers())
+    for candidate in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
+        if candidate in installed:
+            return candidate
+    raise RuntimeError("no_supported_sql_server_odbc_driver")
+
+
+def build_integrated_dsn(server: str, database: str, *, driver: str, source: bool) -> str:
+    server = server.strip()
+    database = database.strip()
+    if not SQL_ENDPOINT_RE.fullmatch(server):
+        raise RuntimeError("sql_server_invalid")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", database):
+        raise RuntimeError("sql_database_invalid")
+    if driver not in {"ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"}:
+        raise RuntimeError("sql_driver_invalid")
+    parts = [
+        f"Driver={{{driver}}}",
+        f"Server={server}",
+        f"Database={database}",
+        "Trusted_Connection=yes",
+    ]
+    if source:
+        parts.extend(("Encrypt=yes", "TrustServerCertificate=no", "ApplicationIntent=ReadOnly"))
+    else:
+        if server.casefold() not in LOCAL_SQL_SERVERS:
+            raise RuntimeError("target_integrated_endpoint_must_be_local")
+        if not database.casefold().endswith("dev"):
+            raise RuntimeError("target_database_must_end_with_dev")
+        parts.extend(("Encrypt=no", "TrustServerCertificate=yes"))
+    return ";".join(parts) + ";"
+
+
+def _explicit_dsn_configured(name: str) -> bool:
+    return bool(os.getenv(name, "").strip() or os.getenv(f"{name}_FILE", "").strip())
+
+
+def resolve_source_dsn() -> str:
+    name = "MOVIMENTO_EMAIL_SOURCE_DSN"
+    explicit = _explicit_dsn_configured(name)
+    server = os.getenv("MOVIMENTO_EMAIL_SOURCE_SERVER", "").strip()
+    database = os.getenv("MOVIMENTO_EMAIL_SOURCE_DATABASE", "").strip()
+    integrated = bool(server or database)
+    if explicit and integrated:
+        raise RuntimeError("source_configuration_ambiguous")
+    if explicit:
+        dsn = read_secret(name)
+    else:
+        if bool(server) != bool(database):
+            raise RuntimeError("source_integrated_endpoint_incomplete")
+        if not server:
+            raise RuntimeError("MOVIMENTO_EMAIL_SOURCE_DSN_missing")
+        dsn = build_integrated_dsn(server, database, driver=choose_driver(), source=True)
+    validate_source_dsn(dsn)
+    return dsn
+
+
+def resolve_target_dsn() -> str:
+    name = "MOVIMENTO_EMAIL_TARGET_DSN"
+    explicit = _explicit_dsn_configured(name)
+    server_env = os.getenv("MOVIMENTO_EMAIL_TARGET_SERVER", "").strip()
+    database_env = os.getenv("MOVIMENTO_EMAIL_TARGET_DATABASE", "").strip()
+    if explicit and (server_env or database_env):
+        raise RuntimeError("target_configuration_ambiguous")
+    if explicit:
+        return read_secret(name)
+    server = server_env or "localhost"
+    database = database_env or "ReqSysMovimentoDev"
+    return build_integrated_dsn(server, database, driver=choose_driver(), source=False)
 
 
 def validate_source_dsn(dsn: str) -> None:
@@ -292,9 +368,8 @@ def record_run(conn, *, correlation_id: str, ref: date, payload_hash: str, statu
 
 def run(*, mode: str, ref: date, mapping_path: Path | None, evidence_path: Path,
         correlation_id: str, source_sha: str) -> int:
-    source_dsn = read_secret("MOVIMENTO_EMAIL_SOURCE_DSN")
-    target_dsn = read_secret("MOVIMENTO_EMAIL_TARGET_DSN")
-    validate_source_dsn(source_dsn)
+    source_dsn = resolve_source_dsn()
+    target_dsn = resolve_target_dsn()
     mapping = load_mapping(mapping_path)
 
     source = connect(source_dsn)
