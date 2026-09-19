@@ -77,9 +77,12 @@ def test_install_falls_back_to_logon_when_startup_task_denied(monkeypatch, tmp_p
     ))
     monkeypatch.setattr(
         m,
-        "_run_schtasks",
-        lambda args: subprocess.CompletedProcess(["schtasks"], 1, stdout="", stderr="Access is denied"),
+        "_register_task_via_base_python",
+        lambda **kwargs: subprocess.CompletedProcess(["python"], 1, stdout="", stderr="Access is denied"),
     )
+    monkeypatch.setattr(m, "probe_ollama", lambda: None)
+    monkeypatch.setattr(m, "probe_gateway", lambda: None)
+    monkeypatch.setattr(m, "probe_backend", lambda: None)
     observed = {}
     monkeypatch.setattr(m, "_install_run_key", lambda action: observed.setdefault("action", action))
     monkeypatch.setattr(m.subprocess, "Popen", lambda *args, **kwargs: object())
