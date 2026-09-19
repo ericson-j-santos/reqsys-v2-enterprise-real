@@ -1,0 +1,6 @@
+services:
+  api:
+    environment:
+      TEAMS_BOT_APP_ID: "${TEAMS_BOT_APP_ID:?TEAMS_BOT_APP_ID required}"
+      TEAMS_BOT_APP_TENANT_ID: "${TEAMS_BOT_APP_TENANT_ID:?TEAMS_BOT_APP_TENANT_ID required}"
+      TEAMS_BOT_SECRET: "${TEAMS_BOT_SECRET:?TEAMS_BOT_SECRET required}"
