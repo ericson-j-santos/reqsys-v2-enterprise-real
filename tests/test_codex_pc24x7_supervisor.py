@@ -45,15 +45,15 @@ def test_gateway_and_backend_are_loopback_only(tmp_path: Path) -> None:
     assert be["PUBLIC_ENVIRONMENT"] == "development"
 
 
-def test_task_action_contains_no_secret_values(tmp_path: Path) -> None:
-    action = m._task_action(
-        Path(r"C:\Python\python.exe"),
-        tmp_path / "supervisor.py",
-        tmp_path / "metadata.json",
-    )
+def test_task_action_contains_no_secret_values_and_stays_short(tmp_path: Path) -> None:
+    launcher = m._write_launcher(tmp_path)
+    action = m._task_action(Path(r"C:\Python\python.exe"), launcher)
     assert "password" not in action.casefold()
     assert "token" not in action.casefold()
-    assert "watch" in action
+    assert len(action) < 261
+    launcher_text = launcher.read_text(encoding="utf-8")
+    assert "watch" in launcher_text
+    assert "metadata.json" in launcher_text
 
 
 def test_runtime_status_fails_closed_without_install(tmp_path: Path) -> None:
