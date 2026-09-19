@@ -206,7 +206,14 @@ def score_code_response(text: str) -> dict[str, Any]:
     return {"checks": checks, "passed": sum(checks.values()), "total": len(checks)}
 
 
-def run_code_benchmark(base: str, model: str, timeout: int, num_ctx: int | None) -> dict[str, Any]:
+def _apply_think(payload: dict[str, Any], think_mode: str) -> None:
+    if think_mode == "off":
+        payload["think"] = False
+
+
+def run_code_benchmark(
+    base: str, model: str, timeout: int, num_ctx: int | None, think_mode: str
+) -> dict[str, Any]:
     prompt = """Você é um revisor sênior de Python. Corrija a função abaixo e proponha testes mínimos.
 
 def normalize_ids(values):
@@ -223,10 +230,17 @@ Responda de forma objetiva com diagnóstico, código corrigido e testes."""
     options: dict[str, Any] = {"temperature": 0}
     if num_ctx:
         options["num_ctx"] = num_ctx
+    payload: dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": options,
+    }
+    _apply_think(payload, think_mode)
     _, data, wall_ms = _json_request(
         "POST",
         f"{base}/api/generate",
-        {"model": model, "prompt": prompt, "stream": False, "options": options},
+        payload,
         timeout=timeout,
     )
     response = str(data.get("response") or "")
@@ -238,7 +252,9 @@ Responda de forma objetiva com diagnóstico, código corrigido e testes."""
     }
 
 
-def run_tool_call_benchmark(base: str, model: str, timeout: int, num_ctx: int | None) -> dict[str, Any]:
+def run_tool_call_benchmark(
+    base: str, model: str, timeout: int, num_ctx: int | None, think_mode: str
+) -> dict[str, Any]:
     options: dict[str, Any] = {"temperature": 0}
     if num_ctx:
         options["num_ctx"] = num_ctx
@@ -270,6 +286,7 @@ def run_tool_call_benchmark(base: str, model: str, timeout: int, num_ctx: int | 
         ],
         "options": options,
     }
+    _apply_think(payload, think_mode)
     _, data, wall_ms = _json_request("POST", f"{base}/api/chat", payload, timeout=timeout)
     message = data.get("message") if isinstance(data.get("message"), dict) else {}
     calls = message.get("tool_calls") if isinstance(message, dict) else None
@@ -310,6 +327,9 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     capabilities = show_data.get("capabilities")
     if not isinstance(capabilities, list):
         capabilities = []
+    details = show_data.get("details") if isinstance(show_data.get("details"), dict) else {}
+    remote_host = show_data.get("remote_host")
+    remote_model = show_data.get("remote_model")
 
     result: dict[str, Any] = {
         "timestamp": utc_now(),
@@ -324,24 +344,39 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         },
         "selected_model": model,
         "selected_by": selected_by,
-        "cloud_hint": "cloud" in model.casefold(),
+        "configured_env_model": env_model,
+        "cloud_hint": bool(
+            "cloud" in model.casefold()
+            or (isinstance(remote_host, str) and remote_host)
+            or (isinstance(remote_model, str) and remote_model)
+        ),
+        "remote_host": remote_host,
+        "remote_model": remote_model,
+        "model_details": details,
         "running_models": _model_names(running_models),
         "available_models": _model_names(available_models),
         "context": context,
         "capabilities": capabilities,
         "requested_num_ctx_override": args.num_ctx,
+        "think_mode": args.think,
     }
 
     if not args.inventory_only:
         benchmarks: dict[str, Any] = {}
-        try:
-            benchmarks["code"] = run_code_benchmark(base, model, args.timeout, args.num_ctx)
-        except ProbeError as exc:
-            benchmarks["code"] = {"ok": False, "error": str(exc)}
-        try:
-            benchmarks["tool_calling"] = run_tool_call_benchmark(base, model, args.timeout, args.num_ctx)
-        except ProbeError as exc:
-            benchmarks["tool_calling"] = {"ok": False, "error": str(exc)}
+        if args.benchmark in {"all", "code"}:
+            try:
+                benchmarks["code"] = run_code_benchmark(
+                    base, model, args.timeout, args.num_ctx, args.think
+                )
+            except ProbeError as exc:
+                benchmarks["code"] = {"ok": False, "error": str(exc)}
+        if args.benchmark in {"all", "tool"}:
+            try:
+                benchmarks["tool_calling"] = run_tool_call_benchmark(
+                    base, model, args.timeout, args.num_ctx, args.think
+                )
+            except ProbeError as exc:
+                benchmarks["tool_calling"] = {"ok": False, "error": str(exc)}
         result["benchmarks"] = benchmarks
 
     return result
@@ -353,6 +388,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     parser.add_argument("--num-ctx", type=int, default=None)
+    parser.add_argument("--think", choices=("default", "off"), default="default")
+    parser.add_argument("--benchmark", choices=("all", "code", "tool"), default="all")
     parser.add_argument("--inventory-only", action="store_true")
     parser.add_argument("--allow-non-loopback", action="store_true")
     return parser
