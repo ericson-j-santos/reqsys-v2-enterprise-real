@@ -82,7 +82,7 @@ def _active_service(database_url: str) -> str:
             return str(row[0])
 
 
-def run(base_url: str, database_url: str) -> dict:
+def run(base_url: str, database_url: str, expected_sha: str) -> dict:
     correlation_id = f'rsm1788-{uuid4().hex}'
     logical_id = f'rsm-e2e-{uuid4().hex}'
     idempotency_key = _sha(logical_id)
@@ -97,7 +97,14 @@ def run(base_url: str, database_url: str) -> dict:
     login_data = _data(login)
     session.headers.update({'Authorization': f"Bearer {login_data['access_token']}"})
 
+    expected_sha = expected_sha.strip().lower()
+    _assert(
+        len(expected_sha) in {40, 64} and all(ch in '0123456789abcdef' for ch in expected_sha),
+        'expected_sha deve ser SHA Git completo hexadecimal',
+    )
     build_info = _data(session.get(base_url.rstrip('/') + '/api/runtime/build-info', timeout=20))
+    runtime_sha = str(build_info.get('build_sha') or '').strip().lower()
+    _assert(runtime_sha == expected_sha, f'build-info SHA divergente: esperado={expected_sha} observado={runtime_sha}')
     create_payload = {
         'case_type': 'REQUEST',
         'service_id': service_id,
@@ -212,7 +219,8 @@ def run(base_url: str, database_url: str) -> dict:
     return {
         'status': 'passed',
         'environment': build_info.get('environment'),
-        'sha': build_info.get('build_sha') or os.getenv('GITHUB_SHA') or 'unknown',
+        'sha': runtime_sha,
+        'expected_sha': expected_sha,
         'correlation_id': correlation_id,
         'idempotency_key': idempotency_key,
         'case_id': case['case_id'],
@@ -240,10 +248,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--base-url', required=True)
     parser.add_argument('--database-url', required=True)
+    parser.add_argument('--expected-sha', required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     try:
-        evidence = run(args.base_url, args.database_url)
+        evidence = run(args.base_url, args.database_url, args.expected_sha)
     except Exception as exc:
         evidence = {'status': 'failed', 'error': type(exc).__name__, 'detail': str(exc)[:500]}
         code = 2
