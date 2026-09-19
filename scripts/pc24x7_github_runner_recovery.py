@@ -5,6 +5,7 @@ import argparse
 import csv
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -55,16 +56,11 @@ def listener_processes() -> list[dict[str, object]]:
     return found
 
 
-def _query_all_services() -> str:
+def runner_services() -> list[dict[str, str]]:
     result = _run([_tool("sc.exe"), "query", "type=", "service", "state=", "all"], timeout=60)
     if result.returncode != 0:
-        raise RecoveryError("service_inventory_failed")
-    return result.stdout or ""
-
-
-def runner_services() -> list[dict[str, str]]:
-    text = _query_all_services()
-    blocks = re.split(r"(?=SERVICE_NAME:)", text)
+        return []
+    blocks = re.split(r"(?=SERVICE_NAME:)", result.stdout or "")
     found: list[dict[str, str]] = []
     for block in blocks:
         match = re.search(r"SERVICE_NAME:\s*(\S+)", block, flags=re.IGNORECASE)
@@ -74,29 +70,107 @@ def runner_services() -> list[dict[str, str]]:
         if "actions.runner" not in name.casefold():
             continue
         state_match = re.search(r"STATE\s*:\s*\d+\s+(\S+)", block, flags=re.IGNORECASE)
-        state = state_match.group(1).upper() if state_match else "UNKNOWN"
-        found.append({"name": name, "status": state})
+        found.append({"name": name, "status": state_match.group(1).upper() if state_match else "UNKNOWN"})
     return found
 
 
-def service_status(service_name: str) -> str:
-    result = _run([_tool("sc.exe"), "query", service_name], timeout=30)
+def runner_tasks() -> list[dict[str, str]]:
+    tool = shutil.which("schtasks.exe")
+    if not tool:
+        return []
+    result = _run([tool, "/Query", "/FO", "CSV", "/V", "/NH"], timeout=90)
     if result.returncode != 0:
-        return "UNKNOWN"
-    match = re.search(r"STATE\s*:\s*\d+\s+(\S+)", result.stdout or "", flags=re.IGNORECASE)
-    return match.group(1).upper() if match else "UNKNOWN"
+        return []
+    found: list[dict[str, str]] = []
+    for row in csv.reader(io.StringIO(result.stdout or "")):
+        if not row:
+            continue
+        joined = " ".join(row).casefold()
+        if not any(marker in joined for marker in ("runner.listener", "actions-runner", "github actions runner", "githubactionsrunner")):
+            continue
+        task_name = row[1].strip() if len(row) > 1 else row[0].strip()
+        found.append({"task_name": task_name})
+    unique = {item["task_name"]: item for item in found if item["task_name"]}
+    return list(unique.values())
+
+
+def runner_roots() -> list[dict[str, str]]:
+    roots: list[Path] = []
+    explicit = [
+        Path(r"C:\actions-runner"),
+        Path(r"C:\github-actions-runner"),
+        Path(r"C:\dev\actions-runner"),
+        Path(r"C:\dev\github-actions-runner"),
+        Path(r"C:\ProgramData\GitHubActionsRunner"),
+        Path(r"C:\Users\Windows\actions-runner"),
+        Path(r"C:\Users\Windows\github-actions-runner"),
+    ]
+    roots.extend(explicit)
+    for parent in (Path(r"C:\dev"), Path(r"C:\Users\Windows")):
+        try:
+            for child in parent.iterdir():
+                if child.is_dir():
+                    roots.append(child)
+        except OSError:
+            pass
+    found: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for root in roots:
+        try:
+            resolved = str(root.resolve())
+        except OSError:
+            continue
+        key = resolved.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        listener = root / "bin" / "Runner.Listener.exe"
+        config = root / ".runner"
+        if listener.is_file() and config.is_file():
+            found.append({"root": resolved, "listener": str(listener)})
+    return found
+
+
+def _start_task(task_name: str) -> bool:
+    tool = _tool("schtasks.exe")
+    result = _run([tool, "/Run", "/TN", task_name], timeout=30)
+    return result.returncode == 0
+
+
+def _start_listener(listener: Path, root: Path) -> bool:
+    flags = 0
+    for name in ("DETACHED_PROCESS", "CREATE_NEW_PROCESS_GROUP", "CREATE_NO_WINDOW"):
+        flags |= int(getattr(subprocess, name, 0))
+    try:
+        subprocess.Popen(
+            [str(listener), "run"],
+            cwd=str(root),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            shell=False,
+            creationflags=flags,
+            close_fds=True,
+        )
+        return True
+    except OSError:
+        return False
 
 
 def execute(start: bool) -> dict[str, object]:
     before = listener_processes()
     services = runner_services()
+    tasks = runner_tasks()
+    roots = runner_roots()
     evidence: dict[str, object] = {
         "host": "DESKTOP-PDQK954",
         "environment": "dev",
         "listener_processes_before": before,
         "services": services,
+        "tasks": tasks,
+        "runner_roots": roots,
         "start_requested": start,
-        "service_started": False,
+        "runner_started": False,
         "production_touched": False,
         "secret_value_exposed": False,
     }
@@ -104,42 +178,45 @@ def execute(start: bool) -> dict[str, object]:
         evidence["status"] = "ready"
         evidence["listener_processes_after"] = before
         return evidence
-    if len(services) != 1:
-        evidence["status"] = "blocked"
-        evidence["reason"] = "runner_service_ambiguous_or_missing"
-        return evidence
-
-    service_name = services[0]["name"]
-    current = service_status(service_name)
-    if current == "RUNNING":
-        evidence["status"] = "ready"
-        evidence["listener_processes_after"] = listener_processes()
-        return evidence
     if not start:
         evidence["status"] = "stopped"
-        evidence["reason"] = f"runner_service_{current.lower()}"
         return evidence
 
-    started = _run([_tool("sc.exe"), "start", service_name], timeout=30)
-    if started.returncode not in {0, 1056}:
+    attempted = False
+    if len(tasks) == 1:
+        attempted = _start_task(tasks[0]["task_name"])
+        evidence["start_method"] = "scheduled_task"
+    elif len(services) == 1:
+        result = _run([_tool("sc.exe"), "start", services[0]["name"]], timeout=30)
+        attempted = result.returncode in {0, 1056}
+        evidence["start_method"] = "windows_service"
+    elif len(roots) == 1:
+        root = Path(roots[0]["root"])
+        listener = Path(roots[0]["listener"])
+        attempted = _start_listener(listener, root)
+        evidence["start_method"] = "runner_listener_direct"
+    else:
         evidence["status"] = "blocked"
-        evidence["reason"] = f"service_start_failed:exit_{started.returncode}"
+        evidence["reason"] = "runner_target_ambiguous_or_missing"
+        return evidence
+
+    if not attempted:
+        evidence["status"] = "blocked"
+        evidence["reason"] = "runner_start_failed"
         return evidence
 
     deadline = time.monotonic() + 60
-    last = current
     while time.monotonic() < deadline:
-        last = service_status(service_name)
         processes = listener_processes()
-        if last == "RUNNING" and processes:
+        if processes:
             evidence["status"] = "ready"
-            evidence["service_started"] = True
+            evidence["runner_started"] = True
             evidence["listener_processes_after"] = processes
             return evidence
         time.sleep(2)
 
     evidence["status"] = "blocked"
-    evidence["reason"] = f"runner_start_timeout:{last}"
+    evidence["reason"] = "runner_start_timeout"
     evidence["listener_processes_after"] = listener_processes()
     return evidence
 
