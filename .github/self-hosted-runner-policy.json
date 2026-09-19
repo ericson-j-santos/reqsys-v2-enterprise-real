@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
-  "self_hosted_allowed": false,
-  "approved_workflows": [],
-  "required_adr": null,
-  "rationale": "ReqSys usa runners hospedados pelo GitHub. A adoção de self-hosted exige ADR, allowlist explícita e revisão de segurança."
+  "self_hosted_allowed": true,
+  "approved_workflows": [
+    ".github/workflows/desktop-rdc-recovery.yml"
+  ],
+  "required_adr": "docs/adr/ADR-046-pc24x7-substituicao-flyio.md",
+  "rationale": "Self-hosted permitido apenas por allowlist explícita para capacidades DEV PC24x7 cobertas pelo ADR-046; qualquer outro workflow permanece bloqueado."
 }

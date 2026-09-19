@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Desktop RDC self-hosted recovery",
+  "status": "ready_for_validation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_rdc_recovery.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ]
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/desktop-rdc-selfhosted-recovery.requirements.md",
+    "workflow": ".github/workflows/desktop-rdc-recovery.yml",
+    "recovery_script": "scripts/pc24x7_rdc_recovery.py",
+    "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+  }
+}

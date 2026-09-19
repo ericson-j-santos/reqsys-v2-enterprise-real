@@ -19,6 +19,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch'" in content
     assert "github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'" in content
     assert "github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev'" in content
+    assert "github.event.comment.body == '/reqsys run desktop-rdc-recovery'" in content
 
 
 def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
@@ -29,11 +30,13 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pending-development-agent-pr-permission-watch.yml'" in content
     assert "target='bacen-57-simulation-assessment.yml'" in content
     assert "target='cofre-runtime-evidence-gate.yml'" in content
+    assert "target='desktop-rdc-recovery.yml'" in content
     assert (
         "bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
         "bacen-57-simulation-assessment.yml|"
-        "cofre-runtime-evidence-gate.yml"
+        "cofre-runtime-evidence-gate.yml|"
+        "desktop-rdc-recovery.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
@@ -79,3 +82,15 @@ def test_gateway_cofre_fixa_dev_e_timeout_sem_producao() -> None:
     assert '-f timeout_seconds=20' in content
     assert 'environment=stg' not in content
     assert 'environment=prod' not in content
+
+
+def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run desktop-rdc-recovery')" in content
+    assert "target='desktop-rdc-recovery.yml'" in content
+    assert "desktop-rdc-recovery.yml)" in content
+    assert "|desktop-rdc-recovery.yml)" in content
+    assert "desktop-rdc-recovery-dev" not in content
+    assert "-f host=" not in content
+    assert "-f task=" not in content

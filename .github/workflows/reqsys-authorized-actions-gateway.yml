@@ -23,7 +23,8 @@ jobs:
         github.event.comment.body == '/reqsys run runtime-e2e-dev' ||
         github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
         github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
-        github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev'
+        github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
+        github.event.comment.body == '/reqsys run desktop-rdc-recovery'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -51,6 +52,9 @@ jobs:
             '/reqsys run cofre-runtime-evidence-dev')
               target='cofre-runtime-evidence-gate.yml'
               ;;
+            '/reqsys run desktop-rdc-recovery')
+              target='desktop-rdc-recovery.yml'
+              ;;
             *)
               echo 'command_not_allowlisted' >&2
               exit 2
@@ -77,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
