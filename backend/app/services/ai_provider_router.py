@@ -46,6 +46,11 @@ def _value(env: Mapping[str, str] | None, *names: str) -> str:
     return ''
 
 
+def _safe_log_value(value: object, *, max_length: int = 200) -> str:
+    """Remove delimitadores capazes de forjar novas linhas de log."""
+    return str(value).replace('\r', ' ').replace('\n', ' ')[:max_length]
+
+
 class AIProviderRouter:
     """Roteador único de providers textuais do ReqSys.
 
@@ -233,10 +238,10 @@ class AIProviderRouter:
 
         logger.info(
             'ai_provider_route correlation_id=%s requested_provider=%s provider=%s model=%s',
-            correlation,
-            requested_provider,
-            resolved,
-            effective_model,
+            _safe_log_value(correlation),
+            _safe_log_value(requested_provider),
+            _safe_log_value(resolved),
+            _safe_log_value(effective_model),
         )
         return AIRouteResult(
             text=normalized,

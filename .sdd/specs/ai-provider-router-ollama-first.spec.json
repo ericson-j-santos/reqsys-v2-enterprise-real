@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Centraliza geração textual de IA no AIProviderRouter, usa ollama_gateway como default, preserva multi-provider explícito e bloqueia novos bypasses diretos.",
+  "description": "Centraliza geração textual de IA no AIProviderRouter, usa ollama_gateway como default, preserva multi-provider explícito, bloqueia bypasses diretos e sanitiza campos dinâmicos de log contra injection/forging.",
   "scope": "ai-provider-routing",
   "files": [
     "backend/app/core/config.py",
@@ -28,7 +28,7 @@
       "backend/tests/test_ai_provider_router.py",
       "backend/tests/test_ai_provider_architecture.py"
     ],
-    "evidence_contract": "Provar default ollama_gateway, fallback configurado, providers explícitos, falha fechada e anti-bypass no HEAD exato."
+    "evidence_contract": "Provar default ollama_gateway, fallback configurado, providers explícitos, falha fechada, anti-bypass e sanitização CR/LF dos campos de log no HEAD exato."
   },
   "risk": {
     "production": false,
