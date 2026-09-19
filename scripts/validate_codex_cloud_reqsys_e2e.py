@@ -4,8 +4,8 @@
 Executa em ambiente isolado de DEV:
 1) lê somente as três variáveis Ollama allowlisted do perfil Windows;
 2) valida o provider direto ReqSys -> LLMGateway -> Ollama;
-3) sobe temporariamente gateway :8008 e backend :8000;
-4) autentica com identidade demo sintética;
+3) sobe temporariamente o gateway ou reutiliza explicitamente um gateway DEV saudável;
+4) sobe backend temporário em porta configurável e autentica com identidade demo sintética;
 5) chama POST /v1/codex/analyze com provider ollama_gateway;
 6) encerra os processos e emite evidência JSON.
 
@@ -138,6 +138,24 @@ def _free_port(port: int) -> None:
             raise E2EError(f"porta {port} já está ocupada")
 
 
+def _validate_port(port: int, *, name: str) -> int:
+    if not 1 <= int(port) <= 65535:
+        raise E2EError(f"{name} deve estar entre 1 e 65535")
+    return int(port)
+
+
+def _validate_reusable_gateway_health(data: dict[str, Any]) -> None:
+    if data.get("status") != "ok":
+        raise E2EError("gateway existente não está saudável")
+    if data.get("service") != "reqsys-ollama-local-gateway":
+        raise E2EError("serviço em gateway-port não é reqsys-ollama-local-gateway")
+    env = str(data.get("env") or "").strip().lower()
+    if env not in {"dev", "development", "test", "testing"}:
+        raise E2EError("gateway existente não está em ambiente não-produtivo permitido")
+    if bool(data.get("auth_required")):
+        raise E2EError("gateway existente exige autenticação e não pode ser reutilizado por este E2E")
+
+
 def _direct_provider(root: Path, probe: Any) -> dict[str, Any]:
     backend = root / "backend"
     sys.path.insert(0, str(backend))
@@ -162,7 +180,12 @@ def _direct_provider(root: Path, probe: Any) -> dict[str, Any]:
     }
 
 
-def _stack_env(profile: dict[str, str], temp_db: Path) -> dict[str, str]:
+def _stack_env(
+    profile: dict[str, str],
+    temp_db: Path,
+    *,
+    gateway_url: str = "http://127.0.0.1:8008",
+) -> dict[str, str]:
     env = os.environ.copy()
     env.update(profile)
     env.update(
@@ -172,7 +195,7 @@ def _stack_env(profile: dict[str, str], temp_db: Path) -> dict[str, str]:
             "PUBLIC_ENVIRONMENT": "development",
             "ALLOW_DEMO_LOGIN": "true",
             "DATABASE_URL": f"sqlite:///{temp_db.as_posix()}",
-            "CODEX_OLLAMA_GATEWAY_URL": "http://127.0.0.1:8008",
+            "CODEX_OLLAMA_GATEWAY_URL": gateway_url,
             "CODEX_OLLAMA_GATEWAY_API_KEY": "",
             "CODEX_OLLAMA_GATEWAY_TIMEOUT_SECONDS": "60",
             "REQSYS_ENV": "dev",
@@ -189,44 +212,66 @@ def _stack_env(profile: dict[str, str], temp_db: Path) -> dict[str, str]:
     return env
 
 
-def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str, Any]:
-    _free_port(8008)
-    _free_port(8000)
+def _full_endpoint(
+    root: Path,
+    profile: dict[str, str],
+    probe: Any,
+    *,
+    gateway_port: int = 8008,
+    backend_port: int = 8000,
+    reuse_running_gateway: bool = False,
+) -> dict[str, Any]:
+    gateway_port = _validate_port(gateway_port, name="gateway-port")
+    backend_port = _validate_port(backend_port, name="backend-port")
+    if gateway_port == backend_port:
+        raise E2EError("gateway-port e backend-port devem ser diferentes")
+
+    gateway_url = f"http://127.0.0.1:{gateway_port}"
+    backend_url = f"http://127.0.0.1:{backend_port}"
+    _free_port(backend_port)
+    if not reuse_running_gateway:
+        _free_port(gateway_port)
+
     backend = root / "backend"
     gateway_src = root / "docs" / "ollama-local-gateway" / "bootstrap-files" / "src"
 
     temp = Path(tempfile.mkdtemp(prefix="reqsys-codex-cloud-e2e-"))
-    env = _stack_env(profile, temp / "e2e.db")
+    env = _stack_env(profile, temp / "e2e.db", gateway_url=gateway_url)
     gateway_log = (temp / "gateway.log").open("w", encoding="utf-8")
     backend_log = (temp / "backend.log").open("w", encoding="utf-8")
     gateway: subprocess.Popen[Any] | None = None
     api: subprocess.Popen[Any] | None = None
     try:
-        gateway = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "uvicorn",
-                "reqsys_ollama_gateway.main:app",
-                "--app-dir",
-                str(gateway_src),
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "8008",
-                "--log-level",
-                "warning",
-            ],
-            cwd=str(root),
-            env=env,
-            stdout=gateway_log,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        gateway_health = _wait_http("http://127.0.0.1:8008/health", gateway, 30)
+        if reuse_running_gateway:
+            gateway_health = _wait_http(f"{gateway_url}/health", None, 10)
+            _validate_reusable_gateway_health(gateway_health)
+        else:
+            gateway = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "uvicorn",
+                    "reqsys_ollama_gateway.main:app",
+                    "--app-dir",
+                    str(gateway_src),
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(gateway_port),
+                    "--log-level",
+                    "warning",
+                ],
+                cwd=str(root),
+                env=env,
+                stdout=gateway_log,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            gateway_health = _wait_http(f"{gateway_url}/health", gateway, 30)
+            _validate_reusable_gateway_health(gateway_health)
 
         fallback_probe = requests.post(
-            "http://127.0.0.1:8008/v1/chat",
+            f"{gateway_url}/v1/chat",
             json={
                 "model": "__reqsys_cloud_unavailable__",
                 "fallback_model": profile["CODEX_OLLAMA_FALLBACK_MODEL"],
@@ -257,7 +302,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
                 "--host",
                 "127.0.0.1",
                 "--port",
-                "8000",
+                str(backend_port),
                 "--log-level",
                 "warning",
             ],
@@ -267,10 +312,10 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        backend_health = _wait_http("http://127.0.0.1:8000/health", api, 45)
+        backend_health = _wait_http(f"{backend_url}/health", api, 45)
 
         login = requests.post(
-            "http://127.0.0.1:8000/v1/auth/login",
+            f"{backend_url}/v1/auth/login",
             json={"email": "codex-e2e@example.com"},
             timeout=15,
         )
@@ -282,7 +327,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
         }
 
         status = requests.get(
-            "http://127.0.0.1:8000/v1/codex/status",
+            f"{backend_url}/v1/codex/status",
             headers=headers,
             timeout=15,
         )
@@ -290,7 +335,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
 
         started = time.perf_counter()
         analyze = requests.post(
-            "http://127.0.0.1:8000/v1/codex/analyze",
+            f"{backend_url}/v1/codex/analyze",
             headers=headers,
             json={
                 "provider": "ollama_gateway",
@@ -313,6 +358,8 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
 
         return {
             "evidence_dir": str(temp),
+            "gateway_url": gateway_url,
+            "gateway_reused": reuse_running_gateway,
             "gateway_health": gateway_health,
             "fallback_probe": {
                 "requested_model": fallback_data.get("requested_model"),
@@ -321,6 +368,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
                 "latency_ms": fallback_data.get("latency_ms"),
                 "response_excerpt": str(fallback_data.get("response") or "")[:200],
             },
+            "backend_url": backend_url,
             "backend_health": backend_health,
             "codex_status": status.json()["data"],
             "provider": data.get("provider"),
@@ -334,7 +382,8 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
         }
     finally:
         _terminate(api)
-        _terminate(gateway)
+        if not reuse_running_gateway:
+            _terminate(gateway)
         backend_log.close()
         gateway_log.close()
 
@@ -343,6 +392,13 @@ def main() -> int:
     parser.add_argument("--expected-model", default="gemma4:31b-cloud")
     parser.add_argument("--expected-fallback-model", default="gemma4:26b-q8-code")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--gateway-port", type=int, default=8008)
+    parser.add_argument("--backend-port", type=int, default=8000)
+    parser.add_argument(
+        "--reuse-running-gateway",
+        action="store_true",
+        help="Reutiliza somente um reqsys-ollama-local-gateway saudável em DEV/test.",
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
@@ -350,7 +406,14 @@ def main() -> int:
         profile = _load_profile_into_env(args.expected_model, args.expected_fallback_model)
         probe = _load_probe(root)
         direct = _direct_provider(root, probe)
-        full = _full_endpoint(root, profile, probe)
+        full = _full_endpoint(
+            root,
+            profile,
+            probe,
+            gateway_port=args.gateway_port,
+            backend_port=args.backend_port,
+            reuse_running_gateway=args.reuse_running_gateway,
+        )
         result = {
             "result": "E2E_OK",
             "root": str(root),
