@@ -18,6 +18,12 @@ from typing import Any, Callable, Iterable
 
 EXPECTED_FUNCTION = "CNS.PROSPECCAO_FN001_PAINEL_FLUXO_INTRADIA"
 PATTERNS = ("prospec", "movimento", "pendenc", "fechamento", "consign", "portab")
+EXPECTED_DATASETS = {
+    "fechamento_diario": ["indicador", "valor", "observacao", "data_referencia"],
+    "pendencias_cadastro": ["protocolo", "cliente", "cpf", "pendencia", "dias_em_aberto", "responsavel", "data_referencia"],
+    "pendencias_historicas": ["periodo_referencia", "pendencia", "quantidade", "percentual", "data_referencia"],
+    "pendencias_observacao": ["protocolo", "tipo_inconsistencia", "descricao", "etapa", "data_referencia"],
+}
 SAFE_SQL_NAME = re.compile(r"^[A-Za-z0-9_.\\\\-]+$")
 
 
@@ -169,6 +175,24 @@ def probe_network(server: str, *, port: int = 1433, timeout: float = 3.0) -> dic
     return evidence
 
 
+def infer_exact_mapping(object_columns: dict[str, list[str]]) -> dict[str, Any]:
+    normalized = {name: {column.casefold() for column in columns} for name, columns in object_columns.items()}
+    mapping: dict[str, str] = {}
+    missing: list[str] = []
+    ambiguous: dict[str, list[str]] = {}
+    for dataset, expected in EXPECTED_DATASETS.items():
+        wanted = {column.casefold() for column in expected}
+        matches = sorted(name for name, columns in normalized.items() if wanted.issubset(columns))
+        if len(matches) == 1:
+            mapping[dataset] = matches[0]
+        elif not matches:
+            missing.append(dataset)
+        else:
+            ambiguous[dataset] = matches
+    status = "complete" if len(mapping) == len(EXPECTED_DATASETS) else ("ambiguous" if ambiguous else "partial")
+    return {"status": status, "mapping": mapping, "missing": missing, "ambiguous": ambiguous}
+
+
 def inspect_sql_metadata(conn: Any) -> dict[str, Any]:
     cur = conn.cursor()
     cur.execute(
@@ -183,10 +207,23 @@ def inspect_sql_metadata(conn: Any) -> dict[str, Any]:
         "FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA, TABLE_NAME"
     )
     objects: list[str] = []
+    object_names: set[str] = set()
     for schema, name, kind in cur.fetchall():
         name_text = str(name or "")
         if any(pattern in name_text.casefold() for pattern in PATTERNS):
-            objects.append(f"{schema}.{name_text}:{kind}")
+            object_name = f"{schema}.{name_text}"
+            object_names.add(object_name)
+            objects.append(f"{object_name}:{kind}")
+
+    cur.execute(
+        "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME "
+        "FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
+    )
+    object_columns: dict[str, list[str]] = {name: [] for name in object_names}
+    for schema, name, column in cur.fetchall():
+        object_name = f"{schema}.{name}"
+        if object_name in object_columns:
+            object_columns[object_name].append(str(column))
 
     cur.execute(
         "SELECT CASE WHEN OBJECT_ID(N'CNS.PROSPECCAO_FN001_PAINEL_FLUXO_INTRADIA') "
@@ -212,6 +249,8 @@ def inspect_sql_metadata(conn: Any) -> dict[str, Any]:
         "resolved_database_hash": short_hash(str(database_name or "")),
         "broad_write_role_detected": broad_write_role,
         "candidate_objects": objects[:100],
+        "candidate_object_columns": object_columns,
+        "mapping_inference": infer_exact_mapping(object_columns),
         "expected_function_present": expected_function_present,
         "expected_function_columns": function_columns,
         "expected_function_metadata_status": function_metadata_status,
@@ -318,12 +357,26 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidate", action="append", type=parse_cli_candidate, default=[])
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--mapping-output", type=Path)
     args = parser.parse_args()
     env_items = parse_env_candidates(os.getenv("MOVIMENTO_EMAIL_SOURCE_CANDIDATES", ""))
     payload = run([*args.candidate, *env_items, *registry_candidates()])
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.mapping_output and payload.get("selected"):
+        inference = payload["selected"].get("mapping_inference") or {}
+        if inference.get("status") == "complete":
+            datasets = {}
+            for name, source_object in inference["mapping"].items():
+                datasets[name] = {
+                    "source_object": source_object,
+                    "target_object": f"movimento_src.{name}",
+                    "view": f"dbo.vw_prospeccao_movimento_{name}",
+                    "columns": EXPECTED_DATASETS[name],
+                }
+            args.mapping_output.parent.mkdir(parents=True, exist_ok=True)
+            args.mapping_output.write_text(json.dumps({"datasets": datasets}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False))
     return 0 if payload["source_validated"] else 3
 
