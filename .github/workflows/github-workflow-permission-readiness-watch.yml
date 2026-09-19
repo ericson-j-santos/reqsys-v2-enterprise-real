@@ -21,6 +21,11 @@ on:
         required: true
         type: boolean
         default: false
+      app_runner_admin_probe:
+        description: "Probe da GitHub App governada para Administration:write"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,6 +36,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  app-runner-admin-probe:
+    if: github.event_name == 'workflow_dispatch' && inputs.app_runner_admin_probe == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Mint governed GitHub App token with repository administration
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-administration: write
+
+      - name: Probe runner registration capability without exposing token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          set +x
+          payload="$(gh api --method POST "repos/${REPOSITORY}/actions/runners/registration-token" 2>/dev/null)" || {
+            echo "::error::app_runner_admin_token_probe_failed"
+            exit 33
+          }
+          printf '%s' "$payload" | python -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("token") and d.get("expires_at") else 1)'
+          unset payload
+          echo "app_runner_admin_registration_token_capability=true" >> "$GITHUB_STEP_SUMMARY"
+          echo "secret_value_exposed=false" >> "$GITHUB_STEP_SUMMARY"
+          echo "production_touched=false" >> "$GITHUB_STEP_SUMMARY"
+
   runner-admin-probe:
     if: github.event_name == 'workflow_dispatch' && inputs.runner_admin_probe == true
     runs-on: ubuntu-latest
@@ -75,7 +113,7 @@ jobs:
         run: python -m pytest -q tests/test_evaluate_github_workflow_token_readiness.py
 
   probe:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.runner_admin_probe != true)
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.runner_admin_probe != true && inputs.app_runner_admin_probe != true)
     runs-on: ubuntu-latest
     timeout-minutes: 7
     outputs:
