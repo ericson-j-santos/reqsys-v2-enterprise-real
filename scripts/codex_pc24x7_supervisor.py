@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import locale
 import os
 import shutil
 import socket
