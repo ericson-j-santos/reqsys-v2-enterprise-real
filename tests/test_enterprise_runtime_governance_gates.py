@@ -45,3 +45,34 @@ def test_scan_content_bloqueia_fragmento_password_de_connection_string() -> None
     assert len(findings) == 1
     assert findings[0].code == "SEC_CONNECTION_STRING"
     assert findings[0].severity == "HIGH"
+
+def test_scan_content_aceita_secret_por_env_obrigatoria() -> None:
+    findings = scan_content(
+        ROOT / "config/runtime.override.yml",
+        'TEAMS_BOT_SECRET: "${TEAMS_BOT_SECRET:?TEAMS_BOT_SECRET required}"\n',
+    )
+
+    assert findings == []
+
+
+def test_scan_content_continua_bloqueando_secret_literal() -> None:
+    findings = scan_content(
+        ROOT / "config/runtime.override.yml",
+        'TEAMS_BOT_SECRET: "super-secret-literal"\n',
+    )
+
+    assert len(findings) == 1
+    assert findings[0].code == "SEC_SECRET_HARDCODED"
+    assert findings[0].severity == "HIGH"
+
+
+def test_scan_content_nao_permite_fallback_literal_em_secret_env() -> None:
+    findings = scan_content(
+        ROOT / "config/runtime.override.yml",
+        'TEAMS_BOT_SECRET: "${TEAMS_BOT_SECRET:-fallback-secret}"\n',
+    )
+
+    assert len(findings) == 1
+    assert findings[0].code == "SEC_SECRET_HARDCODED"
+    assert findings[0].severity == "HIGH"
+
