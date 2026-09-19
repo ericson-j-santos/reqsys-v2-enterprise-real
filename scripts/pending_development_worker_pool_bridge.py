@@ -296,7 +296,10 @@ def main() -> int:
 
         token_path = args.token_file
         if token_path is None:
-            configured = os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
+            configured = (
+                os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
+                or os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "").strip()
+            )
             token_path = Path(configured) if configured else None
         token = read_token(token_path)
         result = enqueue_local_work(
