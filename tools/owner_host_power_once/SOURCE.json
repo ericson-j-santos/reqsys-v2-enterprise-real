@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "purpose": "noteri_one_time_reboot_transport_only",
+  "source_repository": "ericson-j-santos/chatgpt-operational-rules",
+  "source_pr": 73,
+  "source_sha": "90d5ca10db54327bb28ee184d23fdf82343283fd",
+  "authorized_in_chat": true,
+  "merge_intent": false
+}
