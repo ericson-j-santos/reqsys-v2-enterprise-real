@@ -22,3 +22,55 @@ jobs:
 
       - name: Validate acceleration runbook
         run: python3 scripts/validate_parallel_development_acceleration.py
+
+
+  materialize-teams-bot-runtime-dev:
+    name: Materialize Teams Bot on PC24x7 DEV
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate-parallel-development-acceleration
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    environment: development
+    timeout-minutes: 20
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      TARGET_RUNTIME_SHA: 0649ef8ee9b533b44ee05f15c9158856fefd8ad7
+      TARGET_RUNTIME_REPO: C:\\dev\\chatgpt-workers\\wt-chat-reqsys-pc24x7-deploy-0649ef8
+      OPS_SESSION_ID: teams-bot-runtime-${{ github.run_id }}
+      CORRELATION_ID: teams-bot-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+      OWNER_GATEWAY: C:\\dev\\chatgpt-workers\\wt-chat-maint-desktop-20260919x\\scripts\\owner_risk3_gateway.py
+    steps:
+      - name: Checkout immutable operational branch SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Login Azure by governed OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bootstrap governed PC24x7 worktree
+        shell: pwsh
+        run: |
+          python C:\dev\chatgpt-command-gateway\bin\session_launcher.py --policy C:\dev\chatgpt-command-gateway\config\policy.json --repo C:\dev\reqsys-v2-enterprise-real --session-id "$env:OPS_SESSION_ID" --correlation-id "$env:CORRELATION_ID-bootstrap" --expected-head "${{ github.sha }}" --sync-ref "origin/${{ github.ref_name }}"
+
+      - name: Reuse existing Bot credential and execute E2E
+        shell: pwsh
+        run: |
+          $worktree = "C:\dev\chatgpt-workers\wt-chat-$env:OPS_SESSION_ID"
+          python "$env:OWNER_GATEWAY" --action-id reqsys.teams.bot.runtime.dev --scope repo://reqsys/environment/dev/teams-bot-runtime --cwd "$worktree" --timeout 900 --correlation-id "$env:CORRELATION_ID" -- python scripts\provision_pc24x7_teams_bot_runtime.py --confirm REUSE-EXISTING-TEAMS-BOT-DEV --runtime-repo-root "$env:TARGET_RUNTIME_REPO" --expected-runtime-sha "$env:TARGET_RUNTIME_SHA" --vault-name "$env:REQSYS_KEY_VAULT_NAME" --expected-tenant-id "$env:CCP_AZURE_TENANT_ID" --admin-override C:\dev\wt-pc24x7-piloto\docker-compose.admin-dev.override.yml --teams-override "$worktree\config\pc24x7-teams-bot-runtime.override.yml" --correlation-id "$env:CORRELATION_ID" --evidence-file "$worktree\artifacts\teams-bot-runtime-e2e.json"
+
+      - name: Upload sanitized E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-teams-bot-runtime-${{ github.run_id }}
+          path: C:\dev\chatgpt-workers\wt-chat-teams-bot-runtime-${{ github.run_id }}\artifacts\teams-bot-runtime-e2e.json
+          if-no-files-found: warn
+          retention-days: 30
