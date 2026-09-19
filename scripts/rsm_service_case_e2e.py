@@ -91,7 +91,7 @@ def run(base_url: str, database_url: str) -> dict:
 
     login = session.post(
         base_url.rstrip('/') + '/v1/auth/login',
-        json={'email': 'rsm-e2e@example.invalid'},
+        json={'email': 'rsm-e2e@example.com'},
         timeout=20,
     )
     login_data = _data(login)
