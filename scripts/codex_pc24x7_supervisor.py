@@ -577,8 +577,12 @@ def runner_service_status() -> dict[str, Any]:
             win32service.SERVICE_STATE_ALL,
         )
         for item in services:
-            service_name = str(item[0])
-            display_name = str(item[1])
+            if isinstance(item, dict):
+                service_name = str(item.get("ServiceName") or "")
+                display_name = str(item.get("DisplayName") or "")
+            else:
+                service_name = str(item[0])
+                display_name = str(item[1])
             haystack = f"{service_name} {display_name}".casefold()
             if "actions.runner" not in haystack and "github actions runner" not in haystack:
                 continue
