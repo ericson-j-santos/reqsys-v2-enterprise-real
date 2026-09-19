@@ -94,35 +94,34 @@ def apply(rules_root: Path, expected_rules_sha: str, confirm: str) -> dict:
     if arbitration.get("result") not in {"OWNER_ARBITRATION_APPLIED", "already_applied"}:
         raise RuntimeError("owner_arbitration_not_proven")
 
-    resilience = run_json(
+    service_apply = run_json(
         [
             sys.executable,
-            str(rules_root / "scripts" / "rdc_task_resilience.py"),
-            "--apply",
-            "--headless",
+            str(Path(__file__).resolve().with_name("rdc_headless_service_s4u_apply.py")),
             "--confirm",
-            "INSTALL-RDC-HEADLESS",
-            "--start-in-seconds",
-            "30",
+            "APPLY-DESKTOP-RDC-SERVICE-S4U",
         ],
-        cwd=rules_root,
+        cwd=Path(__file__).resolve().parents[1],
+        timeout=120,
     )
-    if resilience.get("result") != "TASK_RESILIENCE_HEADLESS_APPLIED":
-        raise RuntimeError("headless_task_not_proven")
+    if service_apply.get("ok") is not True:
+        raise RuntimeError("headless_service_task_not_proven")
 
     result = {
         "ok": True,
         "host": HOST,
         "rules_sha": expected,
         "owner_arbitration": arbitration.get("result"),
-        "task_result": resilience.get("result"),
-        "headless": resilience.get("headless"),
-        "requires_user_logon": resilience.get("requires_user_logon"),
-        "start_requested": resilience.get("start_requested"),
-        "principal_logon_type": resilience.get("principal_logon_type"),
-        "trigger_count": resilience.get("trigger_count"),
-        "restart_count": resilience.get("restart_count"),
-        "restart_interval": resilience.get("restart_interval"),
+        "task_result": "RDC_HEADLESS_SERVICE_S4U_READY",
+        "headless": True,
+        "requires_user_logon": False,
+        "start_requested": True,
+        "principal_logon_type": "S4U",
+        "service_account": service_apply.get("service_account"),
+        "password_used": False,
+        "session_restored_count": service_apply.get("session_restored_count"),
+        "device_ready_count": service_apply.get("device_ready_count"),
+        "legacy_task_stopped_for_cutover": service_apply.get("legacy_task_stopped_for_cutover"),
     }
     write_receipt(result)
     return result
