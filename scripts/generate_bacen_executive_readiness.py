@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,7 +30,14 @@ REQUIRED_DESIGNATION_FIELDS = (
     "designation_document_reference",
     "designated_by",
 )
+AUTHENTICATED_EVIDENCE_ASSERTED_FIELDS = {
+    "executive_name",
+    "executive_role",
+    "designated_at",
+    "designation_document_reference",
+}
 INSTITUTIONAL_STAGES = {"PRODUCTION", "INSTITUTIONAL"}
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -45,6 +53,59 @@ def missing_required_sections(report_text: str) -> list[str]:
         if not any(f"## {heading}" in report_text for heading in accepted_headings):
             missing.append(section_name)
     return missing
+
+
+def validate_authenticated_decision_evidence(
+    designation_document: dict[str, Any],
+) -> tuple[bool, list[str], dict[str, Any]]:
+    evidence = designation_document.get("decision_evidence")
+    findings: list[str] = []
+    if not isinstance(evidence, dict):
+        return False, ["decision_evidence_missing"], {}
+
+    comment_url = str(evidence.get("comment_url") or "").strip()
+    comment_sha256 = str(evidence.get("comment_sha256") or "").strip().lower()
+    actor = str(evidence.get("authenticated_actor") or "").strip()
+    recorded_at = str(evidence.get("recorded_at") or "").strip()
+    decision = str(evidence.get("decision") or "").strip().lower()
+    asserted_fields = {
+        str(item).strip()
+        for item in (evidence.get("asserted_fields_present") or [])
+        if str(item).strip()
+    }
+
+    if not (
+        comment_url.startswith("https://github.com/")
+        and "/issues/" in comment_url
+        and "#issuecomment-" in comment_url
+    ):
+        findings.append("decision_evidence_comment_url_invalid")
+    if not SHA256_RE.fullmatch(comment_sha256):
+        findings.append("decision_evidence_comment_sha256_invalid")
+    if decision != "approved":
+        findings.append("decision_evidence_not_approved")
+    if not actor:
+        findings.append("decision_evidence_authenticated_actor_missing")
+    if not recorded_at:
+        findings.append("decision_evidence_recorded_at_missing")
+    if not AUTHENTICATED_EVIDENCE_ASSERTED_FIELDS.issubset(asserted_fields):
+        findings.append("decision_evidence_asserted_fields_incomplete")
+    if evidence.get("automatic_status_promotion_allowed") is not False:
+        findings.append("decision_evidence_must_forbid_automatic_status_promotion")
+
+    reference = {
+        "comment_url": comment_url or None,
+        "comment_sha256": comment_sha256 or None,
+        "authenticated_actor": actor or None,
+        "recorded_at": recorded_at or None,
+        "decision": decision or None,
+        "asserted_fields_present": sorted(asserted_fields),
+        "verification_status": evidence.get("verification_status"),
+        "personal_or_sensitive_content_replicated": evidence.get(
+            "personal_or_sensitive_content_replicated"
+        ),
+    }
+    return not findings, findings, reference
 
 
 def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
@@ -72,6 +133,13 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
     ):
         structural_findings.append("deferred_governance_production_gate_missing")
 
+    (
+        authenticated_evidence_valid,
+        authenticated_evidence_findings,
+        authenticated_evidence_reference,
+    ) = validate_authenticated_decision_evidence(designation_document)
+    structural_findings.extend(authenticated_evidence_findings)
+
     institutional_stage = lifecycle_stage in INSTITUTIONAL_STAGES
     missing_report_sections = missing_required_sections(report_text)
     designation_status = str(designation.get("status", "unknown"))
@@ -92,6 +160,12 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
     formal_governance_complete = formal_designation_present and formal_report_signoff_present
     deferred_in_current_stage = deferred_enabled and not institutional_stage and not formal_governance_complete
     production_gate_blocking = institutional_stage and not formal_governance_complete
+
+    remaining_formal_blockers: list[str] = []
+    if not formal_designation_present:
+        remaining_formal_blockers.append("formal_executive_designation")
+    if not formal_report_signoff_present:
+        remaining_formal_blockers.append("annual_report_formal_signoff")
 
     findings: list[str] = []
     if missing_report_sections:
@@ -120,7 +194,7 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
         next_stage = "formal_executive_designation_and_signed_annual_report"
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "control_id": "BACEN-08",
         "generated_at": datetime.now(UTC).isoformat(),
         "report_path": str(report_path),
@@ -134,10 +208,14 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
         "missing_report_sections": missing_report_sections,
         "accepted_report_section_headings": REQUIRED_REPORT_SECTIONS,
         "designation_status": designation_status,
+        "authenticated_designation_evidence_structurally_valid": authenticated_evidence_valid,
+        "authenticated_designation_evidence_reference": authenticated_evidence_reference,
+        "authenticated_designation_evidence_findings": authenticated_evidence_findings,
         "formal_designation_present": formal_designation_present,
         "missing_designation_fields": missing_designation_fields,
         "formal_report_signoff_present": formal_report_signoff_present,
         "formal_governance_complete": formal_governance_complete,
+        "remaining_formal_blockers": remaining_formal_blockers,
         "technical_readiness_passed": technical_readiness_passed,
         "readiness_status": readiness_status,
         "control_status": "implemented" if formal_governance_complete else "partial",
@@ -146,6 +224,7 @@ def build_evidence(report_path: Path, designation_path: Path) -> dict[str, Any]:
         "automatic_blocking": automatic_blocking,
         "human_action_required": human_action_required,
         "production_touched": False,
+        "automatic_status_promotion_allowed": False,
         "next_stage": next_stage,
     }
 
