@@ -10,7 +10,7 @@
   },
   "description": "No Noteri, coleta periodicamente telemetria operacional real do runtime ReqSys DEV no Desktop e grava em owner_movimento.fechamento_diario pelo Owner Gateway local, sem fabricar pendências de negócio.",
   "source": {
-    "runtime_base": "http://127.0.0.1:8081",
+    "runtime_base": "http://DESKTOP-PDQK954:8081",
     "endpoints": [
       "/api/health",
       "/api/runtime/health"
@@ -51,7 +51,8 @@
   },
   "sdd_gate": {
     "tests": [
-      "tests/test_movimento_owner_runtime_projector.py"
+      "tests/test_movimento_owner_runtime_projector.py",
+      "tests/test_movimento_owner_runtime_feed_worker.py"
     ],
     "evidence_contract": "Comprovar captura de valores reais do runtime, ingest owner-managed, sync DEV, replay noop e leitura independente; não classificar telemetria como transação comercial."
   }
