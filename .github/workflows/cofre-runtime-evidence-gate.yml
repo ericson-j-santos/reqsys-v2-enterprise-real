@@ -14,6 +14,11 @@ on:
         required: true
         type: string
         default: "20"
+      rdc_restore:
+        description: Restaurar somente o Remote Desktop Commander do PC24x7
+        required: true
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       environment:
@@ -40,7 +45,23 @@ env:
   CORRELATION_ID: cofre-runtime-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  rdc-recovery:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.rdc_restore == true }}
+    name: Restaurar RDC no PC24x7
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout do SHA da branch de recuperação
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Disparar somente tarefa RDC governada
+        run: python scripts/pc24x7_rdc_restore_once.py
+
   validate-inputs:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.rdc_restore != true }}
     name: Validar contrato PC24x7 DEV
     runs-on: ubuntu-latest
     outputs:
