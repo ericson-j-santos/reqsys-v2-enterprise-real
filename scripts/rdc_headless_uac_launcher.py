@@ -54,7 +54,7 @@ def read_receipt() -> dict:
 
 def launch(rules_root: Path, expected_rules_sha: str, confirm: str, timeout: int) -> dict:
     validate(socket.gethostname(), os.name, confirm)
-    RECEIPT.unlink(missing_ok=True)
+    before_receipt = read_receipt()
     rc = int(
         ctypes.windll.shell32.ShellExecuteW(
             None,
@@ -71,7 +71,7 @@ def launch(rules_root: Path, expected_rules_sha: str, confirm: str, timeout: int
     deadline = time.monotonic() + max(10, min(timeout, 120))
     while time.monotonic() < deadline:
         receipt = read_receipt()
-        if receipt:
+        if receipt and receipt != before_receipt:
             return {
                 "ok": receipt.get("ok") is True,
                 "mode": "uac",
