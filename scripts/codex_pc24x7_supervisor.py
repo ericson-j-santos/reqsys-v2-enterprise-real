@@ -31,7 +31,15 @@ from typing import Any
 
 EXPECTED_HOST = "DESKTOP-PDQK954"
 SERVICE_NAME = "reqsys-codex-pc24x7-supervisor"
-TASK_NAME = r"\Automation\ReqSysCodexPC24x7Supervisor"
+TASK_FOLDER = r"\Automation"
+TASK_LEAF = "ReqSysCodexPC24x7Supervisor"
+TASK_NAME = TASK_FOLDER + "\\" + TASK_LEAF
+TASK_TRIGGER_BOOT = 8
+TASK_ACTION_EXEC = 0
+TASK_LOGON_S4U = 2
+TASK_CREATE_OR_UPDATE = 6
+TASK_RUNLEVEL_LUA = 0
+TASK_INSTANCES_IGNORE_NEW = 2
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_VALUE = "ReqSysCodexPC24x7Supervisor"
 DEFAULT_GATEWAY_PORT = 8008
@@ -545,6 +553,92 @@ class Supervisor:
             time.sleep(max(5, interval))
 
 
+def current_user_id() -> str:
+    return f"{socket.gethostname()}\\\\{getpass.getuser()}"
+
+
+def register_task_com(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
+    require_windows_desktop()
+    try:
+        import win32com.client  # type: ignore
+    except ImportError as exc:
+        raise SupervisorError("pywin32 indisponível no Python base") from exc
+
+    service = win32com.client.Dispatch("Schedule.Service")
+    service.Connect()
+    try:
+        folder = service.GetFolder(TASK_FOLDER)
+    except Exception:
+        root = service.GetFolder("\\")
+        folder = root.CreateFolder(TASK_FOLDER.lstrip("\\"))
+
+    definition = service.NewTask(0)
+    definition.RegistrationInfo.Description = "ReqSys Codex/Ollama PC24x7 local DEV supervisor"
+    definition.Settings.Enabled = True
+    definition.Settings.StartWhenAvailable = True
+    definition.Settings.DisallowStartIfOnBatteries = False
+    definition.Settings.StopIfGoingOnBatteries = False
+    definition.Settings.MultipleInstances = TASK_INSTANCES_IGNORE_NEW
+    definition.Settings.ExecutionTimeLimit = "PT0S"
+
+    trigger = definition.Triggers.Create(TASK_TRIGGER_BOOT)
+    trigger.Enabled = True
+    trigger.Delay = "PT20S"
+
+    action = definition.Actions.Create(TASK_ACTION_EXEC)
+    action.Path = str(python_executable)
+    action.Arguments = f'"{launcher}"'
+    action.WorkingDirectory = str(launcher.parent)
+
+    principal = definition.Principal
+    principal.UserId = current_user_id()
+    principal.LogonType = TASK_LOGON_S4U
+    principal.RunLevel = TASK_RUNLEVEL_LUA
+
+    folder.RegisterTaskDefinition(
+        TASK_LEAF,
+        definition,
+        TASK_CREATE_OR_UPDATE,
+        principal.UserId,
+        "",
+        TASK_LOGON_S4U,
+    )
+    return {
+        "ok": True,
+        "task_name": TASK_NAME,
+        "trigger": "AtStartup",
+        "logon_type": "S4U",
+        "password_used": False,
+        "run_level": "limited",
+    }
+
+
+def _register_task_via_base_python(
+    *,
+    release_supervisor: Path,
+    python_executable: Path,
+    launcher: Path,
+) -> subprocess.CompletedProcess[str]:
+    base_python = Path(getattr(sys, "_base_executable", "") or sys.executable)
+    return subprocess.run(
+        [
+            str(base_python),
+            str(release_supervisor),
+            "register-task-com",
+            "--python-executable",
+            str(python_executable),
+            "--launcher",
+            str(launcher),
+        ],
+        capture_output=True,
+        text=True,
+        encoding=locale.getpreferredencoding(False) or "utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+
+
 def _schtasks() -> Path:
     root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
     target = root / "System32" / "schtasks.exe"
@@ -710,27 +804,18 @@ def install(
     launcher = _write_launcher(runtime_root)
     action = _task_action(python_executable, launcher)
     was_healthy = all((probe_ollama(), probe_gateway(), probe_backend()))
-    username = f"{socket.gethostname()}\\{getpass.getuser()}"
-    task = _run_schtasks(
-        [
-            "/Create",
-            "/TN",
-            TASK_NAME,
-            "/SC",
-            "ONSTART",
-            "/TR",
-            action,
-            "/RU",
-            username,
-            "/NP",
-            "/RL",
-            "LIMITED",
-            "/F",
-        ]
+    registration = _register_task_via_base_python(
+        release_supervisor=supervisor,
+        python_executable=python_executable,
+        launcher=launcher,
     )
-    verified_task = task_status() if task.returncode == 0 else {"exists": False, "trigger_at_startup": False}
+    verified_task = (
+        task_status()
+        if registration.returncode == 0
+        else {"exists": False, "trigger_at_startup": False}
+    )
     task_ok = (
-        task.returncode == 0
+        registration.returncode == 0
         and verified_task.get("exists") is True
         and verified_task.get("trigger_at_startup") is True
     )
@@ -741,7 +826,11 @@ def install(
         _remove_run_key()
     else:
         _install_run_key(action)
-        task_error = (task.stderr or task.stdout or "task_at_startup_not_verified")[:500]
+        task_error = (
+            registration.stderr
+            or registration.stdout
+            or "task_at_startup_not_verified"
+        )[:500]
 
     if not was_healthy:
         if task_ok:
@@ -866,6 +955,10 @@ def main() -> int:
         p = sub.add_parser(name)
         p.add_argument("--metadata", type=Path, required=True)
 
+    register = sub.add_parser("register-task-com")
+    register.add_argument("--python-executable", type=Path, required=True)
+    register.add_argument("--launcher", type=Path, required=True)
+
     post = sub.add_parser("postboot-check")
     post.add_argument("--metadata", type=Path, required=True)
     post.add_argument("--require-reboot", action="store_true")
@@ -878,6 +971,13 @@ def main() -> int:
                 source_sha=args.source_sha,
                 python_executable=args.python_executable.resolve(),
                 runtime_root=(args.runtime_root or default_runtime_root()).resolve(),
+            )
+            print(json.dumps(result, ensure_ascii=True, sort_keys=True))
+            return 0
+        if args.command == "register-task-com":
+            result = register_task_com(
+                python_executable=args.python_executable.resolve(),
+                launcher=args.launcher.resolve(),
             )
             print(json.dumps(result, ensure_ascii=True, sort_keys=True))
             return 0
