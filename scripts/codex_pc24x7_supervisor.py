@@ -621,6 +621,60 @@ def runner_service_status() -> dict[str, Any]:
     }
 
 
+def runner_task_status() -> dict[str, Any]:
+    require_windows_desktop()
+    try:
+        import win32com.client  # type: ignore
+    except ImportError as exc:
+        raise SupervisorError("pywin32 indisponível no Python base") from exc
+
+    service = win32com.client.Dispatch("Schedule.Service")
+    service.Connect()
+    matches: list[dict[str, Any]] = []
+
+    def walk(folder, depth: int = 0) -> None:
+        if depth > 4:
+            return
+        for index in range(1, folder.GetTasks(0).Count + 1):
+            task = folder.GetTasks(0).Item(index)
+            definition = task.Definition
+            action_paths: list[str] = []
+            for action_index in range(1, definition.Actions.Count + 1):
+                action = definition.Actions.Item(action_index)
+                action_paths.append(str(getattr(action, "Path", "") or ""))
+            haystack = " ".join([str(task.Name), str(task.Path), *action_paths]).casefold()
+            if "runner" not in haystack and "actions" not in haystack and "github" not in haystack:
+                continue
+            triggers = [
+                int(definition.Triggers.Item(i).Type)
+                for i in range(1, definition.Triggers.Count + 1)
+            ]
+            matches.append(
+                {
+                    "task_name": str(task.Name),
+                    "task_path": str(task.Path),
+                    "enabled": bool(task.Enabled),
+                    "state": int(task.State),
+                    "action_paths": action_paths,
+                    "trigger_types": triggers,
+                    "boot_trigger": TASK_TRIGGER_BOOT in triggers,
+                    "logon_type": int(definition.Principal.LogonType),
+                    "run_level": int(definition.Principal.RunLevel),
+                }
+            )
+        folders = folder.GetFolders(0)
+        for folder_index in range(1, folders.Count + 1):
+            walk(folders.Item(folder_index), depth + 1)
+
+    walk(service.GetFolder("\\"))
+    return {
+        "ok": bool(matches),
+        "host": socket.gethostname(),
+        "runner_tasks": matches,
+        "boot_runner_task_present": any(item["boot_trigger"] for item in matches),
+    }
+
+
 def register_task_com(*, python_executable: Path, launcher: Path) -> dict[str, Any]:
     require_windows_desktop()
     try:
@@ -1020,6 +1074,7 @@ def main() -> int:
         p.add_argument("--metadata", type=Path, required=True)
 
     sub.add_parser("runner-service-status")
+    sub.add_parser("runner-task-status")
 
     register = sub.add_parser("register-task-com")
     register.add_argument("--python-executable", type=Path, required=True)
@@ -1044,6 +1099,10 @@ def main() -> int:
             result = runner_service_status()
             print(json.dumps(result, ensure_ascii=True, sort_keys=True))
             return 0 if result.get("automatic_runner_present") else 3
+        if args.command == "runner-task-status":
+            result = runner_task_status()
+            print(json.dumps(result, ensure_ascii=True, sort_keys=True))
+            return 0 if result.get("boot_runner_task_present") else 3
         if args.command == "register-task-com":
             result = register_task_com(
                 python_executable=args.python_executable.resolve(),
