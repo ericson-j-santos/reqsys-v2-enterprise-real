@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.codex_auditoria import CodexAuditoria
+from app.services.ai_provider_router import AIProviderRouter
 from app.services.llm_provider import (
     LLMGateway,
 )
@@ -117,65 +118,68 @@ def _extrair_resposta_gemini(data: dict[str, Any]) -> str:
     return _llm_extrair_resposta_gemini(data)
 
 
-def chamar_ollama(prompt: str) -> str:
-    return _gateway().gerar_ollama(
-        base_url=settings.codex_ollama_base_url or 'http://localhost:11434',
+def _router() -> AIProviderRouter:
+    return AIProviderRouter(gateway=_gateway())
+
+
+def chamar_ollama(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='ollama',
         model=settings.codex_ollama_model,
         prompt=prompt,
-        fallback_model=settings.codex_ollama_fallback_model,
-        fallback_timeout=settings.codex_ollama_fallback_timeout_seconds,
-    )
+        correlation_id=correlation_id,
+    ).text
 
 
 def chamar_ollama_gateway(prompt: str, contexto: str, entrada: str, correlation_id: str) -> str:
-    model = settings.codex_ollama_gateway_model or settings.codex_ollama_model
-    return _gateway().gerar_ollama_gateway(
-        base_url=settings.codex_ollama_gateway_url,
-        model=model,
+    return _router().generate_text(
+        provider='ollama_gateway',
+        model=settings.codex_ollama_gateway_model or settings.codex_ollama_model,
         prompt=prompt,
-        contexto=contexto,
-        entrada=entrada,
+        context=contexto,
+        input_text=entrada,
         correlation_id=correlation_id,
-        api_key=settings.codex_ollama_gateway_api_key,
-        timeout=settings.codex_ollama_gateway_timeout_seconds,
-        fallback_model=settings.codex_ollama_fallback_model,
-    )
+    ).text
 
 
-def chamar_openai(prompt: str) -> str:
-    return _gateway().gerar_openai(
-        api_key=settings.codex_openai_key,
+def chamar_openai(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='openai',
         model=settings.codex_openai_model,
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
-    )
+        correlation_id=correlation_id,
+    ).text
 
 
-def chamar_claude(prompt: str) -> str:
-    return _gateway().gerar_claude(
-        api_key=settings.codex_claude_key,
+def chamar_claude(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='claude',
         model=settings.codex_claude_model,
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
-    )
+        correlation_id=correlation_id,
+    ).text
 
 
-def chamar_groq(prompt: str) -> str:
-    return _gateway().gerar_groq(
-        api_key=settings.groq_api_key,
+def chamar_groq(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='groq',
         model=settings.groq_model,
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
-    )
+        correlation_id=correlation_id,
+    ).text
 
 
-def chamar_gemini(prompt: str) -> str:
-    return _gateway().gerar_gemini(
-        api_key=settings.gemini_api_key,
+def chamar_gemini(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='gemini',
         model=settings.gemini_model,
         prompt=prompt,
         system_prompt=_SYSTEM_PROMPT,
-    )
+        correlation_id=correlation_id,
+    ).text
 
 
 def resposta_mock(contexto: str, entrada: str, correlation_id: str) -> str:
@@ -193,17 +197,17 @@ def executar_provider(provider: Provider, prompt: str, contexto: str, entrada: s
     if provider == 'mock':
         return resposta_mock(contexto, entrada, correlation_id)
     if provider == 'ollama':
-        return chamar_ollama(prompt)
+        return chamar_ollama(prompt, correlation_id)
     if provider == 'ollama_gateway':
         return chamar_ollama_gateway(prompt, contexto, entrada, correlation_id)
     if provider == 'openai':
-        return chamar_openai(prompt)
+        return chamar_openai(prompt, correlation_id)
     if provider == 'claude':
-        return chamar_claude(prompt)
+        return chamar_claude(prompt, correlation_id)
     if provider == 'groq':
-        return chamar_groq(prompt)
+        return chamar_groq(prompt, correlation_id)
     if provider == 'gemini':
-        return chamar_gemini(prompt)
+        return chamar_gemini(prompt, correlation_id)
     raise RuntimeError(f'Provider nao suportado: {provider}')
 
 
