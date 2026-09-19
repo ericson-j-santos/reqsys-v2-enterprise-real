@@ -4,9 +4,9 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-SUPPORTED_PROVIDERS = frozenset({'openai', 'claude', 'gemini', 'groq', 'ollama'})
+SUPPORTED_PROVIDERS = frozenset({'openai', 'claude', 'gemini', 'groq', 'ollama', 'ollama_gateway'})
 SUPPORTED_DATA_CLASSIFICATIONS = frozenset({'public', 'internal', 'confidential', 'restricted'})
-DEFAULT_LOCAL_PROVIDERS = frozenset({'ollama'})
+DEFAULT_LOCAL_PROVIDERS = frozenset({'ollama', 'ollama_gateway'})
 
 
 class CorporateAIPolicyError(ValueError):
