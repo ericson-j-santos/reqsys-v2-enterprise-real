@@ -8,6 +8,7 @@ from dataclasses import dataclass
 class Settings:
     env: str
     ollama_base_url: str
+    ollama_fallback_model: str
     auth_required: bool
     allowed_origins: tuple[str, ...]
     api_key: str
@@ -28,6 +29,7 @@ def load_settings() -> Settings:
     settings = Settings(
         env=env,
         ollama_base_url=os.getenv('REQSYS_OLLAMA_BASE_URL', 'http://localhost:11434'),
+        ollama_fallback_model=os.getenv('REQSYS_OLLAMA_FALLBACK_MODEL', '').strip(),
         auth_required=os.getenv('REQSYS_AUTH_REQUIRED', 'true').lower() == 'true',
         allowed_origins=origins,
         api_key=os.getenv('REQSYS_GATEWAY_API_KEY', ''),
