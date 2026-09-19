@@ -180,6 +180,8 @@ def _stack_env(profile: dict[str, str], temp_db: Path) -> dict[str, str]:
             "REQSYS_OLLAMA_BASE_URL": profile["CODEX_OLLAMA_BASE_URL"],
             "REQSYS_OLLAMA_FALLBACK_MODEL": profile["CODEX_OLLAMA_FALLBACK_MODEL"],
             "REQSYS_OLLAMA_TIMEOUT_SECONDS": "60",
+            "REQSYS_OLLAMA_FALLBACK_TIMEOUT_SECONDS": "180",
+            "CODEX_OLLAMA_FALLBACK_TIMEOUT_SECONDS": "180",
             "COFRE_API_URL": "",
             "COFRE_SERVICE_TOKEN": "",
         }
@@ -235,7 +237,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
                 "correlation_id": "codex-cloud-fallback-20260919",
                 "source": "reqsys-codex-e2e",
             },
-            timeout=90,
+            timeout=210,
         )
         fallback_probe.raise_for_status()
         fallback_data = fallback_probe.json()
