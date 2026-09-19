@@ -1,0 +1,30 @@
+{
+  "feature_name": "e2e-reuse-running-ollama-gateway",
+  "project": "ReqSys v2 Enterprise — Ollama Gateway E2E",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Adiciona modo fail-closed para reutilizar gateway Ollama DEV/test já ativo durante o E2E físico, mantendo backend temporário no SHA validado.",
+  "scope": "e2e-harness",
+  "files": [
+    "scripts/validate_codex_cloud_reqsys_e2e.py",
+    "tests/test_validate_codex_cloud_reqsys_e2e.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_validate_codex_cloud_reqsys_e2e.py"
+    ],
+    "evidence_contract": "Provar reutilização somente de gateway DEV/test saudável e preservar controle negativo de fallback sem interromper serviço existente."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false
+  }
+}
