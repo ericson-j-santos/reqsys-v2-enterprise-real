@@ -364,3 +364,33 @@ def test_rules_sha_mismatch_fails_closed(store: WorkerPoolStore) -> None:
             role="builder",
             correlation_id="claim-stale-rules",
         )
+
+
+def test_snapshot_redacts_sensitive_values_and_hides_lease_token(
+    store: WorkerPoolStore,
+) -> None:
+    register_ready(store, "builder-observability", "builder")
+    task, _ = enqueue(store, request_id="snapshot-negative-1771")
+    claimed, lease = store.claim_task(
+        worker_id="builder-observability",
+        role="builder",
+        correlation_id="snapshot-negative-claim",
+    )
+    assert claimed and lease
+
+    raw_marker = "NEGATIVE_SECRET_MARKER_1771"
+    blocked = store.block_task(
+        task_id=task["task_id"],
+        worker_id="builder-observability",
+        lease_token=lease.lease_token,
+        correlation_id="snapshot-negative-block",
+        reason=f"api_key={raw_marker}",
+    )
+    assert blocked["state"] == "blocked"
+
+    snapshot_text = repr(store.snapshot())
+
+    assert lease.lease_token not in snapshot_text
+    assert "lease_token" not in snapshot_text
+    assert raw_marker not in snapshot_text
+    assert "[REDACTED]" in snapshot_text
