@@ -1,0 +1,116 @@
+name: PC24x7 Teams Bot Encrypted Handoff
+
+on:
+  push:
+    branches:
+      - ops/pc24x7-teams-bot-crypto-handoff-20260919
+    paths:
+      - '.github/workflows/pc24x7-teams-bot-encrypted-handoff.yml'
+      - 'ops/pc24x7-teams-bot-public.pem'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: pc24x7-teams-bot-encrypted-handoff-dev
+  cancel-in-progress: false
+
+jobs:
+  encrypt-existing-bot-secret:
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 8
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      BOT_SECRET_VAULT_NAME: reqsys-teams-bot-dev-secret
+      PUBLIC_KEY_FILE: ops/pc24x7-teams-bot-public.pem
+      ENVELOPE_DIR: artifacts/pc24x7-teams-bot-encrypted-handoff
+    steps:
+      - name: Checkout immutable handoff SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Validate governed configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID REQSYS_KEY_VAULT_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name not configured; encrypted handoff remains fail-closed."
+              exit 2
+            fi
+          done
+          test -s "$PUBLIC_KEY_FILE"
+
+      - name: Azure OIDC login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Encrypt existing Teams Bot credential for PC24x7
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ENVELOPE_DIR"
+
+          secret_meta="$(az keyvault secret show             --vault-name "$REQSYS_KEY_VAULT_NAME"             --name "$BOT_SECRET_VAULT_NAME"             --query '{enabled:attributes.enabled,tags:tags}'             --output json --only-show-errors)"
+          app_id="$(jq -r '.tags["app-id"] // empty' <<<"$secret_meta")"
+          enabled="$(jq -r '.enabled // false' <<<"$secret_meta")"
+          if [ "$enabled" != "true" ] || ! [[ "$app_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo "::error::Existing Teams Bot Key Vault record is not reusable."
+            exit 20
+          fi
+
+          bot_secret="$(az keyvault secret show             --vault-name "$REQSYS_KEY_VAULT_NAME"             --name "$BOT_SECRET_VAULT_NAME"             --query value --output tsv --only-show-errors)"
+          if [ -z "$bot_secret" ]; then
+            echo "::error::Existing Teams Bot secret is empty."
+            exit 21
+          fi
+          echo "::add-mask::$bot_secret"
+
+          printf '%s' "$bot_secret"             | openssl pkeyutl -encrypt -pubin -inkey "$PUBLIC_KEY_FILE"                 -pkeyopt rsa_padding_mode:oaep                 -pkeyopt rsa_oaep_md:sha256                 -pkeyopt rsa_mgf1_md:sha256             | base64 -w0 > "$ENVELOPE_DIR/ciphertext.b64"
+          unset bot_secret
+
+          APP_ID="$app_id" HANDOFF_SHA="${{ github.sha }}" CORRELATION_ID="teams-bot-handoff-${{ github.run_id }}-${{ github.run_attempt }}" python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["ENVELOPE_DIR"])
+          ciphertext = (root / "ciphertext.b64").read_text(encoding="ascii").strip()
+          payload = {
+              "schema_version": "1.0.0",
+              "status": "encrypted",
+              "environment": "dev",
+              "algorithm": "RSA-OAEP-SHA256",
+              "ciphertext_b64": ciphertext,
+              "app_id": os.environ["APP_ID"],
+              "tenant_id": os.environ["CCP_AZURE_TENANT_ID"],
+              "key_vault_secret_name": os.environ["BOT_SECRET_VAULT_NAME"],
+              "handoff_sha": os.environ["HANDOFF_SHA"],
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "credential_rotated": False,
+              "secret_value_exposed": False,
+              "production_touched": False,
+          }
+          (root / "envelope.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          (root / "ciphertext.b64").unlink()
+          PY
+
+      - name: Upload encrypted handoff only
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-teams-bot-encrypted-handoff-${{ github.run_id }}
+          path: artifacts/pc24x7-teams-bot-encrypted-handoff/envelope.json
+          if-no-files-found: error
+          retention-days: 1
