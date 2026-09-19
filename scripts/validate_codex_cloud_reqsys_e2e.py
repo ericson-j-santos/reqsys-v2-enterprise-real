@@ -196,114 +196,113 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
     gateway: subprocess.Popen[Any] | None = None
     api: subprocess.Popen[Any] | None = None
     try:
-            gateway = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "uvicorn",
-                    "reqsys_ollama_gateway.main:app",
-                    "--app-dir",
-                    str(gateway_src),
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    "8008",
-                    "--log-level",
-                    "warning",
-                ],
-                cwd=str(root),
-                env=env,
-                stdout=gateway_log,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            gateway_health = _wait_http("http://127.0.0.1:8008/health", gateway, 30)
+        gateway = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "reqsys_ollama_gateway.main:app",
+                "--app-dir",
+                str(gateway_src),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8008",
+                "--log-level",
+                "warning",
+            ],
+            cwd=str(root),
+            env=env,
+            stdout=gateway_log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        gateway_health = _wait_http("http://127.0.0.1:8008/health", gateway, 30)
 
-            api = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "uvicorn",
-                    "app.main:app",
-                    "--app-dir",
-                    str(backend),
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    "8000",
-                    "--log-level",
-                    "warning",
-                ],
-                cwd=str(backend),
-                env=env,
-                stdout=backend_log,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            backend_health = _wait_http("http://127.0.0.1:8000/health", api, 45)
+        api = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "app.main:app",
+                "--app-dir",
+                str(backend),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8000",
+                "--log-level",
+                "warning",
+            ],
+            cwd=str(backend),
+            env=env,
+            stdout=backend_log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        backend_health = _wait_http("http://127.0.0.1:8000/health", api, 45)
 
-            login = requests.post(
-                "http://127.0.0.1:8000/v1/auth/login",
-                json={"email": "codex-e2e@example.com"},
-                timeout=15,
-            )
-            login.raise_for_status()
-            token = login.json()["data"]["access_token"]
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "X-Correlation-Id": "codex-cloud-e2e-20260919",
-            }
+        login = requests.post(
+            "http://127.0.0.1:8000/v1/auth/login",
+            json={"email": "codex-e2e@example.com"},
+            timeout=15,
+        )
+        login.raise_for_status()
+        token = login.json()["data"]["access_token"]
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Correlation-Id": "codex-cloud-e2e-20260919",
+        }
 
-            status = requests.get(
-                "http://127.0.0.1:8000/v1/codex/status",
-                headers=headers,
-                timeout=15,
-            )
-            status.raise_for_status()
+        status = requests.get(
+            "http://127.0.0.1:8000/v1/codex/status",
+            headers=headers,
+            timeout=15,
+        )
+        status.raise_for_status()
 
-            started = time.perf_counter()
-            analyze = requests.post(
-                "http://127.0.0.1:8000/v1/codex/analyze",
-                headers=headers,
-                json={
-                    "provider": "ollama_gateway",
-                    "contexto": "Validação E2E local do provider Codex governado no SHA corrente.",
-                    "entrada": CODE_PROMPT,
-                    "correlation_id": "codex-cloud-e2e-20260919",
-                    "publicar_no_reqsys": False,
-                },
-                timeout=90,
-            )
-            wall_ms = round((time.perf_counter() - started) * 1000, 2)
-            analyze.raise_for_status()
-            data = analyze.json()["data"]
-            response = str(data.get("resultado") or "")
-            quality = probe.score_code_response(response)
-            if data.get("provider") != "ollama_gateway":
-                raise E2EError("backend retornou provider diferente de ollama_gateway")
-            if quality.get("passed") != quality.get("total"):
-                raise E2EError("resposta E2E não passou o rubric 4/4")
+        started = time.perf_counter()
+        analyze = requests.post(
+            "http://127.0.0.1:8000/v1/codex/analyze",
+            headers=headers,
+            json={
+                "provider": "ollama_gateway",
+                "contexto": "Validação E2E local do provider Codex governado no SHA corrente.",
+                "entrada": CODE_PROMPT,
+                "correlation_id": "codex-cloud-e2e-20260919",
+                "publicar_no_reqsys": False,
+            },
+            timeout=90,
+        )
+        wall_ms = round((time.perf_counter() - started) * 1000, 2)
+        analyze.raise_for_status()
+        data = analyze.json()["data"]
+        response = str(data.get("resultado") or "")
+        quality = probe.score_code_response(response)
+        if data.get("provider") != "ollama_gateway":
+            raise E2EError("backend retornou provider diferente de ollama_gateway")
+        if quality.get("passed") != quality.get("total"):
+            raise E2EError("resposta E2E não passou o rubric 4/4")
 
         return {
-                "evidence_dir": str(temp),
-                "gateway_health": gateway_health,
-                "backend_health": backend_health,
-                "codex_status": status.json()["data"],
-                "provider": data.get("provider"),
-                "correlation_id": data.get("correlation_id"),
-                "backend_latency_ms": data.get("latencia_ms"),
-                "wall_ms": wall_ms,
-                "score_confianca": data.get("score_confianca"),
-                "quality": quality,
-                "response_excerpt": response[:900],
-                "published_to_reqsys": bool((data.get("reqsys_publicacao") or {}).get("publicado")),
-            }
+            "evidence_dir": str(temp),
+            "gateway_health": gateway_health,
+            "backend_health": backend_health,
+            "codex_status": status.json()["data"],
+            "provider": data.get("provider"),
+            "correlation_id": data.get("correlation_id"),
+            "backend_latency_ms": data.get("latencia_ms"),
+            "wall_ms": wall_ms,
+            "score_confianca": data.get("score_confianca"),
+            "quality": quality,
+            "response_excerpt": response[:900],
+            "published_to_reqsys": bool((data.get("reqsys_publicacao") or {}).get("publicado")),
+        }
     finally:
         _terminate(api)
         _terminate(gateway)
         backend_log.close()
         gateway_log.close()
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validação E2E ReqSys -> Ollama cloud")
