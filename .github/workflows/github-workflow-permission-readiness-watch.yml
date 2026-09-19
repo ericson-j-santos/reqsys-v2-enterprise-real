@@ -65,13 +65,7 @@ jobs:
               continue
             fi
             if GH_TOKEN="$token" gh api --method POST "repos/${REPOSITORY}/actions/runners/registration-token" >/tmp/runner-token.json 2>/dev/null; then
-              python - <<'PY'
-import json
-from pathlib import Path
-p=Path("/tmp/runner-token.json")
-d=json.loads(p.read_text())
-raise SystemExit(0 if d.get("token") and d.get("expires_at") else 1)
-PY
+              python -c 'import json; d=json.load(open("/tmp/runner-token.json")); raise SystemExit(0 if d.get("token") and d.get("expires_at") else 1)'
               echo "$name=capable" >> "$GITHUB_STEP_SUMMARY"
               echo "capable_name=$name" >> "$GITHUB_OUTPUT"
               found=true
