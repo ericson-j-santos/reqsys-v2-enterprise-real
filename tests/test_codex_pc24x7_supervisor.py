@@ -102,7 +102,9 @@ def test_install_falls_back_to_logon_when_startup_task_denied(monkeypatch, tmp_p
     assert result["headless_24x7"] is False
     assert result["metadata"]["persistence_mode"] == "hkcu_run_at_logon"
     assert result["metadata"]["requires_user_logon"] is True
-    assert "watch" in observed["action"]
+    assert "run.py" in observed["action"]
+    launcher = tmp_path / "runtime" / "run.py"
+    assert "watch" in launcher.read_text(encoding="utf-8")
 
 
 def test_postboot_requires_real_reboot_for_headless_evidence(monkeypatch, tmp_path: Path) -> None:
