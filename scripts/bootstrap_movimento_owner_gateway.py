@@ -68,6 +68,18 @@ def _register_autostart(command: list[str]) -> None:
         winreg.SetValueEx(key, RUN_NAME, 0, winreg.REG_SZ, subprocess.list2cmdline(command))
 
 
+def _autostart_registered() -> bool:
+    if os.name != "nt":
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            value, _kind = winreg.QueryValueEx(key, RUN_NAME)
+        return bool(str(value).strip())
+    except OSError:
+        return False
+
+
 def _start(command: list[str]) -> int:
     creationflags = 0
     if os.name == "nt":
@@ -136,7 +148,7 @@ def install(port: int) -> dict:
         "port": port,
         "token_created": created_token,
         "token_sha256": hashlib.sha256(TOKEN.read_bytes()).hexdigest(),
-        "autostart": True,
+        "autostart": _autostart_registered(),
         "already_running": already_running,
         "pid_started": pid,
         "secrets_exposed": False,
@@ -156,7 +168,39 @@ def status() -> dict:
         "private_bind_hash": hashlib.sha256(str(config["bind_ip"]).encode("utf-8")).hexdigest()[:16],
         "port": int(config["port"]),
         "token_present": TOKEN.is_file(),
-        "autostart_expected": True,
+        "autostart_registered": _autostart_registered(),
+        "secrets_exposed": False,
+        "production_touched": False,
+    }
+
+
+def probe() -> dict:
+    if not CONFIG.is_file() or not TOKEN.is_file():
+        return {"status": "not_installed", "production_touched": False}
+    config = json.loads(CONFIG.read_text(encoding="utf-8"))
+    token = TOKEN.read_text(encoding="utf-8").strip()
+    request = urllib.request.Request(
+        f"http://{config['bind_ip']}:{int(config['port'])}/status",
+        method="GET",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        return {
+            "status": "blocked",
+            "error": type(exc).__name__,
+            "authenticated_probe": False,
+            "secrets_exposed": False,
+            "production_touched": False,
+        }
+    return {
+        "status": "passed" if payload.get("status") == "passed" else "blocked",
+        "authenticated_probe": True,
+        "source_authority": payload.get("source_authority"),
+        "source_objects": payload.get("source_objects"),
+        "target_objects": payload.get("target_objects"),
         "secrets_exposed": False,
         "production_touched": False,
     }
@@ -164,12 +208,17 @@ def status() -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("install", "status"))
+    parser.add_argument("command", choices=("install", "status", "probe"))
     parser.add_argument("--port", type=int, default=18443)
     args = parser.parse_args()
     if not (1024 <= args.port <= 65535):
         raise SystemExit("port_invalid")
-    result = install(args.port) if args.command == "install" else status()
+    if args.command == "install":
+        result = install(args.port)
+    elif args.command == "status":
+        result = status()
+    else:
+        result = probe()
     print(json.dumps(result, ensure_ascii=False))
     return 0 if result["status"] == "passed" else 3
 
