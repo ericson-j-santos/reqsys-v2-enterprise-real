@@ -54,11 +54,20 @@ def run_json(command: list[str], *, cwd: Path, timeout: int = 180) -> dict:
         except json.JSONDecodeError:
             payload = {}
     if cp.returncode != 0:
+        detail = str(
+            payload.get("error")
+            or payload.get("reason")
+            or payload.get("error_type")
+            or payload.get("result")
+            or "unknown"
+        )
         raise RuntimeError(
             "governed_admin_step_failed:"
             + str(cp.returncode)
             + ":"
-            + str(payload.get("error_type") or payload.get("result") or "unknown")
+            + str(payload.get("stage") or "unknown_stage")
+            + ":"
+            + detail[:500]
         )
     return payload
 
