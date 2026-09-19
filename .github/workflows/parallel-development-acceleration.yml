@@ -6,6 +6,13 @@ on:
       - 'docs/runbooks/parallel-development-acceleration.md'
       - 'scripts/validate_parallel_development_acceleration.py'
       - '.github/workflows/parallel-development-acceleration.yml'
+  push:
+    branches:
+      - ops/pc24x7-teams-bot-runtime-0649ef8-20260919
+    paths:
+      - '.github/workflows/parallel-development-acceleration.yml'
+      - 'scripts/provision_pc24x7_teams_bot_runtime.py'
+      - 'config/pc24x7-teams-bot-runtime.override.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,7 +33,7 @@ jobs:
 
   materialize-teams-bot-runtime-dev:
     name: Materialize Teams Bot on PC24x7 DEV
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     needs: validate-parallel-development-acceleration
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     environment: development
