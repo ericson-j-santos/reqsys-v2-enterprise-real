@@ -126,3 +126,37 @@ def test_human_pending_workflow_bootstraps_pytest_before_classifier():
     install_pos = workflow.index("python -m pip install --disable-pip-version-check pytest==9.0.3")
     test_pos = workflow.index("python -m pytest -q tests/test_human_pending_satellite.py")
     assert setup_pos < install_pos < test_pos
+
+
+def test_auto_remediation_suppresses_only_active_managed_issue(tmp_path):
+    path = tmp_path / "remediation.json"
+    path.write_text(
+        '{"results":['
+        '{"issue_number":1520,"state":"recent_success","suppress_human":true},'
+        '{"issue_number":1532,"state":"recent_success","suppress_human":false},'
+        '{"issue_number":1130,"state":"blocked","suppress_human":false}'
+        ']}',
+        encoding="utf-8",
+    )
+    assert module.load_auto_remediation_suppression(str(path)) == {1520}
+
+
+def test_known_gate_override_replaces_stale_issue_wording():
+    issue = {
+        "number": 1532,
+        "title": "Ativar Central de Conversas IA via Azure Bot em DEV",
+        "body": "A criação da identidade permanece como ação humana única e exige permissão Entra.",
+        "html_url": "https://example.test/issues/1532",
+    }
+    finding = module.build_finding(issue, [], ["permission"])
+    assert "conversationReference" in finding.decision
+    assert "instalar o pacote" in finding.action_text.lower()
+
+
+def test_human_pending_workflow_runs_remediation_before_satellite():
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/human-pending-satellite.yml").read_text(encoding="utf-8")
+    remediation_pos = workflow.index("human_pending_auto_remediation.py")
+    satellite_pos = workflow.index("human_pending_satellite.py")
+    assert remediation_pos < satellite_pos
+    assert "actions: write" in workflow
+    assert "--remediation-file" in workflow
