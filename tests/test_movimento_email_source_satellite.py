@@ -25,6 +25,16 @@ class FakeCursor:
             self._rows = [("SQL01", "DB01", 0, 0, 0)]
         elif "INFORMATION_SCHEMA.TABLES" in sql:
             self._rows = [("CNS", "PROSPECCAO_MOVIMENTO", "BASE TABLE"), ("dbo", "other", "BASE TABLE")]
+        elif "INFORMATION_SCHEMA.COLUMNS" in sql:
+            self._rows = [
+                ("CNS", "PROSPECCAO_MOVIMENTO", "protocolo"),
+                ("CNS", "PROSPECCAO_MOVIMENTO", "cliente"),
+                ("CNS", "PROSPECCAO_MOVIMENTO", "cpf"),
+                ("CNS", "PROSPECCAO_MOVIMENTO", "pendencia"),
+                ("CNS", "PROSPECCAO_MOVIMENTO", "dias_em_aberto"),
+                ("CNS", "PROSPECCAO_MOVIMENTO", "responsavel"),
+                ("CNS", "PROSPECCAO_MOVIMENTO", "data_referencia"),
+            ]
         elif "OBJECT_ID" in sql:
             self._rows = [(1,)]
         elif "dm_exec_describe_first_result_set" in sql:
@@ -149,3 +159,31 @@ def test_run_reports_no_candidates_without_false_success() -> None:
     assert payload["source_validated"] is False
     assert payload["secret_exposed"] is False
     assert payload["production_touched"] is False
+
+def test_infer_exact_mapping_only_accepts_unambiguous_metadata() -> None:
+    columns = {
+        "dbo.fechamento": ["indicador", "valor", "observacao", "data_referencia"],
+        "dbo.cadastro": ["protocolo", "cliente", "cpf", "pendencia", "dias_em_aberto", "responsavel", "data_referencia"],
+        "dbo.historico": ["periodo_referencia", "pendencia", "quantidade", "percentual", "data_referencia"],
+        "dbo.observacao": ["protocolo", "tipo_inconsistencia", "descricao", "etapa", "data_referencia"],
+    }
+
+    result = module.infer_exact_mapping(columns)
+
+    assert result["status"] == "complete"
+    assert result["mapping"]["fechamento_diario"] == "dbo.fechamento"
+    assert result["missing"] == []
+    assert result["ambiguous"] == {}
+
+
+def test_infer_exact_mapping_blocks_ambiguity() -> None:
+    columns = {
+        "dbo.fechamento_a": ["indicador", "valor", "observacao", "data_referencia"],
+        "dbo.fechamento_b": ["indicador", "valor", "observacao", "data_referencia"],
+    }
+
+    result = module.infer_exact_mapping(columns)
+
+    assert result["status"] == "ambiguous"
+    assert "fechamento_diario" in result["ambiguous"]
+
