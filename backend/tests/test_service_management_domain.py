@@ -8,7 +8,11 @@ from app.domain.service_management import (
     Approval,
     ApprovalStatus,
     CaseEvent,
+    ChangeCiEvidence,
+    ChangeTraceability,
     EvidenceReference,
+    ExternalReference,
+    ExternalReferenceType,
     Impact,
     InvalidStateTransition,
     Service,
@@ -23,6 +27,7 @@ from app.domain.service_management import (
     SlaPolicy,
     Urgency,
     calculate_priority,
+    validate_change_ci,
 )
 
 
@@ -39,6 +44,27 @@ def _case(*, key: str = 'rsm-1783') -> ServiceCase:
         urgency=Urgency.CRITICAL,
         correlation_id='corr-rsm-1783',
         idempotency_key=_sha(key),
+    )
+
+
+def _change_case(*, key: str = 'rsm-1789') -> ServiceCase:
+    return ServiceCase.create(
+        case_type=ServiceCaseType.CHANGE,
+        service_id=str(uuid4()),
+        requester='qa-rsm-change',
+        impact=Impact.HIGH,
+        urgency=Urgency.HIGH,
+        correlation_id='corr-rsm-1789',
+        idempotency_key=_sha(key),
+    )
+
+
+def _change_traceability(head_sha: str) -> ChangeTraceability:
+    return ChangeTraceability(
+        requirement=ExternalReference(ExternalReferenceType.REQUIREMENT, 'REQ-1789'),
+        sdd=ExternalReference(ExternalReferenceType.SDD, 'rsm-07-change-traceability'),
+        pull_request=ExternalReference(ExternalReferenceType.PULL_REQUEST, 'PR-1789-test'),
+        head_sha=head_sha,
     )
 
 
@@ -160,3 +186,52 @@ def test_evidence_digest_and_self_dependency_controls_fail_closed():
     service_id = str(uuid4())
     with pytest.raises(ServiceManagementValidationError, match='si mesma'):
         ServiceDependency(service_id, service_id, ServiceDependencyType.CALLS)
+
+
+
+def test_change_accepts_requirement_sdd_pr_and_ci_for_exact_sha():
+    head_sha = 'a' * 40
+    case = _change_case()
+    traceability = _change_traceability(head_sha)
+    evidence = ChangeCiEvidence(head_sha=head_sha, run_id='run-1789-ok', conclusion='success')
+
+    validate_change_ci(case, traceability, evidence)
+
+    assert traceability.requirement.external_id == 'REQ-1789'
+    assert traceability.sdd.external_id == 'rsm-07-change-traceability'
+    assert traceability.pull_request.external_id == 'PR-1789-test'
+    assert case.state is ServiceCaseState.NEW
+
+
+def test_change_rejects_green_ci_from_different_sha():
+    case = _change_case(key='rsm-1789-sha-mismatch')
+    traceability = _change_traceability('a' * 40)
+    evidence = ChangeCiEvidence(head_sha='b' * 40, run_id='run-1789-wrong-sha', conclusion='success')
+
+    with pytest.raises(ServiceManagementValidationError, match='outro SHA'):
+        validate_change_ci(case, traceability, evidence)
+
+    assert case.state is ServiceCaseState.NEW
+    with pytest.raises(ServiceManagementValidationError, match='SHA completo'):
+        ChangeCiEvidence(head_sha='a' * 12, run_id='run-short-sha', conclusion='success')
+
+
+def test_change_blocks_when_ci_evidence_is_missing():
+    case = _change_case(key='rsm-1789-missing-evidence')
+    traceability = _change_traceability('c' * 40)
+
+    with pytest.raises(ServiceManagementValidationError, match='obrigatória'):
+        validate_change_ci(case, traceability, None)
+
+    assert case.state is ServiceCaseState.NEW
+
+
+def test_change_traceability_cannot_be_applied_to_non_change_case():
+    case = _case(key='rsm-1789-not-change')
+    traceability = _change_traceability('d' * 40)
+    evidence = ChangeCiEvidence(head_sha='d' * 40, run_id='run-1789-request', conclusion='success')
+
+    with pytest.raises(ServiceManagementValidationError, match='somente case_type CHANGE'):
+        validate_change_ci(case, traceability, evidence)
+
+    assert case.state is ServiceCaseState.NEW
