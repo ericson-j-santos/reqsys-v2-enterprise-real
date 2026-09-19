@@ -109,19 +109,24 @@ def build_owner_payload(
     }
 
 
-def submit_ingest(
+def submit_operation(
     *,
     relay_url: str,
     relay_token: str,
+    operation: str,
     payload: dict[str, Any],
     timeout_seconds: float = 30.0,
 ) -> dict[str, Any]:
+    if operation not in {"ingest", "sync", "status"}:
+        raise RuntimeError("relay_operation_not_allowed")
+    body: dict[str, Any] = {"operation": operation}
+    body.update(payload)
     queued = _relay_request(
         relay_url,
         relay_token,
         "POST",
         "/submit",
-        {"operation": "ingest", "payload": payload},
+        body,
     )
     request_id = str(queued.get("id") or "")
     if not request_id:
@@ -143,6 +148,22 @@ def submit_ingest(
             return actual
         time.sleep(0.5)
     raise TimeoutError("relay_timeout")
+
+
+def submit_ingest(
+    *,
+    relay_url: str,
+    relay_token: str,
+    payload: dict[str, Any],
+    timeout_seconds: float = 30.0,
+) -> dict[str, Any]:
+    return submit_operation(
+        relay_url=relay_url,
+        relay_token=relay_token,
+        operation="ingest",
+        payload={"payload": payload},
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def main() -> int:
