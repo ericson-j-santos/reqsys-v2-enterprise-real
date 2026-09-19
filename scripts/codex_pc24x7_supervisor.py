@@ -77,7 +77,7 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
     fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
+            json.dump(payload, handle, ensure_ascii=True, sort_keys=True)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
@@ -532,8 +532,24 @@ def _schtasks() -> Path:
     return target
 
 
-def _task_action(python: Path, supervisor: Path, metadata: Path) -> str:
-    return f'"{python}" "{supervisor}" watch --metadata "{metadata}"'
+def _write_launcher(runtime_root: Path) -> Path:
+    launcher = runtime_root / "run.py"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text(
+        "from pathlib import Path\n"
+        "import json, runpy, sys\n"
+        "metadata = Path(__file__).with_name('metadata.json')\n"
+        "payload = json.loads(metadata.read_text(encoding='utf-8'))\n"
+        "script = Path(payload['release_root']) / 'scripts' / 'codex_pc24x7_supervisor.py'\n"
+        "sys.argv = [str(script), 'watch', '--metadata', str(metadata)]\n"
+        "runpy.run_path(str(script), run_name='__main__')\n",
+        encoding="utf-8",
+    )
+    return launcher
+
+
+def _task_action(python: Path, launcher: Path) -> str:
+    return f'"{python}" "{launcher}"'
 
 
 def _run_schtasks(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -541,7 +557,7 @@ def _run_schtasks(args: list[str]) -> subprocess.CompletedProcess[str]:
         [str(_schtasks()), *args],
         capture_output=True,
         text=True,
-        encoding="utf-8",
+        encoding=locale.getpreferredencoding(False) or "utf-8",
         errors="replace",
         timeout=30,
         check=False,
@@ -639,7 +655,8 @@ def install(
         },
     }
     atomic_json(metadata_file, metadata)
-    action = _task_action(python_executable, supervisor, metadata_file)
+    launcher = _write_launcher(runtime_root)
+    action = _task_action(python_executable, launcher)
     username = f"{socket.gethostname()}\\{getpass.getuser()}"
     task = _run_schtasks(
         [
@@ -671,7 +688,7 @@ def install(
         _run_schtasks(["/Run", "/TN", TASK_NAME])
     else:
         subprocess.Popen(
-            [str(python_executable), str(supervisor), "watch", "--metadata", str(metadata_file)],
+            [str(python_executable), str(launcher)],
             cwd=str(release_root),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -801,22 +818,22 @@ def main() -> int:
                 python_executable=args.python_executable.resolve(),
                 runtime_root=(args.runtime_root or default_runtime_root()).resolve(),
             )
-            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            print(json.dumps(result, ensure_ascii=True, sort_keys=True))
             return 0
         if args.command == "status":
             result = runtime_status(args.metadata.resolve())
-            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            print(json.dumps(result, ensure_ascii=True, sort_keys=True))
             return 0 if result.get("runtime_healthy") else 3
         if args.command == "postboot-check":
             code, result = postboot_check(args.metadata.resolve(), args.require_reboot)
-            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            print(json.dumps(result, ensure_ascii=True, sort_keys=True))
             return code
 
         require_windows_desktop()
         supervisor = Supervisor(args.metadata.resolve())
         if args.command == "once":
             result = supervisor.cycle(force_smoke=True)
-            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            print(json.dumps(result, ensure_ascii=True, sort_keys=True))
             return 0
         return supervisor.watch()
     except (OSError, SupervisorError, subprocess.SubprocessError, ValueError, json.JSONDecodeError) as exc:
@@ -829,7 +846,7 @@ def main() -> int:
                     "production_touched": False,
                     "deploy_performed": False,
                 },
-                ensure_ascii=False,
+                ensure_ascii=True,
                 sort_keys=True,
             ),
             file=sys.stderr,
