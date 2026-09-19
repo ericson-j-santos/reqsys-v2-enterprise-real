@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "status": "encrypted",
+  "environment": "dev",
+  "algorithm": "RSA-OAEP-SHA256",
+  "ciphertext_b64": "nd7onSiss6RBB3MtjoZKbAACFrILrrWq+hqtvf5Sl7nCl3YGMviORMMipak3g/LiOFwkVSEKkiqkahZ8Ko/mA3cIYOfVHHSBlDWp9bWBfz/Jt01lIJtoodGor91ZjK2sHiIkfa16bRU6KlMM7n7dL9IxsGQTpTFrTLvUxDRGtZ/4d+/BxINAJ099DneLquHY2j1TPdUyDDCHeHcI+V6ZDTdhn6DkA/u8WMtWFeeaHJi2UApSlwc3HqyxxxkHNL0T4hhQrJsRgTNBOJBo51J5d4cNEmiRnnuoe1aWtYvE7MC3yHBjSlpBKJNioBgNVAzB55yHWZf03N1eLMorA73W6XcdKRwzs2J7hexGBWdbaDnRy6e932Xm4hervkPX/Kfsvq53BnujmEzjS/ZU7J4XSYbgi86AaGyNeRxuTVHljKoFjuqGONF5S3/5Cxh7tOcKUI8sWNEGjtZMhWSg2iJpLyhzo+VpksnXazWt/ZgF5DA4wGTMis2guXt6BjoEPNOD",
+  "app_id": "cc233a8b-e2dc-425c-bbb2-afcc876a865d",
+  "tenant_id": "6d09c88c-0617-490c-8329-305e577684bc",
+  "key_vault_secret_name": "reqsys-teams-bot-dev-secret",
+  "handoff_sha": "b733f245b03679e44deb554748ffb916d7789001",
+  "correlation_id": "teams-bot-handoff-35472724014-1",
+  "credential_rotated": false,
+  "secret_value_exposed": false,
+  "production_touched": false
+}
