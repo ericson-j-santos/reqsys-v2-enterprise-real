@@ -156,7 +156,23 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         env=child_env,
         timeout=720,
         sensitive=True,
+        allow_nonzero=True,
     )
+    if recreate.returncode != 0:
+        safe_error = "unknown"
+        for stream in (recreate.stderr, recreate.stdout):
+            for raw in reversed([line.strip() for line in (stream or "").splitlines() if line.strip()]):
+                try:
+                    candidate = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                value = candidate.get("error") if isinstance(candidate, dict) else None
+                if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", value):
+                    safe_error = value
+                    break
+            if safe_error != "unknown":
+                break
+        raise ConsumeError(f"runtime_recreate_failed:{safe_error}")
     recreate_evidence = _json_from_stdout(recreate, "recreate")
     if recreate_evidence.get("ok") is not True or recreate_evidence.get("runtime_sha") != RUNTIME_SHA:
         raise ConsumeError("runtime_recreate_not_proven")
