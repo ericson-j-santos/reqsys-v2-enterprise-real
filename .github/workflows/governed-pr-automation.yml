@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
     types: [opened, reopened, ready_for_review, labeled]
+  workflow_run:
+    workflows:
+      - Governed Merge Queue
+    types: [completed]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -210,6 +214,145 @@ jobs:
         run: |
           echo "Abertura de PR sinalizada pelo increment gate, mas mantida como advisory."
           echo "O bloqueio obrigatório permanece no workflow_dispatch de merge governado."
+
+  auto-merge-after-governed-queue:
+    name: Auto-merge CI-driven após fila governada
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'Governed Merge Queue' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Revalidar SHA, gates e executar squash merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pullRequests = context.payload.workflow_run.pull_requests || [];
+            if (pullRequests.length !== 1) {
+              core.notice(`Merge governado ignorado: workflow_run associado a ${pullRequests.length} PR(s).`);
+              return;
+            }
+
+            const prNumber = Number(pullRequests[0].number);
+            const triggerHeadSha = context.payload.workflow_run.head_sha;
+            const { owner, repo } = context.repo;
+            const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
+              .split('\n')
+              .map((item) => item.trim())
+              .filter(Boolean);
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+
+            if (pr.merged) {
+              core.notice(`PR #${prNumber} já foi mergeado por execução concorrente.`);
+              return;
+            }
+
+            const failures = [];
+            if (pr.state !== 'open') failures.push(`PR não está aberto: ${pr.state}`);
+            if (pr.draft) failures.push('PR ainda está em draft.');
+            if (pr.base.ref !== 'main') failures.push(`Base não autorizada para auto-merge: ${pr.base.ref}`);
+            if (pr.head.sha !== triggerHeadSha) {
+              failures.push(`HEAD mudou após a fila governada: esperado ${triggerHeadSha}, atual ${pr.head.sha}`);
+            }
+            if (pr.mergeable !== true) failures.push(`PR não está mergeable: ${pr.mergeable}`);
+
+            const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const labelNames = labels.map((label) => label.name);
+            if (!labelNames.includes('merge-queue:eligible')) {
+              failures.push('Label merge-queue:eligible ausente.');
+            }
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              head_sha: triggerHeadSha,
+              event: 'pull_request',
+              per_page: 100,
+            });
+            const latestByWorkflow = new Map();
+            for (const run of runs) {
+              const existing = latestByWorkflow.get(run.name);
+              if (!existing || new Date(run.created_at) > new Date(existing.created_at)) {
+                latestByWorkflow.set(run.name, run);
+              }
+            }
+
+            for (const workflow of requiredWorkflows) {
+              const run = latestByWorkflow.get(workflow);
+              if (!run) {
+                failures.push(`Workflow obrigatório ausente no HEAD atual: ${workflow}`);
+                continue;
+              }
+              if (run.status !== 'completed' || run.conclusion !== 'success') {
+                failures.push(
+                  `Workflow não verde no HEAD atual: ${workflow} (${run.status}/${run.conclusion})`
+                );
+              }
+            }
+
+            if (failures.length) {
+              core.setFailed(failures.join('\n'));
+              return;
+            }
+
+            // Releitura imediatamente antes da mutação: proteção equivalente a expected_head_sha.
+            const { data: current } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+            if (
+              current.state !== 'open' ||
+              current.draft ||
+              current.mergeable !== true ||
+              current.head.sha !== triggerHeadSha
+            ) {
+              core.setFailed(
+                `Estado mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
+              );
+              return;
+            }
+
+            const result = await github.rest.pulls.merge({
+              owner,
+              repo,
+              pull_number: prNumber,
+              merge_method: 'squash',
+              sha: triggerHeadSha,
+              commit_title: `chore: governed CI-driven merge PR #${prNumber}`,
+              commit_message:
+                'Merge automático autorizado pelo owner após todos os gates obrigatórios verdes no HEAD exato.',
+            });
+
+            if (!result.data.merged) {
+              core.setFailed(`GitHub recusou o merge: ${result.data.message || 'sem mensagem'}`);
+              return;
+            }
+
+            await core.summary
+              .addHeading('Governed PR Automation — CI-driven merge')
+              .addRaw(
+                [
+                  `PR: #${prNumber}`,
+                  `HEAD validado: \`${triggerHeadSha}\``,
+                  `Merge SHA: \`${result.data.sha}\``,
+                  'Método: `squash`',
+                  'Deploy/promoção: não executados por este workflow.',
+                ].join('\n')
+              )
+              .write();
 
   governed-pr-check:
     name: Validate governed PR merge readiness
