@@ -643,7 +643,14 @@ def runner_task_status() -> dict[str, Any]:
                 action = definition.Actions.Item(action_index)
                 action_paths.append(str(getattr(action, "Path", "") or ""))
             haystack = " ".join([str(task.Name), str(task.Path), *action_paths]).casefold()
-            if "runner" not in haystack and "actions" not in haystack and "github" not in haystack:
+            runner_markers = (
+                "actions.runner",
+                "runner.listener",
+                "actions-runner",
+                "\\actions-runner\\",
+                "github actions runner",
+            )
+            if not any(marker in haystack for marker in runner_markers):
                 continue
             triggers = [
                 int(definition.Triggers.Item(i).Type)
@@ -713,14 +720,20 @@ def register_task_com(*, python_executable: Path, launcher: Path) -> dict[str, A
     principal.LogonType = TASK_LOGON_S4U
     principal.RunLevel = TASK_RUNLEVEL_LUA
 
-    folder.RegisterTaskDefinition(
-        TASK_LEAF,
-        definition,
-        TASK_CREATE_OR_UPDATE,
-        principal.UserId,
-        "",
-        TASK_LOGON_S4U,
-    )
+    try:
+        folder.RegisterTaskDefinition(
+            TASK_LEAF,
+            definition,
+            TASK_CREATE_OR_UPDATE,
+            principal.UserId,
+            "",
+            TASK_LOGON_S4U,
+        )
+    except Exception as exc:
+        detail = repr(exc).casefold()
+        if "-2147024891" in detail or "access is denied" in detail or "acesso negado" in detail:
+            raise SupervisorError("task_scheduler_access_denied") from exc
+        raise SupervisorError(f"task_scheduler_register_failed:{type(exc).__name__}") from exc
     return {
         "ok": True,
         "task_name": TASK_NAME,
