@@ -29,6 +29,7 @@ TASK_TRIGGER_BOOT = 8
 TASK_TRIGGER_DAILY = 2
 TASK_ACTION_EXEC = 0
 TASK_INSTANCES_IGNORE_NEW = 2
+CURRENT_STAGE = {"value": "init"}
 
 
 def is_admin() -> bool:
@@ -60,6 +61,9 @@ def account_identity() -> tuple[str, object]:
 def configure_batch_rights(sid: object) -> None:
     import win32security
 
+    required = ("LsaOpenPolicy", "LsaAddAccountRights")
+    if not all(hasattr(win32security, name) for name in required):
+        raise RuntimeError("lsa_api_unavailable")
     policy = win32security.LsaOpenPolicy(None, win32security.POLICY_ALL_ACCESS)
     win32security.LsaAddAccountRights(
         policy,
@@ -80,7 +84,9 @@ def grant_runtime_acl(sid: object) -> None:
     sd = win32security.GetFileSecurity(
         str(RUNTIME), win32security.DACL_SECURITY_INFORMATION
     )
-    dacl = sd.GetSecurityDescriptorDacl() or win32security.ACL()
+    dacl = sd.GetSecurityDescriptorDacl()
+    if dacl is None:
+        dacl = win32security.ACL()
     flags = (
         win32security.OBJECT_INHERIT_ACE
         | win32security.CONTAINER_INHERIT_ACE
@@ -121,7 +127,8 @@ def secure_session_file(path: Path, service_sid: object) -> None:
 
 
 def prepare_service_profile(service_sid: object) -> Path:
-    source = Path(os.environ.get("USERPROFILE", "")) / ".desktop-commander-device" / "device.json"
+    current_profile = Path(os.environ.get("USERPROFILE", ""))
+    source = current_profile / ".desktop-commander-device" / "device.json"
     if not source.is_file():
         raise RuntimeError("source_persisted_session_missing")
     profile = Path(os.environ.get("SystemDrive", "C:")) / "Users" / ACCOUNT
@@ -138,13 +145,15 @@ def prepare_service_profile(service_sid: object) -> Path:
 def write_service_wrapper(profile: Path) -> None:
     if not RUNNER.is_file():
         raise RuntimeError("governed_headless_runner_missing")
+    profile_text = str(profile)
+    homepath = profile_text[2:] if len(profile_text) > 2 else "\\"
     content = (
         "// RDC_SERVICE_S4U_PROFILE_V1\n"
-        f"process.env.USERPROFILE = {json.dumps(str(profile))};\n"
-        f"process.env.HOME = {json.dumps(str(profile))};\n"
-        f"process.env.HOMEDRIVE = {json.dumps(profile.drive or 'C:')};\n"
-        f"process.env.HOMEPATH = {json.dumps(str(profile)[2:] if len(str(profile)) > 2 else '\\\\')};\n"
-        f"require({json.dumps(str(RUNNER))});\n"
+        + "process.env.USERPROFILE = " + json.dumps(profile_text) + ";\n"
+        + "process.env.HOME = " + json.dumps(profile_text) + ";\n"
+        + "process.env.HOMEDRIVE = " + json.dumps(profile.drive or "C:") + ";\n"
+        + "process.env.HOMEPATH = " + json.dumps(homepath) + ";\n"
+        + "require(" + json.dumps(str(RUNNER)) + ");\n"
     )
     temp = SERVICE_WRAPPER.with_suffix(".tmp")
     temp.write_text(content, encoding="utf-8", newline="")
@@ -189,6 +198,7 @@ def register_task(user_id: str, node: Path):
     )
     settings = definition.Settings
     settings.Enabled = True
+    settings.AllowDemandStart = True
     settings.StartWhenAvailable = True
     settings.DisallowStartIfOnBatteries = False
     settings.StopIfGoingOnBatteries = False
@@ -255,16 +265,22 @@ def wait_for_count(key: str, baseline: int, timeout: float) -> bool:
     return False
 
 
-CURRENT_STAGE["value"] = "validate"
+def apply(confirm: str) -> dict:
+    CURRENT_STAGE["value"] = "validate"
     validate(socket.gethostname(), os.name, confirm)
+
     CURRENT_STAGE["value"] = "account_identity"
     user_id, sid = account_identity()
+
     CURRENT_STAGE["value"] = "batch_rights"
     configure_batch_rights(sid)
+
     CURRENT_STAGE["value"] = "runtime_acl"
     grant_runtime_acl(sid)
+
     CURRENT_STAGE["value"] = "service_profile"
     profile = prepare_service_profile(sid)
+
     CURRENT_STAGE["value"] = "service_wrapper"
     write_service_wrapper(profile)
     node = resolve_node()
@@ -272,11 +288,13 @@ CURRENT_STAGE["value"] = "validate"
     before = marker_counts()
     CURRENT_STAGE["value"] = "register_task"
     folder, task = register_task(user_id, node)
+
     CURRENT_STAGE["value"] = "start_task"
     task.Run("")
     if not wait_for_count("runner", before["runner"], 20):
         raise RuntimeError("headless_runner_did_not_start")
 
+    CURRENT_STAGE["value"] = "cutover_legacy"
     legacy_stopped = False
     try:
         legacy = folder.GetTask(LEGACY_TASK)
@@ -286,11 +304,14 @@ CURRENT_STAGE["value"] = "validate"
     except Exception:
         pass
 
+    CURRENT_STAGE["value"] = "wait_ready"
     restored = wait_for_count("restored", before["restored"], 60)
     ready = wait_for_count("ready", before["ready"], 20 if restored else 1)
     if not (restored and ready):
         raise RuntimeError("headless_controller_did_not_become_ready")
 
+    CURRENT_STAGE["value"] = "complete"
+    counts = marker_counts()
     return {
         "ok": True,
         "host": HOST,
@@ -307,10 +328,12 @@ CURRENT_STAGE["value"] = "validate"
         "task_state": int(task.State),
         "task_last_result": int(task.LastTaskResult),
         "legacy_task_stopped_for_cutover": legacy_stopped,
-        "node_under_programdata": str(node).casefold().startswith(str(RUNTIME).casefold()),
-        "runner_marker_count": marker_counts()["runner"],
-        "session_restored_count": marker_counts()["restored"],
-        "device_ready_count": marker_counts()["ready"],
+        "node_under_programdata": str(node).casefold().startswith(
+            str(RUNTIME).casefold()
+        ),
+        "runner_marker_count": counts["runner"],
+        "session_restored_count": counts["restored"],
+        "device_ready_count": counts["ready"],
     }
 
 
