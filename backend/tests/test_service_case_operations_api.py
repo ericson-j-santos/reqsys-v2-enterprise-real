@@ -486,3 +486,19 @@ def test_primeira_resposta_deriva_do_historico(case, policy):
     dados = client.get(f"/v1/service-cases/{case['case_id']}/operations").json()['data']
     assert dados['sla']['first_response_at'] is not None
     assert dados['sla']['resolved_at'] is None
+
+
+def test_politica_inexistente_e_404_mesmo_com_sla_ja_aplicado(case, policy):
+    """Regressão: a ordem de validação não pode mascarar 404 com 409.
+
+    Detectado pelo E2E físico, não pelo teste anterior, que usava caso sem SLA.
+    """
+    client.post(
+        f"/v1/service-cases/{case['case_id']}/sla",
+        json={'policy_id': policy['policy_id'], 'event_id': str(uuid4())},
+    )
+    resposta = client.post(
+        f"/v1/service-cases/{case['case_id']}/sla",
+        json={'policy_id': str(uuid4()), 'event_id': str(uuid4())},
+    )
+    assert resposta.status_code == 404

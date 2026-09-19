@@ -395,15 +395,17 @@ def apply_case_sla(
             raise ServiceCaseConflictError('evento de SLA registrado sem prazo persistido')
         return existing, True
 
+    # A existência da política é verificada antes do estado do caso: uma política
+    # inexistente é 404 independentemente de o caso já possuir SLA aplicado.
+    policy_record = db.get(SlaPolicyRecord, payload.policy_id)
+    if policy_record is None:
+        raise ServiceCaseNotFoundError('política de SLA não encontrada')
+
     existing = db.get(CaseSlaRecord, case_id)
     if existing is not None:
         if existing.policy_id != payload.policy_id:
             raise ServiceCaseConflictError('caso já possui política de SLA divergente aplicada')
         return existing, True
-
-    policy_record = db.get(SlaPolicyRecord, payload.policy_id)
-    if policy_record is None:
-        raise ServiceCaseNotFoundError('política de SLA não encontrada')
 
     targets = calculate_sla_targets(
         _domain_policy(policy_record),
