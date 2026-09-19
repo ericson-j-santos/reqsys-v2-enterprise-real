@@ -115,3 +115,13 @@ def test_rejects_gate_after_productive_job(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="gate_order_invalid"):
         build_plan(homologation_dir, padrao_dir, "a" * 40, digests, tmp_path / "tests")
+
+
+def test_promotion_uses_ephemeral_github_app_with_workflow_scope() -> None:
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/governed-workflow-artifact-promotion.yml").read_text(encoding="utf-8")
+    assert "GH_PAT_ACTIONS" not in workflow
+    assert "actions/create-github-app-token@v2" in workflow
+    assert "permission-contents: write" in workflow
+    assert "permission-pull-requests: write" in workflow
+    assert "permission-workflows: write" in workflow
+    assert "GH_TOKEN: ${{ steps.app-token.outputs.token }}" in workflow
