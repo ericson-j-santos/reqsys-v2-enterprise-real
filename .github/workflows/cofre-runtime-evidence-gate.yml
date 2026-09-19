@@ -46,8 +46,6 @@ jobs:
     outputs:
       base_url: ${{ steps.resolve.outputs.base_url }}
       github_environment: ${{ steps.resolve.outputs.github_environment }}
-      runner_labels: ${{ steps.resolve.outputs.runner_labels }}
-      container_name: ${{ steps.resolve.outputs.container_name }}
     steps:
       - name: Resolver DEV canônico
         id: resolve
@@ -79,13 +77,11 @@ jobs:
           esac
           echo "base_url=${DEV_BASE_URL%/}" >> "$GITHUB_OUTPUT"
           echo "github_environment=development" >> "$GITHUB_OUTPUT"
-          echo 'runner_labels=["self-hosted","Windows","X64","pc24x7","reqsys-dev"]' >> "$GITHUB_OUTPUT"
-          echo "container_name=wt-pc24x7-piloto-api-1" >> "$GITHUB_OUTPUT"
 
   runtime-evidence:
     name: Evidência Cofre DEV PC24x7
     needs: validate-inputs
-    runs-on: ${{ fromJSON(needs.validate-inputs.outputs.runner_labels) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
       name: ${{ needs.validate-inputs.outputs.github_environment }}
@@ -109,84 +105,118 @@ jobs:
       - name: Instalar dependência criptográfica mínima
         run: python -m pip install --disable-pip-version-check "cryptography>=44,<51"
 
-      - name: Validar runtime PC24x7 e SHA antes da mutação
-        shell: pwsh
+      - name: Validar runtime remoto PC24x7 e SHA antes da mutação
+        env:
+          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force -Path $env:ARTIFACT_DIR | Out-Null
-          python scripts/pc24x7_cofre_runtime_control.py inspect --expected-sha "${{ github.sha }}" --correlation-id "$env:CORRELATION_ID-preflight" --evidence-file "$env:ARTIFACT_DIR/runtime-preflight.json"
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          test -n "${COFRE_ADMIN_JWT:-}"
+          python scripts/cofre_remote_runtime_control.py inspect             --base-url "$BASE_URL"             --expected-sha "${{ github.sha }}"             --correlation-id "$CORRELATION_ID-preflight"             --timeout "$TIMEOUT_SECONDS"             --evidence-file "$ARTIFACT_DIR/runtime-preflight.json"
 
       - name: Preparar estado efêmero criptografado
-        shell: pwsh
+        shell: bash
         run: |
-          $stateKey = python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-          if (-not $stateKey) { throw "Falha ao gerar chave efêmera de estado." }
-          Write-Output "::add-mask::$stateKey"
-          "COFRE_STATE_FERNET_KEY=$stateKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          set -euo pipefail
+          state_key="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          test -n "$state_key"
+          echo "::add-mask::$state_key"
+          echo "COFRE_STATE_FERNET_KEY=$state_key" >> "$GITHUB_ENV"
 
       - name: Validar ciclo antes do restart
         env:
           COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
-        shell: pwsh
+        shell: bash
         run: |
-          if (-not $env:COFRE_ADMIN_JWT) { throw "COFRE_ADMIN_JWT ausente." }
-          python scripts/cofre_runtime_evidence.py --phase before-restart --base-url "$env:BASE_URL" --environment "$env:TARGET_ENV" --correlation-id "$env:CORRELATION_ID" --state-file "$env:STATE_FILE" --evidence-file "$env:ARTIFACT_DIR/before-restart.json" --timeout "$env:TIMEOUT_SECONDS"
+          set -euo pipefail
+          python scripts/cofre_runtime_evidence.py             --phase before-restart             --base-url "$BASE_URL"             --environment "$TARGET_ENV"             --correlation-id "$CORRELATION_ID"             --state-file "$STATE_FILE"             --evidence-file "$ARTIFACT_DIR/before-restart.json"             --timeout "$TIMEOUT_SECONDS"
 
-      - name: Reiniciar somente a API DEV no PC24x7
-        shell: pwsh
+      - name: Solicitar restart autenticado somente da API DEV
+        env:
+          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+        shell: bash
         run: |
-          python scripts/pc24x7_cofre_runtime_control.py restart --expected-sha "${{ github.sha }}" --timeout 180 --correlation-id "$env:CORRELATION_ID-restart" --evidence-file "$env:ARTIFACT_DIR/runtime-restart.json"
+          set -euo pipefail
+          python scripts/cofre_remote_runtime_control.py restart             --base-url "$BASE_URL"             --expected-sha "${{ github.sha }}"             --correlation-id "$CORRELATION_ID-restart"             --timeout "$TIMEOUT_SECONDS"             --evidence-file "$ARTIFACT_DIR/runtime-restart.json"
+
+      - name: Comprovar novo boot no mesmo SHA
+        env:
+          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/cofre_remote_runtime_control.py verify             --base-url "$BASE_URL"             --expected-sha "${{ github.sha }}"             --correlation-id "$CORRELATION_ID-verify"             --timeout "$TIMEOUT_SECONDS"             --wait-seconds 180             --restart-evidence-file "$ARTIFACT_DIR/runtime-restart.json"             --evidence-file "$ARTIFACT_DIR/runtime-restart-verified.json"
 
       - name: Aguardar readiness público após restart
-        shell: pwsh
+        shell: bash
         run: |
-          python scripts/validate_public_runtime.py --base-url "$env:BASE_URL" --environment dev --timeout "$env:TIMEOUT_SECONDS" --endpoint /api/runtime/readiness --output "$env:ARTIFACT_DIR/public-readiness.json" --readiness-output "$env:ARTIFACT_DIR/public-readiness-summary.json"
+          set -euo pipefail
+          python scripts/validate_public_runtime.py             --base-url "$BASE_URL"             --environment dev             --timeout "$TIMEOUT_SECONDS"             --endpoint /api/runtime/readiness             --output "$ARTIFACT_DIR/public-readiness.json"             --readiness-output "$ARTIFACT_DIR/public-readiness-summary.json"
 
       - name: Validar persistência e cleanup
         env:
           COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
-        shell: pwsh
+        shell: bash
         run: |
-          python scripts/cofre_runtime_evidence.py --phase after-restart --base-url "$env:BASE_URL" --environment "$env:TARGET_ENV" --correlation-id "$env:CORRELATION_ID" --state-file "$env:STATE_FILE" --evidence-file "$env:ARTIFACT_DIR/after-restart.json" --timeout "$env:TIMEOUT_SECONDS"
+          set -euo pipefail
+          python scripts/cofre_runtime_evidence.py             --phase after-restart             --base-url "$BASE_URL"             --environment "$TARGET_ENV"             --correlation-id "$CORRELATION_ID"             --state-file "$STATE_FILE"             --evidence-file "$ARTIFACT_DIR/after-restart.json"             --timeout "$TIMEOUT_SECONDS"
 
       - name: Consolidar evidência sanitizada
         if: always()
-        shell: pwsh
+        shell: python
         run: |
-          $beforePath = Join-Path $env:ARTIFACT_DIR "before-restart.json"
-          $afterPath = Join-Path $env:ARTIFACT_DIR "after-restart.json"
-          $restartPath = Join-Path $env:ARTIFACT_DIR "runtime-restart.json"
-          $phases = @{}
-          if (Test-Path $beforePath) { $phases["before-restart"] = Get-Content $beforePath -Raw | ConvertFrom-Json }
-          if (Test-Path $afterPath) { $phases["after-restart"] = Get-Content $afterPath -Raw | ConvertFrom-Json }
-          $restart = if (Test-Path $restartPath) { Get-Content $restartPath -Raw | ConvertFrom-Json } else { $null }
-          $ok = $phases.Count -eq 2 -and $phases["before-restart"].ok -eq $true -and $phases["after-restart"].ok -eq $true -and $restart -ne $null -and $restart.ok -eq $true
-          $payload = [ordered]@{
-            schema_version = "2.0.0"
-            contract = "reqsys-cofre-runtime-evidence-summary"
-            ok = $ok
-            environment = "dev"
-            runtime_target = "pc24x7"
-            base_url = $env:BASE_URL
-            workflow_sha = "${{ github.sha }}"
-            run_id = "${{ github.run_id }}"
-            run_attempt = "${{ github.run_attempt }}"
-            correlation_id = $env:CORRELATION_ID
-            restart_runtime = $true
-            transient_state_encrypted = $true
-            production_touched = $false
-            sensitive_values_exposed = $false
-            phases = $phases
-            runtime_control = $restart
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["ARTIFACT_DIR"])
+          def load(name):
+              path = root / name
+              return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+          before = load("before-restart.json")
+          after = load("after-restart.json")
+          restart = load("runtime-restart.json")
+          verified = load("runtime-restart-verified.json")
+          ok = all(
+              item is not None and item.get("ok") is True
+              for item in (before, after, restart, verified)
+          ) and verified.get("boot_id_changed") is True
+          payload = {
+              "schema_version": "3.0.0",
+              "contract": "reqsys-cofre-runtime-evidence-summary",
+              "ok": ok,
+              "environment": "dev",
+              "runtime_target": "pc24x7",
+              "control_plane": "authenticated_remote_self_restart",
+              "base_url": os.environ["BASE_URL"],
+              "workflow_sha": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "restart_runtime": True,
+              "boot_id_changed": bool(verified and verified.get("boot_id_changed")),
+              "transient_state_encrypted": True,
+              "production_touched": False,
+              "sensitive_values_exposed": False,
+              "phases": {"before-restart": before, "after-restart": after},
+              "runtime_control": restart,
+              "runtime_restart_verification": verified,
           }
-          $payload | ConvertTo-Json -Depth 20 | Set-Content -Encoding utf8 (Join-Path $env:ARTIFACT_DIR "summary.json")
-          if (-not $ok) { throw "Evidência consolidada incompleta ou com falha." }
+          (root / "summary.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+          if not ok:
+              raise SystemExit("Evidência consolidada incompleta ou com falha.")
 
       - name: Remover estado sensível residual
         if: always()
-        shell: pwsh
+        shell: bash
         run: |
-          Remove-Item -Force -ErrorAction SilentlyContinue "$env:STATE_FILE"
-          Remove-Item Env:COFRE_STATE_FERNET_KEY -ErrorAction SilentlyContinue
+          rm -f "$STATE_FILE"
+          unset COFRE_STATE_FERNET_KEY || true
 
       - name: Upload das evidências
         if: always()
@@ -199,13 +229,16 @@ jobs:
 
       - name: Resumo do gate
         if: always()
-        shell: pwsh
+        shell: bash
         run: |
-          "## Cofre Runtime Evidence Gate" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Ambiente: dev" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Runtime: pc24x7" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Container: ${{ needs.validate-inputs.outputs.container_name }}" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- SHA: ${{ github.sha }}" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Valores sensíveis publicados: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          {
+            echo "## Cofre Runtime Evidence Gate"
+            echo "- Ambiente: dev"
+            echo "- Runtime: pc24x7"
+            echo "- Executor CI: GitHub-hosted"
+            echo "- Controle: restart remoto autenticado da própria API"
+            echo "- SHA: ${{ github.sha }}"
+            echo "- Correlation ID: $CORRELATION_ID"
+            echo "- Produção tocada: não"
+            echo "- Valores sensíveis publicados: não"
+          } >> "$GITHUB_STEP_SUMMARY"
