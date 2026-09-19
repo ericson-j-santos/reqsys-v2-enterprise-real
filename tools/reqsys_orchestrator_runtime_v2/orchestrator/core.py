@@ -15,6 +15,8 @@ COMPLETED = "CONCLUÍDO"
 CANCELLED = "CANCELADO"
 VALID_STATUSES = {PENDING, IN_PROGRESS, BLOCKED, COMPLETED, CANCELLED}
 
+REBOOT_ONCE_TASK = "host.reboot.once.v1"
+
 ALLOWED_WORKERS = {
     "planner",
     "builder",
@@ -73,6 +75,17 @@ def route_task(task_type: str, payload: dict[str, Any], risk: int) -> RouteDecis
     normalized = task_type.strip().lower()
     if not normalized:
         raise ValueError("task_type is required")
+    if risk >= 3 and normalized == REBOOT_ONCE_TASK:
+        target_host = payload.get("target_host")
+        action_id = payload.get("action_id")
+        if not isinstance(target_host, str) or not target_host.strip():
+            raise ValueError("reboot task requires target_host")
+        if not isinstance(action_id, str) or not action_id.strip():
+            raise ValueError("reboot task requires action_id")
+        return RouteDecision(
+            "builder",
+            "risk 3 reboot delegated to local owner authorization adapter",
+        )
     if risk >= 3:
         return RouteDecision("human-gate", "risk 3 requires human gate")
     if any(token in normalized for token in ("e2e", "validate", "validation", "evidence")):
