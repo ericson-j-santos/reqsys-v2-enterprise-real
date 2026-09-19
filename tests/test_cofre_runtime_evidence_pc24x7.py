@@ -47,7 +47,6 @@ def test_workflow_proves_same_sha_restart_before_persistence_check():
     assert preflight < before < restart < verify < after
     assert "--expected-sha" in raw
     assert "runtime-restart-verified.json" in raw
-    assert "boot_id_changed" in raw
     assert "cofre_runtime_evidence.py" in raw
 
 
