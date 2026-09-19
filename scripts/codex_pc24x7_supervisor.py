@@ -489,6 +489,7 @@ class Supervisor:
             },
             "components": observed,
             "restart_counts": dict(self.restart_counts),
+            "supervisor_pid": os.getpid(),
             "smoke": smoke,
             "ok": True,
             "production_touched": False,
@@ -499,8 +500,27 @@ class Supervisor:
             atomic_json(self.runtime_root / "last-smoke.json", smoke)
         return payload
 
+    def _acquire_watch_lock(self):
+        path = self.runtime_root / "supervisor.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = path.open("a+b")
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                handle.close()
+                raise SupervisorError("outro supervisor já está ativo") from exc
+        return handle
+
     def watch(self) -> int:
         interval = int(self.metadata.get("watch_interval_seconds") or DEFAULT_WATCH_SECONDS)
+        lock_handle = self._acquire_watch_lock()
         while True:
             try:
                 self.cycle()
@@ -566,12 +586,34 @@ def _run_schtasks(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 def task_status() -> dict[str, Any]:
     if os.name != "nt":
-        return {"exists": False}
-    result = _run_schtasks(["/Query", "/TN", TASK_NAME, "/FO", "LIST", "/V"])
+        return {"exists": False, "trigger_at_startup": False}
+    result = _run_schtasks(["/Query", "/TN", TASK_NAME, "/XML"])
+    if result.returncode != 0:
+        return {"exists": False, "trigger_at_startup": False, "returncode": result.returncode}
+    try:
+        import xml.etree.ElementTree as ET
+
+        root = ET.fromstring(result.stdout)
+        ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+        boot = root.find(".//t:BootTrigger", ns) is not None
+        command = root.findtext(".//t:Exec/t:Command", default="", namespaces=ns)
+        arguments = root.findtext(".//t:Exec/t:Arguments", default="", namespaces=ns)
+        logon_type = root.findtext(".//t:Principal/t:LogonType", default="", namespaces=ns)
+    except Exception as exc:
+        return {
+            "exists": True,
+            "trigger_at_startup": False,
+            "returncode": result.returncode,
+            "parse_error": str(exc)[:300],
+        }
     return {
-        "exists": result.returncode == 0,
+        "exists": True,
+        "trigger_at_startup": boot,
         "returncode": result.returncode,
         "task_name": TASK_NAME,
+        "command": command,
+        "arguments_present": bool(arguments.strip()),
+        "logon_type": logon_type,
     }
 
 
@@ -579,6 +621,15 @@ def _install_run_key(action: str) -> None:
     winreg = _winreg()
     with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
         winreg.SetValueEx(key, RUN_VALUE, 0, winreg.REG_SZ, action)
+
+
+def _remove_run_key() -> None:
+    winreg = _winreg()
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.DeleteValue(key, RUN_VALUE)
+    except FileNotFoundError:
+        return
 
 
 def run_key_status() -> dict[str, Any]:
@@ -657,6 +708,7 @@ def install(
     atomic_json(metadata_file, metadata)
     launcher = _write_launcher(runtime_root)
     action = _task_action(python_executable, launcher)
+    was_healthy = all((probe_ollama(), probe_gateway(), probe_backend()))
     username = f"{socket.gethostname()}\\{getpass.getuser()}"
     task = _run_schtasks(
         [
@@ -675,27 +727,34 @@ def install(
             "/F",
         ]
     )
-    persistence_mode = "task_at_startup_no_password"
-    requires_user_logon = False
+    verified_task = task_status() if task.returncode == 0 else {"exists": False, "trigger_at_startup": False}
+    task_ok = (
+        task.returncode == 0
+        and verified_task.get("exists") is True
+        and verified_task.get("trigger_at_startup") is True
+    )
+    persistence_mode = "task_at_startup_no_password" if task_ok else "hkcu_run_at_logon"
+    requires_user_logon = not task_ok
     task_error = None
-    if task.returncode != 0:
-        _install_run_key(action)
-        persistence_mode = "hkcu_run_at_logon"
-        requires_user_logon = True
-        task_error = (task.stderr or task.stdout or "")[:500]
-
-    if task.returncode == 0:
-        _run_schtasks(["/Run", "/TN", TASK_NAME])
+    if task_ok:
+        _remove_run_key()
     else:
-        subprocess.Popen(
-            [str(python_executable), str(launcher)],
-            cwd=str(release_root),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            creationflags=_creationflags(),
-        )
+        _install_run_key(action)
+        task_error = (task.stderr or task.stdout or "task_at_startup_not_verified")[:500]
+
+    if not was_healthy:
+        if task_ok:
+            _run_schtasks(["/Run", "/TN", TASK_NAME])
+        else:
+            subprocess.Popen(
+                [str(python_executable), str(launcher)],
+                cwd=str(release_root),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                creationflags=_creationflags(),
+            )
 
     deadline = time.monotonic() + 45
     status_payload: dict[str, Any] | None = None
@@ -722,6 +781,7 @@ def install(
         "task": task_status(),
         "run_key": run_key_status(),
         "runtime": status_payload,
+        "runtime_reused": was_healthy,
         "headless_24x7": persistence_mode == "task_at_startup_no_password",
         "production_touched": False,
         "deploy_performed": False,
