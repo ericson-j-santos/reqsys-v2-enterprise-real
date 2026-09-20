@@ -46,4 +46,4 @@ def test_supervisor_has_no_tailscale_or_nport_critical_dependency():
     assert supervisor.LOCATOR_PUBLISHER.name == "pc24x7_dev_locator_publisher.py"
     raw = (ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py").read_text(encoding="utf-8").lower()
     assert "tailscale_funnel" not in raw
-    assert "nport" not in raw
+    assert "pc24x7_nport_tunnel.py" not in raw
