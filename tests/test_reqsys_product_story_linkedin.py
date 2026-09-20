@@ -9,10 +9,13 @@ from scripts.reqsys_product_story_linkedin import (
     ApprovalError,
     DEFAULT_LINKEDIN_VERSION,
     LINKEDIN_POSTS_URL,
+    LedgerError,
     LinkedInPublishError,
     build_linkedin_headers,
     build_linkedin_payload,
-    execute,
+    execute_dry_run,
+    execute_publish,
+    ledger_comment,
 )
 
 
@@ -37,14 +40,19 @@ def report(*, selected=True, status="READY_FOR_HUMAN_REVIEW"):
     }
 
 
-class FakeResponse:
-    status = 201
-
-    def __init__(self, post_id="urn:li:share:123"):
-        self.headers = {"x-restli-id": post_id}
+class FakeHttpResponse:
+    def __init__(self, status, payload=None, headers=None):
+        self.status = status
+        self.headers = headers or {}
+        self._payload = payload
 
     def getcode(self):
         return self.status
+
+    def read(self):
+        if self._payload is None:
+            return b""
+        return json.dumps(self._payload).encode("utf-8")
 
     def __enter__(self):
         return self
@@ -53,13 +61,49 @@ class FakeResponse:
         return False
 
 
-class FakeOpener:
+class FakeLinkedInOpener:
     def __init__(self):
         self.calls = []
 
     def __call__(self, request, timeout=30):
         self.calls.append((request, timeout))
-        return FakeResponse()
+        return FakeHttpResponse(
+            201,
+            headers={"x-restli-id": "urn:li:share:123"},
+        )
+
+
+class FakeGitHubOpener:
+    def __init__(self, comments=None):
+        self.calls = []
+        self.comments = list(comments or [])
+        self.next_id = 1000
+
+    def __call__(self, request, timeout=30):
+        self.calls.append((request.get_method(), request.full_url))
+        method = request.get_method()
+        url = request.full_url
+
+        if method == "GET" and "/comments?" in url:
+            return FakeHttpResponse(200, payload=self.comments)
+
+        if method == "POST" and url.endswith("/comments"):
+            body = json.loads(request.data.decode("utf-8"))["body"]
+            self.next_id += 1
+            item = {"id": self.next_id, "body": body}
+            self.comments.append(item)
+            return FakeHttpResponse(201, payload=item)
+
+        if method == "PATCH" and "/issues/comments/" in url:
+            comment_id = int(url.rsplit("/", 1)[-1])
+            body = json.loads(request.data.decode("utf-8"))["body"]
+            for item in self.comments:
+                if int(item["id"]) == comment_id:
+                    item["body"] = body
+                    return FakeHttpResponse(200, payload=item)
+            return FakeHttpResponse(404, payload={"message": "not found"})
+
+        raise AssertionError(f"GitHub fake não cobre {method} {url}")
 
 
 class ReqSysProductStoryLinkedInTests(unittest.TestCase):
@@ -79,7 +123,7 @@ class ReqSysProductStoryLinkedInTests(unittest.TestCase):
     def test_approval_rejects_wrong_confirmation(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ApprovalError):
-                execute(
+                execute_dry_run(
                     report=report(),
                     content_hash=CONTENT_HASH,
                     approved_by="reviewer",
@@ -87,7 +131,6 @@ class ReqSysProductStoryLinkedInTests(unittest.TestCase):
                     confirmation="YES",
                     approval_kind="human",
                     author_urn="urn:li:person:123",
-                    mode="dry_run",
                     api_version="202609",
                     ledger_path=Path(tmp) / "ledger.json",
                 )
@@ -95,7 +138,7 @@ class ReqSysProductStoryLinkedInTests(unittest.TestCase):
     def test_approval_rejects_candidate_not_selected(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ApprovalError):
-                execute(
+                execute_dry_run(
                     report=report(selected=False),
                     content_hash=CONTENT_HASH,
                     approved_by="reviewer",
@@ -103,15 +146,13 @@ class ReqSysProductStoryLinkedInTests(unittest.TestCase):
                     confirmation="APPROVE",
                     approval_kind="human",
                     author_urn="urn:li:person:123",
-                    mode="dry_run",
                     api_version="202609",
                     ledger_path=Path(tmp) / "ledger.json",
                 )
 
-    def test_dry_run_never_calls_network(self):
-        opener = FakeOpener()
+    def test_dry_run_is_network_free(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = execute(
+            result = execute_dry_run(
                 report=report(),
                 content_hash=CONTENT_HASH,
                 approved_by="ci-e2e",
@@ -119,92 +160,125 @@ class ReqSysProductStoryLinkedInTests(unittest.TestCase):
                 confirmation="APPROVE",
                 approval_kind="test",
                 author_urn="urn:li:person:ci-e2e",
-                mode="dry_run",
                 api_version="202609",
                 ledger_path=Path(tmp) / "ledger.json",
-                opener=opener,
             )
         self.assertEqual("DRY_RUN_APPROVED", result["status"])
         self.assertFalse(result["published"])
-        self.assertEqual([], opener.calls)
         self.assertEqual(LINKEDIN_POSTS_URL, result["linkedin"]["endpoint"])
+        self.assertEqual("local_dry_run", result["idempotency"]["backend"])
 
     def test_publish_requires_human_approval(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(ApprovalError):
-                execute(
-                    report=report(),
-                    content_hash=CONTENT_HASH,
-                    approved_by="ci",
-                    correlation_id="corr-test",
-                    confirmation="APPROVE",
-                    approval_kind="test",
-                    author_urn="urn:li:person:123",
-                    mode="publish",
-                    api_version="202609",
-                    ledger_path=Path(tmp) / "ledger.json",
-                )
+        with self.assertRaises(ApprovalError):
+            execute_publish(
+                report=report(),
+                content_hash=CONTENT_HASH,
+                approved_by="ci",
+                correlation_id="corr-test",
+                confirmation="APPROVE",
+                approval_kind="test",
+                author_urn="urn:li:person:123",
+                api_version="202609",
+                ledger_repository="example/repo",
+                ledger_issue=1862,
+                github_token="github-test",
+                linkedin_token="linkedin-test",
+            )
 
     def test_publish_is_feature_flagged_closed(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(os.environ, {}, clear=True):
-                with self.assertRaises(LinkedInPublishError):
-                    execute(
-                        report=report(),
-                        content_hash=CONTENT_HASH,
-                        approved_by="reviewer",
-                        correlation_id="corr-flag",
-                        confirmation="APPROVE",
-                        approval_kind="human",
-                        author_urn="urn:li:person:123",
-                        mode="publish",
-                        api_version="202609",
-                        ledger_path=Path(tmp) / "ledger.json",
-                    )
-
-    def test_publish_records_post_and_blocks_duplicate_network_call(self):
-        opener = FakeOpener()
-        with tempfile.TemporaryDirectory() as tmp:
-            ledger = Path(tmp) / "ledger.json"
-            env = {
-                "REQSYS_LINKEDIN_PUBLISH_ENABLED": "true",
-                "LINKEDIN_ACCESS_TOKEN": "token-for-test-only",
-            }
-            with patch.dict(os.environ, env, clear=True):
-                first = execute(
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(LinkedInPublishError):
+                execute_publish(
                     report=report(),
                     content_hash=CONTENT_HASH,
                     approved_by="reviewer",
-                    correlation_id="corr-publish-1",
+                    correlation_id="corr-flag",
                     confirmation="APPROVE",
                     approval_kind="human",
                     author_urn="urn:li:person:123",
-                    mode="publish",
                     api_version="202609",
-                    ledger_path=ledger,
-                    opener=opener,
-                )
-                second = execute(
-                    report=report(),
-                    content_hash=CONTENT_HASH,
-                    approved_by="reviewer",
-                    correlation_id="corr-publish-2",
-                    confirmation="APPROVE",
-                    approval_kind="human",
-                    author_urn="urn:li:person:123",
-                    mode="publish",
-                    api_version="202609",
-                    ledger_path=ledger,
-                    opener=opener,
+                    ledger_repository="example/repo",
+                    ledger_issue=1862,
+                    github_token="github-test",
+                    linkedin_token="linkedin-test",
                 )
 
-            saved = json.loads(ledger.read_text(encoding="utf-8"))
+    def test_persistent_ledger_prevents_duplicate_linkedin_call(self):
+        github = FakeGitHubOpener()
+        linkedin = FakeLinkedInOpener()
+        with patch.dict(os.environ, {"REQSYS_LINKEDIN_PUBLISH_ENABLED": "true"}, clear=True):
+            first = execute_publish(
+                report=report(),
+                content_hash=CONTENT_HASH,
+                approved_by="reviewer",
+                correlation_id="corr-publish-1",
+                confirmation="APPROVE",
+                approval_kind="human",
+                author_urn="urn:li:person:123",
+                api_version="202609",
+                ledger_repository="example/repo",
+                ledger_issue=1862,
+                github_token="github-test",
+                linkedin_token="linkedin-test",
+                linkedin_opener=linkedin,
+                github_opener=github,
+            )
+            second = execute_publish(
+                report=report(),
+                content_hash=CONTENT_HASH,
+                approved_by="reviewer",
+                correlation_id="corr-publish-2",
+                confirmation="APPROVE",
+                approval_kind="human",
+                author_urn="urn:li:person:123",
+                api_version="202609",
+                ledger_repository="example/repo",
+                ledger_issue=1862,
+                github_token="github-test",
+                linkedin_token="linkedin-test",
+                linkedin_opener=linkedin,
+                github_opener=github,
+            )
 
         self.assertEqual("PUBLISHED", first["status"])
         self.assertEqual("urn:li:share:123", first["post_id"])
         self.assertEqual("ALREADY_PUBLISHED", second["status"])
-        self.assertEqual(1, len(opener.calls))
-        self.assertIn(CONTENT_HASH, saved["publications"])
+        self.assertEqual(1, len(linkedin.calls))
+        self.assertIn('"state":"PUBLISHED"', github.comments[-1]["body"])
+
+    def test_prepared_ledger_blocks_automatic_retry(self):
+        prepared = {
+            "schema_version": 1,
+            "state": "PREPARED",
+            "content_hash": CONTENT_HASH,
+            "correlation_id": "old-corr",
+            "approved_by": "reviewer",
+            "pr_number": 1900,
+            "source_head_sha": "b" * 40,
+            "post_id": None,
+            "updated_at": "2026-09-20T00:00:00Z",
+        }
+        github = FakeGitHubOpener(comments=[{"id": 77, "body": ledger_comment(prepared)}])
+        linkedin = FakeLinkedInOpener()
+        with patch.dict(os.environ, {"REQSYS_LINKEDIN_PUBLISH_ENABLED": "true"}, clear=True):
+            with self.assertRaises(LedgerError):
+                execute_publish(
+                    report=report(),
+                    content_hash=CONTENT_HASH,
+                    approved_by="reviewer",
+                    correlation_id="corr-retry",
+                    confirmation="APPROVE",
+                    approval_kind="human",
+                    author_urn="urn:li:person:123",
+                    api_version="202609",
+                    ledger_repository="example/repo",
+                    ledger_issue=1862,
+                    github_token="github-test",
+                    linkedin_token="linkedin-test",
+                    linkedin_opener=linkedin,
+                    github_opener=github,
+                )
+        self.assertEqual([], linkedin.calls)
 
 
 if __name__ == "__main__":
