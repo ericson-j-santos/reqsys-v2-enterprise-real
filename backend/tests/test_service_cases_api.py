@@ -320,3 +320,44 @@ def test_transition_missing_case_returns_404():
     response = client.post(f'/v1/service-cases/{uuid4()}/transitions', json=body)
     assert response.status_code == 404
 
+
+
+def test_get_case_exposes_domain_allowed_transitions_without_ui_rule_duplication(service_id):
+    payload = _create_payload(service_id, f'allowed-transitions-{uuid4()}')
+    created = client.post('/v1/service-cases', json=payload)
+    assert created.status_code == 200
+    case_id = created.json()['data']['case']['case_id']
+
+    response = client.get(f'/v1/service-cases/{case_id}')
+    assert response.status_code == 200
+    assert response.json()['data']['allowed_transitions'] == ['CANCELED', 'TRIAGE']
+
+    triage = _transition(case_id, 'TRIAGE', 1)
+    assert triage.status_code == 200
+    response = client.get(f'/v1/service-cases/{case_id}')
+    assert response.status_code == 200
+    assert response.json()['data']['allowed_transitions'] == [
+        'CANCELED',
+        'IN_PROGRESS',
+        'PENDING_APPROVAL',
+    ]
+
+
+def test_get_case_terminal_state_has_no_allowed_transition(service_id):
+    payload = _create_payload(service_id, f'terminal-actions-{uuid4()}')
+    created = client.post('/v1/service-cases', json=payload)
+    case = created.json()['data']['case']
+    for target in ('TRIAGE', 'IN_PROGRESS'):
+        moved = _transition(case['case_id'], target, case['version'])
+        assert moved.status_code == 200
+        case = moved.json()['data']['case']
+    resolved = _transition(case['case_id'], 'RESOLVED', case['version'], evidence=True)
+    assert resolved.status_code == 200
+    case = resolved.json()['data']['case']
+    closed = _transition(case['case_id'], 'CLOSED', case['version'])
+    assert closed.status_code == 200
+
+    response = client.get(f"/v1/service-cases/{case['case_id']}")
+    assert response.status_code == 200
+    assert response.json()['data']['state'] == 'CLOSED'
+    assert response.json()['data']['allowed_transitions'] == []
