@@ -1,0 +1,41 @@
+name: Desktop RDC Unblock Probe
+
+on:
+  push:
+    branches:
+      - ops/desktop-rdc-unblock-probe-20260920-1130
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-rdc-unblock-probe-20260920-1130
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Recover RDC on any Windows self-hosted runner
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    env:
+      CORRELATION_ID: rdc-unblock-probe-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/desktop-rdc-unblock-probe/evidence.json
+    steps:
+      - name: Checkout immutable probe SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify exact host and recover governed RDC
+        shell: pwsh
+        run: python scripts/pc24x7_rdc_recovery.py --confirm RECOVER-GOVERNED-RDC --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: desktop-rdc-unblock-probe-${{ github.run_id }}
+          path: artifacts/desktop-rdc-unblock-probe/evidence.json
+          if-no-files-found: warn
+          retention-days: 7
