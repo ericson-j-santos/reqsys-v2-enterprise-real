@@ -2,7 +2,7 @@
 
 ## Estado deste incremento
 
-O fluxo de aprovação está implementado em modo seguro de validação. O adapter conhece o contrato oficial da LinkedIn Posts API, mas o workflow não executa publicação real.
+O fluxo de aprovação está implementado em modo seguro de validação. O adapter conhece o contrato oficial da LinkedIn Posts API e possui ledger persistente governado, mas o workflow não executa publicação real.
 
 ## Fluxo
 
@@ -11,10 +11,12 @@ Weekly Accomplishment Log
   -> Product Story Engine
   -> selected_for_review
   -> Approval Gate
-  -> LinkedIn payload
-  -> dry-run evidence
-  -> [futuro] publish
+  -> GitHub Ledger PREPARED
+  -> LinkedIn Posts API
+  -> GitHub Ledger PUBLISHED
 ```
+
+No CI desta PR, o caminho externo é substituído por `dry_run`; nenhum post é criado.
 
 ## Approval Gate
 
@@ -44,6 +46,28 @@ O adapter usa:
 
 Para perfil pessoal, a aplicação LinkedIn deverá possuir `w_member_social`.
 
+## Ledger persistente
+
+Fonte: GitHub Issue #1862.
+
+Estados:
+
+- `PREPARED`: reserva criada antes da chamada externa;
+- `PUBLISHED`: publicação concluída e `post_id` persistido;
+- `RECONCILE_REQUIRED`: o efeito externo pode ter ocorrido e o ledger exige reconciliação antes de qualquer retry.
+
+Regra de idempotência:
+
+1. consultar o issue por `content_hash`;
+2. `PUBLISHED` retorna `ALREADY_PUBLISHED`;
+3. `PREPARED` ou `RECONCILE_REQUIRED` bloqueiam retry automático;
+4. ausência de entrada permite criar reserva `PREPARED`;
+5. somente após a reserva o adapter pode chamar o LinkedIn;
+6. HTTP 201 captura `x-restli-id`;
+7. a mesma entrada é atualizada para `PUBLISHED`.
+
+Esse desenho evita uma segunda publicação mesmo se ocorrer falha entre a chamada externa e a persistência final.
+
 ## Fail closed
 
 Publicação real exige simultaneamente:
@@ -52,9 +76,11 @@ Publicação real exige simultaneamente:
 2. confirmação `APPROVE`;
 3. `REQSYS_LINKEDIN_PUBLISH_ENABLED=true`;
 4. `LINKEDIN_ACCESS_TOKEN`;
-5. ausência de publicação anterior para o mesmo `content_hash` no ledger fornecido.
+5. `GITHUB_TOKEN` com acesso ao ledger;
+6. issue #1862 acessível;
+7. ausência de reserva/publicação incompatível para o mesmo `content_hash`.
 
-No workflow versionado neste incremento nenhuma dessas credenciais é carregada e apenas `--mode dry_run` é usado.
+No workflow versionado neste incremento nenhuma credencial LinkedIn é carregada e apenas `--mode dry_run` é usado.
 
 ## Validação de PR
 
@@ -73,17 +99,12 @@ O workflow `ReqSys Product Story Approval Gate`:
    - protocolo Rest.li `2.0.0`;
 7. publica somente artifact de evidência.
 
-## Idempotência
-
-O adapter recebe um ledger JSON e consulta `content_hash` antes da chamada HTTP. Em teste controlado, uma segunda tentativa para hash já publicado retorna `ALREADY_PUBLISHED` sem repetir a chamada de rede.
-
-Esse ledger ainda não é persistido de forma definitiva entre runs; por isso publicação real permanece desabilitada no workflow.
+Os testes unitários também exercitam o caminho publish com clientes falsos para comprovar reserva persistente, finalização `PUBLISHED` e ausência de segunda chamada LinkedIn.
 
 ## Próximo incremento antes de publicação real
 
-- escolher mecanismo persistente e auditável para o ledger;
 - configurar a aplicação LinkedIn e `w_member_social`;
 - provisionar o access token em secret store;
 - determinar o `author_urn` real;
-- validar autenticação sem publicar;
-- executar uma publicação real somente com autorização explícita e específica.
+- validar autenticação e autorização sem publicar;
+- só então executar uma publicação real com autorização explícita e específica.
