@@ -38,6 +38,7 @@ PC24x7 --Ed25519--> ntfy.sh
 10. HML e PROD permanecem fora deste incremento.
 11. Após merge automático governado, o Pages deve ser acionado pela conclusão bem-sucedida do `Governed PR Automation` quando esse workflow tiver origem `workflow_run`.
 12. O run que dispara o deploy não pode ser tratado como produtor do dashboard Teams; o deploy deve resolver separadamente o último `Teams Notification Dashboard` bem-sucedido.
+13. A `Validação de Acessos Públicos — ReqSys` deve executar após `Governed PR Automation` concluído com sucesso no caminho `workflow_run`, mantendo a URL `/dev/` como alvo obrigatório.
 
 ## Critérios de aceite
 
@@ -49,4 +50,5 @@ PC24x7 --Ed25519--> ntfy.sh
 - task scheduler preserva bateria/StartWhenAvailable/timeout de 10 minutos;
 - deploy pós-merge ocorre mesmo quando o merge foi executado com `GITHUB_TOKEN`;
 - simples abertura/edição de PR não dispara esse caminho de redeploy;
+- validação pública pós-merge é disparada automaticamente e falha se o alvo obrigatório estiver indisponível;
 - nenhuma dependência paga é introduzida.
