@@ -34,15 +34,24 @@ def test_task_name_is_strictly_allowlisted():
         m.task_run(r"\Automation\ArbitraryTask")
 
 
-def test_prefers_governed_headless_task(monkeypatch):
+def test_prefers_transport_proven_headless_and_arms_interactive_standby(monkeypatch):
     monkeypatch.setattr(m, "validate_host", lambda: m.EXPECTED_HOST)
-    monkeypatch.setattr(m, "validate_headless_source", lambda: {"exists": True, "governed": True})
+    monkeypatch.setattr(
+        m,
+        "validate_headless_source",
+        lambda: {"exists": True, "governed": True, "marker": m.HEADLESS_TRANSPORT_MARKER},
+    )
     monkeypatch.setattr(
         m,
         "validate_interactive_source",
-        lambda: {"exists": True, "governed": True, "marker": m.INTERACTIVE_MARKERS[1]},
+        lambda: {"exists": True, "governed": True, "marker": m.INTERACTIVE_MARKERS[-1]},
     )
     monkeypatch.setattr(m, "task_available", lambda task: True)
+    monkeypatch.setattr(
+        m,
+        "wait_for_headless_ready",
+        lambda: {"fresh": True, "ready": True, "age_seconds": 0.2, "reason": "fresh"},
+    )
     observed = []
     monkeypatch.setattr(
         m,
@@ -54,9 +63,11 @@ def test_prefers_governed_headless_task(monkeypatch):
 
     assert result["ok"] is True
     assert result["owner"] == "headless"
-    assert observed == [m.TASK_HEADLESS]
-    assert result["attempts"][0]["end_returncode"] == 0
-    assert result["attempts"][0]["run_returncode"] == 0
+    assert result["mode"] == "headless_transport_proven_with_interactive_standby"
+    assert result["fallback_armed"] is True
+    assert result["headless_transport_guarded"] is True
+    assert observed == [m.TASK_HEADLESS, m.TASK_INTERACTIVE]
+    assert result["attempts"][0]["transport_claim"]["fresh"] is True
 
 
 def test_falls_back_to_governed_interactive_task(monkeypatch):
@@ -79,9 +90,66 @@ def test_falls_back_to_governed_interactive_task(monkeypatch):
 
     assert result["ok"] is True
     assert result["owner"] == "interactive"
+    assert result["mode"] == "interactive_fallback"
+    assert result["fallback_armed"] is True
     assert observed == [m.TASK_INTERACTIVE]
     assert result["attempts"][0]["end_returncode"] == 1
     assert result["attempts"][0]["run_returncode"] == 0
+
+
+def test_v3_headless_is_suppressed_instead_of_trusted(monkeypatch):
+    monkeypatch.setattr(m, "validate_host", lambda: m.EXPECTED_HOST)
+    monkeypatch.setattr(
+        m,
+        "validate_headless_source",
+        lambda: {"exists": True, "governed": True, "marker": "// RDC_HEADLESS_V3_READY_CLAIM"},
+    )
+    monkeypatch.setattr(
+        m,
+        "validate_interactive_source",
+        lambda: {"exists": True, "governed": True, "marker": m.INTERACTIVE_MARKERS[-1]},
+    )
+    monkeypatch.setattr(m, "task_available", lambda task: True)
+    ended = []
+    restarted = []
+    monkeypatch.setattr(m, "task_end", lambda task: ended.append(task) or completed(0))
+    monkeypatch.setattr(m, "clear_headless_claim", lambda: {"cleared": True})
+    monkeypatch.setattr(
+        m,
+        "restart_task",
+        lambda task: restarted.append(task) or {"end_returncode": 0, "run_returncode": 0},
+    )
+
+    result = m.recover(m.CONFIRM, "corr-test-v3-fallback")
+
+    assert result["ok"] is True
+    assert result["owner"] == "interactive"
+    assert result["mode"] == "interactive_fallback"
+    assert result["headless_transport_guarded"] is False
+    assert ended == [m.TASK_HEADLESS]
+    assert restarted == [m.TASK_INTERACTIVE]
+    assert result["attempts"][0]["action"] == "suppress_unverified_transport_owner"
+
+
+def test_read_headless_claim_requires_fresh_timezone_aware_ready_claim(monkeypatch, tmp_path):
+    claim = tmp_path / "rdc-headless-owner.json"
+    monkeypatch.setattr(m, "HEADLESS_CLAIM", claim)
+
+    claim.write_text(
+        '{"ready": true, "pid": 123, "updated_at": "2000-01-01T00:00:00+00:00"}',
+        encoding="utf-8",
+    )
+    stale = m.read_headless_claim()
+    assert stale["fresh"] is False
+    assert stale["reason"] == "claim_stale"
+
+    claim.write_text(
+        '{"ready": true, "pid": 123, "updated_at": "not-a-date"}',
+        encoding="utf-8",
+    )
+    invalid = m.read_headless_claim()
+    assert invalid["fresh"] is False
+    assert invalid["reason"] == "claim_invalid"
 
 
 def test_restart_task_runs_even_when_end_reports_not_running(monkeypatch):
@@ -125,4 +193,5 @@ def test_workflow_contract_is_fixed_to_pc24x7_desktop():
 
 def test_current_rdc_markers_are_allowlisted():
     assert "// RDC_HEADLESS_V3_READY_CLAIM" in m.HEADLESS_MARKERS
+    assert m.HEADLESS_TRANSPORT_MARKER in m.HEADLESS_MARKERS
     assert "REM RDC_LAUNCHER_V5_READY_CLAIM" in m.INTERACTIVE_MARKERS
