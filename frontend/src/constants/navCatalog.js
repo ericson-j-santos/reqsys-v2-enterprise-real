@@ -19,6 +19,7 @@ export const NAV_TEMAS = [
     items: [
       { to: '/', icon: 'mdi-view-dashboard', title: 'Painel do dia', tip: 'Resumo objetivo das pendências, qualidade e próximos passos.' },
       { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Demandas e requisitos', tip: 'Cadastrar, revisar e acompanhar requisitos de negócio.' },
+      { to: '/service-cases', icon: 'mdi-clipboard-text-clock-outline', title: 'Casos de serviço', tip: 'Acompanhar solicitação, incidente, problema ou mudança em uma única tela operacional.' },
       { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo de aprovação', tip: 'Acompanhar a demanda da entrada até a aprovação e publicação.' },
       { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Ver origem, história, decisão, entrega e evidências.' },
     ],
