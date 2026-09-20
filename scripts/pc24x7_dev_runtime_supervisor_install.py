@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Instala/remove supervisor DEV recorrente no Task Scheduler do usuário.
-
-A instalação materializa uma cópia persistente fora do worktree para que a
-automação continue válida após limpeza de branches/worktrees.
-"""
+"""Instala/remove o supervisor DEV recorrente e persistente do PC24x7."""
 from __future__ import annotations
 
 import argparse
@@ -19,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SCRIPTS = (
     "pc24x7_dev_runtime_supervisor.py",
     "pc24x7_public_dev_tunnel.py",
-    "pc24x7_tailscale_funnel.py",
+    "pc24x7_dev_locator_publisher.py",
 )
 BASE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ReqSys"
 RUNTIME_DIR = BASE_DIR / "RuntimeSupervisor"
@@ -58,40 +54,80 @@ def materialize_runtime() -> dict[str, str]:
         copied[name] = str(target)
 
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "source_head": source_head(),
         "source_root": str(ROOT),
         "supervisor": str(PERSISTENT_SUPERVISOR),
+        "cost_policy": "zero_additional_cost",
     }
-    MANIFEST.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    MANIFEST.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return copied
 
 
 def write_wrapper() -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     python = Path(sys.executable)
-    content = (
+    WRAPPER.write_text(
         "@echo off\r\n"
         f'"{python}" "{PERSISTENT_SUPERVISOR}" --apply '
-        f'>> "{LOG_DIR / "dev-supervisor.log"}" 2>&1\r\n'
+        f'>> "{LOG_DIR / "dev-supervisor.log"}" 2>&1\r\n',
+        encoding="utf-8",
     )
-    WRAPPER.write_text(content, encoding="utf-8")
+
+
+def harden_task_settings() -> dict:
+    if os.name != "nt":
+        return {"skipped": "non_windows"}
+    import win32com.client
+
+    service = win32com.client.Dispatch("Schedule.Service")
+    service.Connect()
+    folder = service.GetFolder("\\")
+    task = folder.GetTask(TASK_NAME)
+    definition = task.Definition
+    settings = definition.Settings
+    settings.DisallowStartIfOnBatteries = False
+    settings.StopIfGoingOnBatteries = False
+    settings.StartWhenAvailable = True
+    settings.ExecutionTimeLimit = "PT10M"
+
+    TASK_CREATE_OR_UPDATE = 6
+    TASK_LOGON_INTERACTIVE_TOKEN = 3
+    folder.RegisterTaskDefinition(
+        TASK_NAME,
+        definition,
+        TASK_CREATE_OR_UPDATE,
+        definition.Principal.UserId or os.environ.get("USERNAME"),
+        None,
+        TASK_LOGON_INTERACTIVE_TOKEN,
+    )
+    registered = folder.GetTask(TASK_NAME)
+    current = registered.Definition.Settings
+    return {
+        "DisallowStartIfOnBatteries": bool(current.DisallowStartIfOnBatteries),
+        "StopIfGoingOnBatteries": bool(current.StopIfGoingOnBatteries),
+        "StartWhenAvailable": bool(current.StartWhenAvailable),
+        "ExecutionTimeLimit": str(current.ExecutionTimeLimit),
+    }
 
 
 def install() -> int:
     copied = materialize_runtime()
     write_wrapper()
-    command = [
+    created = run([
         "schtasks", "/Create", "/F",
         "/TN", TASK_NAME,
         "/TR", str(WRAPPER),
         "/SC", "MINUTE", "/MO", "5",
-    ]
-    created = run(command)
+    ])
     if created.returncode != 0:
         print(created.stderr or created.stdout, file=sys.stderr)
         return 2
 
+    settings = harden_task_settings()
     triggered = run(["schtasks", "/Run", "/TN", TASK_NAME])
     print(json.dumps({
         "status": "installed",
@@ -99,6 +135,7 @@ def install() -> int:
         "wrapper": str(WRAPPER),
         "persistent_supervisor": str(PERSISTENT_SUPERVISOR),
         "copied": copied,
+        "settings": settings,
         "trigger_returncode": triggered.returncode,
     }, ensure_ascii=True, sort_keys=True))
     return 0
@@ -119,16 +156,14 @@ def uninstall() -> int:
 
 def status() -> int:
     result = run(["schtasks", "/Query", "/TN", TASK_NAME, "/FO", "LIST", "/V"])
-    manifest = None
-    if MANIFEST.is_file():
-        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.is_file() else None
     print(json.dumps({
         "task_query_returncode": result.returncode,
         "task": result.stdout if result.stdout else result.stderr,
         "manifest": manifest,
         "wrapper_exists": WRAPPER.is_file(),
         "persistent_supervisor_exists": PERSISTENT_SUPERVISOR.is_file(),
-    }, ensure_ascii=False, sort_keys=True))
+    }, ensure_ascii=True, sort_keys=True))
     return result.returncode
 
 

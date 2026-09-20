@@ -37,5 +37,13 @@ def test_installer_uses_user_level_recurring_task_and_persistent_copy():
     assert set(installer.SOURCE_SCRIPTS) == {
         "pc24x7_dev_runtime_supervisor.py",
         "pc24x7_public_dev_tunnel.py",
-        "pc24x7_tailscale_funnel.py",
+        "pc24x7_dev_locator_publisher.py",
     }
+
+
+def test_supervisor_has_no_tailscale_or_nport_critical_dependency():
+    assert supervisor.PUBLIC_TUNNEL.name == "pc24x7_public_dev_tunnel.py"
+    assert supervisor.LOCATOR_PUBLISHER.name == "pc24x7_dev_locator_publisher.py"
+    raw = (ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py").read_text(encoding="utf-8").lower()
+    assert "tailscale_funnel" not in raw
+    assert "pc24x7_nport_tunnel.py" not in raw
