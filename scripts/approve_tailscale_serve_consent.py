@@ -118,21 +118,80 @@ def approval_target(snapshot: dict[str, Any]) -> tuple[str | None, bool]:
     return None, auth_required
 
 
-def click_exact(label: str) -> bool:
+def control_diagnostics(labels: set[str]) -> list[dict[str, Any]]:
     from pywinauto import Desktop
 
+    rows: list[dict[str, Any]] = []
+    for window in Desktop(backend="uia").windows():
+        try:
+            for control in window.descendants():
+                try:
+                    label = (control.window_text() or "").strip()
+                    ctype = str(control.element_info.control_type or "")
+                    if label not in labels and ctype != "TabItem":
+                        continue
+                    rect = control.rectangle()
+                    rows.append(
+                        {
+                            "window": (window.window_text() or "").strip(),
+                            "label": label,
+                            "control_type": ctype,
+                            "automation_id": str(control.element_info.automation_id or ""),
+                            "class_name": str(control.element_info.class_name or ""),
+                            "visible": bool(control.is_visible()),
+                            "enabled": bool(control.is_enabled()),
+                            "rectangle": [rect.left, rect.top, rect.right, rect.bottom],
+                        }
+                    )
+                except Exception as exc:
+                    rows.append({"error": type(exc).__name__})
+        except Exception as exc:
+            rows.append({"window_error": type(exc).__name__})
+    return rows
+
+
+def click_exact(label: str) -> tuple[bool, list[dict[str, Any]]]:
+    from pywinauto import Desktop
+
+    attempts: list[dict[str, Any]] = []
     for window in Desktop(backend="uia").windows():
         try:
             for control in window.descendants(control_type="Button"):
-                if (control.window_text() or "").strip() == label:
+                if (control.window_text() or "").strip() != label:
+                    continue
+                try:
+                    rect = control.rectangle()
+                    row = {
+                        "window": (window.window_text() or "").strip(),
+                        "label": label,
+                        "visible": bool(control.is_visible()),
+                        "enabled": bool(control.is_enabled()),
+                        "rectangle": [rect.left, rect.top, rect.right, rect.bottom],
+                    }
+                    try:
+                        window.set_focus()
+                    except Exception as exc:
+                        row["focus_error"] = type(exc).__name__
                     try:
                         control.invoke()
-                    except Exception:
+                        row["method"] = "invoke"
+                        attempts.append(row)
+                        return True, attempts
+                    except Exception as exc:
+                        row["invoke_error"] = type(exc).__name__
+                    try:
                         control.click_input()
-                    return True
-        except Exception:
-            continue
-    return False
+                        row["method"] = "click_input"
+                        attempts.append(row)
+                        return True, attempts
+                    except Exception as exc:
+                        row["click_error"] = type(exc).__name__
+                    attempts.append(row)
+                except Exception as exc:
+                    attempts.append({"window": (window.window_text() or "").strip(), "label": label, "error": type(exc).__name__})
+        except Exception as exc:
+            attempts.append({"window_error": type(exc).__name__})
+    return False, attempts
 
 
 def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
@@ -151,6 +210,11 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
         "auth_required": auth_required,
         "snapshot": snapshot,
     }
+    if mode == "diagnose":
+        return {
+            **base,
+            "controls": control_diagnostics({"Authorize tailscale", "Grant", "Cancel", "Sign in with GitHub", *APPROVE_LABELS}),
+        }
     if mode == "probe":
         return base
     if mode == "authorize-github-oauth":
@@ -160,12 +224,13 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
         )
         if not oauth_present:
             return {**base, "ok": False, "result": "github_oauth_control_not_found"}
-        clicked = click_exact(oauth_label)
+        clicked, attempts = click_exact(oauth_label)
         time.sleep(6)
         return {
             **base,
             "ok": clicked,
             "result": "github_oauth_authorized" if clicked else "github_oauth_click_failed",
+            "click_attempts": attempts,
             "after": browser_snapshot(),
         }
     if mode == "login-github":
@@ -177,31 +242,33 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
         )
         if not github_present:
             return {**base, "ok": False, "result": "github_signin_control_not_found"}
-        clicked = click_exact(github_label)
+        clicked, attempts = click_exact(github_label)
         time.sleep(5)
         return {
             **base,
             "ok": clicked,
             "result": "github_signin_clicked" if clicked else "github_signin_click_failed",
+            "click_attempts": attempts,
             "after": browser_snapshot(),
         }
     if auth_required and not target:
         return {**base, "ok": False, "result": "interactive_auth_required"}
     if not target:
         return {**base, "ok": False, "result": "approval_control_not_found"}
-    clicked = click_exact(target)
+    clicked, attempts = click_exact(target)
     time.sleep(3)
     return {
         **base,
         "ok": clicked,
         "result": "approval_clicked" if clicked else "approval_click_failed",
+        "click_attempts": attempts,
         "after": browser_snapshot(),
     }
 
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("mode", choices=("probe", "login-github", "authorize-github-oauth", "approve"))
+    p.add_argument("mode", choices=("probe", "diagnose", "login-github", "authorize-github-oauth", "approve"))
     p.add_argument("--https-port", type=int, default=11443)
     p.add_argument("--wait-seconds", type=int, default=6)
     return p
