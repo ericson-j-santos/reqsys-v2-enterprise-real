@@ -1,0 +1,17 @@
+{
+  "id": "ollama-tailscale-private-serve",
+  "title": "Ollama privado via Tailscale Serve",
+  "description": "Mantém o Ollama somente em loopback e publica uma rota HTTPS privada no tailnet, sem Funnel.",
+  "scope": {
+    "environment": "local/dev",
+    "backend": "http://127.0.0.1:11434",
+    "default_https_port": 11443,
+    "public_internet": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_configure_ollama_tailscale_serve.py"
+    ],
+    "evidence_contract": "A validação deve comprovar Ollama saudável em loopback, Tailscale Running, HTTPS Serve funcional em /api/version e /v1/models e porta nativa 11434 inacessível por IPv4 não-loopback."
+  }
+}
