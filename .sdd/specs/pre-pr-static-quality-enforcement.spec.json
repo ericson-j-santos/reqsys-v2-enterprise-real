@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Pre-PR Static Quality Enforcement",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pre_pr_readiness.py"
+    ],
+    "evidence_contract": "READY_FOR_PR only passes after changed Python Ruff, shell syntax, referenced contract tests, exact head SHA and current base validation."
+  },
+  "traceability": {
+    "implementation": "scripts/pre_pr_readiness.py",
+    "workflow": ".github/workflows/pre-pr-readiness.yml",
+    "structural_guard": ".github/workflows/pr-readiness-guard.yml",
+    "merge_policy": "governance/merge/current-sha-required-workflows.json",
+    "runbook": "docs/runbooks/pre-pr-readiness.md"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}
