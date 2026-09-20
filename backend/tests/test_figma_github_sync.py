@@ -62,7 +62,7 @@ class TestClientesFigmaGithub:
 
 
 class TestSyncManual:
-    def test_sync_manual_bidirecional_cria_vinculo_e_issue_fake(self, client, monkeypatch, sync_case):
+    def test_sync_manual_bidirecional_cria_vinculo_e_issue_fake(self, client, monkeypatch, sync_case, auth_headers):
         from app.services import figma_client, github_client
 
         monkeypatch.setattr(figma_client, 'get_comments', lambda file_key: [_fake_comment()])
@@ -81,7 +81,7 @@ class TestSyncManual:
             },
         )
 
-        resp = client.post('/v1/integracoes/figma-github/sync', json=sync_case)
+        resp = client.post('/v1/integracoes/figma-github/sync', json=sync_case, headers=auth_headers)
 
         assert resp.status_code == 200
         data = resp.json()['data']
@@ -89,7 +89,7 @@ class TestSyncManual:
         assert data['updated'] == 1
         assert data['links'][0]['github_issue_number'] == 101
 
-    def test_segundo_sync_nao_duplica_issue(self, client, monkeypatch, sync_case):
+    def test_segundo_sync_nao_duplica_issue(self, client, monkeypatch, sync_case, auth_headers):
         from app.services import figma_client, github_client
 
         monkeypatch.setattr(figma_client, 'get_comments', lambda file_key: [_fake_comment()])
@@ -108,8 +108,8 @@ class TestSyncManual:
             },
         )
 
-        first = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'})
-        second = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'})
+        first = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'}, headers=auth_headers)
+        second = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'}, headers=auth_headers)
 
         assert first.status_code == 200
         assert second.status_code == 200
@@ -117,7 +117,46 @@ class TestSyncManual:
         assert second.json()['data']['created'] == 0
         assert second.json()['data']['skipped'] == 1
 
-    def test_github_vence_em_conflito(self, client, monkeypatch, sync_case):
+
+    def test_replay_bidirecional_nao_duplica_comentario_figma(self, client, monkeypatch, sync_case, auth_headers):
+        from app.services import figma_client, github_client
+
+        comments = [_fake_comment()]
+        created_comments = []
+
+        monkeypatch.setattr(figma_client, 'get_comments', lambda file_key: list(comments))
+        monkeypatch.setattr(figma_client, 'get_nodes', lambda file_key, node_ids: {'nodes': {}})
+        def create_comment(file_key, message, node_id=None):
+            created = {'id': f'figma-reply-{len(created_comments) + 1}', 'message': message, 'client_meta': {'node_id': node_id}}
+            created_comments.append(created)
+            comments.append(created)
+            return created
+        monkeypatch.setattr(figma_client, 'create_comment', create_comment)
+        monkeypatch.setattr(github_client, 'find_issue_by_marker', lambda repo, marker: None)
+        monkeypatch.setattr(
+            github_client,
+            'create_issue',
+            lambda repo, title, body, labels=None: {
+                'number': 104,
+                'title': title,
+                'body': body,
+                'state': 'open',
+                'html_url': 'https://github.com/acme/figma-sync/issues/104',
+            },
+        )
+
+        first = client.post('/v1/integracoes/figma-github/sync', json=sync_case, headers=auth_headers)
+        second = client.post('/v1/integracoes/figma-github/sync', json=sync_case, headers=auth_headers)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()['data']['updated'] == 1
+        assert second.json()['data']['updated'] == 0
+        assert second.json()['data']['created'] == 0
+        assert second.json()['data']['skipped'] >= 2
+        assert len(created_comments) == 1
+
+    def test_github_vence_em_conflito(self, client, monkeypatch, sync_case, auth_headers):
         from app.services import figma_client, github_client
 
         monkeypatch.setattr(figma_client, 'get_nodes', lambda file_key, node_ids: {'nodes': {}})
@@ -135,11 +174,11 @@ class TestSyncManual:
         )
 
         monkeypatch.setattr(figma_client, 'get_comments', lambda file_key: [_fake_comment('Texto inicial')])
-        resp1 = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'})
+        resp1 = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'}, headers=auth_headers)
         assert resp1.status_code == 200
 
         monkeypatch.setattr(figma_client, 'get_comments', lambda file_key: [_fake_comment('Texto alterado no Figma')])
-        resp2 = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'})
+        resp2 = client.post('/v1/integracoes/figma-github/sync', json={**sync_case, 'mode': 'figma_to_github'}, headers=auth_headers)
 
         assert resp2.status_code == 200
         data = resp2.json()['data']

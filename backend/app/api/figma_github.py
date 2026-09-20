@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.envelope import ok
+from app.core.service_tokens import require_admin_or_service_token
 from app.db import get_db
 from app.models.integracao_figma_github import IntegracaoFigmaGithub
 from app.services import figma_github_sync
 
 router = APIRouter(prefix='/v1/integracoes/figma-github', tags=['Integracoes Figma GitHub'])
+_require_figma_sync = require_admin_or_service_token('figma:sync')
 
 
 class FigmaGithubSyncIn(BaseModel):
@@ -46,7 +48,7 @@ def config_figma_github():
     })
 
 
-@router.post('/sync')
+@router.post('/sync', dependencies=[Depends(_require_figma_sync)])
 def sincronizar_figma_github(payload: FigmaGithubSyncIn, db: Session = Depends(get_db)):
     if not figma_github_sync.sync_enabled():
         raise HTTPException(status_code=409, detail='Integracao Figma GitHub desabilitada por feature flag.')
