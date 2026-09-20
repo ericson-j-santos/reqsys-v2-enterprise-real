@@ -1,0 +1,171 @@
+name: ReqSys Product Story Approval Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      content_hash:
+        description: "Hash SHA-256 do candidato selecionado"
+        required: true
+        type: string
+      author_urn:
+        description: "LinkedIn author URN (urn:li:person:* ou urn:li:organization:*)"
+        required: true
+        type: string
+      confirmation:
+        description: "Digite exatamente APPROVE"
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - ".github/workflows/reqsys-product-story-approval.yml"
+      - ".sdd/specs/reqsys-product-story-approval-linkedin-v1.*"
+      - "docs/runbooks/reqsys-product-story-approval-linkedin.md"
+      - "scripts/reqsys_product_story_linkedin.py"
+      - "tests/test_reqsys_product_story_linkedin.py"
+      - "tests/test_reqsys_product_story_approval_workflow.py"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: reqsys-product-story-approval-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  approval-dry-run:
+    name: Approval Gate + LinkedIn adapter dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CORRELATION_ID: story-approval-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar contratos
+        run: |
+          python -m unittest -v tests/test_reqsys_product_story_linkedin.py
+          python -m unittest -v tests/test_reqsys_product_story_approval_workflow.py
+
+      - name: Resolver Weekly Log verde da main
+        id: weekly
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list             --workflow reqsys-weekly-accomplishment-log.yml             --branch main             --status success             --limit 1             --json databaseId             --jq '.[0].databaseId // empty')"
+          test -n "$run_id" || {
+            echo "Nenhum Weekly Accomplishment Log verde na main." >&2
+            exit 1
+          }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar evidência semanal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/reqsys-product-story-approval/source
+          gh run download "${{ steps.weekly.outputs.run_id }}"             --name reqsys-weekly-accomplishment-log             --dir artifacts/reqsys-product-story-approval/source
+          test -f artifacts/reqsys-product-story-approval/source/reqsys-weekly-accomplishment-log.json
+
+      - name: Regenerar candidatos no SHA atual
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/reqsys_product_story_engine.py             --input artifacts/reqsys-product-story-approval/source/reqsys-weekly-accomplishment-log.json             --output-dir artifacts/reqsys-product-story-approval/candidates             --limit 3
+
+      - name: Resolver aprovação
+        id: approval
+        shell: bash
+        env:
+          INPUT_HASH: ${{ github.event.inputs.content_hash }}
+          INPUT_AUTHOR: ${{ github.event.inputs.author_urn }}
+          INPUT_CONFIRMATION: ${{ github.event.inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          p = json.loads(Path("artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json").read_text(encoding="utf-8"))
+          selected = [c for c in p["candidates"] if c.get("selected_for_review")]
+          if not selected:
+              raise SystemExit("nenhum candidato selecionado")
+          print(f"content_hash={selected[0]['linkedin']['content_hash']}")
+          print("author_urn=urn:li:person:ci-e2e")
+          print("confirmation=APPROVE")
+          print("approval_kind=test")
+          print("approved_by=ci-e2e")
+          PY
+          else
+            echo "content_hash=$INPUT_HASH" >> "$GITHUB_OUTPUT"
+            echo "author_urn=$INPUT_AUTHOR" >> "$GITHUB_OUTPUT"
+            echo "confirmation=$INPUT_CONFIRMATION" >> "$GITHUB_OUTPUT"
+            echo "approval_kind=human" >> "$GITHUB_OUTPUT"
+            echo "approved_by=$GITHUB_ACTOR" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Controle negativo — confirmação incorreta deve falhar
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          python scripts/reqsys_product_story_linkedin.py             --input artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json             --content-hash "${{ steps.approval.outputs.content_hash }}"             --approved-by "${{ steps.approval.outputs.approved_by }}"             --correlation-id "$CORRELATION_ID-negative"             --confirmation "DENY"             --approval-kind "${{ steps.approval.outputs.approval_kind }}"             --author-urn "${{ steps.approval.outputs.author_urn }}"             --mode dry_run             --output artifacts/reqsys-product-story-approval/negative.json
+          code=$?
+          set -e
+          test "$code" -ne 0 || {
+            echo "Falso positivo: confirmação inválida foi aceita." >&2
+            exit 1
+          }
+
+      - name: Approval Gate positivo + adapter oficial dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/reqsys_product_story_linkedin.py             --input artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json             --content-hash "${{ steps.approval.outputs.content_hash }}"             --approved-by "${{ steps.approval.outputs.approved_by }}"             --correlation-id "$CORRELATION_ID"             --confirmation "${{ steps.approval.outputs.confirmation }}"             --approval-kind "${{ steps.approval.outputs.approval_kind }}"             --author-urn "${{ steps.approval.outputs.author_urn }}"             --mode dry_run             --api-version 202609             --output artifacts/reqsys-product-story-approval/approval-result.json
+
+      - name: Leitura independente da evidência
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(Path("artifacts/reqsys-product-story-approval/approval-result.json").read_text(encoding="utf-8"))
+          assert p["status"] == "DRY_RUN_APPROVED"
+          assert p["published"] is False
+          assert p["post_id"] is None
+          assert p["linkedin"]["endpoint"] == "https://api.linkedin.com/rest/posts"
+          assert p["linkedin"]["api_version"] == "202609"
+          assert p["linkedin"]["restli_protocol_version"] == "2.0.0"
+          assert p["approval"]["decision"] == "APPROVED"
+          assert p["content_hash"] == "${{ steps.approval.outputs.content_hash }}"
+          print(json.dumps({
+              "status": p["status"],
+              "content_hash": p["content_hash"],
+              "correlation_id": p["correlation_id"],
+              "published": p["published"],
+              "endpoint": p["linkedin"]["endpoint"],
+              "api_version": p["linkedin"]["api_version"],
+          }))
+          PY
+
+      - name: Publicar artifact de aprovação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-product-story-approval
+          path: |
+            artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json
+            artifacts/reqsys-product-story-approval/candidates/product-story-candidates.md
+            artifacts/reqsys-product-story-approval/approval-result.json
+          if-no-files-found: error
+          retention-days: 90
