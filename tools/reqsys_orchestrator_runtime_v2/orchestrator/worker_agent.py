@@ -13,10 +13,23 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .maintenance import reboot_once, recover_rdc
+from .maintenance import (
+    reboot_once,
+    recover_github_runner,
+    recover_rdc,
+    request_runtime_refresh,
+)
+from .pr_remediation_bridge import handoff_pr_remediation
 
 VALID_PROFILES = {"NORMAL", "ESTUDO"}
-SAFE_TASK_TYPES = {"orchestrator.selftest", "host.rdc.recover.v1", "host.reboot.once.v1"}
+PR_REMEDIATION_TASK = "github.pr.remediate.v1"
+SAFE_TASK_TYPES = {
+    "orchestrator.selftest",
+    "host.rdc.recover.v1",
+    "host.github_runner.recover.v1",
+    "host.orchestrator.refresh.v1",
+    "host.reboot.once.v1",
+}
 
 
 def utc_iso() -> str:
@@ -73,6 +86,9 @@ class WorkerAgentConfig:
     poll_interval_seconds: float = 2.0
     lease_seconds: int = 120
     profile_path: Path | None = None
+    runtime_root: Path | None = None
+    pr_remediation_pool_url: str | None = None
+    pr_remediation_token_file: Path | None = None
 
 
 class WorkerAgent:
@@ -80,6 +96,18 @@ class WorkerAgent:
         self.config = config
         self.endpoint = config.endpoint.rstrip("/")
         self.device_name = socket.gethostname()
+
+    def safe_task_types(self) -> set[str]:
+        task_types = set(SAFE_TASK_TYPES)
+        token_file = self.config.pr_remediation_token_file
+        if (
+            "ci-remediator" in self.config.roles
+            and self.config.pr_remediation_pool_url
+            and token_file is not None
+            and token_file.is_file()
+        ):
+            task_types.add(PR_REMEDIATION_TASK)
+        return task_types
 
     def heartbeat(self, correlation_id: str) -> dict[str, Any]:
         profile = resolve_profile(self.config.profile_path or default_profile_path())
@@ -95,7 +123,7 @@ class WorkerAgent:
                     "python_version": platform.python_version(),
                     "platform": platform.system(),
                     "source": "persistent-worker-agent",
-                    "safe_task_types": sorted(SAFE_TASK_TYPES),
+                    "safe_task_types": sorted(self.safe_task_types()),
                 },
                 "profile": profile,
                 "controller_online": True,
@@ -162,7 +190,7 @@ class WorkerAgent:
 
     def execute(self, item: dict[str, Any]) -> dict[str, Any]:
         task_type = item.get("task_type")
-        if task_type not in SAFE_TASK_TYPES:
+        if task_type not in self.safe_task_types():
             raise RuntimeError(f"unsupported task_type: {task_type}")
         if task_type == "orchestrator.selftest":
             payload = item.get("payload") or {}
@@ -174,14 +202,67 @@ class WorkerAgent:
                 "input": payload.get("input"),
                 "observed_at": utc_iso(),
             }
+        if task_type == PR_REMEDIATION_TASK:
+            pool_url = self.config.pr_remediation_pool_url
+            token_file = self.config.pr_remediation_token_file
+            if not pool_url or token_file is None:
+                raise RuntimeError("pr remediation bridge unavailable")
+            result = handoff_pr_remediation(
+                item.get("payload") or {},
+                correlation_id=item.get("correlation_id") or "",
+                pool_url=pool_url,
+                token_file=token_file,
+            )
+            result.update(
+                {
+                    "worker_id": self.config.worker_id,
+                    "device_name": self.device_name,
+                    "observed_at": utc_iso(),
+                }
+            )
+            return result
         if task_type == "host.rdc.recover.v1":
             payload = item.get("payload") or {}
-            result = recover_rdc(target_host=payload.get("target_host"))
+            result = recover_rdc(
+                target_host=payload.get("target_host"),
+                force_restart=payload.get("force_restart", False),
+            )
             result.update(
                 {
                     "worker_id": self.config.worker_id,
                     "device_name": self.device_name,
                     "correlation_id": item.get("correlation_id"),
+                    "observed_at": utc_iso(),
+                }
+            )
+            return result
+        if task_type == "host.github_runner.recover.v1":
+            payload = item.get("payload") or {}
+            result = recover_github_runner(target_host=payload.get("target_host"))
+            result.update(
+                {
+                    "worker_id": self.config.worker_id,
+                    "device_name": self.device_name,
+                    "correlation_id": item.get("correlation_id"),
+                    "observed_at": utc_iso(),
+                }
+            )
+            return result
+        if task_type == "host.orchestrator.refresh.v1":
+            payload = item.get("payload") or {}
+            runtime_root = self.config.runtime_root
+            if runtime_root is None:
+                raise RuntimeError("runtime_root unavailable")
+            result = request_runtime_refresh(
+                runtime_root=runtime_root,
+                target_host=payload.get("target_host"),
+                expected_sha=payload.get("expected_sha", ""),
+                correlation_id=item.get("correlation_id") or "",
+            )
+            result.update(
+                {
+                    "worker_id": self.config.worker_id,
+                    "device_name": self.device_name,
                     "observed_at": utc_iso(),
                 }
             )
@@ -253,6 +334,17 @@ class WorkerAgent:
 def parse_config(path: Path) -> WorkerAgentConfig:
     payload = json.loads(path.read_text(encoding="utf-8"))
     profile_path = payload.get("profile_path")
+    configured_token_file = (
+        str(payload.get("pr_remediation_token_file") or "").strip()
+        or os.environ.get("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
+        or os.environ.get("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "").strip()
+    )
+    configured_pool_url = (
+        str(payload.get("pr_remediation_pool_url") or "").strip()
+        or os.environ.get("CODEX_WORKER_POOL_URL", "").strip()
+    )
+    if configured_token_file and not configured_pool_url:
+        configured_pool_url = "http://127.0.0.1:8097"
     return WorkerAgentConfig(
         endpoint=payload["endpoint"],
         worker_id=payload["worker_id"],
@@ -264,6 +356,11 @@ def parse_config(path: Path) -> WorkerAgentConfig:
         poll_interval_seconds=float(payload.get("poll_interval_seconds", 2)),
         lease_seconds=int(payload.get("lease_seconds", 120)),
         profile_path=Path(profile_path) if profile_path else None,
+        runtime_root=Path(payload.get("runtime_root") or path.resolve().parent),
+        pr_remediation_pool_url=configured_pool_url or None,
+        pr_remediation_token_file=(
+            Path(configured_token_file) if configured_token_file else None
+        ),
     )
 
 
