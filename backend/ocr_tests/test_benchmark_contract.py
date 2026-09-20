@@ -2,6 +2,8 @@ from pathlib import Path
 import importlib.util
 import sys
 
+import pytest
+
 MODULE_PATH=Path(__file__).resolve().parents[2]/'scripts'/'ocr_benchmark.py'
 spec=importlib.util.spec_from_file_location('ocr_benchmark',MODULE_PATH); mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
 
@@ -24,3 +26,32 @@ def test_corpus_versionado_tem_ids_unicos_e_versao_canonica():
     assert len(corpus) >= 8
     assert len({x['case_id'] for x in corpus}) == len(corpus)
     assert all(x['corpus_version'] == mod.CORPUS_VERSION for x in corpus)
+
+
+def test_resolver_imagemagick_rejeita_convert_do_windows(monkeypatch):
+    def fake_which(nome):
+        return r'C:\\Windows\\System32\\convert.exe' if nome == 'convert' else None
+
+    class Probe:
+        returncode = 0
+        stdout = 'Microsoft Windows File System Conversion Utility'
+        stderr = ''
+
+    monkeypatch.setattr(mod.shutil, 'which', fake_which)
+    monkeypatch.setattr(mod.subprocess, 'run', lambda *args, **kwargs: Probe())
+
+    with pytest.raises(RuntimeError, match='ImageMagick não encontrado'):
+        mod._resolver_imagemagick()
+
+
+def test_resolver_imagemagick_aceita_assinatura_valida(monkeypatch):
+    monkeypatch.setattr(mod.shutil, 'which', lambda nome: '/usr/bin/magick' if nome == 'magick' else None)
+
+    class Probe:
+        returncode = 0
+        stdout = 'Version: ImageMagick 7.1.1'
+        stderr = ''
+
+    monkeypatch.setattr(mod.subprocess, 'run', lambda *args, **kwargs: Probe())
+
+    assert mod._resolver_imagemagick() == '/usr/bin/magick'
