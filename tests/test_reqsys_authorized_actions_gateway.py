@@ -116,4 +116,30 @@ def test_gateway_desktop_rdc_falha_fechado_sem_runner_e_preserva_evidencia() -> 
     assert "runner_pickup_status" in content
     assert "runner_pickup_error" in content
     assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
-    assert "steps.pickup.outputs.status == 'queued'" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'" in content
+    assert "pending|queued|requested|waiting" in content
+
+
+def test_gateway_vincula_evidencia_ao_run_exato_retornado_pelo_dispatch() -> None:
+    content = _workflow()
+
+    assert "id: dispatch" in content
+    assert 'run_url="$(gh workflow run "$TARGET_WORKFLOW"' in content
+    assert 'run_id="${run_url##*/}"' in content
+    assert "TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}" in content
+    assert "TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}" in content
+    assert 'gh run view "$TARGET_RUN_ID"' in content
+    assert "dispatched_run_id_mismatch" in content
+    assert "dispatched_run_url_mismatch" in content
+    assert "dispatched_run_sha_mismatch" in content
+    assert "dispatched_run_event_mismatch" in content
+    assert "gh run list" not in content
+
+
+def test_gateway_desktop_rdc_considera_pending_como_runner_nao_adquirido() -> None:
+    content = _workflow()
+
+    assert "status='pending'" in content
+    assert "pending|queued|requested|waiting" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'" in content
