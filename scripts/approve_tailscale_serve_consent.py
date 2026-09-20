@@ -219,17 +219,48 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
         return base
     if mode == "authorize-github-oauth":
         oauth_label = "Authorize tailscale"
-        oauth_present = any(
-            oauth_label in window.get("buttons", []) for window in snapshot.get("windows", [])
+        grant_label = "Grant"
+        diagnostics = control_diagnostics({oauth_label, grant_label})
+        oauth_present = any(row.get("label") == oauth_label for row in diagnostics)
+        oauth_enabled = any(
+            row.get("label") == oauth_label and row.get("enabled") is True for row in diagnostics
         )
+        grant_enabled = any(
+            row.get("label") == grant_label and row.get("enabled") is True for row in diagnostics
+        )
+        grant_attempts: list[dict[str, Any]] = []
         if not oauth_present:
-            return {**base, "ok": False, "result": "github_oauth_control_not_found"}
+            return {**base, "ok": False, "result": "github_oauth_control_not_found", "controls": diagnostics}
+        if not oauth_enabled and grant_enabled:
+            grant_clicked, grant_attempts = click_exact(grant_label)
+            if not grant_clicked:
+                return {
+                    **base,
+                    "ok": False,
+                    "result": "github_org_grant_click_failed",
+                    "grant_attempts": grant_attempts,
+                    "controls": diagnostics,
+                }
+            time.sleep(5)
+            diagnostics = control_diagnostics({oauth_label, grant_label})
+            oauth_enabled = any(
+                row.get("label") == oauth_label and row.get("enabled") is True for row in diagnostics
+            )
+        if not oauth_enabled:
+            return {
+                **base,
+                "ok": False,
+                "result": "github_oauth_control_disabled",
+                "grant_attempts": grant_attempts,
+                "controls": diagnostics,
+            }
         clicked, attempts = click_exact(oauth_label)
         time.sleep(6)
         return {
             **base,
             "ok": clicked,
             "result": "github_oauth_authorized" if clicked else "github_oauth_click_failed",
+            "grant_attempts": grant_attempts,
             "click_attempts": attempts,
             "after": browser_snapshot(),
         }
