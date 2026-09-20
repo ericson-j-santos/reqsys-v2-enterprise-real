@@ -30,3 +30,9 @@ def test_runtime_is_reusable_and_oidc_only() -> None:
     assert "Aguardar aquecimento dos gatilhos Planner" in source
     assert "msal_device_code" not in source.lower()
     assert "device_code" not in source.lower()
+
+
+def test_runtime_e2e_nao_depende_de_trigger_fly() -> None:
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert "Fly DEV Fast Deploy" not in source
+    assert "workflow_run:" not in source
