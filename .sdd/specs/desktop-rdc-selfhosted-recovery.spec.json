@@ -8,14 +8,16 @@
   "marker_compatibility": {
     "headless_allowed": [
       "// RDC_HEADLESS_V2_PRIMARY_OWNER",
-      "// RDC_HEADLESS_V3_READY_CLAIM"
+      "// RDC_HEADLESS_V3_READY_CLAIM",
+      "// RDC_HEADLESS_V4_TRANSPORT_GUARD"
     ],
     "interactive_allowed": [
       "REM RDC_LAUNCHER_V3_RESILIENT",
       "REM RDC_LAUNCHER_V4_ARBITRATED",
       "REM RDC_LAUNCHER_V5_READY_CLAIM"
     ],
-    "unknown_marker_policy": "fail_closed"
+    "unknown_marker_policy": "fail_closed",
+    "headless_owner_policy": "V2/V3 are governed legacy sources but never transport-proven owners; suppress them and arm interactive fallback. Only V4 with a fresh ready claim may remain headless owner."
   },
   "recovery_execution": {
     "task_restart_sequence": [
@@ -26,15 +28,27 @@
     "run_failure_policy": "fail_closed",
     "evidence_fields": [
       "end_returncode",
-      "run_returncode"
-    ]
+      "run_returncode",
+      "headless_transport_guarded",
+      "headless_claim",
+      "fallback_armed",
+      "mode"
+    ],
+    "transport_claim": {
+      "required_for_headless_owner": true,
+      "marker": "// RDC_HEADLESS_V4_TRANSPORT_GUARD",
+      "max_age_seconds": 8,
+      "ready_timeout_seconds": 12,
+      "stale_or_invalid_policy": "interactive_fallback"
+    },
+    "interactive_fallback": "always_armed"
   },
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Authorized Actions Gateway must persist runner pickup status/error and fail closed with SELF_HOSTED_RUNNER_UNAVAILABLE when desktop-rdc-recovery remains queued."
+    "evidence_contract": "Recovery must fail closed on unknown markers, suppress V2/V3 as unverified transport owners, require a fresh V4 transport claim for headless ownership, keep interactive fallback armed, and require independent E2E evidence of transport_broadcast_v1 plus a real MCP read."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-rdc-selfhosted-recovery.requirements.md",
