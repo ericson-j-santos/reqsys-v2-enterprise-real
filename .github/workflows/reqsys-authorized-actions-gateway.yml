@@ -25,7 +25,8 @@ jobs:
         github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
         github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
         github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
-        github.event.comment.body == '/reqsys run desktop-rdc-recovery'
+        github.event.comment.body == '/reqsys run desktop-rdc-recovery' ||
+        github.event.comment.body == '/reqsys run figma-github-e2e-dev'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -59,6 +60,9 @@ jobs:
             '/reqsys run desktop-rdc-recovery')
               target='desktop-rdc-recovery.yml'
               ;;
+            '/reqsys run figma-github-e2e-dev')
+              target='figma-github-e2e-dev.yml'
+              ;;
             *)
               echo 'command_not_allowlisted' >&2
               exit 2
@@ -85,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|figma-github-e2e-dev.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then

@@ -8,6 +8,23 @@ from app.main import app
 
 client = TestClient(app)
 
+ADMIN_EMAIL = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
+
+
+def _auth_headers():
+    response = client.post('/v1/auth/login', json={'email': ADMIN_EMAIL, 'senha': 'admin123'})
+    assert response.status_code == 200
+    return {'Authorization': f"Bearer {response.json()['data']['access_token']}"}
+
+
+def test_sync_rejeita_chamada_anonima():
+    response = client.post(
+        '/v1/integracoes/figma-github/sync',
+        json={'file_key': 'fk', 'repo': 'org/repo', 'mode': 'figma_to_github'},
+    )
+    assert response.status_code == 401
+
+
 
 def test_sync_rejeita_sem_file_key_quando_default_ausente(monkeypatch):
     monkeypatch.setattr('app.api.figma_github.settings.figma_default_file_key', '')
@@ -16,6 +33,7 @@ def test_sync_rejeita_sem_file_key_quando_default_ausente(monkeypatch):
         response = client.post(
             '/v1/integracoes/figma-github/sync',
             json={'repo': 'org/repo', 'mode': 'figma_to_github'},
+            headers=_auth_headers(),
         )
     assert response.status_code == 422
 
@@ -27,6 +45,7 @@ def test_sync_rejeita_sem_repo_quando_default_ausente(monkeypatch):
         response = client.post(
             '/v1/integracoes/figma-github/sync',
             json={'file_key': 'file-key', 'mode': 'github_to_figma'},
+            headers=_auth_headers(),
         )
     assert response.status_code == 422
 
@@ -36,6 +55,7 @@ def test_sync_retorna_409_quando_feature_desabilitada(monkeypatch):
         response = client.post(
             '/v1/integracoes/figma-github/sync',
             json={'file_key': 'fk', 'repo': 'org/repo'},
+            headers=_auth_headers(),
         )
     assert response.status_code == 409
 
