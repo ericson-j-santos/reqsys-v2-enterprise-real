@@ -33,7 +33,7 @@ def test_supervisor_uses_cloudflare_and_signed_locator_only():
     assert "pc24x7_dev_locator_publisher.py" in raw
     assert "zero_additional_cost" in raw
     assert "tailscale_funnel" not in raw
-    assert "nport" not in raw
+    assert "pc24x7_nport_tunnel.py" not in raw
 
 
 def test_installer_preserves_resilient_task_settings():
