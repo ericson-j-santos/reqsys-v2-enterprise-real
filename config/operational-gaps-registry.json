@@ -52,6 +52,15 @@
       "detail": "A issue #1677 deve comprovar o ciclo execute -> Agent Task -> branch copilot/* -> READY_FOR_PR -> PR draft no SHA vigente, com replay idempotente e sem merge automático.",
       "reference_issue": 1677,
       "allowed_increment_types": ["gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-1818",
+      "title": "Recuperação RDC depende do mesmo self-hosted runner que pode falhar junto",
+      "status": "open",
+      "scope": "desktop-control-plane",
+      "detail": "A recuperação integrada na PR #1818 falha quando RDC e runner PC24x7 ficam indisponíveis simultaneamente; corrigir com watchdog Windows AtStartup independente de ambos.",
+      "reference_pr": 1818,
+      "allowed_increment_types": ["gap_fix", "hotfix"]
     }
   ]
 }

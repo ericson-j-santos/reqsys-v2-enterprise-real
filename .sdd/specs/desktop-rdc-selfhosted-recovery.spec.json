@@ -1,9 +1,14 @@
 {
   "schema_version": "1.0",
   "feature_name": "Desktop RDC self-hosted recovery",
-  "status": "ready_for_validation",
+  "status": "secondary_fallback_after_watchdog",
   "approvals": {
     "requirements": true
+  },
+  "primary_availability_mechanism": {
+    "requirements": ".sdd/specs/desktop-control-plane-watchdog.requirements.md",
+    "implementation": "scripts/desktop_control_plane_watchdog.py",
+    "relationship": "This self-hosted workflow is external fallback/evidence and must not be the sole recovery path."
   },
   "marker_compatibility": {
     "headless_allowed": [
@@ -20,10 +25,7 @@
     "headless_owner_policy": "V2/V3 are governed legacy sources but never transport-proven owners; suppress them and arm interactive fallback. Only V4 with a fresh ready claim may remain headless owner."
   },
   "recovery_execution": {
-    "task_restart_sequence": [
-      "end",
-      "run"
-    ],
+    "task_restart_sequence": ["end", "run"],
     "end_failure_policy": "continue_when_task_not_running",
     "run_failure_policy": "fail_closed",
     "evidence_fields": [
@@ -46,14 +48,16 @@
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
-      "tests/test_reqsys_authorized_actions_gateway.py"
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_desktop_control_plane_watchdog.py"
     ],
-    "evidence_contract": "Recovery must fail closed on unknown markers, suppress V2/V3 as unverified transport owners, require a fresh V4 transport claim for headless ownership, keep interactive fallback armed, bind Authorized Actions Gateway evidence to the exact run_id returned by dispatch, treat pending/queued/requested/waiting pickup as SELF_HOSTED_RUNNER_UNAVAILABLE, and require independent E2E evidence of transport_broadcast_v1 plus a real MCP read."
+    "evidence_contract": "External recovery remains fail-closed and exact-run-bound, while the autonomous local watchdog removes the circular dependency on this self-hosted workflow."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-rdc-selfhosted-recovery.requirements.md",
     "workflow": ".github/workflows/desktop-rdc-recovery.yml",
     "recovery_script": "scripts/pc24x7_rdc_recovery.py",
+    "autonomous_watchdog": "scripts/desktop_control_plane_watchdog.py",
     "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "runner_pickup_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "exact_dispatch_run_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml"
