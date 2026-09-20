@@ -136,6 +136,7 @@ def test_submit_rdc_dispatches_to_exact_worker_and_reads_terminal(monkeypatch):
                     "result": {
                         "handler": "host.rdc.recover.v1",
                         "host": "DESKTOP-PDQK954",
+                        "controller_semantic_ok": True,
                     },
                 }
             }
@@ -176,7 +177,10 @@ def test_replay_uses_same_item_without_second_dispatch(monkeypatch):
                 "item": {
                     "id": "item-rdc-existing",
                     "status": "CONCLUÍDO",
-                    "result": {"handler": "host.rdc.recover.v1"},
+                    "result": {
+                        "handler": "host.rdc.recover.v1",
+                        "controller_semantic_ok": True,
+                    },
                 }
             }
         raise AssertionError((method, url, payload))
@@ -232,3 +236,45 @@ def test_terminal_failure_remains_failure(monkeypatch):
     assert result["ok"] is False
     assert result["item_status"] == "BLOQUEADO"
     assert "controlled failure" in result["last_error"]
+
+
+def test_rdc_completed_without_semantic_witness_fails_closed(monkeypatch):
+    snapshot = worker_snapshot()
+
+    def fake_request(method, url, payload=None, *, timeout=5.0):
+        if method == "GET" and url.endswith("/v1/status"):
+            return 200, snapshot
+        if method == "POST":
+            return 201, {
+                "item": {"id": "item-false-green", "status": "EM ANDAMENTO"},
+                "replayed": False,
+                "dispatch": {
+                    "worker": {
+                        "worker_id": "desktop-pdqk954",
+                        "device_name": "DESKTOP-PDQK954",
+                    }
+                },
+            }
+        return 200, {
+            "item": {
+                "id": "item-false-green",
+                "status": "CONCLUÍDO",
+                "result": {
+                    "handler": "host.rdc.recover.v1",
+                    "host": "DESKTOP-PDQK954",
+                    "after": {"state": 4},
+                },
+            }
+        }
+
+    monkeypatch.setattr(m, "request_json", fake_request)
+    result = m.submit_action(
+        m.DEFAULT_ENDPOINT,
+        action="rdc",
+        correlation_id="corr-false-green",
+        timeout_seconds=2,
+    )
+    assert result["queue_completed"] is True
+    assert result["semantic_ok"] is False
+    assert result["ok"] is False
+    assert result["last_error"] == "controller_semantic_evidence_missing"
