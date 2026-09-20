@@ -30,6 +30,12 @@ def test_supervisor_knows_only_live_dev_containers():
     )
 
 
-def test_installer_uses_user_level_recurring_task():
+def test_installer_uses_user_level_recurring_task_and_persistent_copy():
     assert installer.TASK_NAME == "ReqSys-Dev-Runtime-Supervisor"
-    assert installer.SUPERVISOR.name == "pc24x7_dev_runtime_supervisor.py"
+    assert installer.PERSISTENT_SUPERVISOR.name == "pc24x7_dev_runtime_supervisor.py"
+    assert "RuntimeSupervisor" in str(installer.PERSISTENT_SUPERVISOR)
+    assert set(installer.SOURCE_SCRIPTS) == {
+        "pc24x7_dev_runtime_supervisor.py",
+        "pc24x7_public_dev_tunnel.py",
+        "pc24x7_tailscale_funnel.py",
+    }
