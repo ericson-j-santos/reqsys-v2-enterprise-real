@@ -33,6 +33,12 @@ Esta mudança corrige uma lacuna comprovada da recuperação integrada pela PR #
 15. A instalação exige confirmação exata \`INSTALL-DESKTOP-CONTROL-PLANE-WATCHDOG\` e SHA fonte completo.
 16. A release local deve copiar somente os scripts versionados necessários; não deve depender do checkout permanecer presente.
 17. O workflow \`desktop-rdc-recovery.yml\` continua válido como fallback externo, mas sua indisponibilidade não pode interromper o watchdog local.
+18. Se o Windows recusar o registro `AtStartup + S4U` com `Access Denied`, a instalação deve preservar a release imutável e a metadata e retornar explicitamente `activation_pending=true` e `requires_uac_activation=true`; esse estado não é runtime ativo.
+19. A elevação deve usar somente `desktop_control_plane_watchdog_uac_launcher.py`, restrito ao host exato, Windows e confirmação `LAUNCH-DESKTOP-CONTROL-PLANE-WATCHDOG-UAC`.
+20. O launcher UAC só pode elevar o subcomando fixo `register-task-com --metadata <metadata governada>` da release imutável instalada. Não pode aceitar task name, comando arbitrário, executável arbitrário, senha, token ou segredo.
+21. O subcomando elevado deve revalidar que `metadata.json` pertence ao runtime, que a release está sob `runtime_root/releases/<source_sha>` e que o próprio script executado é o watchdog daquela release.
+22. `headless_boot_ready=true` só pode ser persistido após leitura independente da tarefa comprovar `AtStartup + S4U`; somente então o watchdog pode ser iniciado.
+23. A ativação UAC não pode executar reboot, deploy/promoção, produção, leitura de segredo nem alteração ampla de RBAC.
 
 ## Controles negativos
 
