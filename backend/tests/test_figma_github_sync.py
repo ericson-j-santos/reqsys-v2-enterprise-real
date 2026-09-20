@@ -117,6 +117,45 @@ class TestSyncManual:
         assert second.json()['data']['created'] == 0
         assert second.json()['data']['skipped'] == 1
 
+
+    def test_replay_bidirecional_nao_duplica_comentario_figma(self, client, monkeypatch, sync_case):
+        from app.services import figma_client, github_client
+
+        comments = [_fake_comment()]
+        created_comments = []
+
+        monkeypatch.setattr(figma_client, 'get_comments', lambda file_key: list(comments))
+        monkeypatch.setattr(figma_client, 'get_nodes', lambda file_key, node_ids: {'nodes': {}})
+        def create_comment(file_key, message, node_id=None):
+            created = {'id': f'figma-reply-{len(created_comments) + 1}', 'message': message, 'client_meta': {'node_id': node_id}}
+            created_comments.append(created)
+            comments.append(created)
+            return created
+        monkeypatch.setattr(figma_client, 'create_comment', create_comment)
+        monkeypatch.setattr(github_client, 'find_issue_by_marker', lambda repo, marker: None)
+        monkeypatch.setattr(
+            github_client,
+            'create_issue',
+            lambda repo, title, body, labels=None: {
+                'number': 104,
+                'title': title,
+                'body': body,
+                'state': 'open',
+                'html_url': 'https://github.com/acme/figma-sync/issues/104',
+            },
+        )
+
+        first = client.post('/v1/integracoes/figma-github/sync', json=sync_case)
+        second = client.post('/v1/integracoes/figma-github/sync', json=sync_case)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()['data']['updated'] == 1
+        assert second.json()['data']['updated'] == 0
+        assert second.json()['data']['created'] == 0
+        assert second.json()['data']['skipped'] >= 2
+        assert len(created_comments) == 1
+
     def test_github_vence_em_conflito(self, client, monkeypatch, sync_case):
         from app.services import figma_client, github_client
 
