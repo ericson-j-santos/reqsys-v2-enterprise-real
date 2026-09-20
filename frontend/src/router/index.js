@@ -37,6 +37,7 @@ import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
 import OperationalDeployView from '../views/OperationalDeployView.vue'
 import SessionManagementView from '../views/SessionManagementView.vue'
 import OcrReviewView from '../views/OcrReviewView.vue'
+import ServiceCaseView from '../views/ServiceCaseView.vue'
 import { useAuthStore } from '../stores/auth'
 
 export const routes = [
@@ -63,6 +64,12 @@ export const routes = [
   { path: '/qualidade-ia', component: QualidadeIAView, meta: { recurso: 'dashboard:read' } },
   { path: '/recomendacoes-ia', component: RecomendacoesIAView, meta: { recurso: 'dashboard:read' } },
   { path: '/task-console', component: TaskConsoleView, meta: { recurso: 'dashboard:read' } },
+  {
+    path: '/service-cases/:caseId?',
+    name: 'service-case',
+    component: ServiceCaseView,
+    meta: { recurso: 'dashboard:read' },
+  },
   { path: '/agile-runtime', component: AgileRuntimeView, meta: { recurso: 'dashboard:read' } },
   { path: '/specs', component: SpecsView, meta: { recurso: 'dashboard:read' } },
   { path: '/hub-lowcode', component: HubLowCodeView, meta: { recurso: 'dashboard:read' } },
