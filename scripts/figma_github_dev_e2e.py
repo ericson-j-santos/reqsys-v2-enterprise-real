@@ -342,7 +342,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
         if marker not in str(issue.get("body") or ""):
             raise E2EError("github_marker_missing")
 
-        back_message = f"GitHub #{issue_number} atualizado: {issue_url}".strip()
+        back_message = f"[ReqSys Sync] GitHub #{issue_number} atualizado: {issue_url}".strip()
         comments_after_first = figma_comments(figma_token)
         back_count_first = sum(
             1 for item in comments_after_first
