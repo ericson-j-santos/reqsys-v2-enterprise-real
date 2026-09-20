@@ -1,6 +1,12 @@
 name: Deploy ReqSys Pages Composite
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/public-dev-locator/**"
+      - ".github/workflows/deploy-reqsys-pages-composite.yml"
   workflow_run:
     workflows:
       - Teams Notification Dashboard
@@ -123,7 +129,7 @@ jobs:
           set -euo pipefail
 
           rm -rf site
-          mkdir -p site/showcase site/codex-local-online
+          mkdir -p site/showcase site/codex-local-online site/dev
 
           test -s teams-dashboard-site/index.html
           test -s teams-dashboard-site/data.json
@@ -134,6 +140,7 @@ jobs:
           cp teams-dashboard-site/certification-status.json site/certification-status.json
           cp -a docs/public-showcase/reqsys-linkedin/. site/showcase/
           cp -a tools/codex-local-online/. site/codex-local-online/
+          cp -a docs/public-dev-locator/. site/dev/
           mkdocs build --strict --site-dir site/docs
           : > site/.nojekyll
 
@@ -147,6 +154,7 @@ jobs:
           test -s site/showcase/index.html
           test -s site/showcase/assets/styles.css
           test -s site/codex-local-online/index.html
+          test -s site/dev/index.html
           test -s site/docs/index.html
 
           grep -Fq 'GitHub' site/index.html
@@ -224,6 +232,7 @@ jobs:
             echo '- `/showcase/`: showcase público ReqSys'
             echo '- `/docs/`: documentação MkDocs'
             echo '- `/codex-local-online/`: interface Codex Local Online'
+            echo '- `/dev/`: locator assinado do runtime DEV PC24x7'
             echo '- Proprietário único: `.github/workflows/deploy-reqsys-pages-composite.yml`.'
             echo '- Run produtor: `${{ steps.producer.outputs.run_id }}`.'
             echo '- Origem da resolução: `${{ steps.producer.outputs.source }}`.'
