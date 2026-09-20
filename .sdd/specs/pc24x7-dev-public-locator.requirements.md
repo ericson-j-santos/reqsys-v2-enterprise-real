@@ -36,6 +36,8 @@ PC24x7 --Ed25519--> ntfy.sh
    entrada estável/descoberta.
 9. Tailscale, DuckDNS e NPort não podem bloquear o DEV.
 10. HML e PROD permanecem fora deste incremento.
+11. Após merge automático governado, o Pages deve ser acionado pela conclusão bem-sucedida do `Governed PR Automation` quando esse workflow tiver origem `workflow_run`.
+12. O run que dispara o deploy não pode ser tratado como produtor do dashboard Teams; o deploy deve resolver separadamente o último `Teams Notification Dashboard` bem-sucedido.
 
 ## Critérios de aceite
 
@@ -45,4 +47,6 @@ PC24x7 --Ed25519--> ntfy.sh
 - GitHub Pages publica `/dev/`;
 - `/dev/` valida assinatura e redireciona apenas para tunnel vigente;
 - task scheduler preserva bateria/StartWhenAvailable/timeout de 10 minutos;
+- deploy pós-merge ocorre mesmo quando o merge foi executado com `GITHUB_TOKEN`;
+- simples abertura/edição de PR não dispara esse caminho de redeploy;
 - nenhuma dependência paga é introduzida.
