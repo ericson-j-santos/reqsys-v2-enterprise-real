@@ -62,3 +62,11 @@ def test_pages_redeploys_after_governed_pr_automation():
     assert 'source="governed_pr_automation"' in raw
     assert "github.event.workflow_run.event == 'workflow_run'" in raw
     assert "teams-notification-dashboard.yml/runs?status=success" in raw
+
+
+def test_public_access_validation_runs_after_governed_merge():
+    workflow = (ROOT / ".github" / "workflows" / "validacao-acessos.yml").read_text(encoding="utf-8")
+    assert "Governed PR Automation" in workflow
+    assert "github.event.workflow_run.conclusion == 'success'" in workflow
+    assert "github.event.workflow_run.event == 'workflow_run'" in workflow
+    assert "ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE" in workflow
