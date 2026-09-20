@@ -60,3 +60,37 @@ def test_oauth_mode_does_not_request_new_consent(monkeypatch):
 def test_parser_accepts_diagnose_mode():
     args = m.parser().parse_args(["diagnose"])
     assert args.mode == "diagnose"
+
+
+def test_oauth_grants_org_then_authorizes(monkeypatch):
+    snapshots = [
+        [
+            {"label": "Grant", "enabled": True},
+            {"label": "Authorize tailscale", "enabled": False},
+        ],
+        [
+            {"label": "Grant", "enabled": False},
+            {"label": "Authorize tailscale", "enabled": True},
+        ],
+    ]
+    monkeypatch.setattr(m.time, "sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        m,
+        "browser_snapshot",
+        lambda: {"windows": [{"buttons": ["Grant", "Authorize tailscale"], "texts": []}]},
+    )
+    monkeypatch.setattr(
+        m,
+        "control_diagnostics",
+        lambda _labels: snapshots.pop(0),
+    )
+    clicked = []
+    monkeypatch.setattr(
+        m,
+        "click_exact",
+        lambda label: (clicked.append(label) is None, [{"label": label, "method": "invoke"}]),
+    )
+    result = m.run("authorize-github-oauth", 11443, 0)
+    assert result["ok"] is True
+    assert result["result"] == "github_oauth_authorized"
+    assert clicked == ["Grant", "Authorize tailscale"]
