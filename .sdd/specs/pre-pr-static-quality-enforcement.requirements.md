@@ -18,7 +18,7 @@ O gate pré-PR compilava Python, mas não executava Ruff nos arquivos alterados.
 2. Todo shell `.sh` alterado deve passar `bash -n`.
 3. O seletor de testes deve incluir testes alterados, testes pelo nome convencional e testes contratuais que referenciem explicitamente path/nome/stem de arquivos alterados.
 4. O workflow Pre-PR deve instalar Ruff antes da validação.
-5. `Pre-PR Readiness Gate` deve ser obrigatório em `governance/merge/current-sha-required-workflows.json`.
+5. `Pre-PR Readiness Gate` deve ser obrigatório em `governance/merge/current-sha-required-workflows.json` e executar tanto em `push` quanto em `pull_request` para o SHA exato da branch do PR.
 6. O workflow não pode ser tratado como opcional quando ausente/falho.
 7. Evidência continua vinculada ao `head_sha` exato e `behind_by=0`.
 8. Nenhum merge, deploy ou produção é realizado por este incremento.
@@ -28,7 +28,7 @@ O gate pré-PR compilava Python, mas não executava Ruff nos arquivos alterados.
 - Ruff vermelho => `READY_FOR_PR=blocked`;
 - `bash -n` vermelho => `READY_FOR_PR=blocked`;
 - teste contratual relacionado vermelho => `READY_FOR_PR=blocked`;
-- ausência/falha do `Pre-PR Readiness Gate` no SHA atual => Governed Merge Queue não libera merge;
+- ausência/falha do `Pre-PR Readiness Gate` no evento `pull_request` e SHA atual => Governed Merge Queue não libera merge;
 - evidência de SHA anterior não é válida.
 
 ## Critérios de aceite
