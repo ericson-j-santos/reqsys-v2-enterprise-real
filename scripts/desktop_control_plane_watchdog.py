@@ -39,6 +39,7 @@ CONFIRM = "INSTALL-DESKTOP-CONTROL-PLANE-WATCHDOG"
 
 RDC_RECOVERY_CONFIRM = "RECOVER-GOVERNED-RDC"
 RDC_RECOVERY_SCRIPT = "pc24x7_rdc_recovery.py"
+UAC_LAUNCHER_SCRIPT = "desktop_control_plane_watchdog_uac_launcher.py"
 RDC_HEADLESS_CLAIM = Path(r"C:\ProgramData\ReqSys\RdcSvc\rdc-headless-owner.json")
 RDC_CLAIM_MAX_AGE_SECONDS = 20.0
 
@@ -353,10 +354,11 @@ def _copy_release(source_root: Path, release_root: Path) -> None:
     scripts = release_root / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     shutil.copy2(Path(__file__).resolve(), scripts / Path(__file__).name)
-    recovery = source_root / "scripts" / RDC_RECOVERY_SCRIPT
-    if not recovery.is_file():
-        raise WatchdogError(f"script obrigatório ausente: {recovery}")
-    shutil.copy2(recovery, scripts / RDC_RECOVERY_SCRIPT)
+    for required_name in (RDC_RECOVERY_SCRIPT, UAC_LAUNCHER_SCRIPT):
+        required = source_root / "scripts" / required_name
+        if not required.is_file():
+            raise WatchdogError(f"script obrigatório ausente: {required}")
+        shutil.copy2(required, scripts / required_name)
 
 
 def _write_launcher(runtime_root: Path) -> Path:
@@ -372,6 +374,61 @@ def _write_launcher(runtime_root: Path) -> Path:
         encoding="utf-8",
     )
     return launcher
+
+
+def load_installed_metadata(
+    metadata_path: Path,
+    *,
+    require_current_release: bool = False,
+) -> dict[str, Any]:
+    metadata_path = metadata_path.resolve()
+    if not metadata_path.is_file():
+        raise WatchdogError("metadata do watchdog ausente")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    runtime_root = Path(str(metadata.get("runtime_root") or "")).resolve()
+    release_root = Path(str(metadata.get("release_root") or "")).resolve()
+    python_executable = Path(str(metadata.get("python_executable") or "")).resolve()
+    source_sha = str(metadata.get("source_sha") or "")
+    if metadata_path != runtime_root / "metadata.json":
+        raise WatchdogError("metadata fora do runtime governado")
+    if len(source_sha) != 40 or any(ch not in "0123456789abcdefABCDEF" for ch in source_sha):
+        raise WatchdogError("source_sha da instalação inválido")
+    expected_release = runtime_root / "releases" / source_sha.lower()
+    if release_root != expected_release:
+        raise WatchdogError("release_root não corresponde ao source_sha governado")
+    if str(metadata.get("host") or "").casefold() != EXPECTED_HOST.casefold():
+        raise WatchdogError("metadata pertence a host não autorizado")
+    if os.name == "nt" and runtime_root != default_runtime_root().resolve():
+        raise WatchdogError("runtime_root fora do caminho governado do Desktop")
+    release_watchdog = release_root / "scripts" / "desktop_control_plane_watchdog.py"
+    launcher = runtime_root / "run.py"
+    for path, label in (
+        (release_watchdog, "watchdog instalado"),
+        (python_executable, "Python instalado"),
+        (launcher, "launcher estável"),
+    ):
+        if not path.is_file():
+            raise WatchdogError(f"{label} ausente: {path}")
+    if require_current_release and release_watchdog.resolve() != Path(__file__).resolve():
+        raise WatchdogError("subcomando elevado deve executar da release imutável instalada")
+    return {
+        "metadata": metadata,
+        "metadata_path": metadata_path,
+        "runtime_root": runtime_root,
+        "release_root": release_root,
+        "release_watchdog": release_watchdog,
+        "python_executable": python_executable,
+        "launcher": launcher,
+        "source_sha": source_sha.lower(),
+    }
+
+
+def register_task_from_metadata(metadata_path: Path) -> dict[str, Any]:
+    installation = load_installed_metadata(metadata_path, require_current_release=True)
+    return register_boot_task(
+        python_executable=installation["python_executable"],
+        launcher=installation["launcher"],
+    )
 
 
 def current_user_id() -> str:
@@ -435,6 +492,14 @@ def register_boot_task(*, python_executable: Path, launcher: Path) -> dict[str, 
             TASK_LOGON_S4U,
         )
     except Exception as exc:
+        detail = repr(exc).casefold()
+        if (
+            "-2147024891" in detail
+            or "0x80070005" in detail
+            or "access is denied" in detail
+            or "acesso negado" in detail
+        ):
+            raise WatchdogError("task_scheduler_access_denied") from exc
         raise WatchdogError(f"registro AtStartup falhou: {type(exc).__name__}") from exc
 
     return {
@@ -540,9 +605,29 @@ def install(
         "production_touched": False,
         "secrets_read": False,
     }
-    atomic_json(runtime_root / "metadata.json", metadata)
-    task = register_boot_task(python_executable=python_executable.resolve(), launcher=launcher)
-    started = run_watchdog_task()
+    metadata_path = runtime_root / "metadata.json"
+    atomic_json(metadata_path, metadata)
+    activation_pending = False
+    requires_uac_activation = False
+    try:
+        task = register_boot_task(
+            python_executable=python_executable.resolve(),
+            launcher=launcher,
+        )
+        started = run_watchdog_task()
+        headless_boot_ready = bool(
+            task.get("trigger") == "AtStartup"
+            and str(task.get("logon_type") or "").casefold() == "s4u"
+        )
+    except WatchdogError as exc:
+        if str(exc) != "task_scheduler_access_denied":
+            raise
+        task = task_status()
+        started = {"started": False, "reason": "uac_activation_required"}
+        headless_boot_ready = False
+        activation_pending = True
+        requires_uac_activation = True
+
     result = {
         "ok": True,
         "host": host,
@@ -552,7 +637,10 @@ def install(
         "runner_home": str(discovered_runner),
         "task": task,
         "start": started,
-        "headless_boot_ready": bool(task.get("trigger") == "AtStartup"),
+        "headless_boot_ready": headless_boot_ready,
+        "activation_pending": activation_pending,
+        "requires_uac_activation": requires_uac_activation,
+        "uac_launcher": str(release_root / "scripts" / UAC_LAUNCHER_SCRIPT),
         "production_touched": False,
         "secrets_read": False,
         "reboot_performed": False,
@@ -597,6 +685,9 @@ def main() -> int:
     status_parser = sub.add_parser("status")
     status_parser.add_argument("--runtime-root", type=Path, default=None)
 
+    register_parser = sub.add_parser("register-task-com")
+    register_parser.add_argument("--metadata", type=Path, required=True)
+
     ns = parser.parse_args()
     try:
         if ns.command == "install":
@@ -617,6 +708,10 @@ def main() -> int:
         if ns.command == "status":
             runtime_root = ns.runtime_root or default_runtime_root()
             print(json.dumps(status(runtime_root), ensure_ascii=False, sort_keys=True))
+            return 0
+        if ns.command == "register-task-com":
+            payload = register_task_from_metadata(ns.metadata)
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0
         raise WatchdogError("comando inválido")
     except (WatchdogError, OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
