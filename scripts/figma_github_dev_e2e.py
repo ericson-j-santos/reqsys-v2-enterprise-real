@@ -270,6 +270,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
     runtime_request(
         "POST",
         "/v1/integracoes/figma-github/sync",
+        headers=admin_headers(admin_token, correlation_id + "-negative"),
         body={"mode": "invalid-e2e-control"},
         expected=(422,),
     )
@@ -307,7 +308,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
         first_status, first_payload, first_headers = runtime_request(
             "POST",
             "/v1/integracoes/figma-github/sync",
-            headers={"X-Correlation-Id": correlation_id + "-first"},
+            headers=admin_headers(admin_token, correlation_id + "-first"),
             body=sync_payload(),
         )
         first = _data(first_payload)
@@ -353,7 +354,7 @@ def execute(expected_sha: str, correlation_id: str, evidence_file: Path) -> dict
         _, replay_payload, replay_headers = runtime_request(
             "POST",
             "/v1/integracoes/figma-github/sync",
-            headers={"X-Correlation-Id": correlation_id + "-replay"},
+            headers=admin_headers(admin_token, correlation_id + "-replay"),
             body=sync_payload(),
         )
         replay = _data(replay_payload)
