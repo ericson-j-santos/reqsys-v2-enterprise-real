@@ -10,6 +10,7 @@ on:
   workflow_run:
     workflows:
       - Teams Notification Dashboard
+      - Governed PR Automation
     types:
       - completed
   workflow_dispatch:
@@ -34,7 +35,18 @@ concurrency:
 jobs:
   deploy:
     name: Publicar Pages canônico sem colisão
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        (
+          github.event.workflow_run.name == 'Teams Notification Dashboard' ||
+          (
+            github.event.workflow_run.name == 'Governed PR Automation' &&
+            github.event.workflow_run.event == 'workflow_run'
+          )
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -53,13 +65,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name }}
           INPUT_RUN_ID: ${{ inputs.producer_run_id }}
         run: |
           set -euo pipefail
 
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_run" && "$WORKFLOW_RUN_NAME" == "Teams Notification Dashboard" ]]; then
             run_id="$WORKFLOW_RUN_ID"
             source="workflow_run"
+          elif [[ "$EVENT_NAME" == "workflow_run" && "$WORKFLOW_RUN_NAME" == "Governed PR Automation" ]]; then
+            run_id="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/teams-notification-dashboard.yml/runs?status=success&per_page=20" \
+              --jq '.workflow_runs[0].id // empty')"
+            source="governed_pr_automation"
           elif [[ -n "${INPUT_RUN_ID:-}" ]]; then
             run_id="$INPUT_RUN_ID"
             source="workflow_dispatch"

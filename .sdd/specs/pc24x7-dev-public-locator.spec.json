@@ -25,6 +25,13 @@
     "tests": [
       "tests/test_pc24x7_dev_public_locator.py"
     ],
-    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 5 minutos e Cloudflare continua como transporte."
+    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 5 minutos e Cloudflare continua como transporte. O deploy do Pages deve ser disparado após Governed PR Automation concluído com sucesso no caminho workflow_run, resolvendo separadamente o último Teams Notification Dashboard bem-sucedido."
+  },
+  "post_merge_deployment": {
+    "trigger_workflow": "Governed PR Automation",
+    "trigger_event": "workflow_run",
+    "require_success": true,
+    "require_trigger_event": "workflow_run",
+    "artifact_source": "latest_successful_teams_notification_dashboard"
   }
 }
