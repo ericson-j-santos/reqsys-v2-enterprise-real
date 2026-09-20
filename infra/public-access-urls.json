@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.1.0",
-  "updated_at": "2026-09-20T19:52:42Z",
+  "schema_version": "1.2.0",
+  "updated_at": "2026-09-20T21:55:00Z",
   "source": "docs/adr/ADR-047-pc24x7-public-ingress.md",
   "runbook": "docs/runbooks/pc24x7-piloto-dev.md",
   "validation_script": "scripts/validar-acessos-publicos.mjs",
@@ -9,9 +9,11 @@
       "runtime_target": "pc24x7",
       "gateway": "http://127.0.0.1:8083",
       "public_transport": "cloudflare_quick_tunnel",
-      "runtime_state_file": "%LOCALAPPDATA%/ReqSys/PublicRuntime/dev-tunnels.json",
-      "stable_url_target": "https://tieridev.duckdns.org/",
-      "stable_url_status": "pending_duckdns_credential_and_ingress"
+      "runtime_state_file": "%LOCALAPPDATA%/ReqSys/PublicRuntime/dev-supervisor.json",
+      "stable_url_target": "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/",
+      "stable_url_status": "signed_runtime_locator",
+      "locator_channel": "ntfy_signed_ed25519",
+      "cost_policy": "zero_additional_cost"
     },
     "hml": {
       "runtime_target": "not_promoted",
@@ -24,25 +26,14 @@
   },
   "targets": [
     {
-      "name": "dev-frontend-duckdns",
+      "name": "dev-stable-entrypoint",
       "environment": "dev",
-      "type": "frontend",
-      "provider": "duckdns",
-      "url": "https://tieridev.duckdns.org/",
-      "expectedStatus": [200, 301, 302],
-      "required": false,
-      "lifecycle": "stable_target_pending"
-    },
-    {
-      "name": "dev-api-health-duckdns",
-      "environment": "dev",
-      "type": "api",
-      "provider": "duckdns",
-      "url": "https://tieridev.duckdns.org/api/health",
+      "type": "locator",
+      "provider": "github_pages",
+      "url": "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/",
       "expectedStatus": [200],
-      "expectJson": true,
-      "required": false,
-      "lifecycle": "stable_target_pending"
+      "required": true,
+      "lifecycle": "zero_cost_stable_entrypoint"
     },
     {
       "name": "hml-frontend-duckdns",
