@@ -1,75 +1,91 @@
-# ADR-047 — Publicação do ReqSys no PC24x7 sem Fly.io
+# ADR-047 — Publicação DEV zero-cost no PC24x7
 
 Status: **aceito para DEV**
 Data: 2026-09-20
 
 ## Contexto
 
-O Fly.io deixou de ser o runtime vigente do ReqSys. O runtime local/DEV está no PC24x7 e o
-gateway funcional é o Nginx publicado em `:8083`.
+O Fly.io deixou de ser runtime vigente. O ReqSys DEV roda no PC24x7, com gateway
+Nginx em `:8083`.
 
-A validação física de 2026-09-20 encontrou dois drifts:
+Os E2Es físicos de 2026-09-20 provaram:
 
-1. os containers `reqsys-dev-gateway-tunnel` e `reqsys-dev-failover-tunnel` apontavam para
-   endereço LAN/portas antigas;
-2. os nomes `tieridev`, `tierin` e `tieriprod.duckdns.org` apontavam para um IPv4 público
-   antigo, e não havia token DuckDNS armazenado no host nem UPnP disponível para provisionar
-   automaticamente o roteador.
+- dois Cloudflare Quick Tunnels apontando para `host.docker.internal:8083`
+  permaneceram HTTP 200 durante queda do transporte alternativo;
+- Quick Tunnel é resiliente como transporte, mas o hostname muda após reinício;
+- NPort forneceu subdomínio escolhido sem custo, porém após crash abrupto a nova
+  instância recebeu `subdomain already in use`, portanto não é canônico para
+  recuperação pós-falha;
+- DuckDNS depende de credencial ausente e ingresso residencial;
+- Tailscale Funnel depende de consentimento administrativo e não deve bloquear DEV.
+
+A regra econômica do projeto é **custo adicional zero**.
 
 ## Decisão
 
-1. **Runtime:** PC24x7 continua como primeira opção, conforme a regra global
-   `runtime-routing.md`.
-2. **DEV público imediato:** dois Cloudflare Quick Tunnels gratuitos, ambos apontando para
-   `http://host.docker.internal:8083`.
-3. **URL estável sem domínio pago:** `tieridev.duckdns.org` permanece o alvo, mas só pode ser
-   promovido quando houver credencial DuckDNS disponível fora do Git/chat e ingresso
-   80/443 comprovado no roteador/reverse proxy.
-4. **URL estável com Cloudflare:** quando houver domínio próprio sob DNS Cloudflare, substituir
-   Quick Tunnel por Named Tunnel. O túnel continua gratuito; o domínio é externo ao plano.
-5. **HML/PROD:** não são promovidos por esta decisão. Exigem gates próprios, isolamento,
-   continuidade e evidência E2E antes de publicação.
-6. **Backend:** nenhuma porta de API é publicada diretamente como entrada pública. O acesso
-   deve passar pelo gateway Nginx do ambiente.
+A publicação DEV passa a ter duas camadas:
 
-## Implementação
+1. **Transporte:** dois Cloudflare Quick Tunnels gratuitos para o gateway
+   `:8083`.
+2. **Entrada estável:** GitHub Pages em
+   `https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/`.
 
-O reconciliador `scripts/pc24x7_public_dev_tunnel.py`:
+O PC24x7 publica a cada ciclo de 5 minutos o estado atual dos tunnels em um
+tópico ntfy público. O payload é assinado com Ed25519.
 
-- não lê segredos;
-- é idempotente;
-- usa `host.docker.internal`, removendo dependência de IPv4 LAN fixo;
-- garante `restart: unless-stopped`;
-- valida `/api/health` e `/task-console`;
-- grava o estado runtime local em
-  `%LOCALAPPDATA%/ReqSys/PublicRuntime/dev-tunnels.json`.
+A chave privada:
 
-Aplicação:
+- nasce no próprio PC24x7;
+- é protegida por Windows DPAPI;
+- nunca entra no Git, ntfy ou logs públicos.
 
-```powershell
-python scripts/pc24x7_public_dev_tunnel.py --apply
-```
+O Pages contém somente a chave pública e aceita exclusivamente payload:
 
-Validação read-only:
+- com assinatura Ed25519 válida;
+- `environment=dev`;
+- não expirado;
+- com URL HTTPS terminando em `.trycloudflare.com`;
+- cujo destino foi previamente validado pelo publisher via `/api/health`.
 
-```powershell
-python scripts/pc24x7_public_dev_tunnel.py
-```
+O payload expira em 15 minutos. Mensagens inválidas ou spam no tópico público
+são ignorados.
 
-## Evidência de 2026-09-20
+## Resiliência local
 
-Após a correção, os dois túneis DEV ficaram em execução com destino
-`http://host.docker.internal:8083`, política `unless-stopped` e retornaram HTTP 200 tanto
-em `/api/health` quanto em `/task-console`.
+A tarefa `ReqSys-Dev-Runtime-Supervisor` executa a cada 5 minutos e possui:
 
-As URLs Quick Tunnel são deliberadamente tratadas como estado runtime e não são commitadas,
-pois mudam quando o processo do tunnel é recriado.
+- `DisallowStartIfOnBatteries=false`;
+- `StopIfGoingOnBatteries=false`;
+- `StartWhenAvailable=true`;
+- `ExecutionTimeLimit=PT10M`;
+- `MultipleInstancesPolicy=IgnoreNew`.
 
-## Critério de conclusão da URL estável DEV
+O supervisor recupera containers, reconcilia os dois Cloudflare tunnels e
+publica o locator assinado.
 
-- credencial DuckDNS armazenada em mecanismo local protegido, nunca no Git/chat;
-- atualização automática do registro comprovada;
-- ingresso HTTPS público comprovado sem publicar API direta;
-- certificado válido;
-- `/api/health` e `/task-console` HTTP 200 por leitura externa;
-- restart do host seguido de recuperação sem intervenção.
+## Evidência
+
+Em 2026-09-20:
+
+- Cloudflare A: `/api/health` HTTP 200;
+- Cloudflare B: `/api/health` HTTP 200;
+- queda controlada do NPort não afetou os dois Cloudflare;
+- publisher assinou e publicou dois endpoints saudáveis no ntfy com HTTP 200;
+- leitura externa do ntfy recuperou a mensagem assinada;
+- nenhuma credencial externa nova foi criada.
+
+## Limites
+
+- Quick Tunnel continua sendo um transporte de desenvolvimento sem SLA;
+- GitHub Pages é locator/entrada estável, não proxy reverso;
+- HML e PROD não são promovidos por esta ADR;
+- prova pós-reboot/headless permanece um gate separado.
+
+## Critério de conclusão DEV
+
+- Pages `/dev/` publicado;
+- assinatura/expiração validadas no navegador;
+- redirecionamento somente para tunnel DEV vigente;
+- supervisor recorrente produz novo locator sem intervenção;
+- Cloudflare redundante permanece verde;
+- custo adicional igual a zero.
