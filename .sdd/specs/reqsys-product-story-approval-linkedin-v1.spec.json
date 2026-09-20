@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Adiciona Approval Gate governado e adapter compatível com a LinkedIn Posts API, mantendo publicação real desabilitada neste incremento.",
+  "description": "Adiciona Approval Gate governado, adapter compatível com LinkedIn Posts API e ledger persistente no GitHub Issue #1862, mantendo publicação real desabilitada no workflow.",
   "external_contract": {
     "provider": "LinkedIn",
     "endpoint": "https://api.linkedin.com/rest/posts",
@@ -22,13 +22,16 @@
     "human_approval_required_for_publish": true,
     "feature_flag_required": "REQSYS_LINKEDIN_PUBLISH_ENABLED=true",
     "token_environment_variable": "LINKEDIN_ACCESS_TOKEN",
-    "persistent_ledger_ready": false
+    "persistent_ledger_ready": true,
+    "persistent_ledger_backend": "github_issue",
+    "persistent_ledger_issue": 1862,
+    "reservation_states": ["PREPARED", "PUBLISHED", "RECONCILE_REQUIRED"]
   },
   "sdd_gate": {
     "tests": [
       "tests/test_reqsys_product_story_linkedin.py",
       "tests/test_reqsys_product_story_approval_workflow.py"
     ],
-    "evidence_contract": "Artifact deve registrar correlation_id, content_hash, aprovação, endpoint/versão, payload, published=false no dry-run e controle negativo aprovado."
+    "evidence_contract": "Artifact deve registrar correlation_id, content_hash, aprovação, endpoint/versão, published=false no dry-run e controle negativo aprovado; testes de publish devem provar reserva persistente e bloqueio de duplicidade sem rede real."
   }
 }
