@@ -48,5 +48,10 @@
       "fresh_self_hosted_workflow_pickup"
     ],
     "runtime_status_until_evidence": "activation_pending"
+  },
+  "quality_followup": {
+    "source_pr": 1855,
+    "finding": "CodeQL empty-except findings eliminated with explicit fallback/evidence semantics.",
+    "regression_test": "tests/test_desktop_control_plane_watchdog.py"
   }
 }
