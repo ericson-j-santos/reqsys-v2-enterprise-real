@@ -29,3 +29,8 @@ def test_approval_target_prefers_exact_allowlist():
 def test_approval_target_marks_auth_without_click_target():
     snapshot = {"windows": [{"buttons": ["Sign in with GitHub"], "texts": ["Sign in"]}]}
     assert m.approval_target(snapshot) == (None, True)
+
+
+def test_parser_accepts_explicit_github_login_mode():
+    args = m.parser().parse_args(["login-github"])
+    assert args.mode == "login-github"
