@@ -60,4 +60,5 @@ def test_pages_redeploys_after_governed_pr_automation():
     assert 'WORKFLOW_RUN_NAME" == "Teams Notification Dashboard"' in raw
     assert 'WORKFLOW_RUN_NAME" == "Governed PR Automation"' in raw
     assert 'source="governed_pr_automation"' in raw
+    assert "github.event.workflow_run.event == 'workflow_run'" in raw
     assert "teams-notification-dashboard.yml/runs?status=success" in raw
