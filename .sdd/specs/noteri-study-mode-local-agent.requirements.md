@@ -15,6 +15,9 @@ Após uma alteração, o Task Console deve executar nova leitura do agente e som
 ## Requisito 5 — experiência de uso
 O Task Console deve mostrar o estado atual do Noteri e fornecer ações claras para ativar `ESTUDO` ou voltar a `NORMAL`. Quando o agente local estiver indisponível, a tela deve permanecer utilizável e indicar que a mudança de perfil está indisponível.
 
+## Requisito 6 — acesso do runtime oficial local
+O agente deve aceitar o Task Console oficial servido em `http://127.0.0.1:8083` ou `http://localhost:8083` sem ampliar a política para origens não locais, curingas ou hosts externos.
+
 ## Critérios de aceite (Acceptance Criteria)
 1. `scripts/noteri_host_profile_agent.py` não aceita bind externo a loopback.
 2. O agente aceita `NORMAL|ESTUDO`, grava de forma atômica e registra auditoria sem segredos.
@@ -24,3 +27,5 @@ O Task Console deve mostrar o estado atual do Noteri e fornecer ações claras p
 6. O Task Console não declara que o Desktop assumiu uma tarefa sem evidência; informa apenas que o Noteri deixou de aceitar novas tarefas de desenvolvimento.
 7. O E2E local comprova `NORMAL → ESTUDO → NORMAL` no Noteri real e restaura `NORMAL` ao final.
 8. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato antes da abertura da PR.
+9. `DEFAULT_ORIGINS` inclui explicitamente `http://127.0.0.1:8083` e `http://localhost:8083`.
+10. A inclusão do runtime `8083` não permite origens externas nem remove a validação estrita de `Origin`.

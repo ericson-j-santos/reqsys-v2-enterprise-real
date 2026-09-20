@@ -162,3 +162,14 @@ def test_normalize_origin_rejeita_valores_inseguros(origin: str):
 
 def test_normalize_origin_preserva_origem_permitida():
     assert agent.normalize_origin("https://reqsys.example/") == "https://reqsys.example"
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://127.0.0.1:8083",
+        "http://localhost:8083",
+    ],
+)
+def test_default_origins_incluem_runtime_oficial_8083(origin: str):
+    assert origin in agent.DEFAULT_ORIGINS
