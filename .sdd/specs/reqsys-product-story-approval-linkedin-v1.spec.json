@@ -1,0 +1,34 @@
+{
+  "feature_name": "reqsys-product-story-approval-linkedin-v1",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Adiciona Approval Gate governado e adapter compatível com a LinkedIn Posts API, mantendo publicação real desabilitada neste incremento.",
+  "external_contract": {
+    "provider": "LinkedIn",
+    "endpoint": "https://api.linkedin.com/rest/posts",
+    "api_version": "202609",
+    "restli_protocol_version": "2.0.0",
+    "publish_permission_member": "w_member_social"
+  },
+  "publication_policy": {
+    "workflow_mode": "dry_run_only",
+    "human_approval_required_for_publish": true,
+    "feature_flag_required": "REQSYS_LINKEDIN_PUBLISH_ENABLED=true",
+    "token_environment_variable": "LINKEDIN_ACCESS_TOKEN",
+    "persistent_ledger_ready": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_product_story_linkedin.py",
+      "tests/test_reqsys_product_story_approval_workflow.py"
+    ],
+    "evidence_contract": "Artifact deve registrar correlation_id, content_hash, aprovação, endpoint/versão, payload, published=false no dry-run e controle negativo aprovado."
+  }
+}
