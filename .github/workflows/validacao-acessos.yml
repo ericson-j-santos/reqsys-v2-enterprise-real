@@ -16,6 +16,12 @@ on:
     branches:
       - main
 
+  workflow_run:
+    workflows:
+      - Governed PR Automation
+    types:
+      - completed
+
   schedule:
     - cron: "17 10 * * *"
 
@@ -29,6 +35,12 @@ concurrency:
 jobs:
   validar-acessos:
     name: Validar URLs públicas e gerar analítico
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'workflow_run'
+      )
     runs-on: ubuntu-latest
 
     steps:
