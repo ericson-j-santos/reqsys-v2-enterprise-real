@@ -3,6 +3,9 @@
   "feature_name": "Desktop PC24x7 autonomous control-plane watchdog",
   "increment_type": "gap_fix",
   "status": "ready_for_runtime_activation",
+  "approvals": {
+    "requirements": true
+  },
   "target_host": "DESKTOP-PDQK954",
   "scope": "local/dev",
   "problem": "RDC recovery depended on the same self-hosted runner that can fail together with RDC.",
@@ -16,6 +19,13 @@
     "reboot_required": false,
     "secrets_read": false,
     "production_touched": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_desktop_control_plane_watchdog.py",
+      "tests/test_pc24x7_rdc_recovery.py"
+    ],
+    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency, while preserving fail-closed host and source validation."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-control-plane-watchdog.requirements.md",
