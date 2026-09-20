@@ -99,3 +99,8 @@ def test_oauth_grants_org_then_authorizes(monkeypatch):
     assert result["ok"] is True
     assert result["result"] == "github_oauth_authorized"
     assert clicked == ["Grant", "Authorize tailscale"]
+
+
+def test_parser_accepts_github_mobile_mode():
+    args = m.parser().parse_args(["confirm-github-mobile"])
+    assert args.mode == "confirm-github-mobile"
