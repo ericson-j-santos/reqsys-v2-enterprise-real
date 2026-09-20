@@ -15,6 +15,13 @@ class ReqSysProductStoryWorkflowTests(unittest.TestCase):
         self.assertIn("ReqSys Weekly Accomplishment Log", self.text)
         self.assertIn("github.event.workflow_run.conclusion == 'success'", self.text)
 
+    def test_pr_validation_exercises_real_artifact_flow(self):
+        self.assertIn("pull_request:", self.text)
+        self.assertIn('".github/workflows/reqsys-product-story-engine.yml"', self.text)
+        self.assertIn("github.event_name != 'workflow_run'", self.text)
+        self.assertIn("--status success", self.text)
+        self.assertIn("--branch main", self.text)
+
     def test_downloads_exact_source_artifact(self):
         self.assertIn("--name reqsys-weekly-accomplishment-log", self.text)
         self.assertIn("reqsys-weekly-accomplishment-log.json", self.text)
