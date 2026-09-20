@@ -50,8 +50,13 @@ def test_oauth_mode_does_not_request_new_consent(monkeypatch):
         "browser_snapshot",
         lambda: {"windows": [{"buttons": ["Authorize tailscale"], "texts": ["Authorize application"]}]},
     )
-    monkeypatch.setattr(m, "click_exact", lambda label: label == "Authorize tailscale")
+    monkeypatch.setattr(m, "click_exact", lambda label: (label == "Authorize tailscale", [{"method": "invoke"}]))
     result = m.run("authorize-github-oauth", 11443, 0)
     assert result["ok"] is True
     assert result["result"] == "github_oauth_authorized"
     assert called["request"] is False
+
+
+def test_parser_accepts_diagnose_mode():
+    args = m.parser().parse_args(["diagnose"])
+    assert args.mode == "diagnose"
