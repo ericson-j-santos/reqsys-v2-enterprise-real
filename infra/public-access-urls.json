@@ -1,39 +1,28 @@
 {
-  "schema_version": "1.0.0",
-  "updated_at": "2026-06-28T21:30:00Z",
-  "source": "infra/fly-environments.json",
-  "runbook": "docs/PADRAO_OURO_FLYIO_DUCKDNS.md",
+  "schema_version": "1.1.0",
+  "updated_at": "2026-09-20T19:52:42Z",
+  "source": "docs/adr/ADR-047-pc24x7-public-ingress.md",
+  "runbook": "docs/runbooks/pc24x7-piloto-dev.md",
   "validation_script": "scripts/validar-acessos-publicos.mjs",
+  "runtime_discovery": {
+    "dev": {
+      "runtime_target": "pc24x7",
+      "gateway": "http://127.0.0.1:8083",
+      "public_transport": "cloudflare_quick_tunnel",
+      "runtime_state_file": "%LOCALAPPDATA%/ReqSys/PublicRuntime/dev-tunnels.json",
+      "stable_url_target": "https://tieridev.duckdns.org/",
+      "stable_url_status": "pending_duckdns_credential_and_ingress"
+    },
+    "hml": {
+      "runtime_target": "not_promoted",
+      "stable_url_target": "https://tierin.duckdns.org/"
+    },
+    "prod": {
+      "runtime_target": "not_promoted",
+      "stable_url_target": "https://tieriprod.duckdns.org/"
+    }
+  },
   "targets": [
-    {
-      "name": "dev-frontend-fly",
-      "environment": "dev",
-      "type": "frontend",
-      "provider": "fly",
-      "url": "https://reqsys-app-dev.fly.dev/",
-      "expectedStatus": [200],
-      "required": true
-    },
-    {
-      "name": "dev-api-health",
-      "environment": "dev",
-      "type": "api",
-      "provider": "fly",
-      "url": "https://reqsys-api-dev.fly.dev/health",
-      "expectedStatus": [200],
-      "expectJson": true,
-      "required": true
-    },
-    {
-      "name": "dev-api-runtime-health",
-      "environment": "dev",
-      "type": "api",
-      "provider": "fly",
-      "url": "https://reqsys-api-dev.fly.dev/api/runtime/health",
-      "expectedStatus": [200],
-      "expectJson": true,
-      "required": true
-    },
     {
       "name": "dev-frontend-duckdns",
       "environment": "dev",
@@ -42,36 +31,18 @@
       "url": "https://tieridev.duckdns.org/",
       "expectedStatus": [200, 301, 302],
       "required": false,
-      "contingency": "https://reqsys-app-dev.fly.dev/"
+      "lifecycle": "stable_target_pending"
     },
     {
-      "name": "hml-frontend-fly",
-      "environment": "hml",
-      "type": "frontend",
-      "provider": "fly",
-      "url": "https://reqsys-app-stg.fly.dev/",
-      "expectedStatus": [200],
-      "required": true
-    },
-    {
-      "name": "hml-api-health",
-      "environment": "hml",
+      "name": "dev-api-health-duckdns",
+      "environment": "dev",
       "type": "api",
-      "provider": "fly",
-      "url": "https://reqsys-api-stg.fly.dev/health",
+      "provider": "duckdns",
+      "url": "https://tieridev.duckdns.org/api/health",
       "expectedStatus": [200],
       "expectJson": true,
-      "required": true
-    },
-    {
-      "name": "hml-api-runtime-health",
-      "environment": "hml",
-      "type": "api",
-      "provider": "fly",
-      "url": "https://reqsys-api-stg.fly.dev/api/runtime/health",
-      "expectedStatus": [200],
-      "expectJson": true,
-      "required": true
+      "required": false,
+      "lifecycle": "stable_target_pending"
     },
     {
       "name": "hml-frontend-duckdns",
@@ -81,38 +52,7 @@
       "url": "https://tierin.duckdns.org/",
       "expectedStatus": [200, 301, 302],
       "required": false,
-      "contingency": "https://reqsys-app-stg.fly.dev/"
-    },
-    {
-      "name": "prod-frontend-fly",
-      "environment": "prod",
-      "type": "frontend",
-      "provider": "fly",
-      "url": "https://reqsys-app.fly.dev/",
-      "expectedStatus": [200],
-      "required": true
-    },
-    {
-      "name": "prod-api-health",
-      "environment": "prod",
-      "type": "api",
-      "provider": "fly",
-      "url": "https://reqsys-api.fly.dev/health",
-      "expectedStatus": [200],
-      "expectJson": true,
-      "required": true,
-      "coldStartRetries": 2
-    },
-    {
-      "name": "prod-api-runtime-health",
-      "environment": "prod",
-      "type": "api",
-      "provider": "fly",
-      "url": "https://reqsys-api.fly.dev/api/runtime/health",
-      "expectedStatus": [200],
-      "expectJson": true,
-      "required": true,
-      "coldStartRetries": 2
+      "lifecycle": "not_promoted"
     },
     {
       "name": "prod-frontend-duckdns",
@@ -122,7 +62,7 @@
       "url": "https://tieriprod.duckdns.org/",
       "expectedStatus": [200, 301, 302],
       "required": false,
-      "contingency": "https://reqsys-app.fly.dev/"
+      "lifecycle": "not_promoted"
     }
   ]
 }
