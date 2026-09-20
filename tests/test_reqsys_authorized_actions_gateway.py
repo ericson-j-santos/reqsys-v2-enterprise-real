@@ -106,3 +106,14 @@ def test_gateway_fly_dev_fast_deploy_fixa_dev_e_input_exato() -> None:
     assert '-f deploy=true' in content
     assert "'production_touched': False" in content
     assert 'deploy=false' not in content
+
+
+def test_gateway_desktop_rdc_falha_fechado_sem_runner_e_preserva_evidencia() -> None:
+    content = _workflow()
+
+    assert "Validate desktop recovery runner pickup" in content
+    assert 'gh run view "$TARGET_RUN_ID"' in content
+    assert "runner_pickup_status" in content
+    assert "runner_pickup_error" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "steps.pickup.outputs.status == 'queued'" in content
