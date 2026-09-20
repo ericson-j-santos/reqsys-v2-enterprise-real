@@ -150,6 +150,21 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
     }
     if mode == "probe":
         return base
+    if mode == "authorize-github-oauth":
+        oauth_label = "Authorize tailscale"
+        oauth_present = any(
+            oauth_label in window.get("buttons", []) for window in snapshot.get("windows", [])
+        )
+        if not oauth_present:
+            return {**base, "ok": False, "result": "github_oauth_control_not_found"}
+        clicked = click_exact(oauth_label)
+        time.sleep(6)
+        return {
+            **base,
+            "ok": clicked,
+            "result": "github_oauth_authorized" if clicked else "github_oauth_click_failed",
+            "after": browser_snapshot(),
+        }
     if mode == "login-github":
         if target:
             return {**base, "result": "approval_already_available"}
@@ -183,7 +198,7 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("mode", choices=("probe", "login-github", "approve"))
+    p.add_argument("mode", choices=("probe", "login-github", "authorize-github-oauth", "approve"))
     p.add_argument("--https-port", type=int, default=11443)
     p.add_argument("--wait-seconds", type=int, default=6)
     return p
