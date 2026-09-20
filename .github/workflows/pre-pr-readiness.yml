@@ -4,6 +4,9 @@ on:
   push:
     branches-ignore:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       base_ref:
@@ -17,6 +20,8 @@ permissions:
 
 env:
   CORRELATION_ID: pre-pr-${{ github.run_id }}-${{ github.run_attempt }}
+  EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}
 
 concurrency:
   group: pre-pr-readiness-${{ github.ref }}
@@ -32,6 +37,7 @@ jobs:
       - name: Checkout completo
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.EVALUATED_SHA }}
           fetch-depth: 0
 
       - name: Python 3.12
@@ -47,14 +53,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Dependências do gate por perfil
-        env:
-          BASE_REF: ${{ github.event.inputs.base_ref || 'main' }}
         run: |
           set -euo pipefail
           git fetch origin "$BASE_REF" --prune
           # Os testes raiz podem ser selecionados mesmo quando o diff também contém backend.
           # Portanto, as dependências mínimas do próprio gate são invariantes de perfil.
-          python -m pip install --disable-pip-version-check PyYAML pytest 'httpx==0.28.1' 'openpyxl==3.1.5'
+          python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5'
           if git diff --name-only "origin/$BASE_REF...HEAD" | grep -q '^backend/'; then
             echo "Perfil backend detectado: instalando também as dependências oficiais do backend."
             python -m pip install --disable-pip-version-check -r backend/requirements.txt
@@ -71,13 +75,11 @@ jobs:
       - name: Executar prontidão no HEAD atual
         id: readiness
         if: always()
-        env:
-          BASE_REF: ${{ github.event.inputs.base_ref || 'main' }}
         run: |
           set +e
           python scripts/pre_pr_readiness.py \
             --base-ref "$BASE_REF" \
-            --expected-head-sha "$GITHUB_SHA" \
+            --expected-head-sha "$EVALUATED_SHA" \
             --correlation-id "$CORRELATION_ID" \
             --output artifacts/pre-pr-readiness/pre-pr-readiness.json
           code=$?
@@ -88,7 +90,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pre-pr-readiness-${{ github.sha }}
+          name: pre-pr-readiness-${{ env.EVALUATED_SHA }}
           path: artifacts/pre-pr-readiness/pre-pr-readiness.json
           if-no-files-found: warn
           retention-days: 30
@@ -100,7 +102,7 @@ jobs:
           set -euo pipefail
           echo "## Pre-PR Readiness" >> "$GITHUB_STEP_SUMMARY"
           echo "- Correlation ID: \`$CORRELATION_ID\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- HEAD: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- HEAD: \`$EVALUATED_SHA\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Contract tests: \`${{ steps.contract.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
           if [[ -f artifacts/pre-pr-readiness/pre-pr-readiness.json ]]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"

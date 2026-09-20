@@ -22,6 +22,7 @@ Reduzir retrabalho de CI deslocando para a branch, antes da abertura da Pull Req
 6. Agentes e automações devem abrir PR somente depois de uma execução `success` do `Pre-PR Readiness Gate` no HEAD atual.
 7. Qualquer novo commit invalida a evidência anterior e exige nova execução.
 8. Depois da abertura da PR, os gates completos continuam obrigatórios; um `READY_FOR_PR=passed` não autoriza merge.
+9. A Governed Merge Queue exige também `Pre-PR Readiness Gate=success` no HEAD exato; ausência ou falha bloqueia publicação na `main`.
 
 ## Enforcement v2 — caminhos de abertura de PR
 
@@ -63,16 +64,19 @@ Qualquer divergência bloqueia a criação da PR.
 
 `.github/workflows/pr-readiness-guard.yml` valida continuamente que os dois caminhos acima mantêm os controles fail-closed e executa `tests/test_auto_open_agent_pr.py` quando o contrato é alterado.
 
-## Verificações v1
+## Verificações v3
 
 O script `scripts/pre_pr_readiness.py` seleciona verificações pelo diff contra `origin/main`:
 
 - vínculo da execução ao HEAD SHA;
 - branch não pode estar atrás da base;
 - compilação dos arquivos Python alterados;
+- `ruff check` obrigatório em todos os arquivos Python alterados;
+- `bash -n` obrigatório em scripts shell alterados;
 - parse de JSON alterado;
 - parse e estrutura mínima de YAML alterado, incluindo workflows;
 - execução de testes alterados e testes correspondentes a scripts quando localizados;
+- descoberta de testes contratuais agregados que referenciem path, nome ou stem dos arquivos alterados;
 - para perfil operacional, reutilização da suíte rápida já usada pelo `Fast CI - Operational Guardrails`;
 - para frontend, `npm ci` e `npm run build`;
 - para backend, sintaxe e testes diretamente relacionados são antecipados; a suíte integrada continua no CI da PR nesta versão.
@@ -94,6 +98,10 @@ O enforcement v2 acrescenta controles negativos para:
 - tentativa de criação automática sem evidência válida.
 
 Uma execução verde de commit anterior não é evidência válida para um novo HEAD.
+
+## Enforcement v3 — prevenção de falso verde estático
+
+A partir do v3, erros determinísticos de lint/sintaxe não podem ser postergados para o CI da PR. O mesmo HEAD precisa passar `py_compile`, Ruff e `bash -n` quando aplicável, além dos testes contratuais encontrados por referência. A fila governada exige a execução verde do `Pre-PR Readiness Gate`, impedindo merge de uma PR aberta por caminho que tenha contornado o criador governado.
 
 ## Limite explícito
 

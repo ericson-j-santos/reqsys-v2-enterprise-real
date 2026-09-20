@@ -82,10 +82,35 @@ def changed_files(base_ref: str) -> list[str]:
     return sorted({line.strip() for line in output.splitlines() if line.strip()})
 
 
-def candidate_pytests(files: list[str], root: Path) -> list[str]:
+def referenced_contract_tests(files: list[str], root: Path) -> list[str]:
+    """Descobre testes contratuais que referenciam explicitamente arquivos alterados."""
+    needles: set[str] = set()
+    for rel in files:
+        path = Path(rel)
+        needles.add(rel.replace("\\", "/"))
+        needles.add(path.name)
+        if path.suffix:
+            needles.add(path.stem)
+    needles = {item for item in needles if len(item) >= 4}
+
     candidates: set[str] = set()
+    for test_root in (root / "tests", root / "backend" / "tests"):
+        if not test_root.is_dir():
+            continue
+        for test_file in test_root.rglob("test_*.py"):
+            try:
+                text = test_file.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if any(needle in text for needle in needles):
+                candidates.add(test_file.relative_to(root).as_posix())
+    return sorted(candidates)
+
+
+def candidate_pytests(files: list[str], root: Path) -> list[str]:
+    candidates: set[str] = set(referenced_contract_tests(files, root))
     for path in files:
-        if path.endswith(".py") and (path.startswith("tests/") or path.startswith("backend/tests/")):
+        if path.endswith(".py") and path.startswith(("tests/", "backend/tests/")):
             if (root / path).is_file():
                 candidates.add(path)
         if path.startswith("scripts/") and path.endswith(".py"):
@@ -183,11 +208,31 @@ def validate_structured_files(files: list[str], root: Path) -> list[CheckResult]
 
 def validate_python(files: list[str], root: Path) -> list[CheckResult]:
     results: list[CheckResult] = []
-    for rel in files:
-        if not rel.endswith(".py") or not (root / rel).is_file():
-            continue
+    python_files = [rel for rel in files if rel.endswith(".py") and (root / rel).is_file()]
+    for rel in python_files:
         results.append(_timed_check(f"py_compile:{rel}", [sys.executable, "-m", "py_compile", rel], cwd=root))
+    if python_files:
+        results.append(
+            _timed_check(
+                "python:ruff:changed",
+                [sys.executable, "-m", "ruff", "check", "--select", "E,F", "--ignore", "E501", *python_files],
+                cwd=root,
+            )
+        )
     return results
+
+
+def validate_shell(files: list[str], root: Path) -> list[CheckResult]:
+    shell_files = [rel for rel in files if rel.endswith(".sh") and (root / rel).is_file()]
+    if not shell_files:
+        return []
+    return [
+        _timed_check(
+            "shell:bash-n:changed",
+            ["bash", "-n", *shell_files],
+            cwd=root,
+        )
+    ]
 
 
 def operational_fast_checks(root: Path) -> list[CheckResult]:
@@ -275,6 +320,7 @@ def main() -> int:
         blockers.append("nenhuma alteração detectada em relação à base")
 
     checks.extend(validate_python(files, root))
+    checks.extend(validate_shell(files, root))
     checks.extend(validate_structured_files(files, root))
     checks.append(
         _timed_check(
@@ -302,7 +348,7 @@ def main() -> int:
     status = "passed" if not blockers else "blocked"
 
     evidence = ReadinessEvidence(
-        schema_version="1.0.0",
+        schema_version="1.1.0",
         status=status,
         correlation_id=args.correlation_id,
         base_ref=args.base_ref,

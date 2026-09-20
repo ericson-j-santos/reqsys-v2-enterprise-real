@@ -1,6 +1,7 @@
 {
   "schema_version": "1.0.0",
   "required_workflows": [
+    "Pre-PR Readiness Gate",
     "CI — ReqSys v2 Enterprise",
     "CI Enterprise Fast",
     "PR Evidence Gate",
