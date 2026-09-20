@@ -51,3 +51,13 @@ def test_public_manifest_uses_pages_as_stable_dev_entrypoint():
     assert dev["stable_url_target"] == "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/"
     assert dev["cost_policy"] == "zero_additional_cost"
     assert dev["locator_channel"] == "ntfy_signed_ed25519"
+
+
+def test_pages_redeploys_after_governed_pr_automation():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "Governed PR Automation" in raw
+    assert "WORKFLOW_RUN_NAME" in raw
+    assert 'WORKFLOW_RUN_NAME" == "Teams Notification Dashboard"' in raw
+    assert 'WORKFLOW_RUN_NAME" == "Governed PR Automation"' in raw
+    assert 'source="governed_pr_automation"' in raw
+    assert "teams-notification-dashboard.yml/runs?status=success" in raw
