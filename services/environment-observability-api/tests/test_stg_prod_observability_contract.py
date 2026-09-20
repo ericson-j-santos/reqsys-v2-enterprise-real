@@ -64,12 +64,30 @@ def test_stg_and_prod_do_not_commit_secrets_or_fake_notification_success() -> No
         "bearer ",
         "webhook_url",
         "api_key",
-        "password:",
-        "token:",
         "teams.webhook",
         "hooks.office.com",
     ):
         assert forbidden not in serialized
+
+    expected_secret_refs = {
+        "stg": {
+            "grafana_password": "${STG_GRAFANA_ADMIN_PASSWORD:?required}",
+            "otel_authorization": "${STG_OTEL_UPSTREAM_AUTHORIZATION:-}",
+        },
+        "prod": {
+            "grafana_password": "${PROD_GRAFANA_ADMIN_PASSWORD:?required}",
+            "otel_authorization": "${PROD_OTEL_UPSTREAM_AUTHORIZATION:-}",
+        },
+    }
+    for prefix, compose in (("stg", stg_compose), ("prod", prod_compose)):
+        assert (
+            compose["services"]["grafana"]["environment"]["GF_SECURITY_ADMIN_PASSWORD"]
+            == expected_secret_refs[prefix]["grafana_password"]
+        )
+        assert (
+            compose["services"]["collector"]["environment"]["OTEL_UPSTREAM_AUTHORIZATION"]
+            == expected_secret_refs[prefix]["otel_authorization"]
+        )
 
     assert stg_alertmanager["route"]["receiver"] == "stg-notification-pending"
     assert prod_alertmanager["route"]["receiver"] == "prod-notification-pending"
