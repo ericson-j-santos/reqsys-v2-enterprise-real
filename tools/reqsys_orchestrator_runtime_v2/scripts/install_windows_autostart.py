@@ -10,6 +10,9 @@ import time
 from pathlib import Path
 
 
+DEFAULT_CONTROL_PLANE_PORT = 8787
+
+
 def startup_dir() -> Path:
     appdata = os.environ.get("APPDATA")
     if not appdata:
@@ -46,6 +49,13 @@ def install(
 ) -> dict:
     if mode not in {"control-plane-worker", "worker"}:
         raise ValueError("mode must be control-plane-worker or worker")
+    if mode == "control-plane-worker":
+        expected_endpoint = f"http://127.0.0.1:{port}"
+        if endpoint.rstrip("/") != expected_endpoint:
+            raise ValueError(
+                "control-plane-worker endpoint/port mismatch: "
+                f"endpoint={endpoint!r} expected={expected_endpoint!r}"
+            )
     copy_runtime(source_root, install_root)
 
     data_dir = install_root / "data"
@@ -60,6 +70,7 @@ def install(
         "heartbeat_interval_seconds": 20,
         "poll_interval_seconds": 2,
         "lease_seconds": 180,
+        "runtime_root": str(install_root.resolve()),
     }
     worker_path = install_root / "worker-config.json"
     worker_path.write_text(
@@ -72,6 +83,7 @@ def install(
         "install_root": str(install_root),
         "worker_config": str(worker_path),
         "restart_delay_seconds": 5,
+        "source_root": str(source_root.resolve()),
     }
     if mode == "control-plane-worker":
         supervisor.update(
@@ -180,7 +192,7 @@ def main() -> None:
     parser.add_argument("--worker-id", required=True)
     parser.add_argument("--controller-version", required=True)
     parser.add_argument("--dispatch-priority", type=int, default=100)
-    parser.add_argument("--port", type=int, default=18787)
+    parser.add_argument("--port", type=int, default=DEFAULT_CONTROL_PLANE_PORT)
     parser.add_argument("--startup-root")
     parser.add_argument("--start-now", action="store_true")
     args = parser.parse_args()
