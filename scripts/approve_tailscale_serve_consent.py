@@ -211,7 +211,7 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
             "click_attempts": attempts,
             "after": browser_snapshot(),
         }
-    if mode == "authorize-github-oauth":
+    if mode in {"authorize-github-oauth", "confirm-github-mobile"}:
         opened = False
     else:
         url = request_consent_url(find_tailscale(), https_port)
