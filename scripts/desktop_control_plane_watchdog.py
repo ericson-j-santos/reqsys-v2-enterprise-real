@@ -105,7 +105,7 @@ def _candidate_runner_homes() -> list[Path]:
                 if item.is_dir() and "runner" in item.name.casefold():
                     candidates.append(item)
         except OSError:
-            pass
+            return candidates
     return candidates
 
 
@@ -404,11 +404,12 @@ def register_boot_task(*, python_executable: Path, launcher: Path) -> dict[str, 
     definition.Settings.StopIfGoingOnBatteries = False
     definition.Settings.MultipleInstances = TASK_INSTANCES_IGNORE_NEW
     definition.Settings.ExecutionTimeLimit = "PT0S"
+    restart_policy_supported = True
     try:
         definition.Settings.RestartCount = 999
         definition.Settings.RestartInterval = "PT1M"
     except Exception:
-        pass
+        restart_policy_supported = False
 
     trigger = definition.Triggers.Create(TASK_TRIGGER_BOOT)
     trigger.Enabled = True
@@ -443,6 +444,7 @@ def register_boot_task(*, python_executable: Path, launcher: Path) -> dict[str, 
         "logon_type": "S4U",
         "password_used": False,
         "run_level": "limited",
+        "restart_policy_supported": restart_policy_supported,
     }
 
 
