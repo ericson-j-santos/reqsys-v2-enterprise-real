@@ -14,6 +14,9 @@ class FigmaGithubSyncError(RuntimeError):
     pass
 
 
+REQSYS_FIGMA_BACK_PREFIX = '[ReqSys Sync] '
+
+
 @dataclass
 class SyncResult:
     created: int = 0
@@ -206,6 +209,8 @@ def _collect_comment_sources(file_key: str) -> list[dict[str, Any]]:
         if comment.get('resolved_at'):
             continue
         message = comment.get('message') or comment.get('text') or ''
+        if message.startswith(REQSYS_FIGMA_BACK_PREFIX):
+            continue
         comment_id = str(comment.get('id') or '')
         if not comment_id:
             continue
@@ -284,7 +289,7 @@ def sync_github_to_figma(db: Session, file_key: str | None = None, repo: str | N
         if not link.github_issue_number:
             result.skipped += 1
             continue
-        message = f'GitHub #{link.github_issue_number} atualizado: {link.github_issue_url or ""}'.strip()
+        message = (REQSYS_FIGMA_BACK_PREFIX + f'GitHub #{link.github_issue_number} atualizado: {link.github_issue_url or ""}').strip()
         try:
             if link.figma_file_key not in comments_by_file:
                 comments_by_file[link.figma_file_key] = figma_client.get_comments(link.figma_file_key)
@@ -356,7 +361,7 @@ def handle_github_issue_event(db: Session, payload: dict[str, Any]) -> SyncResul
         result.skipped += 1
         return result
     action = payload.get('action') or 'updated'
-    message = f'GitHub #{number} {action}: {issue.get("html_url") or link.github_issue_url or ""}'.strip()
+    message = (REQSYS_FIGMA_BACK_PREFIX + f'GitHub #{number} {action}: {issue.get("html_url") or link.github_issue_url or ""}').strip()
     try:
         figma_client.create_comment(link.figma_file_key, message, node_id=link.figma_node_id)
     except Exception as exc:
