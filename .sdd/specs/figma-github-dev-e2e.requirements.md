@@ -17,4 +17,4 @@ Configurar os defaults da integração Figma/GitHub apenas no runtime DEV PC24x7
 11. O replay deve produzir `created=0`, `updated=0`, `skipped>=2` e manter exatamente um comentário de retorno.
 12. O token temporário do Cofre deve ser revogado em cleanup.
 13. Nenhum segredo deve ir para artifact/log e `production_touched=false`.
-14. O workflow deve ser disparável apenas manualmente e pela rota exata allowlisted `/reqsys run figma-github-e2e-dev` na issue #1705.
+14. `POST /v1/integracoes/figma-github/sync` deve exigir JWT admin ou service token com escopo `figma:sync`; chamadas anônimas devem retornar 401.\n15. O workflow deve ser disparável apenas manualmente e pela rota exata allowlisted `/reqsys run figma-github-e2e-dev` na issue #1705.
