@@ -39,3 +39,19 @@ def test_parser_accepts_explicit_github_login_mode():
 def test_parser_accepts_explicit_github_oauth_mode():
     args = m.parser().parse_args(["authorize-github-oauth"])
     assert args.mode == "authorize-github-oauth"
+
+
+def test_oauth_mode_does_not_request_new_consent(monkeypatch):
+    called = {"request": False}
+    monkeypatch.setattr(m, "request_consent_url", lambda *_args, **_kwargs: called.__setitem__("request", True))
+    monkeypatch.setattr(m.time, "sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        m,
+        "browser_snapshot",
+        lambda: {"windows": [{"buttons": ["Authorize tailscale"], "texts": ["Authorize application"]}]},
+    )
+    monkeypatch.setattr(m, "click_exact", lambda label: label == "Authorize tailscale")
+    result = m.run("authorize-github-oauth", 11443, 0)
+    assert result["ok"] is True
+    assert result["result"] == "github_oauth_authorized"
+    assert called["request"] is False
