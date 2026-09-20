@@ -195,6 +195,22 @@ def click_exact(label: str) -> tuple[bool, list[dict[str, Any]]]:
 
 
 def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
+    if mode == "confirm-github-mobile":
+        mobile_label = "Use GitHub Mobile"
+        present = any(
+            mobile_label in window.get("buttons", []) for window in snapshot.get("windows", [])
+        )
+        if not present:
+            return {**base, "ok": False, "result": "github_mobile_control_not_found"}
+        clicked, attempts = click_exact(mobile_label)
+        time.sleep(4)
+        return {
+            **base,
+            "ok": clicked,
+            "result": "github_mobile_challenge_started" if clicked else "github_mobile_click_failed",
+            "click_attempts": attempts,
+            "after": browser_snapshot(),
+        }
     if mode == "authorize-github-oauth":
         opened = False
     else:
@@ -299,7 +315,7 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("mode", choices=("probe", "diagnose", "login-github", "authorize-github-oauth", "approve"))
+    p.add_argument("mode", choices=("probe", "diagnose", "login-github", "authorize-github-oauth", "confirm-github-mobile", "approve"))
     p.add_argument("--https-port", type=int, default=11443)
     p.add_argument("--wait-seconds", type=int, default=6)
     return p
