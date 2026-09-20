@@ -521,6 +521,7 @@ def execute_publish(
                 opener=github_opener,
             )
         except LedgerError:
+            # Best effort: preserve the original ledger failure raised below if reconciliation marking also fails.
             pass
         raise LedgerError(
             f"LinkedIn publicou post_id={post_id}, mas ledger requer reconciliação; "
