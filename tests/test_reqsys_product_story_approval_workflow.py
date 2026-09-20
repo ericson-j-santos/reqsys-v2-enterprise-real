@@ -56,6 +56,14 @@ class ReqSysProductStoryApprovalWorkflowTests(unittest.TestCase):
         self.assertIn("name: reqsys-product-story-ledger-e2e", self.text)
         self.assertIn("ledger-e2e.json", self.text)
 
+    def test_ledger_e2e_binds_evidence_to_exact_pr_head_sha(self):
+        self.assertIn("SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}", self.text)
+        self.assertIn("ref: ${{ env.SOURCE_HEAD_SHA }}", self.text)
+        self.assertIn('"source_head_sha": os.environ["SOURCE_HEAD_SHA"]', self.text)
+        self.assertIn('"head_sha": os.environ["SOURCE_HEAD_SHA"]', self.text)
+        self.assertIn('"github_event_sha": os.environ["GITHUB_SHA"]', self.text)
+        self.assertNotIn('"source_head_sha": os.environ["GITHUB_SHA"]', self.text)
+
 
 if __name__ == "__main__":
     unittest.main()
