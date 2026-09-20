@@ -376,6 +376,8 @@ def get_case(
         .all()
     )
     payload = _serialize(record)
+    # A UI não replica a máquina de estados: as ações navegáveis vêm do domínio autoritativo.
+    payload['allowed_transitions'] = sorted(state.value for state in _domain(record).allowed_transitions())
     payload['events'] = [
         {
             'event_id': event.event_id,
