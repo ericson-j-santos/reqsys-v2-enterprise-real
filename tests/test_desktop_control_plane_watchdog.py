@@ -196,6 +196,8 @@ def test_source_contract_is_independent_of_rdc_and_github_runner(tmp_path: Path)
     assert "github.com" not in text.casefold()
     assert "api.github" not in text.casefold()
     assert "workflow_dispatch" not in text
+    assert "except OSError:\n            pass" not in text
+    assert "except Exception:\n        pass" not in text
     assert "reboot" not in text.casefold() or '"reboot_performed": False' in text
 
 
