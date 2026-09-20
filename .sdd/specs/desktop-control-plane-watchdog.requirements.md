@@ -39,6 +39,13 @@ Esta mudança corrige uma lacuna comprovada da recuperação integrada pela PR #
 21. O subcomando elevado deve revalidar que `metadata.json` pertence ao runtime, que a release está sob `runtime_root/releases/<source_sha>` e que o próprio script executado é o watchdog daquela release.
 22. `headless_boot_ready=true` só pode ser persistido após leitura independente da tarefa comprovar `AtStartup + S4U`; somente então o watchdog pode ser iniciado.
 23. A ativação UAC não pode executar reboot, deploy/promoção, produção, leitura de segredo nem alteração ampla de RBAC.
+24. A recuperação remota a partir do Noteri deve preferir o control plane já instalado em `http://DESKTOP-PDQK954:18787`, sem WMI, SMB, shell remoto ou automação de interface gráfica.
+25. O cliente de manutenção deve aceitar somente o host `DESKTOP-PDQK954`, porta `18787`, esquema HTTP local e endpoint base sem credenciais, path, query ou fragment.
+26. As únicas ações remotas permitidas pelo cliente são `host.rdc.recover.v1`, `host.github_runner.recover.v1` e `host.orchestrator.refresh.v1`; reboot e comando arbitrário ficam explicitamente fora da allowlist.
+27. Antes de submeter manutenção, o cliente deve exigir worker único do Desktop com heartbeat fresco, `eligible=true` e capability explícita para o task type solicitado.
+28. Toda submissão deve preservar `correlation_id` e gerar `event_id`/ `idempotency_key` determinísticos; replay deve reutilizar o mesmo item sem segundo dispatch.
+29. Estado terminal `CONCLUÍDO` da fila não comprova efeito funcional. Para RDC, o cliente só pode retornar `ok=true` quando houver testemunho `controller_semantic_ok=true`; ausência desse testemunho deve falhar fechado como `controller_semantic_evidence_missing`.
+30. A evidência do cliente deve separar `queue_completed` de `semantic_ok` e declarar `production_touched=false`, `secrets_read=false` e `reboot_performed=false`.
 
 ## Controles negativos
 
@@ -49,14 +56,20 @@ Esta mudança corrige uma lacuna comprovada da recuperação integrada pela PR #
 - ausência/falha da recuperação RDC deve deixar \`ok=false\`;
 - nenhuma leitura do conteúdo de \`.runner\` é permitida;
 - nenhuma chamada a \`github.com\`/GitHub API pode existir no watchdog;
-- nenhum reboot ou shutdown pode ser disparado.
+- nenhum reboot ou shutdown pode ser disparado;
+- endpoint com host, porta, credencial ou path divergente deve ser recusado antes da chamada;
+- ação fora da allowlist deve ser recusada;
+- worker stale, inelegível ou sem capability deve bloquear antes da mutação;
+- `CONCLUÍDO` sem testemunho semântico do RDC deve permanecer `ok=false`.
 
 ## Critérios de aceite de código
 
 - testes unitários positivos e negativos verdes;
 - \`desktop_control_plane_watchdog.py\` compilável;
 - \`pc24x7_rdc_recovery.py\` reutilizado, sem duplicar sua allowlist RDC;
-- CI do PR verde no SHA atual.
+- CI do PR verde no SHA atual;
+- `desktop_control_plane_maintenance_client.py` compilável;
+- testes positivos, negativos, replay e falso-verde do cliente de manutenção verdes.
 
 ## Critérios de aceite runtime
 
