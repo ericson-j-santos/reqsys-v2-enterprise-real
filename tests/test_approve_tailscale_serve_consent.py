@@ -104,3 +104,19 @@ def test_oauth_grants_org_then_authorizes(monkeypatch):
 def test_parser_accepts_github_mobile_mode():
     args = m.parser().parse_args(["confirm-github-mobile"])
     assert args.mode == "confirm-github-mobile"
+
+
+def test_github_mobile_mode_does_not_request_new_consent(monkeypatch):
+    called = {"request": False}
+    monkeypatch.setattr(m, "request_consent_url", lambda *_args, **_kwargs: called.__setitem__("request", True))
+    monkeypatch.setattr(m.time, "sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        m,
+        "browser_snapshot",
+        lambda: {"windows": [{"buttons": ["Use GitHub Mobile"], "texts": ["Confirm access"]}]},
+    )
+    monkeypatch.setattr(m, "click_exact", lambda label: (label == "Use GitHub Mobile", [{"method": "invoke"}]))
+    result = m.run("confirm-github-mobile", 11443, 0)
+    assert result["ok"] is True
+    assert result["result"] == "github_mobile_challenge_started"
+    assert called["request"] is False
