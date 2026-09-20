@@ -110,7 +110,7 @@ def referenced_contract_tests(files: list[str], root: Path) -> list[str]:
 def candidate_pytests(files: list[str], root: Path) -> list[str]:
     candidates: set[str] = set(referenced_contract_tests(files, root))
     for path in files:
-        if path.endswith(".py") and (path.startswith("tests/") or path.startswith("backend/tests/")):
+        if path.endswith(".py") and path.startswith(("tests/", "backend/tests/")):
             if (root / path).is_file():
                 candidates.add(path)
         if path.startswith("scripts/") and path.endswith(".py"):
@@ -215,7 +215,7 @@ def validate_python(files: list[str], root: Path) -> list[CheckResult]:
         results.append(
             _timed_check(
                 "python:ruff:changed",
-                [sys.executable, "-m", "ruff", "check", *python_files],
+                [sys.executable, "-m", "ruff", "check", "--select", "E,F,I", "--ignore", "E501", *python_files],
                 cwd=root,
             )
         )
