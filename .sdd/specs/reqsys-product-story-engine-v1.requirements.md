@@ -13,7 +13,8 @@ Transformar o log semanal evidenciado do ReqSys em drafts governados para aprese
 5. Produzir JSON e Markdown com fonte, evidência, blockers, score operacional, texto draft e brief visual.
 6. Manter `mode=review_only`, `human_review_required=true` e `automatic_publish=false`.
 7. O workflow deve ser acionado pelo sucesso do `ReqSys Weekly Accomplishment Log` e permitir execução manual para reconstrução.
-8. O workflow deve ter apenas permissões de leitura e não chamar API de publicação do LinkedIn.
+8. Em Pull Requests que alterem o próprio Product Story Engine, o workflow deve executar o fluxo real usando o último artifact semanal verde da `main`, permitindo validação ponta a ponta antes do merge.
+9. O workflow deve ter apenas permissões de leitura e não chamar API de publicação do LinkedIn.
 
 ## Critérios de aceite (Acceptance Criteria)
 
@@ -24,9 +25,10 @@ Transformar o log semanal evidenciado do ReqSys em drafts governados para aprese
 5. A mesma entrada PR/SHA/texto produz o mesmo `content_hash`.
 6. Com `limit=1`, somente o candidato elegível de maior score operacional é selecionado.
 7. O Markdown informa explicitamente que nenhuma publicação é automática e que revisão humana é obrigatória.
-8. O contrato do workflow comprova `workflow_run` a partir do log semanal, artifact fonte exato, permissões read-only e ausência de integração de postagem externa.
-9. Os testes `tests/test_reqsys_product_story_engine.py` e `tests/test_reqsys_product_story_workflow.py` passam.
-10. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato e `behind_by=0` antes da abertura de PR.
+8. O contrato do workflow comprova `workflow_run` a partir do log semanal, execução de validação em PR para arquivos do próprio engine, artifact fonte exato, permissões read-only e ausência de integração de postagem externa.
+9. A execução de PR baixa um `reqsys-weekly-accomplishment-log` verde da `main`, executa o gerador real e publica o artifact `reqsys-product-story-engine`.
+10. Os testes `tests/test_reqsys_product_story_engine.py` e `tests/test_reqsys_product_story_workflow.py` passam.
+11. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato e `behind_by=0` antes da abertura de PR.
 
 ## Fora de escopo
 
