@@ -167,6 +167,38 @@ def deterministic_identity(action: str, correlation_id: str) -> tuple[str, str]:
     )
 
 
+
+def evaluate_semantic_result(
+    action: str,
+    result: dict[str, Any],
+    *,
+    expected_sha: str | None = None,
+) -> tuple[bool, str]:
+    """Valida efeito funcional local; ausência de testemunho falha fechado."""
+    if action == "rdc":
+        if result.get("controller_semantic_ok") is True:
+            return True, "controller_semantic_ok"
+        return False, "controller_semantic_evidence_missing"
+
+    if action == "github-runner":
+        state = result.get("after_state")
+        if result.get("result") in {"recovered", "already_running"} and state == 4:
+            return True, "github_runner_running"
+        return False, "github_runner_running_state_not_proven"
+
+    if action == "refresh":
+        expected = str(expected_sha or "").strip().lower()
+        if (
+            SHA_RE.fullmatch(expected)
+            and str(result.get("expected_sha") or "").lower() == expected
+            and bool(result.get("request"))
+        ):
+            return True, "refresh_request_persisted"
+        return False, "refresh_request_not_proven"
+
+    return False, "semantic_validator_missing"
+
+
 def submit_action(
     endpoint: str,
     *,
@@ -242,8 +274,17 @@ def submit_action(
 
     final_status = str(last_item.get("status") or "")
     result = last_item.get("result") if isinstance(last_item.get("result"), dict) else {}
+    queue_completed = final_status == "CONCLUÍDO"
+    semantic_ok, semantic_reason = evaluate_semantic_result(
+        action,
+        result,
+        expected_sha=expected_sha,
+    )
     evidence = {
-        "ok": final_status == "CONCLUÍDO",
+        "ok": queue_completed and semantic_ok,
+        "queue_completed": queue_completed,
+        "semantic_ok": semantic_ok,
+        "semantic_reason": semantic_reason,
         "action": action,
         "task_type": task_type,
         "target_host": EXPECTED_HOST,
@@ -257,8 +298,10 @@ def submit_action(
         "secrets_read": False,
         "reboot_performed": False,
     }
-    if not evidence["ok"]:
+    if not queue_completed:
         evidence["last_error"] = last_item.get("last_error")
+    elif not semantic_ok:
+        evidence["last_error"] = semantic_reason
     return evidence
 
 
