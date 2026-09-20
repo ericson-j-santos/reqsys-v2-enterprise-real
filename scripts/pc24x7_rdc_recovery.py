@@ -254,7 +254,7 @@ def recover(confirm: str, correlation_id: str) -> dict[str, Any]:
         }
 
     raise RecoveryError(
-        "fallback interativo RDC governado não pôde ser iniciado; "
+        "nenhuma tarefa RDC governada pôde ser iniciada; fallback interativo indisponível; "
         + json.dumps(
             {
                 "headless_source": headless_source,
