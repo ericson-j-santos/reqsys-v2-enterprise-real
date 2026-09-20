@@ -8,6 +8,7 @@ import os
 import re
 import socket
 import subprocess
+import time
 from ctypes import wintypes
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,7 +19,21 @@ TASK_NAME = "RemoteDesktopCommander"
 LAUNCHER = Path(r"C:\RemoteDesktopCommander\start-remote-desktop-commander.cmd")
 
 REBOOT_TASK = "host.reboot.once.v1"
+GITHUB_RUNNER_RECOVERY_TASK = "host.github_runner.recover.v1"
+RUNTIME_REFRESH_TASK = "host.orchestrator.refresh.v1"
 MAX_REBOOT_WINDOW_MINUTES = 15
+RUNTIME_REFRESH_DELAY_SECONDS = 5
+RUNTIME_REFRESH_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+RUNNER_SERVICE_MARKERS = ("actions.runner", "github actions runner")
+RUNNER_TASK_MARKERS = (
+    "actions.runner",
+    "runner.listener",
+    "actions-runner",
+    "\\actions-runner\\",
+    "github actions runner",
+)
+WINDOWS_RUNNING_STATE = 4
+TASK_TRIGGER_BOOT = 8
 ACTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,127}$")
 
 SHTDN_REASON_MAJOR_APPLICATION = 0x00040000
@@ -112,6 +127,72 @@ def parse_utc(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def request_runtime_refresh(
+    *,
+    runtime_root: Path,
+    target_host: str | None,
+    expected_sha: str,
+    correlation_id: str,
+) -> dict[str, Any]:
+    local_host = socket.gethostname()
+    if target_host and target_host.casefold() != local_host.casefold():
+        raise MaintenanceError("target_host does not match local host")
+    expected = str(expected_sha or "").strip().lower()
+    if not RUNTIME_REFRESH_SHA_RE.fullmatch(expected):
+        raise MaintenanceError("expected_sha must be a lowercase 40-character SHA")
+
+    root = Path(runtime_root).resolve()
+    service_config = root / "service-config.json"
+    if not service_config.is_file():
+        raise MaintenanceError("runtime service-config.json missing")
+    try:
+        config = json.loads(service_config.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MaintenanceError("runtime service-config.json invalid") from exc
+    configured_root = Path(str(config.get("install_root") or "")).resolve()
+    if configured_root != root:
+        raise MaintenanceError("runtime root does not match service config")
+
+    request_path = root / "data" / "control" / "refresh-runtime.request.json"
+    if request_path.exists():
+        try:
+            existing = json.loads(request_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise MaintenanceError("existing runtime refresh request is invalid") from exc
+        if (
+            existing.get("expected_sha") == expected
+            and str(existing.get("target_host") or "").casefold() == local_host.casefold()
+        ):
+            return {
+                "handler": RUNTIME_REFRESH_TASK,
+                "host": local_host,
+                "expected_sha": expected,
+                "request": str(request_path),
+                "replayed": True,
+            }
+        raise MaintenanceError("different runtime refresh is already pending")
+
+    now = time.time()
+    atomic_json(
+        request_path,
+        {
+            "version": 1,
+            "target_host": local_host,
+            "expected_sha": expected,
+            "correlation_id": correlation_id,
+            "requested_at_epoch": now,
+            "not_before_epoch": now + RUNTIME_REFRESH_DELAY_SECONDS,
+        },
+    )
+    return {
+        "handler": RUNTIME_REFRESH_TASK,
+        "host": local_host,
+        "expected_sha": expected,
+        "request": str(request_path),
+        "replayed": False,
+    }
+
+
 def _task_action_snapshot(task) -> dict[str, Any]:
     definition = task.Definition
     if int(definition.Actions.Count) != 1:
@@ -150,10 +231,25 @@ def _connect_task():
     return folder.GetTask(TASK_NAME)
 
 
-def recover_rdc(*, target_host: str | None = None) -> dict[str, Any]:
+def _wait_until_not_running(task, timeout_seconds: float = 10.0) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if int(task.State) != 4:
+            return True
+        time.sleep(0.1)
+    return int(task.State) != 4
+
+
+def recover_rdc(
+    *,
+    target_host: str | None = None,
+    force_restart: bool = False,
+) -> dict[str, Any]:
     local_host = socket.gethostname()
     if target_host and target_host.casefold() != local_host.casefold():
         raise MaintenanceError("target_host does not match local host")
+    if not isinstance(force_restart, bool):
+        raise MaintenanceError("force_restart must be boolean")
     if not _launcher_exists():
         raise MaintenanceError("rdc launcher missing")
 
@@ -162,6 +258,13 @@ def recover_rdc(*, target_host: str | None = None) -> dict[str, Any]:
     if not before["enabled"]:
         raise MaintenanceError("rdc task disabled")
 
+    stopped_for_restart = False
+    if force_restart and before["state"] == 4:
+        task.Stop(0)
+        stopped_for_restart = True
+        if not _wait_until_not_running(task):
+            raise MaintenanceError("rdc task did not stop before forced restart")
+
     running = task.Run("")
     after = _task_action_snapshot(task)
     return {
@@ -169,10 +272,262 @@ def recover_rdc(*, target_host: str | None = None) -> dict[str, Any]:
         "host": local_host,
         "task": str(task.Path),
         "launcher": str(LAUNCHER),
+        "force_restart": force_restart,
+        "stopped_for_restart": stopped_for_restart,
         "before": before,
         "after": after,
         "running_instance": str(getattr(running, "InstanceGuid", "")),
     }
+
+
+
+def _discover_github_runner_services() -> list[dict[str, Any]]:
+    if os.name != "nt":
+        raise MaintenanceError("github runner recovery is supported only on Windows")
+    try:
+        import win32service
+    except ImportError as exc:
+        raise MaintenanceError("pywin32 unavailable") from exc
+
+    scm = win32service.OpenSCManager(
+        None,
+        None,
+        win32service.SC_MANAGER_CONNECT | win32service.SC_MANAGER_ENUMERATE_SERVICE,
+    )
+    matches: list[dict[str, Any]] = []
+    try:
+        services = win32service.EnumServicesStatusEx(
+            scm,
+            win32service.SERVICE_WIN32,
+            win32service.SERVICE_STATE_ALL,
+        )
+        for item in services:
+            if isinstance(item, dict):
+                service_name = str(item.get("ServiceName") or "")
+                display_name = str(item.get("DisplayName") or "")
+            else:
+                service_name = str(item[0])
+                display_name = str(item[1])
+            haystack = f"{service_name} {display_name}".casefold()
+            if not any(marker in haystack for marker in RUNNER_SERVICE_MARKERS):
+                continue
+            handle = win32service.OpenService(
+                scm,
+                service_name,
+                win32service.SERVICE_QUERY_CONFIG | win32service.SERVICE_QUERY_STATUS,
+            )
+            try:
+                config = win32service.QueryServiceConfig(handle)
+                status = win32service.QueryServiceStatus(handle)
+                matches.append(
+                    {
+                        "service_name": service_name,
+                        "display_name": display_name,
+                        "automatic": int(config[1]) == int(win32service.SERVICE_AUTO_START),
+                        "current_state": int(status[1]),
+                    }
+                )
+            finally:
+                win32service.CloseServiceHandle(handle)
+    finally:
+        win32service.CloseServiceHandle(scm)
+    return matches
+
+
+def _start_github_runner_service(service_name: str) -> dict[str, Any]:
+    if os.name != "nt":
+        raise MaintenanceError("github runner recovery is supported only on Windows")
+    try:
+        import win32service
+    except ImportError as exc:
+        raise MaintenanceError("pywin32 unavailable") from exc
+
+    scm = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_CONNECT)
+    try:
+        handle = win32service.OpenService(
+            scm,
+            service_name,
+            win32service.SERVICE_QUERY_STATUS | win32service.SERVICE_START,
+        )
+        try:
+            before = int(win32service.QueryServiceStatus(handle)[1])
+            if before == int(win32service.SERVICE_RUNNING):
+                return {"started": False, "before_state": before, "after_state": before}
+            win32service.StartService(handle, None)
+            deadline = time.monotonic() + 15.0
+            after = before
+            while time.monotonic() < deadline:
+                after = int(win32service.QueryServiceStatus(handle)[1])
+                if after == int(win32service.SERVICE_RUNNING):
+                    return {"started": True, "before_state": before, "after_state": after}
+                time.sleep(0.25)
+            raise MaintenanceError("github runner service did not reach running state")
+        finally:
+            win32service.CloseServiceHandle(handle)
+    finally:
+        win32service.CloseServiceHandle(scm)
+
+
+def _discover_github_runner_tasks() -> list[dict[str, Any]]:
+    if os.name != "nt":
+        raise MaintenanceError("github runner recovery is supported only on Windows")
+    try:
+        import win32com.client
+    except ImportError as exc:
+        raise MaintenanceError("pywin32 unavailable") from exc
+
+    service = win32com.client.Dispatch("Schedule.Service")
+    service.Connect()
+    matches: list[dict[str, Any]] = []
+
+    def walk(folder, depth: int = 0) -> None:
+        if depth > 4:
+            return
+        tasks = folder.GetTasks(0)
+        for index in range(1, tasks.Count + 1):
+            task = tasks.Item(index)
+            definition = task.Definition
+            action_paths = [
+                str(getattr(definition.Actions.Item(i), "Path", "") or "")
+                for i in range(1, definition.Actions.Count + 1)
+            ]
+            haystack = " ".join(
+                [str(task.Name), str(task.Path), *action_paths]
+            ).casefold()
+            if not any(marker in haystack for marker in RUNNER_TASK_MARKERS):
+                continue
+            triggers = [
+                int(definition.Triggers.Item(i).Type)
+                for i in range(1, definition.Triggers.Count + 1)
+            ]
+            matches.append(
+                {
+                    "task_path": str(task.Path),
+                    "enabled": bool(task.Enabled),
+                    "boot_trigger": TASK_TRIGGER_BOOT in triggers,
+                    "current_state": int(task.State),
+                }
+            )
+        folders = folder.GetFolders(0)
+        for folder_index in range(1, folders.Count + 1):
+            walk(folders.Item(folder_index), depth + 1)
+
+    walk(service.GetFolder("\\"))
+    return matches
+
+
+def _start_github_runner_task(task_path: str) -> dict[str, Any]:
+    if os.name != "nt":
+        raise MaintenanceError("github runner recovery is supported only on Windows")
+    if (
+        not isinstance(task_path, str)
+        or not task_path.startswith("\\")
+        or not task_path[1:].strip()
+    ):
+        raise MaintenanceError("invalid github runner task path")
+    try:
+        import win32com.client
+    except ImportError as exc:
+        raise MaintenanceError("pywin32 unavailable") from exc
+
+    folder_path, task_name = task_path.rsplit("\\", 1)
+    folder_path = folder_path or "\\"
+    service = win32com.client.Dispatch("Schedule.Service")
+    service.Connect()
+    task = service.GetFolder(folder_path).GetTask(task_name)
+    definition = task.Definition
+    action_paths = [
+        str(getattr(definition.Actions.Item(i), "Path", "") or "")
+        for i in range(1, definition.Actions.Count + 1)
+    ]
+    haystack = " ".join([str(task.Name), str(task.Path), *action_paths]).casefold()
+    if not any(marker in haystack for marker in RUNNER_TASK_MARKERS):
+        raise MaintenanceError("github runner task marker mismatch")
+    triggers = [
+        int(definition.Triggers.Item(i).Type)
+        for i in range(1, definition.Triggers.Count + 1)
+    ]
+    if TASK_TRIGGER_BOOT not in triggers or not bool(task.Enabled):
+        raise MaintenanceError("github runner task is not an enabled boot task")
+
+    before = int(task.State)
+    if before == WINDOWS_RUNNING_STATE:
+        return {"started": False, "before_state": before, "after_state": before}
+    task.Run("")
+    deadline = time.monotonic() + 15.0
+    after = before
+    while time.monotonic() < deadline:
+        after = int(task.State)
+        if after == WINDOWS_RUNNING_STATE:
+            return {"started": True, "before_state": before, "after_state": after}
+        time.sleep(0.25)
+    raise MaintenanceError("github runner task did not reach running state")
+
+
+def recover_github_runner(*, target_host: str | None = None) -> dict[str, Any]:
+    local_host = socket.gethostname()
+    if not isinstance(target_host, str) or target_host.casefold() != local_host.casefold():
+        raise MaintenanceError("target_host does not match local host")
+
+    services = [
+        item for item in _discover_github_runner_services()
+        if item.get("automatic") is True
+    ]
+    if len(services) > 1:
+        raise MaintenanceError("multiple automatic github runner services found")
+    if len(services) == 1:
+        candidate = services[0]
+        if int(candidate["current_state"]) == WINDOWS_RUNNING_STATE:
+            return {
+                "handler": GITHUB_RUNNER_RECOVERY_TASK,
+                "host": local_host,
+                "mode": "service",
+                "result": "already_running",
+                "started": False,
+                "service_name": candidate["service_name"],
+                "before_state": int(candidate["current_state"]),
+                "after_state": int(candidate["current_state"]),
+            }
+        observed = _start_github_runner_service(str(candidate["service_name"]))
+        return {
+            "handler": GITHUB_RUNNER_RECOVERY_TASK,
+            "host": local_host,
+            "mode": "service",
+            "result": "recovered",
+            "service_name": candidate["service_name"],
+            **observed,
+        }
+
+    tasks = [
+        item for item in _discover_github_runner_tasks()
+        if item.get("enabled") is True and item.get("boot_trigger") is True
+    ]
+    if len(tasks) > 1:
+        raise MaintenanceError("multiple github runner boot tasks found")
+    if len(tasks) == 1:
+        candidate = tasks[0]
+        if int(candidate["current_state"]) == WINDOWS_RUNNING_STATE:
+            return {
+                "handler": GITHUB_RUNNER_RECOVERY_TASK,
+                "host": local_host,
+                "mode": "scheduled_task",
+                "result": "already_running",
+                "started": False,
+                "task_path": candidate["task_path"],
+                "before_state": int(candidate["current_state"]),
+                "after_state": int(candidate["current_state"]),
+            }
+        observed = _start_github_runner_task(str(candidate["task_path"]))
+        return {
+            "handler": GITHUB_RUNNER_RECOVERY_TASK,
+            "host": local_host,
+            "mode": "scheduled_task",
+            "result": "recovered",
+            "task_path": candidate["task_path"],
+            **observed,
+        }
+
+    raise MaintenanceError("github runner recovery target not found")
 
 
 def load_reboot_authorization(
