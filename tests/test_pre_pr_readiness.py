@@ -127,7 +127,7 @@ def test_validate_python_runs_ruff_for_changed_python(monkeypatch, tmp_path: Pat
         "python:ruff:changed",
     ]
     assert calls[1][1][:4] == [sys.executable, "-m", "ruff", "check"]
-    assert calls[1][1][4:8] == ["--select", "E,F,I", "--ignore", "E501"]
+    assert calls[1][1][4:8] == ["--select", "E,F", "--ignore", "E501"]
     assert "scripts/alpha.py" in calls[1][1]
 
 
