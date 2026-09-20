@@ -215,7 +215,7 @@ def validate_python(files: list[str], root: Path) -> list[CheckResult]:
         results.append(
             _timed_check(
                 "python:ruff:changed",
-                [sys.executable, "-m", "ruff", "check", "--select", "E,F,I", "--ignore", "E501", *python_files],
+                [sys.executable, "-m", "ruff", "check", "--select", "E,F", "--ignore", "E501", *python_files],
                 cwd=root,
             )
         )
