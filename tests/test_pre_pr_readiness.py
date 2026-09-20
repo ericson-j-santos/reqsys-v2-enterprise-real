@@ -9,6 +9,7 @@ from pathlib import Path
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "pre_pr_readiness.py"
 WORKFLOW_PATH = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "pre-pr-readiness.yml"
 MERGE_POLICY_PATH = Path(__file__).resolve().parents[1] / "governance" / "merge" / "current-sha-required-workflows.json"
+MERGE_QUEUE_WORKFLOW_PATH = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "governed-merge-queue.yml"
 SPEC = importlib.util.spec_from_file_location("pre_pr_readiness", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -158,3 +159,19 @@ def test_governed_merge_requires_pre_pr_readiness_on_current_sha() -> None:
     policy = json.loads(MERGE_POLICY_PATH.read_text(encoding="utf-8"))
     assert "Pre-PR Readiness Gate" in policy["required_workflows"]
     assert "Pre-PR Readiness Gate" not in policy["optional_when_not_registered"]
+
+
+def test_pre_pr_runs_on_push_and_pull_request_using_exact_pr_head() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "pull_request:\n    branches:\n      - main" in workflow
+    assert "EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}" in workflow
+    assert "BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}" in workflow
+    assert "ref: ${{ env.EVALUATED_SHA }}" in workflow
+    assert '--expected-head-sha "$EVALUATED_SHA"' in workflow
+
+
+def test_merge_queue_can_require_pre_pr_from_pull_request_event() -> None:
+    workflow = MERGE_QUEUE_WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert '-f event="pull_request"' in workflow
+    policy = json.loads(MERGE_POLICY_PATH.read_text(encoding="utf-8"))
+    assert "Pre-PR Readiness Gate" in policy["required_workflows"]
