@@ -15,6 +15,6 @@
       "backend/tests/test_figma_github_sync.py",
       "tests/test_figma_github_dev_e2e_contract.py"
     ],
-    "evidence_contract": "O run só passa no host PC24x7 exato e SHA exato do runtime, com defaults configurados via Cofre, credenciais apenas verificadas sem exposição, marker GitHub lido independentemente, exatamente um retorno Figma e replay sem criação/atualização adicional."
+    "evidence_contract": "O run só passa no host PC24x7 exato e SHA exato do runtime, com defaults configurados via Cofre, credenciais apenas verificadas sem exposição, marker GitHub lido independentemente, exatamente um retorno Figma e replay sem criação/atualização adicional. O endpoint POST /sync deve falhar com 401 sem credencial e permanecer funcional com JWT admin."
   }
 }
