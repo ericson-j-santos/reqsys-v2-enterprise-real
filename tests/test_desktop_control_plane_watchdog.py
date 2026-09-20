@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -182,6 +183,108 @@ def test_install_requires_exact_confirmation(tmp_path: Path) -> None:
             watch_interval_seconds=30,
             confirm="NO",
         )
+
+
+def test_load_installed_metadata_binds_release_and_metadata(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runtime = tmp_path / "runtime"
+    monkeypatch.setattr(m, "default_runtime_root", lambda: runtime)
+    release = runtime / "releases" / ("a" * 40)
+    scripts = release / "scripts"
+    scripts.mkdir(parents=True)
+    release_watchdog = scripts / "desktop_control_plane_watchdog.py"
+    release_watchdog.write_text("stub", encoding="utf-8")
+    python = tmp_path / "python.exe"
+    python.write_text("", encoding="utf-8")
+    launcher = runtime / "run.py"
+    launcher.write_text("", encoding="utf-8")
+    metadata = runtime / "metadata.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "runtime_root": str(runtime),
+                "release_root": str(release),
+                "python_executable": str(python),
+                "source_sha": "a" * 40,
+                "host": m.EXPECTED_HOST,
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = m.load_installed_metadata(metadata)
+    assert result["release_watchdog"] == release_watchdog.resolve()
+    assert result["metadata_path"] == metadata.resolve()
+
+
+def test_load_installed_metadata_rejects_release_not_bound_to_sha(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    release = runtime / "releases" / "wrong-release"
+    scripts = release / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "desktop_control_plane_watchdog.py").write_text("stub", encoding="utf-8")
+    python = tmp_path / "python.exe"
+    python.write_text("", encoding="utf-8")
+    launcher = runtime / "run.py"
+    launcher.write_text("", encoding="utf-8")
+    metadata = runtime / "metadata.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "runtime_root": str(runtime),
+                "release_root": str(release),
+                "python_executable": str(python),
+                "source_sha": "a" * 40,
+                "host": m.EXPECTED_HOST,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(m.WatchdogError, match="source_sha"):
+        m.load_installed_metadata(metadata)
+
+
+def test_install_stages_release_when_uac_activation_is_required(monkeypatch, tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    (source / "scripts").mkdir(parents=True)
+    (source / "scripts" / m.RDC_RECOVERY_SCRIPT).write_text("# recovery", encoding="utf-8")
+    (source / "scripts" / m.UAC_LAUNCHER_SCRIPT).write_text("# uac", encoding="utf-8")
+    runner = make_runner_home(tmp_path)
+    runtime = tmp_path / "runtime"
+    monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
+    monkeypatch.setattr(m, "discover_runner_home", lambda explicit=None: runner.resolve())
+    monkeypatch.setattr(
+        m,
+        "register_boot_task",
+        lambda **kwargs: (_ for _ in ()).throw(m.WatchdogError("task_scheduler_access_denied")),
+    )
+    monkeypatch.setattr(
+        m,
+        "task_status",
+        lambda: {"exists": False, "trigger_at_startup": False},
+    )
+    original_file = m.__file__
+    try:
+        m.__file__ = str(source / "scripts" / "desktop_control_plane_watchdog.py")
+        Path(m.__file__).write_text("# watchdog", encoding="utf-8")
+        result = m.install(
+            source,
+            source_sha="b" * 40,
+            python_executable=Path(sys.executable),
+            runner_home=runner,
+            runtime_root=runtime,
+            watch_interval_seconds=30,
+            confirm=m.CONFIRM,
+        )
+    finally:
+        m.__file__ = original_file
+    assert result["ok"] is True
+    assert result["headless_boot_ready"] is False
+    assert result["activation_pending"] is True
+    assert result["requires_uac_activation"] is True
+    assert result["start"]["reason"] == "uac_activation_required"
+    assert (runtime / "metadata.json").is_file()
+    assert (runtime / "releases" / ("b" * 40) / "scripts" / m.UAC_LAUNCHER_SCRIPT).is_file()
 
 
 def test_source_contract_is_independent_of_rdc_and_github_runner(tmp_path: Path) -> None:

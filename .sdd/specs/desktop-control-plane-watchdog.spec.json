@@ -18,25 +18,30 @@
     "secondary_fallback": ".github/workflows/desktop-rdc-recovery.yml",
     "reboot_required": false,
     "secrets_read": false,
-    "production_touched": false
+    "production_touched": false,
+    "uac_activation": "Governed one-time launcher restricted to immutable release register-task-com metadata"
   },
   "sdd_gate": {
     "tests": [
       "tests/test_desktop_control_plane_watchdog.py",
+      "tests/test_desktop_control_plane_watchdog_uac_launcher.py",
       "tests/test_pc24x7_rdc_recovery.py"
     ],
-    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency, while preserving fail-closed host and source validation."
+    "evidence_contract": "The watchdog must recover RDC and the local GitHub runner without using either as its own bootstrap dependency. If Task Scheduler registration is denied, activation remains fail-closed until the governed UAC launcher registers the immutable release task and independent status proves AtStartup+S4U."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-control-plane-watchdog.requirements.md",
     "implementation": "scripts/desktop_control_plane_watchdog.py",
     "rdc_recovery": "scripts/pc24x7_rdc_recovery.py",
-    "tests": "tests/test_desktop_control_plane_watchdog.py"
+    "tests": "tests/test_desktop_control_plane_watchdog.py",
+    "uac_launcher": "scripts/desktop_control_plane_watchdog_uac_launcher.py",
+    "uac_tests": "tests/test_desktop_control_plane_watchdog_uac_launcher.py"
   },
   "acceptance": {
     "code": [
       "unit_tests_green",
       "negative_controls_green",
+      "uac_activation_fail_closed_tests_green",
       "ci_green_current_sha"
     ],
     "runtime": [
