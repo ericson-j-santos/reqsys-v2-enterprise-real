@@ -38,15 +38,20 @@ def find_tailscale() -> Path:
 
 
 def run_tailscale(binary: Path, args: list[str], *, timeout: int = TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        [str(binary), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=timeout,
-        shell=False,
-    )
-    return result
+    try:
+        return subprocess.run(
+            [str(binary), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+        detail = (stdout + "\n" + stderr).strip()[-2000:]
+        raise ServeError(f"tailscale_timeout detail={detail}") from exc
 
 
 def require_ok(result: subprocess.CompletedProcess[str], action: str) -> str:
