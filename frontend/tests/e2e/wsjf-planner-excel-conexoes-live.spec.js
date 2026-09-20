@@ -53,9 +53,12 @@ function loadAuthBundle(filePath) {
 const authBundle = loadAuthBundle(storageStatePath)
 const hasAuthBundle = Boolean(authBundle)
 
+if (realJourney && !hasAuthBundle) {
+  throw new Error('Gate real MSAL recusado: MSAL_STORAGE_STATE_PATH ausente ou invalido; skip nao e evidencia E2E.')
+}
+
 test.describe('aceite real WSJF — conexões via token delegado MSAL', () => {
   test.skip(!realJourney, 'Executado somente pelo gate de aceite real no DEV.')
-  test.skip(!hasAuthBundle, 'Sem MSAL_STORAGE_STATE_PATH valido — rode npm run setup:msal-state e configure o secret.')
 
   test.use({
     storageState: authBundle?.storageState || { cookies: [], origins: [] },

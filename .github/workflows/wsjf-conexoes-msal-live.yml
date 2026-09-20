@@ -39,15 +39,14 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Decodificar sessao MSAL (se configurada)
+      - name: Exigir e decodificar sessao MSAL real
         id: state
         shell: bash
         run: |
           set -euo pipefail
           if [ -z "${WSJF_MSAL_STORAGE_STATE_B64:-}" ]; then
-            echo "Secret WSJF_MSAL_STORAGE_STATE_B64 nao configurado — rode scripts/setup-msal-storage-state.mjs localmente e cadastre o secret."
-            echo "path=" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::WSJF_MSAL_STORAGE_STATE_B64 ausente: o gate real nao pode ser aprovado por skip."
+            exit 2
           fi
           echo "$WSJF_MSAL_STORAGE_STATE_B64" | base64 --decode > "$RUNNER_TEMP/msal-storage-state.json"
           echo "path=$RUNNER_TEMP/msal-storage-state.json" >> "$GITHUB_OUTPUT"
@@ -55,7 +54,6 @@ jobs:
           WSJF_MSAL_STORAGE_STATE_B64: ${{ secrets.WSJF_MSAL_STORAGE_STATE_B64 }}
 
       - name: Verificar validade da sessao MSAL decodificada
-        if: steps.state.outputs.path != ''
         working-directory: frontend
         env:
           MSAL_STORAGE_STATE_PATH: ${{ steps.state.outputs.path }}
