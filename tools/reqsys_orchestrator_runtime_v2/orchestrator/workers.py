@@ -22,7 +22,16 @@ AUTO_WORKER_ROLES = ALLOWED_WORKERS - {"human-gate"}
 VALID_PROFILES = {"NORMAL", "ESTUDO"}
 RDC_RECOVERY_TASK = "host.rdc.recover.v1"
 REBOOT_ONCE_TASK = "host.reboot.once.v1"
-LOCAL_MAINTENANCE_TASKS = {RDC_RECOVERY_TASK, REBOOT_ONCE_TASK}
+GITHUB_RUNNER_RECOVERY_TASK = "host.github_runner.recover.v1"
+RUNTIME_REFRESH_TASK = "host.orchestrator.refresh.v1"
+PR_REMEDIATION_TASK = "github.pr.remediate.v1"
+LOCAL_MAINTENANCE_TASKS = {
+    RDC_RECOVERY_TASK,
+    GITHUB_RUNNER_RECOVERY_TASK,
+    RUNTIME_REFRESH_TASK,
+    REBOOT_ONCE_TASK,
+}
+CAPABILITY_GATED_TASKS = LOCAL_MAINTENANCE_TASKS | {PR_REMEDIATION_TASK}
 
 
 @dataclass(frozen=True)
@@ -335,13 +344,14 @@ class WorkerRegistry:
             return None
         required_device_name = None
         required_task_type = None
+        if row["task_type"] in CAPABILITY_GATED_TASKS:
+            required_task_type = row["task_type"]
         if row["task_type"] in LOCAL_MAINTENANCE_TASKS:
             payload = json.loads(row["payload_json"])
             target_host = payload.get("target_host")
             if not isinstance(target_host, str) or not target_host.strip():
                 return None
             required_device_name = target_host.strip()
-            required_task_type = row["task_type"]
 
         candidates = self._eligible_candidates(
             conn,
