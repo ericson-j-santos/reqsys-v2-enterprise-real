@@ -13,7 +13,7 @@ concurrency:
 jobs:
   recover:
     name: Recover RDC on PC24x7 Desktop
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: self-hosted
     timeout-minutes: 10
     env:
       CORRELATION_ID: rdc-recovery-${{ github.run_id }}-${{ github.run_attempt }}
