@@ -22,11 +22,6 @@ on:
   schedule:
     # 09:15 BRT (UTC-3), dias úteis.
     - cron: '15 12 * * 1-5'
-  workflow_run:
-    workflows:
-      - Fly DEV Fast Deploy
-    types:
-      - completed
 
 permissions:
   contents: read
@@ -44,7 +39,7 @@ jobs:
       - name: Checkout do SHA sob teste
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -54,7 +49,7 @@ jobs:
       - name: Validar rastreabilidade do SHA
         shell: bash
         env:
-          EXPECTED_CHECKOUT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          EXPECTED_CHECKOUT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           actual_sha="$(git rev-parse HEAD)"
@@ -68,10 +63,7 @@ jobs:
   planner-teams-runtime:
     name: Planner → Teams — E2E contínuo DEV
     needs: contract
-    if: >-
-      github.event_name != 'pull_request' &&
-      (github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
     timeout-minutes: 20
@@ -98,7 +90,7 @@ jobs:
       - name: Checkout do SHA implantado
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Autenticar ReqSys Enterprise por OIDC
         uses: azure/login@v2
@@ -150,7 +142,7 @@ jobs:
       - name: Executar prova real Planner → Teams
         shell: bash
         env:
-          EXPECTED_EVIDENCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          EXPECTED_EVIDENCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           actual_sha="$(git rev-parse HEAD)"
@@ -158,10 +150,8 @@ jobs:
             echo "::error::SHA efetivamente executado diverge do SHA esperado: actual=$actual_sha expected=$EXPECTED_EVIDENCE_SHA"
             exit 42
           fi
-          # O GITHUB_SHA do evento workflow_run aponta para a revisão do workflow na
-          # default branch, não necessariamente para o SHA implantado. O processo do
-          # harness recebe explicitamente o HEAD efetivamente executado para que o
-          # artifact não atribua a evidência a outra revisão.
+          # A evidência fica vinculada ao checkout exato. O gate de jornada PC24x7
+          # comprova separadamente que esse mesmo SHA está publicado em DEV.
           GITHUB_SHA="$actual_sha" node scripts/planner_teams_runtime_e2e.mjs
           jq -e '.status == "passed" and .auth_mode == "oidc" and .checks.graph_auth_mode == "oidc" and .tokens_persisted == false' "$EVIDENCE_PATH" >/dev/null
 
