@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Supervisor idempotente do runtime público DEV no PC24x7.
 
-Mantém o gateway local e os transportes públicos reconciliados sem interação
-humana repetitiva. O consentimento inicial do Tailscale Funnel é tratado como
-bloqueio externo: enquanto a capability não existir, Cloudflare Quick Tunnel
-permanece ativo e o supervisor não abre navegador em loop.
+Mantém containers, Cloudflare Quick Tunnels e o locator público assinado.
+Política econômica: custo adicional zero; Tailscale, DuckDNS e NPort não
+fazem parte da rota crítica.
 """
 from __future__ import annotations
 
@@ -21,12 +20,12 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_TUNNEL = ROOT / "scripts" / "pc24x7_public_dev_tunnel.py"
-TAILSCALE_FUNNEL = ROOT / "scripts" / "pc24x7_tailscale_funnel.py"
+LOCATOR_PUBLISHER = ROOT / "scripts" / "pc24x7_dev_locator_publisher.py"
 LOCAL_GATEWAY = "http://127.0.0.1:8083"
 CONTAINERS = ("reqsys-live-api-1", "reqsys-live-frontend-1", "reqsys-live-nginx-1")
 
 
-def run(args: list[str], timeout: int = 90) -> subprocess.CompletedProcess[str]:
+def run(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
         capture_output=True,
@@ -40,8 +39,8 @@ def run(args: list[str], timeout: int = 90) -> subprocess.CompletedProcess[str]:
 
 def probe(url: str, timeout: float = 5.0) -> dict[str, Any]:
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "ReqSysDevSupervisor/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        request = urllib.request.Request(url, headers={"User-Agent": "ReqSysDevSupervisor/2.0"})
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return {"ok": True, "status": int(response.status)}
     except (OSError, urllib.error.URLError) as exc:
         return {"ok": False, "error": repr(exc)}
@@ -65,23 +64,7 @@ def ensure_containers() -> dict[str, Any]:
     return {"changed": changed, "containers": results, "ready": all(x["running_after"] for x in results)}
 
 
-def tailscale_capabilities() -> dict[str, Any]:
-    status = run(["tailscale", "status", "--json"], timeout=20)
-    if status.returncode != 0:
-        return {"ready": False, "error": status.stderr.strip()}
-    data = json.loads(status.stdout)
-    cap_map = (data.get("Self") or {}).get("CapMap") or {}
-    keys = sorted(str(key) for key in cap_map)
-    funnel_allowed = any("funnel" in key.casefold() for key in keys)
-    return {
-        "ready": data.get("BackendState") == "Running",
-        "magic_dns": bool((data.get("CurrentTailnet") or {}).get("MagicDNSEnabled")),
-        "funnel_allowed": funnel_allowed,
-        "dns_name": str((data.get("Self") or {}).get("DNSName") or "").rstrip("."),
-    }
-
-
-def run_json_script(path: Path, *args: str, timeout: int = 120) -> dict[str, Any]:
+def run_json_script(path: Path, *args: str, timeout: int = 150) -> dict[str, Any]:
     completed = run([sys.executable, str(path), *args], timeout=timeout)
     payload: dict[str, Any] = {
         "returncode": completed.returncode,
@@ -92,7 +75,7 @@ def run_json_script(path: Path, *args: str, timeout: int = 120) -> dict[str, Any
         try:
             payload["result"] = json.loads(lines[-1])
         except json.JSONDecodeError:
-            payload["stdout_tail"] = completed.stdout[-2000:]
+            payload["stdout_tail"] = completed.stdout[-3000:]
     return payload
 
 
@@ -108,53 +91,49 @@ def main() -> int:
     args = parser.parse_args()
 
     payload: dict[str, Any] = {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "environment": "dev",
         "apply": args.apply,
         "timestamp_epoch": int(time.time()),
+        "cost_policy": "zero_additional_cost",
+        "transport": "cloudflare_quick_tunnel",
+        "locator": "github_pages_plus_signed_ntfy",
     }
 
     payload["local_before"] = {
         "frontend": probe(LOCAL_GATEWAY + "/task-console"),
         "health": probe(LOCAL_GATEWAY + "/api/health"),
     }
-    if args.apply:
-        payload["runtime"] = ensure_containers()
-    else:
-        payload["runtime"] = {"changed": False}
-
+    payload["runtime"] = ensure_containers() if args.apply else {"changed": False}
     payload["local_after"] = {
         "frontend": probe(LOCAL_GATEWAY + "/task-console"),
         "health": probe(LOCAL_GATEWAY + "/api/health"),
     }
 
+    payload["cloudflare"] = run_json_script(
+        PUBLIC_TUNNEL,
+        *(("--apply",) if args.apply else ()),
+    )
+
     if args.apply:
-        payload["cloudflare"] = run_json_script(PUBLIC_TUNNEL, "--apply")
+        payload["public_locator"] = run_json_script(LOCATOR_PUBLISHER)
     else:
-        payload["cloudflare"] = run_json_script(PUBLIC_TUNNEL)
+        payload["public_locator"] = {"deferred": True}
 
-    tailscale = tailscale_capabilities()
-    payload["tailscale_capabilities"] = tailscale
-    if tailscale.get("ready") and tailscale.get("magic_dns") and tailscale.get("funnel_allowed"):
-        payload["tailscale"] = run_json_script(
-            TAILSCALE_FUNNEL,
-            *(("--apply",) if args.apply else ()),
-        )
-        payload["human_blocker"] = None
-    else:
-        payload["tailscale"] = {
-            "deferred": True,
-            "reason": "funnel_consent_required" if not tailscale.get("funnel_allowed") else "tailscale_not_ready",
-        }
-        payload["human_blocker"] = (
-            "TAILSCALE_FUNNEL_CONSENT_REQUIRED" if not tailscale.get("funnel_allowed") else "TAILSCALE_NOT_READY"
-        )
-
-    payload["ready"] = (
+    cloudflare_ready = (payload.get("cloudflare", {}).get("result") or {}).get("ready") is True
+    locator_result = payload.get("public_locator", {}).get("result") or {}
+    locator_ready = (
+        locator_result.get("published") is True
+        and int(locator_result.get("healthy_url_count") or 0) > 0
+    )
+    local_ready = (
         payload["local_after"]["frontend"].get("status") == 200
         and payload["local_after"]["health"].get("status") == 200
-        and (payload.get("cloudflare", {}).get("result") or {}).get("ready") is True
     )
+
+    payload["locator_ready"] = locator_ready
+    payload["human_blocker"] = None
+    payload["ready"] = local_ready and cloudflare_ready
 
     path = state_file()
     path.parent.mkdir(parents=True, exist_ok=True)
