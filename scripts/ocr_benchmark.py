@@ -109,10 +109,34 @@ def carregar_corpus_versionado(path: Path = CORPUS_PATH) -> list[dict]:
             raise ValueError(f"versão de corpus incompatível em {case_id}: {item.get('corpus_version')}")
     return registros
 
+def _resolver_imagemagick() -> str:
+    """Resolve somente um executável que se identifique como ImageMagick.
+
+    No Windows, ``convert.exe`` pertence ao sistema operacional e não ao
+    ImageMagick. Validar a assinatura impede que o benchmark execute o binário
+    errado e produza uma falha enganosa.
+    """
+    for nome in ('magick', 'convert'):
+        executavel = shutil.which(nome)
+        if not executavel:
+            continue
+        try:
+            probe = subprocess.run(
+                [executavel, '-version'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        assinatura = f'{probe.stdout}\n{probe.stderr}'.lower()
+        if probe.returncode == 0 and 'imagemagick' in assinatura:
+            return executavel
+    raise RuntimeError('ImageMagick não encontrado ou executável convert incompatível')
+
+
 def _renderizar_nome(nome: str, destino: Path, *, degradacao: dict | None = None) -> None:
-    convert = shutil.which('magick') or shutil.which('convert')
-    if not convert:
-        raise RuntimeError('ImageMagick não encontrado')
+    convert = _resolver_imagemagick()
     degradacao = degradacao or {}
     cmd = [convert, '-size', '1800x180', 'xc:white', '-gravity', 'center', '-font', 'DejaVu-Sans', '-pointsize', str(int(degradacao.get('pointsize', 64))), '-fill', 'black', '-annotate', '+0+0', nome]
     blur = float(degradacao.get('blur', 0.0))
