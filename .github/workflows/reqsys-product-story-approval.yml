@@ -1,0 +1,337 @@
+name: ReqSys Product Story Approval Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      content_hash:
+        description: "Hash SHA-256 do candidato selecionado"
+        required: true
+        type: string
+      author_urn:
+        description: "LinkedIn author URN (urn:li:person:* ou urn:li:organization:*)"
+        required: true
+        type: string
+      confirmation:
+        description: "Digite exatamente APPROVE"
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - ".github/workflows/reqsys-product-story-approval.yml"
+      - ".sdd/specs/reqsys-product-story-approval-linkedin-v1.*"
+      - "docs/runbooks/reqsys-product-story-approval-linkedin.md"
+      - "scripts/reqsys_product_story_linkedin.py"
+      - "tests/test_reqsys_product_story_linkedin.py"
+      - "tests/test_reqsys_product_story_approval_workflow.py"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: reqsys-product-story-approval-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  approval-dry-run:
+    name: Approval Gate + LinkedIn adapter dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CORRELATION_ID: story-approval-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar contratos
+        run: |
+          python -m unittest -v tests/test_reqsys_product_story_linkedin.py
+          python -m unittest -v tests/test_reqsys_product_story_approval_workflow.py
+
+      - name: Resolver Weekly Log verde da main
+        id: weekly
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list \
+            --workflow reqsys-weekly-accomplishment-log.yml \
+            --branch main \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId // empty')"
+          test -n "$run_id" || {
+            echo "Nenhum Weekly Accomplishment Log verde na main." >&2
+            exit 1
+          }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar evidência semanal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/reqsys-product-story-approval/source
+          gh run download "${{ steps.weekly.outputs.run_id }}" \
+            --name reqsys-weekly-accomplishment-log \
+            --dir artifacts/reqsys-product-story-approval/source
+          test -f artifacts/reqsys-product-story-approval/source/reqsys-weekly-accomplishment-log.json
+
+      - name: Regenerar candidatos no SHA atual
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/reqsys_product_story_engine.py \
+            --input artifacts/reqsys-product-story-approval/source/reqsys-weekly-accomplishment-log.json \
+            --output-dir artifacts/reqsys-product-story-approval/candidates \
+            --limit 3
+
+      - name: Resolver aprovação
+        id: approval
+        shell: bash
+        env:
+          INPUT_HASH: ${{ github.event.inputs.content_hash }}
+          INPUT_AUTHOR: ${{ github.event.inputs.author_urn }}
+          INPUT_CONFIRMATION: ${{ github.event.inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          p = json.loads(Path("artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json").read_text(encoding="utf-8"))
+          selected = [c for c in p["candidates"] if c.get("selected_for_review")]
+          if not selected:
+              raise SystemExit("nenhum candidato selecionado")
+          print(f"content_hash={selected[0]['linkedin']['content_hash']}")
+          print("author_urn=urn:li:person:ci-e2e")
+          print("confirmation=APPROVE")
+          print("approval_kind=test")
+          print("approved_by=ci-e2e")
+          PY
+          else
+            echo "content_hash=$INPUT_HASH" >> "$GITHUB_OUTPUT"
+            echo "author_urn=$INPUT_AUTHOR" >> "$GITHUB_OUTPUT"
+            echo "confirmation=$INPUT_CONFIRMATION" >> "$GITHUB_OUTPUT"
+            echo "approval_kind=human" >> "$GITHUB_OUTPUT"
+            echo "approved_by=$GITHUB_ACTOR" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Controle negativo — confirmação incorreta deve falhar
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          python scripts/reqsys_product_story_linkedin.py \
+            --input artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json \
+            --content-hash "${{ steps.approval.outputs.content_hash }}" \
+            --approved-by "${{ steps.approval.outputs.approved_by }}" \
+            --correlation-id "$CORRELATION_ID-negative" \
+            --confirmation "DENY" \
+            --approval-kind "${{ steps.approval.outputs.approval_kind }}" \
+            --author-urn "${{ steps.approval.outputs.author_urn }}" \
+            --mode dry_run \
+            --output artifacts/reqsys-product-story-approval/negative.json
+          code=$?
+          set -e
+          test "$code" -ne 0 || {
+            echo "Falso positivo: confirmação inválida foi aceita." >&2
+            exit 1
+          }
+
+      - name: Approval Gate positivo + adapter oficial dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/reqsys_product_story_linkedin.py \
+            --input artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json \
+            --content-hash "${{ steps.approval.outputs.content_hash }}" \
+            --approved-by "${{ steps.approval.outputs.approved_by }}" \
+            --correlation-id "$CORRELATION_ID" \
+            --confirmation "${{ steps.approval.outputs.confirmation }}" \
+            --approval-kind "${{ steps.approval.outputs.approval_kind }}" \
+            --author-urn "${{ steps.approval.outputs.author_urn }}" \
+            --mode dry_run \
+            --api-version 202609 \
+            --output artifacts/reqsys-product-story-approval/approval-result.json
+
+      - name: Leitura independente da evidência
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(Path("artifacts/reqsys-product-story-approval/approval-result.json").read_text(encoding="utf-8"))
+          assert p["status"] == "DRY_RUN_APPROVED"
+          assert p["published"] is False
+          assert p["post_id"] is None
+          assert p["linkedin"]["endpoint"] == "https://api.linkedin.com/rest/posts"
+          assert p["linkedin"]["api_version"] == "202609"
+          assert p["linkedin"]["restli_protocol_version"] == "2.0.0"
+          assert p["approval"]["decision"] == "APPROVED"
+          assert p["content_hash"] == "${{ steps.approval.outputs.content_hash }}"
+          print(json.dumps({
+              "status": p["status"],
+              "content_hash": p["content_hash"],
+              "correlation_id": p["correlation_id"],
+              "published": p["published"],
+              "endpoint": p["linkedin"]["endpoint"],
+              "api_version": p["linkedin"]["api_version"],
+          }))
+          PY
+
+      - name: Publicar artifact de aprovação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-product-story-approval
+          path: |
+            artifacts/reqsys-product-story-approval/candidates/product-story-candidates.json
+            artifacts/reqsys-product-story-approval/candidates/product-story-candidates.md
+            artifacts/reqsys-product-story-approval/approval-result.json
+          if-no-files-found: error
+          retention-days: 90
+
+  ledger-e2e:
+    name: Publication Ledger E2E real
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      LEDGER_REPOSITORY: ${{ github.repository }}
+      LEDGER_ISSUE: "1862"
+      CORRELATION_ID: ledger-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_HEAD_SHA }}
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Reserva real, retry bloqueado e fechamento do probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/reqsys-product-story-approval
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from scripts.reqsys_product_story_linkedin import (
+              LedgerError,
+              find_persistent_entry,
+              list_github_ledger_entries,
+              reserve_github_ledger,
+              update_github_ledger_entry,
+          )
+
+          run_material = f"{os.environ['GITHUB_RUN_ID']}:{os.environ['GITHUB_RUN_ATTEMPT']}:{os.environ['SOURCE_HEAD_SHA']}:ledger-e2e"
+          content_hash = hashlib.sha256(run_material.encode("utf-8")).hexdigest()
+          approval = {
+              "content_hash": content_hash,
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "approved_by": "ci-ledger-e2e",
+              "pr_number": int(os.environ.get("PR_NUMBER") or 0),
+              "source_head_sha": os.environ["SOURCE_HEAD_SHA"],
+          }
+          repo = os.environ["LEDGER_REPOSITORY"]
+          issue = int(os.environ["LEDGER_ISSUE"])
+          token = os.environ["GITHUB_TOKEN"]
+
+          first = reserve_github_ledger(
+              repository=repo,
+              issue_number=issue,
+              token=token,
+              approval=approval,
+          )
+          assert first["already_published"] is False
+          prepared = first["entry"]
+          assert prepared["state"] == "PREPARED"
+          assert prepared["content_hash"] == content_hash
+          assert int(prepared["_comment_id"]) > 0
+
+          retry_blocked = False
+          try:
+              reserve_github_ledger(
+                  repository=repo,
+                  issue_number=issue,
+                  token=token,
+                  approval=approval,
+              )
+          except LedgerError as exc:
+              retry_blocked = "PREPARED" in str(exc)
+          assert retry_blocked, "retry automático não foi bloqueado por PREPARED"
+
+          closed = {
+              **{k: v for k, v in prepared.items() if not k.startswith("_")},
+              "state": "TEST_CLOSED",
+          }
+          final = update_github_ledger_entry(
+              repository=repo,
+              comment_id=int(prepared["_comment_id"]),
+              token=token,
+              entry=closed,
+          )
+          entries = list_github_ledger_entries(
+              repository=repo,
+              issue_number=issue,
+              token=token,
+          )
+          observed = find_persistent_entry(entries, content_hash)
+          assert observed is not None
+          assert observed["state"] == "TEST_CLOSED"
+          assert int(observed["_comment_id"]) == int(prepared["_comment_id"])
+
+          evidence = {
+              "result": "OK",
+              "environment": "github-actions",
+              "head_sha": os.environ["SOURCE_HEAD_SHA"],
+              "github_event_sha": os.environ["GITHUB_SHA"],
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "ledger_repository": repo,
+              "ledger_issue": issue,
+              "content_hash": content_hash,
+              "comment_id": int(prepared["_comment_id"]),
+              "prepared_observed": True,
+              "retry_blocked": retry_blocked,
+              "final_state": observed["state"],
+              "linkedin_called": False,
+          }
+          path = Path("artifacts/reqsys-product-story-approval/ledger-e2e.json")
+          path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(evidence))
+          PY
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+      - name: Publicar evidência do ledger real
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-product-story-ledger-e2e
+          path: artifacts/reqsys-product-story-approval/ledger-e2e.json
+          if-no-files-found: error
+          retention-days: 90
