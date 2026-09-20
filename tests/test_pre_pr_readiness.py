@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -82,7 +83,7 @@ def test_valid_workflow_yaml_is_accepted(tmp_path: Path) -> None:
 
 def test_workflow_installs_root_dependencies_before_backend_profile_branch() -> None:
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-    common_install = "python -m pip install --disable-pip-version-check PyYAML pytest 'httpx==0.28.1' 'openpyxl==3.1.5'"
+    common_install = "python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5'"
     backend_branch = "if git diff --name-only \"origin/$BASE_REF...HEAD\" | grep -q '^backend/'; then"
 
     assert common_install in workflow
@@ -126,6 +127,7 @@ def test_validate_python_runs_ruff_for_changed_python(monkeypatch, tmp_path: Pat
         "python:ruff:changed",
     ]
     assert calls[1][1][:4] == [sys.executable, "-m", "ruff", "check"]
+    assert calls[1][1][4:8] == ["--select", "E,F,I", "--ignore", "E501"]
     assert "scripts/alpha.py" in calls[1][1]
 
 
@@ -153,8 +155,6 @@ def test_pre_pr_workflow_installs_ruff_before_readiness() -> None:
 
 
 def test_governed_merge_requires_pre_pr_readiness_on_current_sha() -> None:
-    import json
-
     policy = json.loads(MERGE_POLICY_PATH.read_text(encoding="utf-8"))
     assert "Pre-PR Readiness Gate" in policy["required_workflows"]
     assert "Pre-PR Readiness Gate" not in policy["optional_when_not_registered"]
