@@ -1,0 +1,22 @@
+{
+  "feature_name": "rsm-05-service-case-console",
+  "project": "ReqSys Service Management",
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Tela única Vue 3 para REQUEST/INCIDENT/PROBLEM/CHANGE que recebe as transições permitidas do domínio autoritativo, executa mutações com versionamento otimista e somente confirma sucesso após releitura independente do estado persistido.",
+  "runtime_target": "pc24x7-dev",
+  "environment": "DEV",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_service_cases_api.py",
+      "frontend/src/services/serviceCases.test.js"
+    ],
+    "evidence_contract": "Provar UI real -> GET do ServiceCase e operações -> ação informada pelo backend -> POST com version/event_id -> GET independente confirmando estado persistido; incluir controle negativo sem alteração e replay sem efeito adicional no SHA atual."
+  }
+}
