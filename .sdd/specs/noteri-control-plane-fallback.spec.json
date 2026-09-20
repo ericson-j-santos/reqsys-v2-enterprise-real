@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Noteri control-plane fallback without RDC",
+  "status": "code_ready_activation_pending",
+  "approvals": {
+    "requirements": true
+  },
+  "architecture": {
+    "external_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "self_hosted_workflow": ".github/workflows/noteri-control-plane-probe.yml",
+    "probe": "scripts/noteri_control_plane_probe.py",
+    "watchdog": "scripts/noteri_control_plane_watchdog.py",
+    "runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "noteri",
+      "reqsys-dev"
+    ],
+    "rdc_required": false,
+    "environment": "DEV"
+  },
+  "security": {
+    "arbitrary_shell": false,
+    "gui_input": false,
+    "secrets_stored": false,
+    "production": false,
+    "reboot": false,
+    "fail_closed_on_missing_runner": true
+  },
+  "runtime_gate": {
+    "prerequisite": "preconfigured GitHub Actions runner on Noteri",
+    "activation_pending_until": [
+      "AtStartup+S4U watchdog proven",
+      "Runner.Listener.exe proven",
+      "workflow pickup proven"
+    ],
+    "unavailable_error": "SELF_HOSTED_RUNNER_UNAVAILABLE"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_control_plane_fallback.py",
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; sucesso exige pickup real e prova no host exato."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
+    "workflow": ".github/workflows/noteri-control-plane-probe.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "probe": "scripts/noteri_control_plane_probe.py",
+    "watchdog": "scripts/noteri_control_plane_watchdog.py",
+    "policy": ".github/self-hosted-runner-policy.json"
+  }
+}
