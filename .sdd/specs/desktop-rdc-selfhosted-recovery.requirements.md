@@ -22,6 +22,8 @@ Recuperar o Remote Desktop Commander do DESKTOP-PDQK954 sem depender do próprio
 14. O launcher interativo deve aceitar somente os marcadores governados `RDC_LAUNCHER_V3_RESILIENT`, `RDC_LAUNCHER_V4_ARBITRATED` e `RDC_LAUNCHER_V5_READY_CLAIM`; qualquer marcador desconhecido deve permanecer fail-closed.
 15. Após iniciar V4, a recuperação deve aguardar claim `ready=true` fresco por janela limitada; claim ausente, inválido ou stale não comprova saúde e deve cair para o launcher interativo.
 16. O fluxo deve armar o fallback interativo mesmo quando V4 estiver saudável, permitindo takeover automático se o claim V4 desaparecer.
+17. O Authorized Actions Gateway deve vincular a evidência ao `run_id` retornado pelo próprio `gh workflow run`; é proibido selecionar um run apenas por `head_sha`, pois múltiplas execuções podem compartilhar o mesmo SHA.
+18. Para recuperação Desktop, estados `pending`, `queued`, `requested` ou `waiting` após a janela de pickup devem produzir `SELF_HOSTED_RUNNER_UNAVAILABLE` e falhar fechado.
 
 ## Critérios de aceite
 
@@ -31,5 +33,7 @@ Recuperar o Remote Desktop Commander do DESKTOP-PDQK954 sem depender do próprio
 - marcadores não allowlisted permanecem recusados antes da execução de qualquer tarefa;
 - workflow usa exclusivamente o runner PC24x7;
 - gateway mantém a allowlist estática;
+- gateway comprova `run_id`, URL, SHA e evento do run exato disparado e recusa evidência de execução histórica;
+- recuperação permanece bloqueada quando o run exato não sai de `pending/queued/requested/waiting`;
 - após integração, comentário exato em #1705 cria um novo workflow_dispatch no SHA atual da main;
 - recuperação só é considerada concluída após leitura independente mostrar `DESKTOP-PDQK954` online com `transport_broadcast_v1=true` e uma chamada MCP real de leitura concluir com sucesso.

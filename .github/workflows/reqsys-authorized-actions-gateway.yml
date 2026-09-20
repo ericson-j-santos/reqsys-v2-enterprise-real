@@ -82,6 +82,7 @@ jobs:
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch fixed workflow on main
+        id: dispatch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,42 +94,48 @@ jobs:
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
-            gh workflow run "$TARGET_WORKFLOW" \
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
-              -f deploy=true
+              -f deploy=true)"
           elif [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
-            gh workflow run "$TARGET_WORKFLOW" \
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f environment=dev \
-              -f timeout_seconds=20
+              -f timeout_seconds=20)"
           else
-            gh workflow run "$TARGET_WORKFLOW" \
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
-              --ref main
+              --ref main)"
           fi
 
-      - name: Resolve dispatched run evidence
+          case "$run_url" in
+            "https://github.com/${GITHUB_REPOSITORY}/actions/runs/"*) ;;
+            *) echo 'dispatch_run_url_invalid' >&2; exit 4 ;;
+          esac
+          run_id="${run_url##*/}"
+          case "$run_id" in
+            ''|*[!0-9]*) echo 'dispatch_run_id_invalid' >&2; exit 4 ;;
+          esac
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+          printf 'run_url=%s\n' "$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Validate exact dispatched run evidence
         id: evidence
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
           EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
         run: |
           set -euo pipefail
           run_json=''
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            run_json="$(gh run list \
+            run_json="$(gh run view "$TARGET_RUN_ID" \
               --repo "$GITHUB_REPOSITORY" \
-              --workflow "$TARGET_WORKFLOW" \
-              --branch main \
-              --event workflow_dispatch \
-              --limit 20 \
-              --json databaseId,url,headSha,status,createdAt \
-              --jq ".[] | select(.headSha == \"$EXPECTED_SHA\")" \
-              | head -n 1 || true)"
+              --json databaseId,url,headSha,status,event 2>/dev/null || true)"
             [ -n "$run_json" ] && break
             sleep 5
           done
@@ -136,6 +143,17 @@ jobs:
           RUN_JSON="$run_json" python - <<'PY'
           import json, os
           run = json.loads(os.environ['RUN_JSON'])
+          expected_id = int(os.environ['TARGET_RUN_ID'])
+          expected_url = os.environ['TARGET_RUN_URL']
+          expected_sha = os.environ['EXPECTED_SHA']
+          if run.get('databaseId') != expected_id:
+              raise SystemExit('dispatched_run_id_mismatch')
+          if run.get('url') != expected_url:
+              raise SystemExit('dispatched_run_url_mismatch')
+          if run.get('headSha') != expected_sha:
+              raise SystemExit('dispatched_run_sha_mismatch')
+          if run.get('event') != 'workflow_dispatch':
+              raise SystemExit('dispatched_run_event_mismatch')
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
               fh.write(f"run_id={run['databaseId']}\n")
               fh.write(f"run_url={run['url']}\n")
@@ -151,16 +169,20 @@ jobs:
           TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
         run: |
           set -euo pipefail
-          status='queued'
+          status='pending'
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
-            [ "$status" != "queued" ] && break
-            sleep 5
+            case "$status" in
+              pending|queued|requested|waiting) sleep 5 ;;
+              *) break ;;
+            esac
           done
           printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
-          if [ "$status" = "queued" ]; then
-            printf 'error=SELF_HOSTED_RUNNER_UNAVAILABLE\n' >> "$GITHUB_OUTPUT"
-          fi
+          case "$status" in
+            pending|queued|requested|waiting)
+              printf 'error=SELF_HOSTED_RUNNER_UNAVAILABLE\n' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
       - name: Write sanitized dispatch evidence
         shell: bash
@@ -209,7 +231,7 @@ jobs:
           retention-days: 30
 
       - name: Fail closed when Desktop recovery runner is unavailable
-        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' && steps.pickup.outputs.status == 'queued'
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
         shell: bash
         run: |
           echo 'SELF_HOSTED_RUNNER_UNAVAILABLE' >&2
