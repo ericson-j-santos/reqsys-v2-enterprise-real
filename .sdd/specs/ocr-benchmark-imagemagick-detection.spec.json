@@ -1,0 +1,19 @@
+{
+  "feature_name": "ocr-benchmark-imagemagick-detection",
+  "project": "ReqSys v2 Enterprise — OCR benchmark",
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Corrige a resolução do ImageMagick no benchmark OCR para rejeitar o convert.exe nativo do Windows e aceitar somente executáveis cuja assinatura de -version confirme ImageMagick.",
+  "sdd_gate": {
+    "tests": [
+      "backend/ocr_tests/test_benchmark_contract.py"
+    ],
+    "evidence_contract": "O resolvedor deve rejeitar executáveis incompatíveis, aceitar assinatura ImageMagick válida, falhar explicitamente quando não houver candidato compatível e preservar o comportamento em plataformas onde magick/convert são de fato ImageMagick."
+  }
+}
