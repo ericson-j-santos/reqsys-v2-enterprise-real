@@ -26,6 +26,7 @@ jobs:
         github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
         github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
         github.event.comment.body == '/reqsys run desktop-rdc-recovery' ||
+        github.event.comment.body == '/reqsys run noteri-control-plane-probe' ||
         github.event.comment.body == '/reqsys run figma-github-e2e-dev'
       )
     runs-on: ubuntu-latest
@@ -60,6 +61,9 @@ jobs:
             '/reqsys run desktop-rdc-recovery')
               target='desktop-rdc-recovery.yml'
               ;;
+            '/reqsys run noteri-control-plane-probe')
+              target='noteri-control-plane-probe.yml'
+              ;;
             '/reqsys run figma-github-e2e-dev')
               target='figma-github-e2e-dev.yml'
               ;;
@@ -90,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|figma-github-e2e-dev.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|figma-github-e2e-dev.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
@@ -160,9 +164,9 @@ jobs:
               fh.write(f"run_status={run['status']}\n")
           PY
 
-      - name: Validate desktop recovery runner pickup
+      - name: Validate self-hosted runner pickup
         id: pickup
-        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml'
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -230,8 +234,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Fail closed when Desktop recovery runner is unavailable
-        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+      - name: Fail closed when self-hosted runner is unavailable
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
         shell: bash
         run: |
           echo 'SELF_HOSTED_RUNNER_UNAVAILABLE' >&2

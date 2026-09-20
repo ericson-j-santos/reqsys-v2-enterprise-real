@@ -21,6 +21,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'" in content
     assert "github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev'" in content
     assert "github.event.comment.body == '/reqsys run desktop-rdc-recovery'" in content
+    assert "github.event.comment.body == '/reqsys run noteri-control-plane-probe'" in content
 
 
 def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
@@ -33,12 +34,14 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='bacen-57-simulation-assessment.yml'" in content
     assert "target='cofre-runtime-evidence-gate.yml'" in content
     assert "target='desktop-rdc-recovery.yml'" in content
+    assert "target='noteri-control-plane-probe.yml'" in content
     assert (
         "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
         "bacen-57-simulation-assessment.yml|"
         "cofre-runtime-evidence-gate.yml|"
-        "desktop-rdc-recovery.yml"
+        "desktop-rdc-recovery.yml|"
+        "noteri-control-plane-probe.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
@@ -91,7 +94,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|figma-github-e2e-dev.yml)" in content
+    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|figma-github-e2e-dev.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
@@ -110,7 +113,7 @@ def test_gateway_fly_dev_fast_deploy_fixa_dev_e_input_exato() -> None:
 def test_gateway_desktop_rdc_falha_fechado_sem_runner_e_preserva_evidencia() -> None:
     content = _workflow()
 
-    assert "Validate desktop recovery runner pickup" in content
+    assert "Validate self-hosted runner pickup" in content
     assert 'gh run view "$TARGET_RUN_ID"' in content
     assert "runner_pickup_status" in content
     assert "runner_pickup_error" in content
@@ -142,3 +145,14 @@ def test_gateway_desktop_rdc_considera_pending_como_runner_nao_adquirido() -> No
     assert "pending|queued|requested|waiting" in content
     assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
     assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'" in content
+
+
+def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run noteri-control-plane-probe')" in content
+    assert "target='noteri-control-plane-probe.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-control-plane-probe.yml'" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "-f host=" not in content
+    assert "-f command=" not in content
