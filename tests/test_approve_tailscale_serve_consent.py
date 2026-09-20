@@ -34,3 +34,8 @@ def test_approval_target_marks_auth_without_click_target():
 def test_parser_accepts_explicit_github_login_mode():
     args = m.parser().parse_args(["login-github"])
     assert args.mode == "login-github"
+
+
+def test_parser_accepts_explicit_github_oauth_mode():
+    args = m.parser().parse_args(["authorize-github-oauth"])
+    assert args.mode == "authorize-github-oauth"
