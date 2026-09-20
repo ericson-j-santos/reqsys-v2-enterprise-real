@@ -112,8 +112,9 @@ def test_sync_figma_to_github_cria_issue(mock_create_issue, mock_comments, db_se
     mock_create_issue.assert_called_once()
 
 
+@patch('app.services.figma_github_sync.figma_client.get_comments', return_value=[])
 @patch('app.services.figma_github_sync.figma_client.create_comment')
-def test_sync_github_to_figma_atualiza_link(mock_create_comment, db_session):
+def test_sync_github_to_figma_atualiza_link(mock_create_comment, mock_get_comments, db_session):
     link = IntegracaoFigmaGithub(
         figma_file_key='fk',
         figma_node_id='1:1',
@@ -218,8 +219,9 @@ def test_sync_github_to_figma_pula_sem_issue_number(db_session):
     assert result.skipped == 1
 
 
+@patch('app.services.figma_github_sync.figma_client.get_comments', return_value=[])
 @patch('app.services.figma_github_sync.figma_client.create_comment', side_effect=RuntimeError('figma down'))
-def test_sync_github_to_figma_registra_warning_quando_comentario_falha(mock_comment, db_session):
+def test_sync_github_to_figma_registra_warning_quando_comentario_falha(mock_comment, mock_get_comments, db_session):
     link = IntegracaoFigmaGithub(
         figma_file_key='fk',
         figma_node_id='1:1',

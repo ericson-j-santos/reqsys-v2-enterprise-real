@@ -24,6 +24,8 @@ DEFAULT_PORT = 8765
 DEFAULT_ORIGINS = {
     "http://127.0.0.1:5173",
     "http://localhost:5173",
+    "http://127.0.0.1:8083",
+    "http://localhost:8083",
     "http://127.0.0.1:8084",
     "http://localhost:8084",
 }

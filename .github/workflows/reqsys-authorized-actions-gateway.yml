@@ -25,7 +25,8 @@ jobs:
         github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
         github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
         github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
-        github.event.comment.body == '/reqsys run desktop-rdc-recovery'
+        github.event.comment.body == '/reqsys run desktop-rdc-recovery' ||
+        github.event.comment.body == '/reqsys run figma-github-e2e-dev'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -59,6 +60,9 @@ jobs:
             '/reqsys run desktop-rdc-recovery')
               target='desktop-rdc-recovery.yml'
               ;;
+            '/reqsys run figma-github-e2e-dev')
+              target='figma-github-e2e-dev.yml'
+              ;;
             *)
               echo 'command_not_allowlisted' >&2
               exit 2
@@ -85,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|figma-github-e2e-dev.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
@@ -138,6 +142,26 @@ jobs:
               fh.write(f"run_status={run['status']}\n")
           PY
 
+      - name: Validate desktop recovery runner pickup
+        id: pickup
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          status='queued'
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
+            [ "$status" != "queued" ] && break
+            sleep 5
+          done
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" = "queued" ]; then
+            printf 'error=SELF_HOSTED_RUNNER_UNAVAILABLE\n' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Write sanitized dispatch evidence
         shell: bash
         env:
@@ -147,6 +171,8 @@ jobs:
           TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
           TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
           TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
+          RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
+          RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -163,6 +189,8 @@ jobs:
               'target_run_id': int(os.environ['TARGET_RUN_ID']),
               'target_run_url': os.environ['TARGET_RUN_URL'],
               'target_run_status': os.environ['TARGET_RUN_STATUS'],
+              'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
+              'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
               'gateway_run_id': int(os.environ['GITHUB_RUN_ID']),
               'secrets_read': False,
               'production_touched': False,
@@ -179,3 +207,10 @@ jobs:
           path: authorized-action-dispatch.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Fail closed when Desktop recovery runner is unavailable
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' && steps.pickup.outputs.status == 'queued'
+        shell: bash
+        run: |
+          echo 'SELF_HOSTED_RUNNER_UNAVAILABLE' >&2
+          exit 4

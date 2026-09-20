@@ -37,6 +37,7 @@ class EndpointResult:
     content_type: str | None
     error: str | None = None
     payload_keys: list[str] | None = None
+    correlation_id: str | None = None
     cors_allow_origin: str | None = None
     has_asset_reference: bool = False
     has_runtime_dashboard_marker: bool = False
@@ -82,8 +83,22 @@ def validar_endpoint(base_url: str, endpoint: str, timeout: float, origin: str |
         with urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL fornecida explicitamente pelo operador
             raw = response.read(512_000)
             elapsed_ms = round((time.perf_counter() - started) * 1000)
-            _payload, payload_keys = _ler_json_seguro(raw)
+            payload, payload_keys = _ler_json_seguro(raw)
             markers = _text_markers(raw)
+            correlation_id = None
+            if isinstance(payload, dict):
+                meta = payload.get("meta")
+                data = payload.get("data")
+                if isinstance(meta, dict) and meta.get("correlation_id"):
+                    correlation_id = str(meta["correlation_id"])
+                elif isinstance(data, dict) and data.get("correlation_id"):
+                    correlation_id = str(data["correlation_id"])
+            if not correlation_id:
+                correlation_id = (
+                    response.headers.get("x-correlation-id")
+                    or response.headers.get("x-request-id")
+                    or response.headers.get("traceparent")
+                )
             return EndpointResult(
                 endpoint=endpoint,
                 url=url,
@@ -92,12 +107,30 @@ def validar_endpoint(base_url: str, endpoint: str, timeout: float, origin: str |
                 elapsed_ms=elapsed_ms,
                 content_type=response.headers.get("content-type"),
                 payload_keys=payload_keys,
+                correlation_id=correlation_id,
                 cors_allow_origin=response.headers.get("access-control-allow-origin"),
                 **markers,
             )
     except HTTPError as exc:
         elapsed_ms = round((time.perf_counter() - started) * 1000)
-        return EndpointResult(endpoint, url, False, int(exc.code), elapsed_ms, exc.headers.get("content-type") if exc.headers else None, str(exc), cors_allow_origin=exc.headers.get("access-control-allow-origin") if exc.headers else None)
+        correlation_id = None
+        if exc.headers:
+            correlation_id = (
+                exc.headers.get("x-correlation-id")
+                or exc.headers.get("x-request-id")
+                or exc.headers.get("traceparent")
+            )
+        return EndpointResult(
+            endpoint,
+            url,
+            False,
+            int(exc.code),
+            elapsed_ms,
+            exc.headers.get("content-type") if exc.headers else None,
+            str(exc),
+            correlation_id=correlation_id,
+            cors_allow_origin=exc.headers.get("access-control-allow-origin") if exc.headers else None,
+        )
     except (TimeoutError, URLError, OSError) as exc:
         elapsed_ms = round((time.perf_counter() - started) * 1000)
         return EndpointResult(endpoint, url, False, None, elapsed_ms, None, f"{type(exc).__name__}: {exc}")
