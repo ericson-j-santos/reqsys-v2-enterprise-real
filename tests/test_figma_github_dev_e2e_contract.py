@@ -3,6 +3,7 @@ from pathlib import Path
 WORKFLOW = Path(".github/workflows/figma-github-e2e-dev.yml")
 SCRIPT = Path("scripts/figma_github_dev_e2e.py")
 GATEWAY = Path(".github/workflows/reqsys-authorized-actions-gateway.yml")
+POLICY = Path(".github/self-hosted-runner-policy.json")
 
 
 def test_workflow_is_fixed_to_pc24x7_dev() -> None:
@@ -35,3 +36,12 @@ def test_authorized_gateway_has_exact_figma_route() -> None:
     assert "github.event.comment.user.login == 'ericson-j-santos'" in raw
     assert "github.event.comment.body == '/reqsys run figma-github-e2e-dev'" in raw
     assert "target='figma-github-e2e-dev.yml'" in raw
+
+
+def test_self_hosted_policy_explicitly_allowlists_figma_e2e() -> None:
+    import json
+
+    policy = json.loads(POLICY.read_text(encoding="utf-8"))
+    assert policy["self_hosted_allowed"] is True
+    assert ".github/workflows/figma-github-e2e-dev.yml" in policy["approved_workflows"]
+    assert policy["required_adr"] == "docs/adr/ADR-046-pc24x7-substituicao-flyio.md"
