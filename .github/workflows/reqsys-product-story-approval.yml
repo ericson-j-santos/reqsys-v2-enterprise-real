@@ -44,6 +44,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -214,10 +216,13 @@ jobs:
       LEDGER_REPOSITORY: ${{ github.repository }}
       LEDGER_ISSUE: "1862"
       CORRELATION_ID: ledger-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_HEAD_SHA }}
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -243,14 +248,14 @@ jobs:
               update_github_ledger_entry,
           )
 
-          run_material = f"{os.environ['GITHUB_RUN_ID']}:{os.environ['GITHUB_RUN_ATTEMPT']}:{os.environ['GITHUB_SHA']}:ledger-e2e"
+          run_material = f"{os.environ['GITHUB_RUN_ID']}:{os.environ['GITHUB_RUN_ATTEMPT']}:{os.environ['SOURCE_HEAD_SHA']}:ledger-e2e"
           content_hash = hashlib.sha256(run_material.encode("utf-8")).hexdigest()
           approval = {
               "content_hash": content_hash,
               "correlation_id": os.environ["CORRELATION_ID"],
               "approved_by": "ci-ledger-e2e",
               "pr_number": int(os.environ.get("PR_NUMBER") or 0),
-              "source_head_sha": os.environ["GITHUB_SHA"],
+              "source_head_sha": os.environ["SOURCE_HEAD_SHA"],
           }
           repo = os.environ["LEDGER_REPOSITORY"]
           issue = int(os.environ["LEDGER_ISSUE"])
@@ -303,7 +308,8 @@ jobs:
           evidence = {
               "result": "OK",
               "environment": "github-actions",
-              "head_sha": os.environ["GITHUB_SHA"],
+              "head_sha": os.environ["SOURCE_HEAD_SHA"],
+              "github_event_sha": os.environ["GITHUB_SHA"],
               "correlation_id": os.environ["CORRELATION_ID"],
               "ledger_repository": repo,
               "ledger_issue": issue,
