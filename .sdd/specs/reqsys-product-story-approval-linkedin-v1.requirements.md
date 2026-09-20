@@ -17,11 +17,14 @@ Adicionar uma etapa governada de aprovação entre o Product Story Engine e a fu
 9. Aceitar autores `urn:li:person:*` ou `urn:li:organization:*`.
 10. Publicação real deve falhar fechada sem `REQSYS_LINKEDIN_PUBLISH_ENABLED=true` e `LINKEDIN_ACCESS_TOKEN`.
 11. Em resposta 201, capturar o `x-restli-id` como identificador do post.
-12. Antes de publicar, consultar ledger de idempotência pelo `content_hash`; uma publicação já registrada não pode provocar nova chamada HTTP.
-13. O workflow deste incremento deve executar somente `dry_run`, sem referenciar segredo do LinkedIn.
-14. Em PR, regenerar candidatos no SHA atual a partir do último Weekly Accomplishment Log verde da `main`.
-15. Executar controle negativo comprovando que confirmação diferente de `APPROVE` é rejeitada.
-16. Fazer leitura independente do JSON de saída e confirmar `published=false`.
+12. Usar o issue #1862 como ledger persistente e auditável por `content_hash`.
+13. Antes da chamada externa, criar reserva `PREPARED`; uma entrada `PUBLISHED`, `PREPARED` ou `RECONCILE_REQUIRED` deve impedir retry automático.
+14. Depois de HTTP 201, atualizar a mesma entrada para `PUBLISHED` com `post_id`.
+15. Se o LinkedIn publicar e a atualização final do ledger falhar, marcar `RECONCILE_REQUIRED` quando possível e bloquear retry automático.
+16. O workflow deste incremento deve executar somente `dry_run`, sem referenciar segredo do LinkedIn.
+17. Em PR, regenerar candidatos no SHA atual a partir do último Weekly Accomplishment Log verde da `main`.
+18. Executar controle negativo comprovando que confirmação diferente de `APPROVE` é rejeitada.
+19. Fazer leitura independente do JSON de saída e confirmar `published=false`.
 
 ## Critérios de aceite (Acceptance Criteria)
 
@@ -29,20 +32,21 @@ Adicionar uma etapa governada de aprovação entre o Product Story Engine e a fu
 2. Confirmação incorreta falha com código diferente de zero.
 3. Candidato não selecionado é rejeitado.
 4. Autor fora dos formatos permitidos é rejeitado.
-5. Dry-run não executa nenhuma chamada de rede.
+5. Dry-run não executa chamada ao LinkedIn nem exige token.
 6. Publish com aprovação de teste é rejeitado.
 7. Publish sem feature flag habilitada é rejeitado.
 8. Teste controlado do cliente com resposta HTTP 201 captura `x-restli-id`.
-9. Repetição da mesma publicação em ledger já preenchido retorna `ALREADY_PUBLISHED` e não executa segunda chamada HTTP.
-10. Workflow de PR não contém `--mode publish`, `LINKEDIN_ACCESS_TOKEN` ou `REQSYS_LINKEDIN_PUBLISH_ENABLED`.
-11. Workflow de PR baixa evidência semanal real, regenera candidatos, executa controle negativo, executa dry-run positivo e publica artifact.
-12. Testes `tests/test_reqsys_product_story_linkedin.py` e `tests/test_reqsys_product_story_approval_workflow.py` passam.
-13. Pre-PR Readiness deve retornar `READY_FOR_PR=passed` no HEAD exato e `behind_by=0` antes de abrir a PR.
+9. Primeira publicação governada cria reserva persistente, executa uma única chamada LinkedIn e finaliza o ledger como `PUBLISHED`.
+10. Repetição do mesmo `content_hash` retorna `ALREADY_PUBLISHED` e não executa segunda chamada LinkedIn.
+11. Ledger em `PREPARED` bloqueia retry automático.
+12. Workflow de PR não contém `--mode publish`, `LINKEDIN_ACCESS_TOKEN` ou `REQSYS_LINKEDIN_PUBLISH_ENABLED`.
+13. Workflow de PR baixa evidência semanal real, regenera candidatos, executa controle negativo, executa dry-run positivo e publica artifact.
+14. Testes `tests/test_reqsys_product_story_linkedin.py` e `tests/test_reqsys_product_story_approval_workflow.py` passam.
+15. Pre-PR Readiness deve retornar `READY_FOR_PR=passed` no HEAD exato e `behind_by=0`.
 
 ## Fora de escopo
 
 - Executar publicação real no LinkedIn.
 - Criar ou armazenar access token.
 - Solicitar permissões OAuth.
-- Persistir ledger definitivo de publicação entre execuções.
 - Merge, deploy ou promoção de ambiente.
