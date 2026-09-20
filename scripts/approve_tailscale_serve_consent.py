@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""Automação fail-closed do consentimento Tailscale Serve no Windows."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import time
+import webbrowser
+from pathlib import Path
+from typing import Any
+
+CONSENT_RE = re.compile(r"https://login\.tailscale\.com/f/serve\?[^\s]+")
+APPROVE_LABELS = {
+    "Enable Tailscale Serve",
+    "Enable Serve",
+    "Enable HTTPS",
+    "Ativar Tailscale Serve",
+    "Ativar Serve",
+    "Ativar HTTPS",
+}
+AUTH_MARKERS = ("sign in", "log in", "github", "entrar", "login")
+
+
+class ConsentError(RuntimeError):
+    pass
+
+
+def emit(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
+def find_tailscale() -> Path:
+    found = shutil.which("tailscale")
+    if found:
+        return Path(found)
+    candidate = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tailscale" / "tailscale.exe"
+    if candidate.is_file():
+        return candidate
+    raise ConsentError("tailscale_cli_not_found")
+
+
+def extract_consent_url(output: str) -> str:
+    match = CONSENT_RE.search(output)
+    if not match:
+        raise ConsentError("serve_consent_url_not_found")
+    return match.group(0)
+
+
+def request_consent_url(binary: Path, https_port: int) -> str:
+    proc = subprocess.Popen(
+        [
+            str(binary),
+            "serve",
+            "--bg",
+            "--yes",
+            f"--https={https_port}",
+            "http://127.0.0.1:11434",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        shell=False,
+    )
+    try:
+        output, _ = proc.communicate(timeout=8)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        output, _ = proc.communicate(timeout=5)
+    return extract_consent_url(output or "")
+
+
+def browser_snapshot() -> dict[str, Any]:
+    try:
+        from pywinauto import Desktop
+    except ImportError as exc:
+        raise ConsentError("pywinauto_not_available") from exc
+    windows = []
+    for window in Desktop(backend="uia").windows():
+        try:
+            title = (window.window_text() or "").strip()
+            buttons = []
+            texts = []
+            for control in window.descendants():
+                try:
+                    label = (control.window_text() or "").strip()
+                    ctype = str(control.element_info.control_type or "")
+                except Exception:
+                    continue
+                if not label:
+                    continue
+                if ctype == "Button" and label not in buttons:
+                    buttons.append(label)
+                if ctype in {"Text", "Document"} and label not in texts:
+                    texts.append(label)
+            combined = " ".join([title, *buttons, *texts]).casefold()
+            if any(marker in combined for marker in ("tailscale", "serve", "sign in", "log in", "github", "entrar")):
+                windows.append({"title": title, "buttons": buttons[:40], "texts": texts[:40]})
+        except Exception:
+            continue
+    return {"windows": windows}
+
+
+def approval_target(snapshot: dict[str, Any]) -> tuple[str | None, bool]:
+    auth_required = False
+    for window in snapshot.get("windows", []):
+        for label in window.get("buttons", []):
+            if label in APPROVE_LABELS:
+                return label, False
+            if any(marker in label.casefold() for marker in AUTH_MARKERS):
+                auth_required = True
+        for label in window.get("texts", []):
+            if any(marker in label.casefold() for marker in AUTH_MARKERS):
+                auth_required = True
+    return None, auth_required
+
+
+def click_exact(label: str) -> bool:
+    from pywinauto import Desktop
+
+    for window in Desktop(backend="uia").windows():
+        try:
+            for control in window.descendants(control_type="Button"):
+                if (control.window_text() or "").strip() == label:
+                    try:
+                        control.invoke()
+                    except Exception:
+                        control.click_input()
+                    return True
+        except Exception:
+            continue
+    return False
+
+
+def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
+    url = request_consent_url(find_tailscale(), https_port)
+    opened = bool(webbrowser.open(url, new=2))
+    time.sleep(wait_seconds)
+    snapshot = browser_snapshot()
+    target, auth_required = approval_target(snapshot)
+    base = {
+        "ok": True,
+        "browser_opened": opened,
+        "approval_target": target,
+        "auth_required": auth_required,
+        "snapshot": snapshot,
+    }
+    if mode == "probe":
+        return base
+    if auth_required and not target:
+        return {**base, "ok": False, "result": "interactive_auth_required"}
+    if not target:
+        return {**base, "ok": False, "result": "approval_control_not_found"}
+    clicked = click_exact(target)
+    time.sleep(3)
+    return {
+        **base,
+        "ok": clicked,
+        "result": "approval_clicked" if clicked else "approval_click_failed",
+        "after": browser_snapshot(),
+    }
+
+
+def parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("mode", choices=("probe", "approve"))
+    p.add_argument("--https-port", type=int, default=11443)
+    p.add_argument("--wait-seconds", type=int, default=6)
+    return p
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        payload = run(args.mode, args.https_port, args.wait_seconds)
+        emit(payload)
+        return 0 if payload.get("ok") else 2
+    except (ConsentError, OSError, subprocess.SubprocessError) as exc:
+        emit({"ok": False, "error": str(exc)})
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
