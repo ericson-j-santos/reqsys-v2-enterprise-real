@@ -279,16 +279,37 @@ def sync_github_to_figma(db: Session, file_key: str | None = None, repo: str | N
     if repo:
         query = query.filter(IntegracaoFigmaGithub.github_repo == repo)
 
+    comments_by_file: dict[str, list[dict[str, Any]]] = {}
     for link in query.all():
         if not link.github_issue_number:
             result.skipped += 1
             continue
         message = f'GitHub #{link.github_issue_number} atualizado: {link.github_issue_url or ""}'.strip()
         try:
-            figma_client.create_comment(link.figma_file_key, message, node_id=link.figma_node_id)
+            if link.figma_file_key not in comments_by_file:
+                comments_by_file[link.figma_file_key] = figma_client.get_comments(link.figma_file_key)
+            comments = comments_by_file[link.figma_file_key]
         except Exception as exc:
             result.warnings.append(str(exc))
             continue
+
+        if any((comment.get('message') or comment.get('text') or '').strip() == message for comment in comments):
+            link.status = 'synced'
+            link.conflict_reason = None
+            result.skipped += 1
+            result.links.append({'id': link.id, 'github_issue_number': link.github_issue_number, 'figma_file_key': link.figma_file_key})
+            continue
+
+        try:
+            created_comment = figma_client.create_comment(link.figma_file_key, message, node_id=link.figma_node_id)
+        except Exception as exc:
+            result.warnings.append(str(exc))
+            continue
+        comments.append({
+            'id': created_comment.get('id'),
+            'message': message,
+            'client_meta': {'node_id': link.figma_node_id} if link.figma_node_id else {},
+        })
         link.status = 'synced'
         link.conflict_reason = None
         result.updated += 1
