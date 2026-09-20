@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import getpass
 import json
 import os
@@ -20,6 +21,15 @@ TASK_TRIGGER_DAILY = 2
 TASK_ACTION_EXEC = 0
 TASK_INSTANCES_IGNORE_NEW = 2
 VALID_LOGON_MODES = {"interactive", "s4u"}
+
+
+def is_windows_admin() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
 
 
 def identity() -> str:
@@ -52,6 +62,8 @@ def configure(
 ) -> int:
     if logon_mode not in VALID_LOGON_MODES:
         raise ValueError("unsupported logon_mode")
+    if logon_mode == "s4u" and not is_windows_admin():
+        raise PermissionError("ADMIN_ELEVATION_REQUIRED_FOR_S4U_BOOT_AUTOSTART")
 
     definition.RegistrationInfo.Description = (
         "Governed resilient ReqSys orchestrator supervisor"

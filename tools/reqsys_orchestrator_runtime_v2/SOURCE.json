@@ -1,19 +1,21 @@
 {
   "schema_version": "1",
-  "purpose": "physical_24x7_e2e_transport_with_rdc_and_reboot_once_adapters",
+  "purpose": "physical_24x7_runtime_current_main_with_force_rdc_runner_recovery_self_refresh",
   "source_repository": "ericson-j-santos/reqsys-engineering-orchestrator",
-  "source_sha": "4c33029e37d633445d15f53a0b526b8c39f6c1a7",
+  "source_sha": "fb74f5ee34baa0cf7cffb3ac71e480bed9a6db13",
   "source_ci_run": 35406173178,
   "parent_snapshot_sha": "84b7b6be956b257c9672aa2058c54411b1ca85a1",
   "merge_intent": false,
   "hardening_pr": 3,
   "source_ci_runs": [
-    35523629272
+    35534577716
   ],
   "maintenance_adapter": "host.rdc.recover.v1",
-  "source_pr": 8,
+  "source_pr": 14,
   "maintenance_adapters": [
     "host.rdc.recover.v1",
+    "host.github_runner.recover.v1",
+    "host.orchestrator.refresh.v1",
     "host.reboot.once.v1"
   ],
   "autostart": "task-scheduler-s4u-prelogin",
@@ -23,5 +25,7 @@
     "host.orchestrator.refresh.v1",
     "host.reboot.once.v1",
     "orchestrator.selftest"
-  ]
+  ],
+  "control_plane_port": 8787,
+  "updated_at": "2026-09-20T20:32:00Z"
 }

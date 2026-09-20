@@ -1,16 +1,206 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
+import re
+import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 import time
-from pathlib import Path
+import zipfile
+from pathlib import Path, PurePosixPath
 from urllib.error import URLError
 from urllib.request import urlopen
 
 from orchestrator.persistence import backup_database, restore_if_missing
+
+
+RUNTIME_REFRESH_REQUEST = "refresh-runtime.request.json"
+RUNTIME_REFRESH_TTL_SECONDS = 900
+RUNTIME_REFRESH_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+APPROVED_ORIGIN = "https://github.com/ericson-j-santos/reqsys-engineering-orchestrator"
+
+
+def normalize_origin_url(value: str) -> str:
+    text = str(value or "").strip()
+    if text.startswith("git@github.com:"):
+        text = "https://github.com/" + text[len("git@github.com:"):]
+    elif text.startswith("ssh://git@github.com/"):
+        text = "https://github.com/" + text[len("ssh://git@github.com/"):]
+    if text.endswith(".git"):
+        text = text[:-4]
+    return text.rstrip("/").casefold()
+
+
+def git_text(source_root: Path, *args: str, timeout: int = 60) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(source_root), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} failed with exit={completed.returncode}")
+    return completed.stdout.strip()
+
+
+def git_bytes(source_root: Path, *args: str, timeout: int = 60) -> bytes:
+    completed = subprocess.run(
+        ["git", "-C", str(source_root), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} failed with exit={completed.returncode}")
+    return bytes(completed.stdout)
+
+
+def load_runtime_refresh_request(path: Path, now: float | None = None) -> dict:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("version") != 1:
+        raise ValueError("unsupported runtime refresh request version")
+    host = str(payload.get("target_host") or "")
+    if host.casefold() != socket.gethostname().casefold():
+        raise ValueError("runtime refresh request belongs to another host")
+    expected = str(payload.get("expected_sha") or "").lower()
+    if not RUNTIME_REFRESH_SHA_RE.fullmatch(expected):
+        raise ValueError("invalid runtime refresh expected_sha")
+    requested = float(payload.get("requested_at_epoch"))
+    not_before = float(payload.get("not_before_epoch"))
+    reference = time.time() if now is None else now
+    if requested > reference + 60:
+        raise ValueError("runtime refresh request is from the future")
+    if reference - requested > RUNTIME_REFRESH_TTL_SECONDS:
+        raise ValueError("runtime refresh request expired")
+    if not_before < requested or not_before - requested > 60:
+        raise ValueError("runtime refresh not_before is invalid")
+    payload["expected_sha"] = expected
+    return payload
+
+
+def _safe_extract_runtime_archive(raw: bytes, stage_root: Path) -> None:
+    allowed = {"orchestrator", "scripts"}
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        for info in archive.infolist():
+            path = PurePosixPath(info.filename)
+            if path.is_absolute() or ".." in path.parts or not path.parts:
+                raise ValueError("unsafe runtime archive path")
+            if path.parts[0] not in allowed:
+                raise ValueError("runtime archive contains unexpected path")
+        archive.extractall(stage_root)
+    if not (stage_root / "orchestrator" / "__init__.py").is_file():
+        raise ValueError("runtime archive missing orchestrator package")
+    if not (stage_root / "scripts" / "service_supervisor.py").is_file():
+        raise ValueError("runtime archive missing service supervisor")
+
+
+def _install_staged_runtime(
+    install_root: Path,
+    stage_root: Path,
+    expected_sha: str,
+) -> dict:
+    backup_root = install_root / "data" / "runtime-backups"
+    backup_root.mkdir(parents=True, exist_ok=True)
+    backup = backup_root / f"{int(time.time())}-{expected_sha[:12]}"
+    backup.mkdir(parents=True, exist_ok=False)
+    for name in ("orchestrator", "scripts"):
+        current = install_root / name
+        staged = stage_root / name
+        if not current.is_dir() or not staged.is_dir():
+            raise ValueError(f"runtime directory missing: {name}")
+        shutil.copytree(current, backup / name)
+    try:
+        for name in ("orchestrator", "scripts"):
+            shutil.copytree(stage_root / name, install_root / name, dirs_exist_ok=True)
+        atomic_json(
+            install_root / "runtime-version.json",
+            {
+                "schema_version": 1,
+                "source_sha": expected_sha,
+                "updated_at_epoch": time.time(),
+            },
+        )
+    except Exception:
+        for name in ("orchestrator", "scripts"):
+            shutil.copytree(backup / name, install_root / name, dirs_exist_ok=True)
+        raise
+    return {"backup": str(backup), "source_sha": expected_sha}
+
+
+def apply_runtime_refresh(config: dict, install_root: Path, request: dict) -> dict:
+    source_root_raw = str(config.get("source_root") or "").strip()
+    if not source_root_raw:
+        raise ValueError("source_root missing from supervisor config")
+    source_root = Path(source_root_raw).resolve()
+    if not source_root.is_dir():
+        raise ValueError("source_root does not exist")
+
+    origin = git_text(source_root, "remote", "get-url", "origin")
+    if normalize_origin_url(origin) != APPROVED_ORIGIN.casefold():
+        raise ValueError("source_root origin is not approved")
+
+    expected = request["expected_sha"]
+    git_text(source_root, "fetch", "--prune", "origin", "main", timeout=120)
+    actual = git_text(source_root, "rev-parse", "origin/main").lower()
+    if actual != expected:
+        raise ValueError("origin/main does not match expected_sha")
+
+    archive = git_bytes(
+        source_root,
+        "archive",
+        "--format=zip",
+        expected,
+        "orchestrator",
+        "scripts",
+    )
+    data_root = install_root / "data"
+    data_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="runtime-refresh-", dir=data_root) as tmp:
+        stage_root = Path(tmp)
+        _safe_extract_runtime_archive(archive, stage_root)
+        result = _install_staged_runtime(install_root, stage_root, expected)
+    result["origin"] = APPROVED_ORIGIN
+    return result
+
+
+def maybe_apply_runtime_refresh(config: dict, control_dir: Path, install_root: Path) -> bool:
+    request_path = control_dir / RUNTIME_REFRESH_REQUEST
+    if not request_path.is_file():
+        return False
+    try:
+        request = load_runtime_refresh_request(request_path)
+        if time.time() < float(request["not_before_epoch"]):
+            return False
+        result = apply_runtime_refresh(config, install_root, request)
+        request_path.unlink(missing_ok=True)
+        event(
+            "runtime_refresh_applied",
+            source_sha=result["source_sha"],
+            backup=result["backup"],
+            origin=result["origin"],
+        )
+        return True
+    except Exception as exc:
+        failed = control_dir / f"refresh-runtime.failed.{int(time.time())}.json"
+        try:
+            request_path.replace(failed)
+        except OSError:
+            request_path.unlink(missing_ok=True)
+        event(
+            "runtime_refresh_failed",
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+        )
+        return False
 
 
 def ready(url: str) -> bool:
@@ -134,6 +324,9 @@ def supervise(config: dict) -> None:
 
     try:
         while True:
+            if maybe_apply_runtime_refresh(config, control_dir, install_root):
+                event("supervisor_restart_for_runtime_refresh")
+                return
             if consume_request(control_dir, "shutdown.request"):
                 event("shutdown_requested")
                 return
