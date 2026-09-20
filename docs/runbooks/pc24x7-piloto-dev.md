@@ -1,191 +1,124 @@
-# Piloto PC 24x7 — ambiente dev
+# Piloto PC24x7 — publicação pública do ambiente DEV
 
-Runbook operacional do piloto descrito no [ADR-046](../adr/ADR-046-pc24x7-substituicao-flyio.md).
-Escopo **restrito a dev** — hml e prod continuam no Fly.io até o piloto ser validado por um
-período e uma decisão explícita ser tomada para os demais ambientes.
+Este runbook aplica o ADR-047 e substitui a dependência operacional do Fly.io para DEV.
 
-Todos os passos abaixo usam ferramentas gratuitas (nenhum custo de domínio, nuvem ou
-armazenamento é necessário para rodar o piloto).
+## Estado evidenciado em 2026-09-20
 
-## 1. Pré-requisitos
+- gateway ReqSys DEV saudável em `http://127.0.0.1:8083`;
+- API saudável via `/api/health`;
+- dois Cloudflare Quick Tunnels corrigidos para `http://host.docker.internal:8083`;
+- ambos com `restart: unless-stopped`;
+- `/api/health` e `/task-console` retornaram HTTP 200 através dos túneis;
+- DuckDNS existente está com drift de IP e não há token DuckDNS armazenado no host;
+- UPnP não foi detectado no roteador;
+- HML e PROD não são promovidos por este runbook.
 
-- Docker + Docker Compose instalados no PC 24x7.
-- Conta gratuita na Cloudflare (só para exposição pública e backup — ver seções 3 e 5).
-- `cloudflared` instalado ([instruções oficiais](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)).
-- **Repositório `kb` ao lado deste** — o serviço `kb` do `docker-compose.yml` faz `build: ../../kb`
-  (dois níveis acima da raiz do repositório). Numa máquina nova o `docker compose up` falha com
-  `unable to prepare context: path "…\kb" not found` até esse diretório existir. Se o piloto não
-  precisar da base de conhecimento, suba a stack sem ele (ver abaixo).
-- **Chaves da IA Assistente** (`GEMINI_API_KEY`, `GROQ_API_KEY`, opcionalmente `GEMINI_MODEL` /
-  `GROQ_MODEL`) no `.env` da raiz — o compose repassa essas variáveis para a API. Sem elas a
-  aplicação sobe normalmente, mas o botão "Assistente IA" do formulário de requisito responde
-  `GEMINI_API_KEY não configurada` e o probe `POST /api/v1/ia/govbi/probes` fica `amarelo`
-  (`provider_nao_configurado`).
+## 1. Arquitetura
 
-## 2. Subir a stack
+```text
+Internet
+   |
+   +-- Cloudflare Quick Tunnel (DEV imediato, gratuito, URL dinâmica)
+   |        |
+   |        +--> host.docker.internal:8083
+   |
+   +-- tieridev.duckdns.org (alvo de URL estável)
+            |
+            +--> HTTPS do PC24x7 quando DNS/ingresso estiverem comprovados
 
-A stack já existe (PR #1557); a execução real do piloto em 2026-09-10 revelou e corrigiu três
-lacunas (build do `kb`, variáveis da IA e roteamento `/api/runtime/*` no gateway):
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+PC24x7
+   |
+   +--> Nginx DEV :8083
+           +--> frontend
+           +--> /api --> backend
 ```
 
-Sem o repositório `kb` disponível, use um override local (fora do repositório) que troca o build
-por um placeholder — o nginx precisa que o host `kb` resolva para subir:
+Não publicar `:8210`, `:8211`, `:8215` ou qualquer backend diretamente para a Internet.
 
-```yaml
-# compose.pc24x7-local.yml (não versionar)
-services:
-  kb:
-    build: !reset null
-    image: python:3.12-alpine
-    command: python -m http.server 8080
+## 2. Reconciliação do Quick Tunnel
+
+Somente leitura:
+
+```powershell
+python scripts/pc24x7_public_dev_tunnel.py
 ```
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml -f compose.pc24x7-local.yml up -d
+Aplicar correção idempotente:
+
+```powershell
+python scripts/pc24x7_public_dev_tunnel.py --apply
 ```
 
-O gateway nginx sobe em `http://localhost:${GATEWAY_PORT:-8081}` e já roteia `/api/*`
-(backend) e `/` (frontend) — confirmar com:
+O reconciliador garante dois containers:
 
-```bash
-curl http://localhost:8081/api/health           # saúde básica (API + banco)
-curl http://localhost:8081/api/runtime/health   # saúde operacional (mesmo endpoint do smoke Fly)
-curl -X POST http://localhost:8081/api/v1/ia/govbi/probes   # IA Assistente: verde/amarelo/vermelho
+- `reqsys-dev-gateway-tunnel`
+- `reqsys-dev-failover-tunnel`
+
+Ambos apontam para `http://host.docker.internal:8083`, evitando dependência do IPv4 LAN do
+host. O estado corrente é salvo fora do repositório em
+`%LOCALAPPDATA%/ReqSys/PublicRuntime/dev-tunnels.json`.
+
+## 3. Por que Quick Tunnel é contingência e não URL canônica
+
+Quick Tunnel é gratuito e não exige domínio, IP público ou porta aberta, mas o hostname
+`*.trycloudflare.com` muda quando o processo é recriado. Portanto:
+
+- adequado para DEV, validação e contingência;
+- inadequado como endereço canônico de HML/PROD;
+- a URL dinâmica nunca deve ser hardcoded no Git.
+
+## 4. URL estável gratuita com DuckDNS
+
+Alvo DEV:
+
+```text
+https://tieridev.duckdns.org
 ```
 
-Resultado esperado da execução de referência (2026-09-10, Windows 11 + Docker Desktop, ~2 min de
-build): `api` e `db` `healthy`, `nginx` em `8081`, frontend respondendo `200` em `/`,
-`/api/health` `{"status":"ok"}` e o probe da IA `amarelo` (execução feita sem chaves — comportamento
-esperado, não é falha do piloto). Com chaves válidas o esperado é `verde`, como validado no mesmo
-dia no Fly DEV com o mesmo backend (PR #1589).
+Pré-requisitos para ativar:
 
-## 3. Expor publicamente — sem domínio, sem custo (fase 1)
+1. token DuckDNS disponível no host por mecanismo protegido;
+2. atualizador DDNS idempotente;
+3. entrada 80/443 no roteador ou outro ingresso externo comprovado;
+4. reverse proxy HTTPS válido para `:8083`;
+5. E2E externo.
 
-Como não há domínio próprio ainda, a fase 1 usa o **Cloudflare Quick Tunnel**: gera uma URL
-pública `https://<aleatório>.trycloudflare.com` sem precisar de conta paga, domínio ou
-qualquer configuração de DNS.
+O token não deve ser colocado em `.env` versionado, argumento de container, log ou
+artifact.
 
-```bash
-cloudflared tunnel --url http://localhost:8081
-```
+Se o provedor de Internet usar CGNAT ou o roteador não permitir ingresso, não forçar
+DuckDNS direto: usar Cloudflare Tunnel.
 
-A URL aparece no terminal (ex.: `https://exemplo-aleatorio.trycloudflare.com`) e pode ser
-testada imediatamente:
+## 5. URL estável por Cloudflare
 
-```bash
-curl https://<url-gerada>/api/runtime/health
-```
+Cloudflare Tunnel usa conexão somente de saída e não exige abrir portas. Para hostname
+estável próprio, usar Named Tunnel com domínio sob DNS Cloudflare.
 
-**Limitação conhecida e aceita para o piloto:** essa URL é temporária — muda toda vez que o
-`cloudflared` reinicia, e a Cloudflare não dá garantia de disponibilidade para Quick Tunnels
-(são documentados como uso de teste, não produção). Isso é aceitável para o piloto de **dev**
-porque o objetivo aqui é validar o caminho técnico (Docker + túnel + PC 24x7), não servir
-usuários finais com URL estável.
+Sem domínio próprio, manter Quick Tunnel apenas para DEV.
 
-### Fase 2 (quando houver orçamento): domínio próprio + túnel nomeado
+## 6. HML e PROD
 
-Quando fizer sentido gastar (~R$40–60/ano por um domínio), o caminho fica assim:
+Não copiar automaticamente DEV para HML/PROD.
 
-1. Registrar um domínio em qualquer registrador.
-2. Adicionar o domínio à Cloudflare (plano Free) e apontar os nameservers do registrador
-   para a Cloudflare.
-3. Criar um túnel nomeado (`cloudflared tunnel create reqsys-dev`) e uma rota DNS
-   (`cloudflared tunnel route dns reqsys-dev dev.seudominio.com`) — isso substitui o Quick
-   Tunnel por uma URL estável, sem os limites do modo de teste.
+Antes da promoção exigir:
 
-Esse passo é adiado deliberadamente: não faz sentido gastar em domínio antes de validar que o
-resto do piloto (estabilidade do PC, backup, restart) funciona.
+- stack isolada por ambiente;
+- persistência/backup restaurável;
+- restart pós-boot;
+- endpoint HTTPS estável;
+- health/readiness;
+- gates de segurança/governança;
+- E2E com leitura independente;
+- rollback testado.
 
-## 4. Restart automático após queda de energia/reinício
+## 7. Critério de conclusão DEV
 
-A stack já tem `restart: unless-stopped` em todos os serviços do `docker-compose.yml` — isso
-garante que os containers voltam sozinhos **assim que o daemon do Docker sobe**. O que falta
-garantir é que o **próprio Docker** suba sozinho com o sistema operacional, sem depender de
-alguém logar fisicamente na máquina.
+DEV público só passa de contingência para canônico quando:
 
-### Linux (recomendado para o PC 24x7 definitivo)
-
-```bash
-sudo systemctl enable docker
-```
-
-O Docker Engine no Linux roda como serviço `systemd` — sobe no boot do SO, sem precisar de
-login de usuário. É o caminho mais robusto para uma máquina que passa por quedas de energia.
-
-### Windows (o que está disponível hoje, para validar o piloto rapidamente)
-
-Docker Desktop **não** roda como serviço do Windows — ele depende de uma sessão de usuário
-logada. Duas opções, em ordem de recomendação:
-
-1. **WSL2 + Ubuntu com systemd + Docker Engine nativo (sem Docker Desktop).** O WSL2 moderno
-   suporta `systemd`, então dá para instalar o Docker Engine dentro de uma distro Ubuntu e
-   habilitar `docker.service` exatamente como no Linux — isso inicia com o Windows sem exigir
-   login de usuário. É o caminho recomendado se o PC 24x7 for continuar no Windows.
-2. **Docker Desktop + login automático do Windows.** Habilitar "Start Docker Desktop when you
-   sign in" nas configurações do Docker Desktop, e configurar login automático do Windows
-   (`netplwiz` ou uma conta de serviço dedicada). **Ressalva de segurança:** login automático
-   enfraquece a postura de segurança da máquina (a senha fica acessível a quem tiver acesso
-   físico/à conta local) — aceitável só para o piloto de dev, não recomendado se este PC vier
-   a hospedar hml/prod no futuro.
-
-## 5. Backup — reaproveitando o padrão gratuito que o repositório já usa
-
-O ReqSys já tem um pipeline de backup gratuito testado para BACEN-04
-(`scripts/reqsys_free_tier_backup.py` + `scripts/run_reqsys_free_tier_backup.sh`): restic
-como ferramenta de backup + Cloudflare R2 (10 GiB grátis, sem custo de egress) como
-armazenamento externo criptografado. Esse padrão já é a resposta certa aqui — só não precisa
-da parte de orquestração de Fly Machines (`flyctl ssh`/`machine start`/`stop`), porque no PC
-24x7 o backup roda no mesmo host onde o banco já está.
-
-`scripts/pc24x7_backup_restic.sh` faz a versão simplificada: dump do
-Postgres via `docker compose exec`, backup com `restic`, retenção com `restic forget --prune`.
-
-### Configuração (uma vez)
-
-1. Criar um bucket R2 gratuito na Cloudflare (dashboard → R2 → Create bucket).
-2. Gerar um token de API R2 (S3-compatible) com permissão de leitura/escrita nesse bucket.
-3. Exportar as variáveis que o restic espera:
-
-```bash
-export RESTIC_REPOSITORY="s3:https://<account-id>.r2.cloudflarestorage.com/reqsys-dev-backup"
-export RESTIC_PASSWORD="<senha-forte-para-criptografia-do-repositorio-restic>"
-export AWS_ACCESS_KEY_ID="<r2-access-key-id>"
-export AWS_SECRET_ACCESS_KEY="<r2-secret-access-key>"
-```
-
-### Rodando o backup
-
-```bash
-./scripts/pc24x7_backup_restic.sh
-```
-
-Recomendado agendar isso diariamente (`cron` no Linux, Agendador de Tarefas no Windows).
-
-## 6. Acompanhamento de custo sem gasto novo
-
-A comparação inicial está documentada no [ADR-046](../adr/ADR-046-pc24x7-substituicao-flyio.md).
-Para manter a fase 1 fiel ao objetivo de custo, registrar manualmente durante o piloto:
-
-- consumo aproximado do PC ligado 24x7, quando houver medidor ou estimativa confiável;
-- tempo gasto em administração por semana (backup, atualização, restart, túnel, investigação);
-- falhas de energia/internet e tempo até recuperação;
-- qualquer gasto efetivo diferente de zero.
-
-Enquanto esses itens não forem medidos, a decisão continua conservadora: **dev pode rodar no
-PC 24x7 como piloto sem gasto novo; hml e prod continuam no Fly.io**.
-
-## 7. Critério de saída do piloto
-
-Antes de considerar promover dev-no-PC24x7 para "principal" (e antes de sequer cogitar hml ou
-prod), validar por um período (sugestão: pelo menos 2 semanas de uso real):
-
-- URL pública respondendo de forma consistente (sem quedas não planejadas).
-- Pelo menos uma restauração de backup testada com sucesso (`restic restore`), não só o
-  backup em si.
-- Reinício do PC (real ou simulado) seguido de recuperação automática dos containers sem
-  intervenção manual.
-
-Só depois disso faz sentido revisitar o ADR-046 para decidir sobre hml/prod.
+- URL estável;
+- DNS atualizado automaticamente;
+- HTTPS válido;
+- frontend e `/api/health` verdes;
+- reinício recupera stack e publicação;
+- nenhuma porta de backend está exposta diretamente;
+- evidência vinculada ao SHA corrente.
