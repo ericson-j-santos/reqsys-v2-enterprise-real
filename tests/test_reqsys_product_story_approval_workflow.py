@@ -47,7 +47,7 @@ class ReqSysProductStoryApprovalWorkflowTests(unittest.TestCase):
         self.assertIn("Publication Ledger E2E real", self.text)
         self.assertIn("github.event.pull_request.head.repo.full_name == github.repository", self.text)
         self.assertIn("issues: write", self.text)
-        self.assertIn("LEDGER_ISSUE: "1862"", self.text)
+        self.assertIn('LEDGER_ISSUE: "1862"', self.text)
         self.assertIn("retry automático não foi bloqueado por PREPARED", self.text)
         self.assertIn('"state": "TEST_CLOSED"', self.text)
         self.assertIn('"linkedin_called": False', self.text)
