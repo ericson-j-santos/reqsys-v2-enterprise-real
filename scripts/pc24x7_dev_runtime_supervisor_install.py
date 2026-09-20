@@ -100,7 +100,7 @@ def install() -> int:
         "persistent_supervisor": str(PERSISTENT_SUPERVISOR),
         "copied": copied,
         "trigger_returncode": triggered.returncode,
-    }, ensure_ascii=False, sort_keys=True))
+    }, ensure_ascii=True, sort_keys=True))
     return 0
 
 
