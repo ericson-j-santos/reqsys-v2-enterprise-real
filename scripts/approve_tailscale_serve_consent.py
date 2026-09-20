@@ -136,8 +136,11 @@ def click_exact(label: str) -> bool:
 
 
 def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
-    url = request_consent_url(find_tailscale(), https_port)
-    opened = bool(webbrowser.open(url, new=2))
+    if mode == "authorize-github-oauth":
+        opened = False
+    else:
+        url = request_consent_url(find_tailscale(), https_port)
+        opened = bool(webbrowser.open(url, new=2))
     time.sleep(wait_seconds)
     snapshot = browser_snapshot()
     target, auth_required = approval_target(snapshot)
