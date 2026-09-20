@@ -150,6 +150,23 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
     }
     if mode == "probe":
         return base
+    if mode == "login-github":
+        if target:
+            return {**base, "result": "approval_already_available"}
+        github_label = "Sign in with GitHub"
+        github_present = any(
+            github_label in window.get("buttons", []) for window in snapshot.get("windows", [])
+        )
+        if not github_present:
+            return {**base, "ok": False, "result": "github_signin_control_not_found"}
+        clicked = click_exact(github_label)
+        time.sleep(5)
+        return {
+            **base,
+            "ok": clicked,
+            "result": "github_signin_clicked" if clicked else "github_signin_click_failed",
+            "after": browser_snapshot(),
+        }
     if auth_required and not target:
         return {**base, "ok": False, "result": "interactive_auth_required"}
     if not target:
@@ -166,7 +183,7 @@ def run(mode: str, https_port: int, wait_seconds: int) -> dict[str, Any]:
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("mode", choices=("probe", "approve"))
+    p.add_argument("mode", choices=("probe", "login-github", "approve"))
     p.add_argument("--https-port", type=int, default=11443)
     p.add_argument("--wait-seconds", type=int, default=6)
     return p
