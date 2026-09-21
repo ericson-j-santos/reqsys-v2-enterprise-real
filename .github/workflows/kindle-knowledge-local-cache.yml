@@ -1,0 +1,135 @@
+name: Kindle Knowledge Local Cache
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 11 * * *'
+  pull_request:
+    paths:
+      - 'scripts/kindle_knowledge_local_cache.py'
+      - 'tests/test_kindle_knowledge_local_cache.py'
+      - '.github/workflows/kindle-knowledge-local-cache.yml'
+      - '.github/self-hosted-runner-policy.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kindle-knowledge-local-cache-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    name: Validate Kindle local cache contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Validate contract and negative controls
+        run: python -m pytest tests/test_kindle_knowledge_local_cache.py -q
+
+  noteri:
+    name: Materialize and replay on Noteri
+    needs: contract
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 8
+    env:
+      CORRELATION_ID: kindle-noteri-${{ github.run_id }}-${{ github.run_attempt }}
+      OUTPUT_ROOT: C:\dev\chatgpt-workers\kindle-knowledge-local
+      EVIDENCE_FILE: artifacts\kindle-knowledge\noteri.json
+      REPLAY_EVIDENCE_FILE: artifacts\kindle-knowledge\noteri-replay.json
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Materialize queries
+        shell: powershell
+        run: >
+          python scripts/kindle_knowledge_local_cache.py
+          --confirm MATERIALIZE-KINDLE-QUERIES
+          --expected-host Noteri
+          --output-root "$env:OUTPUT_ROOT"
+          --correlation-id "$env:CORRELATION_ID"
+          --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Replay must be idempotent
+        shell: powershell
+        run: >
+          python scripts/kindle_knowledge_local_cache.py
+          --confirm MATERIALIZE-KINDLE-QUERIES
+          --expected-host Noteri
+          --output-root "$env:OUTPUT_ROOT"
+          --correlation-id "$env:CORRELATION_ID-replay"
+          --evidence-file "$env:REPLAY_EVIDENCE_FILE"
+          --expect-no-changes
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kindle-local-noteri-${{ github.run_id }}
+          path: artifacts/kindle-knowledge/*.json
+          if-no-files-found: error
+          retention-days: 30
+
+  desktop:
+    name: Materialize and replay on PC24x7
+    needs: contract
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 8
+    env:
+      CORRELATION_ID: kindle-pc24x7-${{ github.run_id }}-${{ github.run_attempt }}
+      OUTPUT_ROOT: C:\dev\chatgpt-workers\kindle-knowledge-local
+      EVIDENCE_FILE: artifacts\kindle-knowledge\pc24x7.json
+      REPLAY_EVIDENCE_FILE: artifacts\kindle-knowledge\pc24x7-replay.json
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Materialize queries
+        shell: powershell
+        run: >
+          python scripts/kindle_knowledge_local_cache.py
+          --confirm MATERIALIZE-KINDLE-QUERIES
+          --expected-host DESKTOP-PDQK954
+          --output-root "$env:OUTPUT_ROOT"
+          --correlation-id "$env:CORRELATION_ID"
+          --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Replay must be idempotent
+        shell: powershell
+        run: >
+          python scripts/kindle_knowledge_local_cache.py
+          --confirm MATERIALIZE-KINDLE-QUERIES
+          --expected-host DESKTOP-PDQK954
+          --output-root "$env:OUTPUT_ROOT"
+          --correlation-id "$env:CORRELATION_ID-replay"
+          --evidence-file "$env:REPLAY_EVIDENCE_FILE"
+          --expect-no-changes
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kindle-local-pc24x7-${{ github.run_id }}
+          path: artifacts/kindle-knowledge/*.json
+          if-no-files-found: error
+          retention-days: 30
