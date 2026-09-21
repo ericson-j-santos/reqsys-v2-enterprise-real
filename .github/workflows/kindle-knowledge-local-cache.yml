@@ -49,6 +49,7 @@ jobs:
       OUTPUT_ROOT: C:\dev\chatgpt-workers\kindle-knowledge-local
       EVIDENCE_FILE: artifacts\kindle-knowledge\noteri.json
       REPLAY_EVIDENCE_FILE: artifacts\kindle-knowledge\noteri-replay.json
+      RECOVERY_EVIDENCE_FILE: artifacts\kindle-knowledge\desktop-recovery.json
     steps:
       - name: Checkout immutable SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
