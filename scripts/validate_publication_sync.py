@@ -126,33 +126,9 @@ def _sha_matches(expected: str, observed: str | None) -> bool:
     return _normalize_sha(observed) == _normalize_sha(expected)
 
 
-def _fetch_origin_main_sha() -> str | None:
-    try:
-        subprocess.run(
-            ["git", "fetch", "origin", "main", "--depth", "1"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        completed = subprocess.run(
-            ["git", "rev-parse", "origin/main"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return _normalize_sha(completed.stdout.strip())
-    except Exception:
-        return None
-
-
 def _api_sha_acceptable(expected_sha: str, observed_sha: str | None) -> tuple[bool, str]:
     if _sha_matches(expected_sha, observed_sha):
         return True, "matches_event_sha"
-    main_head = _fetch_origin_main_sha()
-    if main_head and _sha_matches(main_head, observed_sha):
-        return True, "matches_origin_main_head"
     return False, "sha_mismatch"
 
 
