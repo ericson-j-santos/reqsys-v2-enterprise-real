@@ -14,6 +14,11 @@ class FabricHmlNoteriDiscoveryContractTests(unittest.TestCase):
         self.assertNotIn("gh secret set", script)
         self.assertIn("secret_value_exposed", script)
         self.assertIn("identifiers_exposed", script)
+        self.assertIn("fabric_hml_azps_probe.ps1", script)
+        helper = Path("scripts/fabric_hml_azps_probe.ps1").read_text(encoding="utf-8")
+        self.assertIn("Get-AzAccessToken", helper)
+        self.assertNotIn("Write-Host $graphToken", helper)
+        self.assertNotIn("Write-Host $fabricToken", helper)
 
     def test_apply_is_main_only_and_confirmed(self):
         workflow = Path(".github/workflows/fabric-hml-noteri-discovery.yml").read_text(encoding="utf-8")
