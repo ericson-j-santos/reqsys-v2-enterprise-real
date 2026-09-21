@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pr-creation-readiness-enforcement",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "controls": {
+    "direct_main_gh_pr_create_allowed": false,
+    "direct_main_rest_pull_create_allowed": false,
+    "exact_head_readiness_required": true,
+    "current_base_revalidation_required": true,
+    "required_merge_workflow": "PR Creation Path Guard",
+    "merge": false,
+    "deploy": false,
+    "production": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_validate_pr_creation_paths.py",
+      "tests/test_auto_open_agent_pr.py"
+    ],
+    "evidence_contract": "Automated PRs targeting main use auto_open_agent_pr only after Pre-PR Readiness success on the exact head SHA and current-base comparison."
+  },
+  "traceability": {
+    "validator": "scripts/validate_pr_creation_paths.py",
+    "opener": "scripts/auto_open_agent_pr.py",
+    "workflow": ".github/workflows/pr-creation-path-guard.yml",
+    "merge_policy": "governance/merge/current-sha-required-workflows.json"
+  }
+}
