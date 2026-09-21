@@ -26,6 +26,8 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe'" in content
     assert "github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'" in content
     assert "github.event.comment.body == '/reqsys run noteri-desktop-network-probe'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev'" in content
 
 
 def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
@@ -43,6 +45,8 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='fabric-oidc-readonly-probe.yml'" in content
     assert "target='codex-ollama-e2e-dev.yml'" in content
     assert "target='noteri-desktop-network-probe.yml'" in content
+    assert "target='pc24x7-teams-token-bootstrap.yml'" in content
+    assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert (
         "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
@@ -53,7 +57,10 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "noteri-headless-control-plane-activation.yml|"
         "figma-github-e2e-dev.yml|"
         "fabric-oidc-readonly-probe.yml|"
-        "codex-ollama-e2e-dev.yml"
+        "codex-ollama-e2e-dev.yml|"
+        "noteri-desktop-network-probe.yml|"
+        "pc24x7-teams-token-bootstrap.yml|"
+        "pc24x7-teams-ephemeral-e2e.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
@@ -106,7 +113,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|noteri-desktop-network-probe.yml)" in content
+    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|noteri-desktop-network-probe.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
@@ -197,6 +204,21 @@ def test_gateway_noteri_headless_activation_is_exact_inputless_and_fail_closed()
     assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
     assert "-f host=" not in content
     assert "-f command=" not in content
+
+
+def test_gateway_teams_ai_dev_dispatches_sao_exatos_e_nonprod() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run pc24x7-teams-token-bootstrap-dev')" in content
+    assert "target='pc24x7-teams-token-bootstrap.yml'" in content
+    assert "'/reqsys run pc24x7-teams-e2e-dev')" in content
+    assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
+    assert "'production_touched': False" in content
+    assert "'secrets_read': False" in content
+    assert "-f environment=prod" not in content
+    assert "-f environment=stg" not in content
+    assert "-f workflow=" not in content
+    assert "eval " not in content
 
 
 def test_gateway_noteri_desktop_network_probe_is_exact_inputless_and_fail_closed() -> None:
