@@ -19,7 +19,17 @@
       "reqsys-dev"
     ],
     "rdc_required": false,
-    "environment": "DEV"
+    "environment": "DEV",
+    "headless_runner_name": "NoteriHeadless",
+    "headless_runner_home": "C:\\actions-runner-noteri-headless",
+    "headless_runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "noteri-headless",
+      "reqsys-dev"
+    ],
+    "headless_runtime": "native_windows_service"
   },
   "security": {
     "arbitrary_shell": false,
@@ -33,9 +43,9 @@
   "runtime_gate": {
     "prerequisite": "GitHub CLI autenticado e bootstrap governado capaz de provisionar ou reutilizar o runner do Noteri",
     "activation_pending_until": [
-      "AtStartup+S4U watchdog proven",
-      "Runner.Listener.exe proven",
-      "workflow pickup proven"
+      "native GitHub runner Windows service proven",
+      "NoteriHeadless Runner.Listener.exe proven",
+      "headless service workflow pickup proven"
     ],
     "unavailable_error": "SELF_HOSTED_RUNNER_UNAVAILABLE",
     "abandoned_run_cleanup": "cancel_exact_run_and_record_terminal_state"
@@ -47,7 +57,7 @@
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_activate_noteri_free_control_plane.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático."
+    "evidence_contract": "O runner interativo deve permanecer funcional durante a migração; o headless só é aceito após serviço Windows nativo do GitHub Runner ativo, pickup real no runner NoteriHeadless, artifact sanitizado, replay idempotente e controle negativo de identidade."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -57,55 +67,61 @@
     "watchdog": "scripts/noteri_control_plane_watchdog.py",
     "bootstrap": "scripts/activate_noteri_free_control_plane.py",
     "policy": ".github/self-hosted-runner-policy.json",
-    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "headless_service_probe": ".github/workflows/noteri-headless-service-probe.yml"
   },
   "artifacts": {
     "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
-    "headless_uac_launcher": "scripts/noteri_control_plane_watchdog_uac_launcher.py"
+    "headless_service_probe_workflow": ".github/workflows/noteri-headless-service-probe.yml",
+    "native_service_bootstrap": "scripts/activate_noteri_free_control_plane.py",
+    "legacy_s4u_launcher_deprecated": "scripts/noteri_control_plane_watchdog_uac_launcher.py"
   },
   "commands": {
-    "headless_activation": "/reqsys run noteri-headless-control-plane-activation"
+    "headless_activation": "/reqsys run noteri-headless-control-plane-activation",
+    "headless_service_probe": "/reqsys run noteri-headless-service-probe"
   },
   "runtime_acceptance": {
-    "headless_task": {
-      "trigger": "AtStartup",
-      "logon_type": "S4U",
-      "host": "Noteri",
-      "rdc_required": false,
-      "shell": "powershell",
-      "shell_reason": "Noteri uses Windows PowerShell; pwsh is not installed in the self-hosted runner PATH",
-      "task_folder": "\\Automation",
-      "validator": "schtasks_xml",
-      "elevated_result": "required",
-      "failure_contract": "elevated child must persist sanitized result and fail closed",
-      "uac_brokers": [
-        "ShellExecuteW(runas)",
-        "Windows PowerShell Start-Process -Verb RunAs",
-        "Shell.Application.ShellExecute(runas)"
+    "headless_service": {
+      "type": "windows_service",
+      "provisioner": "GitHub Actions Runner config.cmd --runasservice",
+      "runner_name": "NoteriHeadless",
+      "runner_home": "C:\\actions-runner-noteri-headless",
+      "labels": [
+        "self-hosted",
+        "Windows",
+        "X64",
+        "noteri-headless",
+        "reqsys-dev"
+      ],
+      "service_account": "GitHub Runner default NetworkService",
+      "password_supplied": false,
+      "validator": "windows_scm",
+      "required_state": [
+        "service_exists",
+        "auto_start",
+        "running"
       ],
       "uac_bypass_allowed": false,
-      "principal_resolution": [
-        "current user SID from whoami /user",
-        "resolved whoami account name fallback"
-      ],
-      "principal_value_logged": false,
-      "s4u_logon_failure_code": "0x8007052E",
       "local_interactive_fallback": {
-        "staged_by": "GitHub self-hosted runner",
+        "staged_by": "GitHub self-hosted runner Noteri",
         "desktop_files": [
           "Ativar-Noteri-Headless.cmd",
           "Ativar-Noteri-Headless.ps1"
         ],
-        "purpose": "single-click legitimate UAC consent when remote runner cannot invoke runas",
-        "rdc_required": false,
-        "uac_bypass_allowed": false
+        "purpose": "single-click legitimate UAC consent for initial native Windows service provisioning",
+        "rdc_required": false
       }
+    },
+    "legacy_s4u": {
+      "accepted_for_headless": false,
+      "reason": "Task Scheduler S4U has no network access and cannot satisfy GitHub runner connectivity"
     },
     "probe_workflow": {
       "host": "Noteri",
+      "runner_name": "NoteriHeadless",
       "shell": "powershell",
       "forbidden_shell": "pwsh",
-      "reason": "Noteri self-hosted runner exposes Windows PowerShell; PowerShell 7 (pwsh) is not available on PATH"
+      "reason": "Noteri self-hosted runner exposes Windows PowerShell; PowerShell 7 (pwsh) is not required"
     }
   }
 }
