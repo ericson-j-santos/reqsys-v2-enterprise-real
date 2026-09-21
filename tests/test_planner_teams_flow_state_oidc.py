@@ -444,7 +444,7 @@ def test_reconcile_falha_fechado_quando_ha_revisao_unpublished(monkeypatch):
     with pytest.raises(
         FlowStateError,
         match=r"published update.*unpublished active row",
-    ):
+    ) as exc_info:
         mod.reconcile_flow_card(
             "https://org.crm.dynamics.com",
             "token",
@@ -452,10 +452,62 @@ def test_reconcile_falha_fechado_quando_ha_revisao_unpublished(monkeypatch):
             "ReqSys - Notificar Teams (Tarefa criada no Planner)",
         )
 
+    assert exc_info.value.details["unpublished_detected"] is True
+    assert exc_info.value.details["unpublished_relation"] == "same_as_published"
+    assert "unpublished_clientdata_sha256" in exc_info.value.details
+    assert "clientdata" not in exc_info.value.details
     assert fake.state_patches() == []
-    assert fake.unpublished_reads == 0
+    assert fake.unpublished_reads == 1
     assert int(fake.row["statecode"]) == 1
     assert int(fake.row["statuscode"]) == 2
+
+
+def test_reconcile_classifica_draft_igual_ao_desejado_sem_muta_lo(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
+    desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
+        fake.row,
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
+    fake.unpublished["clientdata"] = desired_raw
+    _install(monkeypatch, fake)
+
+    with pytest.raises(FlowStateError) as exc_info:
+        mod.reconcile_flow_card(
+            "https://org.crm.dynamics.com",
+            "token",
+            copy.deepcopy(fake.row),
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+        )
+
+    assert exc_info.value.details["unpublished_relation"] == "same_as_desired"
+    assert fake.unpublished_reads == 1
+    assert fake.state_patches() == []
+
+
+def test_reconcile_classifica_draft_divergente_sem_expor_conteudo(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
+    fake.unpublished["clientdata"] = '{"draft":"externo"}'
+    _install(monkeypatch, fake)
+
+    with pytest.raises(FlowStateError) as exc_info:
+        mod.reconcile_flow_card(
+            "https://org.crm.dynamics.com",
+            "token",
+            copy.deepcopy(fake.row),
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+        )
+
+    assert exc_info.value.details["unpublished_relation"] == "divergent"
+    assert set(exc_info.value.details) == {
+        "unpublished_detected",
+        "unpublished_relation",
+        "published_clientdata_sha256",
+        "desired_clientdata_sha256",
+        "unpublished_clientdata_sha256",
+        "unpublished_componentstate",
+    }
+    assert fake.unpublished_reads == 1
+    assert fake.state_patches() == []
 
 
 def test_patch_clientdata_propaga_conflito_unpublished_real(monkeypatch):
