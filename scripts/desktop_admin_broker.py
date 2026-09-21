@@ -538,6 +538,7 @@ def _copy_release(source_root: Path, release_root: Path) -> None:
     scripts.mkdir(parents=True, exist_ok=True)
     for name in (
         "desktop_admin_broker.py",
+        "desktop_admin_broker_uac_launcher.py",
         WATCHDOG_SCRIPT,
         WATCHDOG_UAC_SCRIPT,
         RDC_RECOVERY_SCRIPT,
@@ -561,6 +562,31 @@ def _write_launcher(runtime_root: Path) -> Path:
         "runpy.run_path(str(script), run_name='__main__')\n",
         encoding="utf-8",
     )
+    return launcher
+
+
+def _write_uac_activation_launcher(
+    runtime_root: Path,
+    *,
+    release_root: Path,
+    python_executable: Path,
+    metadata_path: Path,
+) -> Path:
+    launcher = runtime_root / "Activate-Desktop-Admin-Broker.cmd"
+    uac_script = release_root / "scripts" / "desktop_admin_broker_uac_launcher.py"
+    command = subprocess.list2cmdline(
+        [
+            str(python_executable),
+            str(uac_script),
+            "--metadata",
+            str(metadata_path),
+            "--confirm",
+            "LAUNCH-DESKTOP-ADMIN-BROKER-UAC",
+            "--timeout-seconds",
+            "90",
+        ]
+    )
+    launcher.write_text("@echo off\r\n" + command + "\r\n", encoding="utf-8")
     return launcher
 
 
@@ -624,6 +650,12 @@ def install(
     _copy_release(source_root.resolve(), release)
     launcher = _write_launcher(runtime)
     metadata_path = runtime / "metadata.json"
+    activation_launcher = _write_uac_activation_launcher(
+        runtime,
+        release_root=release,
+        python_executable=python_executable.resolve(),
+        metadata_path=metadata_path,
+    )
     metadata = {
         "schema_version": "1",
         "service": "reqsys-desktop-admin-broker",
@@ -642,6 +674,7 @@ def install(
         "production_touched": False,
         "secrets_read": False,
         "installed_at": now_iso(),
+        "activation_launcher": str(activation_launcher),
     }
     runtime.mkdir(parents=True, exist_ok=True)
     atomic_json(metadata_path, metadata)
@@ -670,6 +703,7 @@ def install(
         "task": task,
         "start": started,
         "metadata_path": str(metadata_path),
+        "activation_launcher": str(activation_launcher),
     }
 
 
