@@ -12,7 +12,7 @@ PROBE_PATH = ROOT / "scripts" / "noteri_control_plane_probe.py"
 WATCHDOG_PATH = ROOT / "scripts" / "noteri_control_plane_watchdog.py"
 WORKFLOW = ROOT / ".github/workflows/noteri-control-plane-probe.yml"
 HEADLESS_WORKFLOW = ROOT / ".github/workflows/noteri-headless-control-plane-activation.yml"
-HEADLESS_LAUNCHER = ROOT / "scripts" / "noteri_control_plane_watchdog_uac_launcher.py"
+HEADLESS_SERVICE_PROBE_WORKFLOW = ROOT / ".github/workflows/noteri-headless-service-probe.yml"\nBOOTSTRAP = ROOT / "scripts" / "activate_noteri_free_control_plane.py"
 POLICY = ROOT / ".github/self-hosted-runner-policy.json"
 
 PROBE_SPEC = importlib.util.spec_from_file_location("noteri_control_plane_probe", PROBE_PATH)
