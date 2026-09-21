@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -31,7 +33,11 @@ RUNNER_ASSET_URL = (
 RUNNER_ASSET_SHA256 = "1150692afa94e71f872017e254ea55b6eece1eece3fe7e3a6d4c93d0a1b85cfc"
 RUNNER_NAME = "Noteri"
 RUNNER_LABELS = "noteri,reqsys-dev"
+HEADLESS_RUNNER_NAME = "NoteriHeadless"
+HEADLESS_RUNNER_LABELS = "noteri-headless,reqsys-dev"
+HEADLESS_RUNNER_HOME = Path(r"C:\actions-runner-noteri-headless")
 EXPECTED_GITHUB_LOGIN = "ericson-j-santos"
+SERVICE_NAME_RE = re.compile(r"^actions\.runner\.[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+$")
 
 CANDIDATES = (
     Path(r"C:\actions-runner"),
@@ -51,6 +57,13 @@ def emit(payload: dict[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
 
 
+def atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def validate_host() -> str:
     if os.name != "nt":
         raise ActivationError("windows_required", "Windows obrigatório")
@@ -63,6 +76,15 @@ def validate_host() -> str:
     return host
 
 
+def is_admin() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
+
+
 def runner_binary_contract(root: Path) -> bool:
     return (
         root.is_dir()
@@ -72,8 +94,80 @@ def runner_binary_contract(root: Path) -> bool:
     )
 
 
+def service_runner_binary_contract(root: Path) -> bool:
+    return runner_binary_contract(root) and (root / "bin" / "RunnerService.exe").is_file()
+
+
 def runner_contract(root: Path) -> bool:
     return runner_binary_contract(root) and (root / ".runner").is_file()
+
+
+def service_name(root: Path) -> str:
+    marker = root / ".service"
+    if not marker.is_file():
+        return ""
+    value = marker.read_text(encoding="utf-8", errors="replace").strip()
+    if not SERVICE_NAME_RE.fullmatch(value):
+        raise ActivationError("runner_service_marker_invalid", "marcador .service inválido")
+    return value
+
+
+def sc_path() -> Path:
+    target = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "sc.exe"
+    if not target.is_file():
+        raise ActivationError("sc_missing", "sc.exe não encontrado")
+    return target
+
+
+def service_status(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    name = service_name(root)
+    if not name:
+        return {
+            "exists": False,
+            "running": False,
+            "auto_start": False,
+            "runner_home": str(root),
+        }
+    query = subprocess.run(
+        [str(sc_path()), "query", name],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+    qc = subprocess.run(
+        [str(sc_path()), "qc", name],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+    query_text = (query.stdout + "\n" + query.stderr).upper()
+    qc_text = (qc.stdout + "\n" + qc.stderr).upper()
+    exists = query.returncode == 0 and qc.returncode == 0
+    running = exists and "RUNNING" in query_text
+    auto_start = exists and "AUTO_START" in qc_text
+    return {
+        "exists": exists,
+        "running": running,
+        "auto_start": auto_start,
+        "runner_home": str(root),
+        "service_name": name,
+        "validator": "windows_scm",
+    }
+
+
+def service_ready(status: dict[str, Any]) -> bool:
+    return (
+        status.get("exists") is True
+        and status.get("running") is True
+        and status.get("auto_start") is True
+    )
 
 
 def discover_runner(explicit: Path | None) -> Path | None:
@@ -128,6 +222,13 @@ def find_gh() -> Path | None:
     return next((item for item in candidates if item.is_file()), None)
 
 
+def gh_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    return env
+
+
 def ensure_gh() -> Path:
     existing = find_gh()
     if existing:
@@ -158,13 +259,6 @@ def ensure_gh() -> Path:
     if cp.returncode != 0 or installed is None:
         raise ActivationError("github_cli_install_failed", "GitHub CLI não pôde ser instalado automaticamente")
     return installed
-
-
-def gh_env() -> dict[str, str]:
-    env = os.environ.copy()
-    env.pop("GH_TOKEN", None)
-    env.pop("GITHUB_TOKEN", None)
-    return env
 
 
 def gh_active_login(gh: Path) -> str:
@@ -283,18 +377,15 @@ def registration_token(gh: Path) -> str:
     token = request_registration_token(gh)
     if token:
         return token
-
     refresh_repo_scope(gh)
     if gh_active_login(gh).casefold() != EXPECTED_GITHUB_LOGIN.casefold():
         raise ActivationError(
             "github_account_mismatch",
             "conta GitHub ativa diverge de ericson-j-santos",
         )
-
     token = request_registration_token(gh)
     if token:
         return token
-
     raise ActivationError(
         "github_runner_admin_permission_required",
         "token GitHub local não autorizou o endpoint de registro após refresh de escopo",
@@ -345,28 +436,47 @@ def ensure_runner_binaries(root: Path) -> None:
         raise ActivationError("runner_install_incomplete", "binários oficiais do runner incompletos")
 
 
-def register_runner(root: Path, gh: Path) -> bool:
+def register_runner(
+    root: Path,
+    gh: Path,
+    *,
+    runner_name: str = RUNNER_NAME,
+    runner_labels: str = RUNNER_LABELS,
+    run_as_service: bool = False,
+) -> bool:
     if runner_contract(root):
+        if run_as_service and not (root / ".service").is_file():
+            raise ActivationError(
+                "runner_service_inconsistent",
+                "runner headless já registrado sem marcador de serviço; não reconfigurar automaticamente",
+            )
         return False
+    if run_as_service and not is_admin():
+        raise ActivationError("administrator_required", "registro como serviço Windows exige elevação administrativa")
     token = registration_token(gh)
     try:
+        command = [
+            str(root / "config.cmd"),
+            "--unattended",
+            "--url", REPOSITORY_URL,
+            "--token", token,
+            "--name", runner_name,
+            "--labels", runner_labels,
+            "--work", "_work",
+            "--replace",
+        ]
+        if run_as_service:
+            # O runner oficial escolhe NetworkService por padrão no Windows.
+            # Não passamos usuário/senha para evitar dependência de conta localizada ou segredo.
+            command.append("--runasservice")
         cp = subprocess.run(
-            [
-                str(root / "config.cmd"),
-                "--unattended",
-                "--url", REPOSITORY_URL,
-                "--token", token,
-                "--name", RUNNER_NAME,
-                "--labels", RUNNER_LABELS,
-                "--work", "_work",
-                "--replace",
-            ],
+            command,
             cwd=root,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=120,
+            timeout=180,
             check=False,
         )
         if cp.returncode != 0:
@@ -375,6 +485,8 @@ def register_runner(root: Path, gh: Path) -> bool:
         token = ""
     if not runner_contract(root):
         raise ActivationError("runner_registration_failed", "contrato local do runner não foi criado")
+    if run_as_service and not (root / ".service").is_file():
+        raise ActivationError("runner_service_registration_failed", "runner não criou marcador .service")
     return True
 
 
@@ -385,6 +497,26 @@ def provision_runner(explicit: Path | None) -> tuple[Path, bool]:
     ensure_runner_binaries(root)
     registered = register_runner(root, gh)
     return root, registered
+
+
+def provision_headless_service_runner(explicit: Path | None) -> tuple[Path, bool, dict[str, Any]]:
+    if not is_admin():
+        raise ActivationError("administrator_required", "serviço headless exige elevação administrativa")
+    gh = ensure_gh()
+    ensure_gh_auth(gh)
+    root = (explicit or HEADLESS_RUNNER_HOME).resolve()
+    ensure_runner_binaries(root)
+    if not service_runner_binary_contract(root):
+        raise ActivationError("runner_service_binary_missing", "RunnerService.exe ausente no pacote oficial")
+    registered = register_runner(
+        root,
+        gh,
+        runner_name=HEADLESS_RUNNER_NAME,
+        runner_labels=HEADLESS_RUNNER_LABELS,
+        run_as_service=True,
+    )
+    status = service_status(root)
+    return root, registered, status
 
 
 def runner_running() -> bool:
@@ -401,38 +533,104 @@ def runner_running() -> bool:
     return cp.returncode == 0 and "runner.listener.exe" in cp.stdout.casefold()
 
 
+def resolve_source_sha(repo_root: Path, supplied: str | None) -> str:
+    value = (supplied or "").strip()
+    if not value:
+        cp = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=False,
+        )
+        if cp.returncode != 0:
+            raise ActivationError("source_sha_unavailable", "source_sha indisponível")
+        value = cp.stdout.strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", value):
+        raise ActivationError("source_sha_invalid", "source_sha inválido")
+    return value.lower()
+
+
+def finish(payload: dict[str, Any], code: int, result_path: Path | None) -> int:
+    if result_path is not None:
+        atomic_json(result_path.resolve(), payload)
+    emit(payload)
+    return code
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--source-sha")
     parser.add_argument("--runner-home", type=Path)
+    parser.add_argument(
+        "--mode",
+        choices=("interactive", "headless-service", "headless-service-status"),
+        default="interactive",
+    )
+    parser.add_argument("--result-path", type=Path)
     args = parser.parse_args()
     if args.confirm != CONFIRM:
-        emit({"ok": False, "state": "confirmation_invalid"})
-        return 2
+        return finish({"ok": False, "state": "confirmation_invalid"}, 2, args.result_path)
 
     registration_performed = False
     registration_token_consumed_in_memory = False
     try:
         host = validate_host()
         repo_root = args.repo_root.resolve()
-        source_sha = (args.source_sha or "").strip()
-        if not source_sha:
-            cp = subprocess.run(
-                ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=20,
-                check=False,
+        source_sha = resolve_source_sha(repo_root, args.source_sha)
+
+        if args.mode == "headless-service-status":
+            root = (args.runner_home or HEADLESS_RUNNER_HOME).resolve()
+            status = service_status(root)
+            ready = service_ready(status)
+            return finish(
+                {
+                    "ok": ready,
+                    "state": "headless_service_active" if ready else "headless_service_not_ready",
+                    "host": host,
+                    "runner_name": HEADLESS_RUNNER_NAME,
+                    "runner_labels": HEADLESS_RUNNER_LABELS.split(","),
+                    "service": status,
+                    "source_sha": source_sha,
+                    "rdc_required": False,
+                    "production_touched": False,
+                    "secrets_read": False,
+                    "registration_token_persisted": False,
+                    "registration_token_logged": False,
+                },
+                0 if ready else 3,
+                args.result_path,
             )
-            if cp.returncode != 0:
-                raise ActivationError("source_sha_unavailable", "source_sha indisponível")
-            source_sha = cp.stdout.strip()
-        if len(source_sha) != 40:
-            raise ActivationError("source_sha_invalid", "source_sha inválido")
+
+        if args.mode == "headless-service":
+            root, registration_performed, status = provision_headless_service_runner(args.runner_home)
+            registration_token_consumed_in_memory = registration_performed
+            ready = service_ready(status)
+            return finish(
+                {
+                    "ok": ready,
+                    "state": "headless_service_active" if ready else "headless_service_not_ready",
+                    "host": host,
+                    "runner_home": str(root),
+                    "runner_name": HEADLESS_RUNNER_NAME,
+                    "runner_labels": HEADLESS_RUNNER_LABELS.split(","),
+                    "runner_registered_now": registration_performed,
+                    "service": status,
+                    "source_sha": source_sha,
+                    "rdc_required": False,
+                    "production_touched": False,
+                    "secrets_read": False,
+                    "registration_token_consumed_in_memory": registration_token_consumed_in_memory,
+                    "registration_token_persisted": False,
+                    "registration_token_logged": False,
+                },
+                0 if ready else 3,
+                args.result_path,
+            )
 
         runner = discover_runner(args.runner_home)
         if runner is None:
@@ -487,33 +685,38 @@ def main() -> int:
             "registration_token_persisted": False,
             "registration_token_logged": False,
         }
-        emit(result)
-        return 0 if running else 3
+        return finish(result, 0 if running else 3, args.result_path)
     except ActivationError as exc:
-        emit({
-            "ok": False,
-            "state": exc.state,
-            "error": str(exc)[:1000],
-            "rdc_required": False,
-            "production_touched": False,
-            "registration_token_consumed_in_memory": registration_token_consumed_in_memory,
-            "registration_token_persisted": False,
-            "registration_token_logged": False,
-        })
-        return 4
+        return finish(
+            {
+                "ok": False,
+                "state": exc.state,
+                "error": str(exc)[:1000],
+                "rdc_required": False,
+                "production_touched": False,
+                "registration_token_consumed_in_memory": registration_token_consumed_in_memory,
+                "registration_token_persisted": False,
+                "registration_token_logged": False,
+            },
+            4,
+            args.result_path,
+        )
     except Exception as exc:
-        emit({
-            "ok": False,
-            "state": "unexpected_error",
-            "error": str(exc)[:1000],
-            "error_type": type(exc).__name__,
-            "rdc_required": False,
-            "production_touched": False,
-            "registration_token_consumed_in_memory": registration_token_consumed_in_memory,
-            "registration_token_persisted": False,
-            "registration_token_logged": False,
-        })
-        return 2
+        return finish(
+            {
+                "ok": False,
+                "state": "unexpected_error",
+                "error": str(exc)[:1000],
+                "error_type": type(exc).__name__,
+                "rdc_required": False,
+                "production_touched": False,
+                "registration_token_consumed_in_memory": registration_token_consumed_in_memory,
+                "registration_token_persisted": False,
+                "registration_token_logged": False,
+            },
+            2,
+            args.result_path,
+        )
 
 
 if __name__ == "__main__":
