@@ -54,7 +54,11 @@ def runner_listener_detected() -> bool:
     return completed.returncode == 0 and "runner.listener.exe" in completed.stdout.casefold()
 
 
-def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
+def probe(
+    confirm: str,
+    correlation_id: str,
+    expected_runner_name: str | None = None,
+) -> dict[str, Any]:
     if confirm != CONFIRM:
         raise ProbeError("confirmação inválida")
     correlation_id = correlation_id.strip()
@@ -66,6 +70,9 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     runner_arch = str(os.environ.get("RUNNER_ARCH") or "").strip()
     if not runner_name:
         raise ProbeError("RUNNER_NAME ausente")
+    expected = str(expected_runner_name or "").strip()
+    if expected and runner_name.casefold() != expected.casefold():
+        raise ProbeError("RUNNER_NAME divergente")
     if runner_os.casefold() != "windows":
         raise ProbeError("RUNNER_OS divergente")
     if not runner_listener_detected():
@@ -90,10 +97,11 @@ def main() -> int:
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--evidence-file", type=Path, required=True)
+    parser.add_argument("--expected-runner-name")
     args = parser.parse_args()
     code = 0
     try:
-        payload = probe(args.confirm, args.correlation_id)
+        payload = probe(args.confirm, args.correlation_id, args.expected_runner_name)
     except (ProbeError, OSError, subprocess.SubprocessError) as exc:
         payload = {
             "ok": False,
