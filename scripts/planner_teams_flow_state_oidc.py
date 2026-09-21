@@ -36,7 +36,14 @@ WORKFLOW_SELECT = (
 
 
 class FlowStateError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.details = details or {}
 
 
 def required(name: str) -> str:
@@ -321,6 +328,54 @@ def get_flow(base: str, token: str, workflow_id: str) -> dict[str, Any]:
     return payload
 
 
+def get_unpublished_flow(
+    base: str,
+    token: str,
+    workflow_id: str,
+) -> dict[str, Any]:
+    status, payload = request_json(
+        "GET",
+        (
+            workflow_url(base, workflow_id)
+            + f"/Microsoft.Dynamics.CRM.RetrieveUnpublished()?$select={WORKFLOW_SELECT}"
+        ),
+        token,
+    )
+    if status != 200:
+        raise FlowStateError(
+            f"dataverse_retrieve_unpublished_http_{status}:{error_detail(payload)}"
+        )
+    return payload
+
+
+def unpublished_diagnostic(
+    published: dict[str, Any],
+    desired_raw: str,
+    unpublished: dict[str, Any],
+) -> dict[str, Any]:
+    published_raw = str(published.get("clientdata") or "")
+    unpublished_raw = str(unpublished.get("clientdata") or "")
+
+    if unpublished_raw == published_raw:
+        relation = "same_as_published"
+    elif unpublished_raw == desired_raw:
+        relation = "same_as_desired"
+    else:
+        relation = "divergent"
+
+    return {
+        "unpublished_detected": True,
+        "unpublished_relation": relation,
+        "published_clientdata_sha256": hashlib.sha256(
+            published_raw.encode()
+        ).hexdigest(),
+        "desired_clientdata_sha256": hashlib.sha256(desired_raw.encode()).hexdigest(),
+        "unpublished_clientdata_sha256": hashlib.sha256(
+            unpublished_raw.encode()
+        ).hexdigest(),
+        "unpublished_componentstate": unpublished.get("componentstate"),
+    }
+
 
 def patch_clientdata(
     base: str,
@@ -378,16 +433,30 @@ def reconcile_flow_card(
     # como published update em conflito (Dataverse 0x80040203).
     # Se ja existir uma revisao unpublished concorrente, o PATCH falha fechado e
     # nenhuma mudanca de estado e tentada automaticamente.
-    after, observed_contract = _patch_and_verify(
-        base,
-        token,
-        row,
-        workflow_id,
-        desired_raw,
-        desired_contract,
-        raw_before,
-        before_hash,
-    )
+    try:
+        after, observed_contract = _patch_and_verify(
+            base,
+            token,
+            row,
+            workflow_id,
+            desired_raw,
+            desired_contract,
+            raw_before,
+            before_hash,
+        )
+    except FlowStateError as exc:
+        message = str(exc)
+        if (
+            "dataverse_card_patch_http_400:0x80040203:" in message
+            and "unpublished active row" in message.lower()
+        ):
+            # Diagnóstico somente leitura: nunca publica, sobrescreve ou descarta
+            # automaticamente uma revisão concorrente. Os hashes classificam o
+            # draft sem expor o clientdata bruto no artifact/log.
+            unpublished = get_unpublished_flow(base, token, workflow_id)
+            details = unpublished_diagnostic(row, desired_raw, unpublished)
+            raise FlowStateError(message, details=details) from exc
+        raise
 
     return after, {
         "card_reconciled": True,
@@ -480,7 +549,7 @@ def main() -> int:
     base = required("PLANNER_TEAMS_DATAVERSE_URL")
     token = required("POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN")
     evidence: dict[str, Any] = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "environment": "dev",
         "auth_mode": "github_oidc_dataverse",
         "status": "running",
@@ -531,10 +600,13 @@ def main() -> int:
         evidence["status"] = "passed"
     except Exception as exc:
         evidence["status"] = "failed"
-        evidence["error"] = {
+        error: dict[str, Any] = {
             "type": exc.__class__.__name__,
             "message": str(exc)[:500],
         }
+        if isinstance(exc, FlowStateError) and exc.details:
+            error["details"] = exc.details
+        evidence["error"] = error
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
