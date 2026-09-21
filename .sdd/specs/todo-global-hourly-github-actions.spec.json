@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "TODO Global Hourly Cycle via GitHub Actions",
+  "status": "implemented_pending_ci_and_runtime_e2e",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_todo_global_hourly_cycle.py"
+    ],
+    "evidence_contract": "O ciclo horário publica todo.reconcile.requested, rejeita payload inválido, aguarda estado terminal, exige readback_verified e comprova replay sem segundo job."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/todo-global-hourly-cycle.yml",
+    "executor": "scripts/todo_global_hourly_cycle.py"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}
