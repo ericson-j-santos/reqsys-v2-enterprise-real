@@ -208,13 +208,36 @@ jobs:
       - name: Prepare SBOM output directory
         run: mkdir -p artifacts/security-scanners/sbom
 
+      - name: Install pinned Syft with bounded retries
+        shell: bash
+        env:
+          SYFT_VERSION: "1.51.0"
+          SYFT_ARCHIVE_SHA256: "2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f"
+        run: |
+          set -euo pipefail
+          archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${archive}"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-delay 2 --retry-all-errors \
+            "$url" -o "$tmp_dir/$archive"
+
+          printf '%s  %s\n' "$SYFT_ARCHIVE_SHA256" "$tmp_dir/$archive" | sha256sum --check -
+          tar -xzf "$tmp_dir/$archive" -C "$tmp_dir" syft
+          install -m 0755 "$tmp_dir/syft" "$RUNNER_TEMP/syft"
+          "$RUNNER_TEMP/syft" version
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
       - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: cyclonedx-json
-          syft-version: v1.51.0
-          output-file: artifacts/security-scanners/sbom/reqsys-sbom.cyclonedx.json
+        shell: bash
+        env:
+          SYFT_CHECK_FOR_APP_UPDATE: "false"
+        run: |
+          set -euo pipefail
+          syft . -o cyclonedx-json=artifacts/security-scanners/sbom/reqsys-sbom.cyclonedx.json
+          test -s artifacts/security-scanners/sbom/reqsys-sbom.cyclonedx.json
 
       - name: Upload SBOM artifact
         if: always()

@@ -1,0 +1,250 @@
+name: Fabric Identity Read-only Probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/fabric-identity-readonly-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fabric-identity-readonly-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: fabric-identity-readonly-probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: reqsys-power-platform-dev
+    env:
+      TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+      CROSS_REPO_PAT: ${{ secrets.GITHUB_PAT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Probe Fabric, Power BI e Graph sem expor credenciais
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          tenant = os.environ.get("TENANT_ID", "").strip()
+          client = os.environ.get("CLIENT_ID", "").strip()
+          secret = os.environ.get("CLIENT_SECRET", "").strip()
+
+          evidence = {
+              "schema": "fabric-identity-probe/v2",
+              "secret_value_exposed": False,
+              "tenant_match": None,
+              "client_identity_match": "unknown",
+              "fabric": {"token_obtained": False, "status": None, "workspaces": []},
+              "fabric_admin": {"status": None, "workspaces": []},
+              "powerbi": {"token_obtained": False, "status": None, "workspaces": []},
+              "graph": {"token_obtained": False, "status": None, "apps": []},
+              "github": {"pat_present": False, "target_repo_status": None, "variables_status": None, "secrets_metadata_status": None},
+          }
+
+          if not tenant or not client or not secret:
+              evidence["configuration_complete"] = False
+              Path("artifacts/fabric-identity-probe.json").parent.mkdir(parents=True, exist_ok=True)
+              Path("artifacts/fabric-identity-probe.json").write_text(
+                  json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8"
+              )
+              raise SystemExit("Configuração POWER_PLATFORM_* incompleta no environment.")
+
+          evidence["configuration_complete"] = True
+          evidence["tenant_match"] = tenant.casefold() == "6d09c88c-0617-490c-8329-305e577684bc"
+
+          known = {
+              "powerplatform_profile_cb8c": "cb8c924f-70ce-4e5b-a1a7-290c73ca3953",
+              "reqsys_enterprise_4061": "4061c542-cdc1-4007-ab57-40ab8f9109fc",
+          }
+          client_digest = hashlib.sha256(client.encode("utf-8")).hexdigest()
+          for label, candidate in known.items():
+              if client_digest == hashlib.sha256(candidate.encode("utf-8")).hexdigest():
+                  evidence["client_identity_match"] = label
+                  break
+
+          def token(scope):
+              body = urllib.parse.urlencode({
+                  "client_id": client,
+                  "client_secret": secret,
+                  "grant_type": "client_credentials",
+                  "scope": scope,
+              }).encode("utf-8")
+              req = urllib.request.Request(
+                  f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+                  data=body,
+                  method="POST",
+                  headers={"Content-Type": "application/x-www-form-urlencoded"},
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  return json.loads(resp.read().decode("utf-8"))["access_token"]
+
+          def get_json(url, bearer):
+              req = urllib.request.Request(
+                  url,
+                  headers={"Authorization": f"Bearer {bearer}", "Accept": "application/json"},
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      return resp.status, json.loads(resp.read().decode("utf-8"))
+              except urllib.error.HTTPError as exc:
+                  return exc.code, {}
+
+          try:
+              fabric_token = token("https://api.fabric.microsoft.com/.default")
+              evidence["fabric"]["token_obtained"] = True
+
+              status, payload = get_json("https://api.fabric.microsoft.com/v1/workspaces", fabric_token)
+              evidence["fabric"]["status"] = status
+              if status == 200:
+                  evidence["fabric"]["workspaces"] = [
+                      {"id": str(item.get("id") or ""), "displayName": str(item.get("displayName") or "")}
+                      for item in payload.get("value", [])
+                  ]
+
+              admin_status, admin_payload = get_json(
+                  "https://api.fabric.microsoft.com/v1/admin/workspaces",
+                  fabric_token,
+              )
+              evidence["fabric_admin"]["status"] = admin_status
+              if admin_status == 200:
+                  evidence["fabric_admin"]["workspaces"] = [
+                      {
+                          "id": str(item.get("id") or ""),
+                          "displayName": str(item.get("displayName") or ""),
+                          "state": str(item.get("state") or ""),
+                          "type": str(item.get("type") or ""),
+                      }
+                      for item in admin_payload.get("workspaces", admin_payload.get("value", []))
+                  ]
+          except Exception as exc:
+              evidence["fabric"]["error_type"] = type(exc).__name__
+
+          try:
+              pbi_token = token("https://analysis.windows.net/powerbi/api/.default")
+              evidence["powerbi"]["token_obtained"] = True
+              status, payload = get_json("https://api.powerbi.com/v1.0/myorg/groups", pbi_token)
+              evidence["powerbi"]["status"] = status
+              if status == 200:
+                  evidence["powerbi"]["workspaces"] = [
+                      {"id": str(item.get("id") or ""), "name": str(item.get("name") or "")}
+                      for item in payload.get("value", [])
+                  ]
+          except Exception as exc:
+              evidence["powerbi"]["error_type"] = type(exc).__name__
+
+          try:
+              graph_token = token("https://graph.microsoft.com/.default")
+              evidence["graph"]["token_obtained"] = True
+              query = urllib.parse.urlencode({
+                  "$filter": "displayName eq 'ReqSys ALM Pipeline'",
+                  "$select": "appId,id,displayName",
+              })
+              status, payload = get_json(
+                  f"https://graph.microsoft.com/v1.0/applications?{query}",
+                  graph_token,
+              )
+              evidence["graph"]["status"] = status
+              if status == 200:
+                  evidence["graph"]["apps"] = [
+                      {
+                          "appId": str(item.get("appId") or ""),
+                          "id": str(item.get("id") or ""),
+                          "displayName": str(item.get("displayName") or ""),
+                      }
+                      for item in payload.get("value", [])
+                  ]
+          except Exception as exc:
+              evidence["graph"]["error_type"] = type(exc).__name__
+
+          pat = os.environ.get("CROSS_REPO_PAT", "").strip()
+          evidence["github"]["pat_present"] = bool(pat)
+          if pat:
+              def github_status(url):
+                  req = urllib.request.Request(
+                      url,
+                      headers={
+                          "Authorization": f"Bearer {pat}",
+                          "Accept": "application/vnd.github+json",
+                          "X-GitHub-Api-Version": "2022-11-28",
+                      },
+                  )
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as resp:
+                          resp.read()
+                          return resp.status
+                  except urllib.error.HTTPError as exc:
+                      return exc.code
+
+              evidence["github"]["target_repo_status"] = github_status(
+                  "https://api.github.com/repos/ericson-j-santos/painel-powerbi"
+              )
+              evidence["github"]["variables_status"] = github_status(
+                  "https://api.github.com/repos/ericson-j-santos/painel-powerbi/environments/homologacao/variables"
+              )
+              evidence["github"]["secrets_metadata_status"] = github_status(
+                  "https://api.github.com/repos/ericson-j-santos/painel-powerbi/environments/homologacao/secrets"
+              )
+
+          all_workspace_ids = set()
+          for item in evidence["fabric"]["workspaces"]:
+              if item.get("id"):
+                  all_workspace_ids.add(item["id"])
+          for item in evidence["fabric_admin"]["workspaces"]:
+              if item.get("id"):
+                  all_workspace_ids.add(item["id"])
+          for item in evidence["powerbi"]["workspaces"]:
+              if item.get("id"):
+                  all_workspace_ids.add(item["id"])
+          evidence["candidate_workspace_ids"] = sorted(all_workspace_ids)
+
+          path = Path("artifacts/fabric-identity-probe.json")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+          print("FABRIC_IDENTITY_PROBE_OK")
+          print(f"tenant_match={str(evidence['tenant_match']).lower()}")
+          print(f"client_identity_match={evidence['client_identity_match']}")
+          print(f"fabric_status={evidence['fabric']['status']}")
+          print(f"fabric_workspace_count={len(evidence['fabric']['workspaces'])}")
+          print(f"fabric_admin_status={evidence['fabric_admin']['status']}")
+          print(f"fabric_admin_workspace_count={len(evidence['fabric_admin']['workspaces'])}")
+          print(f"powerbi_status={evidence['powerbi']['status']}")
+          print(f"powerbi_workspace_count={len(evidence['powerbi']['workspaces'])}")
+          print(f"graph_status={evidence['graph']['status']}")
+          print(f"graph_app_count={len(evidence['graph']['apps'])}")
+          print(f"github_pat_present={str(evidence['github']['pat_present']).lower()}")
+          print(f"github_target_repo_status={evidence['github']['target_repo_status']}")
+          print(f"github_variables_status={evidence['github']['variables_status']}")
+          print(f"github_secrets_metadata_status={evidence['github']['secrets_metadata_status']}")
+          for app in evidence["graph"]["apps"]:
+              print(f"graph_app={app['displayName']}|{app['appId']}")
+          for ws in evidence["fabric_admin"]["workspaces"]:
+              print(f"fabric_admin_workspace={ws['displayName']}|{ws['id']}|{ws['state']}|{ws['type']}")
+          print("secret_value_exposed=false")
+          PY
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-identity-readonly-probe-${{ github.run_id }}
+          path: artifacts/fabric-identity-probe.json
+          if-no-files-found: warn
+          retention-days: 7
