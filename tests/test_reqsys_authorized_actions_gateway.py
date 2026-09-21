@@ -156,3 +156,19 @@ def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
     assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
     assert "-f host=" not in content
     assert "-f command=" not in content
+
+def test_gateway_cancela_run_self_hosted_sem_pickup_e_registra_cleanup() -> None:
+    content = _workflow()
+
+    assert "Cancel self-hosted run without pickup" in content
+    assert 'gh run cancel "$TARGET_RUN_ID"' in content
+    assert "RUN_CANCEL_REQUEST_FAILED" in content
+    assert "RUN_CANCEL_NOT_CONFIRMED" in content
+    assert "target_cleanup_status" in content
+    assert "target_cleanup_error" in content
+    assert "steps.cleanup.outputs.status" in content
+    assert "steps.cleanup.outputs.error" in content
+    assert "[.status, (.conclusion // \"\")] | @tsv" in content
+    assert "[ \"$status\" = 'completed' ]" in content
+    assert "[ \"$conclusion\" = 'cancelled' ]" in content
+
