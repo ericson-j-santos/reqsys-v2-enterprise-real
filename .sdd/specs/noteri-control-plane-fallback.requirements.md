@@ -16,6 +16,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 4. O workflow `noteri-control-plane-probe.yml` prova pickup real, host exato e `Runner.Listener.exe` sem depender de RDC.
 5. O Gateway aceita somente o comando exato `/reqsys run noteri-control-plane-probe`.
 6. O Gateway aguarda pickup e falha fechado com `SELF_HOSTED_RUNNER_UNAVAILABLE` se o runner não adquirir o job.
+7. Quando não houver pickup, o Gateway cancela o run self-hosted abandonado, confirma `completed/cancelled` por janela limitada e registra o resultado da limpeza; nenhuma nova tentativa é criada automaticamente.
 
 ## Requisitos
 
@@ -53,5 +54,6 @@ A rota só fica `runtime_active` após evidência nova de:
 4. comando do Gateway despachando `noteri-control-plane-probe.yml`;
 5. workflow saindo de queued/pending e executando no Noteri;
 6. artifact mostrando `ok=true`, host Noteri e `rdc_required=false`.
+7. em caso negativo sem pickup, o run alvo termina cancelado (ou a falha de cancelamento fica explicitamente registrada), sem fila residual criada pelo Gateway.
 
 Sem esses itens o estado permanece `activation_pending`.

@@ -35,7 +35,8 @@
       "Runner.Listener.exe proven",
       "workflow pickup proven"
     ],
-    "unavailable_error": "SELF_HOSTED_RUNNER_UNAVAILABLE"
+    "unavailable_error": "SELF_HOSTED_RUNNER_UNAVAILABLE",
+    "abandoned_run_cleanup": "cancel_exact_run_and_record_terminal_state"
   },
   "sdd_gate": {
     "tests": [
@@ -43,7 +44,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; sucesso exige pickup real e prova no host exato."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -51,6 +52,7 @@
     "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "probe": "scripts/noteri_control_plane_probe.py",
     "watchdog": "scripts/noteri_control_plane_watchdog.py",
-    "policy": ".github/self-hosted-runner-policy.json"
+    "policy": ".github/self-hosted-runner-policy.json",
+    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml"
   }
 }

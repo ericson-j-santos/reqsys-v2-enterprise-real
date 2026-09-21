@@ -30,6 +30,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 16. O fluxo deve armar o fallback interativo mesmo quando V4 estiver saudável, permitindo takeover automático se o claim V4 desaparecer.
 17. O Authorized Actions Gateway deve vincular a evidência ao \`run_id\` retornado pelo próprio \`gh workflow run\`; é proibido selecionar um run apenas por \`head_sha\`, pois múltiplas execuções podem compartilhar o mesmo SHA.
 18. Para recuperação Desktop, estados \`pending\`, \`queued\`, \`requested\` ou \`waiting\` após a janela de pickup devem produzir \`SELF_HOSTED_RUNNER_UNAVAILABLE\` e falhar fechado.
+19. Antes da falha terminal por ausência de pickup, o gateway deve solicitar o cancelamento do run self-hosted abandonado, aguardar confirmação `completed/cancelled` por janela limitada e registrar `target_cleanup_status`/`target_cleanup_error` na evidência. Falha na limpeza não autoriza redispatch nem retry automático.
 
 ## Critérios de aceite
 
@@ -41,6 +42,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 - gateway mantém a allowlist estática;
 - gateway comprova \`run_id\`, URL, SHA e evento do run exato disparado e recusa evidência de execução histórica;
 - recuperação permanece bloqueada quando o run exato não sai de \`pending/queued/requested/waiting\`;
+- run self-hosted sem pickup é cancelado e o estado terminal é registrado; se o cancelamento não puder ser confirmado, a evidência registra o erro e o gateway continua falhando fechado, sem criar nova tentativa;
 - após integração, comentário exato em #1705 cria um novo workflow_dispatch no SHA atual da main;
 - recuperação só é considerada concluída após leitura independente mostrar \`DESKTOP-PDQK954\` online com \`transport_broadcast_v1=true\` e uma chamada MCP real de leitura concluir com sucesso;
 - o fluxo não pode voltar a ser a única dependência de recuperação do Desktop; o watchdog autônomo é o mecanismo primário.
