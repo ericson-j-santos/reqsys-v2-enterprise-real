@@ -26,9 +26,9 @@ def test_locator_requires_valid_signed_fresh_cloudflare_state():
 
 def test_pages_composite_publishes_stable_dev_path():
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert '"docs/public-dev-locator/**"' in raw
     assert "cp -a docs/public-dev-locator/. site/dev/" in raw
     assert "test -s site/dev/index.html" in raw
+    assert "actions/deploy-pages@v4" in raw
 
 
 def test_supervisor_uses_cloudflare_and_signed_locator_only():
