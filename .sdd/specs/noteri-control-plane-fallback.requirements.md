@@ -14,7 +14,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 2. O Noteri recebe um GitHub Actions runner self-hosted dedicado com labels fixos `[self-hosted, Windows, X64, noteri, reqsys-dev]`.
 3. O watchdog local `noteri_control_plane_watchdog.py` mantém um runner previamente configurado ativo e persiste no boot por tarefa `AtStartup + S4U`.
 4. O workflow `noteri-control-plane-probe.yml` prova pickup real, host exato e `Runner.Listener.exe` sem depender de RDC.
-5. O Gateway aceita somente o comando exato `/reqsys run noteri-control-plane-probe`.
+5. O Gateway aceita somente os comandos exatos `/reqsys run noteri-control-plane-probe` e `/reqsys run noteri-headless-control-plane-activation`.
 6. O Gateway aguarda pickup e falha fechado com `SELF_HOSTED_RUNNER_UNAVAILABLE` se o runner não adquirir o job.
 7. Quando não houver pickup, o Gateway cancela o run self-hosted abandonado, confirma `completed/cancelled` por janela limitada e registra o resultado da limpeza; nenhuma nova tentativa é criada automaticamente.
 
@@ -30,7 +30,9 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - release local imutável sob `%LOCALAPPDATA%\ReqSys\NoteriControlPlaneWatchdog\releases\<sha>`;
 - persistir evidência sanitizada;
 - declarar `rdc_required=false`, `production_touched=false` e `secrets_read=false`;
-- se Task Scheduler negar `AtStartup + S4U`, retornar `activation_pending=true` e não declarar ativação concluída.
+- se Task Scheduler negar `AtStartup + S4U`, retornar `activation_pending=true` e não declarar ativação concluída;
+- a ativação headless administrativa deve ocorrer somente por workflow self-hosted fixo no Noteri, sem inputs arbitrários, via UAC legítimo e validação posterior de tarefa `AtStartup + S4U`;
+- o workflow de ativação headless não pode executar reboot, produção, shell genérico ou ler segredos.
 
 ## Bootstrap físico único
 
@@ -60,7 +62,7 @@ A autenticação interativa do GitHub pode exigir ação humana por consentiment
 A rota só fica `runtime_active` após evidência nova de:
 
 1. runner registrado no Noteri com labels fixos, com bootstrap automatizado ou reutilização idempotente;
-2. watchdog com tarefa `AtStartup + S4U`;
+2. watchdog com tarefa `AtStartup + S4U`, instalada pelo bootstrap elevado governado quando necessário;
 3. `Runner.Listener.exe` ativo;
 4. comando do Gateway despachando `noteri-control-plane-probe.yml`;
 5. workflow saindo de queued/pending e executando no Noteri;
@@ -68,3 +70,21 @@ A rota só fica `runtime_active` após evidência nova de:
 7. em caso negativo sem pickup, o run alvo termina cancelado (ou a falha de cancelamento fica explicitamente registrada), sem fila residual criada pelo Gateway.
 
 Sem esses itens o estado permanece `activation_pending`.
+
+
+## Ativação headless governada
+
+Quando o runner já estiver ativo, a persistência pré-login deve ser instalada pelo workflow `.github/workflows/noteri-headless-control-plane-activation.yml`, disparado somente pelo comando exato `/reqsys run noteri-headless-control-plane-activation` na issue governada.
+
+O workflow deve:
+
+- executar somente no self-hosted runner `[self-hosted, Windows, X64, noteri, reqsys-dev]`;
+- usar checkout do SHA imutável da `main`;
+- chamar `scripts/noteri_control_plane_watchdog_uac_launcher.py`;
+- usar `ShellExecuteW(..., "runas", ...)` apenas para registrar a tarefa local;
+- exigir confirmação fixa `LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC`;
+- aguardar e validar `exists=true`, trigger de startup e logon `S4U`;
+- manter `rdc_required=false`, `production_touched=false` e `reboot_performed=false`;
+- persistir artifact sanitizado do resultado.
+
+A autorização do UAC pode exigir clique humano local por regra do Windows; fora esse consentimento, a operação é automatizada.

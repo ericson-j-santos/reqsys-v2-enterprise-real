@@ -1,0 +1,46 @@
+name: Noteri Headless Control Plane Activation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-headless-control-plane-activation
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    name: Install AtStartup S4U without RDC
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 6
+    env:
+      EVIDENCE_FILE: artifacts/noteri-control-plane/headless-activation.json
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Request governed UAC and validate headless task
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force (Split-Path $env:EVIDENCE_FILE) | Out-Null
+          $output = python scripts/noteri_control_plane_watchdog_uac_launcher.py `
+            --repo-root "$env:GITHUB_WORKSPACE" `
+            --source-sha "${{ github.sha }}" `
+            --confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC `
+            --timeout-seconds 180
+          $output | Tee-Object -FilePath $env:EVIDENCE_FILE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload sanitized activation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-headless-control-plane-${{ github.run_id }}
+          path: artifacts/noteri-control-plane/headless-activation.json
+          if-no-files-found: error
+          retention-days: 30

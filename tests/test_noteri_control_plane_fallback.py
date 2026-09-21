@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PROBE_PATH = ROOT / "scripts" / "noteri_control_plane_probe.py"
 WATCHDOG_PATH = ROOT / "scripts" / "noteri_control_plane_watchdog.py"
 WORKFLOW = ROOT / ".github/workflows/noteri-control-plane-probe.yml"
+HEADLESS_WORKFLOW = ROOT / ".github/workflows/noteri-headless-control-plane-activation.yml"
+HEADLESS_LAUNCHER = ROOT / "scripts" / "noteri_control_plane_watchdog_uac_launcher.py"
 POLICY = ROOT / ".github/self-hosted-runner-policy.json"
 
 PROBE_SPEC = importlib.util.spec_from_file_location("noteri_control_plane_probe", PROBE_PATH)
@@ -136,3 +138,23 @@ def test_watchdog_installs_hkcu_fallback_when_startup_task_denied(monkeypatch, t
     assert result["runtime_persistent_after_login"] is True
     assert result["headless_persistence"] is False
     assert result["logon_fallback"]["scope"] == "HKCU"
+
+
+def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
+    workflow = HEADLESS_WORKFLOW.read_text(encoding="utf-8")
+    launcher = HEADLESS_LAUNCHER.read_text(encoding="utf-8")
+    policy = json.loads(POLICY.read_text(encoding="utf-8"))
+
+    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
+    assert "shell: powershell" in workflow
+    assert "shell: pwsh" not in workflow
+    assert "--confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "inputs:" not in workflow
+    assert "ShellExecuteW" in launcher
+    assert '"runas"' in launcher
+    assert 'EXPECTED_HOST' not in launcher or "watchdog.EXPECTED_HOST" in launcher
+    assert "AtStartup" in launcher or "trigger_at_startup" in launcher
+    assert "S4U" in launcher
+    assert "reboot_performed" in launcher
+    assert ".github/workflows/noteri-headless-control-plane-activation.yml" in policy["approved_workflows"]
