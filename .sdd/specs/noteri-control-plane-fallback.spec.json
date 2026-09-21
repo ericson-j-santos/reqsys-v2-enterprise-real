@@ -47,7 +47,7 @@
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_activate_noteri_free_control_plane.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -109,7 +109,19 @@
       "host": "Noteri",
       "shell": "powershell",
       "forbidden_shell": "pwsh",
-      "reason": "Noteri self-hosted runner exposes Windows PowerShell; PowerShell 7 (pwsh) is not available on PATH"
+      "reason": "Noteri self-hosted runner exposes Windows PowerShell; PowerShell 7 (pwsh) is not available on PATH",
+      "headless_task_status": {
+        "validator": "schtasks_xml",
+        "required_fields": [
+          "exists",
+          "enabled",
+          "trigger_at_startup",
+          "logon_type"
+        ],
+        "ready_when": "exists=true && enabled=true && trigger_at_startup=true && logon_type=S4U",
+        "requires_admin": false,
+        "rdc_required": false
+      }
     }
   }
 }

@@ -38,9 +38,39 @@ def test_probe_requires_exact_confirmation() -> None:
         probe.probe("NO", "corr-12345678")
 
 
+def test_probe_parses_headless_task_xml() -> None:
+    raw = b"""<?xml version="1.0" encoding="UTF-8"?>
+<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Principals><Principal><LogonType>S4U</LogonType></Principal></Principals>
+  <Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>
+  <Settings><Enabled>true</Enabled></Settings>
+</Task>
+"""
+    task = probe.parse_task_xml(raw)
+    assert task == {
+        "exists": True,
+        "enabled": True,
+        "trigger_at_startup": True,
+        "logon_type": "S4U",
+        "validator": "schtasks_xml",
+    }
+    assert probe.task_headless_ready(task) is True
+
+
 def test_probe_proves_runner_without_rdc(monkeypatch) -> None:
     monkeypatch.setattr(probe, "validate_host", lambda: "Noteri")
     monkeypatch.setattr(probe, "runner_listener_detected", lambda: True)
+    monkeypatch.setattr(
+        probe,
+        "task_status",
+        lambda: {
+            "exists": True,
+            "enabled": True,
+            "trigger_at_startup": True,
+            "logon_type": "S4U",
+            "validator": "schtasks_xml",
+        },
+    )
     monkeypatch.setenv("RUNNER_NAME", "noteri-reqsys-dev")
     monkeypatch.setenv("RUNNER_OS", "Windows")
     monkeypatch.setenv("RUNNER_ARCH", "X64")
@@ -48,6 +78,9 @@ def test_probe_proves_runner_without_rdc(monkeypatch) -> None:
     assert result["ok"] is True
     assert result["host"] == "Noteri"
     assert result["runner_listener_detected"] is True
+    assert result["headless_ready"] is True
+    assert result["headless_task"]["trigger_at_startup"] is True
+    assert result["headless_task"]["logon_type"] == "S4U"
     assert result["rdc_required"] is False
     assert result["production_touched"] is False
     assert result["secrets_read"] is False
