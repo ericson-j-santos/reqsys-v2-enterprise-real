@@ -184,7 +184,7 @@ def ensure_task_folder(service):
 
 
 def whoami_path() -> Path:
-    target = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "whoami.exe"
+    target = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "whoami.exe"
     if not target.is_file():
         raise WatchdogError("whoami.exe não encontrado")
     return target
