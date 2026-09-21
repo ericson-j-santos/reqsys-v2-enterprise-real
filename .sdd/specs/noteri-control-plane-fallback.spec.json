@@ -89,7 +89,17 @@
         "resolved whoami account name fallback"
       ],
       "principal_value_logged": false,
-      "s4u_logon_failure_code": "0x8007052E"
+      "s4u_logon_failure_code": "0x8007052E",
+      "local_interactive_fallback": {
+        "staged_by": "GitHub self-hosted runner",
+        "desktop_files": [
+          "Ativar-Noteri-Headless.cmd",
+          "Ativar-Noteri-Headless.ps1"
+        ],
+        "purpose": "single-click legitimate UAC consent when remote runner cannot invoke runas",
+        "rdc_required": false,
+        "uac_bypass_allowed": false
+      }
     },
     "probe_workflow": {
       "host": "Noteri",
