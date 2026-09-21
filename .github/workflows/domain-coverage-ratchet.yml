@@ -104,6 +104,7 @@ jobs:
           READY_FOR_PR_WAIT_SECONDS: "480"
         run: |
           set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || true
           gh auth setup-git
           cp artifacts/domain-coverage/ratcheted-policy.json config/domain-coverage-policy.json
           mkdir -p docs/ops-dashboard/data
