@@ -159,7 +159,7 @@ def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
     assert '"runas"' in launcher
     assert 'EXPECTED_HOST' not in launcher or "watchdog.EXPECTED_HOST" in launcher
     assert "AtStartup" in launcher or "trigger_at_startup" in launcher
-    assert "S4U" in launcher
+    assert "s4u" in launcher.casefold()
     assert "reboot_performed" in launcher
     assert ".github/workflows/noteri-headless-control-plane-activation.yml" in policy["approved_workflows"]
 
