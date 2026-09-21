@@ -26,6 +26,7 @@ KEY_BLOB = RUNTIME / "dev-locator-key.dpapi"
 PUBLIC_CFG = RUNTIME / "dev-locator-public.json"
 PUBLISH_STATE = PUBLIC / "dev-locator-publish.json"
 TTL_SECONDS = 900
+REQUIRED_PUBLIC_ENDPOINTS = ("/api/health", "/api/runtime/health", "/api/runtime/build-info")
 
 
 def b64e(data: bytes) -> str:
@@ -75,16 +76,27 @@ def ensure_identity() -> tuple[Ed25519PrivateKey, dict]:
     return key, cfg
 
 
-def probe(base_url: str) -> bool:
+def probe(base_url: str, path: str) -> bool:
     try:
         request = urllib.request.Request(
-            base_url.rstrip("/") + "/api/health",
-            headers={"User-Agent": "ReqSysLocatorPublisher/1.0"},
+            base_url.rstrip("/") + path,
+            headers={"User-Agent": "ReqSysLocatorPublisher/2.0", "Accept": "application/json"},
         )
         with urllib.request.urlopen(request, timeout=10) as response:
-            return int(response.status) == 200
+            body = response.read(262_144)
+            if int(response.status) != 200:
+                return False
+            if path.startswith("/api/"):
+                payload = json.loads(body.decode("utf-8"))
+                if not isinstance(payload, dict):
+                    return False
+            return True
     except Exception:
         return False
+
+
+def runtime_contract_ready(base_url: str) -> bool:
+    return all(probe(base_url, path) for path in REQUIRED_PUBLIC_ENDPOINTS)
 
 
 def healthy_urls() -> list[str]:
@@ -96,7 +108,7 @@ def healthy_urls() -> list[str]:
             value
             and value.startswith("https://")
             and value.endswith(".trycloudflare.com")
-            and probe(value)
+            and runtime_contract_ready(value)
         ):
             urls.append(value.rstrip("/"))
     return list(dict.fromkeys(urls))
@@ -151,6 +163,8 @@ def main() -> int:
         "expires_at": payload["expires_at"],
         "topic": cfg["topic"],
         "public_key_b64": cfg["public_key_b64"],
+        "required_public_endpoints": list(REQUIRED_PUBLIC_ENDPOINTS),
+        "runtime_contract_required": True,
     }
     PUBLISH_STATE.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
