@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 1
 
       - name: Request governed UAC and validate headless task
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force (Split-Path $env:EVIDENCE_FILE) | Out-Null
           $output = python scripts/noteri_control_plane_watchdog_uac_launcher.py `
