@@ -36,8 +36,8 @@ PC24x7 --Ed25519--> ntfy.sh
    entrada estável/descoberta.
 9. Tailscale, DuckDNS e NPort não podem bloquear o DEV.
 10. HML e PROD permanecem fora deste incremento.
-11. Após merge automático governado, o Pages deve ser acionado pela conclusão bem-sucedida do `Governed PR Automation` quando esse workflow tiver origem `workflow_run`.
-12. O run que dispara o deploy não pode ser tratado como produtor do dashboard Teams; o deploy deve resolver separadamente o último `Teams Notification Dashboard` bem-sucedido.
+11. Merge, push, schedule e conclusão de outro workflow não podem publicar GitHub Pages automaticamente; o deploy deve aceitar somente `workflow_dispatch` explícito a partir de `main`.
+12. O deploy deve exigir `authorization=DEPLOY_PAGES` e `expected_sha` completo igual ao HEAD atual de `main`; divergência deve falhar antes do checkout/publicação. O run produtor do dashboard Teams deve ser resolvido separadamente e validado como bem-sucedido.
 13. A `Validação de Acessos Públicos — ReqSys` deve executar após `Governed PR Automation` concluído com sucesso no caminho `workflow_run`, mantendo a URL `/dev/` como alvo obrigatório.
 14. Consumidores CI do runtime DEV não podem depender de uma URL Quick Tunnel estática; devem resolver o locator público assinado vigente.
 15. A resolução em CI deve validar Ed25519, ambiente DEV, TTL máximo de 15 minutos, `issued_at`, `selected_url` pertencente à lista e somente HTTPS `*.trycloudflare.com`; qualquer divergência falha fechada.
@@ -53,8 +53,9 @@ PC24x7 --Ed25519--> ntfy.sh
 - GitHub Pages publica `/dev/`;
 - `/dev/` valida assinatura e redireciona apenas para tunnel vigente;
 - task scheduler preserva bateria/StartWhenAvailable/timeout de 10 minutos;
-- deploy pós-merge ocorre mesmo quando o merge foi executado com `GITHUB_TOKEN`;
-- simples abertura/edição de PR não dispara esse caminho de redeploy;
+- merge, push, schedule e `workflow_run` não disparam publicação de Pages;
+- `workflow_dispatch` com autorização ausente/incorreta ou SHA divergente falha fechado antes da publicação;
+- `workflow_dispatch` autorizado opera somente sobre o SHA exato da `main` informado em `expected_sha`;
 - validação pública pós-merge é disparada automaticamente e falha se o alvo obrigatório estiver indisponível;
 - nenhuma dependência paga é introduzida;
 - o workflow de promoção automática resolve o tunnel vigente pelo locator assinado e não usa `vars.PC24X7_DEV_BASE_URL`/`vars.PC24X7_DEV_FRONTEND_URL` como URL efêmera estática;
