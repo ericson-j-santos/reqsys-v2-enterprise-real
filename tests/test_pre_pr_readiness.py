@@ -110,11 +110,11 @@ def test_referenced_contract_tests_discovers_aggregate_test(tmp_path: Path) -> N
     assert result == ["tests/test_control_plane.py"]
 
 
-def test_referenced_contract_tests_ignores_generic_frontend_stems(tmp_path: Path) -> None:
+def test_referenced_contract_tests_ignores_generic_frontend_names_and_stems(tmp_path: Path) -> None:
     test_file = tmp_path / "tests" / "test_unrelated.py"
     test_file.parent.mkdir(parents=True)
     test_file.write_text(
-        'MAIN = "backend/app/main.py"\nEVIDENCE = "delivery-evidence-index"\n',
+        'ENTRY = "main.js"\nTEMPLATE = "index.html"\nMAIN = "backend/app/main.py"\nEVIDENCE = "delivery-evidence-index"\n',
         encoding="utf-8",
     )
 
