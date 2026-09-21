@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: kindle-knowledge-local-cache-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   contract:
@@ -86,10 +86,43 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  desktop_recover:
+    name: Request existing Desktop runner watchdog
+    needs: [contract, noteri]
+    if: ${{ always() && needs.contract.result == 'success' && needs.noteri.result == 'success' }}
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      RECOVERY_EVIDENCE_FILE: artifacts\\kindle-knowledge\\desktop-recovery.json
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Request exact existing Desktop watchdog
+        continue-on-error: true
+        shell: powershell
+        run: >
+          python scripts/noteri_desktop_watchdog_rpc_recovery.py
+          --confirm RUN-EXISTING-DESKTOP-WATCHDOG
+          --evidence-file "$env:RECOVERY_EVIDENCE_FILE"
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kindle-desktop-recovery-${{ github.run_id }}
+          path: artifacts/kindle-knowledge/desktop-recovery.json
+          if-no-files-found: error
+          retention-days: 30
+
   desktop:
     name: Materialize and replay on PC24x7
-    needs: contract
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: [contract, desktop_recover]
+    if: ${{ always() && needs.contract.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 8
     env:
