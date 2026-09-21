@@ -157,6 +157,7 @@ def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
     assert "-f host=" not in content
     assert "-f command=" not in content
 
+
 def test_gateway_cancela_run_self_hosted_sem_pickup_e_registra_cleanup() -> None:
     content = _workflow()
 
@@ -169,6 +170,7 @@ def test_gateway_cancela_run_self_hosted_sem_pickup_e_registra_cleanup() -> None
     assert "steps.cleanup.outputs.status" in content
     assert "steps.cleanup.outputs.error" in content
     assert "[.status, (.conclusion // \"\")] | @tsv" in content
+    assert "IFS=$'\\t' read -r status conclusion" in content
     assert "[ \"$status\" = 'completed' ]" in content
     assert "[ \"$conclusion\" = 'cancelled' ]" in content
 
