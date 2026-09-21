@@ -38,6 +38,85 @@ def test_explicit_human_entra_bootstrap_is_detected():
     assert "permission" in categories
 
 
+def test_responsavel_heading_alone_is_not_human_intent():
+    categories = module.classify(
+        "Decisão de arquitetura documentada pelo Coordinator",
+        "### Responsável\nericson-j-santos\nA decisão arquitetural será tratada pelo fluxo automático.",
+    )
+    assert categories == []
+
+
+def test_generic_real_evidence_phrase_alone_is_not_human():
+    assert module.classify(
+        "E2E técnico",
+        "O Coordinator deve coletar evidência real automaticamente após o teste.",
+    ) == []
+
+
+def test_external_corporate_sql_source_remains_human_dependency():
+    categories = module.classify(
+        "P0 — fornecer consulta SQL real",
+        "A dependência mínima externa continua sendo fonte SQL corporativa e consulta real de negócio.",
+    )
+    assert "external_business_input" in categories
+
+
+def test_resolved_human_gate_label_suppresses_stale_body():
+    categories = module.classify(
+        "HUMANO: bootstrap antigo",
+        "A ação humana mínima exige permissão Entra.",
+        {"human-gate:resolved"},
+    )
+    assert categories == []
+
+
+def test_trusted_comment_can_clear_stale_human_gate():
+    comments = [{
+        "body": (
+            "Gate administrativo concluído. Não existe ação manual indispensável ativa "
+            "nesta issue neste momento."
+        ),
+        "author_association": "OWNER",
+    }]
+    assert module.human_gate_state_from_comments(comments) == "cleared"
+
+
+def test_later_trusted_comment_can_reopen_cleared_human_gate():
+    comments = [
+        {
+            "body": "Gate administrativo concluído. Não existe ação manual indispensável ativa.",
+            "author_association": "OWNER",
+        },
+        {
+            "body": "Gate humano atual: ação humana mínima para aprovação externa.",
+            "author_association": "OWNER",
+        },
+    ]
+    assert module.human_gate_state_from_comments(comments) == "active"
+
+
+def test_untrusted_comment_cannot_clear_human_gate():
+    comments = [{
+        "body": "Gate administrativo concluído. Não notificar esta issue como pendência humana.",
+        "author_association": "NONE",
+    }]
+    assert module.human_gate_state_from_comments(comments) is None
+
+
+def test_external_business_finding_has_actionable_instruction():
+    issue = {
+        "number": 1649,
+        "title": "P0 — fornecer consulta SQL real",
+        "body": "A dependência mínima externa continua sendo fonte SQL corporativa.",
+        "html_url": "https://example.test/issues/1649",
+    }
+    finding = module.build_finding(issue, [], ["external_business_input"])
+    assert finding.environment == "DEV corporativo / integração externa"
+    assert finding.risk == "alto"
+    assert "fonte SQL/DSN ou RDL/RDS corporativa autorizada" in finding.action_text
+    assert "Não publique segredo" in finding.action_text
+
+
 def test_explicit_owner_approval_is_captured():
     comment = {
         "body": "Aprovo e autorizo a continuidade controlada.",
