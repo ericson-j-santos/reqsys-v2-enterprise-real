@@ -36,7 +36,7 @@ jobs:
           python-version: '3.12'
 
       - name: Validate contract and negative controls
-        run: python -m pytest tests/test_kindle_knowledge_local_cache.py -q
+        run: python -m unittest discover -s tests -p 'test_kindle_knowledge_local_cache.py' -v
 
   noteri:
     name: Materialize and replay on Noteri
