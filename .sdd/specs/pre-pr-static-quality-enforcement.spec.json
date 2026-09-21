@@ -9,7 +9,7 @@
     "tests": [
       "tests/test_pre_pr_readiness.py"
     ],
-    "evidence_contract": "READY_FOR_PR only passes after changed Python Ruff, shell syntax, referenced contract tests, exact head SHA and current base validation."
+    "evidence_contract": "READY_FOR_PR only passes after changed Python Ruff, shell syntax, scoped referenced contract tests or explicit SDD-declared Python tests, exact head SHA and current base validation; generic stems such as main/index cannot overselect unrelated suites."
   },
   "traceability": {
     "implementation": "scripts/pre_pr_readiness.py",

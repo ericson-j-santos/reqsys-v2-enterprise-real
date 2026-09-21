@@ -20,6 +20,20 @@ from pathlib import Path
 from typing import Iterable
 
 
+GENERIC_REFERENCE_STEMS = {
+    "app",
+    "config",
+    "index",
+    "main",
+    "readme",
+    "requirements",
+    "settings",
+    "spec",
+    "test",
+    "tests",
+}
+
+
 @dataclass(frozen=True)
 class CheckResult:
     name: str
@@ -83,15 +97,22 @@ def changed_files(base_ref: str) -> list[str]:
 
 
 def referenced_contract_tests(files: list[str], root: Path) -> list[str]:
-    """Descobre testes contratuais que referenciam explicitamente arquivos alterados."""
+    """Descobre testes contratuais por referências suficientemente específicas.
+
+    O caminho relativo é sempre específico. Nome de arquivo e stem só entram
+    quando não são genéricos e possuem tamanho suficiente, evitando que mudanças
+    em `main.js`/`index.html` selecionem testes sem relação por coincidência textual.
+    """
     needles: set[str] = set()
     for rel in files:
         path = Path(rel)
-        needles.add(rel.replace("\\", "/"))
-        needles.add(path.name)
-        if path.suffix:
+        normalized = rel.replace("\\", "/")
+        needles.add(normalized)
+        stem = path.stem.lower()
+        if len(path.name) >= 6 and stem not in GENERIC_REFERENCE_STEMS:
+            needles.add(path.name)
+        if len(stem) >= 8 and stem not in GENERIC_REFERENCE_STEMS:
             needles.add(path.stem)
-    needles = {item for item in needles if len(item) >= 4}
 
     candidates: set[str] = set()
     for test_root in (root / "tests", root / "backend" / "tests"):
@@ -107,8 +128,33 @@ def referenced_contract_tests(files: list[str], root: Path) -> list[str]:
     return sorted(candidates)
 
 
+def sdd_declared_pytests(files: list[str], root: Path) -> list[str]:
+    """Inclui testes Python declarados explicitamente nos specs SDD alterados."""
+    candidates: set[str] = set()
+    for rel in files:
+        if not (rel.startswith(".sdd/specs/") and rel.endswith(".spec.json")):
+            continue
+        path = root / rel
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        tests = payload.get("sdd_gate", {}).get("tests", [])
+        if not isinstance(tests, list):
+            continue
+        for item in tests:
+            candidate = str(item).replace("\\", "/")
+            if candidate.startswith(("tests/", "backend/tests/")) and candidate.endswith(".py"):
+                if (root / candidate).is_file():
+                    candidates.add(candidate)
+    return sorted(candidates)
+
+
 def candidate_pytests(files: list[str], root: Path) -> list[str]:
     candidates: set[str] = set(referenced_contract_tests(files, root))
+    candidates.update(sdd_declared_pytests(files, root))
     for path in files:
         if path.endswith(".py") and path.startswith(("tests/", "backend/tests/")):
             if (root / path).is_file():
