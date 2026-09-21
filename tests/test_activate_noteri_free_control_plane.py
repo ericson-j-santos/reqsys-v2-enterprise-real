@@ -46,7 +46,7 @@ def test_bootstrap_auto_registers_official_pinned_runner_without_logging_token()
     assert 'RUNNER_ASSET_SHA256 = "1150692afa94e71f872017e254ea55b6eece1eece3fe7e3a6d4c93d0a1b85cfc"' in text
     assert 'actions-runner-win-x64-' in text
     assert 'registration-token' in text
-    assert '"--labels", RUNNER_LABELS' in text
+    assert '"--labels", runner_labels' in text
     assert 'RUNNER_LABELS = "noteri,reqsys-dev"' in text
     assert '"--replace"' in text
     assert 'registration_token_persisted' in text
