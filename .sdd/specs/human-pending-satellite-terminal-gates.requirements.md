@@ -24,9 +24,10 @@ Fonte SQL/DSN ou RDL/RDS corporativa e consulta/regra de negócio real devem per
 
 1. Issue com apenas cabeçalho `Responsável` não é escalada.
 2. Issue com apenas a expressão genérica `evidência real` não é escalada.
-3. Dependência explícita de fonte SQL corporativa continua classificada como `external_business_input`.
-4. Comentário confiável de gate concluído retorna estado `cleared`.
-5. Comentário confiável posterior de nova ação humana retorna estado `active`.
-6. Comentário não confiável não pode encerrar o gate.
-7. Finding de fonte corporativa informa ambiente de integração externa, risco alto e ação sem exposição de segredo.
-8. `tests/test_human_pending_satellite.py` permanece verde no HEAD exato.
+3. Aprovação humana futura/genérica não é escalada antes de existir gate atual explícito.
+4. Dependência explícita de fonte SQL corporativa continua classificada como `external_business_input`.
+5. Comentário confiável de gate concluído retorna estado `cleared`.
+6. Comentário confiável posterior de nova ação humana retorna estado `active`.
+7. Comentário não confiável não pode encerrar o gate.
+8. Finding de fonte corporativa informa ambiente de integração externa, risco alto e ação sem exposição de segredo.
+9. `tests/test_human_pending_satellite.py` permanece verde no HEAD exato.
