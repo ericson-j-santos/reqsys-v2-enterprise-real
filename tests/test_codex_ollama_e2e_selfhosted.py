@@ -39,6 +39,7 @@ def test_script_rejects_sha_drift_and_writes_evidence() -> None:
     assert "_write_evidence(evidence_file, blocked)" in raw
     assert '"correlation_id": f"{correlation_id}-fallback"' in raw
     assert '"X-Correlation-Id": correlation_id' in raw
+    assert "E2E publicou indevidamente no ReqSys" in raw
     assert "codex-cloud-e2e-20260919" not in raw
 
 
