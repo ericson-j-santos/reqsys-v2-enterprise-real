@@ -8,6 +8,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "deploy-reqsys-pages-composite.yml"
 SUPERVISOR = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py"
 INSTALLER = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor_install.py"
 MANIFEST = ROOT / "infra" / "public-access-urls.json"
+PUBLISHER = ROOT / "scripts" / "pc24x7_dev_locator_publisher.py"
 RESOLVER = ROOT / "scripts" / "resolve_pc24x7_dev_locator.mjs"
 PROMOTION = ROOT / ".github" / "workflows" / "fly-automatic-environment-promotion.yml"
 
@@ -106,3 +107,20 @@ def test_automatic_promotion_resolves_current_locator_instead_of_static_quick_tu
     assert "steps.locator.outputs.frontend_url" in job
     assert "vars.PC24X7_DEV_BASE_URL" not in job
     assert "vars.PC24X7_DEV_FRONTEND_URL" not in job
+
+
+def test_publisher_requires_complete_runtime_contract_before_locator():
+    raw = PUBLISHER.read_text(encoding="utf-8")
+    assert 'REQUIRED_PUBLIC_ENDPOINTS = ("/api/health", "/api/runtime/health", "/api/runtime/build-info")' in raw
+    assert "def runtime_contract_ready" in raw
+    assert "and runtime_contract_ready(value)" in raw
+    assert '"runtime_contract_required": True' in raw
+
+
+def test_supervisor_does_not_publish_when_runtime_contract_is_partial():
+    raw = SUPERVISOR.read_text(encoding="utf-8")
+    assert 'probe(LOCAL_GATEWAY + "/api/runtime/health")' in raw
+    assert 'probe(LOCAL_GATEWAY + "/api/runtime/build-info")' in raw
+    assert '"local_runtime_contract_failed"' in raw
+    assert 'payload["local_runtime_contract_ready"] = local_ready' in raw
+    assert 'payload["ready"] = local_ready and cloudflare_ready and (locator_ready if args.apply else True)' in raw
