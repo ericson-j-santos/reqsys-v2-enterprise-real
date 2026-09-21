@@ -93,6 +93,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || true
           gh auth setup-git
           BRANCH="automation/domain-coverage-baseline-${RUN_ID}"
           git config user.name "github-actions[bot]"
