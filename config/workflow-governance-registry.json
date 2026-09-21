@@ -54,6 +54,7 @@
     "Governed Merge Queue"
   ],
   "informative_workflows": [
+    "Required Checks Stale Inventory",
     "Operational Intelligence Hub",
     "Operational Governance Orchestrator",
     "Coordenador Status Consolidator",

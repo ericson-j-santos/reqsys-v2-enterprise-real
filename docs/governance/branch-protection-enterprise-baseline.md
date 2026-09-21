@@ -26,16 +26,24 @@ A branch `main` deve ser protegida por ruleset ou branch protection com os segui
 
 ## Required status checks
 
-Os nomes exatos devem refletir os jobs existentes no GitHub Actions. Para este repositório, a linha base recomendada é:
+Required status check no GitHub é o **check run name**, que corresponde ao `name` do job (ou ao job id quando o job não declara `name`) — nunca ao nome do workflow. Configurar nome de workflow como contexto obrigatório trava o PR em `Expected — Waiting for status to be reported`, porque nenhum check com aquele nome é publicado.
 
-- `Governança Padrão Ouro`
-- `Governance Quality Gates`
-- `CI — ReqSys v2 Enterprise`
-- `CI Enterprise Fast`
-- `Branch Protection Audit`
-- `Governed Merge Queue` / job `merge-queue-gate`, quando o workflow estiver habilitado para o PR
+Linha base recomendada (contextos comprovados por `scripts/build_required_checks_stale_inventory.py`, todos `active` em PR para `main`):
 
-Checks com filtro de caminhos podem permanecer opcionais até estabilização, mas não devem substituir a linha base acima. Qualquer check marcado como obrigatório no GitHub deve existir com nome idêntico no workflow ativo para evitar PR travado por check inexistente.
+| Contexto obrigatório (check run name) | Workflow produtor | Job |
+| --- | --- | --- |
+| `Required Fast Gate` | `ReqSys Required Fast Gate` | `required-fast-gate` |
+| `CI Router Result` | `CI — ReqSys v2 Enterprise` | `ci-result` (`if: always()`) |
+| `Sumario CI Enterprise Fast` | `CI Enterprise Fast` | `ci-fast-summary` (`if: always()`) |
+| `Validar artefatos de governança` | `Governança Padrão Ouro` | `validar-governanca` |
+| `governance-validation` | `Governance Quality Gates` | `governance-validation` (job sem `name`) |
+| `Security Baseline` | `Security Baseline Gate` | `security-baseline` |
+| `Auditar proteção enterprise da branch` | `Branch Protection Audit` | `audit` |
+| `Gate de merge governado` | `Governed Merge Queue` | `merge-queue-gate` (`if: always()`) |
+
+Nomes de workflow (`Governança Padrão Ouro`, `Governance Quality Gates`, `CI — ReqSys v2 Enterprise`, `CI Enterprise Fast`, `Branch Protection Audit`, `Governed Merge Queue`) permanecem válidos como referência de workflow, mas **não** devem ser usados como contexto obrigatório. A decisão de renomear cada um para o check run name real está registrada em `config/required-checks-inventory-policy.json` e auditada por `docs/governance/required-checks-stale-inventory.md`.
+
+Checks com filtro de caminhos, job matricial, `if` condicional sem `always()` ou trigger fora de `pull_request` podem permanecer opcionais, porque não materializam de forma determinística em todo PR. Antes de alterar a proteção, rodar o inventário e tratar todo contexto classificado como `stale`, `renamed_candidate`, `workflow_name_mismatch`, `conditional_risk` ou `not_pr_triggered`.
 
 ## Required approvals
 
