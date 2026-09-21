@@ -222,6 +222,7 @@ def ensure_gh_auth(gh: Path) -> None:
         ],
         timeout=300,
         check=False,
+        env=gh_env(),
     )
     if login.returncode != 0:
         raise ActivationError("github_auth_required", "autenticação GitHub não concluída")
