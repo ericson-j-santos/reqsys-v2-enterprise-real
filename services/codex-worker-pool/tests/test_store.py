@@ -57,13 +57,21 @@ def register_ready(store: WorkerPoolStore, worker_id: str, role: str, *, profile
     )
 
 
-def enqueue(store: WorkerPoolStore, request_id: str = "req-1", *, max_attempts: int = 2):
+def enqueue(
+    store: WorkerPoolStore,
+    request_id: str = "req-1",
+    *,
+    max_attempts: int = 2,
+    repository: str = "ericson-j-santos/reqsys-v2-enterprise-real",
+    issue_number: int = 1769,
+    priority: int = 10,
+):
     return store.enqueue_task(
-        repository="ericson-j-santos/reqsys-v2-enterprise-real",
-        issue_number=1769,
+        repository=repository,
+        issue_number=issue_number,
         request_id=request_id,
         correlation_id=f"corr-{request_id}",
-        priority=10,
+        priority=priority,
         base_sha="1" * 40,
         max_attempts=max_attempts,
     )
@@ -415,3 +423,126 @@ def test_snapshot_redacts_sensitive_values_and_hides_lease_token(
     assert "lease_token" not in snapshot_text
     assert raw_marker not in snapshot_text
     assert "[REDACTED]" in snapshot_text
+
+
+def test_repository_fair_scheduler_rotates_between_repositories(
+    store: WorkerPoolStore,
+) -> None:
+    repo_a = "ericson-j-santos/repo-a"
+    repo_b = "ericson-j-santos/repo-b"
+    register_ready(store, "builder-a", "builder")
+    register_ready(store, "builder-b", "builder")
+
+    store.configure_repository(repository=repo_a, max_in_flight=2)
+    store.configure_repository(repository=repo_b, max_in_flight=2)
+    first_a, _ = enqueue(store, "fair-a-1", repository=repo_a, issue_number=1)
+    enqueue(store, "fair-a-2", repository=repo_a, issue_number=2)
+    first_b, _ = enqueue(store, "fair-b-1", repository=repo_b, issue_number=1)
+
+    claimed_a, lease_a = store.claim_task(
+        worker_id="builder-a", role="builder", correlation_id="fair-claim-a"
+    )
+    assert claimed_a and lease_a
+    assert claimed_a["task_id"] == first_a["task_id"]
+
+    claimed_b, lease_b = store.claim_task(
+        worker_id="builder-b", role="builder", correlation_id="fair-claim-b"
+    )
+    assert claimed_b and lease_b
+    assert claimed_b["task_id"] == first_b["task_id"]
+
+
+def test_repository_max_in_flight_prevents_second_active_task(
+    store: WorkerPoolStore,
+) -> None:
+    repository = "ericson-j-santos/limited-repo"
+    register_ready(store, "builder-a", "builder")
+    register_ready(store, "builder-b", "builder")
+    store.configure_repository(repository=repository, max_in_flight=1)
+    enqueue(store, "limited-1", repository=repository, issue_number=1)
+    enqueue(store, "limited-2", repository=repository, issue_number=2)
+
+    first, first_lease = store.claim_task(
+        worker_id="builder-a", role="builder", correlation_id="limited-first"
+    )
+    assert first and first_lease
+
+    second, second_lease = store.claim_task(
+        worker_id="builder-b", role="builder", correlation_id="limited-second"
+    )
+    assert second is None
+    assert second_lease is None
+
+
+def test_worker_repository_affinity_filters_claims(store: WorkerPoolStore) -> None:
+    repo_a = "ericson-j-santos/affinity-a"
+    repo_b = "ericson-j-santos/affinity-b"
+    register_ready(store, "builder-affinity", "builder")
+    enqueue(store, "affinity-a", repository=repo_a, issue_number=1)
+    expected, _ = enqueue(store, "affinity-b", repository=repo_b, issue_number=1)
+    store.replace_worker_affinities("builder-affinity", [repo_b])
+
+    claimed, lease = store.claim_task(
+        worker_id="builder-affinity",
+        role="builder",
+        correlation_id="affinity-claim",
+    )
+
+    assert claimed and lease
+    assert claimed["task_id"] == expected["task_id"]
+    assert claimed["repository"] == repo_b
+
+
+def test_worker_without_affinity_remains_shared_pool_compatible(
+    store: WorkerPoolStore,
+) -> None:
+    repository = "ericson-j-santos/shared-pool"
+    register_ready(store, "builder-shared", "builder")
+    expected, _ = enqueue(store, "shared-1", repository=repository, issue_number=1)
+
+    claimed, lease = store.claim_task(
+        worker_id="builder-shared",
+        role="builder",
+        correlation_id="shared-claim",
+    )
+
+    assert claimed and lease
+    assert claimed["task_id"] == expected["task_id"]
+
+
+def test_disabled_repository_lane_does_not_start_new_work(
+    store: WorkerPoolStore,
+) -> None:
+    repository = "ericson-j-santos/paused-repo"
+    register_ready(store, "builder-paused", "builder")
+    enqueue(store, "paused-1", repository=repository, issue_number=1)
+    store.configure_repository(repository=repository, enabled=False, max_in_flight=1)
+
+    claimed, lease = store.claim_task(
+        worker_id="builder-paused",
+        role="builder",
+        correlation_id="paused-claim",
+    )
+
+    assert claimed is None
+    assert lease is None
+
+
+def test_snapshot_exposes_repository_lanes_and_worker_affinity(
+    store: WorkerPoolStore,
+) -> None:
+    repository = "ericson-j-santos/observable-repo"
+    register_ready(store, "builder-observable", "builder")
+    store.configure_repository(repository=repository, max_in_flight=3)
+    store.replace_worker_affinities("builder-observable", [repository])
+    enqueue(store, "observable-1", repository=repository, issue_number=1)
+
+    snapshot = store.snapshot()
+
+    lane = next(item for item in snapshot["repositories"] if item["repository"] == repository)
+    worker = next(item for item in snapshot["workers"] if item["worker_id"] == "builder-observable")
+    assert snapshot["schema_version"] == "1.1.0"
+    assert lane["enabled"] is True
+    assert lane["max_in_flight"] == 3
+    assert lane["queued"] == 1
+    assert worker["repository_affinity"] == [repository]
