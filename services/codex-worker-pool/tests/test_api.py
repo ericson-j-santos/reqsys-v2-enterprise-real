@@ -160,3 +160,69 @@ def test_task_requires_base_sha(tmp_path: Path, monkeypatch) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_repository_lane_and_worker_affinity_api(tmp_path: Path, monkeypatch) -> None:
+    _module, client, headers = load_app(tmp_path, monkeypatch)
+
+    worker = client.post(
+        "/v1/workers",
+        headers=headers,
+        json={
+            "worker_id": "desktop-builder-repo",
+            "host": "desktop",
+            "role": "builder",
+            "profile": "NORMAL",
+            "capacity_score": 80,
+            "controller_version": "0.2.51",
+            "rules_sha": "a" * 40,
+            "gateway_ok": True,
+            "state_validated": True,
+            "worktree_root": "C:/dev/chatgpt-workers/desktop-builder-repo",
+            "correlation_id": "repo-api-worker",
+        },
+    )
+    assert worker.status_code == 200
+
+    configured = client.post(
+        "/v1/repositories",
+        headers=headers,
+        json={
+            "repository": "ericson-j-santos/painel-powerbi",
+            "enabled": True,
+            "max_in_flight": 2,
+            "correlation_id": "repo-api-config",
+        },
+    )
+    assert configured.status_code == 200
+    assert configured.json()["max_in_flight"] == 2
+
+    affinity = client.put(
+        "/v1/workers/desktop-builder-repo/affinities",
+        headers=headers,
+        json={
+            "repositories": ["ericson-j-santos/painel-powerbi"],
+            "correlation_id": "repo-api-affinity",
+        },
+    )
+    assert affinity.status_code == 200
+    assert affinity.json()["repositories"] == ["ericson-j-santos/painel-powerbi"]
+
+    observed = client.get("/v1/repositories", headers=headers)
+    assert observed.status_code == 200
+    lane = next(
+        item
+        for item in observed.json()
+        if item["repository"] == "ericson-j-santos/painel-powerbi"
+    )
+    assert lane["enabled"] is True
+    assert lane["max_in_flight"] == 2
+
+    snapshot = client.get("/v1/snapshot", headers=headers)
+    assert snapshot.status_code == 200
+    worker_view = next(
+        item
+        for item in snapshot.json()["workers"]
+        if item["worker_id"] == "desktop-builder-repo"
+    )
+    assert worker_view["repository_affinity"] == ["ericson-j-santos/painel-powerbi"]
