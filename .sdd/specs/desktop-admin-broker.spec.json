@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Desktop PC24x7 governed administrative broker",
+  "increment_type": "gap_fix",
+  "status": "code_pending_validation",
+  "approvals": {
+    "requirements": true
+  },
+  "target_host": "DESKTOP-PDQK954",
+  "scope": "local/dev",
+  "problem": "RDC and the Desktop self-hosted runner can fail simultaneously, leaving no authorized remote path for one-time privileged recovery.",
+  "solution": {
+    "transport": "outbound HTTPS polling of GitHub issue #1705",
+    "authorization": "exact owner + OWNER association + exact fresh unedited comment",
+    "executor": "AtStartup S4U highest scheduled task",
+    "inbound_listener": false,
+    "arbitrary_shell": false,
+    "secrets_required": false,
+    "reboot_required": false,
+    "production_touched": false
+  },
+  "commands": [
+    "/reqsys admin desktop status",
+    "/reqsys admin desktop recover-control-plane",
+    "/reqsys admin desktop recover-rdc",
+    "/reqsys admin desktop recover-runner",
+    "/reqsys admin desktop activate-watchdog"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_desktop_admin_broker.py",
+      "tests/test_desktop_admin_broker_uac_launcher.py"
+    ],
+    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, and invoke only versioned allowlisted handlers from an immutable release."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/desktop-admin-broker.requirements.md",
+    "implementation": "scripts/desktop_admin_broker.py",
+    "uac_launcher": "scripts/desktop_admin_broker_uac_launcher.py",
+    "tests": "tests/test_desktop_admin_broker.py"
+  },
+  "acceptance": {
+    "code": [
+      "unit_tests_green",
+      "negative_controls_green",
+      "anti_replay_green",
+      "pre_pr_ready_current_sha",
+      "ci_green_current_sha"
+    ],
+    "runtime": [
+      "broker_task_atstartup_s4u_highest",
+      "status_comment_consumed_once",
+      "unsupported_command_no_effect",
+      "runner_recovery_proven",
+      "rdc_recovery_proven",
+      "fresh_self_hosted_workflow_pickup"
+    ],
+    "runtime_status_until_evidence": "activation_pending"
+  }
+}
