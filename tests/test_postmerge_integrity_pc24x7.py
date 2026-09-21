@@ -218,9 +218,13 @@ def test_automatic_promotion_routes_dev_provider_without_self_hosted_runner():
         encoding="utf-8"
     )
     assert "REQSYS_DEV_RUNTIME_PROVIDER" in workflow
-    assert "PC24X7_DEV_BASE_URL" in workflow
-    assert "PC24X7_DEV_FRONTEND_URL" in workflow
     assert "validate-dev-pc24x7:" in workflow
+    assert "resolve_pc24x7_dev_locator.mjs" in workflow
+    assert "signed-locator.json" in workflow
+    assert "steps.locator.outputs.base_url" in workflow
+    pc24x7_job = workflow.split("  validate-dev-pc24x7:", 1)[1].split("\n  dev-result:", 1)[0]
+    assert "vars.PC24X7_DEV_BASE_URL" not in pc24x7_job
+    assert "vars.PC24X7_DEV_FRONTEND_URL" not in pc24x7_job
     assert "runs-on: ubuntu-latest" in workflow
     assert "runs-on: self-hosted" not in workflow
     assert "dev_provider == 'pc24x7'" in workflow
