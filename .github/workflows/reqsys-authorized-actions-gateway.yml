@@ -30,7 +30,8 @@ jobs:
         github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation' ||
         github.event.comment.body == '/reqsys run figma-github-e2e-dev' ||
         github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe' ||
-        github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'
+        github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
+        github.event.comment.body == '/reqsys run noteri-desktop-network-probe'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -79,6 +80,9 @@ jobs:
             '/reqsys run codex-ollama-e2e-dev')
               target='codex-ollama-e2e-dev.yml'
               ;;
+            '/reqsys run noteri-desktop-network-probe')
+              target='noteri-desktop-network-probe.yml'
+              ;;
             *)
               echo 'command_not_allowlisted' >&2
               exit 2
@@ -106,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|noteri-desktop-network-probe.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
@@ -178,7 +182,7 @@ jobs:
 
       - name: Validate self-hosted runner pickup
         id: pickup
-        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml'
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -202,7 +206,7 @@ jobs:
 
       - name: Cancel self-hosted run without pickup
         id: cleanup
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -284,7 +288,7 @@ jobs:
           retention-days: 30
 
       - name: Fail closed when self-hosted runner is unavailable
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
         shell: bash
         run: |
           echo 'SELF_HOSTED_RUNNER_UNAVAILABLE' >&2
