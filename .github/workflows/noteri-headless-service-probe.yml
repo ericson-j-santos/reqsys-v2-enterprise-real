@@ -1,0 +1,44 @@
+name: Noteri Headless Service Probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-headless-service-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Prove Noteri native service runner without RDC
+    runs-on: [self-hosted, Windows, X64, noteri-headless, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      CORRELATION_ID: noteri-headless-service-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/noteri-control-plane/headless-service-probe.json
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Prove exact host and native service runner
+        shell: powershell
+        run: |
+          python scripts/noteri_control_plane_probe.py `
+            --confirm PROBE-NOTERI-CONTROL-PLANE `
+            --correlation-id "$env:CORRELATION_ID" `
+            --expected-runner-name NoteriHeadless `
+            --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Upload sanitized headless evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-headless-service-${{ github.run_id }}
+          path: artifacts/noteri-control-plane/headless-service-probe.json
+          if-no-files-found: error
+          retention-days: 30
