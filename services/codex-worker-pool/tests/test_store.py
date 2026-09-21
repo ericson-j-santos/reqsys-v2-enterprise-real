@@ -11,7 +11,7 @@ SERVICE_ROOT = Path(__file__).resolve().parents[1]
 if str(SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVICE_ROOT))
 
-from app.store import ConflictError, WorkerPoolStore, build_idempotency_key
+from app.store import ConflictError, WorkerPoolStore, build_idempotency_key  # noqa: E402
 
 
 class MutableClock:
