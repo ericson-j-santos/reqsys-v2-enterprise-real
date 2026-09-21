@@ -22,7 +22,8 @@ def test_bootstrap_is_rdc_independent_and_fail_closed():
     assert '"registration_token_persisted": False' in text
     assert '"registration_token_logged": False' in text
     assert ".runner" in text
-    assert "read_text" not in text.split("def runner_contract", 1)[1].split("def discover_runner", 1)[0]
+    assert '(root / ".runner").read_text' not in text
+    assert '(root / ".runner").read_bytes' not in text
 
 def test_bootstrap_reuses_existing_watchdog_contract():
     text = SCRIPT.read_text(encoding="utf-8")
