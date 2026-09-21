@@ -34,7 +34,7 @@ def test_cmd_is_host_pinned_and_has_no_secret_inputs():
     text = CMD.read_text(encoding="utf-8")
     lowered = text.casefold()
     assert 'not "%computername%"=="noteri"' in lowered
-    assert "activate-noteri-free-control-plane" not in lowered
+    assert "--confirm activate-noteri-free-control-plane" in lowered
     assert "token" not in lowered
     assert "password" not in lowered
     assert "secret" not in lowered

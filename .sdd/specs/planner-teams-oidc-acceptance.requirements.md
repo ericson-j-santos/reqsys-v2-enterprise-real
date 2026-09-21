@@ -34,7 +34,7 @@ Antes de criar tarefas de prova, o E2E deve localizar os dois flows Planner→Te
 
 A reconciliação deve falhar fechada se o alvo não for exatamente `shared_teams/PostCardToConversation`, usar o `@odata.etag` corrente para concorrência otimista, preservar destinatário, conexões e todo o restante do `clientdata`, reler o flow após o PATCH e validar independentemente o contrato do cartão. Se a leitura pós-PATCH divergir, deve tentar restaurar o `clientdata` original antes de falhar.
 
-O Dataverse mantém camadas publicadas e não publicadas para componentes de solução. Quando houver drift em flow ativado, a reconciliação deve desativar o flow, recuperar explicitamente a revisão editável por `Microsoft.Dynamics.CRM.RetrieveUnpublished()`, exigir `componentstate=1`, aplicar o PATCH com o `@odata.etag` dessa revisão e validar novamente a revisão não publicada antes de reativar. É proibido reutilizar o ETag da linha publicada quando existir revisão não publicada, pois o Dataverse rejeita esse caminho com `HTTP 400 0x80040203` ("published update ... unpublished active row"). A reativação deve publicar a revisão reconciliada e a releitura normal deve comprovar o mesmo `clientdata`. Nenhuma saída — sucesso, falha do PATCH ou falha da verificação — pode deixar o flow desativado; se a reativação também falhar, o erro deve declarar as duas causas. Os erros do Dataverse devem propagar código e mensagem para diagnóstico.
+A atualização do cartão deve usar diretamente `PATCH workflows(<workflowid>)` no registro corrente com o `@odata.etag` observado, sem desativar um flow ativo apenas para editar `clientdata`. Desativar para esse fim materializa uma revisão não publicada e pode transformar o PATCH seguinte em conflito `HTTP 400 0x80040203` ("published update ... unpublished active row"). Se já existir revisão não publicada concorrente, a reconciliação deve falhar fechada, preservar o estado do flow e não tentar publicar, sobrescrever ou descartar esse draft automaticamente. Os erros do Dataverse devem propagar código e mensagem para diagnóstico.
 
 O cartão corrente deve:
 - usar o título operacional do evento;
@@ -45,7 +45,7 @@ O cartão corrente deve:
 - manter o ID da tarefa apenas como metadado secundário;
 - fornecer `Abrir no Planner` para a tarefa correta.
 
-Depois da reconciliação, o E2E deve ativar somente quando necessário, confirmar `statecode=1/statuscode=2` e comprovar que a ativação não alterou o `clientdata` reconciliado.
+Depois da reconciliação, o E2E deve ativar somente um flow que já estivesse inativo; a reconciliação do cartão não pode desativar um flow ativo. Após eventual ativação, deve confirmar `statecode=1/statuscode=2` e comprovar que a ativação não alterou o `clientdata` reconciliado.
 
 ## Requisito 8 — aquecimento do gatilho
 Após confirmar os flows ativos, o workflow deve aguardar 15 segundos antes de criar as tarefas de prova, preservando a janela já usada pelo acceptance legado para evitar perda do primeiro evento do gatilho recém-ativado.
