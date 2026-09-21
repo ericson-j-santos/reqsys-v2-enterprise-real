@@ -24,29 +24,56 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Stage one-click interactive UAC launcher on Noteri desktop
+      - name: Stage immutable one-click UAC launcher on Noteri desktop
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           $desktop = [Environment]::GetFolderPath('Desktop')
           if ([string]::IsNullOrWhiteSpace($desktop)) { throw 'Desktop path unavailable' }
+
+          $sourceSha = '${{ github.sha }}'
+          if ($sourceSha -notmatch '^[0-9a-fA-F]{40}$') { throw 'Invalid workflow source SHA' }
+
+          $stageRoot = Join-Path $env:LOCALAPPDATA "ReqSys\NoteriControlPlaneBootstrap\$sourceSha"
+          $stageScripts = Join-Path $stageRoot 'scripts'
+          New-Item -ItemType Directory -Force $stageScripts | Out-Null
+
+          $files = @(
+            'noteri_control_plane_watchdog.py',
+            'noteri_control_plane_watchdog_uac_launcher.py'
+          )
+          foreach ($name in $files) {
+            $source = Join-Path $env:GITHUB_WORKSPACE "scripts\$name"
+            $target = Join-Path $stageScripts $name
+            if (-not (Test-Path -LiteralPath $source)) { throw "Required source missing: $name" }
+            Copy-Item -LiteralPath $source -Destination $target -Force
+            $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+            $targetHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            if ($sourceHash -ne $targetHash) { throw "Staged file hash mismatch: $name" }
+          }
+
           $ps1 = Join-Path $desktop 'Ativar-Noteri-Headless.ps1'
           $cmd = Join-Path $desktop 'Ativar-Noteri-Headless.cmd'
-          @'
-          $ErrorActionPreference = 'Stop'
-          $p = 'C:\dev\reqsys-free-control-plane-20260921'
-          git -C $p fetch origin main
-          git -C $p checkout -f origin/main
-          $sha = (git -C $p rev-parse HEAD).Trim()
-          python "$p\scripts\noteri_control_plane_watchdog_uac_launcher.py" --repo-root $p --source-sha $sha --confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC --timeout-seconds 180
+          @"
+          `$ErrorActionPreference = 'Stop'
+          `$p = Join-Path `$env:LOCALAPPDATA 'ReqSys\NoteriControlPlaneBootstrap\$sourceSha'
+          `$sha = '$sourceSha'
+          `$launcher = Join-Path `$p 'scripts\noteri_control_plane_watchdog_uac_launcher.py'
+          if (-not (Test-Path -LiteralPath `$launcher)) { throw 'Launcher imutável não encontrado' }
+          python "`$launcher" --repo-root "`$p" --source-sha "`$sha" --confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC --timeout-seconds 180
+          if (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE }
           Write-Host ''
-          Write-Host 'Resultado acima. Pressione Enter para fechar.'
+          Write-Host 'Ativação concluída. Pressione Enter para fechar.'
           [void](Read-Host)
-          '@ | Set-Content -LiteralPath $ps1 -Encoding UTF8
+          "@ | Set-Content -LiteralPath $ps1 -Encoding UTF8
           @'
           @echo off
           powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Ativar-Noteri-Headless.ps1"
           '@ | Set-Content -LiteralPath $cmd -Encoding ASCII
+
           Write-Host "NOTERI_INTERACTIVE_UAC_LAUNCHER_STAGED=$cmd"
+          Write-Host "NOTERI_IMMUTABLE_SOURCE_SHA=$sourceSha"
+          Write-Host "NOTERI_IMMUTABLE_STAGE_ROOT=$stageRoot"
 
       - name: Request governed UAC and validate headless task
         shell: powershell

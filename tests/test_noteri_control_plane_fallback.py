@@ -156,6 +156,12 @@ def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
     assert "Ativar-Noteri-Headless.cmd" in workflow
     assert "[Environment]::GetFolderPath('Desktop')" in workflow
     assert "ExecutionPolicy Bypass -File" in workflow
+    assert "NoteriControlPlaneBootstrap" in workflow
+    assert "Copy-Item" in workflow
+    assert "Get-FileHash" in workflow
+    assert "NOTERI_IMMUTABLE_SOURCE_SHA" in workflow
+    assert "origin/main" not in workflow
+    assert "git -C $p fetch origin main" not in workflow
     assert "inputs:" not in workflow
     assert "ShellExecuteW" in launcher
     assert "--result-path" in launcher

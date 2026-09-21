@@ -80,7 +80,10 @@ O workflow deve:
 
 - executar somente no self-hosted runner `[self-hosted, Windows, X64, noteri, reqsys-dev]`;
 - usar checkout do SHA imutável da `main`;
-- chamar `scripts/noteri_control_plane_watchdog_uac_launcher.py`;
+- materializar os scripts do launcher/watchdog desse mesmo SHA em `%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneBootstrap\\<sha>` antes de criar o atalho interativo;
+- validar SHA-256 entre os arquivos do checkout e a cópia materializada;
+- o atalho interativo não pode depender de `origin/main`, `FETCH_HEAD` ou de qualquer atualização Git no momento do clique;
+- chamar `scripts/noteri_control_plane_watchdog_uac_launcher.py` a partir da cópia imutável materializada;
 - usar `ShellExecuteW(..., "runas", ...)` apenas para registrar a tarefa local;
 - exigir confirmação fixa `LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC`;
 - aguardar e validar `exists=true`, trigger de startup e logon `S4U`;
