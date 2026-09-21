@@ -6,8 +6,9 @@
     ".github/workflows/codex-worker-pool-handoff.yml",
     ".github/workflows/figma-github-e2e-dev.yml",
     ".github/workflows/noteri-control-plane-probe.yml",
-    ".github/workflows/noteri-headless-control-plane-activation.yml"
+    ".github/workflows/noteri-headless-control-plane-activation.yml",
+    ".github/workflows/fabric-hml-noteri-discovery.yml"
   ],
   "required_adr": "docs/adr/ADR-046-pc24x7-substituicao-flyio.md",
-  "rationale": "Self-hosted permitido apenas por allowlist explícita para capacidades DEV PC24x7 cobertas pelo ADR-046; recuperação RDC, fallback independente no Noteri, ativação headless governada via UAC no Noteri, handoff local Codex→Worker Pool e E2E Figma/GitHub DEV são fail-closed. O Noteri fornece rota de contingência quando RDC/Desktop não está disponível, sem liberar shell arbitrário."
+  "rationale": "Self-hosted permitido apenas por allowlist explícita para capacidades DEV PC24x7 cobertas pelo ADR-046; recuperação RDC, fallback independente no Noteri, ativação headless governada via UAC no Noteri, handoff local Codex→Worker Pool e E2E Figma/GitHub DEV são fail-closed. O Noteri fornece rota de contingência quando RDC/Desktop não está disponível, sem liberar shell arbitrário; a descoberta Fabric HML é restrita a leitura em PR e, em main, à gravação de três variables não sensíveis, sem criação ou rotação de secrets."
 }
