@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/pc24x7-teams-ephemeral-e2e.yml'
       - 'scripts/pc24x7_teams_ephemeral_e2e.py'
+      - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'scripts/pc24x7_teams_queue.py'
       - 'tests/test_pc24x7_teams_ephemeral_e2e.py'
       - 'tests/test_pc24x7_teams_ephemeral_provider_selection.py'
