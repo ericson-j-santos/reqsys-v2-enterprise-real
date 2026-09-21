@@ -137,6 +137,13 @@ jobs:
       homologation_pr_url: ${{ steps.promote.outputs.homologation_pr_url }}
       padrao_pr_url: ${{ steps.promote.outputs.padrao_pr_url }}
     steps:
+      - name: Checkout governed PR opener
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_BASE_SHA }}
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT_ACTIONS }}
+
       - name: Download validated bundle
         uses: actions/download-artifact@v4
         with:
@@ -243,24 +250,39 @@ jobs:
             gh api --method PUT "repos/${REPOSITORY}/contents/${target}" --input request.json --silent
           done < promotion-updates.tsv
 
-          create_pr_payload() {
+          create_pr_governed() {
             local branch="$1"
             local title="$2"
             local body="$3"
-            python - "$branch" "$title" "$body" > pr-request.json <<'PY'
-          import json
-          import sys
-          branch, title, body = sys.argv[1:]
-          print(json.dumps({"title": title, "head": branch, "base": "main", "body": body}))
-          PY
-            gh api --method POST "repos/${REPOSITORY}/pulls" --input pr-request.json --jq .html_url
+            local slug="${branch//\//-}"
+            local head_sha
+            local body_file
+            local pr_url
+
+            head_sha="$(gh api "repos/${REPOSITORY}/git/ref/heads/${branch}" --jq .object.sha)"
+            body_file="$(mktemp)"
+            printf '%s\n' "$body" > "$body_file"
+
+            PR_REQUEST_ARTIFACT_DIR="/tmp/auto-pr-${slug}" \
+            READY_FOR_PR_WAIT_SECONDS="480" \
+              python scripts/auto_open_agent_pr.py \
+                --base main \
+                --branch "$branch" \
+                --head-sha "$head_sha" \
+                --title "$title" \
+                --body-file "$body_file" \
+                --ready
+
+            pr_url="$(gh pr list --repo "${REPOSITORY}" --base main --head "$branch" --state open --json url --jq '.[0].url // empty')"
+            test -n "$pr_url" || { echo "::error::READY_FOR_PR passou, mas a PR governada não foi criada para $branch." >&2; return 1; }
+            printf '%s\n' "$pr_url"
           }
 
-          homologation_pr_url="$(create_pr_payload \
+          homologation_pr_url="$(create_pr_governed \
             "$homologation_branch" \
             "feat(compliance): gate BACEN na homologação Fly" \
             "Artifact validado do run ${HOMOLOGATION_RUN_ID}; SHA-256 ${HOMOLOGATION_SHA256}. Gate antes de environment/secrets/deploy. production_touched=false")"
-          padrao_pr_url="$(create_pr_payload \
+          padrao_pr_url="$(create_pr_governed \
             "$padrao_branch" \
             "feat(compliance): gate BACEN no Padrão Ouro Delivery" \
             "Artifact validado do run ${PADRAO_OURO_RUN_ID}; gate reutilizável e jobs produtivos condicionados. production_touched=false")"
