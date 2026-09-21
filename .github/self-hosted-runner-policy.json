@@ -6,11 +6,12 @@
     ".github/workflows/codex-worker-pool-handoff.yml",
     ".github/workflows/figma-github-e2e-dev.yml",
     ".github/workflows/noteri-control-plane-probe.yml",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
     ".github/workflows/noteri-headless-control-plane-activation.yml",
     ".github/workflows/fabric-hml-noteri-discovery.yml",
     ".github/workflows/codex-ollama-e2e-dev.yml",
     ".github/workflows/ollama-ci-triage.yml"
   ],
   "required_adr": "docs/adr/ADR-046-pc24x7-substituicao-flyio.md",
-  "rationale": "Self-hosted permitido apenas por allowlist explícita para capacidades DEV PC24x7 cobertas pelo ADR-046; recuperação RDC, E2E ReqSys→Ollama cloud/fallback, triagem Ollama-first de CI, fallback independente no Noteri, ativação headless governada via UAC no Noteri, handoff local Codex→Worker Pool e E2E Figma/GitHub DEV são fail-closed. A triagem Ollama usa loopback, faz checkout somente do control-plane confiável e só escala falhas técnicas elegíveis para a branch vigente do mesmo PR. O Noteri fornece rota de contingência quando RDC/Desktop não está disponível, sem liberar shell arbitrário; a descoberta Fabric HML é restrita a leitura em PR e, em main, à gravação de três variables não sensíveis, sem criação ou rotação de secrets."
+  "rationale": "Self-hosted permitido apenas por allowlist explícita para capacidades DEV PC24x7 cobertas pelo ADR-046. O Noteri fornece fallback governado quando RDC/Desktop está indisponível. O recovery Noteri→Desktop usa somente Windows schtasks remoto com destino e tarefa fixos para consultar e iniciar uma tarefa já existente; não cria, altera ou exclui tarefa, não aceita credencial/input arbitrário e falha fechado se RPC, configuração AtStartup+S4U ou acesso remoto não forem comprovados. Nenhuma dessas rotas autoriza produção, deploy, segredo ou bypass de UAC."
 }
