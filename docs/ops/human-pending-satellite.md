@@ -20,6 +20,7 @@ Ela não substitui fatos externos por aprovação textual. Documento, corpus, MF
 - não escala falha técnica isolada de CI/build/teste;
 - cabeçalhos genéricos como `Responsável` não são tratados como intenção humana;
 - a frase genérica `evidência real` não basta para escalar uma issue;
+- menções genéricas ou futuras a `aprovação humana` não geram alerta antes do gate realmente estar ativo; use linguagem explícita (`ação humana`, `aprovação obrigatória`) ou `human-gate:*` quando a intervenção for atual;
 - dependência de fonte corporativa externa é classificada separadamente, por exemplo SQL/DSN ou RDL/RDS de negócio;
 - só reconhece aprovação e mudança de gate em comentários de OWNER/MEMBER/COLLABORATOR;
 - comentários confiáveis podem encerrar um gate humano histórico e comentários posteriores podem reabri-lo;
