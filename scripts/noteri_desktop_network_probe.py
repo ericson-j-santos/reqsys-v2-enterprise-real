@@ -164,7 +164,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "runtime_port_reachable": tcp,
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
-        "admin_staging_path": r"C:\\Users\\Public\\Desktop",
+        "admin_staging_path": r"C:\Users\Public\Desktop",
         "desktop_reachable": desktop_reachable,
         "network_state": state,
         "correlation_id": correlation_id,
