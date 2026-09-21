@@ -430,26 +430,32 @@ def test_repository_fair_scheduler_rotates_between_repositories(
 ) -> None:
     repo_a = "ericson-j-santos/repo-a"
     repo_b = "ericson-j-santos/repo-b"
-    register_ready(store, "builder-a", "builder")
-    register_ready(store, "builder-b", "builder")
+    for worker_id in ("builder-a", "builder-b", "builder-c", "builder-d"):
+        register_ready(store, worker_id, "builder")
 
     store.configure_repository(repository=repo_a, max_in_flight=2)
     store.configure_repository(repository=repo_b, max_in_flight=2)
     first_a, _ = enqueue(store, "fair-a-1", repository=repo_a, issue_number=1)
-    enqueue(store, "fair-a-2", repository=repo_a, issue_number=2)
+    second_a, _ = enqueue(store, "fair-a-2", repository=repo_a, issue_number=2)
     first_b, _ = enqueue(store, "fair-b-1", repository=repo_b, issue_number=1)
+    second_b, _ = enqueue(store, "fair-b-2", repository=repo_b, issue_number=2)
 
-    claimed_a, lease_a = store.claim_task(
-        worker_id="builder-a", role="builder", correlation_id="fair-claim-a"
-    )
-    assert claimed_a and lease_a
-    assert claimed_a["task_id"] == first_a["task_id"]
+    observed = []
+    for worker_id in ("builder-a", "builder-b", "builder-c", "builder-d"):
+        claimed, lease = store.claim_task(
+            worker_id=worker_id,
+            role="builder",
+            correlation_id=f"fair-claim-{worker_id}",
+        )
+        assert claimed and lease
+        observed.append(claimed["task_id"])
 
-    claimed_b, lease_b = store.claim_task(
-        worker_id="builder-b", role="builder", correlation_id="fair-claim-b"
-    )
-    assert claimed_b and lease_b
-    assert claimed_b["task_id"] == first_b["task_id"]
+    assert observed == [
+        first_a["task_id"],
+        first_b["task_id"],
+        second_a["task_id"],
+        second_b["task_id"],
+    ]
 
 
 def test_repository_max_in_flight_prevents_second_active_task(
