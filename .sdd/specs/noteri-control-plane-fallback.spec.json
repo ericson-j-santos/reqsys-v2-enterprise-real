@@ -57,5 +57,20 @@
     "bootstrap": "scripts/activate_noteri_free_control_plane.py",
     "policy": ".github/self-hosted-runner-policy.json",
     "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+  },
+  "artifacts": {
+    "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
+    "headless_uac_launcher": "scripts/noteri_control_plane_watchdog_uac_launcher.py"
+  },
+  "commands": {
+    "headless_activation": "/reqsys run noteri-headless-control-plane-activation"
+  },
+  "runtime_acceptance": {
+    "headless_task": {
+      "trigger": "AtStartup",
+      "logon_type": "S4U",
+      "host": "Noteri",
+      "rdc_required": false
+    }
   }
 }
