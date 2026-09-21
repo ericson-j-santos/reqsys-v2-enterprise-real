@@ -1,0 +1,19 @@
+{
+  "feature_name": "noteri-free-control-plane-bootstrap",
+  "project": "ReqSys v2 Enterprise — PC24x7 / Noteri control plane",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Ativa de forma idempotente e fail-closed o control plane gratuito no Noteri reutilizando um runner GitHub Actions já registrado e o watchdog existente, sem depender de RDC, segredos, produção ou reboot.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_activate_noteri_free_control_plane.py"
+    ],
+    "evidence_contract": "O bootstrap somente executa no host Noteri, exige runner previamente registrado, usa confirmação explícita não secreta, reutiliza o watchdog governado e mantém rdc_required=false, production_touched=false e secrets_read=false."
+  }
+}
