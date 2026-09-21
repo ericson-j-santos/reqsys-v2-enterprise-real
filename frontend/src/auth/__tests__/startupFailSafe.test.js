@@ -28,6 +28,15 @@ describe('startup fail-safe', () => {
     expect(mountAt).toBeLessThan(mainSource.indexOf('void inicializarAutenticacao(caminhoInicial)'))
   })
 
+  it('registra o guard WCAG antes da navegacao inicial ficar pronta', () => {
+    const guardAt = mainSource.indexOf('installWcag22Guard(router)')
+    const readyAt = mainSource.indexOf('await router.isReady()')
+
+    expect(guardAt).toBeGreaterThan(-1)
+    expect(readyAt).toBeGreaterThan(-1)
+    expect(guardAt).toBeLessThan(readyAt)
+  })
+
   it('mantem fallback visivel se o bundle nao montar', () => {
     expect(indexSource).toContain('Carregando ReqSys…')
     expect(indexSource).toContain('o runtime local não conseguiu iniciar a interface')

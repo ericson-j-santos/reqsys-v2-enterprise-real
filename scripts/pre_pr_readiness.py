@@ -99,19 +99,18 @@ def changed_files(base_ref: str) -> list[str]:
 def referenced_contract_tests(files: list[str], root: Path) -> list[str]:
     """Descobre testes contratuais por referências suficientemente específicas.
 
-    Caminho relativo e nome completo do arquivo são sempre seguros para busca.
-    O stem só entra quando não é genérico e possui tamanho suficiente, evitando
-    que mudanças em `main.js`/`index.html` selecionem testes sem relação por
-    ocorrências comuns de "main" ou "index".
+    O caminho relativo é sempre seguro para busca. Nome do arquivo e stem só
+    entram quando não são genéricos, evitando que mudanças em `main.js` ou
+    `index.html` selecionem testes sem relação por coincidência textual.
     """
     needles: set[str] = set()
     for rel in files:
         path = Path(rel)
         normalized = rel.replace("\\", "/")
         needles.add(normalized)
-        if len(path.name) >= 6:
-            needles.add(path.name)
         stem = path.stem.lower()
+        if len(path.name) >= 6 and stem not in GENERIC_REFERENCE_STEMS:
+            needles.add(path.name)
         if len(stem) >= 8 and stem not in GENERIC_REFERENCE_STEMS:
             needles.add(path.stem)
 
