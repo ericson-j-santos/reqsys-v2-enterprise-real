@@ -88,10 +88,6 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "shell: powershell" in workflow
     assert "shell: pwsh" not in workflow
     assert "workflow_dispatch:" in workflow
-    assert "Ativar-Noteri-Headless.ps1" in workflow
-    assert "Ativar-Noteri-Headless.cmd" in workflow
-    assert "[Environment]::GetFolderPath('Desktop')" in workflow
-    assert "ExecutionPolicy Bypass -File" in workflow
     assert "inputs:" not in workflow
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-control-plane-probe.yml" in policy["approved_workflows"]
@@ -156,6 +152,10 @@ def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
     assert "shell: pwsh" not in workflow
     assert "--confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC" in workflow
     assert "workflow_dispatch:" in workflow
+    assert "Ativar-Noteri-Headless.ps1" in workflow
+    assert "Ativar-Noteri-Headless.cmd" in workflow
+    assert "[Environment]::GetFolderPath('Desktop')" in workflow
+    assert "ExecutionPolicy Bypass -File" in workflow
     assert "inputs:" not in workflow
     assert "ShellExecuteW" in launcher
     assert "--result-path" in launcher
