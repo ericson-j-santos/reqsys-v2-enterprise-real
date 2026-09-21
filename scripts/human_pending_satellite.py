@@ -210,8 +210,10 @@ def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categor
     refs = approval_refs(comments)
     body = norm(raw_body)
 
-    external = "real_external_evidence" in categories
-    prod = "production_confirmation" in categories or "prod" in body or "produção" in body or "producao" in body
+    external = any(category in categories for category in {
+        "real_external_evidence", "external_business_input",
+    })
+    prod = "production_confirmation" in categories
 
     decision = "Fornecer a evidência/decisão humana real indicada na issue e registrar sua referência verificável."
     reason = "A etapa exige manifestação, credencial, permissão ou evidência externa que o software não pode fabricar nem inferir com segurança."
@@ -225,6 +227,21 @@ def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categor
         "Execute a ação humana descrita na issue e registre somente a referência verificável. "
         "Não inclua segredo, dado pessoal, conteúdo bruto ou evidência fictícia."
     )
+    if "external_business_input" in categories:
+        decision = (
+            "Fornecer ou referenciar a fonte corporativa autorizada de dados/consulta e a identidade "
+            "de acesso de menor privilégio, sem enviar credenciais em comentário ou chat."
+        )
+        reason = (
+            "A regra de negócio e a origem corporativa pertencem ao sistema externo; o ReqSys pode "
+            "automatizar descoberta, validação e E2E, mas não pode inventar consulta, DSN ou dados reais."
+        )
+        impact = "O E2E corporativo permanece bloqueado; testes DEV controlados não substituem evidência da fonte real."
+        environment = "DEV corporativo / integração externa"
+        action = (
+            "Indique a fonte SQL/DSN ou RDL/RDS corporativa autorizada e o responsável pela consulta real; "
+            "provisione a identidade somente-leitura pelo cofre/canal seguro. Não publique segredo no GitHub ou chat."
+        )
     if refs:
         decision = "A autorização textual já existe; falta apenas comprovar o fato externo específico exigido pela issue."
         reason = "Aprovação humana foi capturada, mas aprovação não substitui documento, corpus, MFA, contrato, permissão ou efeito externo real."
