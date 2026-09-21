@@ -61,19 +61,19 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $args = @(
+          $cliArgs = @(
             "scripts/ollama_ci_triage.py",
             "--repository", "$env:GITHUB_REPOSITORY",
             "--run-id", "$env:TARGET_RUN_ID",
             "--output", "$env:EVIDENCE_FILE"
           )
           if (-not [string]::IsNullOrWhiteSpace("$env:PR_NUMBER")) {
-            $args += @("--pr-number", "$env:PR_NUMBER")
+            $cliArgs += @("--pr-number", "$env:PR_NUMBER")
           }
           if ("$env:MODE" -eq "execute") {
-            $args += "--execute"
+            $cliArgs += "--execute"
           }
-          & python @args
+          & python @cliArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Publicar evidência sanitizada

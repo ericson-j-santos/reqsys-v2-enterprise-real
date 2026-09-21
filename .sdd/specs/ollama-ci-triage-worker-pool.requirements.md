@@ -13,15 +13,16 @@ Usar Ollama no PC24x7 como primeiro nível automático de análise de falhas de 
 5. Ollama responde JSON estruturado com categoria, confiança, causa, ação e evidências.
 6. Somente `code`, `test`, `config` e `dependency` com confiança >= 0.75 podem ser elegíveis ao escalonamento.
 7. `security`, `governance`, `transient` e `unknown` nunca são autoescaladas.
-8. A política determinística, e não o modelo, decide o escalonamento.
-9. PR deve estar aberto, no mesmo repositório e no mesmo SHA analisado; fork externo ou SHA obsoleto falha fechado.
-10. Worker Pool recebe `target_branch` opcional; quando presente, preserva a branch existente do PR. `main`, `master` e `develop` são proibidas.
-11. Chamadas legadas sem `target_branch` preservam a geração atual de branch.
-12. Request ID do CI é idempotente por repositório, PR e SHA.
-13. Enqueue comprova replay `created=false`, mesmo `task_id` e leitura independente com branch/SHA corretos.
-14. Em modo `execute`, comentário sanitizado é publicado uma vez por run; logs brutos não são reproduzidos.
-15. Nenhum caminho deste incremento executa merge, deploy, promoção, segredo, bypass de gate ou administração.
-16. O workflow oferece `dry_run` manual para validar Ollama e evidência antes da ativação automática na `main`.
+8. A política determinística, e não o modelo, decide o escalonamento; o modelo sozinho nunca basta para autorizar correção.
+9. O escalonamento exige também um padrão determinístico técnico conhecido e é bloqueado por sinais de permissão, conflito, quota, artifact ou timeout.
+10. PR deve estar aberto, no mesmo repositório e no mesmo SHA analisado; fork externo ou SHA obsoleto falha fechado.
+11. Worker Pool recebe `target_branch` opcional; quando presente, preserva a branch existente do PR. `main`, `master` e `develop` são proibidas.
+12. Chamadas legadas sem `target_branch` preservam a geração atual de branch.
+13. Request ID do CI é idempotente por repositório, PR e SHA.
+14. Enqueue comprova replay `created=false`, mesmo `task_id` e leitura independente com branch/SHA corretos.
+15. Em modo `execute`, comentário sanitizado é publicado uma vez por run; logs brutos não são reproduzidos.
+16. Nenhum caminho deste incremento executa merge, deploy, promoção, segredo, bypass de gate ou administração.
+17. O workflow oferece `dry_run` manual para validar Ollama e evidência antes da ativação automática na `main`.
 
 ## Critérios de aceite
 

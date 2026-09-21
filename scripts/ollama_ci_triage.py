@@ -40,6 +40,8 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 PROTECTED_BRANCHES = {"main", "master", "develop"}
 TECHNICAL_CATEGORIES = {"code", "test", "config", "dependency"}
 BLOCKED_CATEGORIES = {"security", "governance", "transient", "unknown"}
+DETERMINISTIC_TECHNICAL_CATEGORIES = {"dependencies", "quality_gate", "test_failure"}
+DETERMINISTIC_BLOCKED_CATEGORIES = {"permissions", "git_conflict", "quota", "artifact", "timeout"}
 SENSITIVE_WORKFLOW_WORDS = ("governance", "governança", "security", "segurança", "audit")
 CONFIDENCE_THRESHOLD = 0.75
 MAX_LOG_CHARS_PER_JOB = 30000
@@ -383,10 +385,19 @@ def resolve_pr_context(repository: str, run: dict[str, Any], token: str, explici
     }
 
 
-def escalation_policy(triage: dict[str, Any], run: dict[str, Any], pr: dict[str, Any]) -> dict[str, Any]:
+def deterministic_categories(report: dict[str, Any]) -> set[str]:
+    return {
+        str(item.get("category") or "").strip().lower()
+        for item in (report.get("matches") or [])
+        if isinstance(item, dict) and str(item.get("category") or "").strip()
+    }
+
+
+def escalation_policy(triage: dict[str, Any], run: dict[str, Any], pr: dict[str, Any], deterministic: dict[str, Any]) -> dict[str, Any]:
     workflow = str(run.get("name") or "")
     category = str(triage.get("category") or "")
     confidence = float(triage.get("confidence") or 0)
+    deterministic_signal = deterministic_categories(deterministic)
     if str(run.get("conclusion") or "") != "failure":
         return {"eligible": False, "reason": "run_not_failure"}
     if any(word in workflow.casefold() for word in SENSITIVE_WORKFLOW_WORDS):
@@ -395,6 +406,11 @@ def escalation_policy(triage: dict[str, Any], run: dict[str, Any], pr: dict[str,
         return {"eligible": False, "reason": f"category_{category}_not_auto_fixable"}
     if confidence < CONFIDENCE_THRESHOLD:
         return {"eligible": False, "reason": "confidence_below_threshold"}
+    blocked_signal = sorted(deterministic_signal & DETERMINISTIC_BLOCKED_CATEGORIES)
+    if blocked_signal:
+        return {"eligible": False, "reason": f"deterministic_block:{','.join(blocked_signal)}"}
+    if not deterministic_signal & DETERMINISTIC_TECHNICAL_CATEGORIES:
+        return {"eligible": False, "reason": "deterministic_signal_missing"}
     if not pr.get("number"):
         return {"eligible": False, "reason": "no_pull_request"}
     if pr.get("state") != "open":
@@ -517,7 +533,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     model = select_model(ollama_url, args.model)
     triage = run_ollama_triage(ollama_url, model, run, jobs, log_paths, deterministic)
     pr = resolve_pr_context(repository, run, github_token, args.pr_number)
-    escalation = escalation_policy(triage, run, pr)
+    escalation = escalation_policy(triage, run, pr, deterministic)
     correlation_id = f"ollama-ci-triage-{args.run_id}-{os.getenv('GITHUB_RUN_ATTEMPT', '1')}"[:128]
     evidence: dict[str, Any] = {
         "schema_version": "1.0.0",
@@ -558,7 +574,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             queue_error = one_line(exc)
             evidence["worker_pool"] = {"status": "blocked", "reason": queue_error}
             evidence["result"] = "OLLAMA_CI_TRIAGE_BLOCKED"
-    if args.execute and pr.get("number"):
+    if args.execute and pr.get("number") and pr.get("same_repository"):
         evidence["comment_posted"] = post_comment_once(repository, int(pr["number"]), github_token, args.run_id, render_comment(evidence))
     write_evidence(output, evidence)
     if queue_error:

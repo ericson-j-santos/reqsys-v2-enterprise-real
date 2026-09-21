@@ -34,6 +34,11 @@ def run(name: str = "CI — ReqSys v2 Enterprise") -> dict[str, Any]:
     return {"name": name, "conclusion": "failure"}
 
 
+def deterministic(*categories: str) -> dict[str, Any]:
+    selected = categories or ("test_failure",)
+    return {"matches": [{"category": category} for category in selected]}
+
+
 def pr() -> dict[str, Any]:
     return {
         "number": 1890,
@@ -51,30 +56,40 @@ def pr() -> dict[str, Any]:
 def test_non_technical_categories_never_auto_escalate(category: str) -> None:
     payload = technical()
     payload["category"] = category
-    assert triage.escalation_policy(payload, run(), pr())["eligible"] is False
+    assert triage.escalation_policy(payload, run(), pr(), deterministic())["eligible"] is False
 
 
 def test_low_confidence_never_auto_escalates() -> None:
-    assert triage.escalation_policy(technical(0.74), run(), pr())["reason"] == "confidence_below_threshold"
+    assert triage.escalation_policy(technical(0.74), run(), pr(), deterministic())["reason"] == "confidence_below_threshold"
 
 
 def test_sensitive_workflow_is_analysis_only() -> None:
-    assert triage.escalation_policy(technical(), run("Governance Quality Gates"), pr())["reason"] == "sensitive_workflow"
+    assert triage.escalation_policy(technical(), run("Governance Quality Gates"), pr(), deterministic())["reason"] == "sensitive_workflow"
 
 
 def test_stale_sha_and_external_fork_fail_closed() -> None:
     stale = pr()
     stale["sha_current"] = False
-    assert triage.escalation_policy(technical(), run(), stale)["reason"] == "stale_ci_sha"
+    assert triage.escalation_policy(technical(), run(), stale, deterministic())["reason"] == "stale_ci_sha"
     external = pr()
     external["same_repository"] = False
-    assert triage.escalation_policy(technical(), run(), external)["reason"] == "external_fork_blocked"
+    assert triage.escalation_policy(technical(), run(), external, deterministic())["reason"] == "external_fork_blocked"
 
 
 def test_valid_technical_failure_targets_same_pr_branch() -> None:
-    decision = triage.escalation_policy(technical(), run(), pr())
+    decision = triage.escalation_policy(technical(), run(), pr(), deterministic())
     assert decision["eligible"] is True
     assert decision["target_branch"] == "fix/ci-1890"
+
+
+def test_model_cannot_override_deterministic_transient_signal() -> None:
+    decision = triage.escalation_policy(technical(), run(), pr(), deterministic("timeout"))
+    assert decision == {"eligible": False, "reason": "deterministic_block:timeout"}
+
+
+def test_model_without_known_technical_signal_does_not_auto_escalate() -> None:
+    decision = triage.escalation_policy(technical(), run(), pr(), {"matches": []})
+    assert decision == {"eligible": False, "reason": "deterministic_signal_missing"}
 
 
 @pytest.mark.parametrize("branch", ["main", "master", "develop", "../escape", "bad//branch", "refs heads"])
