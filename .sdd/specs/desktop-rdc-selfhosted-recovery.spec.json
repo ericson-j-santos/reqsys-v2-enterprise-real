@@ -25,7 +25,10 @@
     "headless_owner_policy": "V2/V3 are governed legacy sources but never transport-proven owners; suppress them and arm interactive fallback. Only V4 with a fresh ready claim may remain headless owner."
   },
   "recovery_execution": {
-    "task_restart_sequence": ["end", "run"],
+    "task_restart_sequence": [
+      "end",
+      "run"
+    ],
     "end_failure_policy": "continue_when_task_not_running",
     "run_failure_policy": "fail_closed",
     "evidence_fields": [
@@ -51,7 +54,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_desktop_control_plane_watchdog.py"
     ],
-    "evidence_contract": "External recovery remains fail-closed and exact-run-bound, while the autonomous local watchdog removes the circular dependency on this self-hosted workflow."
+    "evidence_contract": "External recovery remains fail-closed and exact-run-bound; unpicked self-hosted runs are cancelled and cleanup outcome is evidenced, while the autonomous local watchdog removes the circular dependency on this workflow."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-rdc-selfhosted-recovery.requirements.md",
@@ -60,6 +63,7 @@
     "autonomous_watchdog": "scripts/desktop_control_plane_watchdog.py",
     "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "runner_pickup_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "exact_dispatch_run_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+    "exact_dispatch_run_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml"
   }
 }
