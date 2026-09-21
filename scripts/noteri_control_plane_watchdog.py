@@ -271,14 +271,14 @@ def _task_definition(
 
 
 def schtasks_path() -> Path:
-    target = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "schtasks.exe"
+    target = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "schtasks.exe"
     if not target.is_file():
         raise WatchdogError("schtasks.exe não encontrado")
     return target
 
 
 def _decode_task_xml(raw: bytes) -> str:
-    if raw.startswith((b"\\xff\\xfe", b"\\xfe\\xff")):
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
         return raw.decode("utf-16")
     return raw.decode("utf-8", errors="replace")
 
