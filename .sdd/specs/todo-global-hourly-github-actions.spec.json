@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "TODO Global Hourly Cycle via GitHub Actions",
+  "status": "implemented_pending_ci_and_runtime_e2e",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_todo_global_hourly_cycle.py"
+    ],
+    "evidence_contract": "O ciclo horário publica todo.reconcile.requested, rejeita payload inválido, aguarda estado terminal, exige readback_verified e comprova replay sem segundo job."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/todo-global-hourly-cycle.yml",
+    "executor": "scripts/todo_global_hourly_cycle.py"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  },
+  "acceptance_criteria": [
+    "O GitHub Actions executa a reconciliação horária pelo cron 3 * * * * e permite execução manual por workflow_dispatch, sem usar Work para agendamento.",
+    "A execução falha fechada quando TODO_GLOBAL_RUNTIME_URL está ausente ou não usa HTTPS.",
+    "Antes do evento válido, um payload inválido deve ser rejeitado com HTTP 400 ou 422, comprovando o controle negativo.",
+    "O evento todo.reconcile.requested preserva event_id, correlation_id e idempotency_key e aguarda o job até estado terminal dentro do timeout.",
+    "Conclusão exige readback_verified=true obtido na leitura do estado terminal; aceitação HTTP 2xx isolada não caracteriza sucesso.",
+    "O replay do mesmo event_id deve retornar o mesmo job_id e duplicate_event=true, sem criar segundo efeito.",
+    "A evidência sanitizada é preservada como artifact vinculada ao run e ao SHA correspondente."
+  ]
+}
