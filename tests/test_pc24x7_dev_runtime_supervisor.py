@@ -47,3 +47,12 @@ def test_supervisor_has_no_tailscale_or_nport_critical_dependency():
     raw = (ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py").read_text(encoding="utf-8").lower()
     assert "tailscale_funnel" not in raw
     assert "pc24x7_nport_tunnel.py" not in raw
+
+
+def test_supervisor_requires_runtime_health_and_build_info_before_publication():
+    raw = (ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py").read_text(encoding="utf-8")
+    assert '"/api/runtime/health"' in raw
+    assert '"/api/runtime/build-info"' in raw
+    assert '"local_runtime_contract_failed"' in raw
+    assert 'for key in ("frontend", "health", "runtime_health", "build_info")' in raw
+    assert 'locator_ready if args.apply else True' in raw
