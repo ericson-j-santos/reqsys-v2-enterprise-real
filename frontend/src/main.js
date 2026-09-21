@@ -86,8 +86,9 @@ async function boot() {
   // A interface deve existir antes de qualquer chamada externa de autenticacao.
   // Assim, atraso/falha do MSAL nunca deixa o usuario preso em tela branca:
   // a rota protegida cai no login e, quando o SSO concluir, volta ao destino.
+  // Monta antes da resolução assíncrona da rota inicial. Isso mantém o
+  // comportamento de foco dos deep links e evita bloquear a interface.
   installWcag22Guard(router)
-  await router.isReady()
   app.mount('#app')
 
   void inicializarAutenticacao(caminhoInicial)

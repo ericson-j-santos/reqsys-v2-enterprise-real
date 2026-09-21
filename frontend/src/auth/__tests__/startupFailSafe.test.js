@@ -28,13 +28,11 @@ describe('startup fail-safe', () => {
     expect(mountAt).toBeLessThan(mainSource.indexOf('void inicializarAutenticacao(caminhoInicial)'))
   })
 
-  it('registra o guard WCAG antes da navegacao inicial ficar pronta', () => {
-    const guardAt = mainSource.indexOf('installWcag22Guard(router)')
-    const readyAt = mainSource.indexOf('await router.isReady()')
+  it('nao bloqueia o mount aguardando a rota inicial', () => {
+    const mountAt = mainSource.indexOf("app.mount('#app')")
 
-    expect(guardAt).toBeGreaterThan(-1)
-    expect(readyAt).toBeGreaterThan(-1)
-    expect(guardAt).toBeLessThan(readyAt)
+    expect(mountAt).toBeGreaterThan(-1)
+    expect(mainSource).not.toContain('await router.isReady()')
   })
 
   it('mantem fallback visivel se o bundle nao montar', () => {
