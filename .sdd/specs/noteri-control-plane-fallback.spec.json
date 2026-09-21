@@ -70,7 +70,9 @@
       "trigger": "AtStartup",
       "logon_type": "S4U",
       "host": "Noteri",
-      "rdc_required": false
+      "rdc_required": false,
+      "shell": "powershell",
+      "shell_reason": "Noteri uses Windows PowerShell; pwsh is not installed in the self-hosted runner PATH"
     }
   }
 }
