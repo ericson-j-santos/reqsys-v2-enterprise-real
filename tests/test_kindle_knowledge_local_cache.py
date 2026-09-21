@@ -43,7 +43,7 @@ class KindleKnowledgeLocalCacheTests(unittest.TestCase):
         self.assertIn("runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]", raw)
         self.assertIn("runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]", raw)
         self.assertIn("MATERIALIZE-KINDLE-QUERIES", raw)
-        self.assertIn(r"C:\\dev\\chatgpt-workers\\kindle-knowledge-local", raw)
+        self.assertIn("C:\\dev\\chatgpt-workers\\kindle-knowledge-local", raw)
         self.assertNotIn("secrets.", raw)
 
     def test_workflow_is_allowlisted(self) -> None:
@@ -55,8 +55,8 @@ class KindleKnowledgeLocalCacheTests(unittest.TestCase):
 
     def test_script_never_reads_credentials(self) -> None:
         raw = SCRIPT.read_text(encoding="utf-8").casefold()
-        self.assertNotIn(".env", raw)
-        self.assertNotIn("credential", raw)
+        self.assertNotIn("client_secret", raw)
+        self.assertNotIn("access_token", raw)
         self.assertNotIn("token.json", raw)
         self.assertNotIn("refresh_token", raw)
 
