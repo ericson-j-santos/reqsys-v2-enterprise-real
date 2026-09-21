@@ -84,7 +84,7 @@ def test_target_is_fixed_and_no_arbitrary_target_argument() -> None:
     assert 'parser.add_argument("--target"' not in content
     assert "shell=True" not in content
     assert 'RUNTIME_PORT = 8081' in content
-    assert 'ADMIN_STAGING_PATH = rf"\\\\\\\\{TARGET_HOST}\\\\C$\\\\Users\\\\Public\\\\Desktop"' in content
+    assert probe.ADMIN_STAGING_PATH == r"\\\\DESKTOP-PDQK954\C$\Users\Public\Desktop"
 
 
 def test_workflow_is_noteri_only_and_inputless() -> None:
