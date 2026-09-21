@@ -1,0 +1,38 @@
+name: PR Creation Path Guard
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-creation-path-guard-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Block direct PR publication paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate repository PR creation paths
+        run: python scripts/validate_pr_creation_paths.py
+      - name: Run negative and repository contract tests
+        run: python -m pip install --disable-pip-version-check pytest && python -m pytest tests/test_validate_pr_creation_paths.py tests/test_auto_open_agent_pr.py -q
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-creation-path-guard
+          path: artifacts/pr-creation-path-guard/report.json
+          if-no-files-found: error
+          retention-days: 30
