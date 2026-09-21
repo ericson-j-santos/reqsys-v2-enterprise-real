@@ -19,16 +19,20 @@ def test_workflow_uses_development_environment_without_azure_oidc() -> None:
 
 def test_workflow_is_dev_only_and_does_not_execute_e2e_in_pr() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
-    assert 'https://reqsys-api-dev.fly.dev' in text
+    assert 'https://reqsys-api-dev.fly.dev' not in text
     assert 'reqsys-api-stg' not in text
     assert 'https://reqsys-api.fly.dev' not in text
-    assert 'workflow_run:' in text
-    assert '- Fly DEV Fast Deploy' in text
-    assert "github.event.workflow_run.conclusion == 'success'" in text
-    assert "github.event_name == 'workflow_dispatch'" in text
+    assert 'workflow_run:' not in text
+    assert 'Fly DEV Fast Deploy' not in text
+    assert "if: github.event_name == 'workflow_dispatch'" in text
     assert "github.event_name == 'push'" not in text
     assert 'pull_request:' in text
-
+    assert 'resolve_pc24x7_dev_locator.mjs --self-test' in text
+    assert '--output artifacts/pc24x7-teams-ephemeral-e2e/signed-locator.json' in text
+    assert 'steps.locator.outputs.base_url' in text
+    assert '/api/runtime/build-info' in text
+    assert 'pc24x7_runtime_sha_mismatch' in text
+    assert 'EXPECTED_SHA: ${{ github.sha }}' in text
 
 def test_workflow_runs_focused_tests_and_publishes_only_sanitized_artifact() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')

@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,33 @@ module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
+
+
+def test_main_falha_fechado_sem_runtime_pc24x7_resolvido(monkeypatch, tmp_path, capsys):
+    evidence_path = tmp_path / 'evidence.json'
+    monkeypatch.setattr(
+        module,
+        'parse_args',
+        lambda: SimpleNamespace(
+            api_base='',
+            provider='gemini',
+            model='gemini-2.5-flash',
+            admin_email=module.ADMIN_EMAIL_DEFAULT,
+            correlation_id='corr-no-runtime',
+            evidence_path=str(evidence_path),
+        ),
+    )
+
+    assert module.API_DEFAULT == ''
+    assert module.main() == 4
+
+    evidence = json.loads(evidence_path.read_text(encoding='utf-8'))
+    assert evidence['status'] == 'blocked'
+    assert evidence['error'] == 'REQSYS_API_BASE_URL_missing'
+    assert evidence['token_created'] is False
+    assert evidence['production_touched'] is False
+    assert 'fly.dev' not in json.dumps(evidence)
+    assert 'REQSYS_API_BASE_URL_missing' in capsys.readouterr().out
 
 
 def ready_payload():

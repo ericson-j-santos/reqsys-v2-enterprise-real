@@ -2,17 +2,11 @@ name: PC24x7 Teams Ephemeral E2E — DEV
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Fly DEV Fast Deploy
-    types:
-      - completed
-    branches:
-      - main
   pull_request:
     paths:
       - '.github/workflows/pc24x7-teams-ephemeral-e2e.yml'
       - 'scripts/pc24x7_teams_ephemeral_e2e.py'
+      - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'scripts/pc24x7_teams_queue.py'
       - 'tests/test_pc24x7_teams_ephemeral_e2e.py'
       - 'tests/test_pc24x7_teams_ephemeral_provider_selection.py'
@@ -47,15 +41,12 @@ jobs:
 
   e2e-dev:
     name: Readiness + Teams real + revogação — DEV
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'workflow_dispatch'
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: development
     env:
-      REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
       COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
       PC24X7_TEAMS_E2E_CORRELATION_ID: pc24x7-ephemeral-${{ github.run_id }}-${{ github.run_attempt }}
       # Gemini é o provedor primário configurado no ReqSys. Groq permanece visível
@@ -72,6 +63,59 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Preparar Node para locator DEV assinado
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validar contrato fail-closed do locator
+        shell: bash
+        run: node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+
+      - name: Resolver runtime PC24x7 DEV vigente
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pc24x7-teams-ephemeral-e2e
+          node scripts/resolve_pc24x7_dev_locator.mjs             --output artifacts/pc24x7-teams-ephemeral-e2e/signed-locator.json
+
+      - name: Validar runtime PC24x7 no mesmo SHA
+        shell: bash
+        env:
+          REQSYS_API_BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          base = os.environ['REQSYS_API_BASE_URL'].rstrip('/')
+          expected = os.environ['EXPECTED_SHA'].strip().lower()
+          request = Request(
+              base + '/api/runtime/build-info',
+              headers={'Accept': 'application/json', 'User-Agent': 'reqsys-teams-pc24x7-e2e/1.0'},
+          )
+          with urlopen(request, timeout=20) as response:
+              payload = json.loads(response.read(262_144).decode('utf-8'))
+          data = payload.get('data', payload) if isinstance(payload, dict) else {}
+          observed = str(data.get('build_sha') or data.get('commit_sha') or '').strip().lower()
+          if observed != expected:
+              raise SystemExit(f'pc24x7_runtime_sha_mismatch:expected={expected}:observed={observed}')
+          print(f'PC24x7 runtime SHA validado: {observed}')
+          PY
+
+      - name: Exportar runtime PC24x7 DEV
+        shell: bash
+        env:
+          RESOLVED_API_BASE: ${{ steps.locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          test -n "$RESOLVED_API_BASE"
+          printf 'REQSYS_API_BASE_URL=%s\n' "$RESOLVED_API_BASE" >> "$GITHUB_ENV"
+
       - name: Executar E2E DEV com autenticação administrativa efêmera
         run: |
           python scripts/pc24x7_teams_ephemeral_e2e.py \
@@ -82,6 +126,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pc24x7-teams-ephemeral-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/pc24x7-teams-ephemeral-e2e/evidence.json
+          path: |
+            artifacts/pc24x7-teams-ephemeral-e2e/evidence.json
+            artifacts/pc24x7-teams-ephemeral-e2e/signed-locator.json
           if-no-files-found: warn
           retention-days: 30
