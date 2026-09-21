@@ -77,7 +77,13 @@
       "task_folder": "\\Automation",
       "validator": "schtasks_xml",
       "elevated_result": "required",
-      "failure_contract": "elevated child must persist sanitized result and fail closed"
+      "failure_contract": "elevated child must persist sanitized result and fail closed",
+      "uac_brokers": [
+        "ShellExecuteW(runas)",
+        "Windows PowerShell Start-Process -Verb RunAs",
+        "Shell.Application.ShellExecute(runas)"
+      ],
+      "uac_bypass_allowed": false
     },
     "probe_workflow": {
       "host": "Noteri",
