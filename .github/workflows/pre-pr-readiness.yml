@@ -70,6 +70,11 @@ jobs:
               fi
             done < <(git diff --name-only "origin/$BASE_REF...HEAD" | grep -E '^\.sdd/specs/.*\.spec\.json$' || true)
           fi
+          if [[ "$backend_profile" != "true" ]]; then
+            if python -c 'import os; from pathlib import Path; from scripts.pre_pr_readiness import candidate_pytests, changed_files; files = changed_files(os.environ["BASE_REF"]); raise SystemExit(0 if any(path.startswith("backend/tests/") for path in candidate_pytests(files, Path.cwd())) else 1)'; then
+              backend_profile=true
+            fi
+          fi
           if [[ "$backend_profile" == "true" ]]; then
             echo "Perfil backend detectado: instalando também as dependências oficiais do backend."
             python -m pip install --disable-pip-version-check -r backend/requirements.txt

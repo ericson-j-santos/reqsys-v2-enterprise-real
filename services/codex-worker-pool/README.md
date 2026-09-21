@@ -8,6 +8,8 @@ Serviço local/DEV para coordenar workers Codex em múltiplos hosts sem comparti
 - readiness fail-closed quando o SHA canônico esperado das regras não estiver configurado ou o worker anunciar SHA divergente;
 - heartbeat e distinção entre worker ocioso, `ESTUDO`, degradado e offline;
 - fila SQLite persistente com transação `BEGIN IMMEDIATE`, idempotência e aquisição exclusiva;
+- lanes lógicas por repositório com `max_in_flight`, pausa (`enabled=false`) e fairness determinístico;
+- afinidade opcional de worker por repositório, mantendo pool compartilhado quando não configurada;
 - lease renovável e recuperação automática após timeout;
 - tentativas limitadas e quarentena/DLQ auditável;
 - contrato `Builder -> produced_sha -> Validator`, impedindo autovalidação;
@@ -42,10 +44,20 @@ O `/health` fica `503/not_ready` quando o arquivo de token não está disponíve
 python -m pytest services/codex-worker-pool/tests -q
 ```
 
-A suíte cobre replay idempotente, concorrência, lease expirado, quarentena, perfis `NORMAL/ESTUDO`, bloqueio externo, separação Builder/Validator, leitura independente e fluxo HTTP completo.
+A suíte cobre replay idempotente, concorrência, lease expirado, quarentena, perfis `NORMAL/ESTUDO`, bloqueio externo, separação Builder/Validator, leitura independente, fairness entre repositórios, `max_in_flight`, afinidade e fluxo HTTP completo.
 
 ## PC24x7
 
 O compose versionado na raiz (`docker-compose.pc24x7-codex-worker-pool.yml`) publica apenas em loopback (`127.0.0.1:8097`) e exige `CODEX_WORKER_POOL_API_TOKEN_FILE_HOST`.
 
 A existência do compose **não autoriza deploy**. A materialização no PC24x7 continua sujeita ao Command Gateway, sessão governada e validação do ambiente.
+
+## Lanes por repositório
+
+Cada repositório entra automaticamente com uma lane habilitada e `max_in_flight=1`. A configuração pode ser ajustada pela API autenticada:
+
+- `GET /v1/repositories`: snapshot das lanes;
+- `POST /v1/repositories`: cria/atualiza `enabled` e `max_in_flight`;
+- `PUT /v1/workers/{worker_id}/affinities`: substitui a lista de repositórios permitidos para o worker.
+
+Lista de afinidades vazia significa **pool compartilhado**. Quando existe ao menos uma afinidade para o worker, claims ficam restritos à lista configurada. O scheduler usa contadores monotônicos separados para Builder e Validator, evitando starvation entre repositórios elegíveis.

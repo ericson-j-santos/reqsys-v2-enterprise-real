@@ -35,7 +35,7 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(mess
 
 app = FastAPI(
     title="ReqSys Codex Worker Pool",
-    version="1.0.0",
+    version="1.1.0",
     description="Fila governada para workers Codex distribuídos com lease, idempotência e validação independente.",
 )
 
@@ -104,6 +104,18 @@ class Heartbeat(BaseModel):
     memory_percent: float | None = Field(default=None, ge=0, le=100)
     gateway_ok: bool | None = None
     state_validated: bool | None = None
+
+
+class RepositoryLaneConfig(BaseModel):
+    repository: str = Field(min_length=3, max_length=256)
+    enabled: bool = True
+    max_in_flight: int = Field(default=1, ge=1, le=100)
+    correlation_id: str = Field(min_length=1, max_length=128)
+
+
+class WorkerAffinityUpdate(BaseModel):
+    repositories: list[str] = Field(default_factory=list, max_length=100)
+    correlation_id: str = Field(min_length=1, max_length=128)
 
 
 class TaskCreate(BaseModel):
@@ -199,6 +211,40 @@ def heartbeat(worker_id: str, payload: Heartbeat) -> dict[str, Any]:
     worker = store.heartbeat_worker(worker_id, **payload.model_dump(exclude_none=True))
     _audit("worker.heartbeat", payload.correlation_id, worker_id=worker_id, profile=worker["profile"])
     return worker
+
+
+@app.get("/v1/repositories", dependencies=[Depends(require_auth)])
+def repositories() -> list[dict[str, Any]]:
+    return store.snapshot()["repositories"]
+
+
+@app.post("/v1/repositories", dependencies=[Depends(require_auth)])
+def configure_repository(payload: RepositoryLaneConfig) -> dict[str, Any]:
+    configured = store.configure_repository(
+        repository=payload.repository,
+        enabled=payload.enabled,
+        max_in_flight=payload.max_in_flight,
+    )
+    _audit(
+        "repository.configured",
+        payload.correlation_id,
+        repository=payload.repository,
+        enabled=payload.enabled,
+        max_in_flight=payload.max_in_flight,
+    )
+    return configured
+
+
+@app.put("/v1/workers/{worker_id}/affinities", dependencies=[Depends(require_auth)])
+def worker_affinities(worker_id: str, payload: WorkerAffinityUpdate) -> dict[str, Any]:
+    repositories = store.replace_worker_affinities(worker_id, payload.repositories)
+    _audit(
+        "worker.affinity.replaced",
+        payload.correlation_id,
+        worker_id=worker_id,
+        repository_count=len(repositories),
+    )
+    return {"worker_id": worker_id, "repositories": repositories}
 
 
 @app.post("/v1/tasks", dependencies=[Depends(require_auth)], status_code=201)

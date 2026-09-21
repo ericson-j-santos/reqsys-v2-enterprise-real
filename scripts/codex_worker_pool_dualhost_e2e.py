@@ -89,6 +89,14 @@ class Scenario:
         self._register("noteri-validator", "Noteri", "validator")
         self._register("noteri-builder-control", "Noteri", "builder")
 
+        # Este cenário mantém duas tasks simultaneamente ativas no mesmo repositório:
+        # uma aguardando validação e outra exercitando expiração/recuperação de lease.
+        # A lane padrão continua max_in_flight=1; somente o fixture E2E exige capacidade 2.
+        self.store.configure_repository(
+            repository="ericson-j-santos/reqsys-v2-enterprise-real",
+            max_in_flight=2,
+        )
+
         positive, created = self.store.enqueue_task(
             repository="ericson-j-santos/reqsys-v2-enterprise-real",
             issue_number=1769,
