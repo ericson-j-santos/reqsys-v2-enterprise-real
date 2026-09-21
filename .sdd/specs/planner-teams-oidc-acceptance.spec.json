@@ -2,7 +2,7 @@
   "feature_name": "planner-teams-oidc-acceptance",
   "project": "ReqSys v2 Enterprise — Planner → Teams DEV",
   "created_at": "2026-09-18",
-  "updated_at": "2026-09-20",
+  "updated_at": "2026-09-21",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -16,6 +16,6 @@
       "scripts/tests/planner_teams_runtime_e2e.test.mjs",
       "tests/test_planner_teams_flow_state_oidc.py"
     ],
-    "evidence_contract": "O acceptance deve reutilizar o workflow OIDC canônico, sem refresh token, client secret, Device Code ou sessão MSAL persistida. Antes da prova, deve reconciliar somente o body/messageBody quando houver drift; em flow ativado deve desativar, recuperar a revisão editável via RetrieveUnpublished, exigir componentstate=1, usar o ETag da revisão não publicada, validar o draft e reativar/publicar sem alterar o restante do clientdata. A prova real exige CT-01 negativo, CT-02 positivo, CT-03 do Adaptive Card corrigido, leitura independente do Teams e cleanup das tarefas Planner."
+    "evidence_contract": "O acceptance deve reutilizar o workflow OIDC canônico, sem refresh token, client secret, Device Code ou sessão MSAL persistida. Antes da prova, deve reconciliar somente o body/messageBody por PATCH direto no workflow corrente com ETag, sem desativar flow ativo para editar clientdata; conflito com revisão unpublished existente deve falhar fechado sem publicar, sobrescrever ou descartar o draft. A prova real exige CT-01 negativo, CT-02 positivo, CT-03 do Adaptive Card corrigido, leitura independente do Teams e cleanup das tarefas Planner."
   }
 }

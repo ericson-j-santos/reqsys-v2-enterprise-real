@@ -270,13 +270,23 @@ def test_patch_clientdata_falha_fechado_sem_etag():
 
 
 class FakeDataverse:
-    """Dataverse mínimo com camadas published/unpublished de workflow."""
+    """Dataverse mínimo para PATCH direto e conflito de revisão concorrente."""
 
-    def __init__(self, source, *, reject_card_patch=False):
+    def __init__(
+        self,
+        source,
+        *,
+        reject_card_patch=False,
+        unpublished_conflict=False,
+    ):
         self.published = copy.deepcopy(source)
         self.published["componentstate"] = 0
         self.published["@odata.etag"] = 'W/"published-1"'
         self.unpublished = None
+        if unpublished_conflict:
+            self.unpublished = copy.deepcopy(self.published)
+            self.unpublished["componentstate"] = 1
+            self.unpublished["@odata.etag"] = 'W/"draft-1"'
         self.reject_card_patch = reject_card_patch
         self.calls = []
         self.unpublished_reads = 0
@@ -293,7 +303,9 @@ class FakeDataverse:
             if "RetrieveUnpublished()" in url:
                 self.unpublished_reads += 1
                 if self.unpublished is None:
-                    return 404, {"error": {"code": "0x80040217", "message": "draft ausente"}}
+                    return 404, {
+                        "error": {"code": "0x80040217", "message": "draft ausente"}
+                    }
                 return 200, copy.deepcopy(self.unpublished)
             return 200, copy.deepcopy(self.published)
         if method != "PATCH":
@@ -301,51 +313,30 @@ class FakeDataverse:
 
         if "clientdata" in body:
             if self.unpublished is not None:
-                if if_match != self.unpublished["@odata.etag"]:
-                    return 400, {
-                        "error": {
-                            "code": "0x80040203",
-                            "message": (
-                                "You are attempting to do a published update of publishable "
-                                "component in an unmodified active context when there exists "
-                                "an unpublished active row."
-                            ),
-                        }
-                    }
-                if self.reject_card_patch:
-                    return 400, {"error": {"code": "0x80040203", "message": "recusado"}}
-                self.unpublished["clientdata"] = body["clientdata"]
-                self.unpublished["@odata.etag"] = 'W/"draft-2"'
-                return 204, {}
-
-            if int(self.published["statecode"]) == 1:
                 return 400, {
                     "error": {
                         "code": "0x80040203",
-                        "message": "Invalid Argument workflow ativado",
+                        "message": (
+                            "You are attempting to do a published update of publishable "
+                            "component in an unmodified active context when there exists "
+                            "an unpublished active row."
+                        ),
                     }
                 }
             if self.reject_card_patch:
                 return 400, {"error": {"code": "0x80040203", "message": "recusado"}}
+            if if_match != self.published["@odata.etag"]:
+                return 412, {
+                    "error": {"code": "PreconditionFailed", "message": "etag divergente"}
+                }
             self.published["clientdata"] = body["clientdata"]
-            return 204, {}
-
-        if body.get("statecode") == 0:
-            self.unpublished = copy.deepcopy(self.published)
-            self.unpublished["componentstate"] = 1
-            self.unpublished["statecode"] = 0
-            self.unpublished["statuscode"] = 1
-            self.unpublished["@odata.etag"] = 'W/"draft-1"'
+            self.published["@odata.etag"] = 'W/"published-2"'
             return 204, {}
 
         if body.get("statecode") == 1:
-            source = self.unpublished if self.unpublished is not None else self.published
-            self.published = copy.deepcopy(source)
-            self.published["componentstate"] = 0
             self.published["statecode"] = 1
             self.published["statuscode"] = 2
-            self.published["@odata.etag"] = 'W/"published-2"'
-            self.unpublished = None
+            self.published["@odata.etag"] = 'W/"published-active"'
             return 204, {}
 
         raise AssertionError(f"PATCH inesperado: {body}")
@@ -359,12 +350,13 @@ class FakeDataverse:
             and "statecode" in call["body"]
         ]
 
+
 def _install(monkeypatch, fake):
     monkeypatch.setattr(mod, "request_json", fake.request)
     monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
 
 
-def test_reconcile_flow_card_desativa_flow_ativo_antes_do_patch(monkeypatch):
+def test_reconcile_flow_card_atualiza_flow_ativo_sem_desativar(monkeypatch):
     fake = FakeDataverse(row(statecode=1))
     _install(monkeypatch, fake)
 
@@ -376,34 +368,36 @@ def test_reconcile_flow_card_desativa_flow_ativo_antes_do_patch(monkeypatch):
     )
 
     assert evidence["card_reconciled"] is True
-    assert evidence["flow_deactivated_for_patch"] is True
-    assert evidence["flow_unpublished_revision_used"] is True
-    assert fake.unpublished_reads >= 2
-    # desativa (0,1), edita a revisão unpublished pelo ETag dela e publica ao reativar.
-    assert fake.state_patches() == [(0, 1), (1, 2)]
+    assert evidence["flow_direct_patch_used"] is True
+    assert evidence["flow_deactivated_for_patch"] is False
+    assert evidence["flow_unpublished_revision_used"] is False
+    assert fake.unpublished_reads == 0
+    assert fake.state_patches() == []
     assert int(after["statecode"]) == 1
     assert int(after["statuscode"]) == 2
     assert evidence["card_after"]["has_plan_fact"] is False
     assert evidence["card_after"]["has_open_planner"] is True
 
 
-def test_reconcile_flow_card_nao_desativa_flow_ja_inativo(monkeypatch):
+def test_reconcile_flow_card_inativo_edita_sem_trocar_estado(monkeypatch):
     fake = FakeDataverse(row(statecode=0))
     _install(monkeypatch, fake)
 
-    _after, evidence = mod.reconcile_flow_card(
+    after, evidence = mod.reconcile_flow_card(
         "https://org.crm.dynamics.com",
         "token",
         copy.deepcopy(fake.row),
         "ReqSys - Notificar Teams (Tarefa criada no Planner)",
     )
 
+    assert evidence["flow_direct_patch_used"] is True
     assert evidence["flow_deactivated_for_patch"] is False
     assert evidence["flow_unpublished_revision_used"] is False
     assert fake.state_patches() == []
+    assert int(after["statecode"]) == 0
 
 
-def test_reconcile_flow_card_reativa_flow_quando_patch_falha(monkeypatch):
+def test_reconcile_flow_card_falha_sem_alterar_estado(monkeypatch):
     fake = FakeDataverse(row(statecode=1), reject_card_patch=True)
     _install(monkeypatch, fake)
 
@@ -415,16 +409,18 @@ def test_reconcile_flow_card_reativa_flow_quando_patch_falha(monkeypatch):
             "ReqSys - Notificar Teams (Tarefa criada no Planner)",
         )
 
-    # falhar nunca pode deixar o flow DEV desativado.
-    assert fake.state_patches() == [(0, 1), (1, 2)]
+    assert fake.state_patches() == []
     assert int(fake.row["statecode"]) == 1
     assert int(fake.row["statuscode"]) == 2
 
 
 def test_reconcile_flow_card_sem_mudanca_nao_toca_no_estado(monkeypatch):
-    source = row(statecode=1, message_body=mod.desired_card(
-        "ReqSys - Notificar Teams (Tarefa criada no Planner)"
-    ))
+    source = row(
+        statecode=1,
+        message_body=mod.desired_card(
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)"
+        ),
+    )
     fake = FakeDataverse(source)
     _install(monkeypatch, fake)
 
@@ -436,45 +432,47 @@ def test_reconcile_flow_card_sem_mudanca_nao_toca_no_estado(monkeypatch):
     )
 
     assert evidence["card_reconciled"] is False
+    assert evidence["flow_direct_patch_used"] is False
     assert evidence["flow_deactivated_for_patch"] is False
     assert fake.calls == []
 
 
-def test_fake_dataverse_reproduz_erro_runtime_com_etag_publicado(monkeypatch):
-    fake = FakeDataverse(row(statecode=1))
+def test_reconcile_falha_fechado_quando_ha_revisao_unpublished(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
     _install(monkeypatch, fake)
-    mod.deactivate(
-        "https://org.crm.dynamics.com",
-        "token",
-        fake.row["workflowid"],
-    )
 
     with pytest.raises(
         FlowStateError,
         match=r"published update.*unpublished active row",
     ):
-        patch_clientdata(
+        mod.reconcile_flow_card(
             "https://org.crm.dynamics.com",
             "token",
             copy.deepcopy(fake.row),
-            json.dumps(desired_card(fake.row["name"]), ensure_ascii=False),
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
         )
 
+    assert fake.state_patches() == []
+    assert fake.unpublished_reads == 0
+    assert int(fake.row["statecode"]) == 1
+    assert int(fake.row["statuscode"]) == 2
 
-def test_patch_clientdata_propaga_mensagem_do_dataverse(monkeypatch):
-    fake = FakeDataverse(row(statecode=1))
+
+def test_patch_clientdata_propaga_conflito_unpublished_real(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
     _install(monkeypatch, fake)
 
     with pytest.raises(
         FlowStateError,
-        match=r"dataverse_card_patch_http_400:0x80040203:Invalid Argument workflow ativado",
+        match=r"dataverse_card_patch_http_400:0x80040203:.*unpublished active row",
     ):
         patch_clientdata(
             "https://org.crm.dynamics.com",
             "token",
-            row(statecode=1),
+            copy.deepcopy(fake.row),
             '{"x":1}',
         )
+
 
 
 def test_error_detail_sem_mensagem_mantem_apenas_o_codigo():
