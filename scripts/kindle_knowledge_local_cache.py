@@ -260,6 +260,7 @@ def main() -> int:
     parser.add_argument("--output-root", type=Path, default=CANONICAL_ROOT)
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--evidence-file", type=Path, required=True)
+    parser.add_argument("--expect-no-changes", action="store_true")
     args = parser.parse_args()
 
     code = 0
@@ -267,6 +268,10 @@ def main() -> int:
         if args.confirm != CONFIRM:
             raise MaterializeError("confirmação inválida")
         payload = materialize(args.expected_host, args.output_root, args.correlation_id)
+        if args.expect_no_changes and payload["changed_files"]:
+            raise MaterializeError(
+                "replay não idempotente: " + ", ".join(payload["changed_files"])
+            )
     except (MaterializeError, OSError) as exc:
         payload = {
             "ok": False,
