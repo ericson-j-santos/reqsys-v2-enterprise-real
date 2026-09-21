@@ -25,7 +25,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Fixed target/task, Query+Run only, AtStartup+S4U, negative RPC/config tests, exact gateway dispatch and independent Desktop runner pickup."
+    "evidence_contract": "Fixed target/task, Query+Run only, AtStartup+S4U, negative RPC/config tests, exact gateway dispatch and independent Desktop runner pickup. Workflow shell must be Windows PowerShell (`powershell`) on Noteri; `pwsh` is not required."
   },
   "risk": {
     "production": false,
@@ -33,5 +33,6 @@
     "reboot": false,
     "secrets": false,
     "task_creation_or_mutation": false
-  }
+  },
+  "runtime_shell": "powershell"
 }
