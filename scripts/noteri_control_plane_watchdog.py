@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -181,9 +182,71 @@ def ensure_task_folder(service):
         return root.CreateFolder(TASK_FOLDER.lstrip("\\"))
 
 
-def register_task(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:
-    service = _scheduler()
-    folder = ensure_task_folder(service)
+def whoami_path() -> Path:
+    target = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "whoami.exe"
+    if not target.is_file():
+        raise WatchdogError("whoami.exe não encontrado")
+    return target
+
+
+def current_principal_candidates() -> list[tuple[str, str]]:
+    completed = subprocess.run(
+        [str(whoami_path()), "/user", "/fo", "csv", "/nh"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+    candidates: list[tuple[str, str]] = []
+    if completed.returncode == 0 and completed.stdout.strip():
+        try:
+            row = next(csv.reader([completed.stdout.strip()]))
+        except (csv.Error, StopIteration):
+            row = []
+        if len(row) >= 2:
+            account = row[0].strip()
+            sid = row[1].strip()
+            if sid:
+                candidates.append(("sid", sid))
+            if account:
+                candidates.append(("whoami", account))
+
+    if not candidates:
+        fallback = subprocess.run(
+            [str(whoami_path())],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=False,
+        )
+        account = fallback.stdout.strip() if fallback.returncode == 0 else ""
+        if account:
+            candidates.append(("whoami", account))
+
+    unique: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for source, value in candidates:
+        key = value.casefold()
+        if key and key not in seen:
+            seen.add(key)
+            unique.append((source, value))
+    if not unique:
+        raise WatchdogError("identidade Windows atual indisponível")
+    return unique
+
+
+def _task_definition(
+    service,
+    *,
+    python_executable: str,
+    release_script: Path,
+    runner_home: Path,
+    principal_id: str,
+):
     definition = service.NewTask(0)
     definition.RegistrationInfo.Description = "ReqSys Noteri control-plane watchdog"
     definition.Settings.Enabled = True
@@ -202,18 +265,42 @@ def register_task(*, python_executable: str, release_script: Path, runner_home: 
     principal = definition.Principal
     principal.LogonType = TASK_LOGON_S4U
     principal.RunLevel = TASK_RUNLEVEL_LUA
-    principal.UserId = f"{socket.gethostname()}\\{os.environ.get('USERNAME') or ''}"
-    if principal.UserId.endswith("\\"):
-        raise WatchdogError("USERNAME indisponível")
-    folder.RegisterTaskDefinition(
-        TASK_LEAF_NAME,
-        definition,
-        TASK_CREATE_OR_UPDATE,
-        principal.UserId,
-        "",
-        TASK_LOGON_S4U,
-    )
-    return {"exists": True, "trigger": "AtStartup", "logon": "S4U", "run_level": "limited"}
+    principal.UserId = principal_id
+    return definition
+
+
+def register_task(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:
+    service = _scheduler()
+    folder = ensure_task_folder(service)
+    failures: list[str] = []
+    for source, principal_id in current_principal_candidates():
+        definition = _task_definition(
+            service,
+            python_executable=python_executable,
+            release_script=release_script,
+            runner_home=runner_home,
+            principal_id=principal_id,
+        )
+        try:
+            folder.RegisterTaskDefinition(
+                TASK_LEAF_NAME,
+                definition,
+                TASK_CREATE_OR_UPDATE,
+                principal_id,
+                "",
+                TASK_LOGON_S4U,
+            )
+            return {
+                "exists": True,
+                "trigger": "AtStartup",
+                "logon": "S4U",
+                "run_level": "limited",
+                "principal_source": source,
+            }
+        except Exception as exc:
+            code = getattr(exc, "hresult", None)
+            failures.append(f"{source}:{code if code is not None else type(exc).__name__}")
+    raise WatchdogError("falha ao registrar S4U para identidade atual: " + ",".join(failures))
 
 
 def install_logon_fallback(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:

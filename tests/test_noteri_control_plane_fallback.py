@@ -201,3 +201,13 @@ def test_headless_launcher_uses_only_legitimate_uac_brokers() -> None:
     assert "fodhelper" not in launcher.casefold()
     assert "computerdefaults" not in launcher.casefold()
     assert "eventvwr" not in launcher.casefold()
+
+
+def test_watchdog_resolves_current_windows_principal_for_s4u() -> None:
+    text = WATCHDOG_PATH.read_text(encoding="utf-8")
+    assert "whoami.exe" in text
+    assert '"/user", "/fo", "csv", "/nh"' in text
+    assert 'candidates.append(("sid", sid))' in text
+    assert 'candidates.append(("whoami", account))' in text
+    assert "principal_source" in text
+    assert 'f"{socket.gethostname()}\\\\{os.environ.get(' not in text
