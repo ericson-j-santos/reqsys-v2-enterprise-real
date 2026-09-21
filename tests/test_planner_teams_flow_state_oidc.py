@@ -454,7 +454,7 @@ def test_reconcile_falha_fechado_quando_ha_revisao_unpublished(monkeypatch):
 
     assert exc_info.value.details["unpublished_detected"] is True
     assert exc_info.value.details["unpublished_relation"] == "same_as_published"
-    assert "unpublished_clientdata_sha256" in exc_info.value.details
+    assert "unpublished_fingerprint" in exc_info.value.details
     assert "clientdata" not in exc_info.value.details
     assert fake.state_patches() == []
     assert fake.unpublished_reads == 1
@@ -517,7 +517,10 @@ def test_reconcile_classifica_draft_semanticamente_desejado(monkeypatch):
         details["unpublished_fingerprint"]["card_canonical_sha256"]
         == details["desired_fingerprint"]["card_canonical_sha256"]
     )
-    assert "clientdata" not in json.dumps(details)
+    serialized = json.dumps(details)
+    assert "body/recipient/groupId" not in serialized
+    assert "body/recipient/channelId" not in serialized
+    assert "messageBody" not in serialized
     assert fake.unpublished_reads == 1
     assert fake.state_patches() == []
 
