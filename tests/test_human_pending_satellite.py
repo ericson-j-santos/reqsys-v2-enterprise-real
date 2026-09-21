@@ -38,6 +38,20 @@ def test_explicit_human_entra_bootstrap_is_detected():
     assert "permission" in categories
 
 
+def test_generic_future_human_approval_is_not_current_action():
+    assert module.classify(
+        "TODO operacional",
+        "Produção permanece bloqueada. Aprovação humana continua obrigatória antes de promoção.",
+    ) == []
+
+
+def test_future_reboot_approval_does_not_alert_early():
+    assert module.classify(
+        "Piloto DEV",
+        "Recuperação após reinício deve ser validada mediante aprovação humana explícita no momento do teste.",
+    ) == []
+
+
 def test_responsavel_heading_alone_is_not_human_intent():
     categories = module.classify(
         "Decisão de arquitetura documentada pelo Coordinator",
