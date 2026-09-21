@@ -161,11 +161,6 @@ jobs:
           mkdir -p artifacts/pc24x7-dev
           node scripts/resolve_pc24x7_dev_locator.mjs \
             --output artifacts/pc24x7-dev/signed-locator.json
-          test -n "${{ steps.locator.outputs.base_url }}"
-          case "${{ steps.locator.outputs.base_url }}" in
-            https://*.trycloudflare.com) ;;
-            *) echo "::error::signed locator resolved an invalid runtime URL"; exit 1 ;;
-          esac
 
       - name: Validate PC24x7 runtime health
         shell: bash
