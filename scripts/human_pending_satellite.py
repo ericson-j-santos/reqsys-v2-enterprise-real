@@ -208,7 +208,6 @@ def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categor
     raw_body = issue.get("body", "") or ""
     url = issue.get("html_url", "")
     refs = approval_refs(comments)
-    body = norm(raw_body)
 
     external = any(category in categories for category in {
         "real_external_evidence", "external_business_input",
