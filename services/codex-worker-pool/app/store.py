@@ -202,12 +202,12 @@ class WorkerPoolStore:
             CREATE INDEX IF NOT EXISTS idx_affinity_worker
               ON worker_repository_affinity(worker_id,repository);
             """)
-            db.execute(
-                """INSERT OR IGNORE INTO repository_lanes(
-                     repository,enabled,max_in_flight,updated_at)
-                   SELECT DISTINCT repository,1,1,? FROM tasks""",
-                (iso(self.clock()),),
-            )
+                db.execute(
+                    """INSERT OR IGNORE INTO repository_lanes(
+                         repository,enabled,max_in_flight,updated_at)
+                       SELECT DISTINCT repository,1,1,? FROM tasks""",
+                    (iso(self.clock()),),
+                )
             finally:
                 db.close()
 
