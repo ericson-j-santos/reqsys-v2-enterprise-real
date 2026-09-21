@@ -1,0 +1,105 @@
+name: Ollama CI Triage
+
+on:
+  workflow_run:
+    workflows:
+      - "CI — ReqSys v2 Enterprise"
+      - "CI Enterprise Fast"
+      - "Pre-PR Readiness Gate"
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run de GitHub Actions a analisar"
+        required: true
+        type: string
+      pr_number:
+        description: "PR opcional; vazio deriva do run"
+        required: false
+        default: ""
+        type: string
+      mode:
+        description: "dry_run analisa; execute permite comentário e Worker Pool"
+        required: true
+        default: "dry_run"
+        type: choice
+        options: [dry_run, execute]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: ollama-ci-triage-${{ github.event.workflow_run.id || inputs.run_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    name: Ollama-first CI triage
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 15
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      CODEX_OLLAMA_BASE_URL: http://127.0.0.1:11434
+      CODEX_WORKER_POOL_URL: http://127.0.0.1:8097
+      TARGET_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+      PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || inputs.pr_number }}
+      MODE: ${{ github.event_name == 'workflow_run' && 'execute' || inputs.mode }}
+      EVIDENCE_FILE: artifacts/ollama-ci-triage/evidence.json
+
+    steps:
+      - name: Checkout do control-plane confiável
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Executar triagem governada
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $args = @(
+            "scripts/ollama_ci_triage.py",
+            "--repository", "$env:GITHUB_REPOSITORY",
+            "--run-id", "$env:TARGET_RUN_ID",
+            "--output", "$env:EVIDENCE_FILE"
+          )
+          if (-not [string]::IsNullOrWhiteSpace("$env:PR_NUMBER")) {
+            $args += @("--pr-number", "$env:PR_NUMBER")
+          }
+          if ("$env:MODE" -eq "execute") {
+            $args += "--execute"
+          }
+          & python @args
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ollama-ci-triage-${{ github.run_id }}
+          path: artifacts/ollama-ci-triage/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumo
+        if: always()
+        shell: pwsh
+        run: |
+          "## Ollama CI Triage" | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (Test-Path "$env:EVIDENCE_FILE") {
+            $e = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
+            "- Resultado: $($e.result)" | Add-Content $env:GITHUB_STEP_SUMMARY
+            "- Run: $($e.run_id)" | Add-Content $env:GITHUB_STEP_SUMMARY
+            if ($null -ne $e.triage) {
+              "- Categoria: $($e.triage.category)" | Add-Content $env:GITHUB_STEP_SUMMARY
+              "- Confiança: $($e.triage.confidence)" | Add-Content $env:GITHUB_STEP_SUMMARY
+            }
+            if ($null -ne $e.worker_pool) {
+              "- Worker Pool: $($e.worker_pool.status)" | Add-Content $env:GITHUB_STEP_SUMMARY
+            }
+          }
+          "- Merge/deploy: não" | Add-Content $env:GITHUB_STEP_SUMMARY
