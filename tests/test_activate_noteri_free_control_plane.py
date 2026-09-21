@@ -57,20 +57,22 @@ def test_bootstrap_auto_registers_official_pinned_runner_without_logging_token()
 
 def test_bootstrap_can_prepare_github_cli_without_rdc():
     text = SCRIPT.read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
     assert '"GitHub.cli"' in text
     assert '"winget"' in text
-    assert '"auth", "login"' in text
+    assert '"auth", "login"' in normalized
     assert '"--web"' in text
     assert 'rdc_required' in text
 
 
 def test_bootstrap_refreshes_repo_scope_and_selects_expected_account():
     text = SCRIPT.read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
     assert 'EXPECTED_GITHUB_LOGIN = "ericson-j-santos"' in text
-    assert '"auth", "switch"' in text
-    assert '"--user", EXPECTED_GITHUB_LOGIN' in text
-    assert '"auth", "refresh"' in text
-    assert '"--scopes", "repo"' in text
+    assert '"auth", "switch"' in normalized
+    assert '"--user", EXPECTED_GITHUB_LOGIN' in normalized
+    assert '"auth", "refresh"' in normalized
+    assert '"--scopes", "repo"' in normalized
     assert 'env.pop("GH_TOKEN", None)' in text
     assert 'env.pop("GITHUB_TOKEN", None)' in text
     assert 'github_account_mismatch' in text
