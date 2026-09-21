@@ -14,6 +14,7 @@ import socket
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 try:
@@ -183,7 +184,7 @@ def ensure_task_folder(service):
 
 
 def whoami_path() -> Path:
-    target = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "whoami.exe"
+    target = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "whoami.exe"
     if not target.is_file():
         raise WatchdogError("whoami.exe não encontrado")
     return target
@@ -269,39 +270,282 @@ def _task_definition(
     return definition
 
 
+def schtasks_path() -> Path:
+    target = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "schtasks.exe"
+    if not target.is_file():
+        raise WatchdogError("schtasks.exe não encontrado")
+    return target
+
+
+def _decode_task_xml(raw: bytes) -> str:
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    return raw.decode("utf-8", errors="replace")
+
+
+def task_contract() -> dict[str, Any]:
+    completed = subprocess.run(
+        [str(schtasks_path()), "/Query", "/TN", TASK_NAME, "/XML"],
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return {
+            "exists": False,
+            "enabled": False,
+            "trigger_at_startup": False,
+            "logon_type": "",
+            "validator": "schtasks_xml",
+        }
+    try:
+        root = ET.fromstring(_decode_task_xml(completed.stdout))
+    except (ET.ParseError, UnicodeError) as exc:
+        return {
+            "exists": True,
+            "enabled": False,
+            "trigger_at_startup": False,
+            "logon_type": "",
+            "validator": "schtasks_xml",
+            "parse_error": type(exc).__name__,
+        }
+    ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+    enabled_text = (
+        root.findtext("./t:Settings/t:Enabled", default="true", namespaces=ns) or "true"
+    ).strip()
+    logon_type = (
+        root.findtext("./t:Principals/t:Principal/t:LogonType", default="", namespaces=ns) or ""
+    ).strip()
+    boot = root.find("./t:Triggers/t:BootTrigger", ns) is not None
+    return {
+        "exists": True,
+        "enabled": enabled_text.casefold() == "true",
+        "trigger_at_startup": boot,
+        "logon_type": logon_type,
+        "validator": "schtasks_xml",
+    }
+
+
+def task_contract_ready(task: dict[str, Any]) -> bool:
+    return (
+        task.get("exists") is True
+        and task.get("enabled") is True
+        and task.get("trigger_at_startup") is True
+        and str(task.get("logon_type") or "").casefold() == "s4u"
+    )
+
+
+def _delete_task_best_effort() -> None:
+    try:
+        subprocess.run(
+            [str(schtasks_path()), "/Delete", "/TN", TASK_NAME, "/F"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _exception_hresults(exc: BaseException) -> list[int]:
+    result: list[int] = []
+    direct = getattr(exc, "hresult", None)
+    if isinstance(direct, int):
+        result.append(direct)
+    args = getattr(exc, "args", ())
+    if len(args) >= 3 and isinstance(args[2], tuple) and len(args[2]) >= 6:
+        nested = args[2][5]
+        if isinstance(nested, int):
+            result.append(nested)
+    unique: list[int] = []
+    for value in result:
+        if value not in unique:
+            unique.append(value)
+    return unique
+
+
+def _hresult_label(value: int) -> str:
+    return f"0x{value & 0xFFFFFFFF:08X}"
+
+
+def _failure_label(source: str, mode: str, exc: BaseException) -> str:
+    codes = _exception_hresults(exc)
+    suffix = ",".join(_hresult_label(code) for code in codes) if codes else type(exc).__name__
+    return f"{source}/{mode}:{suffix}"
+
+
+def _validate_registered_task(registration_method: str, principal_source: str) -> dict[str, Any]:
+    task = task_contract()
+    if not task_contract_ready(task):
+        _delete_task_best_effort()
+        raise WatchdogError(f"task_contract_mismatch:{registration_method}")
+    return {
+        "exists": True,
+        "trigger": "AtStartup",
+        "logon": "S4U",
+        "run_level": "limited",
+        "principal_source": principal_source,
+        "registration_method": registration_method,
+        "contract": task,
+    }
+
+
+def _register_com_s4u(
+    folder,
+    service,
+    *,
+    python_executable: str,
+    release_script: Path,
+    runner_home: Path,
+    candidates: list[tuple[str, str]],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    failures: list[str] = []
+    for source, principal_id in candidates:
+        for mode in ("explicit_null_password", "definition_principal"):
+            definition = _task_definition(
+                service,
+                python_executable=python_executable,
+                release_script=release_script,
+                runner_home=runner_home,
+                principal_id=principal_id,
+            )
+            try:
+                if mode == "explicit_null_password":
+                    folder.RegisterTaskDefinition(
+                        TASK_LEAF_NAME,
+                        definition,
+                        TASK_CREATE_OR_UPDATE,
+                        principal_id,
+                        None,
+                        TASK_LOGON_S4U,
+                    )
+                else:
+                    folder.RegisterTaskDefinition(
+                        TASK_LEAF_NAME,
+                        definition,
+                        TASK_CREATE_OR_UPDATE,
+                        None,
+                        None,
+                        TASK_LOGON_S4U,
+                    )
+                return _validate_registered_task(f"com_{mode}", source), failures
+            except Exception as exc:
+                failures.append(_failure_label(source, mode, exc))
+    return None, failures
+
+
+def _schtasks_account_candidates(candidates: list[tuple[str, str]]) -> list[tuple[str, str | None]]:
+    result: list[tuple[str, str | None]] = [("current_user", None)]
+    seen: set[str] = set()
+    host = socket.gethostname().strip()
+    for source, value in candidates:
+        if source == "sid":
+            continue
+        value = value.strip()
+        if not value:
+            continue
+        options = [(source, value)]
+        if "\\" in value:
+            prefix, username = value.split("\\", 1)
+            if username and prefix.casefold() == host.casefold():
+                options.extend(
+                    [
+                        ("local_dot", f".\\{username}"),
+                        ("local_name", username),
+                    ]
+                )
+        for option_source, option_value in options:
+            key = option_value.casefold()
+            if key not in seen:
+                seen.add(key)
+                result.append((option_source, option_value))
+    return result
+
+
+def _register_schtasks_np(
+    *,
+    python_executable: str,
+    release_script: Path,
+    runner_home: Path,
+    candidates: list[tuple[str, str]],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    command = subprocess.list2cmdline(
+        [
+            python_executable,
+            str(release_script),
+            "watch",
+            "--runner-home",
+            str(runner_home),
+        ]
+    )
+    failures: list[str] = []
+    for source, account in _schtasks_account_candidates(candidates):
+        argv = [
+            str(schtasks_path()),
+            "/Create",
+            "/TN",
+            TASK_NAME,
+            "/TR",
+            command,
+            "/SC",
+            "ONSTART",
+            "/RL",
+            "LIMITED",
+            "/NP",
+            "/F",
+            "/HRESULT",
+        ]
+        if account is not None:
+            argv.extend(["/RU", account])
+        completed = subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+        if completed.returncode != 0:
+            failures.append(f"{source}/schtasks_np:exit={completed.returncode}")
+            continue
+        try:
+            return _validate_registered_task("schtasks_np", source), failures
+        except WatchdogError:
+            failures.append(f"{source}/schtasks_np:task_contract_mismatch")
+    return None, failures
+
+
 def register_task(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:
     service = _scheduler()
     folder = ensure_task_folder(service)
-    failures: list[str] = []
-    for source, principal_id in current_principal_candidates():
-        definition = _task_definition(
-            service,
-            python_executable=python_executable,
-            release_script=release_script,
-            runner_home=runner_home,
-            principal_id=principal_id,
-        )
-        try:
-            folder.RegisterTaskDefinition(
-                TASK_LEAF_NAME,
-                definition,
-                TASK_CREATE_OR_UPDATE,
-                principal_id,
-                "",
-                TASK_LOGON_S4U,
-            )
-            return {
-                "exists": True,
-                "trigger": "AtStartup",
-                "logon": "S4U",
-                "run_level": "limited",
-                "principal_source": source,
-            }
-        except Exception as exc:
-            code = getattr(exc, "hresult", None)
-            failures.append(f"{source}:{code if code is not None else type(exc).__name__}")
-    raise WatchdogError("falha ao registrar S4U para identidade atual: " + ",".join(failures))
+    candidates = current_principal_candidates()
 
+    task, com_failures = _register_com_s4u(
+        folder,
+        service,
+        python_executable=python_executable,
+        release_script=release_script,
+        runner_home=runner_home,
+        candidates=candidates,
+    )
+    if task is not None:
+        return task
+
+    task, native_failures = _register_schtasks_np(
+        python_executable=python_executable,
+        release_script=release_script,
+        runner_home=runner_home,
+        candidates=candidates,
+    )
+    if task is not None:
+        return task
+
+    failures = com_failures + native_failures
+    raise WatchdogError("falha ao registrar S4U sem senha: " + ",".join(failures))
 
 def install_logon_fallback(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:
     if winreg is None:
