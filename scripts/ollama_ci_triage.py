@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.failure_pattern_engine import build_report as build_pattern_report, load_catalog
-from scripts.pending_development_worker_pool_bridge import (
+from scripts.failure_pattern_engine import build_report as build_pattern_report, load_catalog  # noqa: E402
+from scripts.pending_development_worker_pool_bridge import (  # noqa: E402
     BridgeError,
     http_request as worker_pool_http_request,
     read_token,
