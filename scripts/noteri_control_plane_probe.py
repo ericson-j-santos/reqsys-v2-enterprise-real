@@ -16,6 +16,9 @@ from typing import Any
 EXPECTED_HOST = "Noteri"
 CONFIRM = "PROBE-NOTERI-CONTROL-PLANE"
 TASK_NAME = r"\Automation\ReqSysNoteriControlPlaneWatchdog"
+RUNTIME_DIR = Path("ReqSys") / "NoteriControlPlaneWatchdog"
+INTERACTIVE_RESULT = "interactive-launch-result.json"
+ELEVATED_RESULT = "elevated-install-result.json"
 
 
 class ProbeError(RuntimeError):
@@ -33,6 +36,13 @@ def validate_host() -> str:
     if host.casefold() != EXPECTED_HOST.casefold():
         raise ProbeError(f"host não autorizado: {host}")
     return host
+
+
+def runtime_root() -> Path:
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        raise ProbeError("LOCALAPPDATA ausente")
+    return Path(local) / RUNTIME_DIR
 
 
 def system32_path(name: str) -> Path:
@@ -121,6 +131,56 @@ def task_headless_ready(task: dict[str, Any]) -> bool:
     )
 
 
+def _sanitized_result(path: Path, allowed: set[str]) -> dict[str, Any]:
+    if not path.is_file():
+        return {"exists": False}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        return {"exists": True, "valid": False, "error_type": type(exc).__name__}
+    if not isinstance(raw, dict):
+        return {"exists": True, "valid": False, "error_type": "invalid_payload"}
+    payload: dict[str, Any] = {"exists": True, "valid": True}
+    for key in allowed:
+        if key in raw:
+            value = raw[key]
+            if key == "error" and value is not None:
+                payload[key] = str(value)[:500]
+            else:
+                payload[key] = value
+    return payload
+
+
+def activation_diagnostic() -> dict[str, Any]:
+    root = runtime_root()
+    return {
+        "interactive": _sanitized_result(
+            root / INTERACTIVE_RESULT,
+            {
+                "ok",
+                "exit_code",
+                "source_sha",
+                "result",
+                "error_type",
+                "error",
+                "observed_at",
+            },
+        ),
+        "elevated": _sanitized_result(
+            root / ELEVATED_RESULT,
+            {
+                "ok",
+                "error_type",
+                "error",
+                "runtime_ok",
+                "activation_pending",
+                "requires_uac_activation",
+                "headless_persistence",
+            },
+        ),
+    }
+
+
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     if confirm != CONFIRM:
         raise ProbeError("confirmação inválida")
@@ -148,6 +208,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "runner_listener_detected": True,
         "headless_task": task,
         "headless_ready": task_headless_ready(task),
+        "activation_diagnostic": activation_diagnostic(),
         "correlation_id": correlation_id,
         "rdc_required": False,
         "production_touched": False,

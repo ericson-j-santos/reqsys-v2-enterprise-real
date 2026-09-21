@@ -88,7 +88,9 @@ O workflow deve:
 - exigir confirmação fixa `LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC`;
 - aguardar e validar `exists=true`, trigger de startup e logon `S4U`;
 - manter `rdc_required=false`, `production_touched=false` e `reboot_performed=false`;
-- persistir artifact sanitizado do resultado.
-- o probe operacional deve consultar a tarefa por `schtasks /Query /XML` sem elevação e publicar `headless_ready`, `exists`, `enabled`, `trigger_at_startup` e `logon_type`, sem registrar identidade/principal.
+- persistir artifact sanitizado do staging remoto e não abrir UAC a partir do runner self-hosted;
+- o launcher local deve usar o caminho absoluto do Python resolvido no runner no momento do staging, sem depender de `PATH` da sessão do Explorer;
+- a execução local deve persistir resultado sanitizado em `%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneWatchdog\\interactive-launch-result.json`, e a instalação elevada deve manter `elevated-install-result.json`;
+- o probe operacional deve consultar a tarefa por `schtasks /Query /XML` sem elevação e publicar `headless_ready`, `exists`, `enabled`, `trigger_at_startup` e `logon_type`, além de diagnóstico sanitizado da última ativação, sem registrar identidade/principal ou segredos.
 
 A autorização do UAC pode exigir clique humano local por regra do Windows; fora esse consentimento, a operação é automatizada.
