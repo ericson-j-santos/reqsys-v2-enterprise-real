@@ -321,30 +321,6 @@ def get_flow(base: str, token: str, workflow_id: str) -> dict[str, Any]:
     return payload
 
 
-def get_unpublished_flow(base: str, token: str, workflow_id: str) -> dict[str, Any]:
-    query = urllib.parse.urlencode({"$select": WORKFLOW_SELECT})
-    status, payload = request_json(
-        "GET",
-        workflow_url(base, workflow_id)
-        + "/Microsoft.Dynamics.CRM.RetrieveUnpublished()?"
-        + query,
-        token,
-    )
-    if status != 200:
-        raise FlowStateError(
-            f"dataverse_retrieve_unpublished_http_{status}:{error_detail(payload)}"
-        )
-    observed_id = str(payload.get("workflowid") or "").strip()
-    if observed_id.lower() != workflow_id.lower():
-        raise FlowStateError(
-            f"flow_unpublished_workflowid_divergente:{observed_id or 'ausente'}"
-        )
-    if int(payload.get("componentstate", -1)) != 1:
-        raise FlowStateError(
-            f"flow_unpublished_componentstate_invalido:{payload.get('componentstate')}"
-        )
-    return payload
-
 
 def patch_clientdata(
     base: str,
@@ -385,6 +361,7 @@ def reconcile_flow_card(
     if not changed:
         return row, {
             "card_reconciled": False,
+            "flow_direct_patch_used": False,
             "flow_deactivated_for_patch": False,
             "flow_unpublished_revision_used": False,
             "clientdata_before_sha256": before_hash,
@@ -396,59 +373,32 @@ def reconcile_flow_card(
     if not workflow_id:
         raise FlowStateError("workflowid_ausente")
 
-    # O Dataverse recusa alteracao de `clientdata` enquanto o flow esta ativado
-    # (HTTP 400 0x80040203). Desativa antes do PATCH e devolve o flow ao estado
-    # original em qualquer saida, para nao deixar o DEV sem notificacao.
-    deactivated = False
-    use_unpublished = int(row.get("componentstate", -1)) == 1
-    if int(row.get("statecode", -1)) == 1:
-        deactivate(base, token, workflow_id)
-        deactivated = True
-        # Deactivate creates/updates the editable unpublished layer. A normal GET
-        # resolves the published context and can fail with 0x80040203 when an
-        # unpublished active row already exists. Retrieve the supported draft
-        # revision explicitly and use its ETag for the PATCH.
-        row = get_unpublished_flow(base, token, workflow_id)
-        use_unpublished = True
-
-    try:
-        after, observed_contract = _patch_and_verify(
-            base,
-            token,
-            row,
-            workflow_id,
-            desired_raw,
-            desired_contract,
-            raw_before,
-            before_hash,
-            use_unpublished=use_unpublished,
-        )
-    except Exception as patch_error:
-        if deactivated:
-            try:
-                reactivation_source = (
-                    get_unpublished_flow(base, token, workflow_id)
-                    if use_unpublished
-                    else get_flow(base, token, workflow_id)
-                )
-                ensure_active(base, token, reactivation_source)
-            except Exception as reactivation_error:
-                raise FlowStateError(
-                    f"flow_card_reativacao_falhou:{patch_error}:{reactivation_error}"
-                ) from patch_error
-        raise
-
-    if deactivated:
-        after = ensure_active(base, token, after)
+    # Atualiza o registro corrente diretamente. Desativar o flow apenas para editar
+    # cria uma camada unpublished e pode fazer o PATCH subsequente ser interpretado
+    # como published update em conflito (Dataverse 0x80040203).
+    # Se ja existir uma revisao unpublished concorrente, o PATCH falha fechado e
+    # nenhuma mudanca de estado e tentada automaticamente.
+    after, observed_contract = _patch_and_verify(
+        base,
+        token,
+        row,
+        workflow_id,
+        desired_raw,
+        desired_contract,
+        raw_before,
+        before_hash,
+    )
 
     return after, {
         "card_reconciled": True,
-        "flow_deactivated_for_patch": deactivated,
-        "flow_unpublished_revision_used": use_unpublished,
+        "flow_direct_patch_used": True,
+        "flow_deactivated_for_patch": False,
+        "flow_unpublished_revision_used": False,
         "clientdata_before_sha256": before_hash,
         "card_before": before_contract,
         "card_after": observed_contract,
     }
+
 
 
 def _patch_and_verify(
@@ -460,15 +410,9 @@ def _patch_and_verify(
     desired_contract: dict[str, Any],
     raw_before: str,
     before_hash: str,
-    *,
-    use_unpublished: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     patch_clientdata(base, token, row, desired_raw)
-    after = (
-        get_unpublished_flow(base, token, workflow_id)
-        if use_unpublished
-        else get_flow(base, token, workflow_id)
-    )
+    after = get_flow(base, token, workflow_id)
 
     try:
         observed_contract = card_contract(parse_clientdata(after))
@@ -478,11 +422,7 @@ def _patch_and_verify(
         rollback_error: Exception | None = None
         try:
             patch_clientdata(base, token, after, raw_before)
-            rolled_back = (
-                get_unpublished_flow(base, token, workflow_id)
-                if use_unpublished
-                else get_flow(base, token, workflow_id)
-            )
+            rolled_back = get_flow(base, token, workflow_id)
             if hashlib.sha256(str(rolled_back.get("clientdata") or "").encode()).hexdigest() != before_hash:
                 raise FlowStateError("flow_card_rollback_hash_divergente")
         except Exception as exc:
@@ -496,6 +436,7 @@ def _patch_and_verify(
     return after, observed_contract
 
 
+
 def activate(base: str, token: str, workflow_id: str) -> None:
     status, payload = request_json(
         "PATCH",
@@ -506,16 +447,6 @@ def activate(base: str, token: str, workflow_id: str) -> None:
     if status != 204:
         raise FlowStateError(f"dataverse_activate_http_{status}:{error_detail(payload)}")
 
-
-def deactivate(base: str, token: str, workflow_id: str) -> None:
-    status, payload = request_json(
-        "PATCH",
-        workflow_url(base, workflow_id),
-        token,
-        {"statecode": 0, "statuscode": 1},
-    )
-    if status != 204:
-        raise FlowStateError(f"dataverse_deactivate_http_{status}:{error_detail(payload)}")
 
 
 def ensure_active(
@@ -620,6 +551,7 @@ def main() -> int:
                         "state_before": item.get("state_before"),
                         "state_after": item.get("state_after"),
                         "card_reconciled": item.get("card_reconciled"),
+                        "flow_direct_patch_used": item.get("flow_direct_patch_used"),
                         "card_after": item.get("card_after"),
                         "clientdata_preserved": item.get("clientdata_preserved"),
                     }
