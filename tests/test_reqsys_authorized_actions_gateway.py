@@ -24,6 +24,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run noteri-control-plane-probe'" in content
     assert "github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation'" in content
     assert "github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe'" in content
+    assert "github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'" in content
 
 
 def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
@@ -39,6 +40,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='noteri-control-plane-probe.yml'" in content
     assert "target='noteri-headless-control-plane-activation.yml'" in content
     assert "target='fabric-oidc-readonly-probe.yml'" in content
+    assert "target='codex-ollama-e2e-dev.yml'" in content
     assert (
         "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
@@ -48,7 +50,8 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "noteri-control-plane-probe.yml|"
         "noteri-headless-control-plane-activation.yml|"
         "figma-github-e2e-dev.yml|"
-        "fabric-oidc-readonly-probe.yml"
+        "fabric-oidc-readonly-probe.yml|"
+        "codex-ollama-e2e-dev.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
@@ -101,7 +104,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml)" in content
+    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
