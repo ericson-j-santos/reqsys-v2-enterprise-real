@@ -96,7 +96,7 @@ async function boot() {
 boot().catch((error) => {
   const root = document.getElementById('app')
   if (root) {
-    root.innerHTML = '<main style="font-family:Arial,sans-serif;padding:24px"><h1>ReqSys não iniciou</h1><p>Atualize a página. Se o problema continuar, o runtime local precisa ser revalidado.</p></main>'
+    root.innerHTML = '<main style="font-family:Arial,sans-serif;padding:24px"><h1>ReqSys não iniciou</h1><p>Atualize a página. Se o problema continuar, o execução local precisa ser revalidado.</p></main>'
   }
   console.error('reqsys_boot_failed', error)
 })
