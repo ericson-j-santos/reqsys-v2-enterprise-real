@@ -22,6 +22,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev'" in content
     assert "github.event.comment.body == '/reqsys run desktop-rdc-recovery'" in content
     assert "github.event.comment.body == '/reqsys run noteri-control-plane-probe'" in content
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery'" in content
     assert "github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation'" in content
     assert "github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe'" in content
     assert "github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'" in content
@@ -52,6 +53,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "cofre-runtime-evidence-gate.yml|"
         "desktop-rdc-recovery.yml|"
         "noteri-control-plane-probe.yml|"
+        "noteri-desktop-watchdog-recovery.yml|"
         "noteri-headless-control-plane-activation.yml|"
         "figma-github-e2e-dev.yml|"
         "fabric-oidc-readonly-probe.yml|"
@@ -110,7 +112,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
+    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
@@ -216,3 +218,16 @@ def test_gateway_teams_ai_dev_dispatches_sao_exatos_e_nonprod() -> None:
     assert "-f environment=stg" not in content
     assert "-f workflow=" not in content
     assert "eval " not in content
+
+
+def test_gateway_noteri_desktop_watchdog_recovery_is_exact_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery'" in content
+    assert "'/reqsys run noteri-desktop-watchdog-recovery')" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml'" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "-f host=" not in content
+    assert "-f task=" not in content
+    assert "-f command=" not in content
