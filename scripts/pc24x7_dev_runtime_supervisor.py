@@ -103,20 +103,34 @@ def main() -> int:
     payload["local_before"] = {
         "frontend": probe(LOCAL_GATEWAY + "/task-console"),
         "health": probe(LOCAL_GATEWAY + "/api/health"),
+        "runtime_health": probe(LOCAL_GATEWAY + "/api/runtime/health"),
+        "build_info": probe(LOCAL_GATEWAY + "/api/runtime/build-info"),
     }
     payload["runtime"] = ensure_containers() if args.apply else {"changed": False}
     payload["local_after"] = {
         "frontend": probe(LOCAL_GATEWAY + "/task-console"),
         "health": probe(LOCAL_GATEWAY + "/api/health"),
+        "runtime_health": probe(LOCAL_GATEWAY + "/api/runtime/health"),
+        "build_info": probe(LOCAL_GATEWAY + "/api/runtime/build-info"),
     }
+
+    local_ready = all(
+        payload["local_after"][key].get("status") == 200
+        for key in ("frontend", "health", "runtime_health", "build_info")
+    )
 
     payload["cloudflare"] = run_json_script(
         PUBLIC_TUNNEL,
         *(("--apply",) if args.apply else ()),
     )
 
-    if args.apply:
+    if args.apply and local_ready:
         payload["public_locator"] = run_json_script(LOCATOR_PUBLISHER)
+    elif args.apply:
+        payload["public_locator"] = {
+            "deferred": True,
+            "reason": "local_runtime_contract_failed",
+        }
     else:
         payload["public_locator"] = {"deferred": True}
 
@@ -126,14 +140,10 @@ def main() -> int:
         locator_result.get("published") is True
         and int(locator_result.get("healthy_url_count") or 0) > 0
     )
-    local_ready = (
-        payload["local_after"]["frontend"].get("status") == 200
-        and payload["local_after"]["health"].get("status") == 200
-    )
-
+    payload["local_runtime_contract_ready"] = local_ready
     payload["locator_ready"] = locator_ready
     payload["human_blocker"] = None
-    payload["ready"] = local_ready and cloudflare_ready
+    payload["ready"] = local_ready and cloudflare_ready and (locator_ready if args.apply else True)
 
     path = state_file()
     path.parent.mkdir(parents=True, exist_ok=True)

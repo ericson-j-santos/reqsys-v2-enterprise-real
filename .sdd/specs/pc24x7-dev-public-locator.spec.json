@@ -21,14 +21,17 @@
     "unsigned_locator_accepted": false,
     "backend_direct_publication": false,
     "static_quick_tunnel_url_accepted": false,
-    "ci_signed_locator_required": true
+    "ci_signed_locator_required": true,
+    "runtime_contract_before_locator_required": true,
+    "locator_publish_on_partial_health_allowed": false
   },
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_dev_public_locator.py",
-      "tests/test_postmerge_integrity_pc24x7.py"
+      "tests/test_postmerge_integrity_pc24x7.py",
+      "tests/test_pc24x7_dev_runtime_supervisor.py"
     ],
-    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 5 minutos e Cloudflare continua como transporte. O deploy do Pages deve ser disparado após Governed PR Automation concluído com sucesso no caminho workflow_run, resolvendo separadamente o último Teams Notification Dashboard bem-sucedido. Após integração governada, a Validação de Acessos Públicos deve executar automaticamente e tratar a URL estável DEV do manifesto como alvo obrigatório. Consumidores CI do DEV devem resolver o mesmo locator Ed25519 vigente e falhar fechado para assinatura inválida, estado expirado ou URL fora de *.trycloudflare.com; URL Quick Tunnel estática não é evidência válida."
+    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 5 minutos e Cloudflare continua como transporte. O deploy do Pages deve ser disparado após Governed PR Automation concluído com sucesso no caminho workflow_run, resolvendo separadamente o último Teams Notification Dashboard bem-sucedido. Após integração governada, a Validação de Acessos Públicos deve executar automaticamente e tratar a URL estável DEV do manifesto como alvo obrigatório. Consumidores CI do DEV devem resolver o mesmo locator Ed25519 vigente e falhar fechado para assinatura inválida, estado expirado ou URL fora de *.trycloudflare.com; URL Quick Tunnel estática não é evidência válida. O publisher e o supervisor devem exigir /api/health, /api/runtime/health e /api/runtime/build-info antes de publicar um locator; health básico isolado não autoriza exposição pública."
   },
   "post_merge_deployment": {
     "trigger_workflow": "Governed PR Automation",
