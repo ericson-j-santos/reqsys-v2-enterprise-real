@@ -120,3 +120,5 @@ def test_workflow_is_inputless_noteri_only_and_read_only() -> None:
     assert "secrets." not in raw
     assert "--confirm RUN-EXISTING-DESKTOP-WATCHDOG" in raw
     assert "persist-credentials: false" in raw
+    assert raw.count("shell: powershell") == 2
+    assert "shell: pwsh" not in raw
