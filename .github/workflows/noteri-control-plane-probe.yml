@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 1
 
       - name: Prove exact host and active runner
-        shell: pwsh
+        shell: powershell
         run: python scripts/noteri_control_plane_probe.py --confirm PROBE-NOTERI-CONTROL-PLANE --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
 
       - name: Upload sanitized fallback evidence
@@ -40,7 +40,7 @@ jobs:
 
       - name: Summary
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
           "## Noteri Control Plane Fallback" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Host esperado: Noteri" | Add-Content $env:GITHUB_STEP_SUMMARY
