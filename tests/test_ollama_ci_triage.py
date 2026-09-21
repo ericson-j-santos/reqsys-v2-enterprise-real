@@ -17,7 +17,7 @@ SPEC.loader.exec_module(triage)
 SERVICE_ROOT = ROOT / "services" / "codex-worker-pool"
 if str(SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVICE_ROOT))
-from app.store import ConflictError, WorkerPoolStore
+from app.store import ConflictError, WorkerPoolStore  # noqa: E402
 
 
 def technical(confidence: float = 0.9) -> dict[str, Any]:

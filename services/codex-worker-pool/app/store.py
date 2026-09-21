@@ -484,13 +484,20 @@ class WorkerPoolStore:
         for row in workers:
             w, age = dict(row), max(0.0, (now - parse_iso(row["last_heartbeat_at"])).total_seconds())
             online, task = age <= self.heartbeat_ttl_seconds, active.get(row["worker_id"])
-            if not online: why = "offline_or_stale"
-            elif row["profile"] == "ESTUDO": why = "profile_estudo"
-            elif not row["gateway_ok"] or not row["state_validated"]: why = "governance_not_ready"
-            elif task: why = None
-            elif row["role"] == "builder" and not counts.get("queued", 0): why = "no_queued_work"
-            elif row["role"] == "validator" and not counts.get("validating", 0): why = "no_validation_work"
-            else: why = "available"
+            if not online:
+                why = "offline_or_stale"
+            elif row["profile"] == "ESTUDO":
+                why = "profile_estudo"
+            elif not row["gateway_ok"] or not row["state_validated"]:
+                why = "governance_not_ready"
+            elif task:
+                why = None
+            elif row["role"] == "builder" and not counts.get("queued", 0):
+                why = "no_queued_work"
+            elif row["role"] == "validator" and not counts.get("validating", 0):
+                why = "no_validation_work"
+            else:
+                why = "available"
             w.update(gateway_ok=bool(w["gateway_ok"]), state_validated=bool(w["state_validated"]),
                      online=online, heartbeat_age_seconds=round(age, 3),
                      active_task=task["task_id"] if task else None,
