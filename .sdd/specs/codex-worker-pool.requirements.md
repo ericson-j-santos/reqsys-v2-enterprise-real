@@ -25,6 +25,10 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 17. A prova física dual-host deve executar somente após `dual_host_preflight` aprovar ambos os hosts no mesmo SHA canônico de regras e no mesmo SHA do ReqSys.
 18. O probe de conectividade entre hosts deve usar código Python versionado, sem shell, sem leitura de credenciais e sem alteração de firewall.
 19. O E2E físico deve provar Builder no Desktop -> `produced_sha` -> Validator no Noteri, replay idempotente, claim duplicado bloqueado, expiração/recuperação de lease e leitura final independente.
+20. Cada repositório deve possuir uma lane lógica configurável com `enabled` e `max_in_flight`, criada automaticamente no primeiro enqueue quando não existir.
+21. O scheduler de Builder deve distribuir claims de forma justa e determinística entre repositórios elegíveis, impedindo starvation de projetos com fila pendente.
+22. Afinidade worker→repositório deve ser opcional: quando configurada restringe claims; sem afinidade explícita o worker permanece elegível ao pool compartilhado.
+23. Snapshot e API devem expor lanes, capacidade, contadores de claim e afinidades sem revelar `lease_token` ou segredos.
 
 ## Requisitos de qualidade
 
@@ -51,3 +55,5 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 - com ambos elegíveis, `scripts/codex_worker_pool_dualhost_e2e.py` deve terminar `overall_passed=true` no SHA exato da execução;
 - teste negativo com `correlation_id` incorreto deve ser rejeitado;
 - a mesma task de controle não pode ser adquirida pelo segundo Builder antes do lease expirar e deve ser recuperável após a expiração.
+- dois repositórios com backlog e capacidade disponível devem alternar claims de forma determinística, respeitando `max_in_flight`;
+- worker com afinidade explícita não pode adquirir task fora dos repositórios autorizados; worker sem afinidade mantém compatibilidade com o pool compartilhado.
