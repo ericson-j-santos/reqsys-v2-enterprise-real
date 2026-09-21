@@ -71,6 +71,14 @@ def test_probe_proves_runner_without_rdc(monkeypatch) -> None:
             "validator": "schtasks_xml",
         },
     )
+    monkeypatch.setattr(
+        probe,
+        "activation_diagnostic",
+        lambda: {
+            "interactive": {"exists": False},
+            "elevated": {"exists": False},
+        },
+    )
     monkeypatch.setenv("RUNNER_NAME", "noteri-reqsys-dev")
     monkeypatch.setenv("RUNNER_OS", "Windows")
     monkeypatch.setenv("RUNNER_ARCH", "X64")
@@ -84,6 +92,49 @@ def test_probe_proves_runner_without_rdc(monkeypatch) -> None:
     assert result["rdc_required"] is False
     assert result["production_touched"] is False
     assert result["secrets_read"] is False
+
+
+def test_probe_sanitizes_activation_diagnostics(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    root = tmp_path / "ReqSys" / "NoteriControlPlaneWatchdog"
+    root.mkdir(parents=True)
+    (root / "interactive-launch-result.json").write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "exit_code": 2,
+                "source_sha": "a" * 40,
+                "result": "interactive_launcher_exception",
+                "error_type": "RuntimeError",
+                "error": "falha controlada",
+                "observed_at": "2026-09-21T00:00:00+00:00",
+                "secret": "never-expose",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "elevated-install-result.json").write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "error_type": "WatchdogError",
+                "error": "registro falhou",
+                "runtime_ok": True,
+                "activation_pending": True,
+                "requires_uac_activation": True,
+                "headless_persistence": False,
+                "principal": "must-not-leak",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = probe.activation_diagnostic()
+    assert result["interactive"]["exists"] is True
+    assert result["interactive"]["exit_code"] == 2
+    assert "secret" not in result["interactive"]
+    assert result["elevated"]["activation_pending"] is True
+    assert "principal" not in result["elevated"]
 
 
 def test_watchdog_runner_contract_never_reads_runner_contents(tmp_path: Path) -> None:
@@ -193,6 +244,10 @@ def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
     assert "Copy-Item" in workflow
     assert "Get-FileHash" in workflow
     assert "NOTERI_IMMUTABLE_SOURCE_SHA" in workflow
+    assert "Get-Command python -ErrorAction Stop" in workflow
+    assert "interactive-launch-result.json" in workflow
+    assert "remote_uac_attempted = $false" in workflow
+    assert "Request governed UAC and validate headless task" not in workflow
     assert "origin/main" not in workflow
     assert "git -C $p fetch origin main" not in workflow
     assert "inputs:" not in workflow
