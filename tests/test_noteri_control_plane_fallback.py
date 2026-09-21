@@ -142,32 +142,29 @@ def test_watchdog_installs_hkcu_fallback_when_startup_task_denied(monkeypatch, t
     assert result["logon_fallback"]["scope"] == "HKCU"
 
 
-def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
+def test_headless_activation_workflow_uses_native_runner_service() -> None:
     workflow = HEADLESS_WORKFLOW.read_text(encoding="utf-8")
-    launcher = HEADLESS_LAUNCHER.read_text(encoding="utf-8")
+    bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
 
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
     assert "shell: powershell" in workflow
     assert "shell: pwsh" not in workflow
-    assert "--confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC" in workflow
     assert "workflow_dispatch:" in workflow
     assert "Ativar-Noteri-Headless.ps1" in workflow
     assert "Ativar-Noteri-Headless.cmd" in workflow
     assert "[Environment]::GetFolderPath('Desktop')" in workflow
     assert "ExecutionPolicy Bypass -File" in workflow
-    assert "inputs:" not in workflow
-    assert "ShellExecuteW" in launcher
-    assert "--result-path" in launcher
-    assert "ELEVATED_INSTALL_FAILED" in launcher
-    assert "schtasks.exe" in launcher
-    assert "schtasks_xml" in launcher
-    assert '"runas"' in launcher
-    assert 'EXPECTED_HOST' not in launcher or "watchdog.EXPECTED_HOST" in launcher
-    assert "AtStartup" in launcher or "trigger_at_startup" in launcher
-    assert "s4u" in launcher.casefold()
-    assert "reboot_performed" in launcher
+    assert "--mode headless-service" in workflow
+    assert "--mode headless-service-status" in workflow
+    assert "C:\\actions-runner-noteri-headless" in workflow
+    assert "noteri_control_plane_watchdog_uac_launcher.py" not in workflow
+    assert "S4U" not in workflow
+    assert '"--runasservice"' in bootstrap
+    assert 'HEADLESS_RUNNER_NAME = "NoteriHeadless"' in bootstrap
+    assert 'HEADLESS_RUNNER_LABELS = "noteri-headless,reqsys-dev"' in bootstrap
     assert ".github/workflows/noteri-headless-control-plane-activation.yml" in policy["approved_workflows"]
+    assert ".github/workflows/noteri-headless-service-probe.yml" in policy["approved_workflows"]
 
 
 def test_watchdog_creates_automation_folder_when_missing() -> None:
@@ -194,24 +191,29 @@ def test_watchdog_creates_automation_folder_when_missing() -> None:
     assert service.root.created == "Automation"
 
 
-def test_headless_launcher_uses_only_legitimate_uac_brokers() -> None:
-    launcher = HEADLESS_LAUNCHER.read_text(encoding="utf-8")
-    assert "ShellExecuteW" in launcher
-    assert "Start-Process" in launcher
-    assert "-Verb RunAs" in launcher
-    assert "Shell.Application" in launcher
-    assert "powershell_start_process_runas" in launcher
-    assert "shell_application_runas" in launcher
-    assert "fodhelper" not in launcher.casefold()
-    assert "computerdefaults" not in launcher.casefold()
-    assert "eventvwr" not in launcher.casefold()
+def test_headless_launcher_uses_legitimate_uac_without_bypass() -> None:
+    workflow = HEADLESS_WORKFLOW.read_text(encoding="utf-8")
+    lowered = workflow.casefold()
+    assert "Start-Process" in workflow
+    assert "-Verb RunAs" in workflow
+    assert "fodhelper" not in lowered
+    assert "computerdefaults" not in lowered
+    assert "eventvwr" not in lowered
 
 
-def test_watchdog_resolves_current_windows_principal_for_s4u() -> None:
-    text = WATCHDOG_PATH.read_text(encoding="utf-8")
-    assert "whoami.exe" in text
-    assert '"/user", "/fo", "csv", "/nh"' in text
-    assert 'candidates.append(("sid", sid))' in text
-    assert 'candidates.append(("whoami", account))' in text
-    assert "principal_source" in text
-    assert 'f"{socket.gethostname()}\\\\{os.environ.get(' not in text
+def test_headless_service_probe_pins_dedicated_runner() -> None:
+    workflow = HEADLESS_SERVICE_PROBE_WORKFLOW.read_text(encoding="utf-8")
+    assert "runs-on: [self-hosted, Windows, X64, noteri-headless, reqsys-dev]" in workflow
+    assert "--expected-runner-name NoteriHeadless" in workflow
+    assert "--confirm PROBE-NOTERI-CONTROL-PLANE" in workflow
+    assert "workflow_dispatch:" in workflow
+
+
+def test_probe_rejects_unexpected_runner_name(monkeypatch) -> None:
+    monkeypatch.setattr(probe, "validate_host", lambda: "Noteri")
+    monkeypatch.setattr(probe, "runner_listener_detected", lambda: True)
+    monkeypatch.setenv("RUNNER_NAME", "Noteri")
+    monkeypatch.setenv("RUNNER_OS", "Windows")
+    monkeypatch.setenv("RUNNER_ARCH", "X64")
+    with pytest.raises(probe.ProbeError, match="RUNNER_NAME divergente"):
+        probe.probe(probe.CONFIRM, "corr-headless-service", "NoteriHeadless")
