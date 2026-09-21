@@ -188,6 +188,146 @@ jobs:
               ;;
           esac
 
+      - name: Cancel self-hosted run without pickup
+        id: cleanup
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          cleanup_status='cancel_failed'
+          cleanup_error=''
+          if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
+            cleanup_status='cancel_requested'
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv')"
+              status="${state%%
+        shell: bash
+        env:
+          COMMAND: ${{ github.event.comment.body }}
+          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
+          TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
+          RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
+          RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
+          TARGET_CLEANUP_STATUS: ${{ steps.cleanup.outputs.status }}
+          TARGET_CLEANUP_ERROR: ${{ steps.cleanup.outputs.error }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          evidence = {
+              'status': 'dispatched',
+              'authorization': 'exact_issue_actor_command_allowlist',
+              'issue_number': 1705,
+              'actor': os.environ['GITHUB_ACTOR'],
+              'command': os.environ['COMMAND'],
+              'target_workflow': os.environ['TARGET_WORKFLOW'],
+              'target_ref': 'main',
+              'target_sha': os.environ['EXPECTED_SHA'],
+              'target_run_id': int(os.environ['TARGET_RUN_ID']),
+              'target_run_url': os.environ['TARGET_RUN_URL'],
+              'target_run_status': os.environ['TARGET_RUN_STATUS'],
+              'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
+              'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
+              'target_cleanup_status': os.environ.get('TARGET_CLEANUP_STATUS') or None,
+              'target_cleanup_error': os.environ.get('TARGET_CLEANUP_ERROR') or None,
+              'gateway_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'secrets_read': False,
+              'production_touched': False,
+          }
+          with open('authorized-action-dispatch.json', 'w', encoding='utf-8') as fh:
+              json.dump(evidence, fh, indent=2, sort_keys=True)
+              fh.write('\n')
+          PY
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: authorized-action-dispatch-${{ github.run_id }}
+          path: authorized-action-dispatch.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail closed when self-hosted runner is unavailable
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+        shell: bash
+        run: |
+          echo 'SELF_HOSTED_RUNNER_UNAVAILABLE' >&2
+          exit 4
+\t'*}"
+              conclusion="${state#*
+        shell: bash
+        env:
+          COMMAND: ${{ github.event.comment.body }}
+          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
+          TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
+          RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
+          RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          evidence = {
+              'status': 'dispatched',
+              'authorization': 'exact_issue_actor_command_allowlist',
+              'issue_number': 1705,
+              'actor': os.environ['GITHUB_ACTOR'],
+              'command': os.environ['COMMAND'],
+              'target_workflow': os.environ['TARGET_WORKFLOW'],
+              'target_ref': 'main',
+              'target_sha': os.environ['EXPECTED_SHA'],
+              'target_run_id': int(os.environ['TARGET_RUN_ID']),
+              'target_run_url': os.environ['TARGET_RUN_URL'],
+              'target_run_status': os.environ['TARGET_RUN_STATUS'],
+              'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
+              'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
+              'gateway_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'secrets_read': False,
+              'production_touched': False,
+          }
+          with open('authorized-action-dispatch.json', 'w', encoding='utf-8') as fh:
+              json.dump(evidence, fh, indent=2, sort_keys=True)
+              fh.write('\n')
+          PY
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: authorized-action-dispatch-${{ github.run_id }}
+          path: authorized-action-dispatch.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail closed when self-hosted runner is unavailable
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+        shell: bash
+        run: |
+          echo 'SELF_HOSTED_RUNNER_UNAVAILABLE' >&2
+          exit 4
+\t'}"
+              if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
+                cleanup_status='cancelled'
+                break
+              fi
+              sleep 5
+            done
+            if [ "$cleanup_status" != 'cancelled' ]; then
+              cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+            fi
+          else
+            cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+          fi
+          printf 'status=%s\n' "$cleanup_status" >> "$GITHUB_OUTPUT"
+          printf 'error=%s\n' "$cleanup_error" >> "$GITHUB_OUTPUT"
+
       - name: Write sanitized dispatch evidence
         shell: bash
         env:
