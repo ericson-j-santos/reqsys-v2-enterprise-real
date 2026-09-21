@@ -117,6 +117,46 @@ def _notify(clientdata):
     ]["actions"]["Notificar_Teams"]
 
 
+def completed_row_with_designer_metadata():
+    name = "ReqSys - Notificar Teams (Tarefa concluída no Planner)"
+    source = row(name=name, statecode=1)
+    payload = json.loads(source["clientdata"])
+    properties = payload["properties"]
+    properties["templateName"] = "PowerAutomateDesignerTemplate"
+
+    definition = properties["definition"]
+    definition["triggers"] = {
+        "Quando_uma_tarefa_e_concluida": {
+            "type": "OpenApiConnection",
+            "inputs": {
+                "host": {
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_planner",
+                    "operationId": "OnCompleteTask_V3",
+                    "connectionName": "shared_planner",
+                },
+                "parameters": {
+                    "groupId": "group-real",
+                    "id": "plan-real",
+                },
+            },
+            "recurrence": {"frequency": "Minute", "interval": 1},
+            "splitOn": "@triggerBody()?['value']",
+            "metadata": {"operationMetadataId": "trigger-metadata"},
+        }
+    }
+
+    filtro = definition["actions"]["Ignorar_tarefas_de_teste_automatizado"]
+    filtro["metadata"] = {"operationMetadataId": "filter-metadata"}
+    del filtro["else"]
+
+    notify = _notify(payload)
+    notify["metadata"] = {"operationMetadataId": "notify-metadata"}
+    notify["inputs"]["authentication"] = "@parameters('$authentication')"
+
+    source["clientdata"] = json.dumps(payload, ensure_ascii=False)
+    return source
+
+
 def test_select_flow_exige_modern_flow_unico():
     item = row()
     assert select_flow([item], item["name"]) == item
@@ -569,6 +609,90 @@ def test_reconcile_publica_draft_semantico_com_else_esperado(monkeypatch):
     ]
     assert filtro_after["else"] == {"actions": {}}
     assert card_contract(reconciled)["has_open_planner"] is True
+
+
+def test_reconcile_publica_draft_concluido_quando_igual_a_projecao_canonica(monkeypatch):
+    source = completed_row_with_designer_metadata()
+    desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
+        source,
+        source["name"],
+    )
+    canonical_raw = mod.canonical_desired_clientdata(desired_raw)
+
+    diff = mod.non_card_structural_diff(source["clientdata"], canonical_raw)
+    assert diff["count"] == 7
+    assert diff["truncated"] is False
+    assert {item["path"] for item in diff["paths"]} == {
+        "/properties/definition/actions/Ignorar_tarefas_de_teste_automatizado/actions/Notificar_Teams/inputs/authentication",
+        "/properties/definition/actions/Ignorar_tarefas_de_teste_automatizado/actions/Notificar_Teams/metadata",
+        "/properties/definition/actions/Ignorar_tarefas_de_teste_automatizado/else",
+        "/properties/definition/actions/Ignorar_tarefas_de_teste_automatizado/metadata",
+        "/properties/definition/triggers/Quando_uma_tarefa_e_concluida/metadata",
+        "/properties/definition/triggers/Quando_uma_tarefa_e_concluida/recurrence/interval",
+        "/properties/templateName",
+    }
+
+    fake = FakeDataverse(source, unpublished_conflict=True)
+    fake.unpublished["clientdata"] = canonical_raw
+    _install(monkeypatch, fake)
+
+    after, evidence = mod.reconcile_flow_card(
+        "https://org.crm.dynamics.com",
+        "token",
+        copy.deepcopy(fake.row),
+        source["name"],
+    )
+
+    assert evidence["flow_unpublished_revision_used"] is True
+    assert evidence["flow_publish_xml_used"] is True
+    assert evidence["flow_unpublished_relation"] == "same_as_canonical_desired"
+    assert fake.unpublished_reads == 1
+    assert fake.publish_calls == 1
+    assert fake.unpublished is None
+    assert int(after["componentstate"]) == 0
+    observed = json.loads(after["clientdata"])
+    assert card_contract(observed) == {
+        "title": "Tarefa concluída no Planner",
+        "facts": ["Progresso", "Vencimento"],
+        "has_plan_fact": False,
+        "has_progress_fact": True,
+        "has_open_planner": True,
+    }
+    trigger = observed["properties"]["definition"]["triggers"][
+        "Quando_uma_tarefa_e_concluida"
+    ]
+    assert trigger["recurrence"] == {"frequency": "Minute", "interval": 5}
+
+
+def test_reconcile_bloqueia_draft_canonico_com_oitava_diferenca(monkeypatch):
+    source = completed_row_with_designer_metadata()
+    desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
+        source,
+        source["name"],
+    )
+    draft = json.loads(mod.canonical_desired_clientdata(desired_raw))
+    _notify(draft)["inputs"]["parameters"][
+        "body/recipient/groupId"
+    ] = "@parameters('OUTRO_TEAM_ID')"
+
+    fake = FakeDataverse(source, unpublished_conflict=True)
+    fake.unpublished["clientdata"] = json.dumps(draft, ensure_ascii=False)
+    _install(monkeypatch, fake)
+
+    with pytest.raises(FlowStateError) as exc_info:
+        mod.reconcile_flow_card(
+            "https://org.crm.dynamics.com",
+            "token",
+            copy.deepcopy(fake.row),
+            source["name"],
+        )
+
+    details = exc_info.value.details
+    assert details["unpublished_relation"] == "non_card_divergent"
+    assert details["canonical_desired_fingerprint"]["status"] == "ok"
+    assert fake.unpublished_reads == 1
+    assert fake.publish_calls == 0
+    assert "@parameters('OUTRO_TEAM_ID')" not in json.dumps(details)
 
 
 def test_reconcile_classifica_draft_com_diferenca_fora_do_cartao(monkeypatch):
