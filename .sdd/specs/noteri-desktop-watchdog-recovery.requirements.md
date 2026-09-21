@@ -18,6 +18,7 @@ Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indispo
 10. O Authorized Actions Gateway expõe somente o comando exato `/reqsys run noteri-desktop-watchdog-recovery`.
 11. Sem pickup do Noteri, o gateway cancela o run abandonado e registra `SELF_HOSTED_RUNNER_UNAVAILABLE`.
 12. Após sucesso, E2E independente deve comprovar pickup do runner Desktop.
+13. Os passos PowerShell do workflow DEV devem usar `shell: powershell`, compatível com o runner Noteri evidenciado; `pwsh` não é requisito do host.
 
 ## Critérios de aceite
 
