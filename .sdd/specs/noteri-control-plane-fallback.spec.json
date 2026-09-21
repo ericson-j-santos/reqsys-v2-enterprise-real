@@ -78,6 +78,12 @@
       "validator": "schtasks_xml",
       "elevated_result": "required",
       "failure_contract": "elevated child must persist sanitized result and fail closed"
+    },
+    "probe_workflow": {
+      "host": "Noteri",
+      "shell": "powershell",
+      "forbidden_shell": "pwsh",
+      "reason": "Noteri self-hosted runner exposes Windows PowerShell; PowerShell 7 (pwsh) is not available on PATH"
     }
   }
 }
