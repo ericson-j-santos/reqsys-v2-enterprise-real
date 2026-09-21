@@ -83,7 +83,13 @@
         "Windows PowerShell Start-Process -Verb RunAs",
         "Shell.Application.ShellExecute(runas)"
       ],
-      "uac_bypass_allowed": false
+      "uac_bypass_allowed": false,
+      "principal_resolution": [
+        "current user SID from whoami /user",
+        "resolved whoami account name fallback"
+      ],
+      "principal_value_logged": false,
+      "s4u_logon_failure_code": "0x8007052E"
     },
     "probe_workflow": {
       "host": "Noteri",
