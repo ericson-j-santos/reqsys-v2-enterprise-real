@@ -47,7 +47,7 @@
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_activate_noteri_free_control_plane.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -102,7 +102,14 @@
         "uac_bypass_allowed": false,
         "source_binding": "workflow_checkout_sha",
         "git_ref_dependency": false,
-        "staged_files_sha256_verified": true
+        "staged_files_sha256_verified": true,
+        "python_executable_source": "resolved_by_runner_and_embedded_as_absolute_path",
+        "remote_uac_attempted": false,
+        "diagnostics": {
+          "interactive_result": "%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneWatchdog\\interactive-launch-result.json",
+          "elevated_result": "%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneWatchdog\\elevated-install-result.json",
+          "probe_exposes_sanitized_fields_only": true
+        }
       }
     },
     "probe_workflow": {
