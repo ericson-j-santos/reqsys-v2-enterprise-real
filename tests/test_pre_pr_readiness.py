@@ -92,6 +92,143 @@ def test_workflow_installs_root_dependencies_before_backend_profile_branch() -> 
     assert workflow.index(common_install) < workflow.index(backend_branch)
 
 
+def test_workflow_installs_backend_dependencies_for_sdd_declared_backend_tests() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "backend_profile=false" in workflow
+    assert "grep -E '^\\.sdd/specs/.*\\.spec\\.json    assert MODULE.self_test_negative() is True
+
+
+def test_referenced_contract_tests_discovers_aggregate_test(tmp_path: Path) -> None:
+    test_file = tmp_path / "tests" / "test_control_plane.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text(
+        'MODULE = "scripts/noteri_control_plane_watchdog.py"\n',
+        encoding="utf-8",
+    )
+    result = MODULE.referenced_contract_tests(
+        ["scripts/noteri_control_plane_watchdog.py"],
+        tmp_path,
+    )
+    assert result == ["tests/test_control_plane.py"]
+
+
+def test_referenced_contract_tests_ignores_generic_frontend_names_and_stems(tmp_path: Path) -> None:
+    test_file = tmp_path / "tests" / "test_unrelated.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text(
+        'ENTRY = "main.js"\nTEMPLATE = "index.html"\nMAIN = "backend/app/main.py"\nEVIDENCE = "delivery-evidence-index"\n',
+        encoding="utf-8",
+    )
+
+    result = MODULE.referenced_contract_tests(
+        ["frontend/src/main.js", "frontend/index.html"],
+        tmp_path,
+    )
+
+    assert result == []
+
+
+def test_candidate_pytests_includes_python_tests_declared_by_changed_sdd(tmp_path: Path) -> None:
+    declared = tmp_path / "tests" / "test_noteri_agent.py"
+    declared.parent.mkdir(parents=True)
+    declared.write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    spec = tmp_path / ".sdd" / "specs" / "noteri.spec.json"
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        json.dumps(
+            {
+                "sdd_gate": {
+                    "tests": [
+                        "tests/test_noteri_agent.py",
+                        "frontend/src/auth/__tests__/startupFailSafe.test.js",
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = MODULE.candidate_pytests(
+        [".sdd/specs/noteri.spec.json", "frontend/src/main.js"],
+        tmp_path,
+    )
+
+    assert result == ["tests/test_noteri_agent.py"]
+
+
+def test_validate_python_runs_ruff_for_changed_python(monkeypatch, tmp_path: Path) -> None:
+    script = tmp_path / "scripts" / "alpha.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("x = 1\n", encoding="utf-8")
+    calls: list[tuple[str, list[str], Path | None]] = []
+
+    def fake_timed_check(name: str, command: list[str], *, cwd: Path | None = None):
+        calls.append((name, command, cwd))
+        return MODULE.CheckResult(name, "passed", "ok", 0.0)
+
+    monkeypatch.setattr(MODULE, "_timed_check", fake_timed_check)
+    results = MODULE.validate_python(["scripts/alpha.py"], tmp_path)
+
+    assert [item.name for item in results] == [
+        "py_compile:scripts/alpha.py",
+        "python:ruff:changed",
+    ]
+    assert calls[1][1][:4] == [sys.executable, "-m", "ruff", "check"]
+    assert calls[1][1][4:8] == ["--select", "E,F", "--ignore", "E501"]
+    assert "scripts/alpha.py" in calls[1][1]
+
+
+def test_validate_shell_runs_bash_syntax_check(monkeypatch, tmp_path: Path) -> None:
+    script = tmp_path / "scripts" / "alpha.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_timed_check(name: str, command: list[str], *, cwd: Path | None = None):
+        calls.append(command)
+        return MODULE.CheckResult(name, "passed", "ok", 0.0)
+
+    monkeypatch.setattr(MODULE, "_timed_check", fake_timed_check)
+    results = MODULE.validate_shell(["scripts/alpha.sh"], tmp_path)
+
+    assert results[0].name == "shell:bash-n:changed"
+    assert calls == [["bash", "-n", "scripts/alpha.sh"]]
+
+
+def test_pre_pr_workflow_installs_ruff_before_readiness() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "PyYAML pytest ruff" in workflow
+    assert "python scripts/pre_pr_readiness.py" in workflow
+
+
+def test_governed_merge_requires_pre_pr_readiness_on_current_sha() -> None:
+    policy = json.loads(MERGE_POLICY_PATH.read_text(encoding="utf-8"))
+    assert "Pre-PR Readiness Gate" in policy["required_workflows"]
+    assert "Pre-PR Readiness Gate" not in policy["optional_when_not_registered"]
+
+
+def test_pre_pr_runs_on_push_and_pull_request_using_exact_pr_head() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "pull_request:\n    branches:\n      - main" in workflow
+    assert "EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}" in workflow
+    assert "BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}" in workflow
+    assert "ref: ${{ env.EVALUATED_SHA }}" in workflow
+    assert '--expected-head-sha "$EVALUATED_SHA"' in workflow
+
+
+def test_merge_queue_can_require_pre_pr_from_pull_request_event() -> None:
+    workflow = MERGE_QUEUE_WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert '-f event="pull_request"' in workflow
+    policy = json.loads(MERGE_POLICY_PATH.read_text(encoding="utf-8"))
+    assert "Pre-PR Readiness Gate" in policy["required_workflows"]
+" in workflow
+    assert "grep -q '\"backend/tests/'" in workflow
+    assert 'if [[ "$backend_profile" == "true" ]]; then' in workflow
+    assert "python -m pip install --disable-pip-version-check -r backend/requirements.txt" in workflow
+
+
 def test_negative_self_test_proves_detector_is_fail_closed() -> None:
     assert MODULE.self_test_negative() is True
 
