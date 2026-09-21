@@ -1,0 +1,87 @@
+name: Desktop Remote Admin Capabilities Probe
+
+on:
+  push:
+    branches:
+      - ops/desktop-runner-service-recovery-20260921
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-remote-admin-capabilities-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe fixed Windows remote administration paths
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_HOST: DESKTOP-PDQK954
+      EVIDENCE_FILE: artifacts/desktop-remote-admin-capabilities/evidence.json
+    steps:
+      - name: Probe WinRM CIM WMI and admin share without mutation
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path (Split-Path $env:EVIDENCE_FILE) | Out-Null
+
+          function Compact-Error($e) {
+            $s = (($e | Out-String) -replace '[\r\n]+',' ').Trim()
+            if ($s.Length -gt 300) { return $s.Substring(0,300) }
+            return $s
+          }
+
+          $result = [ordered]@{
+            schema_version = '1'
+            generated_at_utc = [DateTime]::UtcNow.ToString('o')
+            source_host = $env:COMPUTERNAME
+            target_host = $env:TARGET_HOST
+            winrm_ok = $false
+            cim_ok = $false
+            wmi_ok = $false
+            admin_share_ok = $false
+            mutation_attempted = $false
+            credentials_supplied = $false
+            secrets_read = $false
+            production_touched = $false
+          }
+
+          try {
+            Test-WSMan -ComputerName $env:TARGET_HOST -ErrorAction Stop | Out-Null
+            $result.winrm_ok = $true
+          } catch {
+            $result.winrm_error = Compact-Error $_.Exception.Message
+          }
+
+          try {
+            Get-CimInstance -ClassName Win32_OperatingSystem -ComputerName $env:TARGET_HOST -ErrorAction Stop | Select-Object -First 1 | Out-Null
+            $result.cim_ok = $true
+          } catch {
+            $result.cim_error = Compact-Error $_.Exception.Message
+          }
+
+          try {
+            Get-WmiObject -Class Win32_OperatingSystem -ComputerName $env:TARGET_HOST -ErrorAction Stop | Select-Object -First 1 | Out-Null
+            $result.wmi_ok = $true
+          } catch {
+            $result.wmi_error = Compact-Error $_.Exception.Message
+          }
+
+          try {
+            $result.admin_share_ok = [bool](Test-Path "\\$env:TARGET_HOST\C$\dev")
+          } catch {
+            $result.admin_share_error = Compact-Error $_.Exception.Message
+          }
+
+          $result | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 $env:EVIDENCE_FILE
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-remote-admin-capabilities-${{ github.run_id }}
+          path: artifacts/desktop-remote-admin-capabilities/evidence.json
+          if-no-files-found: error
+          retention-days: 7
