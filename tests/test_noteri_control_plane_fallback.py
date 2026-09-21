@@ -84,8 +84,6 @@ def test_watchdog_cycle_starts_runner_when_listener_missing(monkeypatch, tmp_pat
 def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
-    assert "shell: powershell" in workflow
-    assert "shell: pwsh" not in workflow
     assert "--confirm PROBE-NOTERI-CONTROL-PLANE" in workflow
     assert "workflow_dispatch:" in workflow
     assert "inputs:" not in workflow
@@ -148,6 +146,8 @@ def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
 
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
+    assert "shell: powershell" in workflow
+    assert "shell: pwsh" not in workflow
     assert "--confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC" in workflow
     assert "workflow_dispatch:" in workflow
     assert "inputs:" not in workflow
