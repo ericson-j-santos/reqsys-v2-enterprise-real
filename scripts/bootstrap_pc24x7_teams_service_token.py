@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 SCOPE = 'teams_gateway:ai_conversations'
 LABEL = 'pc24x7-teams-dev'
 DEFAULT_SECRET_NAME = 'reqsys-pc24x7-teams-service-token'
-DEFAULT_API = 'https://reqsys-api-dev.fly.dev'
+DEFAULT_API = ''
 
 
 class BootstrapError(RuntimeError):
@@ -116,6 +116,9 @@ def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: s
 
 def main() -> int:
     api_base = os.getenv('REQSYS_API_BASE_URL', DEFAULT_API).strip() or DEFAULT_API
+    if not api_base:
+        print(json.dumps({'status': 'blocked', 'reason': 'REQSYS_API_BASE_URL_missing', 'secret_value_exposed': False}))
+        return 4
     cofre_base = os.getenv('COFRE_API_URL', api_base).strip() or api_base
     vault_token = os.getenv('VAULT_API_TOKEN', '').strip()
     admin_jwt = os.getenv('COFRE_ADMIN_JWT', '').strip()

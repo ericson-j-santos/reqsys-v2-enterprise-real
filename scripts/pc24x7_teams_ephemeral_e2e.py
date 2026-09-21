@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-API_DEFAULT = 'https://reqsys-api-dev.fly.dev'
+API_DEFAULT = ''
 ADMIN_EMAIL_DEFAULT = 'ericsonjosedossantos@tieri659.onmicrosoft.com'
 SCOPE = 'teams_gateway:ai_conversations'
 TOKEN_TTL_DAYS = 1
@@ -454,8 +454,27 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     correlation_id = args.correlation_id or f'pc24x7-ephemeral-{uuid.uuid4()}'
+    api_base = str(args.api_base or '').strip()
+    if not api_base:
+        evidence = {
+            'schema_version': '1.3.0',
+            'status': 'blocked',
+            'environment': 'dev',
+            'correlation_id': correlation_id,
+            'error': 'REQSYS_API_BASE_URL_missing',
+            'secret_value_exposed': False,
+            'production_touched': False,
+            'test_touched': False,
+            'token_created': False,
+            'token_revoked': False,
+        }
+        output = Path(args.evidence_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
+        return 4
     evidence = execute_e2e(
-        api_base=args.api_base,
+        api_base=api_base,
         admin_jwt=os.getenv('COFRE_ADMIN_JWT', ''),
         correlation_id=correlation_id,
         provider=args.provider,

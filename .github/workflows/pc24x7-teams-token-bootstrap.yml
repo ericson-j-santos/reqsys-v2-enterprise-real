@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/bootstrap_pc24x7_teams_service_token.py'
+      - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_bootstrap_pc24x7_teams_service_token.py'
       - 'tests/test_pc24x7_teams_token_bootstrap_workflow.py'
       - '.github/workflows/pc24x7-teams-token-bootstrap.yml'
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/bootstrap_pc24x7_teams_service_token.py'
+      - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_pc24x7_teams_token_bootstrap_workflow.py'
       - '.github/workflows/pc24x7-teams-token-bootstrap.yml'
   schedule:
@@ -66,7 +68,6 @@ jobs:
     environment: development
     timeout-minutes: 10
     env:
-      REQSYS_API_BASE_URL: https://reqsys-api-dev.fly.dev
       COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       PC24X7_TEAMS_SERVICE_TOKEN_SECRET: reqsys-pc24x7-teams-service-token
@@ -79,6 +80,32 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Preparar Node para locator DEV assinado
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validar contrato fail-closed do locator
+        shell: bash
+        run: node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+
+      - name: Resolver runtime PC24x7 DEV vigente
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pc24x7-teams-token
+          node scripts/resolve_pc24x7_dev_locator.mjs             --output artifacts/pc24x7-teams-token/signed-locator.json
+
+      - name: Exportar runtime PC24x7 DEV
+        shell: bash
+        env:
+          RESOLVED_API_BASE: ${{ steps.locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          test -n "$RESOLVED_API_BASE"
+          printf 'REQSYS_API_BASE_URL=%s\n' "$RESOLVED_API_BASE" >> "$GITHUB_ENV"
 
       - name: Inicializar evidência sanitizada
         shell: bash
@@ -130,7 +157,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pc24x7-teams-token-bootstrap-${{ github.run_id }}
-          path: pc24x7-teams-token-bootstrap.json
+          path: |
+            pc24x7-teams-token-bootstrap.json
+            artifacts/pc24x7-teams-token/signed-locator.json
           if-no-files-found: error
           retention-days: 30
 

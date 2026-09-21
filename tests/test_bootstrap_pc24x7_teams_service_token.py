@@ -74,6 +74,7 @@ def test_validation_only_blocks_when_secret_missing(monkeypatch):
 
 
 def test_validation_only_main_does_not_require_vault_api_token(monkeypatch, capsys):
+    monkeypatch.setenv('REQSYS_API_BASE_URL', 'https://pc24x7-dev.invalid')
     monkeypatch.setenv('PC24X7_TEAMS_ALLOW_PROVISION', 'false')
     monkeypatch.setenv('REQSYS_KEY_VAULT_NAME', 'kv')
     monkeypatch.delenv('VAULT_API_TOKEN', raising=False)
@@ -83,6 +84,17 @@ def test_validation_only_main_does_not_require_vault_api_token(monkeypatch, caps
     assert payload['status'] == 'ready'
     assert payload['token_created'] is False
     assert payload['existing_token_reused'] is True
+
+
+def test_main_falha_fechado_sem_runtime_pc24x7_resolvido(monkeypatch, capsys):
+    monkeypatch.delenv('REQSYS_API_BASE_URL', raising=False)
+    monkeypatch.setenv('REQSYS_KEY_VAULT_NAME', 'kv')
+    assert module.DEFAULT_API == ''
+    assert module.main() == 4
+    payload = json.loads(capsys.readouterr().out)
+    assert payload['status'] == 'blocked'
+    assert payload['reason'] == 'REQSYS_API_BASE_URL_missing'
+    assert payload['secret_value_exposed'] is False
 
 
 def test_mints_and_stores_when_secret_missing(monkeypatch):
