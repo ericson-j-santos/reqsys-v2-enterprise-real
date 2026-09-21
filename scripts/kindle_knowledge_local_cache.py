@@ -231,7 +231,6 @@ def materialize(expected_host: str, output_root: Path, correlation_id: str) -> d
         "sql_sha256": sha256_text(sql_text),
         "query_ids": [item[0] for item in QUERIES],
         "correlation_id": correlation_id,
-        "generated_at": utc_now(),
     }
     manifest_text = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     changed["manifest.json"] = atomic_write(queries_dir / "manifest.json", manifest_text)
