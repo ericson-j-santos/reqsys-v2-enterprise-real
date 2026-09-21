@@ -10,6 +10,7 @@ import socket
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -53,25 +54,34 @@ def load_metadata(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _decode_xml(raw: bytes) -> str:
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    return raw.decode("utf-8", errors="replace")
+
+
 def task_status() -> dict[str, Any]:
+    target = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "schtasks.exe"
     try:
-        service = watchdog._scheduler()
-        root = service.GetFolder("\\")
-        task = root.GetTask(watchdog.TASK_NAME)
-        definition = task.Definition
-        trigger_types = [
-            int(definition.Triggers.Item(index).Type)
-            for index in range(1, int(definition.Triggers.Count) + 1)
-        ]
-        principal = definition.Principal
+        result = subprocess.run(
+            [str(target), "/Query", "/TN", watchdog.TASK_NAME, "/XML"],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        if result.returncode != 0:
+            return {"exists": False, "error": "task_not_found_or_query_failed"}
+        root = ET.fromstring(_decode_xml(result.stdout))
+        ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+        enabled_text = (root.findtext("./t:Settings/t:Enabled", default="true", namespaces=ns) or "true").strip()
+        logon_type = (root.findtext("./t:Principals/t:Principal/t:LogonType", default="", namespaces=ns) or "").strip()
+        boot = root.find("./t:Triggers/t:BootTrigger", ns) is not None
         return {
             "exists": True,
-            "enabled": bool(definition.Settings.Enabled),
-            "trigger_at_startup": watchdog.TASK_TRIGGER_BOOT in trigger_types,
-            "logon_type": "S4U"
-            if int(principal.LogonType) == watchdog.TASK_LOGON_S4U
-            else str(int(principal.LogonType)),
-            "run_level": int(principal.RunLevel),
+            "enabled": enabled_text.casefold() == "true",
+            "trigger_at_startup": boot,
+            "logon_type": logon_type,
+            "validator": "schtasks_xml",
         }
     except Exception as exc:
         return {"exists": False, "error": type(exc).__name__}
@@ -99,7 +109,13 @@ def shell_execute_runas(executable: Path, params: str, cwd: Path) -> int:
     )
 
 
-def build_install_args(*, repo_root: Path, runner_home: Path, source_sha: str) -> str:
+def build_install_args(
+    *,
+    repo_root: Path,
+    runner_home: Path,
+    source_sha: str,
+    result_path: Path,
+) -> str:
     argv = [
         str(repo_root / "scripts" / "noteri_control_plane_watchdog.py"),
         "install",
@@ -111,6 +127,8 @@ def build_install_args(*, repo_root: Path, runner_home: Path, source_sha: str) -
         source_sha,
         "--confirm",
         watchdog.INSTALL_CONFIRM,
+        "--result-path",
+        str(result_path),
     ]
     return subprocess.list2cmdline(argv)
 
@@ -165,6 +183,12 @@ def launch(
             **finalized,
         }
 
+    elevated_result_path = watchdog.runtime_root() / "elevated-install-result.json"
+    try:
+        elevated_result_path.unlink()
+    except FileNotFoundError:
+        pass
+
     if is_admin():
         result = subprocess.run(
             [
@@ -179,6 +203,8 @@ def launch(
                 source_sha,
                 "--confirm",
                 watchdog.INSTALL_CONFIRM,
+                "--result-path",
+                str(elevated_result_path),
             ],
             cwd=repo_root,
             capture_output=True,
@@ -197,6 +223,7 @@ def launch(
                 repo_root=repo_root,
                 runner_home=runner_home,
                 source_sha=source_sha,
+                result_path=elevated_result_path,
             ),
             repo_root,
         )
@@ -205,7 +232,28 @@ def launch(
 
     deadline = time.monotonic() + max(15, min(timeout_seconds, 240))
     last = current
+    elevated_result: dict[str, Any] | None = None
     while time.monotonic() < deadline:
+        if elevated_result_path.is_file():
+            try:
+                elevated_result = json.loads(elevated_result_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                elevated_result = None
+            if elevated_result and elevated_result.get("ok") is False:
+                return {
+                    "ok": False,
+                    "mode": "elevated" if is_admin() else "uac",
+                    "result": "ELEVATED_INSTALL_FAILED",
+                    "elevated_result": {
+                        "ok": False,
+                        "error": str(elevated_result.get("error") or "")[:1000],
+                        "error_type": str(elevated_result.get("error_type") or ""),
+                    },
+                    "task": task_status(),
+                    "rdc_required": False,
+                    "production_touched": False,
+                    "reboot_performed": False,
+                }
         last = task_status()
         if task_headless_ready(last):
             finalized = finalize(metadata_path, last)
@@ -226,6 +274,7 @@ def launch(
         "mode": "uac",
         "result": "UAC_APPROVAL_OR_PROVISIONING_PENDING",
         "task": last,
+        "elevated_result_observed": bool(elevated_result),
         "rdc_required": False,
         "production_touched": False,
         "reboot_performed": False,
