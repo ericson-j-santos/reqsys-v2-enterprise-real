@@ -188,3 +188,16 @@ def test_watchdog_creates_automation_folder_when_missing() -> None:
     folder = watchdog.ensure_task_folder(service)
     assert folder == {"folder": "Automation"}
     assert service.root.created == "Automation"
+
+
+def test_headless_launcher_uses_only_legitimate_uac_brokers() -> None:
+    launcher = HEADLESS_LAUNCHER.read_text(encoding="utf-8")
+    assert "ShellExecuteW" in launcher
+    assert "Start-Process" in launcher
+    assert "-Verb RunAs" in launcher
+    assert "Shell.Application" in launcher
+    assert "powershell_start_process_runas" in launcher
+    assert "shell_application_runas" in launcher
+    assert "fodhelper" not in launcher.casefold()
+    assert "computerdefaults" not in launcher.casefold()
+    assert "eventvwr" not in launcher.casefold()
