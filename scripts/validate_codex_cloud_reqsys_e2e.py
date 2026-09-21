@@ -17,6 +17,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -48,6 +49,50 @@ Responda de forma objetiva com diagnóstico, código corrigido e testes."""
 
 class E2EError(RuntimeError):
     pass
+
+
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_CORRELATION_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{3,128}$")
+
+
+def _resolve_evidence_file(root: Path, candidate: Path) -> Path:
+    path = candidate if candidate.is_absolute() else root / candidate
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise E2EError("evidence-file deve permanecer dentro do repositório") from exc
+    return resolved
+
+
+def _validate_runtime_identity(root: Path, expected_sha: str, correlation_id: str) -> str:
+    normalized_sha = expected_sha.strip().lower()
+    if not _SHA_RE.fullmatch(normalized_sha):
+        raise E2EError("expected-sha inválido")
+    if not _CORRELATION_ID_RE.fullmatch(correlation_id):
+        raise E2EError("correlation-id inválido")
+    try:
+        observed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        ).stdout.strip().lower()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise E2EError("não foi possível validar o SHA do checkout") from exc
+    if observed != normalized_sha:
+        raise E2EError(f"checkout SHA divergente: esperado={normalized_sha} observado={observed}")
+    return observed
+
+
+def _write_evidence(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _read_windows_profile() -> dict[str, str | None]:
@@ -189,7 +234,7 @@ def _stack_env(profile: dict[str, str], temp_db: Path) -> dict[str, str]:
     return env
 
 
-def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str, Any]:
+def _full_endpoint(root: Path, profile: dict[str, str], probe: Any, correlation_id: str) -> dict[str, Any]:
     _free_port(8008)
     _free_port(8000)
     backend = root / "backend"
@@ -234,7 +279,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
                 "prompt": "Responda somente com FALLBACK_OK.",
                 "contexto": "negative-control",
                 "entrada": "fallback",
-                "correlation_id": "codex-cloud-fallback-20260919",
+                "correlation_id": f"{correlation_id}-fallback",
                 "source": "reqsys-codex-e2e",
             },
             timeout=210,
@@ -278,7 +323,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
         token = login.json()["data"]["access_token"]
         headers = {
             "Authorization": f"Bearer {token}",
-            "X-Correlation-Id": "codex-cloud-e2e-20260919",
+            "X-Correlation-Id": correlation_id,
         }
 
         status = requests.get(
@@ -296,7 +341,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
                 "provider": "ollama_gateway",
                 "contexto": "Validação E2E local do provider Codex governado no SHA corrente.",
                 "entrada": CODE_PROMPT,
-                "correlation_id": "codex-cloud-e2e-20260919",
+                "correlation_id": correlation_id,
                 "publicar_no_reqsys": False,
             },
             timeout=90,
@@ -308,8 +353,14 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
         quality = probe.score_code_response(response)
         if data.get("provider") != "ollama_gateway":
             raise E2EError("backend retornou provider diferente de ollama_gateway")
+        if data.get("correlation_id") != correlation_id:
+            raise E2EError("backend retornou correlation_id diferente da execução")
         if quality.get("passed") != quality.get("total"):
             raise E2EError("resposta E2E não passou o rubric 4/4")
+
+        published_to_reqsys = bool((data.get("reqsys_publicacao") or {}).get("publicado"))
+        if published_to_reqsys:
+            raise E2EError("E2E publicou indevidamente no ReqSys")
 
         return {
             "evidence_dir": str(temp),
@@ -330,7 +381,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any) -> dict[str,
             "score_confianca": data.get("score_confianca"),
             "quality": quality,
             "response_excerpt": response[:900],
-            "published_to_reqsys": bool((data.get("reqsys_publicacao") or {}).get("publicado")),
+            "published_to_reqsys": published_to_reqsys,
         }
     finally:
         _terminate(api)
@@ -342,18 +393,27 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validação E2E ReqSys -> Ollama cloud")
     parser.add_argument("--expected-model", default="gemma4:31b-cloud")
     parser.add_argument("--expected-fallback-model", default="gemma4:26b-q8-code")
+    parser.add_argument("--expected-sha", required=True)
+    parser.add_argument("--correlation-id", required=True)
+    parser.add_argument("--evidence-file", type=Path, required=True)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     args = parser.parse_args()
 
     root = args.root.resolve()
+    evidence_file: Path | None = None
     try:
+        evidence_file = _resolve_evidence_file(root, args.evidence_file)
+        observed_sha = _validate_runtime_identity(root, args.expected_sha, args.correlation_id)
         profile = _load_profile_into_env(args.expected_model, args.expected_fallback_model)
         probe = _load_probe(root)
         direct = _direct_provider(root, probe)
-        full = _full_endpoint(root, profile, probe)
+        full = _full_endpoint(root, profile, probe, args.correlation_id)
         result = {
             "result": "E2E_OK",
             "root": str(root),
+            "expected_sha": args.expected_sha.lower(),
+            "observed_sha": observed_sha,
+            "correlation_id": args.correlation_id,
             "expected_model": args.expected_model,
             "expected_fallback_model": args.expected_fallback_model,
             "profile": profile,
@@ -362,22 +422,21 @@ def main() -> int:
             "production_touched": False,
             "deploy_performed": False,
         }
+        _write_evidence(evidence_file, result)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except Exception as exc:
-        print(
-            json.dumps(
-                {
-                    "result": "E2E_BLOCKED",
-                    "error": str(exc)[:500],
-                    "production_touched": False,
-                    "deploy_performed": False,
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            ),
-            file=sys.stderr,
-        )
+        blocked = {
+            "result": "E2E_BLOCKED",
+            "expected_sha": args.expected_sha.lower(),
+            "correlation_id": args.correlation_id,
+            "error": str(exc)[:500],
+            "production_touched": False,
+            "deploy_performed": False,
+        }
+        if evidence_file is not None:
+            _write_evidence(evidence_file, blocked)
+        print(json.dumps(blocked, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 2
 
 

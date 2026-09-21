@@ -59,7 +59,18 @@ jobs:
           # Os testes raiz podem ser selecionados mesmo quando o diff também contém backend.
           # Portanto, as dependências mínimas do próprio gate são invariantes de perfil.
           python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5'
+          backend_profile=false
           if git diff --name-only "origin/$BASE_REF...HEAD" | grep -q '^backend/'; then
+            backend_profile=true
+          else
+            while IFS= read -r spec; do
+              if [[ -f "$spec" ]] && grep -q '"backend/tests/' "$spec"; then
+                backend_profile=true
+                break
+              fi
+            done < <(git diff --name-only "origin/$BASE_REF...HEAD" | grep -E '^\.sdd/specs/.*\.spec\.json$' || true)
+          fi
+          if [[ "$backend_profile" == "true" ]]; then
             echo "Perfil backend detectado: instalando também as dependências oficiais do backend."
             python -m pip install --disable-pip-version-check -r backend/requirements.txt
           fi

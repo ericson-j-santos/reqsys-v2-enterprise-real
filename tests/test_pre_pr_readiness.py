@@ -92,6 +92,16 @@ def test_workflow_installs_root_dependencies_before_backend_profile_branch() -> 
     assert workflow.index(common_install) < workflow.index(backend_branch)
 
 
+def test_workflow_installs_backend_dependencies_for_sdd_declared_backend_tests() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "backend_profile=false" in workflow
+    assert "grep -E '^\\.sdd/specs/.*\\.spec\\.json$'" in workflow
+    assert "grep -q '\"backend/tests/'" in workflow
+    assert 'if [[ "$backend_profile" == "true" ]]; then' in workflow
+    assert "python -m pip install --disable-pip-version-check -r backend/requirements.txt" in workflow
+
+
 def test_negative_self_test_proves_detector_is_fail_closed() -> None:
     assert MODULE.self_test_negative() is True
 

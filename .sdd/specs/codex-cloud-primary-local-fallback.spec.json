@@ -2,8 +2,8 @@
   "feature_name": "codex-cloud-primary-local-fallback",
   "project": "ReqSys v2 Enterprise — Codex Local / Ollama",
   "created_at": "2026-09-19",
-  "updated_at": "2026-09-19",
-  "phase": "implementation",
+  "updated_at": "2026-09-21",
+  "phase": "runtime_validation_automation",
   "approvals": {
     "requirements": true,
     "design": true,
@@ -14,8 +14,30 @@
     "tests": [
       "backend/tests/test_codex_ollama_fallback.py",
       "docs/ollama-local-gateway/bootstrap-files/tests/test_fallback.py",
-      "tests/test_configure_codex_ollama_fallback.py"
+      "tests/test_configure_codex_ollama_fallback.py",
+      "tests/test_codex_ollama_e2e_selfhosted.py"
     ],
-    "evidence_contract": "O ReqSys deve propagar o fallback ao gateway; falha HTTP do modelo primário pode acionar um único fallback local; a resposta do gateway deve informar requested_model, model efetivo e fallback_used; nenhuma promoção ou deploy de produção faz parte deste incremento."
+    "evidence_contract": "O ReqSys deve propagar o fallback ao gateway; falha HTTP do modelo primário pode acionar um único fallback local; a resposta do gateway deve informar requested_model, model efetivo e fallback_used. O E2E runtime precisa estar vinculado ao SHA exato, correlation_id único e artifact sanitizado no PC24x7 DEV, com cancelamento fail-closed quando o runner não fizer pickup. Nenhuma promoção ou deploy de produção faz parte deste incremento."
+  },
+  "runtime_validation": {
+    "workflow": [
+      ".github/workflows/codex-ollama-e2e-dev.yml"
+    ],
+    "script": "scripts/validate_codex_cloud_reqsys_e2e.py",
+    "host": "DESKTOP-PDQK954",
+    "environment": "DEV",
+    "gateway_command": "/reqsys run codex-ollama-e2e-dev",
+    "expected_primary_model": "gemma4:31b-cloud",
+    "expected_fallback_model": "gemma4:26b-q8-code",
+    "evidence_fields": [
+      "expected_sha",
+      "observed_sha",
+      "correlation_id",
+      "provider",
+      "fallback_used",
+      "production_touched",
+      "deploy_performed"
+    ],
+    "missing_runner_policy": "fail_closed_cancel_exact_run"
   }
 }
