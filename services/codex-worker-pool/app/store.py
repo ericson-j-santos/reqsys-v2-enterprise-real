@@ -155,6 +155,19 @@ class WorkerPoolStore:
               last_heartbeat_at TEXT NOT NULL, cpu_percent REAL,
               memory_percent REAL, correlation_id TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS repository_lanes(
+              repository TEXT PRIMARY KEY,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              max_in_flight INTEGER NOT NULL DEFAULT 1 CHECK(max_in_flight>=1),
+              last_builder_claimed_at TEXT,
+              last_validator_claimed_at TEXT,
+              updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS worker_repository_affinity(
+              worker_id TEXT NOT NULL, repository TEXT NOT NULL,
+              PRIMARY KEY(worker_id,repository),
+              FOREIGN KEY(worker_id) REFERENCES workers(worker_id) ON DELETE CASCADE
+            );
             CREATE TABLE IF NOT EXISTS tasks(
               task_id TEXT PRIMARY KEY, repository TEXT NOT NULL,
               issue_number INTEGER NOT NULL, request_id TEXT NOT NULL,
@@ -184,7 +197,15 @@ class WorkerPoolStore:
             CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_active
               ON tasks(repository,workspace_key)
               WHERE state IN ('leased','running','validating');
+            CREATE INDEX IF NOT EXISTS idx_affinity_worker
+              ON worker_repository_affinity(worker_id,repository);
             """)
+            db.execute(
+                """INSERT OR IGNORE INTO repository_lanes(
+                     repository,enabled,max_in_flight,updated_at)
+                   SELECT DISTINCT repository,1,1,? FROM tasks""",
+                (iso(self.clock()),),
+            )
             finally:
                 db.close()
 
@@ -231,6 +252,79 @@ class WorkerPoolStore:
         data["gateway_ok"], data["state_validated"] = bool(data["gateway_ok"]), bool(data["state_validated"])
         return data
 
+    @staticmethod
+    def _validate_repository(repository: str) -> str:
+        normalized = str(repository or "").strip()
+        if "/" not in normalized or normalized.startswith("/") or normalized.endswith("/"):
+            raise ValueError("repository inválido")
+        return normalized
+
+    def _ensure_repository_lane(self, db: sqlite3.Connection, repository: str) -> None:
+        db.execute(
+            """INSERT OR IGNORE INTO repository_lanes(
+                 repository,enabled,max_in_flight,updated_at)
+               VALUES(?,1,1,?)""",
+            (repository, iso(self.clock())),
+        )
+
+    def configure_repository(
+        self, *, repository: str, enabled: bool = True, max_in_flight: int = 1
+    ) -> dict[str, Any]:
+        repository = self._validate_repository(repository)
+        if int(max_in_flight) < 1 or int(max_in_flight) > 100:
+            raise ValueError("max_in_flight inválido")
+        stamp = iso(self.clock())
+        with self._tx() as db:
+            db.execute(
+                """INSERT INTO repository_lanes(
+                     repository,enabled,max_in_flight,updated_at)
+                   VALUES(?,?,?,?)
+                   ON CONFLICT(repository) DO UPDATE SET
+                     enabled=excluded.enabled,
+                     max_in_flight=excluded.max_in_flight,
+                     updated_at=excluded.updated_at""",
+                (repository, int(bool(enabled)), int(max_in_flight), stamp),
+            )
+        return self.get_repository(repository)
+
+    def get_repository(self, repository: str) -> dict[str, Any]:
+        repository = self._validate_repository(repository)
+        with self._db() as db:
+            row = db.execute(
+                "SELECT * FROM repository_lanes WHERE repository=?", (repository,)
+            ).fetchone()
+        data = self._d(row)
+        data["enabled"] = bool(data["enabled"])
+        return data
+
+    def replace_worker_affinities(
+        self, worker_id: str, repositories: list[str]
+    ) -> list[str]:
+        self.get_worker(worker_id)
+        normalized = sorted({self._validate_repository(item) for item in repositories})
+        with self._tx() as db:
+            db.execute(
+                "DELETE FROM worker_repository_affinity WHERE worker_id=?", (worker_id,)
+            )
+            for repository in normalized:
+                self._ensure_repository_lane(db, repository)
+                db.execute(
+                    """INSERT INTO worker_repository_affinity(worker_id,repository)
+                       VALUES(?,?)""",
+                    (worker_id, repository),
+                )
+        return normalized
+
+    def worker_affinities(self, worker_id: str) -> list[str]:
+        self.get_worker(worker_id)
+        with self._db() as db:
+            rows = db.execute(
+                """SELECT repository FROM worker_repository_affinity
+                   WHERE worker_id=? ORDER BY repository""",
+                (worker_id,),
+            ).fetchall()
+        return [str(row["repository"]) for row in rows]
+
     def heartbeat_worker(
         self, worker_id: str, *, correlation_id: str, profile: str | None = None,
         cpu_percent: float | None = None, memory_percent: float | None = None,
@@ -264,6 +358,7 @@ class WorkerPoolStore:
         if attempts < 1:
             raise ValueError("max_attempts inválido")
         with self._tx() as db:
+            self._ensure_repository_lane(db, repository.strip())
             row = db.execute("SELECT * FROM tasks WHERE idempotency_key=?", (key,)).fetchone()
             created = row is None
             if not created and target_branch is not None and row["branch"] != task_branch:
@@ -331,14 +426,59 @@ class WorkerPoolStore:
             self._recover(db)
             self._ready(db, worker_id, role)
             if role == "builder":
-                row = db.execute("""SELECT * FROM tasks WHERE state='queued'
-                  ORDER BY priority,created_at,task_id LIMIT 1""").fetchone()
+                row = db.execute(
+                    """SELECT t.* FROM tasks t
+                       JOIN repository_lanes r ON r.repository=t.repository
+                       WHERE t.state='queued'
+                         AND r.enabled=1
+                         AND (
+                           NOT EXISTS(
+                             SELECT 1 FROM worker_repository_affinity wa
+                             WHERE wa.worker_id=?
+                           )
+                           OR EXISTS(
+                             SELECT 1 FROM worker_repository_affinity wa
+                             WHERE wa.worker_id=? AND wa.repository=t.repository
+                           )
+                         )
+                         AND (
+                           SELECT COUNT(*) FROM tasks active
+                           WHERE active.repository=t.repository
+                             AND active.state IN ('leased','running','validating')
+                         ) < r.max_in_flight
+                       ORDER BY
+                         CASE WHEN r.last_builder_claimed_at IS NULL THEN 0 ELSE 1 END,
+                         r.last_builder_claimed_at,
+                         t.priority,t.created_at,t.task_id
+                       LIMIT 1""",
+                    (worker_id, worker_id),
+                ).fetchone()
                 wanted, next_state = "queued", "leased"
             else:
-                row = db.execute("""SELECT * FROM tasks WHERE state='validating'
-                  AND leased_by IS NULL AND produced_sha IS NOT NULL
-                  AND (builder_worker_id IS NULL OR builder_worker_id<>?)
-                  ORDER BY priority,updated_at,task_id LIMIT 1""", (worker_id,)).fetchone()
+                row = db.execute(
+                    """SELECT t.* FROM tasks t
+                       JOIN repository_lanes r ON r.repository=t.repository
+                       WHERE t.state='validating'
+                         AND t.leased_by IS NULL
+                         AND t.produced_sha IS NOT NULL
+                         AND (t.builder_worker_id IS NULL OR t.builder_worker_id<>?)
+                         AND (
+                           NOT EXISTS(
+                             SELECT 1 FROM worker_repository_affinity wa
+                             WHERE wa.worker_id=?
+                           )
+                           OR EXISTS(
+                             SELECT 1 FROM worker_repository_affinity wa
+                             WHERE wa.worker_id=? AND wa.repository=t.repository
+                           )
+                         )
+                       ORDER BY
+                         CASE WHEN r.last_validator_claimed_at IS NULL THEN 0 ELSE 1 END,
+                         r.last_validator_claimed_at,
+                         t.priority,t.updated_at,t.task_id
+                       LIMIT 1""",
+                    (worker_id, worker_id, worker_id),
+                ).fetchone()
                 wanted, next_state = "validating", "validating"
             if not row:
                 return None, None
@@ -351,6 +491,16 @@ class WorkerPoolStore:
                stamp, row["task_id"], wanted))
             if cur.rowcount != 1:
                 raise ConflictError("task adquirida concorrentemente")
+            claimed_column = (
+                "last_builder_claimed_at" if role == "builder"
+                else "last_validator_claimed_at"
+            )
+            db.execute(
+                f"""UPDATE repository_lanes
+                    SET {claimed_column}=?,updated_at=?
+                    WHERE repository=?""",
+                (stamp, stamp, row["repository"]),
+            )
             row = db.execute("SELECT * FROM tasks WHERE task_id=?", (row["task_id"],)).fetchone()
         data = self._d(row)
         return data, Lease(data["task_id"], token, worker_id, role, expires)
@@ -479,6 +629,24 @@ class WorkerPoolStore:
             counts = {r["state"]: r["n"] for r in db.execute(
                 "SELECT state,COUNT(*) n FROM tasks GROUP BY state").fetchall()}
             qn = db.execute("SELECT COUNT(*) n FROM quarantine").fetchone()["n"]
+            repositories = db.execute(
+                """SELECT r.repository,r.enabled,r.max_in_flight,
+                          r.last_builder_claimed_at,r.last_validator_claimed_at,r.updated_at,
+                          SUM(CASE WHEN t.state='queued' THEN 1 ELSE 0 END) queued,
+                          SUM(CASE WHEN t.state IN ('leased','running','validating') THEN 1 ELSE 0 END) active
+                   FROM repository_lanes r
+                   LEFT JOIN tasks t ON t.repository=r.repository
+                   GROUP BY r.repository,r.enabled,r.max_in_flight,
+                            r.last_builder_claimed_at,r.last_validator_claimed_at,r.updated_at
+                   ORDER BY r.repository"""
+            ).fetchall()
+            affinity_rows = db.execute(
+                """SELECT worker_id,repository FROM worker_repository_affinity
+                   ORDER BY worker_id,repository"""
+            ).fetchall()
+        affinity_map: dict[str, list[str]] = {}
+        for item in affinity_rows:
+            affinity_map.setdefault(str(item["worker_id"]), []).append(str(item["repository"]))
         active = {r["leased_by"]: dict(r) for r in tasks if r["leased_by"]}
         views = []
         for row in workers:
@@ -501,14 +669,25 @@ class WorkerPoolStore:
             w.update(gateway_ok=bool(w["gateway_ok"]), state_validated=bool(w["state_validated"]),
                      online=online, heartbeat_age_seconds=round(age, 3),
                      active_task=task["task_id"] if task else None,
-                     active_sha=task["produced_sha"] if task else None, why_idle=why)
+                     active_sha=task["produced_sha"] if task else None,
+                     repository_affinity=affinity_map.get(str(row["worker_id"]), []),
+                     why_idle=why)
             views.append(w)
         safe = ("task_id","repository","issue_number","state","priority","branch","workspace_key",
                 "base_sha","produced_sha","builder_worker_id","validator_worker_id","leased_by",
                 "lease_expires_at","attempt_count","max_attempts","blocked_reason","last_error",
                 "correlation_id","updated_at")
         return {
-            "schema_version":"1.0.0", "generated_at":iso(now), "workers":views,
+            "schema_version":"1.1.0", "generated_at":iso(now), "workers":views,
+            "repositories":[
+                {
+                    **dict(r),
+                    "enabled": bool(r["enabled"]),
+                    "queued": int(r["queued"] or 0),
+                    "active": int(r["active"] or 0),
+                }
+                for r in repositories
+            ],
             "queue":{s:counts.get(s,0) for s in STATES}, "quarantine_count":qn,
             "tasks":[{k:r[k] for k in safe} for r in tasks],
         }
