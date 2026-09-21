@@ -152,9 +152,37 @@ def test_headless_activation_workflow_is_fixed_to_noteri_and_uac() -> None:
     assert "workflow_dispatch:" in workflow
     assert "inputs:" not in workflow
     assert "ShellExecuteW" in launcher
+    assert "--result-path" in launcher
+    assert "ELEVATED_INSTALL_FAILED" in launcher
+    assert "schtasks.exe" in launcher
+    assert "schtasks_xml" in launcher
     assert '"runas"' in launcher
     assert 'EXPECTED_HOST' not in launcher or "watchdog.EXPECTED_HOST" in launcher
     assert "AtStartup" in launcher or "trigger_at_startup" in launcher
     assert "S4U" in launcher
     assert "reboot_performed" in launcher
     assert ".github/workflows/noteri-headless-control-plane-activation.yml" in policy["approved_workflows"]
+
+
+def test_watchdog_creates_automation_folder_when_missing() -> None:
+    class Root:
+        def __init__(self) -> None:
+            self.created = None
+
+        def CreateFolder(self, name: str):
+            self.created = name
+            return {"folder": name}
+
+    class Service:
+        def __init__(self) -> None:
+            self.root = Root()
+
+        def GetFolder(self, path: str):
+            if path == "\\":
+                return self.root
+            raise RuntimeError("missing")
+
+    service = Service()
+    folder = watchdog.ensure_task_folder(service)
+    assert folder == {"folder": "Automation"}
+    assert service.root.created == "Automation"
