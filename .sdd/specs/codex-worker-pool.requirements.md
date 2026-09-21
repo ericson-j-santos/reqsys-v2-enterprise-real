@@ -29,6 +29,9 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 21. O scheduler de Builder deve distribuir claims de forma justa e determinística entre repositórios elegíveis, impedindo starvation de projetos com fila pendente.
 22. Afinidade worker→repositório deve ser opcional: quando configurada restringe claims; sem afinidade explícita o worker permanece elegível ao pool compartilhado.
 23. Snapshot e API devem expor lanes, capacidade, contadores de claim e afinidades sem revelar `lease_token` ou segredos.
+24. Deve existir smoke DEV inputless no PC24x7 que use somente loopback e token por arquivo já provisionado.
+25. O smoke DEV deve configurar uma lane sintética `enabled=false`, enfileirar/repetir a mesma identidade lógica, fazer leitura independente e provar que a task permanece `queued` e sem lease.
+26. O Authorized Actions Gateway deve expor somente o comando exato `/reqsys run codex-worker-pool-smoke-dev`, sem aceitar repositório, issue, request id, branch ou workflow como input do comentário.
 
 ## Requisitos de qualidade
 
@@ -57,3 +60,4 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 - a mesma task de controle não pode ser adquirida pelo segundo Builder antes do lease expirar e deve ser recuperável após a expiração.
 - dois repositórios com backlog e capacidade disponível devem alternar claims de forma determinística, respeitando `max_in_flight`;
 - worker com afinidade explícita não pode adquirir task fora dos repositórios autorizados; worker sem afinidade mantém compatibilidade com o pool compartilhado.
+- smoke DEV no PC24x7 deve retornar `WORKER_POOL_SMOKE_PASSED`, com lane sintética desabilitada, replay sem duplicidade, leitura independente e task não adquirida por worker.
