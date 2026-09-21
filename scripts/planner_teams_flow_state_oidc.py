@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -29,6 +30,8 @@ PLANNER_TASK_URL = (
 TEAMS_API = "/providers/Microsoft.PowerApps/apis/shared_teams"
 TEAMS_POST_CARD_OPERATION = "PostCardToConversation"
 NOTIFY_ACTION_NAME = "Notificar_Teams"
+FILTER_ACTION_NAME = "Ignorar_tarefas_de_teste_automatizado"
+EXPECTED_FILTER_ELSE = {"actions": {}}
 WORKFLOW_SELECT = (
     "workflowid,workflowidunique,name,statecode,statuscode,componentstate,"
     "category,type,clientdata"
@@ -70,7 +73,8 @@ def request_json(
     }
     if body is not None:
         headers["Content-Type"] = "application/json"
-        headers["If-Match"] = if_match or "*"
+        if method.upper() == "PATCH":
+            headers["If-Match"] = if_match or "*"
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -221,6 +225,25 @@ def _notify_action(clientdata: dict[str, Any]) -> dict[str, Any]:
     return action
 
 
+def ensure_filter_else_contract(clientdata: dict[str, Any]) -> bool:
+    properties = clientdata.get("properties")
+    definition = properties.get("definition") if isinstance(properties, dict) else None
+    actions = definition.get("actions") if isinstance(definition, dict) else None
+    if not isinstance(actions, dict):
+        raise FlowStateError("flow_definition_actions_ausentes")
+
+    filter_action = actions.get(FILTER_ACTION_NAME)
+    if not isinstance(filter_action, dict) or filter_action.get("type") != "If":
+        raise FlowStateError("flow_filtro_tarefa_teste_ausente")
+
+    if "else" not in filter_action:
+        filter_action["else"] = copy.deepcopy(EXPECTED_FILTER_ELSE)
+        return True
+    if filter_action.get("else") != EXPECTED_FILTER_ELSE:
+        raise FlowStateError("flow_filtro_tarefa_teste_else_invalido")
+    return False
+
+
 def card_contract(clientdata: dict[str, Any]) -> dict[str, Any]:
     action = _notify_action(clientdata)
     raw = action["inputs"]["parameters"]["body/messageBody"]
@@ -276,9 +299,12 @@ def reconcile_card_clientdata(
     action = _notify_action(after)
     expected_body = json.dumps(desired_card(flow_name), ensure_ascii=False)
     current_body = action["inputs"]["parameters"]["body/messageBody"]
-    changed = current_body != expected_body
-    if changed:
+    card_changed = current_body != expected_body
+    if card_changed:
         action["inputs"]["parameters"]["body/messageBody"] = expected_body
+
+    filter_else_changed = ensure_filter_else_contract(after)
+    changed = card_changed or filter_else_changed
 
     after_contract = card_contract(after)
     expected_contract = {
@@ -517,6 +543,12 @@ def unpublished_diagnostic(
         relation = "unpublished_invalid"
     elif published_fp.get("status") != "ok" or desired_fp.get("status") != "ok":
         relation = "reference_invalid"
+    elif (
+        unpublished_fp.get("non_card_sha256") == desired_fp.get("non_card_sha256")
+        and unpublished_fp.get("card_canonical_sha256")
+        == desired_fp.get("card_canonical_sha256")
+    ):
+        relation = "same_as_desired_semantic"
     elif unpublished_fp.get("non_card_sha256") != published_fp.get("non_card_sha256"):
         relation = "non_card_divergent"
     elif (
@@ -575,6 +607,29 @@ def patch_clientdata(
         raise FlowStateError(f"dataverse_card_patch_http_{status}:{error_detail(payload)}")
 
 
+def publish_workflow(base: str, token: str, workflow_id: str) -> None:
+    try:
+        canonical_id = str(uuid.UUID(workflow_id))
+    except ValueError as exc:
+        raise FlowStateError("workflowid_invalido") from exc
+
+    parameter_xml = (
+        "<importexportxml><workflows><workflow>"
+        + canonical_id
+        + "</workflow></workflows></importexportxml>"
+    )
+    status, payload = request_json(
+        "POST",
+        f"{base.rstrip('/')}/api/data/v9.2/PublishXml",
+        token,
+        {"ParameterXml": parameter_xml},
+    )
+    if status not in {200, 204}:
+        raise FlowStateError(
+            f"dataverse_publish_workflow_http_{status}:{error_detail(payload)}"
+        )
+
+
 def reconcile_flow_card(
     base: str,
     token: str,
@@ -593,6 +648,7 @@ def reconcile_flow_card(
             "flow_direct_patch_used": False,
             "flow_deactivated_for_patch": False,
             "flow_unpublished_revision_used": False,
+            "flow_publish_xml_used": False,
             "clientdata_before_sha256": before_hash,
             "card_before": before_contract,
             "card_after": desired_contract,
@@ -624,12 +680,64 @@ def reconcile_flow_card(
             "dataverse_card_patch_http_400:0x80040203:" in message
             and "unpublished active row" in message.lower()
         ):
-            # Diagnóstico somente leitura: nunca publica, sobrescreve ou descarta
-            # automaticamente uma revisão concorrente. Os hashes classificam o
-            # draft sem expor o clientdata bruto no artifact/log.
             unpublished = get_unpublished_flow(base, token, workflow_id)
             details = unpublished_diagnostic(row, desired_raw, unpublished)
-            raise FlowStateError(message, details=details) from exc
+            relation = details.get("unpublished_relation")
+            unpublished_workflow_id = str(unpublished.get("workflowid") or "").strip()
+            unpublished_componentstate = int(unpublished.get("componentstate", -1))
+
+            if (
+                relation not in {"same_as_desired", "same_as_desired_semantic"}
+                or unpublished_workflow_id != workflow_id
+                or unpublished_componentstate != 1
+            ):
+                raise FlowStateError(message, details=details) from exc
+
+            # O draft só é publicado quando já corresponde semanticamente ao
+            # estado desejado completo. Qualquer divergência adicional continua
+            # falhando fechado para não promover mudança externa concorrente.
+            publish_workflow(base, token, workflow_id)
+            after = get_flow(base, token, workflow_id)
+            if int(after.get("componentstate", -1)) != 0:
+                raise FlowStateError(
+                    "flow_unpublished_publish_componentstate_invalido",
+                    details=details,
+                )
+
+            observed_contract = card_contract(parse_clientdata(after))
+            if observed_contract != desired_contract:
+                raise FlowStateError(
+                    "flow_unpublished_publish_card_divergente",
+                    details=details,
+                )
+
+            desired_fp = semantic_clientdata_fingerprint(desired_raw)
+            observed_fp = semantic_clientdata_fingerprint(
+                str(after.get("clientdata") or "")
+            )
+            if (
+                desired_fp.get("status") != "ok"
+                or observed_fp.get("status") != "ok"
+                or observed_fp.get("non_card_sha256")
+                != desired_fp.get("non_card_sha256")
+                or observed_fp.get("card_canonical_sha256")
+                != desired_fp.get("card_canonical_sha256")
+            ):
+                raise FlowStateError(
+                    "flow_unpublished_publish_semantic_divergente",
+                    details=details,
+                )
+
+            return after, {
+                "card_reconciled": True,
+                "flow_direct_patch_used": False,
+                "flow_deactivated_for_patch": False,
+                "flow_unpublished_revision_used": True,
+                "flow_publish_xml_used": True,
+                "clientdata_before_sha256": before_hash,
+                "card_before": before_contract,
+                "card_after": observed_contract,
+            }
         raise
 
     return after, {
@@ -637,6 +745,7 @@ def reconcile_flow_card(
         "flow_direct_patch_used": True,
         "flow_deactivated_for_patch": False,
         "flow_unpublished_revision_used": False,
+        "flow_publish_xml_used": False,
         "clientdata_before_sha256": before_hash,
         "card_before": before_contract,
         "card_after": observed_contract,
@@ -723,7 +832,7 @@ def main() -> int:
     base = required("PLANNER_TEAMS_DATAVERSE_URL")
     token = required("POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN")
     evidence: dict[str, Any] = {
-        "schema_version": "1.4.0",
+        "schema_version": "1.5.0",
         "environment": "dev",
         "auth_mode": "github_oidc_dataverse",
         "status": "running",
