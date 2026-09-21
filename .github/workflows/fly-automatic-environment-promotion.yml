@@ -144,28 +144,33 @@ jobs:
           ref: ${{ needs.resolve.outputs.expected_sha }}
           fetch-depth: 1
 
-      - name: Validate PC24x7 public configuration
+      - name: Setup Node for signed DEV locator
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate signed locator fail-closed contract
         shell: bash
-        env:
-          PC24X7_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
-          PC24X7_FRONTEND_URL: ${{ vars.PC24X7_DEV_FRONTEND_URL }}
+        run: node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+
+      - name: Resolve current signed PC24x7 locator
+        id: locator
+        shell: bash
         run: |
           set -euo pipefail
-          if [ -z "$PC24X7_BASE_URL" ]; then
-            echo "::error::PC24X7_DEV_BASE_URL não configurada"
-            exit 1
-          fi
-          if [ -z "$PC24X7_FRONTEND_URL" ]; then
-            echo "::error::PC24X7_DEV_FRONTEND_URL não configurada"
-            exit 1
-          fi
-          case "$PC24X7_BASE_URL" in https://*) ;; *) echo "::error::PC24X7_DEV_BASE_URL deve usar HTTPS"; exit 1 ;; esac
-          case "$PC24X7_FRONTEND_URL" in https://*) ;; *) echo "::error::PC24X7_DEV_FRONTEND_URL deve usar HTTPS"; exit 1 ;; esac
+          mkdir -p artifacts/pc24x7-dev
+          node scripts/resolve_pc24x7_dev_locator.mjs \
+            --output artifacts/pc24x7-dev/signed-locator.json
+          test -n "${{ steps.locator.outputs.base_url }}"
+          case "${{ steps.locator.outputs.base_url }}" in
+            https://*.trycloudflare.com) ;;
+            *) echo "::error::signed locator resolved an invalid runtime URL"; exit 1 ;;
+          esac
 
       - name: Validate PC24x7 runtime health
         shell: bash
         env:
-          PC24X7_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
+          PC24X7_BASE_URL: ${{ steps.locator.outputs.base_url }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -197,8 +202,8 @@ jobs:
       - name: Validate PC24x7 same-SHA publication
         shell: bash
         env:
-          PC24X7_BASE_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
-          PC24X7_FRONTEND_URL: ${{ vars.PC24X7_DEV_FRONTEND_URL }}
+          PC24X7_BASE_URL: ${{ steps.locator.outputs.base_url }}
+          PC24X7_FRONTEND_URL: ${{ steps.locator.outputs.frontend_url }}
           EXPECTED_SHA: ${{ needs.resolve.outputs.expected_sha }}
         run: |
           set -euo pipefail
