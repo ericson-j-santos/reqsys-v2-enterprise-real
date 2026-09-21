@@ -30,60 +30,73 @@ const vuetify = createVuetify({
     },
   },
   defaults: {
-    // Densidade única de tabela (design-tokens.json#table) — nenhuma tela
-    // precisa mais escolher `density` individualmente. Não alteramos `variant`
-    // aqui de propósito: mudar o estilo visual padrão de inputs em todo o app
-    // exige validação visual tela a tela, fora do escopo desta correção.
     VDataTable: { density: DSC_TABLE.density },
     VDataTableServer: { density: DSC_TABLE.density },
     VTable: { density: DSC_TABLE.density },
     VTextField: { density: 'comfortable' },
     VSelect: { density: 'comfortable' },
     VBtn: { density: 'comfortable' },
-    // attach:false + zIndex explícito: sem `attach`, VOverlay.useTeleport só
-    // teleporta para `.v-overlay-container` no <body> quando `attach === false`
-    // (não quando é apenas "não definido") — sem isso, o tooltip renderiza
-    // `position:absolute` inline dentro da árvore do componente, sujeito à
-    // ordem normal de pintura entre irmãos no DOM (não a um stacking context
-    // de overlay real), e qualquer conteúdo de página renderizado depois no
-    // DOM pode cobri-lo mesmo com z-index alto. VTooltip também roda com
-    // `_disableGlobalStack`, então nunca sobe acima do zIndex padrão (2000)
-    // da Vuetify sozinho — sem esse zIndex explícito, toast/alerta de
-    // conectividade/route-feedback do app (z-index 3000-5000) cobririam o
-    // tooltip sempre que se sobrepusessem na tela.
     VTooltip: { location: 'top', openDelay: 200, attach: false, zIndex: DSC_Z_INDEX.tooltip },
   },
 })
+
+function caminhoAtual() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
+
+function destinoSeguroAposLogin(caminhoInicial) {
+  const redirect = router.currentRoute.value?.query?.redirect
+  if (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect
+  }
+  if (caminhoInicial.startsWith('/') && !caminhoInicial.startsWith('//') && !caminhoInicial.startsWith('/login')) {
+    return caminhoInicial
+  }
+  return '/'
+}
+
+async function inicializarAutenticacao(caminhoInicial) {
+  try {
+    let idToken = await handleRedirectResult()
+    if (!idToken && !useAuthStore().autenticado) {
+      idToken = await acquireIdTokenSilent()
+    }
+    if (!idToken) return
+
+    const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
+    useAuthStore().salvarSessao(data.data)
+
+    const destino = destinoSeguroAposLogin(caminhoInicial)
+    if (router.currentRoute.value.fullPath !== destino) {
+      await router.replace(destino)
+    }
+  } catch (e) {
+    const msg = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'
+    sessionStorage.setItem('azure_login_error', msg)
+  }
+}
 
 async function boot() {
   const pinia = createPinia()
   setActivePinia(pinia)
 
-  // Apps SPA trocam o codigo no browser; o backend apenas valida o id_token.
-  try {
-    let idToken = await handleRedirectResult()
-    if (!idToken && !useAuthStore().autenticado) {
-      // Sem redirect pendente e sem sessao ReqSys valida: tenta renovar
-      // silenciosamente via SSO (conta Microsoft ja em cache, sem popup/
-      // redirect visivel) antes de aceitar a tela de login. Cobre o caso de
-      // reqsys_token expirado (1h) com a sessao Microsoft ainda ativa —
-      // sem isso o usuario era jogado de volta ao login a cada expiracao.
-      idToken = await acquireIdTokenSilent()
-    }
-    if (idToken) {
-      const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
-      useAuthStore().salvarSessao(data.data)
-      window.history.replaceState({}, document.title, '/')
-    }
-  } catch (e) {
-    const msg = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'
-    sessionStorage.setItem('azure_login_error', msg)
-    window.history.replaceState({}, document.title, '/login')
-  }
-
+  const caminhoInicial = caminhoAtual()
   const app = createApp(App).use(pinia).use(router).use(vuetify)
+
+  // A interface deve existir antes de qualquer chamada externa de autenticacao.
+  // Assim, atraso/falha do MSAL nunca deixa o usuario preso em tela branca:
+  // a rota protegida cai no login e, quando o SSO concluir, volta ao destino.
+  await router.isReady()
   app.mount('#app')
   installWcag22Guard(router)
+
+  void inicializarAutenticacao(caminhoInicial)
 }
 
-boot()
+boot().catch((error) => {
+  const root = document.getElementById('app')
+  if (root) {
+    root.innerHTML = '<main style="font-family:Arial,sans-serif;padding:24px"><h1>ReqSys não iniciou</h1><p>Atualize a página. Se o problema continuar, o ambiente local precisa ser revalidado.</p></main>'
+  }
+  console.error('reqsys_boot_failed', error)
+})

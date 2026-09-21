@@ -110,6 +110,51 @@ def test_referenced_contract_tests_discovers_aggregate_test(tmp_path: Path) -> N
     assert result == ["tests/test_control_plane.py"]
 
 
+def test_referenced_contract_tests_ignores_generic_frontend_stems(tmp_path: Path) -> None:
+    test_file = tmp_path / "tests" / "test_unrelated.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text(
+        'MAIN = "backend/app/main.py"\nEVIDENCE = "delivery-evidence-index"\n',
+        encoding="utf-8",
+    )
+
+    result = MODULE.referenced_contract_tests(
+        ["frontend/src/main.js", "frontend/index.html"],
+        tmp_path,
+    )
+
+    assert result == []
+
+
+def test_candidate_pytests_includes_python_tests_declared_by_changed_sdd(tmp_path: Path) -> None:
+    declared = tmp_path / "tests" / "test_noteri_agent.py"
+    declared.parent.mkdir(parents=True)
+    declared.write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    spec = tmp_path / ".sdd" / "specs" / "noteri.spec.json"
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        json.dumps(
+            {
+                "sdd_gate": {
+                    "tests": [
+                        "tests/test_noteri_agent.py",
+                        "frontend/src/auth/__tests__/startupFailSafe.test.js",
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = MODULE.candidate_pytests(
+        [".sdd/specs/noteri.spec.json", "frontend/src/main.js"],
+        tmp_path,
+    )
+
+    assert result == ["tests/test_noteri_agent.py"]
+
+
 def test_validate_python_runs_ruff_for_changed_python(monkeypatch, tmp_path: Path) -> None:
     script = tmp_path / "scripts" / "alpha.py"
     script.parent.mkdir(parents=True)

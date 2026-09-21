@@ -2,7 +2,7 @@
   "feature_name": "noteri-study-mode-local-agent",
   "project": "ReqSys v2 Enterprise — Centralizadora / Task Console",
   "created_at": "2026-09-18",
-  "updated_at": "2026-09-20",
+  "updated_at": "2026-09-21",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -14,8 +14,9 @@
     "tests": [
       "tests/test_noteri_host_profile_agent.py",
       "tests/test_noteri_host_profile_agent_control.py",
-      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js"
+      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
+      "frontend/src/auth/__tests__/startupFailSafe.test.js"
     ],
-    "evidence_contract": "O agente permanece em loopback, aceita somente origens locais explicitamente permitidas (incluindo 127.0.0.1:8083 e localhost:8083), o controlador persistente não expõe execução genérica, a UI somente confirma alteração após readback coerente e o E2E real restaura o Noteri para NORMAL."
+    "evidence_contract": "O agente permanece em loopback, aceita somente origens locais explicitamente permitidas (incluindo 127.0.0.1:8083 e localhost:8083), o controlador persistente não expõe execução genérica, a UI monta antes do bootstrap MSAL para impedir tela branca, preserva o guard de autenticação e somente confirma alteração de perfil após readback coerente; o E2E real restaura o Noteri para NORMAL."
   }
 }

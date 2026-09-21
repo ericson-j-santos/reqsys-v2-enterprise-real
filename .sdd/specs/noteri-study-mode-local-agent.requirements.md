@@ -18,6 +18,9 @@ O Task Console deve mostrar o estado atual do Noteri e fornecer ações claras p
 ## Requisito 6 — acesso do runtime oficial local
 O agente deve aceitar o Task Console oficial servido em `http://127.0.0.1:8083` ou `http://localhost:8083` sem ampliar a política para origens não locais, curingas ou hosts externos.
 
+## Requisito 7 — inicialização sem tela branca
+O frontend deve montar a interface antes de iniciar autenticação silenciosa externa. Uma falha ou demora do MSAL não pode manter o usuário em tela branca; a rota protegida deve permanecer no login e retornar ao destino original após autenticação válida.
+
 ## Critérios de aceite (Acceptance Criteria)
 1. `scripts/noteri_host_profile_agent.py` não aceita bind externo a loopback.
 2. O agente aceita `NORMAL|ESTUDO`, grava de forma atômica e registra auditoria sem segredos.
@@ -29,3 +32,5 @@ O agente deve aceitar o Task Console oficial servido em `http://127.0.0.1:8083` 
 8. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato antes da abertura da PR.
 9. `DEFAULT_ORIGINS` inclui explicitamente `http://127.0.0.1:8083` e `http://localhost:8083`.
 10. A inclusão do runtime `8083` não permite origens externas nem remove a validação estrita de `Origin`.
+11. O app monta antes do bootstrap MSAL assíncrono e mantém a proteção das rotas privadas pelo router guard.
+12. `frontend/index.html` contém fallback visível para falha de bootstrap, evitando página totalmente branca quando o bundle não monta.
