@@ -14,6 +14,11 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+
+try:
+    import winreg
+except ModuleNotFoundError:  # pragma: no cover - disponível apenas no Windows
+    winreg = None
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +34,8 @@ TASK_CREATE_OR_UPDATE = 6
 TASK_RUNLEVEL_LUA = 0
 TASK_INSTANCES_IGNORE_NEW = 2
 DEFAULT_INTERVAL_SECONDS = 15
+RUN_KEY = r"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+RUN_VALUE = "ReqSysNoteriControlPlaneWatchdog"
 
 
 class WatchdogError(RuntimeError):
@@ -199,6 +206,34 @@ def register_task(*, python_executable: str, release_script: Path, runner_home: 
     return {"exists": True, "trigger": "AtStartup", "logon": "S4U", "run_level": "limited"}
 
 
+def install_logon_fallback(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:
+    if winreg is None:
+        raise WatchdogError("winreg indisponível fora do Windows")
+    command = subprocess.list2cmdline(
+        [
+            python_executable,
+            str(release_script),
+            "watch",
+            "--runner-home",
+            str(runner_home),
+        ]
+    )
+    with winreg.CreateKeyEx(
+        winreg.HKEY_CURRENT_USER,
+        RUN_KEY,
+        0,
+        winreg.KEY_SET_VALUE,
+    ) as key:
+        winreg.SetValueEx(key, RUN_VALUE, 0, winreg.REG_SZ, command)
+    return {
+        "exists": True,
+        "trigger": "AtLogon",
+        "scope": "HKCU",
+        "value_name": RUN_VALUE,
+        "headless": False,
+    }
+
+
 def install(repo_root: Path, runner_home: Path, source_sha: str, confirm: str) -> dict[str, Any]:
     if confirm != INSTALL_CONFIRM:
         raise WatchdogError("confirmação inválida")
@@ -215,6 +250,7 @@ def install(repo_root: Path, runner_home: Path, source_sha: str, confirm: str) -
     digest = hashlib.sha256(release_script.read_bytes()).hexdigest()
     activation_pending = False
     task: dict[str, Any]
+    logon_fallback: dict[str, Any] | None = None
     try:
         task = register_task(
             python_executable=sys.executable,
@@ -226,6 +262,11 @@ def install(repo_root: Path, runner_home: Path, source_sha: str, confirm: str) -
         if "-2147024891" in text or "access is denied" in text or "acesso negado" in text:
             activation_pending = True
             task = {"exists": False, "error": "access_denied"}
+            logon_fallback = install_logon_fallback(
+                python_executable=sys.executable,
+                release_script=release_script,
+                runner_home=runner,
+            )
         else:
             raise
     metadata = {
@@ -237,6 +278,9 @@ def install(repo_root: Path, runner_home: Path, source_sha: str, confirm: str) -
         "release_sha256": digest,
         "runner_home": str(runner),
         "task": task,
+        "logon_fallback": logon_fallback,
+        "runtime_persistent_after_login": bool(logon_fallback) or not activation_pending,
+        "headless_persistence": not activation_pending,
         "activation_pending": activation_pending,
         "requires_uac_activation": activation_pending,
         "rdc_required": False,
@@ -252,6 +296,9 @@ def install(repo_root: Path, runner_home: Path, source_sha: str, confirm: str) -
         "activation_pending": activation_pending,
         "requires_uac_activation": activation_pending,
         "task": task,
+        "logon_fallback": logon_fallback,
+        "runtime_persistent_after_login": bool(logon_fallback) or not activation_pending,
+        "headless_persistence": not activation_pending,
         "state": current,
         "metadata": metadata,
     }

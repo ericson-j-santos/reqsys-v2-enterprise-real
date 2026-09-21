@@ -70,6 +70,7 @@ def test_watchdog_cycle_starts_runner_when_listener_missing(monkeypatch, tmp_pat
     monkeypatch.setattr(watchdog, "require_noteri", lambda: "Noteri")
     monkeypatch.setattr(watchdog, "runner_running", lambda: next(observed))
     monkeypatch.setattr(watchdog, "start_runner", lambda path: True)
+    monkeypatch.setattr(watchdog, "runtime_root", lambda: tmp_path / "runtime")
     monkeypatch.setattr(watchdog, "atomic_json", lambda path, payload: None)
     result = watchdog.cycle(root)
     assert result["ok"] is True
@@ -86,3 +87,52 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "inputs:" not in workflow
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-control-plane-probe.yml" in policy["approved_workflows"]
+
+
+def test_watchdog_installs_hkcu_fallback_when_startup_task_denied(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "actions-runner"
+    (root / "bin").mkdir(parents=True)
+    (root / ".runner").write_text("opaque", encoding="utf-8")
+    (root / "run.cmd").write_text("@echo off\n", encoding="utf-8")
+    (root / "bin" / "Runner.Listener.exe").write_bytes(b"stub")
+
+    repo_root = tmp_path / "repo"
+    scripts = repo_root / "scripts"
+    scripts.mkdir(parents=True)
+    source = scripts / "noteri_control_plane_watchdog.py"
+    source.write_text(WATCHDOG_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+
+    monkeypatch.setattr(watchdog, "require_noteri", lambda: "Noteri")
+    monkeypatch.setattr(watchdog, "runtime_root", lambda: tmp_path / "runtime")
+    monkeypatch.setattr(
+        watchdog,
+        "register_task",
+        lambda **kwargs: (_ for _ in ()).throw(PermissionError("Access is denied")),
+    )
+    monkeypatch.setattr(
+        watchdog,
+        "install_logon_fallback",
+        lambda **kwargs: {
+            "exists": True,
+            "trigger": "AtLogon",
+            "scope": "HKCU",
+            "headless": False,
+        },
+    )
+    monkeypatch.setattr(
+        watchdog,
+        "cycle",
+        lambda runner_home: {"ok": True, "runner_running_after": True},
+    )
+
+    result = watchdog.install(
+        repo_root,
+        root,
+        "a" * 40,
+        watchdog.INSTALL_CONFIRM,
+    )
+    assert result["runtime_ok"] is True
+    assert result["activation_pending"] is True
+    assert result["runtime_persistent_after_login"] is True
+    assert result["headless_persistence"] is False
+    assert result["logon_fallback"]["scope"] == "HKCU"

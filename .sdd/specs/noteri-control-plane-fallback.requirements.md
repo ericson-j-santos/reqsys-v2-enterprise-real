@@ -23,7 +23,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - executar somente no host exato `Noteri`;
 - local/DEV somente;
 - não ler conteúdo de `.runner`;
-- não armazenar token de registro, senha ou segredo;
+- token de registro efêmero pode ser consumido somente em memória no bootstrap; é proibido imprimir, persistir, versionar ou incluir esse valor na evidência;
 - não executar reboot/shutdown;
 - não expor comando arbitrário;
 - usar source SHA completo na instalação do watchdog;
@@ -32,9 +32,20 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - declarar `rdc_required=false`, `production_touched=false` e `secrets_read=false`;
 - se Task Scheduler negar `AtStartup + S4U`, retornar `activation_pending=true` e não declarar ativação concluída.
 
-## Pré-requisito físico
+## Bootstrap físico único
 
-O GitHub Actions runner precisa estar registrado uma vez no Noteri antes de o watchdog poder mantê-lo ativo. O watchdog valida a presença de `.runner`, `run.cmd` e `bin\Runner.Listener.exe`, mas nunca lê o conteúdo de `.runner`.
+O bootstrap `scripts/activate_noteri_free_control_plane.cmd` deve eliminar a sequência manual de registro sempre que possível:
+
+- localizar e reutilizar runner já registrado sem ler o conteúdo de `.runner`;
+- se não existir runner registrado, instalar o GitHub CLI via `winget` quando necessário;
+- reutilizar autenticação GitHub CLI válida ou abrir o fluxo oficial `gh auth login --web` quando autenticação humana for inevitável;
+- obter o token efêmero de registro pelo endpoint oficial apenas em memória;
+- nunca imprimir, persistir ou versionar o token;
+- baixar somente o runner oficial Windows x64 pinado pelo código e validar SHA-256 antes de extrair;
+- registrar nome `Noteri` e labels adicionais fixos `noteri,reqsys-dev`, usando `--replace` de forma idempotente;
+- iniciar o watchdog existente e retornar evidência sanitizada com `rdc_required=false`.
+
+A autenticação interativa do GitHub pode exigir ação humana por consentimento, mas nenhuma etapa recorrente de operação pode voltar a depender do RDC.
 
 ## Critérios de aceite de código
 
@@ -48,7 +59,7 @@ O GitHub Actions runner precisa estar registrado uma vez no Noteri antes de o wa
 
 A rota só fica `runtime_active` após evidência nova de:
 
-1. runner registrado no Noteri com labels fixos;
+1. runner registrado no Noteri com labels fixos, com bootstrap automatizado ou reutilização idempotente;
 2. watchdog com tarefa `AtStartup + S4U`;
 3. `Runner.Listener.exe` ativo;
 4. comando do Gateway despachando `noteri-control-plane-probe.yml`;

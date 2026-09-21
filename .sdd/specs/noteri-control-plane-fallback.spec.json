@@ -10,6 +10,7 @@
     "self_hosted_workflow": ".github/workflows/noteri-control-plane-probe.yml",
     "probe": "scripts/noteri_control_plane_probe.py",
     "watchdog": "scripts/noteri_control_plane_watchdog.py",
+    "bootstrap": "scripts/activate_noteri_free_control_plane.py",
     "runner_labels": [
       "self-hosted",
       "Windows",
@@ -29,7 +30,7 @@
     "fail_closed_on_missing_runner": true
   },
   "runtime_gate": {
-    "prerequisite": "preconfigured GitHub Actions runner on Noteri",
+    "prerequisite": "GitHub CLI autenticado e bootstrap governado capaz de provisionar ou reutilizar o runner do Noteri",
     "activation_pending_until": [
       "AtStartup+S4U watchdog proven",
       "Runner.Listener.exe proven",
@@ -42,9 +43,10 @@
     "tests": [
       "tests/test_noteri_control_plane_fallback.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
-      "tests/test_self_hosted_runner_governance.py"
+      "tests/test_self_hosted_runner_governance.py",
+      "tests/test_activate_noteri_free_control_plane.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -52,6 +54,7 @@
     "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "probe": "scripts/noteri_control_plane_probe.py",
     "watchdog": "scripts/noteri_control_plane_watchdog.py",
+    "bootstrap": "scripts/activate_noteri_free_control_plane.py",
     "policy": ".github/self-hosted-runner-policy.json",
     "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml"
   }
