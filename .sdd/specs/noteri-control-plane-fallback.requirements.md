@@ -85,6 +85,9 @@ O workflow deve:
 - o atalho interativo não pode depender de `origin/main`, `FETCH_HEAD` ou de qualquer atualização Git no momento do clique;
 - chamar `scripts/noteri_control_plane_watchdog_uac_launcher.py` a partir da cópia imutável materializada;
 - usar `ShellExecuteW(..., "runas", ...)` apenas para registrar a tarefa local;
+- registrar primeiro via Task Scheduler COM usando identidade do chamador e senha nula; se o Windows rejeitar S4U, permitir fallback nativo `schtasks /Create /SC ONSTART /NP /RL LIMITED`, sem `/RP` e sem persistir senha;
+- aceitar o fallback nativo somente quando `schtasks /Query /XML` comprovar `exists=true`, `enabled=true`, `BootTrigger` e `LogonType=S4U`; em divergência, remover a tarefa criada e falhar fechado;
+- registrar apenas códigos HRESULT sanitizados da falha COM, incluindo o código interno do Task Scheduler, sem registrar nome/SID/UPN do principal;
 - exigir confirmação fixa `LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC`;
 - aguardar e validar `exists=true`, trigger de startup e logon `S4U`;
 - manter `rdc_required=false`, `production_touched=false` e `reboot_performed=false`;

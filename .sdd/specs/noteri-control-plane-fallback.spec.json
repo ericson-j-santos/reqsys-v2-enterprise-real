@@ -47,7 +47,7 @@
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_activate_noteri_free_control_plane.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -110,6 +110,22 @@
           "elevated_result": "%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneWatchdog\\elevated-install-result.json",
           "probe_exposes_sanitized_fields_only": true
         }
+      },
+      "registration_strategies": [
+        "Task Scheduler COM with caller identity and null password",
+        "schtasks /Create /SC ONSTART /NP /RL LIMITED fallback"
+      ],
+      "native_fallback_contract": {
+        "password_stored": false,
+        "interactive": false,
+        "local_resources_only": true,
+        "accepted_only_when_schtasks_xml_proves_boot_and_s4u": true,
+        "cleanup_on_contract_mismatch": true
+      },
+      "error_evidence": {
+        "outer_com_hresult": true,
+        "nested_task_scheduler_hresult": true,
+        "principal_value_logged": false
       }
     },
     "probe_workflow": {

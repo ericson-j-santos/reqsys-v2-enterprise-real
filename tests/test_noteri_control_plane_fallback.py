@@ -309,3 +309,121 @@ def test_watchdog_resolves_current_windows_principal_for_s4u() -> None:
     assert 'candidates.append(("whoami", account))' in text
     assert "principal_source" in text
     assert 'f"{socket.gethostname()}\\\\{os.environ.get(' not in text
+
+
+def test_watchdog_extracts_nested_task_scheduler_hresult() -> None:
+    exc = RuntimeError(
+        -2147352567,
+        "Exception occurred.",
+        (0, None, None, None, 0, -2147023570),
+        None,
+    )
+    assert watchdog._exception_hresults(exc) == [-2147023570]
+    assert watchdog._hresult_label(-2147023570) == "0x8007052E"
+
+
+def test_watchdog_task_contract_requires_boot_s4u(monkeypatch) -> None:
+    xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Principals><Principal><LogonType>S4U</LogonType></Principal></Principals>
+  <Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>
+  <Settings><Enabled>true</Enabled></Settings>
+</Task>
+"""
+
+    class Completed:
+        returncode = 0
+        stdout = xml
+
+    monkeypatch.setattr(watchdog, "schtasks_path", lambda: Path("schtasks.exe"))
+    monkeypatch.setattr(watchdog.subprocess, "run", lambda *args, **kwargs: Completed())
+    task = watchdog.task_contract()
+    assert watchdog.task_contract_ready(task) is True
+    assert task["logon_type"] == "S4U"
+    assert "principal" not in task
+
+
+def test_watchdog_native_s4u_fallback_uses_np_without_password(monkeypatch, tmp_path: Path) -> None:
+    observed: list[list[str]] = []
+
+    class Completed:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(argv, **kwargs):
+        observed.append([str(item) for item in argv])
+        return Completed()
+
+    monkeypatch.setattr(watchdog, "schtasks_path", lambda: Path("schtasks.exe"))
+    monkeypatch.setattr(watchdog.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        watchdog,
+        "_validate_registered_task",
+        lambda method, source: {
+            "exists": True,
+            "trigger": "AtStartup",
+            "logon": "S4U",
+            "registration_method": method,
+            "principal_source": source,
+        },
+    )
+    result, failures = watchdog._register_schtasks_np(
+        python_executable="python.exe",
+        release_script=tmp_path / "watchdog.py",
+        runner_home=tmp_path / "runner",
+        candidates=[("whoami", r"NOTERI\user")],
+    )
+    assert failures == []
+    assert result is not None
+    assert result["registration_method"] == "schtasks_np"
+    argv = observed[0]
+    assert "/NP" in argv
+    assert "/SC" in argv and "ONSTART" in argv
+    assert "/RL" in argv and "LIMITED" in argv
+    assert "/RP" not in argv
+    assert "/RU" not in argv
+
+
+def test_watchdog_register_task_falls_back_from_com_to_native(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(watchdog, "_scheduler", lambda: object())
+    monkeypatch.setattr(watchdog, "ensure_task_folder", lambda service: object())
+    monkeypatch.setattr(
+        watchdog,
+        "current_principal_candidates",
+        lambda: [("whoami", r"NOTERI\user")],
+    )
+    monkeypatch.setattr(
+        watchdog,
+        "_register_com_s4u",
+        lambda *args, **kwargs: (None, ["whoami/explicit_null_password:0x8007052E"]),
+    )
+    monkeypatch.setattr(
+        watchdog,
+        "_register_schtasks_np",
+        lambda *args, **kwargs: (
+            {
+                "exists": True,
+                "trigger": "AtStartup",
+                "logon": "S4U",
+                "registration_method": "schtasks_np",
+                "principal_source": "current_user",
+            },
+            [],
+        ),
+    )
+    result = watchdog.register_task(
+        python_executable="python.exe",
+        release_script=tmp_path / "watchdog.py",
+        runner_home=tmp_path / "runner",
+    )
+    assert result["registration_method"] == "schtasks_np"
+    assert result["logon"] == "S4U"
+
+
+def test_watchdog_s4u_registration_never_embeds_password() -> None:
+    text = WATCHDOG_PATH.read_text(encoding="utf-8")
+    assert '"/NP"' in text
+    assert '"/RP"' not in text
+    assert "explicit_null_password" in text
+    assert "0x8007052E" not in text
