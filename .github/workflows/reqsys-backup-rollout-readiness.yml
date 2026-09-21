@@ -372,11 +372,13 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
       SOURCE_RUN_ID: ${{ needs.evaluate-dev.outputs.source_run_id }}
+      READY_FOR_PR_WAIT_SECONDS: "480"
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ secrets.GH_PAT_ACTIONS }}
       - name: Prepare idempotent STG enablement proposal
         id: prepare
         shell: bash
@@ -460,11 +462,17 @@ jobs:
 
           Esta PR altera somente o ativo STG no inventário. O merge continua sujeito aos gates governados e não habilita PROD.
           EOF
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "feat(backup): habilitar STG após evidência DEV válida" \
-            --body-file /tmp/pr-body.md
+          PR_REQUEST_ARTIFACT_DIR="artifacts/auto-pr/backup-stg" \
+            python scripts/auto_open_agent_pr.py \
+              --base main \
+              --branch "$BRANCH" \
+              --head-sha "$(git rev-parse HEAD)" \
+              --title "feat(backup): habilitar STG após evidência DEV válida" \
+              --body-file /tmp/pr-body.md \
+              --ready
+          pr_url="$(gh pr list --state open --base main --head "$BRANCH" --json url --jq '.[0].url // empty')"
+          test -n "$pr_url" || { echo "::error::READY_FOR_PR passou, mas a PR STG não foi criada."; exit 1; }
+          echo "PR governada STG: $pr_url" >> "$GITHUB_STEP_SUMMARY"
 
   propose-prod:
     needs: evaluate-stg
@@ -479,11 +487,13 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
       SOURCE_RUN_ID: ${{ needs.evaluate-stg.outputs.source_run_id }}
       SOURCE_ARTIFACT_DIGEST: ${{ needs.evaluate-stg.outputs.source_artifact_digest }}
+      READY_FOR_PR_WAIT_SECONDS: "480"
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ secrets.GH_PAT_ACTIONS }}
       - name: Prepare idempotent PROD enablement proposal
         id: prepare
         shell: bash
@@ -572,8 +582,14 @@ jobs:
 
           Esta PR habilita somente o ativo PROD no inventário após evidência STG válida e aprovação humana explícita. O merge continua sujeito aos checks e à revisão governada.
           EOF
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "feat(backup): habilitar PROD após evidência STG e aprovação" \
-            --body-file /tmp/pr-body.md
+          PR_REQUEST_ARTIFACT_DIR="artifacts/auto-pr/backup-prod" \
+            python scripts/auto_open_agent_pr.py \
+              --base main \
+              --branch "$BRANCH" \
+              --head-sha "$(git rev-parse HEAD)" \
+              --title "feat(backup): habilitar PROD após evidência STG e aprovação" \
+              --body-file /tmp/pr-body.md \
+              --ready
+          pr_url="$(gh pr list --state open --base main --head "$BRANCH" --json url --jq '.[0].url // empty')"
+          test -n "$pr_url" || { echo "::error::READY_FOR_PR passou, mas a PR PROD não foi criada."; exit 1; }
+          echo "PR governada PROD: $pr_url" >> "$GITHUB_STEP_SUMMARY"
