@@ -89,5 +89,6 @@ O workflow deve:
 - aguardar e validar `exists=true`, trigger de startup e logon `S4U`;
 - manter `rdc_required=false`, `production_touched=false` e `reboot_performed=false`;
 - persistir artifact sanitizado do resultado.
+- o probe operacional deve consultar a tarefa por `schtasks /Query /XML` sem elevação e publicar `headless_ready`, `exists`, `enabled`, `trigger_at_startup` e `logon_type`, sem registrar identidade/principal.
 
 A autorização do UAC pode exigir clique humano local por regra do Windows; fora esse consentimento, a operação é automatizada.
