@@ -19,7 +19,7 @@ OCR_CERT_ONLY_LABEL = "scope:ocr-certification-only"
 VALID_SCOPES = {"nonprod", "prod", "ocr-certification"}
 
 HUMAN_PATTERNS: dict[str, tuple[str, ...]] = {
-    "approval_review": ("aprovação obrigatória", "approval required", "review obrigatória", "review required", "aprovação humana"),
+    "approval_review": ("aprovação obrigatória", "approval required", "review obrigatória", "review required", "aprovação humana obrigatória", "aprovação humana necessária"),
     "merge_decision": ("decisão de merge", "merge decision", "human merge", "merge manual"),
     "conflict_choice": ("escolha humana", "decisão humana", "human choice"),
     "environment_approval": ("environment approval", "deployment approval", "aprovação de environment", "aprovação de deployment"),
@@ -36,7 +36,7 @@ HUMAN_PATTERNS: dict[str, tuple[str, ...]] = {
 
 HUMAN_INTENT_PATTERNS = (
     "humano:", "ação humana", "acao humana", "human action", "humana única", "humana unica",
-    "blueprint humano", "aprovação humana", "revisão humana", "revisao humana", "pessoa autorizada",
+    "blueprint humano", "pessoa autorizada",
     "não pode fabricar", "nao pode fabricar", "não automatizável", "nao automatizavel",
 )
 
