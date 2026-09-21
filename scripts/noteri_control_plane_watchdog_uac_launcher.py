@@ -109,6 +109,53 @@ def shell_execute_runas(executable: Path, params: str, cwd: Path) -> int:
     )
 
 
+def powershell_runas(executable: Path, params: str, cwd: Path) -> bool:
+    powershell = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if not powershell.is_file():
+        return False
+    script = (
+        "$ErrorActionPreference='Stop';"
+        f"$p=Start-Process -FilePath {json.dumps(str(executable))} "
+        f"-ArgumentList {json.dumps(params)} "
+        f"-WorkingDirectory {json.dumps(str(cwd))} "
+        "-Verb RunAs -PassThru;"
+        "if($null -eq $p){exit 2}else{exit 0}"
+    )
+    result = subprocess.run(
+        [str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def shell_application_runas(executable: Path, params: str, cwd: Path) -> bool:
+    powershell = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if not powershell.is_file():
+        return False
+    script = (
+        "$ErrorActionPreference='Stop';"
+        "$s=New-Object -ComObject Shell.Application;"
+        f"$s.ShellExecute({json.dumps(str(executable))},{json.dumps(params)},{json.dumps(str(cwd))},'runas',1);"
+        "Start-Sleep -Milliseconds 500;"
+        "exit 0"
+    )
+    result = subprocess.run(
+        [str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def build_install_args(
     *,
     repo_root: Path,
@@ -189,6 +236,8 @@ def launch(
     except FileNotFoundError:
         pass
 
+    broker = "already_elevated" if is_admin() else "none"
+
     if is_admin():
         result = subprocess.run(
             [
@@ -217,17 +266,20 @@ def launch(
         if result.returncode != 0:
             raise LauncherError(f"watchdog_install_failed:{result.returncode}")
     else:
-        rc = shell_execute_runas(
-            Path(sys.executable),
-            build_install_args(
-                repo_root=repo_root,
-                runner_home=runner_home,
-                source_sha=source_sha,
-                result_path=elevated_result_path,
-            ),
-            repo_root,
+        params = build_install_args(
+            repo_root=repo_root,
+            runner_home=runner_home,
+            source_sha=source_sha,
+            result_path=elevated_result_path,
         )
-        if rc <= 32:
+        rc = shell_execute_runas(Path(sys.executable), params, repo_root)
+        if rc > 32:
+            broker = "shell_execute_runas"
+        elif powershell_runas(Path(sys.executable), params, repo_root):
+            broker = "powershell_start_process_runas"
+        elif shell_application_runas(Path(sys.executable), params, repo_root):
+            broker = "shell_application_runas"
+        else:
             raise LauncherError(f"uac_launch_failed:{rc}")
 
     deadline = time.monotonic() + max(15, min(timeout_seconds, 240))
@@ -260,6 +312,7 @@ def launch(
             return {
                 "ok": True,
                 "mode": "elevated" if is_admin() else "uac",
+                "uac_broker": broker,
                 "result": "NOTERI_CONTROL_PLANE_HEADLESS_PROVISIONED",
                 "task": last,
                 "rdc_required": False,
@@ -272,6 +325,7 @@ def launch(
     return {
         "ok": False,
         "mode": "uac",
+        "uac_broker": broker,
         "result": "UAC_APPROVAL_OR_PROVISIONING_PENDING",
         "task": last,
         "elevated_result_observed": bool(elevated_result),
