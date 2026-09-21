@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Fabric HML Noteri Discovery",
+  "status": "implemented_pending_ci",
+  "approvals": {"requirements": true},
+  "sdd_gate": {
+    "tests": ["tests/test_fabric_hml_noteri_discovery_contract.py"],
+    "evidence_contract": "Probe self-hosted fail-closed; PR read-only; identificadores e segredos nao sao expostos; escrita em main limitada a tres Environment Variables nao sensiveis."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/fabric-hml-noteri-discovery.yml"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}
