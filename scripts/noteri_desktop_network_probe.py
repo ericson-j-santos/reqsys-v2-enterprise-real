@@ -18,6 +18,7 @@ CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
+ADMIN_STAGING_PATH = rf"\\\\{TARGET_HOST}\\C$\\Users\\Public\\Desktop"
 
 
 class ProbeError(RuntimeError):
@@ -107,6 +108,24 @@ def runtime_port_reachable() -> bool:
         return False
 
 
+def admin_staging_path_probe() -> dict[str, Any]:
+    """Comprova apenas acesso de leitura ao Desktop Público via C$; não grava nada."""
+    try:
+        with os.scandir(ADMIN_STAGING_PATH) as entries:
+            next(entries, None)
+        return {"reachable": True, "result": "accessible"}
+    except PermissionError:
+        return {"reachable": False, "result": "access_denied"}
+    except FileNotFoundError:
+        return {"reachable": False, "result": "not_found"}
+    except OSError as exc:
+        code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+        return {
+            "reachable": False,
+            "result": f"os_error_{code}" if code is not None else "os_error",
+        }
+
+
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     correlation_id = validate_request(confirm, correlation_id)
     host = validate_host()
@@ -114,9 +133,11 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
 
     icmp: bool | None = None
     tcp = False
+    staging = {"reachable": False, "result": "not_attempted"}
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
+        staging = admin_staging_path_probe()
 
     if not resolution["resolved"]:
         state = "name_resolution_failed"
@@ -141,6 +162,9 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "icmp_reachable": icmp,
         "runtime_port": RUNTIME_PORT,
         "runtime_port_reachable": tcp,
+        "admin_staging_path_reachable": bool(staging["reachable"]),
+        "admin_staging_path_result": staging["result"],
+        "admin_staging_path": r"C:\\Users\\Public\\Desktop",
         "desktop_reachable": desktop_reachable,
         "network_state": state,
         "correlation_id": correlation_id,
