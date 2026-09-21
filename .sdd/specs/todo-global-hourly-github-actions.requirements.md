@@ -22,7 +22,7 @@ Substituir o agendamento do Work por um ciclo horário versionado no GitHub Acti
 - Falta de configuração, timeout, DLQ, falha ou ausência de leitura independente devem falhar fechado.
 - O workflow não executa merge, deploy, alteração administrativa ou produção.
 
-## Critério de aceite
+## Critérios de aceite
 
 - YAML válido;
 - testes de contrato aprovados;
