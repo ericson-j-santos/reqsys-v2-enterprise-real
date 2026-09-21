@@ -137,10 +137,10 @@ def sha256_text(value: str) -> str:
 
 
 def validate_host(expected_host: str) -> str:
-    if os.name != "nt":
-        raise MaterializeError("Windows obrigatório")
     if expected_host not in ALLOWED_HOSTS:
         raise MaterializeError("host esperado não autorizado")
+    if os.name != "nt":
+        raise MaterializeError("Windows obrigatório")
     actual = socket.gethostname()
     if actual.casefold() != expected_host.casefold():
         raise MaterializeError(f"host divergente: esperado={expected_host} observado={actual}")
@@ -163,7 +163,7 @@ def render_sql() -> str:
     parts = [
         "-- Kindle Knowledge - consultas locais",
         "-- Dialeto de referência: PostgreSQL compatível com ordered-set aggregates.",
-        "-- Arquivo gerado; fonte versionada no GitHub.",
+        "-- Arquivo gerado, fonte versionada no GitHub.",
         "",
     ]
     for query_id, title, sql, _tokens in QUERIES:
@@ -230,7 +230,6 @@ def materialize(expected_host: str, output_root: Path, correlation_id: str) -> d
         "query_count": len(QUERIES),
         "sql_sha256": sha256_text(sql_text),
         "query_ids": [item[0] for item in QUERIES],
-        "correlation_id": correlation_id,
     }
     manifest_text = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     changed["manifest.json"] = atomic_write(queries_dir / "manifest.json", manifest_text)
