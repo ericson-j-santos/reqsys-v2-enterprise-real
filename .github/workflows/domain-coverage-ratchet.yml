@@ -88,13 +88,23 @@ jobs:
           print(f"required={'true' if evidence.get('promoted') else 'false'}")
           PY
 
+      - name: Gerar token temporário para publicação governada
+        if: steps.promotion.outputs.required == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+
       - name: Criar PR de elevação
         if: steps.promotion.outputs.required == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RUN_ID: ${{ steps.source.outputs.run_id }}
+          READY_FOR_PR_WAIT_SECONDS: "480"
         run: |
           set -euo pipefail
+          gh auth setup-git
           cp artifacts/domain-coverage/ratcheted-policy.json config/domain-coverage-policy.json
           mkdir -p docs/ops-dashboard/data
           cp artifacts/domain-coverage/ratchet-evidence.json docs/ops-dashboard/data/domain-coverage-ratchet-latest.json
@@ -116,40 +126,28 @@ jobs:
             git push origin "$BRANCH"
           fi
 
-          EXISTING_PR="$(gh pr list \
-            --repo "${{ github.repository }}" \
-            --head "$BRANCH" \
-            --state open \
-            --json url \
-            --jq '.[0].url // empty')"
+          cat > /tmp/pr-body.md <<EOF
+          ## Ratchet monotônico
 
-          if [[ -n "$EXISTING_PR" ]]; then
-            echo "PR de ratchet já existente: $EXISTING_PR"
-            exit 0
-          fi
+          Eleva apenas domínios com ganho mínimo de ${{ steps.source.outputs.minimum_gain }} p.p.
 
-          set +e
-          PR_OUTPUT="$(gh pr create \
-            --repo "${{ github.repository }}" \
-            --base main \
-            --head "$BRANCH" \
-            --title "chore(test): elevar baseline de cobertura por domínio" \
-            --body "## Ratchet monotônico\n\nEleva apenas domínios com ganho mínimo de ${{ steps.source.outputs.minimum_gain }} p.p.\n\n- Nunca reduz baseline.\n- Requer CI e aprovação humana.\n- Evidência: run ${RUN_ID}." 2>&1)"
-          PR_EXIT=$?
-          set -e
+          - Nunca reduz baseline.
+          - Requer CI e aprovação humana.
+          - Evidência: run ${RUN_ID}.
+          EOF
 
-          if [[ $PR_EXIT -eq 0 ]]; then
-            echo "$PR_OUTPUT"
-            exit 0
-          fi
+          PR_REQUEST_ARTIFACT_DIR="artifacts/auto-pr/domain-ratchet" \
+            python scripts/auto_open_agent_pr.py \
+              --base main \
+              --branch "$BRANCH" \
+              --head-sha "$(git rev-parse HEAD)" \
+              --title "chore(test): elevar baseline de cobertura por domínio" \
+              --body-file /tmp/pr-body.md \
+              --ready
 
-          if grep -Fq "GitHub Actions is not permitted to create or approve pull requests" <<< "$PR_OUTPUT"; then
-            echo "::warning::A política do repositório impede o GITHUB_TOKEN de criar PRs. A branch $BRANCH foi preservada para abertura governada por credencial autorizada."
-            exit 0
-          fi
-
-          echo "$PR_OUTPUT" >&2
-          exit "$PR_EXIT"
+          PR_URL="$(gh pr list --repo "${{ github.repository }}" --base main --head "$BRANCH" --state open --json url --jq '.[0].url // empty')"
+          test -n "$PR_URL" || { echo "::error::READY_FOR_PR passou, mas nenhuma PR governada foi criada."; exit 1; }
+          echo "PR governada: $PR_URL"
 
       - name: Publicar evidência
         if: always() && steps.policy.outputs.active == 'true'
