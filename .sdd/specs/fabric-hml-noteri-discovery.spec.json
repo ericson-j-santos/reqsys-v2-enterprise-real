@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Fabric HML Noteri Discovery",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_fabric_hml_noteri_discovery_contract.py"
+    ],
+    "evidence_contract": "Probe self-hosted fail-closed; PR read-only; identificadores e segredos nao sao expostos; escrita em main limitada a tres Environment Variables nao sensiveis."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/fabric-hml-noteri-discovery.yml"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  },
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "acceptance_criteria": [
+    "O probe executa somente no runner Noteri allowlisted e falha fechado fora do host esperado.",
+    "Em pull request, o fluxo permanece somente leitura e nao altera configuracao externa.",
+    "Tenant, App Registration e workspace precisam ser unicos e corresponder aos alvos esperados.",
+    "Access token, client secret, Application ID e Workspace ID nao sao impressos nem persistidos em logs ou artifacts.",
+    "O modo manual em main pode gravar somente FABRIC_TENANT_ID, FABRIC_CLIENT_ID e FABRIC_WORKSPACE_ID no Environment homologacao.",
+    "FABRIC_CLIENT_SECRET nao e criado, rotacionado nem gravado por este incremento.",
+    "A evidencia sanitizada registra contagens, estados e hashes sem expor identificadores."
+  ]
+}
