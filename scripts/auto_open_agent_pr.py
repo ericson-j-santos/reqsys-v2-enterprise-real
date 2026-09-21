@@ -271,6 +271,7 @@ def write_pr_request_artifact(
     status: str = "requested",
     pr_number: int | None = None,
     pr_url: str | None = None,
+    draft: bool = True,
 ) -> Path:
     out_dir = Path(os.environ.get("PR_REQUEST_ARTIFACT_DIR", "artifacts/auto-pr-request"))
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -281,7 +282,7 @@ def write_pr_request_artifact(
         "base": base,
         "title": title,
         "body": body,
-        "draft": True,
+        "draft": draft,
         "labels": ["padrao-ouro", "cloud-agent"],
         "pr_number": pr_number,
         "pr_url": pr_url,
@@ -347,9 +348,10 @@ def create_pr_best_effort(
     base: str,
     title: str,
     body: str,
+    draft: bool = True,
 ) -> int:
     try:
-        created = client.create_pr(title=title, body=body, head=branch, base=base, draft=True)
+        created = client.create_pr(title=title, body=body, head=branch, base=base, draft=draft)
         number = int(created["number"])
         add_labels_best_effort(client, number, ["padrao-ouro", "cloud-agent"])
         write_pr_request_artifact(
@@ -360,6 +362,7 @@ def create_pr_best_effort(
             status="created",
             pr_number=number,
             pr_url=str(created.get("html_url") or ""),
+            draft=draft,
         )
         print(f"PR criado: {created.get('html_url')}")
         return 0
@@ -373,6 +376,7 @@ def create_pr_best_effort(
             body=body,
             status="skipped_permission",
             error=str(exc),
+            draft=draft,
         )
         print(
             "::warning::Criação de PR ignorada por permissão insuficiente do token.",
@@ -433,6 +437,8 @@ def main() -> int:
     parser.add_argument("--branch", default=os.environ.get("GITHUB_REF_NAME", ""))
     parser.add_argument("--title", default=os.environ.get("PR_TITLE", ""))
     parser.add_argument("--head-sha", default=os.environ.get("READY_FOR_PR_HEAD_SHA", ""))
+    parser.add_argument("--body-file", type=Path, default=None)
+    parser.add_argument("--ready", action="store_true", help="Cria PR não-draft somente após READY_FOR_PR=passed.")
     args = parser.parse_args()
 
     branch = args.branch.strip()
@@ -445,10 +451,17 @@ def main() -> int:
         print("GITHUB_REPOSITORY ausente.", file=sys.stderr)
         return 2
 
-    title = args.title.strip() or f"feat: Padrão Ouro — {branch}"
+    explicit_title = args.title.strip()
+    title = explicit_title or f"feat: Padrão Ouro — {branch}"
     metadata = load_branch_pr_metadata(branch)
-    if metadata:
+    if metadata and not explicit_title:
         title = metadata.get("title") or title
+    if args.body_file:
+        if not args.body_file.is_file():
+            print(f"Arquivo de corpo ausente: {args.body_file}", file=sys.stderr)
+            return 2
+        body = args.body_file.read_text(encoding="utf-8").strip()
+    elif metadata:
         body = metadata.get("body") or build_body(branch, args.base, args.head_sha)
     else:
         body = build_body(branch, args.base, args.head_sha)
@@ -504,6 +517,7 @@ def main() -> int:
             base=args.base,
             title=title,
             body=body,
+            draft=not args.ready,
         )
     except Exception as exc:  # noqa: BLE001 - report failure with artifact for automation retry
         artifact = write_pr_request_artifact(branch=branch, base=args.base, title=title, body=body, error=str(exc))
