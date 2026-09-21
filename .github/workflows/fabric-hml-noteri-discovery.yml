@@ -6,6 +6,7 @@ on:
       - ".github/workflows/fabric-hml-noteri-discovery.yml"
       - ".github/self-hosted-runner-policy.json"
       - "scripts/fabric_hml_noteri_discovery.py"
+      - "scripts/fabric_hml_azps_probe.ps1"
       - "tests/test_fabric_hml_noteri_discovery_contract.py"
       - ".sdd/specs/fabric-hml-noteri-discovery.requirements.md"
       - ".sdd/specs/fabric-hml-noteri-discovery.spec.json"
