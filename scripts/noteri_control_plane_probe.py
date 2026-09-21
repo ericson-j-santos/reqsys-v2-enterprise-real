@@ -8,12 +8,14 @@ import json
 import os
 import socket
 import subprocess
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 EXPECTED_HOST = "Noteri"
 CONFIRM = "PROBE-NOTERI-CONTROL-PLANE"
+TASK_NAME = r"\Automation\ReqSysNoteriControlPlaneWatchdog"
 
 
 class ProbeError(RuntimeError):
@@ -33,12 +35,20 @@ def validate_host() -> str:
     return host
 
 
-def tasklist_path() -> Path:
+def system32_path(name: str) -> Path:
     root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
-    target = root / "System32" / "tasklist.exe"
+    target = root / "System32" / name
     if not target.is_file():
-        raise ProbeError("tasklist.exe não encontrado")
+        raise ProbeError(f"{name} não encontrado")
     return target
+
+
+def tasklist_path() -> Path:
+    return system32_path("tasklist.exe")
+
+
+def schtasks_path() -> Path:
+    return system32_path("schtasks.exe")
 
 
 def runner_listener_detected() -> bool:
@@ -52,6 +62,63 @@ def runner_listener_detected() -> bool:
         check=False,
     )
     return completed.returncode == 0 and "runner.listener.exe" in completed.stdout.casefold()
+
+
+def decode_xml(raw: bytes) -> str:
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    return raw.decode("utf-8", errors="replace")
+
+
+def parse_task_xml(raw: bytes) -> dict[str, Any]:
+    root = ET.fromstring(decode_xml(raw))
+    ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+    enabled_text = (
+        root.findtext("./t:Settings/t:Enabled", default="true", namespaces=ns) or "true"
+    ).strip()
+    logon_type = (
+        root.findtext("./t:Principals/t:Principal/t:LogonType", default="", namespaces=ns) or ""
+    ).strip()
+    boot = root.find("./t:Triggers/t:BootTrigger", ns) is not None
+    return {
+        "exists": True,
+        "enabled": enabled_text.casefold() == "true",
+        "trigger_at_startup": boot,
+        "logon_type": logon_type,
+        "validator": "schtasks_xml",
+    }
+
+
+def task_status() -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            [str(schtasks_path()), "/Query", "/TN", TASK_NAME, "/XML"],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        if completed.returncode != 0:
+            return {
+                "exists": False,
+                "error": "task_not_found_or_query_failed",
+                "validator": "schtasks_xml",
+            }
+        return parse_task_xml(completed.stdout)
+    except (OSError, ET.ParseError, UnicodeError, subprocess.SubprocessError) as exc:
+        return {
+            "exists": False,
+            "error": type(exc).__name__,
+            "validator": "schtasks_xml",
+        }
+
+
+def task_headless_ready(task: dict[str, Any]) -> bool:
+    return (
+        task.get("exists") is True
+        and task.get("enabled") is True
+        and task.get("trigger_at_startup") is True
+        and str(task.get("logon_type") or "").casefold() == "s4u"
+    )
 
 
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
@@ -70,6 +137,8 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         raise ProbeError("RUNNER_OS divergente")
     if not runner_listener_detected():
         raise ProbeError("Runner.Listener.exe não comprovado")
+
+    task = task_status()
     return {
         "ok": True,
         "host": host,
@@ -77,6 +146,8 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "runner_os": runner_os,
         "runner_arch": runner_arch or None,
         "runner_listener_detected": True,
+        "headless_task": task,
+        "headless_ready": task_headless_ready(task),
         "correlation_id": correlation_id,
         "rdc_required": False,
         "production_touched": False,
