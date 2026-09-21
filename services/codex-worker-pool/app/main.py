@@ -113,6 +113,7 @@ class TaskCreate(BaseModel):
     correlation_id: str = Field(min_length=1, max_length=128)
     priority: int = Field(default=100, ge=0, le=10000)
     base_sha: str = Field(min_length=40, max_length=40)
+    target_branch: str | None = Field(default=None, max_length=200)
     max_attempts: int | None = Field(default=None, ge=1, le=20)
 
 
@@ -210,6 +211,7 @@ def enqueue_task(payload: TaskCreate, response: Response) -> dict[str, Any]:
         payload.correlation_id,
         task_id=task["task_id"],
         issue_number=payload.issue_number,
+        branch=task["branch"],
         created=created,
     )
     return {"created": created, "task": public_task(task)}

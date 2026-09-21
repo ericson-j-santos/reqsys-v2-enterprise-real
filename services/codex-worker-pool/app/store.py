@@ -19,6 +19,9 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 SECRET = re.compile(r"(?i)\b(token|secret|password|passwd|dsn|connection[_-]?string|api[_-]?key)\s*[:=]\s*[^\s,;]+")
 
+TARGET_BRANCH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
+PROTECTED_TARGET_BRANCHES = {"main", "master", "develop"}
+
 
 class PoolError(RuntimeError):
     pass
@@ -63,6 +66,17 @@ def task_id(key: str) -> str:
 
 def branch(issue_number: int, request_id: str) -> str:
     return f"codex/issue-{issue_number}-{hashlib.sha256(request_id.encode()).hexdigest()[:10]}"
+
+
+def validate_target_branch(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized or not TARGET_BRANCH.fullmatch(normalized):
+        raise ValueError("target_branch inválida")
+    if normalized.casefold() in PROTECTED_TARGET_BRANCHES:
+        raise ValueError("target_branch protegida")
+    if ".." in normalized or "//" in normalized or normalized.endswith(("/", ".", ".lock")):
+        raise ValueError("target_branch inválida")
+    return normalized
 
 
 def workspace(repository: str, task: str) -> str:
@@ -238,12 +252,13 @@ class WorkerPoolStore:
     def enqueue_task(
         self, *, repository: str, issue_number: int, request_id: str,
         correlation_id: str, priority: int = 100, base_sha: str | None = None,
-        max_attempts: int | None = None,
+        max_attempts: int | None = None, target_branch: str | None = None,
     ) -> tuple[dict[str, Any], bool]:
         if "/" not in repository or issue_number < 1 or not request_id.strip() or not correlation_id.strip():
             raise ValueError("identidade da task inválida")
         if base_sha and not SHA40.fullmatch(base_sha.lower()):
             raise ValueError("base_sha inválido")
+        task_branch = validate_target_branch(target_branch) if target_branch is not None else branch(issue_number, request_id)
         key, stamp = identity(repository, issue_number, request_id), iso(self.clock())
         tid, attempts = task_id(key), int(max_attempts or self.default_max_attempts)
         if attempts < 1:
@@ -251,13 +266,15 @@ class WorkerPoolStore:
         with self._tx() as db:
             row = db.execute("SELECT * FROM tasks WHERE idempotency_key=?", (key,)).fetchone()
             created = row is None
+            if not created and target_branch is not None and row["branch"] != task_branch:
+                raise ConflictError("target_branch divergente no replay")
             if created:
                 db.execute("""INSERT INTO tasks(
                   task_id,repository,issue_number,request_id,idempotency_key,state,priority,
                   branch,workspace_key,base_sha,max_attempts,correlation_id,created_at,updated_at)
                   VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?)""",
                   (tid, repository.strip(), issue_number, request_id.strip(), key, int(priority),
-                   branch(issue_number, request_id), workspace(repository, tid),
+                   task_branch, workspace(repository, tid),
                    base_sha.lower() if base_sha else None, attempts,
                    correlation_id.strip(), stamp, stamp))
                 row = db.execute("SELECT * FROM tasks WHERE task_id=?", (tid,)).fetchone()
@@ -467,13 +484,20 @@ class WorkerPoolStore:
         for row in workers:
             w, age = dict(row), max(0.0, (now - parse_iso(row["last_heartbeat_at"])).total_seconds())
             online, task = age <= self.heartbeat_ttl_seconds, active.get(row["worker_id"])
-            if not online: why = "offline_or_stale"
-            elif row["profile"] == "ESTUDO": why = "profile_estudo"
-            elif not row["gateway_ok"] or not row["state_validated"]: why = "governance_not_ready"
-            elif task: why = None
-            elif row["role"] == "builder" and not counts.get("queued", 0): why = "no_queued_work"
-            elif row["role"] == "validator" and not counts.get("validating", 0): why = "no_validation_work"
-            else: why = "available"
+            if not online:
+                why = "offline_or_stale"
+            elif row["profile"] == "ESTUDO":
+                why = "profile_estudo"
+            elif not row["gateway_ok"] or not row["state_validated"]:
+                why = "governance_not_ready"
+            elif task:
+                why = None
+            elif row["role"] == "builder" and not counts.get("queued", 0):
+                why = "no_queued_work"
+            elif row["role"] == "validator" and not counts.get("validating", 0):
+                why = "no_validation_work"
+            else:
+                why = "available"
             w.update(gateway_ok=bool(w["gateway_ok"]), state_validated=bool(w["state_validated"]),
                      online=online, heartbeat_age_seconds=round(age, 3),
                      active_task=task["task_id"] if task else None,
