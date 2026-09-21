@@ -416,3 +416,63 @@ def test_main_creates_new_pr_only_after_ready_for_pr(monkeypatch, tmp_path):
     assert request["status"] == "created"
     assert readiness["status"] == "passed"
     assert readiness["run_id"] == 123
+
+
+def test_main_preserves_custom_body_and_creates_ready_only_after_gate(monkeypatch, tmp_path):
+    body_file = tmp_path / "body.md"
+    body_file.write_text("corpo governado específico", encoding="utf-8")
+
+    class FakeClient:
+        created_payload = None
+
+        def find_existing_pr(self, head: str, base: str):
+            return None
+
+        def list_pre_pr_readiness_runs(self, head_sha: str):
+            return [{
+                "id": 901,
+                "html_url": "https://example/actions/901",
+                "head_sha": head_sha,
+                "status": "completed",
+                "conclusion": "success",
+            }]
+
+        def get_branch_sha(self, branch: str):
+            return "main-current"
+
+        def compare(self, base_sha: str, head_sha: str):
+            return {"behind_by": 0, "ahead_by": 1, "status": "ahead"}
+
+        def create_pr(self, **kwargs):
+            self.created_payload = kwargs
+            return {"number": 901, "html_url": "https://example/pr/901"}
+
+        def add_labels(self, number: int, labels: list[str]):
+            return None
+
+    fake = FakeClient()
+    monkeypatch.setenv("GITHUB_REPOSITORY", "ericson-j-santos/reqsys-v2-enterprise-real")
+    monkeypatch.setenv("GH_TOKEN", "app-token")
+    monkeypatch.setenv("READY_FOR_PR_WAIT_SECONDS", "0")
+    monkeypatch.setenv("PR_REQUEST_ARTIFACT_DIR", str(tmp_path / "artifact"))
+    monkeypatch.setattr("scripts.auto_open_agent_pr.GitHubClient", lambda token, repo: fake)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "auto_open_agent_pr.py",
+            "--base", "main",
+            "--branch", "automation/example",
+            "--head-sha", "head-ready",
+            "--title", "chore: exemplo",
+            "--body-file", str(body_file),
+            "--ready",
+        ],
+    )
+
+    assert main() == 0
+    assert fake.created_payload["draft"] is False
+    assert fake.created_payload["title"] == "chore: exemplo"
+    assert "corpo governado específico" in fake.created_payload["body"]
+    assert "## READY_FOR_PR" in fake.created_payload["body"]
+    artifact = json.loads((tmp_path / "artifact" / "auto-pr-request.json").read_text(encoding="utf-8"))
+    assert artifact["draft"] is False
