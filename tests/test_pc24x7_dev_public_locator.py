@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -7,6 +8,8 @@ WORKFLOW = ROOT / ".github" / "workflows" / "deploy-reqsys-pages-composite.yml"
 SUPERVISOR = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py"
 INSTALLER = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor_install.py"
 MANIFEST = ROOT / "infra" / "public-access-urls.json"
+RESOLVER = ROOT / "scripts" / "resolve_pc24x7_dev_locator.mjs"
+PROMOTION = ROOT / ".github" / "workflows" / "fly-automatic-environment-promotion.yml"
 
 
 def test_locator_requires_valid_signed_fresh_cloudflare_state():
@@ -70,3 +73,36 @@ def test_public_access_validation_runs_after_governed_merge():
     assert "github.event.workflow_run.conclusion == 'success'" in workflow
     assert "github.event.workflow_run.event == 'workflow_run'" in workflow
     assert "ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE" in workflow
+
+
+def test_ci_locator_resolver_proves_fail_closed_negative_cases():
+    result = subprocess.run(
+        ["node", str(RESOLVER), "--self-test"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert '"self_test":true' in result.stdout.replace(" ", "")
+
+
+def test_ci_locator_uses_same_public_identity_as_pages():
+    html = HTML.read_text(encoding="utf-8")
+    resolver = RESOLVER.read_text(encoding="utf-8")
+    assert 'reqsys-dev-locator-2b0950c3bf37ac05b46bdb70ab793ca4c85b220b' in html
+    assert 'reqsys-dev-locator-2b0950c3bf37ac05b46bdb70ab793ca4c85b220b' in resolver
+    assert 'xMQwHfokBxBOkP1bvDCxBDdzmnXlVxApGQbwQ9h8kr8=' in html
+    assert 'xMQwHfokBxBOkP1bvDCxBDdzmnXlVxApGQbwQ9h8kr8=' in resolver
+
+
+def test_automatic_promotion_resolves_current_locator_instead_of_static_quick_tunnel():
+    raw = PROMOTION.read_text(encoding="utf-8")
+    job = raw.split("  validate-dev-pc24x7:", 1)[1].split("\n  dev-result:", 1)[0]
+    assert "resolve_pc24x7_dev_locator.mjs --self-test" in job
+    assert "--output artifacts/pc24x7-dev/signed-locator.json" in job
+    assert "steps.locator.outputs.base_url" in job
+    assert "steps.locator.outputs.frontend_url" in job
+    assert "vars.PC24X7_DEV_BASE_URL" not in job
+    assert "vars.PC24X7_DEV_FRONTEND_URL" not in job
