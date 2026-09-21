@@ -13,8 +13,12 @@ import socket
 import subprocess
 import sys
 import time
-import winreg
 from datetime import datetime, timezone
+
+try:
+    import winreg
+except ModuleNotFoundError:  # pragma: no cover - disponível apenas no Windows
+    winreg = None
 from pathlib import Path
 from typing import Any
 
@@ -203,6 +207,8 @@ def register_task(*, python_executable: str, release_script: Path, runner_home: 
 
 
 def install_logon_fallback(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:
+    if winreg is None:
+        raise WatchdogError("winreg indisponível fora do Windows")
     command = subprocess.list2cmdline(
         [
             python_executable,
