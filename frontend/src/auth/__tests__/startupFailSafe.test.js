@@ -10,10 +10,13 @@ const indexSource = readFileSync(resolve(here, '../../../index.html'), 'utf8')
 describe('startup fail-safe', () => {
   it('monta a interface antes do bootstrap MSAL', () => {
     const mountAt = mainSource.indexOf("app.mount('#app')")
+    const routerReadyAt = mainSource.indexOf('await router.isReady()')
     const authAt = mainSource.indexOf('void inicializarAutenticacao(caminhoInicial)')
 
     expect(mountAt).toBeGreaterThan(-1)
+    expect(routerReadyAt).toBeGreaterThan(-1)
     expect(authAt).toBeGreaterThan(-1)
+    expect(mountAt).toBeLessThan(routerReadyAt)
     expect(mountAt).toBeLessThan(authAt)
   })
 
