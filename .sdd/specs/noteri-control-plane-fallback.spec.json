@@ -19,7 +19,8 @@
       "reqsys-dev"
     ],
     "rdc_required": false,
-    "environment": "DEV"
+    "environment": "DEV",
+    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml"
   },
   "security": {
     "arbitrary_shell": false,
@@ -45,9 +46,10 @@
       "tests/test_noteri_control_plane_fallback.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py",
-      "tests/test_activate_noteri_free_control_plane.py"
+      "tests/test_activate_noteri_free_control_plane.py",
+      "tests/test_noteri_runtime_auto_watch_workflow.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -57,7 +59,8 @@
     "watchdog": "scripts/noteri_control_plane_watchdog.py",
     "bootstrap": "scripts/activate_noteri_free_control_plane.py",
     "policy": ".github/self-hosted-runner-policy.json",
-    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml"
+    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml"
   },
   "artifacts": {
     "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
@@ -145,6 +148,25 @@
         "requires_admin": false,
         "rdc_required": false
       }
+    },
+    "auto_watch": {
+      "workflow": ".github/workflows/noteri-runtime-auto-watch.yml",
+      "schedule": "every_10_minutes",
+      "runner": "ubuntu-latest",
+      "dispatch_target": "noteri-control-plane-probe.yml",
+      "cancel_without_pickup": true,
+      "validates_exact_main_sha": true,
+      "reads_sanitized_probe_artifact": true,
+      "states": [
+        "runner_unavailable",
+        "runner_online_headless_not_ready",
+        "runtime_active",
+        "probe_failed"
+      ],
+      "reboot": false,
+      "rdc_required": false,
+      "production_touched": false,
+      "secrets_read": false
     }
   }
 }
