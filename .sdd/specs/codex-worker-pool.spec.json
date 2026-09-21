@@ -9,14 +9,15 @@
     "design": true,
     "tasks": true
   },
-  "description": "Consolida o pool governado de workers Codex distribuídos com heartbeat, fila idempotente, lease, recuperação, quarentena, isolamento por workspace, separação Builder/Validator e scheduler justo por lanes lógicas de repositório.",
+  "description": "Consolida o pool governado de workers Codex distribuídos com heartbeat, fila idempotente, lease, recuperação, quarentena, isolamento por workspace, separação Builder/Validator, scheduler justo por lanes lógicas de repositório e smoke DEV inputless em lane sintética desabilitada.",
   "issues": [
     1767,
     1768,
     1769,
     1770,
     1771,
-    1907
+    1907,
+    1914
   ],
   "scope": "local-dev-pc24x7",
   "files": [
@@ -29,16 +30,21 @@
     "scripts/pc24x7_network_probe.py",
     "scripts/codex_worker_pool_dualhost_e2e.py",
     "tests/test_pc24x7_network_probe.py",
-    "tests/test_codex_worker_pool_dualhost_e2e.py"
+    "tests/test_codex_worker_pool_dualhost_e2e.py",
+    ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "scripts/codex_worker_pool_smoke_dev.py",
+    "tests/test_codex_worker_pool_smoke_dev.py"
   ],
   "sdd_gate": {
     "tests": [
       "services/codex-worker-pool/tests/test_store.py",
       "services/codex-worker-pool/tests/test_api.py",
       "tests/test_pc24x7_network_probe.py",
-      "tests/test_codex_worker_pool_dualhost_e2e.py"
+      "tests/test_codex_worker_pool_dualhost_e2e.py",
+      "tests/test_codex_worker_pool_smoke_dev.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado/correlation_id divergente fail-closed, replay idempotente, recuperação de lease e quarentena. O snapshot de observabilidade deve omitir lease_token e sanitizar marcadores sensíveis brutos; o teste negativo de vazamento precisa falhar se qualquer valor bruto aparecer. A prova física multi-host exige dual_host_preflight nos dois hosts no mesmo SHA canônico das regras e no mesmo SHA do ReqSys, seguida de handshake de rede governado e E2E Desktop Builder -> Noteri Validator com leitura final independente. O scheduler por repositório deve provar rotação determinística entre lanes elegíveis, respeito a max_in_flight, afinidade restritiva quando configurada e compatibilidade do pool compartilhado quando não houver afinidade."
+    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado/correlation_id divergente fail-closed, replay idempotente, recuperação de lease e quarentena. O snapshot de observabilidade deve omitir lease_token e sanitizar marcadores sensíveis brutos; o teste negativo de vazamento precisa falhar se qualquer valor bruto aparecer. A prova física multi-host exige dual_host_preflight nos dois hosts no mesmo SHA canônico das regras e no mesmo SHA do ReqSys, seguida de handshake de rede governado e E2E Desktop Builder -> Noteri Validator com leitura final independente. O scheduler por repositório deve provar rotação determinística entre lanes elegíveis, respeito a max_in_flight, afinidade restritiva quando configurada e compatibilidade do pool compartilhado quando não houver afinidade. O smoke DEV deve executar somente no PC24x7 allowlisted, configurar uma lane sintética enabled=false, provar enqueue/replay/readback no SHA exato e confirmar por snapshot que a task permanece queued e sem lease."
   },
   "risk": {
     "production": false,
