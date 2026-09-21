@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import secrets
 import time
 import urllib.request
@@ -26,6 +27,7 @@ KEY_BLOB = RUNTIME / "dev-locator-key.dpapi"
 PUBLIC_CFG = RUNTIME / "dev-locator-public.json"
 PUBLISH_STATE = PUBLIC / "dev-locator-publish.json"
 TTL_SECONDS = 900
+SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def b64e(data: bytes) -> str:
@@ -75,44 +77,100 @@ def ensure_identity() -> tuple[Ed25519PrivateKey, dict]:
     return key, cfg
 
 
-def probe(base_url: str) -> bool:
+def _json_probe(base_url: str, path: str) -> tuple[int | None, dict]:
     try:
         request = urllib.request.Request(
-            base_url.rstrip("/") + "/api/health",
-            headers={"User-Agent": "ReqSysLocatorPublisher/1.0"},
+            base_url.rstrip("/") + path,
+            headers={
+                "User-Agent": "ReqSysLocatorPublisher/2.0",
+                "Accept": "application/json",
+            },
         )
         with urllib.request.urlopen(request, timeout=10) as response:
-            return int(response.status) == 200
+            status = int(response.status)
+            payload = json.loads(response.read().decode("utf-8"))
+            return status, payload if isinstance(payload, dict) else {}
     except Exception:
-        return False
+        return None, {}
 
 
-def healthy_urls() -> list[str]:
+def probe_runtime_contract(base_url: str) -> dict:
+    basic_status, basic = _json_probe(base_url, "/api/health")
+    runtime_status, runtime = _json_probe(base_url, "/api/runtime/health")
+    build_status, build = _json_probe(base_url, "/api/runtime/build-info")
+    build_data = build.get("data", build) if isinstance(build, dict) else {}
+    build_sha = str(
+        build_data.get("build_sha") or build_data.get("commit_sha") or ""
+    ).strip().lower()
+    build_sha_valid = bool(SHA_RE.fullmatch(build_sha))
+    return {
+        "ok": (
+            basic_status == 200
+            and runtime_status == 200
+            and build_status == 200
+            and build_sha_valid
+        ),
+        "basic_status": basic_status,
+        "runtime_status": runtime_status,
+        "build_status": build_status,
+        "build_sha": build_sha if build_sha_valid else None,
+        "basic_success": basic.get("success") is True if basic else False,
+        "runtime_success": runtime.get("success") is True if runtime else False,
+    }
+
+
+def healthy_urls() -> tuple[list[str], dict[str, dict]]:
     data = json.loads(CF_STATE.read_text(encoding="utf-8"))
     urls: list[str] = []
+    evidence: dict[str, dict] = {}
     for tunnel in data.get("tunnels") or []:
         value = tunnel.get("url")
-        if (
+        if not (
             value
             and value.startswith("https://")
             and value.endswith(".trycloudflare.com")
-            and probe(value)
         ):
-            urls.append(value.rstrip("/"))
-    return list(dict.fromkeys(urls))
+            continue
+        normalized = value.rstrip("/")
+        contract = probe_runtime_contract(normalized)
+        evidence[normalized] = contract
+        if contract.get("ok") is True:
+            urls.append(normalized)
+    return list(dict.fromkeys(urls)), evidence
 
 
 def main() -> int:
     key, cfg = ensure_identity()
-    urls = healthy_urls()
+    urls, runtime_evidence = healthy_urls()
     now = int(time.time())
+    if not urls:
+        result = {
+            "published": False,
+            "publish_status": None,
+            "healthy_url_count": 0,
+            "selected_url": None,
+            "expires_at": None,
+            "topic": cfg["topic"],
+            "public_key_b64": cfg["public_key_b64"],
+            "reason": "runtime_contract_not_proven",
+            "runtime_contract": runtime_evidence,
+        }
+        PUBLISH_STATE.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(result, ensure_ascii=True, sort_keys=True))
+        return 2
+
+    selected_build_sha = runtime_evidence[urls[0]].get("build_sha")
     payload = {
         "schema_version": "1.0.0",
         "environment": "dev",
         "issued_at": now,
         "expires_at": now + TTL_SECONDS,
-        "selected_url": urls[0] if urls else None,
+        "selected_url": urls[0],
         "urls": urls,
+        "runtime_build_sha": selected_build_sha,
     }
     payload_raw = json.dumps(
         payload,
@@ -151,13 +209,15 @@ def main() -> int:
         "expires_at": payload["expires_at"],
         "topic": cfg["topic"],
         "public_key_b64": cfg["public_key_b64"],
+        "runtime_build_sha": selected_build_sha,
+        "runtime_contract_proven": True,
     }
     PUBLISH_STATE.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     print(json.dumps(result, ensure_ascii=True, sort_keys=True))
-    return 0 if result["published"] and urls else 2
+    return 0 if result["published"] and result["runtime_contract_proven"] else 2
 
 
 if __name__ == "__main__":
