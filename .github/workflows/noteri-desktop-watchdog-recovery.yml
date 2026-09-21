@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Query and run exact existing Desktop watchdog
-        shell: pwsh
+        shell: powershell
         run: |
           python scripts/noteri_desktop_watchdog_rpc_recovery.py --confirm RUN-EXISTING-DESKTOP-WATCHDOG --evidence-file "$env:EVIDENCE_FILE"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -43,7 +43,7 @@ jobs:
 
       - name: Summary
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
           "## Noteri → Desktop Watchdog Recovery" | Add-Content $env:GITHUB_STEP_SUMMARY
           if (Test-Path "$env:EVIDENCE_FILE") {
