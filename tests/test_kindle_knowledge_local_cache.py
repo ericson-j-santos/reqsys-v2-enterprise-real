@@ -43,6 +43,8 @@ class KindleKnowledgeLocalCacheTests(unittest.TestCase):
         self.assertIn("runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]", raw)
         self.assertIn("runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]", raw)
         self.assertIn("MATERIALIZE-KINDLE-QUERIES", raw)
+        self.assertIn("RUN-EXISTING-DESKTOP-WATCHDOG", raw)
+        self.assertIn("noteri_desktop_watchdog_rpc_recovery.py", raw)
         self.assertIn("C:\\dev\\chatgpt-workers\\kindle-knowledge-local", raw)
         self.assertNotIn("secrets.", raw)
 
