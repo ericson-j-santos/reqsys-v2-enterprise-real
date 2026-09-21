@@ -27,7 +27,8 @@
     "secrets_stored": false,
     "production": false,
     "reboot": false,
-    "fail_closed_on_missing_runner": true
+    "fail_closed_on_missing_runner": true,
+    "elevated_result_contains_secrets": false
   },
   "runtime_gate": {
     "prerequisite": "GitHub CLI autenticado e bootstrap governado capaz de provisionar ou reutilizar o runner do Noteri",
@@ -72,7 +73,11 @@
       "host": "Noteri",
       "rdc_required": false,
       "shell": "powershell",
-      "shell_reason": "Noteri uses Windows PowerShell; pwsh is not installed in the self-hosted runner PATH"
+      "shell_reason": "Noteri uses Windows PowerShell; pwsh is not installed in the self-hosted runner PATH",
+      "task_folder": "\\Automation",
+      "validator": "schtasks_xml",
+      "elevated_result": "required",
+      "failure_contract": "elevated child must persist sanitized result and fail closed"
     }
   }
 }
