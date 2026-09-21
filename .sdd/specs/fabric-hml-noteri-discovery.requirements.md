@@ -21,7 +21,7 @@ Recuperar, sem GUI/RDC e sem expor identificadores privados, a configuração n�
 9. Publicar evidência sanitizada com estados, contagens e hashes apenas quando houver aplicação.
 10. Permanecer fail-closed diante de host, tenant, app ou workspace ambíguos.
 
-## Critério de aceite
+## Critérios de aceite
 
 - teste de contrato verde;
 - Self-Hosted Runner Governance verde;
