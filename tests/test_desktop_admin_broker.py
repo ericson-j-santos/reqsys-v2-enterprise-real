@@ -140,6 +140,7 @@ def test_install_stages_release_and_marks_uac_pending(monkeypatch, tmp_path: Pat
     scripts.mkdir(parents=True)
     for name in (
         "desktop_admin_broker.py",
+        "desktop_admin_broker_uac_launcher.py",
         m.WATCHDOG_SCRIPT,
         m.WATCHDOG_UAC_SCRIPT,
         m.RDC_RECOVERY_SCRIPT,
