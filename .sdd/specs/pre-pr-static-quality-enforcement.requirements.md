@@ -21,7 +21,8 @@ O gate pré-PR compilava Python, mas não executava Ruff nos arquivos alterados.
 5. `Pre-PR Readiness Gate` deve ser obrigatório em `governance/merge/current-sha-required-workflows.json` e executar tanto em `push` quanto em `pull_request` para o SHA exato da branch do PR.
 6. O workflow não pode ser tratado como opcional quando ausente/falho.
 7. Evidência continua vinculada ao `head_sha` exato e `behind_by=0`.
-8. Nenhum merge, deploy ou produção é realizado por este incremento.\n9. Uma PR somente frontend não pode executar pytest de backend/raiz por mera coincidência textual com nomes genéricos de arquivos.
+8. Nenhum merge, deploy ou produção é realizado por este incremento.
+9. Uma PR somente frontend não pode executar pytest de backend/raiz por mera coincidência textual com nomes genéricos de arquivos.
 
 ## Controles negativos
 
