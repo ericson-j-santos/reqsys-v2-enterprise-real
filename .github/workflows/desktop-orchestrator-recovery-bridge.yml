@@ -1,0 +1,145 @@
+name: Desktop Orchestrator Recovery Bridge
+
+on:
+  push:
+    branches:
+      - ops/desktop-runner-service-recovery-20260921
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-orchestrator-recovery-bridge
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Recover Desktop runner through existing orchestrator
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 6
+    env:
+      BASE_URL: http://DESKTOP-PDQK954:8787
+      TARGET_HOST: DESKTOP-PDQK954
+      EVIDENCE_FILE: artifacts/desktop-orchestrator-recovery/evidence.json
+    steps:
+      - name: Submit exact runner recovery task
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path (Split-Path $env:EVIDENCE_FILE) | Out-Null
+          $corr = "desktop-orchestrator-recover-${{ github.run_id }}-${{ github.run_attempt }}"
+          $eventId = "$corr-event"
+          $idem = "$corr-idem"
+
+          function Write-Evidence([hashtable]$Data) {
+            $Data.schema_version = '1'
+            $Data.generated_at_utc = [DateTime]::UtcNow.ToString('o')
+            $Data.source_host = $env:COMPUTERNAME
+            $Data.target_host = $env:TARGET_HOST
+            $Data.correlation_id = $corr
+            $Data.production_touched = $false
+            $Data.secrets_read = $false
+            $Data.credentials_supplied = $false
+            $Data | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 $env:EVIDENCE_FILE
+          }
+
+          try {
+            $ready = Invoke-RestMethod -Uri "$env:BASE_URL/readyz" -Method GET -TimeoutSec 8
+            if (-not $ready.ok -or -not $ready.ready) {
+              Write-Evidence @{ ok=$false; result='ORCHESTRATOR_NOT_READY' }
+              exit 2
+            }
+          } catch {
+            Write-Evidence @{ ok=$false; result='ORCHESTRATOR_UNREACHABLE'; error=$_.Exception.Message }
+            exit 3
+          }
+
+          try {
+            $workers = Invoke-RestMethod -Uri "$env:BASE_URL/v1/workers" -Method GET -TimeoutSec 8
+          } catch {
+            Write-Evidence @{ ok=$false; result='WORKER_SNAPSHOT_FAILED'; error=$_.Exception.Message }
+            exit 4
+          }
+
+          $desktop = @($workers.workers | Where-Object {
+            $_.worker_id -eq 'desktop-pdqk954' -and
+            $_.device_name -eq 'DESKTOP-PDQK954'
+          })
+          if ($desktop.Count -ne 1) {
+            Write-Evidence @{ ok=$false; result='DESKTOP_WORKER_NOT_UNIQUE'; worker_count=$desktop.Count }
+            exit 5
+          }
+          $worker = $desktop[0]
+          $safe = @($worker.capabilities.safe_task_types)
+          if ($safe -notcontains 'host.github_runner.recover.v1') {
+            Write-Evidence @{ ok=$false; result='RUNNER_RECOVERY_NOT_ALLOWLISTED' }
+            exit 6
+          }
+
+          $body = @{
+            event_id = $eventId
+            correlation_id = $corr
+            idempotency_key = $idem
+            task_type = 'host.github_runner.recover.v1'
+            payload = @{ target_host = 'DESKTOP-PDQK954' }
+            risk = 1
+            max_attempts = 1
+            lease_seconds = 120
+          } | ConvertTo-Json -Depth 6
+
+          try {
+            $submitted = Invoke-RestMethod -Uri "$env:BASE_URL/v1/intake" -Method POST -ContentType 'application/json' -Body $body -TimeoutSec 8
+          } catch {
+            Write-Evidence @{ ok=$false; result='INTAKE_FAILED'; error=$_.Exception.Message }
+            exit 7
+          }
+
+          $itemId = $submitted.item.id
+          if (-not $itemId) {
+            Write-Evidence @{ ok=$false; result='ITEM_ID_MISSING' }
+            exit 8
+          }
+
+          $deadline = [DateTime]::UtcNow.AddSeconds(90)
+          $terminal = $null
+          while ([DateTime]::UtcNow -lt $deadline) {
+            Start-Sleep -Seconds 2
+            try {
+              $status = Invoke-RestMethod -Uri "$env:BASE_URL/v1/work-items/$itemId" -Method GET -TimeoutSec 8
+              $state = "$($status.item.state)"
+              if ($state -in @('CONCLUIDO','BLOQUEADO','FALHOU','FAILED','COMPLETED')) {
+                $terminal = $status.item
+                break
+              }
+            } catch {}
+          }
+
+          if ($null -eq $terminal) {
+            Write-Evidence @{
+              ok=$false
+              result='RECOVERY_TIMEOUT'
+              item_id=$itemId
+              dispatch=$submitted.dispatch
+            }
+            exit 9
+          }
+
+          $ok = "$($terminal.state)" -in @('CONCLUIDO','COMPLETED')
+          Write-Evidence @{
+            ok=$ok
+            result=$(if ($ok) {'RUNNER_RECOVERY_COMPLETED'} else {'RUNNER_RECOVERY_TERMINAL_FAILURE'})
+            item_id=$itemId
+            final_state=$terminal.state
+            final_item=$terminal
+            dispatch=$submitted.dispatch
+          }
+          if (-not $ok) { exit 10 }
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-orchestrator-recovery-${{ github.run_id }}
+          path: artifacts/desktop-orchestrator-recovery/evidence.json
+          if-no-files-found: error
+          retention-days: 7
