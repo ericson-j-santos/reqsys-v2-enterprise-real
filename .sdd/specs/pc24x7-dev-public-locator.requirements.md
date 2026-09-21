@@ -43,6 +43,7 @@ PC24x7 --Ed25519--> ntfy.sh
 15. A resolução em CI deve validar Ed25519, ambiente DEV, TTL máximo de 15 minutos, `issued_at`, `selected_url` pertencente à lista e somente HTTPS `*.trycloudflare.com`; qualquer divergência falha fechada.
 16. O publisher local só pode publicar URLs que respondam HTTP 200 em `/api/health`, `/api/runtime/health` e `/api/runtime/build-info`.
 17. O supervisor não pode publicar locator quando o contrato runtime local estiver parcial; nesse caso deve registrar `local_runtime_contract_failed`, manter `ready=false` e deixar o locator anterior expirar naturalmente.
+18. Toda validação de publicação same-SHA deve comparar o SHA observado exclusivamente com o `expected_sha` imutável da execução; coincidir apenas com o HEAD atual de `main` não é evidência válida e deve falhar fechado.
 
 ## Critérios de aceite
 
@@ -58,3 +59,4 @@ PC24x7 --Ed25519--> ntfy.sh
 - nenhuma dependência paga é introduzida;
 - o workflow de promoção automática resolve o tunnel vigente pelo locator assinado e não usa `vars.PC24X7_DEV_BASE_URL`/`vars.PC24X7_DEV_FRONTEND_URL` como URL efêmera estática;
 - runtime parcial (health básico verde, mas runtime health/build-info ausentes) nunca é republicado pelo locator.
+- teste negativo comprova que runtime no SHA atual de `main`, porém diferente do `expected_sha`, é rejeitado como `sha_mismatch`.
