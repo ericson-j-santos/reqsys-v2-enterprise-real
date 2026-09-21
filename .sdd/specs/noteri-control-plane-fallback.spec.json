@@ -47,7 +47,7 @@
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_activate_noteri_free_control_plane.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -61,7 +61,8 @@
   },
   "artifacts": {
     "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
-    "headless_uac_launcher": "scripts/noteri_control_plane_watchdog_uac_launcher.py"
+    "headless_uac_launcher": "scripts/noteri_control_plane_watchdog_uac_launcher.py",
+    "headless_interactive_stage_root": "%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneBootstrap\\<sha>"
   },
   "commands": {
     "headless_activation": "/reqsys run noteri-headless-control-plane-activation"
@@ -98,7 +99,10 @@
         ],
         "purpose": "single-click legitimate UAC consent when remote runner cannot invoke runas",
         "rdc_required": false,
-        "uac_bypass_allowed": false
+        "uac_bypass_allowed": false,
+        "source_binding": "workflow_checkout_sha",
+        "git_ref_dependency": false,
+        "staged_files_sha256_verified": true
       }
     },
     "probe_workflow": {
