@@ -17,6 +17,8 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 5. O Gateway aceita somente os comandos exatos `/reqsys run noteri-control-plane-probe` e `/reqsys run noteri-headless-control-plane-activation`.
 6. O Gateway aguarda pickup e falha fechado com `SELF_HOSTED_RUNNER_UNAVAILABLE` se o runner não adquirir o job.
 7. Quando não houver pickup, o Gateway cancela o run self-hosted abandonado, confirma `completed/cancelled` por janela limitada e registra o resultado da limpeza; nenhuma nova tentativa é criada automaticamente.
+8. Um runtime auto watch em GitHub-hosted runner deve verificar periodicamente o retorno do Noteri sem depender do chat: despachar somente `noteri-control-plane-probe.yml` na `main`, validar o SHA exato, cancelar o run sem pickup e atualizar um único comentário de estado na issue governada.
+9. Quando houver pickup, o auto watch deve aguardar o probe, baixar somente o artifact sanitizado e declarar `runtime_active` apenas com `ok=true`, host Noteri, `Runner.Listener.exe` comprovado, `headless_ready=true` e `rdc_required=false`.
 
 ## Requisitos
 
@@ -33,6 +35,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - se Task Scheduler negar `AtStartup + S4U`, retornar `activation_pending=true` e não declarar ativação concluída;
 - a ativação headless administrativa deve ocorrer somente por workflow self-hosted fixo no Noteri, sem inputs arbitrários, via UAC legítimo e validação posterior de tarefa `AtStartup + S4U`;
 - o workflow de ativação headless não pode executar reboot, produção, shell genérico ou ler segredos.
+- o runtime auto watch deve executar em `ubuntu-latest`, sem segredos, sem reboot, sem GUI, sem produção/deploy e sem shell arbitrário; ausência de pickup é estado observável, não motivo para deixar runs órfãos na fila.
 
 ## Bootstrap físico único
 
