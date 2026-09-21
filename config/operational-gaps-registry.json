@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "description": "Gaps operacionais documentados com referência OPS-GAP-* para gate de incremento e hotfix governado.",
+  "description": "Gaps operacionais documentados com referência OPS-GAP-* para gate de incremento e hotfix governado. Os gaps do backlog Pareto canônico (docs/padrao-ouro/enterprise-gap-closure-matrix.json) devem permanecer espelhados aqui para que o Agent Increment Gate aceite --increment-type gap_fix.",
   "gaps": [
     {
       "id": "OPS-GAP-FLY-DEMO-LOGIN",
@@ -61,6 +61,66 @@
       "detail": "A recuperação integrada na PR #1818 falha quando RDC e runner PC24x7 ficam indisponíveis simultaneamente; corrigir com watchdog Windows AtStartup independente de ambos.",
       "reference_pr": 1818,
       "allowed_increment_types": ["gap_fix", "hotfix"]
+    },
+    {
+      "id": "OPS-GAP-AGENT-RUNTIME-001",
+      "title": "Runtime operacional unificado de agentes ainda parcialmente coordenado.",
+      "status": "open",
+      "scope": "multiagentes",
+      "detail": "Definir state machine canônica, envelope de evento e contrato de memória operacional compartilhada antes de novas automações autônomas.",
+      "priority": "P0",
+      "reference_document": "docs/padrao-ouro/enterprise-gap-closure-matrix.json",
+      "allowed_increment_types": ["gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-UX-ENTERPRISE-001",
+      "title": "Experiência operacional ainda depende de telas e fluxos com complexidade elevada para adoção corporativa.",
+      "status": "open",
+      "scope": "ux_enterprise",
+      "detail": "Consolidar guided flows para entrada de requisito, decisão de governança, evidência de CI e monitoramento executivo.",
+      "priority": "P1",
+      "reference_document": "docs/padrao-ouro/enterprise-gap-closure-matrix.json",
+      "allowed_increment_types": ["gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-WORKFLOW-ENGINE-001",
+      "title": "Workflow engine visual ainda não transforma o produto em operação low-code madura.",
+      "status": "open",
+      "scope": "workflow_engine",
+      "detail": "Versionar topologia mínima de workflow com estados, transições, permissões e evidências obrigatórias.",
+      "priority": "P1",
+      "reference_document": "docs/padrao-ouro/enterprise-gap-closure-matrix.json",
+      "allowed_increment_types": ["gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-OBSERVABILITY-001",
+      "title": "Tracing distribuído entre agentes, workflows e integrações ainda é parcial.",
+      "status": "open",
+      "scope": "observabilidade_distribuida",
+      "detail": "Padronizar correlation_id, causation_id e workflow_run_id em artifacts de agentes, CI e runtime health.",
+      "priority": "P2",
+      "reference_document": "docs/padrao-ouro/enterprise-gap-closure-matrix.json",
+      "allowed_increment_types": ["gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-RBAC-ABAC-001",
+      "title": "RBAC/ABAC, policy engine central e auditoria forense ainda não estão consolidados como controle único.",
+      "status": "open",
+      "scope": "seguranca_governanca",
+      "detail": "Mapear matriz recurso -> papel -> contexto -> evidência de auditoria para rotas críticas antes de expandir permissões.",
+      "priority": "P2",
+      "reference_document": "docs/padrao-ouro/enterprise-gap-closure-matrix.json",
+      "allowed_increment_types": ["gap_fix"]
+    },
+    {
+      "id": "OPS-GAP-GITOPS-CHECKS-001",
+      "title": "Branch protection pode esperar checks antigos ou workflows renomeados, gerando ruído operacional.",
+      "status": "open",
+      "scope": "gitops_ci_cd",
+      "detail": "Gerar inventário de checks obrigatórios versus workflows existentes e classificar stale checks antes de alterar proteção.",
+      "priority": "P0",
+      "reference_document": "docs/padrao-ouro/enterprise-gap-closure-matrix.json",
+      "allowed_increment_types": ["gap_fix"]
     }
   ]
 }
