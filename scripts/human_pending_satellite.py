@@ -19,7 +19,7 @@ OCR_CERT_ONLY_LABEL = "scope:ocr-certification-only"
 VALID_SCOPES = {"nonprod", "prod", "ocr-certification"}
 
 HUMAN_PATTERNS: dict[str, tuple[str, ...]] = {
-    "approval_review": ("aprovação obrigatória", "approval required", "review obrigatória", "review required", "aprovação humana"),
+    "approval_review": ("aprovação obrigatória", "approval required", "review obrigatória", "review required", "aprovação humana obrigatória", "aprovação humana necessária"),
     "merge_decision": ("decisão de merge", "merge decision", "human merge", "merge manual"),
     "conflict_choice": ("escolha humana", "decisão humana", "human choice"),
     "environment_approval": ("environment approval", "deployment approval", "aprovação de environment", "aprovação de deployment"),
@@ -30,13 +30,14 @@ HUMAN_PATTERNS: dict[str, tuple[str, ...]] = {
     "operational_acceptance": ("aceite operacional", "operational acceptance", "aceite humano", "human acceptance"),
     "production_confirmation": ("confirmação de produção", "production confirmation", "autorizar produção", "autorizar producao", "prod approval"),
     "architecture_decision": ("decisão arquitetural", "architecture decision", "adr approval", "decisão de arquitetura"),
-    "real_external_evidence": ("corpus real", "documento real", "documentos reais", "mfa real", "contrato real", "evidência real", "evidencia real", "revisão humana", "revisao humana", "sign-off", "assinatura formal"),
+    "real_external_evidence": ("corpus real", "documento real", "documentos reais", "mfa real", "contrato real", "revisão humana", "revisao humana", "sign-off", "assinatura formal"),
+    "external_business_input": ("fonte sql corporativa", "consulta real de negócio", "consulta real de negocio", "fonte de dados/negócio", "fonte de dados/negocio", "fonte/autoria da consulta real"),
 }
 
 HUMAN_INTENT_PATTERNS = (
     "humano:", "ação humana", "acao humana", "human action", "humana única", "humana unica",
-    "blueprint humano", "aprovação humana", "revisão humana", "revisao humana", "pessoa autorizada",
-    "responsável", "responsavel", "não pode fabricar", "nao pode fabricar", "não automatizável", "nao automatizavel",
+    "blueprint humano", "pessoa autorizada",
+    "não pode fabricar", "nao pode fabricar", "não automatizável", "nao automatizavel",
 )
 
 TECHNICAL_ONLY_PATTERNS = (
@@ -47,6 +48,37 @@ TECHNICAL_ONLY_PATTERNS = (
 
 APPROVAL_PATTERNS = (
     r"\baprovo\b", r"\bautorizo\b", r"\bapproved\b", r"\bauthorized\b",
+)
+
+TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+SATELLITE_SUPPRESS_LABEL = "satellite:suppress-human"
+RESOLVED_HUMAN_GATE_LABEL = "human-gate:resolved"
+HUMAN_GATE_CLEAR_PATTERNS = (
+    "não existe ação manual indispensável ativa",
+    "nao existe acao manual indispensavel ativa",
+    "não notificar esta issue como pendência humana",
+    "nao notificar esta issue como pendencia humana",
+    "gate administrativo concluído",
+    "gate administrativo concluido",
+    "gate humano concluído",
+    "gate humano concluido",
+    "não é mais o bloqueador dominante",
+    "nao e mais o bloqueador dominante",
+)
+HUMAN_GATE_REOPEN_PATTERNS = (
+    "ação humana mínima",
+    "acao humana minima",
+    "ação humana remanescente",
+    "acao humana remanescente",
+    "gate humano atual",
+    "human_auth_session_required",
+    "decisão administrativa explícita",
+    "decisao administrativa explicita",
+    "única ação humana necessária",
+    "unica acao humana necessaria",
+    "bloqueio humano",
+    "pendência humana indispensável",
+    "pendencia humana indispensavel",
 )
 
 @dataclass
@@ -100,8 +132,12 @@ def should_defer_notification(issue: dict[str, Any], scope: str) -> bool:
     return target_scope is not None and target_scope != scope
 
 
-def classify(title: str, body: str) -> list[str]:
+def classify(title: str, body: str, labels: set[str] | None = None) -> list[str]:
     text = norm(f"{title}\n{body}")
+    label_names = {str(label).strip().lower() for label in (labels or set())}
+    if SATELLITE_SUPPRESS_LABEL in label_names or RESOLVED_HUMAN_GATE_LABEL in label_names:
+        return []
+
     categories = [
         category
         for category, patterns in HUMAN_PATTERNS.items()
@@ -110,10 +146,16 @@ def classify(title: str, body: str) -> list[str]:
     if not categories:
         return []
 
-    explicit_human_intent = any(pattern in text for pattern in HUMAN_INTENT_PATTERNS)
+    labeled_human_gate = any(
+        label.startswith("human-gate:") and label != RESOLVED_HUMAN_GATE_LABEL
+        for label in label_names
+    )
+    explicit_human_intent = labeled_human_gate or any(
+        pattern in text for pattern in HUMAN_INTENT_PATTERNS
+    )
     strong_external = any(category in categories for category in {
-        "real_external_evidence", "environment_approval", "production_confirmation",
-        "architecture_decision", "billing_limit", "dns_domain",
+        "real_external_evidence", "external_business_input",
+        "production_confirmation", "billing_limit", "dns_domain",
     })
     technical_context = any(pattern in text for pattern in TECHNICAL_ONLY_PATTERNS)
 
@@ -128,10 +170,24 @@ def classify(title: str, body: str) -> list[str]:
     return sorted(set(categories))
 
 
+def human_gate_state_from_comments(comments: list[dict[str, Any]]) -> str | None:
+    state: str | None = None
+    for comment in comments:
+        association = (comment.get("author_association") or "").upper()
+        if association not in TRUSTED_ASSOCIATIONS:
+            continue
+        body = norm(comment.get("body", ""))
+        if any(pattern in body for pattern in HUMAN_GATE_CLEAR_PATTERNS):
+            state = "cleared"
+        if any(pattern in body for pattern in HUMAN_GATE_REOPEN_PATTERNS):
+            state = "active"
+    return state
+
+
 def explicit_approval(comment: dict[str, Any]) -> bool:
     body = norm(comment.get("body", ""))
     association = (comment.get("author_association") or "").upper()
-    if association not in {"OWNER", "MEMBER", "COLLABORATOR"}:
+    if association not in TRUSTED_ASSOCIATIONS:
         return False
     return any(re.search(pattern, body, re.IGNORECASE) for pattern in APPROVAL_PATTERNS)
 
@@ -152,10 +208,11 @@ def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categor
     raw_body = issue.get("body", "") or ""
     url = issue.get("html_url", "")
     refs = approval_refs(comments)
-    body = norm(raw_body)
 
-    external = "real_external_evidence" in categories
-    prod = "production_confirmation" in categories or "prod" in body or "produção" in body or "producao" in body
+    external = any(category in categories for category in {
+        "real_external_evidence", "external_business_input",
+    })
+    prod = "production_confirmation" in categories
 
     decision = "Fornecer a evidência/decisão humana real indicada na issue e registrar sua referência verificável."
     reason = "A etapa exige manifestação, credencial, permissão ou evidência externa que o software não pode fabricar nem inferir com segurança."
@@ -169,6 +226,21 @@ def build_finding(issue: dict[str, Any], comments: list[dict[str, Any]], categor
         "Execute a ação humana descrita na issue e registre somente a referência verificável. "
         "Não inclua segredo, dado pessoal, conteúdo bruto ou evidência fictícia."
     )
+    if "external_business_input" in categories:
+        decision = (
+            "Fornecer ou referenciar a fonte corporativa autorizada de dados/consulta e a identidade "
+            "de acesso de menor privilégio, sem enviar credenciais em comentário ou chat."
+        )
+        reason = (
+            "A regra de negócio e a origem corporativa pertencem ao sistema externo; o ReqSys pode "
+            "automatizar descoberta, validação e E2E, mas não pode inventar consulta, DSN ou dados reais."
+        )
+        impact = "O E2E corporativo permanece bloqueado; testes DEV controlados não substituem evidência da fonte real."
+        environment = "DEV corporativo / integração externa"
+        action = (
+            "Indique a fonte SQL/DSN ou RDL/RDS corporativa autorizada e o responsável pela consulta real; "
+            "provisione a identidade somente-leitura pelo cofre/canal seguro. Não publique segredo no GitHub ou chat."
+        )
     if refs:
         decision = "A autorização textual já existe; falta apenas comprovar o fato externo específico exigido pela issue."
         reason = "Aprovação humana foi capturada, mas aprovação não substitui documento, corpus, MFA, contrato, permissão ou efeito externo real."
@@ -292,10 +364,16 @@ def run(token: str, repo: str, dry_run: bool, output: str, scope: str = "nonprod
     for issue in gh.open_issues():
         if should_defer_notification(issue, scope):
             continue
-        categories = classify(issue.get("title", ""), issue.get("body", ""))
+        categories = classify(
+            issue.get("title", ""),
+            issue.get("body", ""),
+            _label_names(issue),
+        )
         if not categories:
             continue
         comments = gh.comments(int(issue["number"]))
+        if human_gate_state_from_comments(comments) == "cleared":
+            continue
         finding = build_finding(issue, comments, categories)
         findings.append(finding)
         if not already_notified(comments, finding):
