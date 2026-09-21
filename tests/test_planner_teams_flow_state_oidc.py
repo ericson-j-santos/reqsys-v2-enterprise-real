@@ -517,9 +517,8 @@ def test_reconcile_classifica_draft_semanticamente_desejado(monkeypatch):
         details["unpublished_fingerprint"]["card_canonical_sha256"]
         == details["desired_fingerprint"]["card_canonical_sha256"]
     )
+    assert details["non_card_diff"]["count"] == 0
     serialized = json.dumps(details)
-    assert "body/recipient/groupId" not in serialized
-    assert "body/recipient/channelId" not in serialized
     assert "messageBody" not in serialized
     assert fake.unpublished_reads == 1
     assert fake.state_patches() == []
@@ -550,7 +549,16 @@ def test_reconcile_classifica_draft_com_diferenca_fora_do_cartao(monkeypatch):
         details["unpublished_fingerprint"]["non_card_sha256"]
         != details["published_fingerprint"]["non_card_sha256"]
     )
-    assert "OUTRO_TEAM_ID" not in json.dumps(details)
+    diff = details["non_card_diff"]
+    assert diff["count"] == 1
+    assert diff["truncated"] is False
+    assert len(diff["paths"]) == 1
+    assert diff["paths"][0]["path"].endswith("/body~1recipient~1groupId")
+    assert diff["paths"][0]["published_type"] == "str"
+    assert diff["paths"][0]["unpublished_type"] == "str"
+    serialized = json.dumps(details)
+    assert "OUTRO_TEAM_ID" not in serialized
+    assert "@parameters(" not in serialized
     assert fake.unpublished_reads == 1
     assert fake.state_patches() == []
 
