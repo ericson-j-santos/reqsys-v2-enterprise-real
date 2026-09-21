@@ -27,11 +27,15 @@ PLANNER_TASK_URL = (
     "https://planner.cloud.microsoft/webui/plan/"
     "@{parameters('PLANNER_PLAN_ID')}/view/board/task/@{triggerBody()?['id']}"
 )
+PLANNER_API = "/providers/Microsoft.PowerApps/apis/shared_planner"
+PLANNER_TRIGGER_OPERATIONS = {"OnNewTask_V3", "OnCompleteTask_V3"}
 TEAMS_API = "/providers/Microsoft.PowerApps/apis/shared_teams"
 TEAMS_POST_CARD_OPERATION = "PostCardToConversation"
 NOTIFY_ACTION_NAME = "Notificar_Teams"
 FILTER_ACTION_NAME = "Ignorar_tarefas_de_teste_automatizado"
 EXPECTED_FILTER_ELSE = {"actions": {}}
+CANONICAL_TRIGGER_FREQUENCY = "Minute"
+CANONICAL_TRIGGER_INTERVAL = 5
 WORKFLOW_SELECT = (
     "workflowid,workflowidunique,name,statecode,statuscode,componentstate,"
     "category,type,clientdata"
@@ -242,6 +246,64 @@ def ensure_filter_else_contract(clientdata: dict[str, Any]) -> bool:
     if filter_action.get("else") != EXPECTED_FILTER_ELSE:
         raise FlowStateError("flow_filtro_tarefa_teste_else_invalido")
     return False
+
+
+def canonical_desired_clientdata(raw: str) -> str:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise FlowStateError("flow_clientdata_invalido") from exc
+    if not isinstance(payload, dict):
+        raise FlowStateError("flow_clientdata_invalido")
+
+    normalized = copy.deepcopy(payload)
+    properties = normalized.get("properties")
+    if not isinstance(properties, dict):
+        raise FlowStateError("flow_properties_ausentes")
+    properties.pop("templateName", None)
+
+    definition = properties.get("definition")
+    if not isinstance(definition, dict):
+        raise FlowStateError("flow_definition_ausente")
+
+    triggers = definition.get("triggers")
+    if not isinstance(triggers, dict) or len(triggers) != 1:
+        raise FlowStateError("flow_trigger_ambiguo")
+    trigger = next(iter(triggers.values()))
+    if not isinstance(trigger, dict):
+        raise FlowStateError("flow_trigger_invalido")
+
+    trigger_host = trigger.get("inputs", {}).get("host", {})
+    if (
+        trigger_host.get("apiId") != PLANNER_API
+        or trigger_host.get("operationId") not in PLANNER_TRIGGER_OPERATIONS
+    ):
+        raise FlowStateError("flow_trigger_planner_invalido")
+
+    recurrence = trigger.get("recurrence")
+    if not isinstance(recurrence, dict):
+        raise FlowStateError("flow_trigger_recurrence_ausente")
+    recurrence["frequency"] = CANONICAL_TRIGGER_FREQUENCY
+    recurrence["interval"] = CANONICAL_TRIGGER_INTERVAL
+    trigger.pop("metadata", None)
+
+    actions = definition.get("actions")
+    if not isinstance(actions, dict):
+        raise FlowStateError("flow_definition_actions_ausentes")
+    filter_action = actions.get(FILTER_ACTION_NAME)
+    if not isinstance(filter_action, dict) or filter_action.get("type") != "If":
+        raise FlowStateError("flow_filtro_tarefa_teste_ausente")
+    filter_action.pop("metadata", None)
+    ensure_filter_else_contract(normalized)
+
+    notify = _notify_action(normalized)
+    notify.pop("metadata", None)
+    inputs = notify.get("inputs")
+    if not isinstance(inputs, dict):
+        raise FlowStateError("flow_notificar_teams_inputs_ausentes")
+    inputs.pop("authentication", None)
+
+    return json.dumps(normalized, ensure_ascii=False)
 
 
 def card_contract(clientdata: dict[str, Any]) -> dict[str, Any]:
@@ -534,6 +596,15 @@ def unpublished_diagnostic(
     published_fp = semantic_clientdata_fingerprint(published_raw)
     desired_fp = semantic_clientdata_fingerprint(desired_raw)
     unpublished_fp = semantic_clientdata_fingerprint(unpublished_raw)
+    try:
+        canonical_desired_raw = canonical_desired_clientdata(desired_raw)
+        canonical_desired_fp = semantic_clientdata_fingerprint(canonical_desired_raw)
+    except FlowStateError as exc:
+        canonical_desired_raw = None
+        canonical_desired_fp = {
+            "status": "unavailable",
+            "error": str(exc)[:160] or exc.__class__.__name__,
+        }
 
     if unpublished_raw == published_raw:
         relation = "same_as_published"
@@ -549,6 +620,15 @@ def unpublished_diagnostic(
         == desired_fp.get("card_canonical_sha256")
     ):
         relation = "same_as_desired_semantic"
+    elif (
+        canonical_desired_raw is not None
+        and canonical_desired_fp.get("status") == "ok"
+        and unpublished_fp.get("non_card_sha256")
+        == canonical_desired_fp.get("non_card_sha256")
+        and unpublished_fp.get("card_canonical_sha256")
+        == canonical_desired_fp.get("card_canonical_sha256")
+    ):
+        relation = "same_as_canonical_desired"
     elif unpublished_fp.get("non_card_sha256") != published_fp.get("non_card_sha256"):
         relation = "non_card_divergent"
     elif (
@@ -569,6 +649,7 @@ def unpublished_diagnostic(
         "unpublished_relation": relation,
         "published_fingerprint": published_fp,
         "desired_fingerprint": desired_fp,
+        "canonical_desired_fingerprint": canonical_desired_fp,
         "unpublished_fingerprint": unpublished_fp,
         "unpublished_componentstate": unpublished.get("componentstate"),
     }
@@ -686,16 +767,25 @@ def reconcile_flow_card(
             unpublished_workflow_id = str(unpublished.get("workflowid") or "").strip()
             unpublished_componentstate = int(unpublished.get("componentstate", -1))
 
+            allowed_relations = {
+                "same_as_desired",
+                "same_as_desired_semantic",
+                "same_as_canonical_desired",
+            }
             if (
-                relation not in {"same_as_desired", "same_as_desired_semantic"}
+                relation not in allowed_relations
                 or unpublished_workflow_id != workflow_id
                 or unpublished_componentstate != 1
             ):
                 raise FlowStateError(message, details=details) from exc
 
-            # O draft só é publicado quando já corresponde semanticamente ao
-            # estado desejado completo. Qualquer divergência adicional continua
-            # falhando fechado para não promover mudança externa concorrente.
+            publish_target_raw = desired_raw
+            if relation == "same_as_canonical_desired":
+                publish_target_raw = canonical_desired_clientdata(desired_raw)
+
+            # O draft só é publicado quando já corresponde exatamente a uma das
+            # projeções desejadas governadas. A projeção canônica permite apenas
+            # normalizações explicitamente definidas pelo provisionador ReqSys.
             publish_workflow(base, token, workflow_id)
             after = get_flow(base, token, workflow_id)
             if int(after.get("componentstate", -1)) != 0:
@@ -711,17 +801,17 @@ def reconcile_flow_card(
                     details=details,
                 )
 
-            desired_fp = semantic_clientdata_fingerprint(desired_raw)
+            publish_target_fp = semantic_clientdata_fingerprint(publish_target_raw)
             observed_fp = semantic_clientdata_fingerprint(
                 str(after.get("clientdata") or "")
             )
             if (
-                desired_fp.get("status") != "ok"
+                publish_target_fp.get("status") != "ok"
                 or observed_fp.get("status") != "ok"
                 or observed_fp.get("non_card_sha256")
-                != desired_fp.get("non_card_sha256")
+                != publish_target_fp.get("non_card_sha256")
                 or observed_fp.get("card_canonical_sha256")
-                != desired_fp.get("card_canonical_sha256")
+                != publish_target_fp.get("card_canonical_sha256")
             ):
                 raise FlowStateError(
                     "flow_unpublished_publish_semantic_divergente",
@@ -734,6 +824,7 @@ def reconcile_flow_card(
                 "flow_deactivated_for_patch": False,
                 "flow_unpublished_revision_used": True,
                 "flow_publish_xml_used": True,
+                "flow_unpublished_relation": relation,
                 "clientdata_before_sha256": before_hash,
                 "card_before": before_contract,
                 "card_after": observed_contract,
@@ -832,7 +923,7 @@ def main() -> int:
     base = required("PLANNER_TEAMS_DATAVERSE_URL")
     token = required("POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN")
     evidence: dict[str, Any] = {
-        "schema_version": "1.5.0",
+        "schema_version": "1.6.0",
         "environment": "dev",
         "auth_mode": "github_oidc_dataverse",
         "status": "running",
