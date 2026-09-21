@@ -78,7 +78,11 @@ jobs:
           grep -Fq 'actions/upload-artifact@v4' "$producer"
           grep -Fq 'teams-dashboard-site' "$producer"
           ! grep -Fq 'deploy-pages@v4' "$producer"
-          grep -Fq 'workflow_run:' "$publisher"
+          grep -Fq 'workflow_dispatch:' "$publisher"
+          grep -Fq 'expected_sha:' "$publisher"
+          grep -Fq 'authorization:' "$publisher"
+          grep -Fq 'DEPLOY_PAGES' "$publisher"
+          ! grep -Fq 'workflow_run:' "$publisher"
           grep -Fq 'teams-dashboard-site' "$publisher"
           grep -Fq 'deploy-pages@v4' "$publisher"
 

@@ -26,9 +26,9 @@ def test_locator_requires_valid_signed_fresh_cloudflare_state():
 
 def test_pages_composite_publishes_stable_dev_path():
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert '"docs/public-dev-locator/**"' in raw
     assert "cp -a docs/public-dev-locator/. site/dev/" in raw
     assert "test -s site/dev/index.html" in raw
+    assert "actions/deploy-pages@v4" in raw
 
 
 def test_supervisor_uses_cloudflare_and_signed_locator_only():
@@ -57,14 +57,21 @@ def test_public_manifest_uses_pages_as_stable_dev_entrypoint():
     assert dev["locator_channel"] == "ntfy_signed_ed25519"
 
 
-def test_pages_redeploys_after_governed_pr_automation():
+def test_pages_deploy_requires_explicit_sha_bound_authorization():
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "Governed PR Automation" in raw
-    assert "WORKFLOW_RUN_NAME" in raw
-    assert 'WORKFLOW_RUN_NAME" == "Teams Notification Dashboard"' in raw
-    assert 'WORKFLOW_RUN_NAME" == "Governed PR Automation"' in raw
-    assert 'source="governed_pr_automation"' in raw
-    assert "github.event.workflow_run.event == 'workflow_run'" in raw
+    trigger_block = raw.split("permissions:", 1)[0]
+    assert "workflow_dispatch:" in trigger_block
+    assert "workflow_run:" not in trigger_block
+    assert "schedule:" not in trigger_block
+    assert "\n  push:" not in trigger_block
+    assert "expected_sha:" in trigger_block
+    assert "authorization:" in trigger_block
+    assert 'test "$AUTHORIZATION" = "DEPLOY_PAGES"' in raw
+    assert 'test "$EVENT_REF" = "refs/heads/main"' in raw
+    assert "repos/${GITHUB_REPOSITORY}/commits/main" in raw
+    assert 'test "$main_head" = "$EXPECTED_SHA"' in raw
+    assert "ref: ${{ inputs.expected_sha }}" in raw
+    assert 'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"' in raw
     assert "teams-notification-dashboard.yml/runs?status=success" in raw
 
 

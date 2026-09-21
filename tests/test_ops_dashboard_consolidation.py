@@ -40,12 +40,19 @@ def test_teams_operational_consumers_use_canonical_path() -> None:
         )
 
 
-def test_pages_publisher_has_governed_self_healing_fallback() -> None:
+def test_pages_publisher_is_explicit_and_sha_bound() -> None:
     content = PAGES_WORKFLOW_PATH.read_text(encoding="utf-8")
+    trigger_block = content.split("permissions:", 1)[0]
 
-    assert "workflow_run:" in content
-    assert "workflow_dispatch:" in content
-    assert "schedule:" in content
+    assert "workflow_dispatch:" in trigger_block
+    assert "workflow_run:" not in trigger_block
+    assert "schedule:" not in trigger_block
+    assert "\n  push:" not in trigger_block
+    assert "expected_sha:" in trigger_block
+    assert "authorization:" in trigger_block
+    assert "DEPLOY_PAGES" in content
+    assert "refs/heads/main" in content
+    assert "commits/main" in content
     assert "teams-notification-dashboard.yml/runs?status=success" in content
     assert "Execução produtora fora da janela de 48h" in content
     assert content.count("actions/deploy-pages@v4") == 1
