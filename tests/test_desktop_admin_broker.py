@@ -57,6 +57,19 @@ def test_allowlist_is_exact_and_has_no_shell_action() -> None:
     assert "reboot" not in " ".join(m.ALLOWED_COMMANDS).casefold()
 
 
+def test_transport_is_outbound_public_github_only_without_secret_or_listener() -> None:
+    source = MODULE.read_text(encoding="utf-8")
+    lowered = source.casefold()
+    assert "api.github.com/repos/{repository}/issues/{issue_number}/comments" in lowered
+    assert "authorization" not in lowered
+    assert "gh_token" not in lowered
+    assert "github_token" not in lowered
+    assert "threadinghttpserver" not in lowered
+    assert "http.server" not in lowered
+    assert ".listen(" not in lowered
+    assert ".bind(" not in lowered
+
+
 def test_comment_authorization_requires_owner_exact_unedited_fresh() -> None:
     now = datetime.now(timezone.utc)
     not_before = now - timedelta(seconds=30)
@@ -155,6 +168,14 @@ def test_install_stages_release_and_marks_uac_pending(monkeypatch, tmp_path: Pat
     metadata = json.loads((runtime / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["activation_pending"] is True
     assert (runtime / "releases" / ("a" * 40) / "scripts" / "desktop_admin_broker.py").is_file()
+    assert (runtime / "releases" / ("a" * 40) / "scripts" / "desktop_admin_broker_uac_launcher.py").is_file()
+    activation = runtime / "Activate-Desktop-Admin-Broker.cmd"
+    assert activation.is_file()
+    activation_text = activation.read_text(encoding="utf-8")
+    assert "LAUNCH-DESKTOP-ADMIN-BROKER-UAC" in activation_text
+    assert "--metadata" in activation_text
+    assert "--command" not in activation_text
+    assert "--action" not in activation_text
 
 
 def test_register_task_contract_requires_s4u_highest() -> None:
