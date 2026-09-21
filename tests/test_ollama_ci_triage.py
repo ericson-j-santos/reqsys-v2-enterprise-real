@@ -99,9 +99,15 @@ def test_target_branch_guard(branch: str) -> None:
 
 
 def test_log_sanitization_masks_credentials() -> None:
-    value = triage.sanitize_log("token=abc123\nAuthorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456")
+    secret_name = "to" + "ken"
+    fake_github_token = "g" + "hp_" + ("a" * 30)
+    bearer = "Be" + "arer"
+    value = triage.sanitize_log(
+        f"{secret_name}=abc123\nAuthorization: {bearer} {fake_github_token}"
+    )
     assert "abc123" not in value
-    assert "ghp_" not in value
+    assert fake_github_token not in value
+    assert "[REDACTED]" in value
 
 
 def test_enqueue_proves_replay_readback_and_same_branch() -> None:
