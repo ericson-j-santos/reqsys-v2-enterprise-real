@@ -18,7 +18,7 @@ CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
-ADMIN_STAGING_PATH = rf"\\\\{TARGET_HOST}\\C$\\Users\\Public\\Desktop"
+ADMIN_STAGING_PATH = "\\\\" + TARGET_HOST + "\\C$\\Users\\Public\\Desktop"
 
 
 class ProbeError(RuntimeError):
