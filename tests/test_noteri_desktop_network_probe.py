@@ -84,6 +84,7 @@ def test_target_is_fixed_and_no_arbitrary_target_argument() -> None:
     assert 'parser.add_argument("--target"' not in content
     assert "shell=True" not in content
     assert 'RUNTIME_PORT = 8081' in content
+    assert probe.ADMIN_STAGING_PATH == r"\\DESKTOP-PDQK954\C$\Users\Public\Desktop"
 
 
 def test_workflow_is_noteri_only_and_inputless() -> None:
@@ -109,3 +110,47 @@ def test_gateway_exposes_only_exact_network_probe_command() -> None:
 def test_self_hosted_policy_explicitly_allows_probe() -> None:
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-desktop-network-probe.yml" in policy["approved_workflows"]
+
+
+def test_admin_staging_path_probe_accessible(monkeypatch) -> None:
+    class FakeScan:
+        def __enter__(self):
+            return iter([object()])
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(probe.os, "scandir", lambda path: FakeScan())
+    result = probe.admin_staging_path_probe()
+    assert result == {"reachable": True, "result": "accessible"}
+
+
+def test_admin_staging_path_probe_access_denied(monkeypatch) -> None:
+    def denied(path):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(probe.os, "scandir", denied)
+    result = probe.admin_staging_path_probe()
+    assert result == {"reachable": False, "result": "access_denied"}
+
+
+def test_probe_reports_smb_without_persisting_remote_listing(monkeypatch) -> None:
+    monkeypatch.setattr(probe, "validate_host", lambda: "Noteri")
+    monkeypatch.setattr(
+        probe,
+        "resolve_target",
+        lambda: {"resolved": True, "address_count": 1},
+    )
+    monkeypatch.setattr(probe, "icmp_reachable", lambda: True)
+    monkeypatch.setattr(probe, "runtime_port_reachable", lambda: True)
+    monkeypatch.setattr(
+        probe,
+        "admin_staging_path_probe",
+        lambda: {"reachable": False, "result": "access_denied"},
+    )
+    result = probe.probe(probe.CONFIRM, "corr-network-smb")
+    assert result["admin_staging_path_reachable"] is False
+    assert result["admin_staging_path_result"] == "access_denied"
+    assert result["admin_staging_path"] == r"C:\Users\Public\Desktop"
+    assert "listing" not in result
+    assert "files" not in result
