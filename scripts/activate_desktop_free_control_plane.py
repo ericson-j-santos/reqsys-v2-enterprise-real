@@ -181,8 +181,23 @@ def ensure_gh_auth(gh: Path) -> None:
         check=False,
         env=gh_env(),
     )
-    if status.returncode == 0 and gh_active_login(gh).casefold() == EXPECTED_GITHUB_LOGIN.casefold():
-        return
+    if status.returncode == 0:
+        active = gh_active_login(gh)
+        if active.casefold() == EXPECTED_GITHUB_LOGIN.casefold():
+            return
+        switch = subprocess.run(
+            [
+                str(gh), "auth", "switch", "--hostname", "github.com",
+                "--user", EXPECTED_GITHUB_LOGIN,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+            env=gh_env(),
+        )
+        if switch.returncode == 0 and gh_active_login(gh).casefold() == EXPECTED_GITHUB_LOGIN.casefold():
+            return
     login = subprocess.run(
         [
             str(gh), "auth", "login", "--hostname", "github.com",
