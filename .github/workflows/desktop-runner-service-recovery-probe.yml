@@ -1,0 +1,139 @@
+name: Desktop Runner Service Recovery Probe
+
+on:
+  push:
+    branches:
+      - ops/desktop-runner-service-recovery-20260921
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-runner-service-recovery-probe
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Query and start exact Desktop GitHub runner service
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_HOST: DESKTOP-PDQK954
+      EVIDENCE_FILE: artifacts/desktop-runner-service-recovery/evidence.json
+    steps:
+      - name: Query exact existing GitHub Actions runner service
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path (Split-Path $env:EVIDENCE_FILE) | Out-Null
+
+          function Write-Evidence([hashtable]$Data) {
+            $Data.schema_version = '1'
+            $Data.generated_at_utc = [DateTime]::UtcNow.ToString('o')
+            $Data.source_host = $env:COMPUTERNAME
+            $Data.target_host = $env:TARGET_HOST
+            $Data.production_touched = $false
+            $Data.secrets_read = $false
+            $Data.credentials_supplied = $false
+            $Data.service_created_or_modified = $false
+            $Data | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 $env:EVIDENCE_FILE
+          }
+
+          $remote = "\\$env:TARGET_HOST"
+          $all = & sc.exe $remote query state= all 2>&1
+          $rc = $LASTEXITCODE
+          if ($rc -ne 0) {
+            Write-Evidence @{
+              ok = $false
+              result = 'REMOTE_SCM_QUERY_BLOCKED'
+              query_returncode = $rc
+              error = (($all | Out-String) -replace '[\r\n]+',' ').Trim().Substring(0,[Math]::Min(400,(($all | Out-String) -replace '[\r\n]+',' ').Trim().Length))
+            }
+            exit 2
+          }
+
+          $names = @()
+          foreach ($line in $all) {
+            if ($line -match '^SERVICE_NAME:\s*(.+)$') {
+              $name = $Matches[1].Trim()
+              if ($name.StartsWith('actions.runner.', [System.StringComparison]::OrdinalIgnoreCase)) {
+                $names += $name
+              }
+            }
+          }
+
+          if ($names.Count -ne 1) {
+            Write-Evidence @{
+              ok = $false
+              result = 'RUNNER_SERVICE_CANDIDATE_COUNT_INVALID'
+              candidate_count = $names.Count
+            }
+            exit 3
+          }
+
+          $service = $names[0]
+          $before = & sc.exe $remote query $service 2>&1
+          $beforeRc = $LASTEXITCODE
+          if ($beforeRc -ne 0) {
+            Write-Evidence @{
+              ok = $false
+              result = 'RUNNER_SERVICE_QUERY_FAILED'
+              query_returncode = $beforeRc
+            }
+            exit 4
+          }
+
+          $beforeState = ''
+          foreach ($line in $before) {
+            if ($line -match 'STATE\s*:\s*\d+\s+(\w+)') {
+              $beforeState = $Matches[1]
+              break
+            }
+          }
+
+          $startRequested = $false
+          if ($beforeState -ne 'RUNNING') {
+            $start = & sc.exe $remote start $service 2>&1
+            $startRc = $LASTEXITCODE
+            if ($startRc -ne 0) {
+              Write-Evidence @{
+                ok = $false
+                result = 'RUNNER_SERVICE_START_BLOCKED'
+                before_state = $beforeState
+                start_returncode = $startRc
+              }
+              exit 5
+            }
+            $startRequested = $true
+            Start-Sleep -Seconds 3
+          }
+
+          $after = & sc.exe $remote query $service 2>&1
+          $afterRc = $LASTEXITCODE
+          $afterState = ''
+          foreach ($line in $after) {
+            if ($line -match 'STATE\s*:\s*\d+\s+(\w+)') {
+              $afterState = $Matches[1]
+              break
+            }
+          }
+
+          $ok = ($afterRc -eq 0 -and $afterState -eq 'RUNNING')
+          Write-Evidence @{
+            ok = $ok
+            result = $(if ($ok) { 'RUNNER_SERVICE_RUNNING' } else { 'RUNNER_SERVICE_NOT_RUNNING' })
+            before_state = $beforeState
+            after_state = $afterState
+            start_requested = $startRequested
+            candidate_count = 1
+          }
+          if (-not $ok) { exit 6 }
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runner-service-recovery-${{ github.run_id }}
+          path: artifacts/desktop-runner-service-recovery/evidence.json
+          if-no-files-found: error
+          retention-days: 7
