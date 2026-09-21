@@ -24,6 +24,30 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
+      - name: Stage one-click interactive UAC launcher on Noteri desktop
+        shell: powershell
+        run: |
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          if ([string]::IsNullOrWhiteSpace($desktop)) { throw 'Desktop path unavailable' }
+          $ps1 = Join-Path $desktop 'Ativar-Noteri-Headless.ps1'
+          $cmd = Join-Path $desktop 'Ativar-Noteri-Headless.cmd'
+          @'
+          $ErrorActionPreference = 'Stop'
+          $p = 'C:\dev\reqsys-free-control-plane-20260921'
+          git -C $p fetch origin main
+          git -C $p checkout -f origin/main
+          $sha = (git -C $p rev-parse HEAD).Trim()
+          python "$p\scripts\noteri_control_plane_watchdog_uac_launcher.py" --repo-root $p --source-sha $sha --confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC --timeout-seconds 180
+          Write-Host ''
+          Write-Host 'Resultado acima. Pressione Enter para fechar.'
+          [void](Read-Host)
+          '@ | Set-Content -LiteralPath $ps1 -Encoding UTF8
+          @'
+          @echo off
+          powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Ativar-Noteri-Headless.ps1"
+          '@ | Set-Content -LiteralPath $cmd -Encoding ASCII
+          Write-Host "NOTERI_INTERACTIVE_UAC_LAUNCHER_STAGED=$cmd"
+
       - name: Request governed UAC and validate headless task
         shell: powershell
         run: |
