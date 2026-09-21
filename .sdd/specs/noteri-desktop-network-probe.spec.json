@@ -18,7 +18,8 @@
       "reqsys-dev"
     ],
     "runtime_port": 8081,
-    "environment": "DEV"
+    "environment": "DEV",
+    "admin_staging_probe": "C:\\\\Users\\\\Public\\\\Desktop via C$"
   },
   "security": {
     "arbitrary_target": false,
@@ -29,7 +30,9 @@
     "reboot": false,
     "shutdown": false,
     "wake_on_lan": false,
-    "raw_ip_persisted": false
+    "raw_ip_persisted": false,
+    "remote_write": false,
+    "remote_listing_persisted": false
   },
   "evidence_contract": {
     "states": [
@@ -41,7 +44,14 @@
     "artifact": "artifacts/noteri-desktop-network/evidence.json",
     "correlation_id_required": true,
     "independent_readback_required": true,
-    "exact_sha_required": true
+    "exact_sha_required": true,
+    "admin_staging_states": [
+      "accessible",
+      "access_denied",
+      "not_found",
+      "os_error_*"
+    ],
+    "remote_write": false
   },
   "sdd_gate": {
     "tests": [
@@ -53,5 +63,6 @@
   },
   "approvals": {
     "requirements": true
-  }
+  },
+  "updated_at": "2026-09-21"
 }
