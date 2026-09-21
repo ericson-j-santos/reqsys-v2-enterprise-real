@@ -30,13 +30,14 @@ HUMAN_PATTERNS: dict[str, tuple[str, ...]] = {
     "operational_acceptance": ("aceite operacional", "operational acceptance", "aceite humano", "human acceptance"),
     "production_confirmation": ("confirmação de produção", "production confirmation", "autorizar produção", "autorizar producao", "prod approval"),
     "architecture_decision": ("decisão arquitetural", "architecture decision", "adr approval", "decisão de arquitetura"),
-    "real_external_evidence": ("corpus real", "documento real", "documentos reais", "mfa real", "contrato real", "evidência real", "evidencia real", "revisão humana", "revisao humana", "sign-off", "assinatura formal"),
+    "real_external_evidence": ("corpus real", "documento real", "documentos reais", "mfa real", "contrato real", "revisão humana", "revisao humana", "sign-off", "assinatura formal"),
+    "external_business_input": ("fonte sql corporativa", "consulta real de negócio", "consulta real de negocio", "fonte de dados/negócio", "fonte de dados/negocio", "fonte/autoria da consulta real"),
 }
 
 HUMAN_INTENT_PATTERNS = (
     "humano:", "ação humana", "acao humana", "human action", "humana única", "humana unica",
     "blueprint humano", "aprovação humana", "revisão humana", "revisao humana", "pessoa autorizada",
-    "responsável", "responsavel", "não pode fabricar", "nao pode fabricar", "não automatizável", "nao automatizavel",
+    "não pode fabricar", "nao pode fabricar", "não automatizável", "nao automatizavel",
 )
 
 TECHNICAL_ONLY_PATTERNS = (
@@ -47,6 +48,37 @@ TECHNICAL_ONLY_PATTERNS = (
 
 APPROVAL_PATTERNS = (
     r"\baprovo\b", r"\bautorizo\b", r"\bapproved\b", r"\bauthorized\b",
+)
+
+TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+SATELLITE_SUPPRESS_LABEL = "satellite:suppress-human"
+RESOLVED_HUMAN_GATE_LABEL = "human-gate:resolved"
+HUMAN_GATE_CLEAR_PATTERNS = (
+    "não existe ação manual indispensável ativa",
+    "nao existe acao manual indispensavel ativa",
+    "não notificar esta issue como pendência humana",
+    "nao notificar esta issue como pendencia humana",
+    "gate administrativo concluído",
+    "gate administrativo concluido",
+    "gate humano concluído",
+    "gate humano concluido",
+    "não é mais o bloqueador dominante",
+    "nao e mais o bloqueador dominante",
+)
+HUMAN_GATE_REOPEN_PATTERNS = (
+    "ação humana mínima",
+    "acao humana minima",
+    "ação humana remanescente",
+    "acao humana remanescente",
+    "gate humano atual",
+    "human_auth_session_required",
+    "decisão administrativa explícita",
+    "decisao administrativa explicita",
+    "única ação humana necessária",
+    "unica acao humana necessaria",
+    "bloqueio humano",
+    "pendência humana indispensável",
+    "pendencia humana indispensavel",
 )
 
 @dataclass
@@ -100,8 +132,12 @@ def should_defer_notification(issue: dict[str, Any], scope: str) -> bool:
     return target_scope is not None and target_scope != scope
 
 
-def classify(title: str, body: str) -> list[str]:
+def classify(title: str, body: str, labels: set[str] | None = None) -> list[str]:
     text = norm(f"{title}\n{body}")
+    label_names = {str(label).strip().lower() for label in (labels or set())}
+    if SATELLITE_SUPPRESS_LABEL in label_names or RESOLVED_HUMAN_GATE_LABEL in label_names:
+        return []
+
     categories = [
         category
         for category, patterns in HUMAN_PATTERNS.items()
@@ -110,10 +146,16 @@ def classify(title: str, body: str) -> list[str]:
     if not categories:
         return []
 
-    explicit_human_intent = any(pattern in text for pattern in HUMAN_INTENT_PATTERNS)
+    labeled_human_gate = any(
+        label.startswith("human-gate:") and label != RESOLVED_HUMAN_GATE_LABEL
+        for label in label_names
+    )
+    explicit_human_intent = labeled_human_gate or any(
+        pattern in text for pattern in HUMAN_INTENT_PATTERNS
+    )
     strong_external = any(category in categories for category in {
-        "real_external_evidence", "environment_approval", "production_confirmation",
-        "architecture_decision", "billing_limit", "dns_domain",
+        "real_external_evidence", "external_business_input",
+        "production_confirmation", "billing_limit", "dns_domain",
     })
     technical_context = any(pattern in text for pattern in TECHNICAL_ONLY_PATTERNS)
 
@@ -128,10 +170,24 @@ def classify(title: str, body: str) -> list[str]:
     return sorted(set(categories))
 
 
+def human_gate_state_from_comments(comments: list[dict[str, Any]]) -> str | None:
+    state: str | None = None
+    for comment in comments:
+        association = (comment.get("author_association") or "").upper()
+        if association not in TRUSTED_ASSOCIATIONS:
+            continue
+        body = norm(comment.get("body", ""))
+        if any(pattern in body for pattern in HUMAN_GATE_CLEAR_PATTERNS):
+            state = "cleared"
+        if any(pattern in body for pattern in HUMAN_GATE_REOPEN_PATTERNS):
+            state = "active"
+    return state
+
+
 def explicit_approval(comment: dict[str, Any]) -> bool:
     body = norm(comment.get("body", ""))
     association = (comment.get("author_association") or "").upper()
-    if association not in {"OWNER", "MEMBER", "COLLABORATOR"}:
+    if association not in TRUSTED_ASSOCIATIONS:
         return False
     return any(re.search(pattern, body, re.IGNORECASE) for pattern in APPROVAL_PATTERNS)
 
@@ -292,10 +348,16 @@ def run(token: str, repo: str, dry_run: bool, output: str, scope: str = "nonprod
     for issue in gh.open_issues():
         if should_defer_notification(issue, scope):
             continue
-        categories = classify(issue.get("title", ""), issue.get("body", ""))
+        categories = classify(
+            issue.get("title", ""),
+            issue.get("body", ""),
+            _label_names(issue),
+        )
         if not categories:
             continue
         comments = gh.comments(int(issue["number"]))
+        if human_gate_state_from_comments(comments) == "cleared":
+            continue
         finding = build_finding(issue, comments, categories)
         findings.append(finding)
         if not already_notified(comments, finding):
