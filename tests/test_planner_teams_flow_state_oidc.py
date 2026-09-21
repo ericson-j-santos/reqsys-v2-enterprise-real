@@ -454,7 +454,7 @@ def test_reconcile_falha_fechado_quando_ha_revisao_unpublished(monkeypatch):
 
     assert exc_info.value.details["unpublished_detected"] is True
     assert exc_info.value.details["unpublished_relation"] == "same_as_published"
-    assert "unpublished_clientdata_sha256" in exc_info.value.details
+    assert "unpublished_fingerprint" in exc_info.value.details
     assert "clientdata" not in exc_info.value.details
     assert fake.state_patches() == []
     assert fake.unpublished_reads == 1
@@ -484,7 +484,86 @@ def test_reconcile_classifica_draft_igual_ao_desejado_sem_muta_lo(monkeypatch):
     assert fake.state_patches() == []
 
 
-def test_reconcile_classifica_draft_divergente_sem_expor_conteudo(monkeypatch):
+def test_reconcile_classifica_draft_semanticamente_desejado(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
+    desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
+        fake.row,
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
+    fake.unpublished["clientdata"] = json.dumps(
+        json.loads(desired_raw),
+        ensure_ascii=False,
+        sort_keys=True,
+        indent=2,
+    )
+    _install(monkeypatch, fake)
+
+    with pytest.raises(FlowStateError) as exc_info:
+        mod.reconcile_flow_card(
+            "https://org.crm.dynamics.com",
+            "token",
+            copy.deepcopy(fake.row),
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+        )
+
+    details = exc_info.value.details
+    assert details["unpublished_relation"] == "same_non_card_desired_card"
+    assert details["unpublished_fingerprint"]["status"] == "ok"
+    assert (
+        details["unpublished_fingerprint"]["non_card_sha256"]
+        == details["published_fingerprint"]["non_card_sha256"]
+    )
+    assert (
+        details["unpublished_fingerprint"]["card_canonical_sha256"]
+        == details["desired_fingerprint"]["card_canonical_sha256"]
+    )
+    assert details["non_card_diff"]["count"] == 0
+    serialized = json.dumps(details)
+    assert "messageBody" not in serialized
+    assert fake.unpublished_reads == 1
+    assert fake.state_patches() == []
+
+
+def test_reconcile_classifica_draft_com_diferenca_fora_do_cartao(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
+    desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
+        fake.row,
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
+    draft = json.loads(desired_raw)
+    _notify(draft)["inputs"]["parameters"]["body/recipient/groupId"] = "@parameters('OUTRO_TEAM_ID')"
+    fake.unpublished["clientdata"] = json.dumps(draft, ensure_ascii=False)
+    _install(monkeypatch, fake)
+
+    with pytest.raises(FlowStateError) as exc_info:
+        mod.reconcile_flow_card(
+            "https://org.crm.dynamics.com",
+            "token",
+            copy.deepcopy(fake.row),
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+        )
+
+    details = exc_info.value.details
+    assert details["unpublished_relation"] == "non_card_divergent"
+    assert (
+        details["unpublished_fingerprint"]["non_card_sha256"]
+        != details["published_fingerprint"]["non_card_sha256"]
+    )
+    diff = details["non_card_diff"]
+    assert diff["count"] == 1
+    assert diff["truncated"] is False
+    assert len(diff["paths"]) == 1
+    assert diff["paths"][0]["path"].endswith("/body~1recipient~1groupId")
+    assert diff["paths"][0]["published_type"] == "str"
+    assert diff["paths"][0]["unpublished_type"] == "str"
+    serialized = json.dumps(details)
+    assert "OUTRO_TEAM_ID" not in serialized
+    assert "@parameters(" not in serialized
+    assert fake.unpublished_reads == 1
+    assert fake.state_patches() == []
+
+
+def test_reconcile_classifica_draft_invalido_sem_expor_conteudo(monkeypatch):
     fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
     fake.unpublished["clientdata"] = '{"draft":"externo"}'
     _install(monkeypatch, fake)
@@ -497,15 +576,10 @@ def test_reconcile_classifica_draft_divergente_sem_expor_conteudo(monkeypatch):
             "ReqSys - Notificar Teams (Tarefa criada no Planner)",
         )
 
-    assert exc_info.value.details["unpublished_relation"] == "divergent"
-    assert set(exc_info.value.details) == {
-        "unpublished_detected",
-        "unpublished_relation",
-        "published_clientdata_sha256",
-        "desired_clientdata_sha256",
-        "unpublished_clientdata_sha256",
-        "unpublished_componentstate",
-    }
+    details = exc_info.value.details
+    assert details["unpublished_relation"] == "unpublished_invalid"
+    assert details["unpublished_fingerprint"]["status"] == "invalid_contract"
+    assert "externo" not in json.dumps(details)
     assert fake.unpublished_reads == 1
     assert fake.state_patches() == []
 

@@ -23,7 +23,9 @@ from pathlib import Path
 from typing import Any
 
 EXPECTED_HOST = "Noteri"
-TASK_NAME = r"\Automation\ReqSysNoteriControlPlaneWatchdog"
+TASK_FOLDER = r"\Automation"
+TASK_LEAF_NAME = "ReqSysNoteriControlPlaneWatchdog"
+TASK_NAME = rf"{TASK_FOLDER}\{TASK_LEAF_NAME}"
 SERVICE_NAME = "reqsys-noteri-control-plane-watchdog"
 INSTALL_CONFIRM = "INSTALL-NOTERI-CONTROL-PLANE-WATCHDOG"
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
@@ -171,9 +173,17 @@ def _scheduler():
     return service
 
 
+def ensure_task_folder(service):
+    root = service.GetFolder("\\")
+    try:
+        return service.GetFolder(TASK_FOLDER)
+    except Exception:
+        return root.CreateFolder(TASK_FOLDER.lstrip("\\"))
+
+
 def register_task(*, python_executable: str, release_script: Path, runner_home: Path) -> dict[str, Any]:
     service = _scheduler()
-    root = service.GetFolder("\\")
+    folder = ensure_task_folder(service)
     definition = service.NewTask(0)
     definition.RegistrationInfo.Description = "ReqSys Noteri control-plane watchdog"
     definition.Settings.Enabled = True
@@ -195,8 +205,8 @@ def register_task(*, python_executable: str, release_script: Path, runner_home: 
     principal.UserId = f"{socket.gethostname()}\\{os.environ.get('USERNAME') or ''}"
     if principal.UserId.endswith("\\"):
         raise WatchdogError("USERNAME indisponível")
-    root.RegisterTaskDefinition(
-        TASK_NAME,
+    folder.RegisterTaskDefinition(
+        TASK_LEAF_NAME,
         definition,
         TASK_CREATE_OR_UPDATE,
         principal.UserId,
@@ -321,6 +331,7 @@ def main() -> int:
     install_parser.add_argument("--runner-home", type=Path, required=True)
     install_parser.add_argument("--source-sha", required=True)
     install_parser.add_argument("--confirm", required=True)
+    install_parser.add_argument("--result-path", type=Path)
     cycle_parser = sub.add_parser("cycle")
     cycle_parser.add_argument("--runner-home", type=Path, required=True)
     watch_parser = sub.add_parser("watch")
@@ -330,6 +341,8 @@ def main() -> int:
     try:
         if args.command == "install":
             payload = install(args.repo_root, args.runner_home, args.source_sha, args.confirm)
+            if args.result_path:
+                atomic_json(args.result_path.resolve(), payload)
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0 if payload.get("ok") else 3
         if args.command == "cycle":
@@ -337,8 +350,21 @@ def main() -> int:
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0 if payload.get("ok") else 2
         return watch(args.runner_home, args.interval_seconds)
-    except (OSError, WatchdogError, subprocess.SubprocessError, ValueError) as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, sort_keys=True))
+    except Exception as exc:
+        payload = {
+            "ok": False,
+            "error": str(exc)[:1000],
+            "error_type": type(exc).__name__,
+            "rdc_required": False,
+            "production_touched": False,
+            "reboot_performed": False,
+        }
+        if getattr(args, "command", None) == "install" and getattr(args, "result_path", None):
+            try:
+                atomic_json(args.result_path.resolve(), payload)
+            except Exception:
+                pass
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
         return 2
 
 

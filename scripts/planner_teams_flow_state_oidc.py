@@ -348,6 +348,155 @@ def get_unpublished_flow(
     return payload
 
 
+def semantic_clientdata_fingerprint(raw: str) -> dict[str, Any]:
+    raw_hash = hashlib.sha256(raw.encode()).hexdigest()
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "status": "invalid_json",
+            "clientdata_sha256": raw_hash,
+        }
+    if not isinstance(payload, dict):
+        return {
+            "status": "invalid_payload",
+            "clientdata_sha256": raw_hash,
+        }
+
+    normalized = copy.deepcopy(payload)
+    try:
+        action = _notify_action(normalized)
+        parameters = action["inputs"]["parameters"]
+        card_raw = parameters["body/messageBody"]
+        if not isinstance(card_raw, str):
+            raise FlowStateError("flow_card_message_body_invalido")
+        card = json.loads(card_raw)
+        if not isinstance(card, dict):
+            raise FlowStateError("flow_card_message_body_invalido")
+        contract = card_contract(normalized)
+    except (FlowStateError, json.JSONDecodeError) as exc:
+        return {
+            "status": "invalid_contract",
+            "clientdata_sha256": raw_hash,
+            "error": str(exc)[:160] or exc.__class__.__name__,
+        }
+
+    card_canonical = json.dumps(
+        card,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    parameters["body/messageBody"] = "__REQSYS_CARD_BODY__"
+    non_card_canonical = json.dumps(
+        normalized,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return {
+        "status": "ok",
+        "clientdata_sha256": raw_hash,
+        "non_card_sha256": hashlib.sha256(non_card_canonical.encode()).hexdigest(),
+        "card_canonical_sha256": hashlib.sha256(card_canonical.encode()).hexdigest(),
+        "card_contract": contract,
+    }
+
+
+def _non_card_payload(raw: str) -> dict[str, Any]:
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise FlowStateError("flow_clientdata_invalido")
+    normalized = copy.deepcopy(payload)
+    action = _notify_action(normalized)
+    parameters = action["inputs"]["parameters"]
+    parameters["body/messageBody"] = "__REQSYS_CARD_BODY__"
+    return normalized
+
+
+def _json_pointer_segment(value: str) -> str:
+    return value.replace("~", "~0").replace("/", "~1")
+
+
+def _safe_value_hash(value: Any) -> str:
+    if value is _MISSING:
+        raw = "__REQSYS_MISSING__"
+    else:
+        raw = json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _safe_value_type(value: Any) -> str:
+    if value is _MISSING:
+        return "missing"
+    if value is None:
+        return "null"
+    return type(value).__name__
+
+
+_MISSING = object()
+
+
+def non_card_structural_diff(
+    published_raw: str,
+    unpublished_raw: str,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    published = _non_card_payload(published_raw)
+    unpublished = _non_card_payload(unpublished_raw)
+    items: list[dict[str, Any]] = []
+    total = 0
+
+    def walk(before: Any, after: Any, path: str) -> None:
+        nonlocal total
+        if before is not _MISSING and after is not _MISSING and before == after:
+            return
+
+        if isinstance(before, dict) and isinstance(after, dict):
+            for key in sorted(set(before) | set(after)):
+                segment = _json_pointer_segment(str(key))
+                walk(
+                    before.get(key, _MISSING),
+                    after.get(key, _MISSING),
+                    f"{path}/{segment}",
+                )
+            return
+
+        if isinstance(before, list) and isinstance(after, list):
+            for index in range(max(len(before), len(after))):
+                walk(
+                    before[index] if index < len(before) else _MISSING,
+                    after[index] if index < len(after) else _MISSING,
+                    f"{path}/{index}",
+                )
+            return
+
+        total += 1
+        if len(items) < limit:
+            items.append(
+                {
+                    "path": path or "/",
+                    "published_type": _safe_value_type(before),
+                    "unpublished_type": _safe_value_type(after),
+                    "published_value_sha256": _safe_value_hash(before),
+                    "unpublished_value_sha256": _safe_value_hash(after),
+                }
+            )
+
+    walk(published, unpublished, "")
+    return {
+        "count": total,
+        "truncated": total > limit,
+        "paths": items,
+    }
+
+
 def unpublished_diagnostic(
     published: dict[str, Any],
     desired_raw: str,
@@ -356,25 +505,50 @@ def unpublished_diagnostic(
     published_raw = str(published.get("clientdata") or "")
     unpublished_raw = str(unpublished.get("clientdata") or "")
 
+    published_fp = semantic_clientdata_fingerprint(published_raw)
+    desired_fp = semantic_clientdata_fingerprint(desired_raw)
+    unpublished_fp = semantic_clientdata_fingerprint(unpublished_raw)
+
     if unpublished_raw == published_raw:
         relation = "same_as_published"
     elif unpublished_raw == desired_raw:
         relation = "same_as_desired"
+    elif unpublished_fp.get("status") != "ok":
+        relation = "unpublished_invalid"
+    elif published_fp.get("status") != "ok" or desired_fp.get("status") != "ok":
+        relation = "reference_invalid"
+    elif unpublished_fp.get("non_card_sha256") != published_fp.get("non_card_sha256"):
+        relation = "non_card_divergent"
+    elif (
+        unpublished_fp.get("card_canonical_sha256")
+        == desired_fp.get("card_canonical_sha256")
+    ):
+        relation = "same_non_card_desired_card"
+    elif (
+        unpublished_fp.get("card_canonical_sha256")
+        == published_fp.get("card_canonical_sha256")
+    ):
+        relation = "same_non_card_published_card"
     else:
-        relation = "divergent"
+        relation = "card_only_divergent"
 
-    return {
+    diagnostic = {
         "unpublished_detected": True,
         "unpublished_relation": relation,
-        "published_clientdata_sha256": hashlib.sha256(
-            published_raw.encode()
-        ).hexdigest(),
-        "desired_clientdata_sha256": hashlib.sha256(desired_raw.encode()).hexdigest(),
-        "unpublished_clientdata_sha256": hashlib.sha256(
-            unpublished_raw.encode()
-        ).hexdigest(),
+        "published_fingerprint": published_fp,
+        "desired_fingerprint": desired_fp,
+        "unpublished_fingerprint": unpublished_fp,
         "unpublished_componentstate": unpublished.get("componentstate"),
     }
+    if (
+        published_fp.get("status") == "ok"
+        and unpublished_fp.get("status") == "ok"
+    ):
+        diagnostic["non_card_diff"] = non_card_structural_diff(
+            published_raw,
+            unpublished_raw,
+        )
+    return diagnostic
 
 
 def patch_clientdata(
@@ -549,7 +723,7 @@ def main() -> int:
     base = required("PLANNER_TEAMS_DATAVERSE_URL")
     token = required("POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN")
     evidence: dict[str, Any] = {
-        "schema_version": "1.2.0",
+        "schema_version": "1.4.0",
         "environment": "dev",
         "auth_mode": "github_oidc_dataverse",
         "status": "running",
