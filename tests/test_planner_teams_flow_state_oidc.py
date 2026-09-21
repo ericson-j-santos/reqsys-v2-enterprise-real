@@ -193,6 +193,34 @@ def test_reconcile_card_e_idempotente_quando_runtime_ja_esta_correto():
     assert after["has_open_planner"] is True
 
 
+def test_reconcile_card_restaura_else_vazio_do_filtro():
+    source = row(
+        statecode=1,
+        message_body=desired_card(
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)"
+        ),
+    )
+    payload = json.loads(source["clientdata"])
+    filtro = payload["properties"]["definition"]["actions"][
+        "Ignorar_tarefas_de_teste_automatizado"
+    ]
+    del filtro["else"]
+    source["clientdata"] = json.dumps(payload, ensure_ascii=False)
+
+    raw_after, changed, _before, after = reconcile_card_clientdata(
+        source,
+        source["name"],
+    )
+
+    assert changed is True
+    reconciled = json.loads(raw_after)
+    filtro_after = reconciled["properties"]["definition"]["actions"][
+        "Ignorar_tarefas_de_teste_automatizado"
+    ]
+    assert filtro_after["else"] == {"actions": {}}
+    assert after["has_open_planner"] is True
+
+
 def test_card_concluido_mantem_titulo_e_link_da_tarefa():
     name = "ReqSys - Notificar Teams (Tarefa concluída no Planner)"
     source = row(name=name, message_body=desired_card(name))
@@ -290,6 +318,7 @@ class FakeDataverse:
         self.reject_card_patch = reject_card_patch
         self.calls = []
         self.unpublished_reads = 0
+        self.publish_calls = 0
 
     @property
     def row(self):
@@ -308,6 +337,20 @@ class FakeDataverse:
                     }
                 return 200, copy.deepcopy(self.unpublished)
             return 200, copy.deepcopy(self.published)
+        if method == "POST":
+            if not url.endswith("/PublishXml"):
+                raise AssertionError(f"POST inesperado: {url}")
+            self.publish_calls += 1
+            if self.unpublished is None:
+                return 400, {
+                    "error": {"code": "draft_ausente", "message": "sem draft"}
+                }
+            self.published = copy.deepcopy(self.unpublished)
+            self.published["componentstate"] = 0
+            self.published["@odata.etag"] = 'W/"published-after-draft"'
+            self.unpublished = None
+            return 204, {}
+
         if method != "PATCH":
             raise AssertionError(f"metodo inesperado: {method}")
 
@@ -462,7 +505,7 @@ def test_reconcile_falha_fechado_quando_ha_revisao_unpublished(monkeypatch):
     assert int(fake.row["statuscode"]) == 2
 
 
-def test_reconcile_classifica_draft_igual_ao_desejado_sem_muta_lo(monkeypatch):
+def test_reconcile_publica_draft_exatamente_igual_ao_desejado(monkeypatch):
     fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
     desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
         fake.row,
@@ -471,21 +514,33 @@ def test_reconcile_classifica_draft_igual_ao_desejado_sem_muta_lo(monkeypatch):
     fake.unpublished["clientdata"] = desired_raw
     _install(monkeypatch, fake)
 
-    with pytest.raises(FlowStateError) as exc_info:
-        mod.reconcile_flow_card(
-            "https://org.crm.dynamics.com",
-            "token",
-            copy.deepcopy(fake.row),
-            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
-        )
+    after, evidence = mod.reconcile_flow_card(
+        "https://org.crm.dynamics.com",
+        "token",
+        copy.deepcopy(fake.row),
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
 
-    assert exc_info.value.details["unpublished_relation"] == "same_as_desired"
+    assert evidence["flow_unpublished_revision_used"] is True
+    assert evidence["flow_publish_xml_used"] is True
+    assert evidence["flow_direct_patch_used"] is False
     assert fake.unpublished_reads == 1
-    assert fake.state_patches() == []
+    assert fake.publish_calls == 1
+    assert fake.unpublished is None
+    assert int(after["componentstate"]) == 0
+    assert card_contract(json.loads(after["clientdata"]))["has_open_planner"] is True
 
 
-def test_reconcile_classifica_draft_semanticamente_desejado(monkeypatch):
-    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
+def test_reconcile_publica_draft_semantico_com_else_esperado(monkeypatch):
+    source = row(statecode=1)
+    published = json.loads(source["clientdata"])
+    filtro = published["properties"]["definition"]["actions"][
+        "Ignorar_tarefas_de_teste_automatizado"
+    ]
+    del filtro["else"]
+    source["clientdata"] = json.dumps(published, ensure_ascii=False)
+
+    fake = FakeDataverse(source, unpublished_conflict=True)
     desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
         fake.row,
         "ReqSys - Notificar Teams (Tarefa criada no Planner)",
@@ -498,30 +553,22 @@ def test_reconcile_classifica_draft_semanticamente_desejado(monkeypatch):
     )
     _install(monkeypatch, fake)
 
-    with pytest.raises(FlowStateError) as exc_info:
-        mod.reconcile_flow_card(
-            "https://org.crm.dynamics.com",
-            "token",
-            copy.deepcopy(fake.row),
-            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
-        )
+    after, evidence = mod.reconcile_flow_card(
+        "https://org.crm.dynamics.com",
+        "token",
+        copy.deepcopy(fake.row),
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
 
-    details = exc_info.value.details
-    assert details["unpublished_relation"] == "same_non_card_desired_card"
-    assert details["unpublished_fingerprint"]["status"] == "ok"
-    assert (
-        details["unpublished_fingerprint"]["non_card_sha256"]
-        == details["published_fingerprint"]["non_card_sha256"]
-    )
-    assert (
-        details["unpublished_fingerprint"]["card_canonical_sha256"]
-        == details["desired_fingerprint"]["card_canonical_sha256"]
-    )
-    assert details["non_card_diff"]["count"] == 0
-    serialized = json.dumps(details)
-    assert "messageBody" not in serialized
-    assert fake.unpublished_reads == 1
-    assert fake.state_patches() == []
+    assert evidence["flow_unpublished_revision_used"] is True
+    assert evidence["flow_publish_xml_used"] is True
+    assert fake.publish_calls == 1
+    reconciled = json.loads(after["clientdata"])
+    filtro_after = reconciled["properties"]["definition"]["actions"][
+        "Ignorar_tarefas_de_teste_automatizado"
+    ]
+    assert filtro_after["else"] == {"actions": {}}
+    assert card_contract(reconciled)["has_open_planner"] is True
 
 
 def test_reconcile_classifica_draft_com_diferenca_fora_do_cartao(monkeypatch):
@@ -560,7 +607,41 @@ def test_reconcile_classifica_draft_com_diferenca_fora_do_cartao(monkeypatch):
     assert "OUTRO_TEAM_ID" not in serialized
     assert "@parameters(" not in serialized
     assert fake.unpublished_reads == 1
+    assert fake.publish_calls == 0
     assert fake.state_patches() == []
+
+
+def test_reconcile_bloqueia_else_nao_vazio_antes_de_publicar(monkeypatch):
+    fake = FakeDataverse(row(statecode=1), unpublished_conflict=True)
+    desired_raw, _changed, _before, _after = mod.reconcile_card_clientdata(
+        fake.row,
+        "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+    )
+    draft = json.loads(desired_raw)
+    draft["properties"]["definition"]["actions"][
+        "Ignorar_tarefas_de_teste_automatizado"
+    ]["else"] = {
+        "actions": {
+            "Mudanca_Externa": {
+                "type": "Compose",
+                "inputs": "nao-publicar",
+            }
+        }
+    }
+    fake.unpublished["clientdata"] = json.dumps(draft, ensure_ascii=False)
+    _install(monkeypatch, fake)
+
+    with pytest.raises(FlowStateError) as exc_info:
+        mod.reconcile_flow_card(
+            "https://org.crm.dynamics.com",
+            "token",
+            copy.deepcopy(fake.row),
+            "ReqSys - Notificar Teams (Tarefa criada no Planner)",
+        )
+
+    assert exc_info.value.details["unpublished_relation"] == "non_card_divergent"
+    assert fake.publish_calls == 0
+    assert fake.unpublished_reads == 1
 
 
 def test_reconcile_classifica_draft_invalido_sem_expor_conteudo(monkeypatch):
