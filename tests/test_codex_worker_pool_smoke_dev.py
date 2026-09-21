@@ -31,6 +31,7 @@ def test_smoke_script_disables_lane_and_proves_no_execution() -> None:
     assert 'SMOKE_REPOSITORY = "ericson-j-santos/codex-worker-pool-smoke"' in raw
     assert '"enabled": False' in raw
     assert '"max_in_flight": 1' in raw
+    assert 'f"smoke-{expected_sha[:12]}"' in raw
     assert 'if task.get("state") != "queued" or task.get("leased_by") is not None:' in raw
     assert '"replay_created": False' in raw
     assert '"independent_readback": True' in raw
