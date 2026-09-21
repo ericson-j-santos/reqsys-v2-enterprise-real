@@ -40,3 +40,13 @@ Permitir que o Noteri produza evidência independente e sanitizada sobre a dispo
 - Pre-PR Readiness deve retornar `READY_FOR_PR=passed` no HEAD exato.
 - E2E físico deve produzir artifact no Noteri e ser lido independentemente.
 - Nenhuma evidência de outro SHA pode liberar a PR.
+
+## Critérios de aceite
+
+1. Execução em host diferente de `Noteri` deve falhar fechado.
+2. O destino deve permanecer exatamente `DESKTOP-PDQK954`, sem parâmetro externo para substituição.
+3. DNS indisponível deve produzir `name_resolution_failed` sem expor endereço IP bruto.
+4. ICMP positivo e porta 8081 fechada devem produzir `host_reachable_runtime_port_closed`.
+5. Porta 8081 aberta deve produzir `runtime_port_reachable`, mesmo quando ICMP não responder.
+6. O workflow deve produzir artifact sanitizado no E2E físico do Noteri.
+7. O HEAD exato deve obter `READY_FOR_PR=passed` antes de qualquer PR.

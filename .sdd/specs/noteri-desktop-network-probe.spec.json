@@ -50,5 +50,8 @@
       "tests/test_self_hosted_runner_governance.py"
     ],
     "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
+  },
+  "approvals": {
+    "requirements": true
   }
 }
