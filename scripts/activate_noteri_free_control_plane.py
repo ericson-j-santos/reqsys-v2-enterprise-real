@@ -31,6 +31,7 @@ RUNNER_ASSET_URL = (
 RUNNER_ASSET_SHA256 = "1150692afa94e71f872017e254ea55b6eece1eece3fe7e3a6d4c93d0a1b85cfc"
 RUNNER_NAME = "Noteri"
 RUNNER_LABELS = "noteri,reqsys-dev"
+EXPECTED_GITHUB_LOGIN = "ericson-j-santos"
 
 CANDIDATES = (
     Path(r"C:\actions-runner"),
@@ -151,11 +152,33 @@ def ensure_gh() -> Path:
         errors="replace",
         timeout=300,
         check=False,
+        env=gh_env(),
     )
     installed = find_gh()
     if cp.returncode != 0 or installed is None:
         raise ActivationError("github_cli_install_failed", "GitHub CLI não pôde ser instalado automaticamente")
     return installed
+
+
+def gh_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    return env
+
+
+def gh_active_login(gh: Path) -> str:
+    cp = subprocess.run(
+        [str(gh), "api", "user", "--jq", ".login"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+        env=gh_env(),
+    )
+    return cp.stdout.strip() if cp.returncode == 0 else ""
 
 
 def ensure_gh_auth(gh: Path) -> None:
@@ -165,9 +188,28 @@ def ensure_gh_auth(gh: Path) -> None:
         stderr=subprocess.DEVNULL,
         timeout=30,
         check=False,
+        env=gh_env(),
     )
     if status.returncode == 0:
-        return
+        active = gh_active_login(gh)
+        if active.casefold() == EXPECTED_GITHUB_LOGIN.casefold():
+            return
+        switch = subprocess.run(
+            [
+                str(gh),
+                "auth",
+                "switch",
+                "--hostname", "github.com",
+                "--user", EXPECTED_GITHUB_LOGIN,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+            env=gh_env(),
+        )
+        if switch.returncode == 0 and gh_active_login(gh).casefold() == EXPECTED_GITHUB_LOGIN.casefold():
+            return
     login = subprocess.run(
         [
             str(gh),
@@ -189,12 +231,33 @@ def ensure_gh_auth(gh: Path) -> None:
         stderr=subprocess.DEVNULL,
         timeout=30,
         check=False,
+        env=gh_env(),
     )
-    if status.returncode != 0:
+    if status.returncode != 0 or gh_active_login(gh).casefold() != EXPECTED_GITHUB_LOGIN.casefold():
         raise ActivationError("github_auth_required", "GitHub CLI continua sem autenticação válida")
 
 
-def registration_token(gh: Path) -> str:
+def refresh_repo_scope(gh: Path) -> None:
+    cp = subprocess.run(
+        [
+            str(gh),
+            "auth",
+            "refresh",
+            "--hostname", "github.com",
+            "--scopes", "repo",
+        ],
+        timeout=300,
+        check=False,
+        env=gh_env(),
+    )
+    if cp.returncode != 0:
+        raise ActivationError(
+            "github_scope_refresh_required",
+            "não foi possível atualizar o escopo repo da autenticação GitHub",
+        )
+
+
+def request_registration_token(gh: Path) -> str:
     cp = subprocess.run(
         [
             str(gh),
@@ -209,14 +272,32 @@ def registration_token(gh: Path) -> str:
         errors="replace",
         timeout=30,
         check=False,
+        env=gh_env(),
     )
     token = cp.stdout.strip()
-    if cp.returncode != 0 or len(token) < 20:
+    return token if cp.returncode == 0 and len(token) >= 20 else ""
+
+
+def registration_token(gh: Path) -> str:
+    token = request_registration_token(gh)
+    if token:
+        return token
+
+    refresh_repo_scope(gh)
+    if gh_active_login(gh).casefold() != EXPECTED_GITHUB_LOGIN.casefold():
         raise ActivationError(
-            "github_runner_admin_permission_required",
-            "não foi possível obter token efêmero de registro do runner",
+            "github_account_mismatch",
+            "conta GitHub ativa diverge de ericson-j-santos",
         )
-    return token
+
+    token = request_registration_token(gh)
+    if token:
+        return token
+
+    raise ActivationError(
+        "github_runner_admin_permission_required",
+        "token GitHub local não autorizou o endpoint de registro após refresh de escopo",
+    )
 
 
 def sha256_file(path: Path) -> str:
