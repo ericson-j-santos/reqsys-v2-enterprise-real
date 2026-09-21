@@ -159,6 +159,8 @@ class WorkerPoolStore:
               repository TEXT PRIMARY KEY,
               enabled INTEGER NOT NULL DEFAULT 1,
               max_in_flight INTEGER NOT NULL DEFAULT 1 CHECK(max_in_flight>=1),
+              builder_claim_count INTEGER NOT NULL DEFAULT 0,
+              validator_claim_count INTEGER NOT NULL DEFAULT 0,
               last_builder_claimed_at TEXT,
               last_validator_claimed_at TEXT,
               updated_at TEXT NOT NULL
@@ -447,6 +449,7 @@ class WorkerPoolStore:
                              AND active.state IN ('leased','running','validating')
                          ) < r.max_in_flight
                        ORDER BY
+                         r.builder_claim_count,
                          CASE WHEN r.last_builder_claimed_at IS NULL THEN 0 ELSE 1 END,
                          r.last_builder_claimed_at,
                          t.priority,t.created_at,t.task_id
@@ -473,6 +476,7 @@ class WorkerPoolStore:
                            )
                          )
                        ORDER BY
+                         r.validator_claim_count,
                          CASE WHEN r.last_validator_claimed_at IS NULL THEN 0 ELSE 1 END,
                          r.last_validator_claimed_at,
                          t.priority,t.updated_at,t.task_id
@@ -495,9 +499,15 @@ class WorkerPoolStore:
                 "last_builder_claimed_at" if role == "builder"
                 else "last_validator_claimed_at"
             )
+            count_column = (
+                "builder_claim_count" if role == "builder"
+                else "validator_claim_count"
+            )
             db.execute(
                 f"""UPDATE repository_lanes
-                    SET {claimed_column}=?,updated_at=?
+                    SET {claimed_column}=?,
+                        {count_column}={count_column}+1,
+                        updated_at=?
                     WHERE repository=?""",
                 (stamp, stamp, row["repository"]),
             )
@@ -631,12 +641,14 @@ class WorkerPoolStore:
             qn = db.execute("SELECT COUNT(*) n FROM quarantine").fetchone()["n"]
             repositories = db.execute(
                 """SELECT r.repository,r.enabled,r.max_in_flight,
+                          r.builder_claim_count,r.validator_claim_count,
                           r.last_builder_claimed_at,r.last_validator_claimed_at,r.updated_at,
                           SUM(CASE WHEN t.state='queued' THEN 1 ELSE 0 END) queued,
                           SUM(CASE WHEN t.state IN ('leased','running','validating') THEN 1 ELSE 0 END) active
                    FROM repository_lanes r
                    LEFT JOIN tasks t ON t.repository=r.repository
                    GROUP BY r.repository,r.enabled,r.max_in_flight,
+                            r.builder_claim_count,r.validator_claim_count,
                             r.last_builder_claimed_at,r.last_validator_claimed_at,r.updated_at
                    ORDER BY r.repository"""
             ).fetchall()
