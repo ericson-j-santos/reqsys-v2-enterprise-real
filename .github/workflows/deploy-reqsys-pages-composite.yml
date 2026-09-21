@@ -1,26 +1,20 @@
 name: Deploy ReqSys Pages Composite
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "docs/public-dev-locator/**"
-      - ".github/workflows/deploy-reqsys-pages-composite.yml"
-  workflow_run:
-    workflows:
-      - Teams Notification Dashboard
-      - Governed PR Automation
-    types:
-      - completed
   workflow_dispatch:
     inputs:
+      expected_sha:
+        description: "SHA completo da main autorizado para publicação"
+        required: true
+        type: string
       producer_run_id:
         description: "Run ID opcional do Teams Notification Dashboard; vazio usa o último sucesso"
         required: false
         type: string
-  schedule:
-    - cron: "50 12 * * *"
+      authorization:
+        description: "Confirmação explícita; deve ser DEPLOY_PAGES"
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -35,52 +29,72 @@ concurrency:
 jobs:
   deploy:
     name: Publicar Pages canônico sem colisão
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        (
-          github.event.workflow_run.name == 'Teams Notification Dashboard' ||
-          (
-            github.event.workflow_run.name == 'Governed PR Automation' &&
-            github.event.workflow_run.event == 'workflow_run'
-          )
-        )
-      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout da main publicada
+      - name: Validar autorização explícita e SHA alvo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+
+          test "$EVENT_NAME" = "workflow_dispatch" || {
+            echo "Deploy permitido somente por workflow_dispatch explícito." >&2
+            exit 2
+          }
+          test "$EVENT_REF" = "refs/heads/main" || {
+            echo "Deploy deve ser despachado a partir de refs/heads/main." >&2
+            exit 3
+          }
+          test "$AUTHORIZATION" = "DEPLOY_PAGES" || {
+            echo "Autorização explícita DEPLOY_PAGES ausente." >&2
+            exit 4
+          }
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "expected_sha inválido; informe SHA completo de 40 caracteres." >&2
+            exit 5
+          }
+
+          main_head="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          test "$main_head" = "$EXPECTED_SHA" || {
+            echo "expected_sha não corresponde ao HEAD atual da main." >&2
+            echo "expected=$EXPECTED_SHA observed=$main_head" >&2
+            exit 6
+          }
+
+      - name: Checkout da main autorizada
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.expected_sha }}
+
+      - name: Confirmar checkout exato
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Resolver execução produtora
         id: producer
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
-          WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name }}
           INPUT_RUN_ID: ${{ inputs.producer_run_id }}
         run: |
           set -euo pipefail
 
-          if [[ "$EVENT_NAME" == "workflow_run" && "$WORKFLOW_RUN_NAME" == "Teams Notification Dashboard" ]]; then
-            run_id="$WORKFLOW_RUN_ID"
-            source="workflow_run"
-          elif [[ "$EVENT_NAME" == "workflow_run" && "$WORKFLOW_RUN_NAME" == "Governed PR Automation" ]]; then
-            run_id="$(gh api \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/teams-notification-dashboard.yml/runs?status=success&per_page=20" \
-              --jq '.workflow_runs[0].id // empty')"
-            source="governed_pr_automation"
-          elif [[ -n "${INPUT_RUN_ID:-}" ]]; then
+          if [[ -n "${INPUT_RUN_ID:-}" ]]; then
             run_id="$INPUT_RUN_ID"
-            source="workflow_dispatch"
+            source="workflow_dispatch_input"
           else
             run_id="$(gh api \
               "repos/${GITHUB_REPOSITORY}/actions/workflows/teams-notification-dashboard.yml/runs?status=success&per_page=20" \
