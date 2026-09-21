@@ -70,6 +70,7 @@ def test_watchdog_cycle_starts_runner_when_listener_missing(monkeypatch, tmp_pat
     monkeypatch.setattr(watchdog, "require_noteri", lambda: "Noteri")
     monkeypatch.setattr(watchdog, "runner_running", lambda: next(observed))
     monkeypatch.setattr(watchdog, "start_runner", lambda path: True)
+    monkeypatch.setattr(watchdog, "runtime_root", lambda: tmp_path / "runtime")
     monkeypatch.setattr(watchdog, "atomic_json", lambda path, payload: None)
     result = watchdog.cycle(root)
     assert result["ok"] is True
