@@ -358,6 +358,10 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any, correlation_
         if quality.get("passed") != quality.get("total"):
             raise E2EError("resposta E2E não passou o rubric 4/4")
 
+        published_to_reqsys = bool((data.get("reqsys_publicacao") or {}).get("publicado"))
+        if published_to_reqsys:
+            raise E2EError("E2E publicou indevidamente no ReqSys")
+
         return {
             "evidence_dir": str(temp),
             "gateway_health": gateway_health,
@@ -377,7 +381,7 @@ def _full_endpoint(root: Path, profile: dict[str, str], probe: Any, correlation_
             "score_confianca": data.get("score_confianca"),
             "quality": quality,
             "response_excerpt": response[:900],
-            "published_to_reqsys": bool((data.get("reqsys_publicacao") or {}).get("publicado")),
+            "published_to_reqsys": published_to_reqsys,
         }
     finally:
         _terminate(api)
