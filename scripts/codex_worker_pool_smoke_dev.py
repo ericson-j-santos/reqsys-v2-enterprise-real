@@ -86,7 +86,7 @@ def run_smoke(
     report = direct_report(
         SMOKE_REPOSITORY,
         SMOKE_ISSUE,
-        "main",
+        f"smoke-{expected_sha[:12]}",
         correlation_id,
     )
     handoff = enqueue_local_work(
