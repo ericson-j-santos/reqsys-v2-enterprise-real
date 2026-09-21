@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "contract": "reqsys-required-checks-stale-inventory",
-  "observed_at": "2026-09-21T20:14:04.607852+00:00",
+  "observed_at": "2026-09-21T20:32:36.085173+00:00",
   "target_branch": "main",
   "gap_reference": "OPS-GAP-GITOPS-CHECKS-001",
   "required_contexts_source": "versioned_baseline",

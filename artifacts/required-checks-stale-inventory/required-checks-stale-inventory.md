@@ -1,7 +1,7 @@
 # Required Checks Stale Inventory
 
 - Contrato: `reqsys-required-checks-stale-inventory` (schema `1.0.0`)
-- Observado em: `2026-09-21T20:14:04.607852+00:00`
+- Observado em: `2026-09-21T20:32:36.085173+00:00`
 - Branch alvo: `main`
 - Gap canônico: `OPS-GAP-GITOPS-CHECKS-001`
 - Fonte dos contextos exigidos: `versioned_baseline`

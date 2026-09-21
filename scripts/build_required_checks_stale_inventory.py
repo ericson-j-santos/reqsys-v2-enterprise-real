@@ -37,8 +37,8 @@ CONTRACT = "reqsys-required-checks-stale-inventory"
 SCHEMA_VERSION = "1.0.0"
 DEFAULT_WORKFLOW_DIR = Path(".github/workflows")
 DEFAULT_POLICY = Path("config/required-checks-inventory-policy.json")
-DEFAULT_OUTPUT = Path("artifacts/required-checks-stale-inventory/report.json")
-DEFAULT_MARKDOWN = Path("artifacts/required-checks-stale-inventory/report.md")
+DEFAULT_OUTPUT = Path("artifacts/required-checks-stale-inventory/required-checks-stale-inventory.json")
+DEFAULT_MARKDOWN = Path("artifacts/required-checks-stale-inventory/required-checks-stale-inventory.md")
 CLOSE_MATCH_CUTOFF = 0.82
 EXPRESSION_RE = re.compile(r"\$\{\{.*?\}\}")
 

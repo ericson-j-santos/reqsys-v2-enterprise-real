@@ -78,8 +78,8 @@ jobs:
           [[ "${{ inputs.strict || false }}" == "true" ]] && strict_arg=(--strict)
           python scripts/build_required_checks_stale_inventory.py \
             --protection .tmp/protection.json \
-            --output "$REPORT_DIR/report.json" \
-            --markdown-output "$REPORT_DIR/report.md" \
+            --output "$REPORT_DIR/required-checks-stale-inventory.json" \
+            --markdown-output "$REPORT_DIR/required-checks-stale-inventory.md" \
             "${strict_arg[@]}"
 
       - name: Publicar sumário
@@ -87,8 +87,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f "$REPORT_DIR/report.md" ]; then
-            cat "$REPORT_DIR/report.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$REPORT_DIR/required-checks-stale-inventory.md" ]; then
+            cat "$REPORT_DIR/required-checks-stale-inventory.md" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Inventário não gerado." >> "$GITHUB_STEP_SUMMARY"
           fi

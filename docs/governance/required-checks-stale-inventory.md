@@ -54,7 +54,7 @@ python scripts/build_required_checks_stale_inventory.py --protection .tmp/protec
 python -m pytest tests/test_build_required_checks_stale_inventory.py tests/test_operational_gaps_registry_pareto_alignment.py -q
 ```
 
-Saídas: `artifacts/required-checks-stale-inventory/report.json` e `report.md`. O workflow `Required Checks Stale Inventory` roda o contrato em PR que toque o escopo, gera o inventário diariamente e publica o artifact; `--strict` só é aplicado por `workflow_dispatch` com `strict=true`.
+Saídas: `artifacts/required-checks-stale-inventory/required-checks-stale-inventory.json` e `required-checks-stale-inventory.md`. O nome do artifact é específico de propósito: nome genérico como `report.json` é reutilizado por dezenas de testes e faria o `pre_pr_readiness.py` selecionar suites sem relação com este escopo. O workflow `Required Checks Stale Inventory` roda o contrato em PR que toque o escopo, gera o inventário diariamente e publica o artifact; `--strict` só é aplicado por `workflow_dispatch` com `strict=true`.
 
 ## Ciclo de vida da política
 
