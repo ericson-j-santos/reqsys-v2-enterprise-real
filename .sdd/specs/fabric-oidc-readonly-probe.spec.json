@@ -13,7 +13,7 @@
   },
   "traceability": {
     "workflow": ".github/workflows/fabric-oidc-readonly-probe.yml",
-    "pull_request": "#1886"
+    "pull_request": "#1888"
   },
   "risk": {
     "production": false,
