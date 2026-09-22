@@ -11,6 +11,9 @@ Objetivo:
 from __future__ import annotations
 
 import argparse
+import csv
+import ctypes
+from ctypes import wintypes
 import json
 import locale
 import os
@@ -150,11 +153,89 @@ def _tasklist(image: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def runner_running() -> bool:
+def _runner_process_ids() -> list[int]:
+    if os.name != "nt":
+        return []
+    result = _tasklist(RUNNER_PROCESS)
+    if result.returncode != 0:
+        raise WatchdogError(f"tasklist do runner falhou: exit={result.returncode}")
+    pids: list[int] = []
+    for row in csv.reader(result.stdout.splitlines()):
+        if len(row) < 2 or row[0].strip().casefold() != RUNNER_PROCESS.casefold():
+            continue
+        try:
+            pids.append(int(row[1].strip().replace(",", "")))
+        except ValueError as exc:
+            raise WatchdogError("PID inválido ao inspecionar runner") from exc
+    return pids
+
+
+def _process_executable_path(pid: int) -> Path | None:
+    if os.name != "nt":
+        return None
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    open_process.restype = wintypes.HANDLE
+    query_path = kernel32.QueryFullProcessImageNameW
+    query_path.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPWSTR,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    query_path.restype = wintypes.BOOL
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    handle = open_process(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return None
+    try:
+        size = wintypes.DWORD(32768)
+        buffer = ctypes.create_unicode_buffer(size.value)
+        if not query_path(handle, 0, buffer, ctypes.byref(size)):
+            return None
+        return Path(buffer.value).resolve()
+    finally:
+        close_handle(handle)
+
+
+def runner_process_snapshot(runner_home: Path) -> dict[str, Any]:
+    runner_home = validate_runner_home(runner_home)
+    expected = (runner_home / "bin" / RUNNER_PROCESS).resolve()
+    matching: list[int] = []
+    unresolved: list[int] = []
+    observed: list[dict[str, Any]] = []
+    for pid in _runner_process_ids():
+        executable = _process_executable_path(pid)
+        if executable is None:
+            unresolved.append(pid)
+            continue
+        observed.append({"pid": pid, "path": str(executable)})
+        if os.path.normcase(str(executable)) == os.path.normcase(str(expected)):
+            matching.append(pid)
+
+    if len(matching) > 1:
+        raise WatchdogError("mais de um listener pertence ao runner governado")
+    if not matching and unresolved:
+        raise WatchdogError("identidade do Runner.Listener.exe não pôde ser verificada")
+    return {
+        "expected_executable": str(expected),
+        "matching_pids": matching,
+        "unresolved_pids": unresolved,
+        "observed": observed,
+    }
+
+
+def runner_running(runner_home: Path | None = None) -> bool:
     if os.name != "nt":
         return False
-    result = _tasklist(RUNNER_PROCESS)
-    return result.returncode == 0 and RUNNER_PROCESS.casefold() in result.stdout.casefold()
+    if runner_home is None:
+        return bool(_runner_process_ids())
+    return bool(runner_process_snapshot(runner_home)["matching_pids"])
 
 
 def _creationflags() -> int:
@@ -169,8 +250,15 @@ def _creationflags() -> int:
 
 def start_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
     runner_home = validate_runner_home(runner_home)
-    if runner_running():
-        return {"status": "healthy", "started": False}
+    snapshot = runner_process_snapshot(runner_home)
+    if snapshot["matching_pids"]:
+        return {
+            "status": "process_running",
+            "started": False,
+            "listener_pid": snapshot["matching_pids"][0],
+            "github_connectivity_verified": False,
+            "pickup_required": True,
+        }
 
     system_root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
     cmd = system_root / "System32" / "cmd.exe"
@@ -192,13 +280,71 @@ def start_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
 
     deadline = time.monotonic() + RUNNER_START_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
-        if runner_running():
-            return {"status": "recovered", "started": True, "launcher_pid": process.pid}
+        current = runner_process_snapshot(runner_home)
+        if current["matching_pids"]:
+            return {
+                "status": "recovered",
+                "started": True,
+                "launcher_pid": process.pid,
+                "listener_pid": current["matching_pids"][0],
+                "github_connectivity_verified": False,
+                "pickup_required": True,
+            }
         if process.poll() is not None:
             raise WatchdogError(f"runner terminou durante startup: exit={process.returncode}")
         time.sleep(1)
 
-    raise WatchdogError("timeout aguardando Runner.Listener.exe")
+    raise WatchdogError("timeout aguardando Runner.Listener.exe do runner governado")
+
+
+def _taskkill_runner(pid: int) -> subprocess.CompletedProcess[str]:
+    system_root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
+    taskkill = system_root / "System32" / "taskkill.exe"
+    return subprocess.run(
+        [str(taskkill), "/PID", str(pid), "/T", "/F"],
+        capture_output=True,
+        text=True,
+        encoding=locale.getpreferredencoding(False) or "utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+
+
+def stop_runner(runner_home: Path) -> dict[str, Any]:
+    runner_home = validate_runner_home(runner_home)
+    snapshot = runner_process_snapshot(runner_home)
+    matching = snapshot["matching_pids"]
+    previous_pid: int | None = matching[0] if matching else None
+
+    if previous_pid is not None:
+        stopped = _taskkill_runner(previous_pid)
+        if stopped.returncode != 0 and runner_running(runner_home):
+            raise WatchdogError(f"listener governado não pôde ser encerrado: exit={stopped.returncode}")
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and runner_running(runner_home):
+            time.sleep(0.5)
+        if runner_running(runner_home):
+            raise WatchdogError("timeout encerrando listener governado")
+
+    return {
+        "stopped": previous_pid is not None,
+        "previous_listener_pid": previous_pid,
+        "termination_scope": "exact_runner_home",
+    }
+
+
+def restart_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
+    stopped = stop_runner(runner_home)
+    result = start_runner(runner_home, log_path)
+    return {
+        **result,
+        "restart_requested": True,
+        "previous_listener_pid": stopped["previous_listener_pid"],
+        "termination_scope": stopped["termination_scope"],
+        "github_connectivity_verified": False,
+        "pickup_required": True,
+    }
 
 
 def read_rdc_claim() -> dict[str, Any]:

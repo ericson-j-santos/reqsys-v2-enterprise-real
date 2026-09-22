@@ -3,6 +3,12 @@ name: Minimum Controlled Version Gate
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "governance/minimum-controlled-version.json"
+      - "scripts/validate_minimum_controlled_version.py"
+      - "tests/test_minimum_controlled_version.py"
+      - "tests/test_generated_minimum_controlled_manifest_contract.py"
+      - ".github/workflows/minimum-controlled-version-gate.yml"
   push:
     branches: [main]
   workflow_dispatch:

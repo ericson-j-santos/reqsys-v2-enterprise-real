@@ -304,8 +304,33 @@ def build_summary(assessments: list[WorkflowAssessment]) -> dict[str, Any]:
     cascade_critical: list[str] = []
     suppress_notifications: list[str] = []
     redundant: list[str] = []
+    trigger_counts: dict[str, int] = {}
+    workflow_run_workflows: list[str] = []
+    high_fanout_workflow_run_workflows: list[str] = []
+    pull_request_workflows: list[str] = []
+    pull_request_path_scoped: list[str] = []
+    pull_request_unscoped: list[str] = []
+    scheduled_workflows: list[str] = []
+    dispatch_only_workflows: list[str] = []
 
     for item in assessments:
+        for trigger in item.triggers:
+            trigger_counts[trigger] = trigger_counts.get(trigger, 0) + 1
+        trigger_set = set(item.triggers)
+        if "workflow_run" in trigger_set:
+            workflow_run_workflows.append(item.name)
+            if len(item.workflow_run_parents) >= 4:
+                high_fanout_workflow_run_workflows.append(item.name)
+        if "pull_request" in trigger_set:
+            pull_request_workflows.append(item.name)
+            if "paths_only_pr" in item.risk_patterns:
+                pull_request_path_scoped.append(item.name)
+            else:
+                pull_request_unscoped.append(item.name)
+        if "schedule" in trigger_set:
+            scheduled_workflows.append(item.name)
+        if trigger_set == {"workflow_dispatch"}:
+            dispatch_only_workflows.append(item.name)
         by_class[item.classification] = by_class.get(item.classification, 0) + 1
         if item.no_jobs_risk in {"high", "medium"}:
             no_jobs_high.append(item.name)
@@ -323,6 +348,20 @@ def build_summary(assessments: list[WorkflowAssessment]) -> dict[str, Any]:
         "cascade_risk_workflows": sorted(set(cascade_critical)),
         "notification_suppression_workflows": sorted(set(suppress_notifications)),
         "redundant_workflows": sorted(set(redundant)),
+        "execution_surface": {
+            "trigger_counts": dict(sorted(trigger_counts.items())),
+            "workflow_run_count": len(set(workflow_run_workflows)),
+            "workflow_run_workflows": sorted(set(workflow_run_workflows)),
+            "high_fanout_workflow_run_count": len(set(high_fanout_workflow_run_workflows)),
+            "high_fanout_workflow_run_workflows": sorted(set(high_fanout_workflow_run_workflows)),
+            "pull_request_count": len(set(pull_request_workflows)),
+            "pull_request_path_scoped_count": len(set(pull_request_path_scoped)),
+            "pull_request_unscoped_count": len(set(pull_request_unscoped)),
+            "pull_request_unscoped_workflows": sorted(set(pull_request_unscoped)),
+            "scheduled_count": len(set(scheduled_workflows)),
+            "dispatch_only_count": len(set(dispatch_only_workflows)),
+            "dispatch_only_workflows": sorted(set(dispatch_only_workflows)),
+        },
     }
 
 
@@ -342,6 +381,32 @@ def render_markdown(report: dict[str, Any]) -> str:
     ]
     for key, value in sorted(summary["by_classification"].items()):
         lines.append(f"| {key} | {value} |")
+
+    surface = summary["execution_surface"]
+    lines.extend(
+        [
+            "",
+            "## Superfície de execução",
+            "",
+            "| Indicador | Quantidade |",
+            "|---|---:|",
+            f"| Workflows em pull_request | {surface['pull_request_count']} |",
+            f"| PR com paths | {surface['pull_request_path_scoped_count']} |",
+            f"| PR sem filtro de paths | {surface['pull_request_unscoped_count']} |",
+            f"| workflow_run | {surface['workflow_run_count']} |",
+            f"| workflow_run com 4+ produtores | {surface['high_fanout_workflow_run_count']} |",
+            f"| schedules | {surface['scheduled_count']} |",
+            f"| somente workflow_dispatch | {surface['dispatch_only_count']} |",
+            "",
+            "### Candidatos a redução de fan-out",
+            "",
+        ]
+    )
+    if surface["high_fanout_workflow_run_workflows"]:
+        for name in surface["high_fanout_workflow_run_workflows"]:
+            lines.append(f"- `{name}`")
+    else:
+        lines.append("- Nenhum workflow_run com quatro ou mais produtores.")
 
     lines.extend(["", "## No jobs were run — risco", ""])
     if summary["no_jobs_risk_workflows"]:

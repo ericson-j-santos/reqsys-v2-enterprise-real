@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature_name": "Desktop PC24x7 governed administrative broker",
   "increment_type": "gap_fix",
-  "status": "code_pending_validation",
+  "status": "implementation",
   "approvals": {
     "requirements": true
   },
@@ -29,15 +29,17 @@
   "sdd_gate": {
     "tests": [
       "tests/test_desktop_admin_broker.py",
-      "tests/test_desktop_admin_broker_uac_launcher.py"
+      "tests/test_desktop_admin_broker_uac_launcher.py",
+      "tests/test_activate_desktop_free_control_plane.py"
     ],
-    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, and invoke only versioned allowlisted handlers from an immutable release."
+    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, invoke only immutable versioned handlers, and recover a missing runner only through the fixed noninteractive desktop control-plane bootstrap."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-admin-broker.requirements.md",
     "implementation": "scripts/desktop_admin_broker.py",
     "uac_launcher": "scripts/desktop_admin_broker_uac_launcher.py",
-    "tests": "tests/test_desktop_admin_broker.py"
+    "tests": "tests/test_desktop_admin_broker.py",
+    "runner_bootstrap": "scripts/activate_desktop_free_control_plane.py"
   },
   "acceptance": {
     "code": [
