@@ -79,6 +79,17 @@ def test_token_resolution_discovers_single_docker_bind(monkeypatch) -> None:
                                     "com.docker.compose.service": bridge.WORKER_POOL_COMPOSE_SERVICE
                                 }
                             },
+                            "State": {"Running": True},
+                            "NetworkSettings": {
+                                "Ports": {
+                                    bridge.WORKER_POOL_CONTAINER_PORT: [
+                                        {
+                                            "HostIp": bridge.WORKER_POOL_HOST_IP,
+                                            "HostPort": bridge.WORKER_POOL_HOST_PORT,
+                                        }
+                                    ]
+                                }
+                            },
                             "Mounts": [
                                 {
                                     "Type": "bind",
@@ -97,11 +108,15 @@ def test_token_resolution_discovers_single_docker_bind(monkeypatch) -> None:
     monkeypatch.setattr(bridge.subprocess, "run", fake_run)
 
     assert str(bridge.resolve_token_file(None)) == source
-    assert calls[0][:4] == [
+    assert calls[0] == [
         "docker",
         "ps",
         "--filter",
         f"label=com.docker.compose.service={bridge.WORKER_POOL_COMPOSE_SERVICE}",
+        "--filter",
+        f"publish={bridge.WORKER_POOL_HOST_PORT}",
+        "--format",
+        "{{.ID}}",
     ]
     assert calls[1] == ["docker", "inspect", "container-123"]
 
@@ -115,7 +130,7 @@ def test_token_resolution_fails_closed_for_ambiguous_container(monkeypatch) -> N
         lambda *_args, **_kwargs: SimpleNamespace(stdout="one\ntwo\n"),
     )
 
-    with pytest.raises(bridge.BridgeError, match="worker_pool_container_not_unique"):
+    with pytest.raises(bridge.BridgeError, match="worker_pool_endpoint_container_not_unique"):
         bridge.resolve_token_file(None)
 
 
@@ -137,6 +152,17 @@ def test_token_resolution_fails_closed_for_ambiguous_mount(monkeypatch) -> None:
                                 "com.docker.compose.service": bridge.WORKER_POOL_COMPOSE_SERVICE
                             }
                         },
+                        "State": {"Running": True},
+                        "NetworkSettings": {
+                            "Ports": {
+                                bridge.WORKER_POOL_CONTAINER_PORT: [
+                                    {
+                                        "HostIp": bridge.WORKER_POOL_HOST_IP,
+                                        "HostPort": bridge.WORKER_POOL_HOST_PORT,
+                                    }
+                                ]
+                            }
+                        },
                         "Mounts": [mount, dict(mount)],
                     }
                 ]
@@ -148,6 +174,41 @@ def test_token_resolution_fails_closed_for_ambiguous_mount(monkeypatch) -> None:
     monkeypatch.setattr(bridge.subprocess, "run", fake_run)
 
     with pytest.raises(bridge.BridgeError, match="worker_pool_token_mount_not_unique"):
+        bridge.resolve_token_file(None)
+
+
+def test_token_resolution_fails_closed_for_noncanonical_endpoint_binding(monkeypatch) -> None:
+    def fake_run(args: list[str], **_kwargs):
+        if args[1] == "ps":
+            return SimpleNamespace(stdout="container-123\n")
+        return SimpleNamespace(
+            stdout=json.dumps(
+                [
+                    {
+                        "Config": {
+                            "Labels": {
+                                "com.docker.compose.service": bridge.WORKER_POOL_COMPOSE_SERVICE
+                            }
+                        },
+                        "State": {"Running": True},
+                        "NetworkSettings": {
+                            "Ports": {
+                                bridge.WORKER_POOL_CONTAINER_PORT: [
+                                    {"HostIp": "0.0.0.0", "HostPort": bridge.WORKER_POOL_HOST_PORT}
+                                ]
+                            }
+                        },
+                        "Mounts": [],
+                    }
+                ]
+            )
+        )
+
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
+    monkeypatch.setattr(bridge.subprocess, "run", fake_run)
+
+    with pytest.raises(bridge.BridgeError, match="worker_pool_endpoint_binding_invalid"):
         bridge.resolve_token_file(None)
 
 
