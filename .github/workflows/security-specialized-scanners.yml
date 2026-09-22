@@ -504,6 +504,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs:
+      - scope
       - gitleaks
       - python-dependency-audit
       - npm-audit
@@ -511,6 +512,13 @@ jobs:
       - codeql
     if: always()
     steps:
+      - name: Fail closed when security scope routing fails
+        if: needs.scope.result != 'success'
+        shell: bash
+        run: |
+          echo "Security scan scope router failed; refusing to publish a green summary." >&2
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
