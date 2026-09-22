@@ -41,7 +41,15 @@ RUNTIME_FILES = {
 
 
 class ReconcileError(RuntimeError):
-    pass
+    def __init__(self, code: str, *, stage: str | None = None) -> None:
+        parts = code.split(":")
+        self.code = (
+            ":".join(parts[:2])
+            if parts and parts[0] == "command_failed"
+            else (parts[0] if parts else "reconcile_error")
+        )
+        self.stage = stage
+        super().__init__(code)
 
 
 def run(
@@ -50,6 +58,7 @@ def run(
     cwd: Path,
     timeout: int = 300,
     env: dict[str, str] | None = None,
+    stage: str = "runtime_command",
 ) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(
         args,
@@ -65,13 +74,19 @@ def run(
     )
     if completed.returncode != 0:
         raise ReconcileError(
-            f"command_failed:{Path(args[0]).name}:exit_{completed.returncode}"
+            f"command_failed:{Path(args[0]).name}:exit_{completed.returncode}",
+            stage=stage,
         )
     return completed
 
 
 def git_head(repo_root: Path) -> str:
-    return run(["git", "rev-parse", "HEAD"], cwd=repo_root, timeout=30).stdout.strip()
+    return run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        timeout=30,
+        stage="preconditions",
+    ).stdout.strip()
 
 
 def require_host() -> None:
@@ -81,8 +96,18 @@ def require_host() -> None:
         raise ReconcileError("host_not_allowed")
 
 
-def inspect(container: str, repo_root: Path) -> dict[str, Any]:
-    raw = run(["docker", "inspect", container], cwd=repo_root, timeout=60).stdout
+def inspect(
+    container: str,
+    repo_root: Path,
+    *,
+    stage: str = "inspect_runtime",
+) -> dict[str, Any]:
+    raw = run(
+        ["docker", "inspect", container],
+        cwd=repo_root,
+        timeout=60,
+        stage=stage,
+    ).stdout
     payload = json.loads(raw)
     if not isinstance(payload, list) or len(payload) != 1:
         raise ReconcileError(f"docker_inspect_invalid:{container}")
@@ -93,7 +118,7 @@ def labels(item: dict[str, Any]) -> dict[str, str]:
     return (item.get("Config") or {}).get("Labels") or {}
 
 
-def bind_source(item: dict[str, Any], destination: str) -> Path:
+def rw_bind_source(item: dict[str, Any], destination: str) -> Path | None:
     for mount in item.get("Mounts") or []:
         if (
             mount.get("Destination") == destination
@@ -101,7 +126,19 @@ def bind_source(item: dict[str, Any], destination: str) -> Path:
             and mount.get("RW") is True
         ):
             return windows_path(str(mount.get("Source") or ""))
-    raise ReconcileError(f"rw_bind_missing:{destination}")
+    return None
+
+
+def required_bind_source(
+    item: dict[str, Any],
+    destination: str,
+    *,
+    stage: str,
+) -> Path:
+    source = rw_bind_source(item, destination)
+    if source is None:
+        raise ReconcileError(f"rw_bind_missing:{destination}", stage=stage)
+    return source
 
 
 def windows_path(raw: str) -> Path:
@@ -252,7 +289,7 @@ def wait_container_healthy(repo_root: Path, timeout_seconds: int = 180) -> None:
     deadline = time.monotonic() + timeout_seconds
     last = "unknown"
     while time.monotonic() < deadline:
-        item = inspect(API_CONTAINER, repo_root)
+        item = inspect(API_CONTAINER, repo_root, stage="api_health")
         state = item.get("State") or {}
         health = state.get("Health") or {}
         last = str(health.get("Status") or state.get("Status") or "unknown").lower()
@@ -498,9 +535,21 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         if item_labels.get("com.docker.compose.service") != service:
             raise ReconcileError(f"runtime_service_mismatch:{service}")
 
-    api_source = bind_source(api_before, "/app")
-    frontend_source = bind_source(frontend_before, "/app")
+    api_source = required_bind_source(
+        api_before,
+        "/app",
+        stage="api_source_bind",
+    )
     working_dir, compose_files = compose_context(api_before, repo_root)
+
+    frontend_bind_source = rw_bind_source(frontend_before, "/app")
+    frontend_requires_rebuild = frontend_bind_source is None
+    frontend_source = frontend_bind_source or (working_dir / "frontend")
+    if not frontend_source.is_dir():
+        raise ReconcileError(
+            "frontend_source_dir_missing",
+            stage="frontend_source_fallback",
+        )
 
     profile_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "ReqSys" / "TodoGlobal24x7"
     profile_dir.mkdir(parents=True, exist_ok=True)
@@ -524,16 +573,44 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
 
     base = compose_base(PROJECT, compose_files, working_dir)
     try:
-        run([*base, "config"], cwd=working_dir, timeout=120, env=compose_env)
+        run(
+            [*base, "config"],
+            cwd=working_dir,
+            timeout=120,
+            env=compose_env,
+            stage="compose_config",
+        )
         run(
             [*base, "up", "-d", "--no-deps", "--force-recreate", "api"],
             cwd=working_dir,
             timeout=600,
             env=compose_env,
+            stage="api_recreate",
         )
         wait_container_healthy(repo_root, args.health_timeout)
 
-        api_after = inspect(API_CONTAINER, repo_root)
+        if frontend_requires_rebuild:
+            run(
+                [
+                    *base,
+                    "up",
+                    "-d",
+                    "--no-deps",
+                    "--build",
+                    "--force-recreate",
+                    "frontend",
+                ],
+                cwd=working_dir,
+                timeout=900,
+                env=compose_env,
+                stage="frontend_rebuild",
+            )
+
+        api_after = inspect(
+            API_CONTAINER,
+            repo_root,
+            stage="verify_runtime_profile",
+        )
         env_items = (api_after.get("Config") or {}).get("Env") or []
         env_map = dict(entry.split("=", 1) for entry in env_items if "=" in entry)
         mounts = api_after.get("Mounts") or []
@@ -561,7 +638,24 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                 cwd=working_dir,
                 timeout=600,
                 env=compose_env,
+                stage="rollback_api_recreate",
             )
+            if frontend_requires_rebuild:
+                run(
+                    [
+                        *original_base,
+                        "up",
+                        "-d",
+                        "--no-deps",
+                        "--build",
+                        "--force-recreate",
+                        "frontend",
+                    ],
+                    cwd=working_dir,
+                    timeout=900,
+                    env=compose_env,
+                    stage="rollback_frontend_rebuild",
+                )
         except Exception:
             pass
         raise
@@ -576,7 +670,10 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "frontend_container": FRONTEND_CONTAINER,
         "gateway_container": NGINX_CONTAINER,
         "api_source_bind_observed": True,
-        "frontend_source_bind_observed": True,
+        "frontend_source_bind_observed": not frontend_requires_rebuild,
+        "frontend_runtime_refresh": (
+            "rebuild_from_compose_source" if frontend_requires_rebuild else "bind"
+        ),
         "profile_mount_rw": True,
         "loopback_agent_exposed": False,
         "browser_loopback_dependency_removed": True,
@@ -616,6 +713,12 @@ def main() -> int:
             "ok": False,
             "error": "noteri_study_mode_reconcile_failed",
             "error_type": type(exc).__name__,
+            "error_code": (
+                exc.code if isinstance(exc, ReconcileError) else "unexpected_error"
+            ),
+            "failure_stage": (
+                exc.stage if isinstance(exc, ReconcileError) and exc.stage else "unknown"
+            ),
             "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
             "expected_sha": args.expected_sha,
             "environment": "dev",
