@@ -6,7 +6,8 @@ import os
 import tempfile
 import time
 from datetime import UTC, datetime
-from http.client import HTTPConnection, HTTPException as HTTPClientException
+from http.client import HTTPConnection
+from http.client import HTTPException as HTTPClientException
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
