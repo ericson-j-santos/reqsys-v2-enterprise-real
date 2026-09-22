@@ -110,3 +110,20 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - O E2E físico Kindle não executa em PR; a rede de segurança pós-merge continua materializável.
 - Repetir a avaliação com a mesma entrada gera a mesma decisão.
 
+## Incremento Pareto — consolidação report-only pós-CI
+
+31. Workflows consultivos não devem competir com os gates bloqueantes durante `pull_request`. `Runtime Risk Scoring`, `PR Quality Review`, `Predictive Regression Guard`, `Preview Environment Contract` e `PR Fast Classifier` devem permanecer disponíveis via `workflow_dispatch`, mas sem gatilho direto de PR.
+32. Um único `CI Advisory Router` deve consumir a conclusão bem-sucedida de `CI — ReqSys v2 Enterprise`, resolver o PR pelo SHA e registrar quais diagnósticos consultivos são aplicáveis.
+33. O `CI Advisory Router` é estritamente report-only: não pode possuir `actions: write`, não deve disparar workflows automaticamente, não pode bloquear merge e não toca produção.
+34. `Deep Governance Review` deve materializar em PR somente no evento `labeled`; novos SHAs não devem criar execuções vazias via `synchronize`.
+
+### Critérios de aceite — report-only fora do caminho crítico
+
+- Os cinco workflows consultivos não contêm `pull_request:` em seu bloco de gatilho.
+- Todos os cinco preservam `workflow_dispatch:`.
+- `CI Advisory Router` possui `workflow_run` para `CI — ReqSys v2 Enterprise` com `types: [completed]`.
+- A execução automática do router só aceita fonte `pull_request` concluída com `success`.
+- O artifact consolidado declara `automatic_dispatch=false`, `critical_path_blocker=false` e `production_touched=false`.
+- `Deep Governance Review` contém `types: [labeled]` e não contém `synchronize` no trigger.
+- `scripts/validate_path_based_workflow_router.py` e `tests/test_report_only_workflow_pareto.py` ficam verdes.
+

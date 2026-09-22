@@ -3,20 +3,28 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import re
 import time
+import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+from urllib.parse import quote, urlencode, urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 WORKFLOW_NAME = "Pre-PR Readiness Gate"
+MANIFEST_SCHEMA_VERSION = "1.1.0"
+REQUIRED_PREVENTIVE_INVARIANTS = {
+    "sdd:contract",
+    "security:changed-diff",
+    "workflow:regression-contracts",
+}
 RETRYABLE_REASONS = {
     "pre_pr_pending_for_head_sha",
     "pre_pr_success_missing_for_head_sha",
@@ -55,6 +63,124 @@ def github_json(repository: str, path: str, token: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise AdmissionGuardError("github_payload_invalid")
     return payload
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        return None
+
+
+def github_bytes(repository: str, path: str, token: str) -> bytes:
+    """Baixa artifact sem encaminhar o bearer token ao host de redirect assinado."""
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise AdmissionGuardError("repository_invalid")
+    if not token:
+        raise AdmissionGuardError("github_token_missing")
+
+    api_url = f"https://api.github.com/repos/{repository}/{path.lstrip('/')}"
+    req = Request(
+        api_url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    opener = build_opener(_NoRedirect)
+    try:
+        with opener.open(req, timeout=30) as response:
+            return response.read()
+    except HTTPError as exc:
+        if exc.code not in {301, 302, 303, 307, 308}:
+            raise AdmissionGuardError(f"github_http_{exc.code}") from exc
+        location = str(exc.headers.get("Location") or "").strip()
+        parsed = urlparse(location)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise AdmissionGuardError("artifact_redirect_invalid") from exc
+        try:
+            with urlopen(Request(location, headers={"Accept": "application/octet-stream"}), timeout=30) as response:
+                return response.read()
+        except (HTTPError, URLError, TimeoutError, OSError) as download_exc:
+            raise AdmissionGuardError("artifact_download_failed") from download_exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise AdmissionGuardError("github_unreachable_or_invalid") from exc
+
+
+def validate_manifest_payload(manifest: dict[str, Any], head_sha: str, base_sha: str) -> dict[str, Any]:
+    if not isinstance(manifest, dict):
+        raise AdmissionGuardError("admission_manifest_payload_invalid")
+    if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
+        raise AdmissionGuardError("admission_manifest_schema_invalid")
+    if manifest.get("manifest_type") != "reqsys_ci_admission":
+        raise AdmissionGuardError("admission_manifest_type_invalid")
+    if manifest.get("status") != "admitted":
+        raise AdmissionGuardError("admission_manifest_not_admitted")
+    if str(manifest.get("head_sha") or "").lower() != head_sha:
+        raise AdmissionGuardError("admission_manifest_head_sha_mismatch")
+    if str(manifest.get("base_sha") or "").lower() != base_sha:
+        raise AdmissionGuardError("admission_manifest_base_sha_mismatch")
+
+    raw_invariants = manifest.get("preventive_invariants")
+    if not isinstance(raw_invariants, list):
+        raise AdmissionGuardError("admission_manifest_invariants_missing")
+    statuses = {
+        str(item.get("name") or ""): str(item.get("status") or "").lower()
+        for item in raw_invariants
+        if isinstance(item, dict)
+    }
+    missing_or_failed = [
+        name for name in sorted(REQUIRED_PREVENTIVE_INVARIANTS)
+        if statuses.get(name) != "passed"
+    ]
+    if missing_or_failed:
+        raise AdmissionGuardError(
+            "admission_manifest_invariants_failed:" + ",".join(missing_or_failed)
+        )
+    return {
+        "schema_version": manifest["schema_version"],
+        "status": manifest["status"],
+        "head_sha": head_sha,
+        "base_sha": base_sha,
+        "preventive_invariants": [
+            {"name": name, "status": statuses[name]}
+            for name in sorted(REQUIRED_PREVENTIVE_INVARIANTS)
+        ],
+    }
+
+
+def manifest_from_zip(data: bytes, head_sha: str) -> dict[str, Any]:
+    expected_name = f"{head_sha}.json"
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            matches = [
+                name for name in archive.namelist()
+                if not name.endswith("/") and PurePosixPath(name).name == expected_name
+            ]
+            if len(matches) != 1:
+                raise AdmissionGuardError("admission_manifest_file_missing_or_ambiguous")
+            payload = json.loads(archive.read(matches[0]).decode("utf-8"))
+    except AdmissionGuardError:
+        raise
+    except (zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AdmissionGuardError("admission_manifest_archive_invalid") from exc
+    if not isinstance(payload, dict):
+        raise AdmissionGuardError("admission_manifest_payload_invalid")
+    return payload
+
+
+def load_and_validate_manifest(
+    repository: str,
+    artifact: dict[str, Any],
+    head_sha: str,
+    base_sha: str,
+    token: str,
+) -> dict[str, Any]:
+    artifact_id = int(artifact.get("id") or 0)
+    if artifact_id < 1:
+        raise AdmissionGuardError("admission_manifest_artifact_id_invalid")
+    archive = github_bytes(repository, f"actions/artifacts/{artifact_id}/zip", token)
+    manifest = manifest_from_zip(archive, head_sha)
+    return validate_manifest_payload(manifest, head_sha, base_sha)
 
 
 def successful_pre_pr_runs(runs: list[dict[str, Any]], head_sha: str) -> list[dict[str, Any]]:
@@ -105,7 +231,7 @@ def assert_base_freshness(repository: str, base_ref: str, head_sha: str, token: 
     return {"base_ref": base_ref, "base_sha": base_sha, **state}
 
 
-def verify_evidence(repository: str, head_sha: str, token: str) -> dict[str, Any]:
+def verify_evidence(repository: str, head_sha: str, base_sha: str, token: str) -> dict[str, Any]:
     query = urlencode({"head_sha": head_sha, "per_page": 100})
     runs_payload = github_json(repository, f"actions/runs?{query}", token)
     runs = runs_payload.get("workflow_runs") if isinstance(runs_payload.get("workflow_runs"), list) else []
@@ -131,6 +257,7 @@ def verify_evidence(repository: str, head_sha: str, token: str) -> dict[str, Any
         artifacts = artifacts_payload.get("artifacts") if isinstance(artifacts_payload.get("artifacts"), list) else []
         artifact = matching_artifact(artifacts, head_sha)
         if artifact:
+            manifest = load_and_validate_manifest(repository, artifact, head_sha, base_sha, token)
             return {
                 "workflow": WORKFLOW_NAME,
                 "pre_pr_run_id": run_id,
@@ -139,6 +266,7 @@ def verify_evidence(repository: str, head_sha: str, token: str) -> dict[str, Any
                     "name": artifact.get("name"),
                     "expired": artifact.get("expired"),
                 },
+                "manifest": manifest,
             }
     raise AdmissionGuardError("admission_manifest_missing_for_head_sha")
 
@@ -155,9 +283,9 @@ def wait_for_admission(
     deadline = time.monotonic() + max(0, max_wait_seconds)
     while True:
         try:
-            evidence = verify_evidence(repository, head_sha, token)
+            evidence = verify_evidence(repository, head_sha, freshness["base_sha"], token)
             return {
-                "schema_version": "1.0.0",
+                "schema_version": "1.1.0",
                 "result": "ADMISSION_ACCEPTED",
                 "generated_at_utc": utc_now(),
                 "head_sha": head_sha,

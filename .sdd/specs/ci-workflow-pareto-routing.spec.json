@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Reduz fan-out e contenção de runners por roteamento de workflows advisory e especializados, impõe orçamento máximo de workflows bloqueantes no CI canônico e desloca E2E físico pesado para pós-merge, preservando checks protegidos e comportamento fail-closed.",
+  "description": "Reduz fan-out e contenção de runners por orçamento bloqueante no CI canônico, roteamento especializado e consolidação das análises report-only fora do caminho crítico do pull request, preservando checks protegidos e comportamento fail-closed.",
   "scope": "governance-ci-routing",
   "files": [
     ".github/workflows/security-specialized-scanners.yml",
@@ -40,7 +40,9 @@
     "config/ci-workflow-pareto-policy.json",
     "scripts/ci_budget_guard.py",
     "tests/test_ci_budget_guard.py",
-    "tests/fixtures/ci-budget/pr-1954-changed-files.txt"
+    "tests/fixtures/ci-budget/pr-1954-changed-files.txt",
+    ".github/workflows/ci-advisory-router.yml",
+    ".github/workflows/deep-governance-review.yml"
   ],
   "sdd_gate": {
     "tests": [
@@ -49,7 +51,7 @@
       "tests/test_workflow_governance_consolidator.py",
       "tests/test_ci_budget_guard.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request, mantendo rede de segurança em push/main; Kindle executa somente contrato estático em PR e mantém E2E físico em main/schedule/manual; a fixture da PR #1954 não seleciona os três workflows especializados caros."
+    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico."
   },
   "risk": {
     "production": false,
@@ -66,6 +68,10 @@
     "Trilha D não usa backend/** no pull_request; o push/main mantém backend/**.",
     "Os jobs físicos Noteri/Desktop do Kindle falham fechados para pull_request e continuam disponíveis em push/main, schedule e workflow_dispatch.",
     "O controle negativo bloqueia política acima do orçamento e sobreposição protected_workflows/report_only_workflows.",
-    "A mesma entrada produz a mesma seleção e o mesmo resultado de orçamento."
+    "A mesma entrada produz a mesma seleção e o mesmo resultado de orçamento.",
+    "Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier não possuem gatilho pull_request e preservam workflow_dispatch.",
+    "CI Advisory Router é acionado somente após CI — ReqSys v2 Enterprise concluído ou manualmente e publica evidência report-only.",
+    "CI Advisory Router não possui actions:write, não dispara automaticamente os workflows consultivos e declara critical_path_blocker=false.",
+    "Deep Governance Review não materializa em synchronize; mantém labeled, schedule e workflow_dispatch."
   ]
 }

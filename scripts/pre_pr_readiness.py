@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,15 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
+
+
+CORE_PREVENTIVE_INVARIANTS = (
+    "sdd:contract",
+    "security:changed-diff",
+    "workflow:regression-contracts",
+)
+
+DIFF_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
 GENERIC_REFERENCE_STEMS = {
@@ -54,6 +64,7 @@ class ReadinessEvidence:
     changed_files: list[str]
     profiles: list[str]
     checks: list[dict[str, object]]
+    preventive_invariants: list[dict[str, str]]
     blockers: list[str]
     warnings: list[str]
 
@@ -94,6 +105,83 @@ def detect_profiles(files: list[str]) -> list[str]:
 def changed_files(base_ref: str) -> list[str]:
     output = git_stdout("diff", "--name-only", f"origin/{base_ref}...HEAD")
     return sorted({line.strip() for line in output.splitlines() if line.strip()})
+
+
+def added_line_map(base_ref: str) -> dict[str, list[int]]:
+    """Mapeia somente linhas adicionadas/modificadas no lado HEAD do diff."""
+    output = git_stdout(
+        "-c",
+        "core.quotePath=false",
+        "diff",
+        "--unified=0",
+        "--no-color",
+        f"origin/{base_ref}...HEAD",
+        "--",
+    )
+    current_path: str | None = None
+    result: dict[str, set[int]] = {}
+    for line in output.splitlines():
+        if line.startswith("+++ "):
+            raw = line[4:].strip()
+            if raw == "/dev/null":
+                current_path = None
+            else:
+                current_path = raw[2:] if raw.startswith("b/") else raw
+                result.setdefault(current_path, set())
+            continue
+        match = DIFF_HUNK_RE.match(line)
+        if current_path is None or not match:
+            continue
+        start = int(match.group(1))
+        count = int(match.group(2) or "1")
+        if count > 0:
+            result[current_path].update(range(start, start + count))
+    return {path: sorted(lines) for path, lines in sorted(result.items())}
+
+
+def security_changed_diff_check(files: list[str], base_ref: str, root: Path) -> CheckResult:
+    """Executa o gate de segurança cedo, bloqueando somente novos sinais determinísticos."""
+    evidence_dir = root / "artifacts" / "pre-pr-readiness"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    changed_files_path = evidence_dir / "changed-files.txt"
+    changed_lines_path = evidence_dir / "changed-lines.json"
+    changed_files_path.write_text("\n".join(files) + "\n", encoding="utf-8")
+    changed_lines_path.write_text(
+        json.dumps(added_line_map(base_ref), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return _timed_check(
+        "security:changed-diff",
+        [
+            sys.executable,
+            "scripts/vibe_security_gate.py",
+            "--scope",
+            "changed",
+            "--changed-files",
+            changed_files_path.relative_to(root).as_posix(),
+            "--changed-lines",
+            changed_lines_path.relative_to(root).as_posix(),
+            "--strict",
+            "--output-dir",
+            "artifacts/pre-pr-readiness/security",
+        ],
+        cwd=root,
+    )
+
+
+def preventive_invariant_summary(checks: list[CheckResult]) -> list[dict[str, str]]:
+    by_name = {item.name: item for item in checks}
+    result: list[dict[str, str]] = []
+    for name in CORE_PREVENTIVE_INVARIANTS:
+        item = by_name.get(name)
+        result.append(
+            {
+                "name": name,
+                "status": item.status if item else "missing",
+                "detail": item.detail if item else "check obrigatório ausente",
+            }
+        )
+    return result
 
 
 def referenced_contract_tests(files: list[str], root: Path) -> list[str]:
@@ -141,7 +229,12 @@ def sdd_declared_pytests(files: list[str], root: Path) -> list[str]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        tests = payload.get("sdd_gate", {}).get("tests", [])
+        gate = payload.get("sdd_gate", {})
+        if not isinstance(gate, dict):
+            continue
+        tests = gate.get("pre_pr_tests")
+        if tests is None:
+            tests = gate.get("tests", [])
         if not isinstance(tests, list):
             continue
         for item in tests:
@@ -375,6 +468,14 @@ def main() -> int:
             cwd=root,
         )
     )
+    checks.append(security_changed_diff_check(files, args.base_ref, root))
+    checks.append(
+        _timed_check(
+            "workflow:regression-contracts",
+            [sys.executable, "scripts/validate_workflow_regression_contracts.py"],
+            cwd=root,
+        )
+    )
 
     targeted = candidate_pytests(files, root)
     if targeted:
@@ -391,10 +492,18 @@ def main() -> int:
 
     failed = [item for item in checks if item.status != "passed"]
     blockers.extend(f"{item.name}: {item.detail}" for item in failed)
+    preventive_invariants = preventive_invariant_summary(checks)
+    missing_or_failed_invariants = [
+        item for item in preventive_invariants if item["status"] != "passed"
+    ]
+    for item in missing_or_failed_invariants:
+        marker = f"{item['name']}: {item['detail']}"
+        if marker not in blockers:
+            blockers.append(marker)
     status = "passed" if not blockers else "blocked"
 
     evidence = ReadinessEvidence(
-        schema_version="1.1.0",
+        schema_version="1.2.0",
         status=status,
         correlation_id=args.correlation_id,
         base_ref=args.base_ref,
@@ -404,6 +513,7 @@ def main() -> int:
         changed_files=files,
         profiles=profiles,
         checks=[asdict(item) for item in checks],
+        preventive_invariants=preventive_invariants,
         blockers=blockers,
         warnings=warnings,
     )

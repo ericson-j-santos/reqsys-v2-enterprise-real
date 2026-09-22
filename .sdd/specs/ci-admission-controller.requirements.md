@@ -24,6 +24,12 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 8. O PR Evidence Gate deve exigir `Pre-PR Readiness Gate` e o artefato `ci-admission-<head_sha>` não expirado do SHA atual.
 9. Evidência de SHA antigo não pode liberar CI caro nem Evidence Gate.
 10. Nenhum merge, deploy, promoção de ambiente, segredo ou escrita em branch protegida faz parte deste incremento.
+11. O Pre-PR deve executar e registrar como invariantes preventivos obrigatórios: contrato SDD, segurança no diff e contratos de regressão de workflow.
+12. O security gate antecipado deve limitar bloqueadores estáticos às linhas adicionadas/modificadas no HEAD, evitando que dívida legada não tocada gere falso positivo; achados contextuais continuam visíveis para revisão.
+13. O manifesto de admissão deve carregar os invariantes preventivos e somente ficar `admitted` quando todos estiverem `passed`, `behind_by=0` e o SHA/base forem válidos.
+14. O Admission Controller deve baixar o artifact `ci-admission-<head_sha>`, ler o JSON interno e validar schema, tipo, status, HEAD, base SHA e invariantes; validar apenas nome/metadado do artifact é insuficiente.
+15. O download do artifact não pode encaminhar o bearer token do GitHub ao host externo do redirect assinado.
+16. O SDD pode declarar `sdd_gate.pre_pr_tests` para separar testes determinísticos de pré-PR dos testes completos que exigem runtime/E2E; quando presente, o Pre-PR deve executar essa lista e preservar `sdd_gate.tests` como contrato completo.
 
 ## Controles negativos
 
@@ -32,6 +38,8 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 - Artefato com SHA diferente ou expirado => bloqueio.
 - `main` avançou e o branch ficou atrás/divergiu => `source_stale_or_diverged`.
 - Evidence Gate sem manifesto do HEAD => falha.
+- Artifact com nome correto, mas conteúdo de outro HEAD/base, schema inválido ou invariante faltante/falho => Admission Controller bloqueia.
+- Dívida de segurança pré-existente em linha não alterada não bloqueia o Pre-PR; o mesmo sinal introduzido em linha nova bloqueia.
 - Falha do Ollama permanece degradada/fail-closed pelo mecanismo já integrado na `main`, sem produzir nova falha de CI por si só.
 
 ## Critérios de aceite
@@ -42,6 +50,11 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 - Caso negativo detecta SHA divergente, artefato expirado e base atrasada/divergida.
 - Os três workflows caros têm dependência transitiva do job `ci-admission`.
 - PR Evidence Gate rejeita ausência do manifesto do mesmo SHA.
+- Manifesto preventivo contém `sdd:contract`, `security:changed-diff` e `workflow:regression-contracts` com status `passed`.
+- Teste negativo prova que artifact com nome correto e conteúdo/base/invariante inválido é rejeitado.
+- Teste negativo prova que o security gate distingue dívida legada não tocada de blocker introduzido no diff.
+- Teste de controle prova que `pre_pr_tests` impede execução prematura de testes dependentes de runtime sem remover esses testes do contrato completo.
+- `tests/test_vibe_security_gate.py` verde junto aos testes de admission/readiness.
 - Nenhum merge/deploy executado por este incremento.
 
 

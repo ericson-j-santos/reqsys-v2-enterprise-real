@@ -75,3 +75,27 @@ def test_ci_driven_automerge_e_fail_closed_por_head_sha() -> None:
     assert "merge_method: 'squash'" in block
     assert 'sha: triggerHeadSha' in block
     assert 'Deploy/promoção: não executados por este workflow.' in block
+
+
+def test_ci_driven_automerge_exige_autorizacao_explicita_por_pr() -> None:
+    text = _text()
+
+    marker = 'auto-merge-after-governed-queue:'
+    block = text.split(marker, maxsplit=1)[1]
+    assert "const approvalLabel = 'governed-merge-approved';" in block
+    assert "labelNames.includes(approvalLabel)" in block
+    assert 'Autorizacao explicita ausente' in block
+    assert 'merge-queue:eligible' in block
+
+
+def test_ci_driven_automerge_revalida_autorizacao_imediatamente_antes_do_merge() -> None:
+    text = _text()
+
+    marker = 'auto-merge-after-governed-queue:'
+    block = text.split(marker, maxsplit=1)[1]
+    assert 'const currentLabels = await github.paginate' in block
+    assert "currentLabelNames.includes('merge-queue:eligible')" in block
+    assert 'currentLabelNames.includes(approvalLabel)' in block
+    assert 'Estado ou autorizacao mudou antes do merge' in block
+    assert "github.rest.pulls.merge({" in block
+    assert block.index('currentLabelNames.includes(approvalLabel)') < block.index("github.rest.pulls.merge({")

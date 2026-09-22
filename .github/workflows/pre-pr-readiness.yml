@@ -86,8 +86,9 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          python -m pytest tests/test_pre_pr_readiness.py -q
+          python -m pytest tests/test_pre_pr_readiness.py tests/test_ci_admission_control.py tests/test_vibe_security_gate.py -q
           python scripts/pre_pr_readiness.py --self-test-negative
+          python scripts/vibe_security_gate.py --self-test-negative
 
       - name: Executar prontidão no HEAD atual
         id: readiness
@@ -119,7 +120,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pre-pr-readiness-${{ env.EVALUATED_SHA }}
-          path: artifacts/pre-pr-readiness/pre-pr-readiness.json
+          path: artifacts/pre-pr-readiness/
           if-no-files-found: warn
           retention-days: 30
 
@@ -151,6 +152,11 @@ jobs:
           print(f"- Behind: `{p['behind_by']}`")
           print(f"- Arquivos alterados: `{len(p['changed_files'])}`")
           print(f"- Perfis: `{', '.join(p['profiles'])}`")
+          invariants = p.get('preventive_invariants', [])
+          if invariants:
+              print("### Invariantes preventivos")
+              for item in invariants:
+                  print(f"- {item['name']}: `{item['status']}`")
           if p['blockers']:
               print('### Bloqueios')
               for item in p['blockers']:
@@ -187,7 +193,20 @@ jobs:
           sha = sys.argv[1]
           path = Path("artifacts/admission") / f"{sha}.json"
           payload = json.loads(path.read_text(encoding="utf-8"))
+          required = {
+              "sdd:contract",
+              "security:changed-diff",
+              "workflow:regression-contracts",
+          }
+          invariants = {
+              str(item.get("name")): str(item.get("status"))
+              for item in payload.get("preventive_invariants", [])
+              if isinstance(item, dict)
+          }
           if payload.get("status") != "admitted" or payload.get("head_sha") != sha:
               raise SystemExit("CI_ADMISSION_BLOCKED")
+          failed = sorted(name for name in required if invariants.get(name) != "passed")
+          if failed:
+              raise SystemExit("CI_ADMISSION_PREVENTIVE_INVARIANTS_BLOCKED:" + ",".join(failed))
           print(f"CI_ADMISSION_ACCEPTED head={sha}")
           PY
