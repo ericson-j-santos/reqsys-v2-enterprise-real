@@ -84,8 +84,21 @@ def test_ci_driven_automerge_exige_autorizacao_explicita_por_pr() -> None:
     block = text.split(marker, maxsplit=1)[1]
     assert "const approvalLabel = 'governed-merge-approved';" in block
     assert "labelNames.includes(approvalLabel)" in block
-    assert 'Autorizacao explicita ausente' in block
+    assert 'Merge governado aguardando autorizacao explicita' in block
+    assert 'Autorizacao explicita ausente' not in block
     assert 'merge-queue:eligible' in block
+
+
+def test_ci_driven_automerge_reage_a_label_de_aprovacao_sem_falso_ci_vermelho() -> None:
+    text = _text()
+
+    marker = 'auto-merge-after-governed-queue:'
+    block = text.split(marker, maxsplit=1)[1]
+    assert "github.event_name == 'pull_request'" in block
+    assert "github.event.action == 'labeled'" in block
+    assert "github.event.label.name == 'governed-merge-approved'" in block
+    assert "context.eventName === 'workflow_run'" in block
+    assert 'context.payload.pull_request.head.sha' in block
 
 
 def test_ci_driven_automerge_revalida_autorizacao_imediatamente_antes_do_merge() -> None:
