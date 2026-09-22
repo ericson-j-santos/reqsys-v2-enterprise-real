@@ -13,11 +13,13 @@ Executar o merge governado de Pull Requests do ReqSys por evento de CI, sem agen
 7. O merge deve usar `squash` e enviar o SHA esperado à API GitHub (`sha: triggerHeadSha`).
 8. Mudança de SHA deve falhar fechado; o novo ciclo de `synchronize` deve reexecutar os gates antes de nova tentativa.
 9. O workflow não pode executar deploy, promoção de ambiente, alteração de segredos ou permissões administrativas.
-10. O caminho manual existente por `workflow_dispatch` deve permanecer disponível e inalterado para contingência governada.\n11. O caminho CI-driven nunca pode adicionar `governed-merge-approved`; essa label representa autorização explícita externa ao resultado de CI.
+10. O caminho manual existente por `workflow_dispatch` deve permanecer disponível e inalterado para contingência governada.
+11. O caminho CI-driven nunca pode adicionar `governed-merge-approved`; essa label representa autorização explícita externa ao resultado de CI.
 
 ## Critérios de aceite
 1. Teste contratual comprova gatilho `workflow_run` da fila governada e ausência de `schedule`.
 2. Teste contratual comprova dupla validação do HEAD e merge com SHA esperado.
 3. Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato e `behind_by=0`.
 4. Após abertura da PR, todos os gates obrigatórios devem passar no novo SHA antes do merge.
-5. O merge automático só ocorre depois da `Governed Merge Queue` verde **e** da presença de `governed-merge-approved`.\n6. Teste contratual comprova que a autorização explícita é revalidada imediatamente antes de `pulls.merge`.
+5. O merge automático só ocorre depois da `Governed Merge Queue` verde **e** da presença de `governed-merge-approved`.
+6. Teste contratual comprova que a autorização explícita é revalidada imediatamente antes de `pulls.merge`.
