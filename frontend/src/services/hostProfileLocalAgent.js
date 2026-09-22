@@ -4,11 +4,11 @@ const VALID_PROFILES = new Set(['NORMAL', 'ESTUDO'])
 
 function validarPayload(payload) {
   if (!payload || payload.success !== true || !payload.data) {
-    const detail = payload?.detail || payload?.errors?.[0]?.message || 'API do modo ESTUDO retornou resposta inválida.'
+    const detail = payload?.detail || payload?.errors?.[0]?.message || 'serviço do modo ESTUDO retornou resposta inválida.'
     throw new Error(detail)
   }
   const data = payload.data
-  if (!VALID_PROFILES.has(data.profile)) throw new Error('API retornou perfil inválido.')
+  if (!VALID_PROFILES.has(data.profile)) throw new Error('serviço retornou perfil inválido.')
   if (String(data.host || '').toLowerCase() !== 'noteri') {
     throw new Error(`Estado pertence ao host ${data.host || 'desconhecido'}, não ao Noteri.`)
   }
