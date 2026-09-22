@@ -22,7 +22,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Inspecionar necessidade de sincronização
+        id: sync-check
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { owner, repo } = context.repo;
+            const repository = owner + '/' + repo;
+            const prNumber = Number(context.payload.pull_request.number);
+
+            const { data: observed } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+
+            if (
+              observed.state !== 'open' ||
+              observed.draft ||
+              observed.base.ref !== 'main' ||
+              observed.head.repo?.full_name !== repository
+            ) {
+              core.notice('PR fora do escopo seguro de auto-sincronização.');
+              return 'false';
+            }
+            if (observed.mergeable === false || observed.mergeable_state === 'dirty') {
+              core.notice('PR com conflito; sincronização automática bloqueada.');
+              return 'false';
+            }
+            if (observed.mergeable === null) {
+              core.notice('Mergeabilidade ainda desconhecida; mantendo fail-closed.');
+              return 'false';
+            }
+
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: 'main...' + observed.head.sha,
+            });
+            if (Number(comparison.behind_by || 0) <= 0) {
+              core.notice('PR já está atualizada com a main; credencial de escrita não será emitida.');
+              return 'false';
+            }
+
+            core.notice('PR está atrás da main; credencial de escrita será solicitada somente agora.');
+            return 'true';
+
       - name: Validar configuração da GitHub App
+        if: steps.sync-check.outputs.result == 'true'
         shell: bash
         env:
           APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
@@ -35,6 +83,7 @@ jobs:
           fi
 
       - name: Gerar token temporário de branch sync
+        if: steps.sync-check.outputs.result == 'true'
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
@@ -46,6 +95,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Atualizar PR atual com proteção por HEAD
+        if: steps.sync-check.outputs.result == 'true'
         uses: actions/github-script@v7
         with:
           github-token: ${{ steps.app-token.outputs.token }}
@@ -150,7 +200,60 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Inspecionar PRs que podem exigir sincronização
+        id: sync-scan
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { owner, repo } = context.repo;
+            const repository = owner + '/' + repo;
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+              sort: 'updated',
+              direction: 'asc',
+            });
+
+            for (const summary of pulls) {
+              const { data: observed } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: Number(summary.number),
+              });
+
+              if (
+                observed.state !== 'open' ||
+                observed.draft ||
+                observed.base.ref !== 'main' ||
+                observed.head.repo?.full_name !== repository ||
+                observed.mergeable === false ||
+                observed.mergeable_state === 'dirty' ||
+                observed.mergeable === null
+              ) {
+                continue;
+              }
+
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                owner,
+                repo,
+                basehead: 'main...' + observed.head.sha,
+              });
+              if (Number(comparison.behind_by || 0) > 0) {
+                core.notice('Existe PR elegível atrasada; credencial de escrita será solicitada.');
+                return 'true';
+              }
+            }
+
+            core.notice('Nenhuma PR elegível está atrasada; credencial de escrita não será emitida.');
+            return 'false';
+
       - name: Validar configuração da GitHub App
+        if: steps.sync-scan.outputs.result == 'true'
         shell: bash
         env:
           APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
@@ -163,6 +266,7 @@ jobs:
           fi
 
       - name: Gerar token temporário de branch sync
+        if: steps.sync-scan.outputs.result == 'true'
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
@@ -174,6 +278,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Atualizar branches com proteção por HEAD
+        if: steps.sync-scan.outputs.result == 'true'
         uses: actions/github-script@v7
         env:
           MAX_BRANCH_SYNCS: "3"
