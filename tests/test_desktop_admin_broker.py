@@ -134,6 +134,41 @@ def test_failed_command_is_recorded_and_not_replayed(monkeypatch, tmp_path: Path
     assert state["accepted"]["comment_id"] == 102
 
 
+def test_recover_runner_uses_explicit_restart_and_requires_pickup(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / "watchdog-metadata.json"
+    runner = tmp_path / "runner"
+    runtime = tmp_path / "runtime"
+    target.write_text(
+        json.dumps({"runner_home": str(runner), "runtime_root": str(runtime)}),
+        encoding="utf-8",
+    )
+
+    class FakeWatchdog:
+        @staticmethod
+        def discover_runner_home(explicit):
+            assert explicit == runner
+            return runner
+
+        @staticmethod
+        def restart_runner(runner_home, log_path):
+            assert runner_home == runner
+            assert log_path == runtime / "logs" / "github-runner.log"
+            return {
+                "status": "recovered",
+                "restart_requested": True,
+                "github_connectivity_verified": False,
+                "pickup_required": True,
+            }
+
+    monkeypatch.setattr(m, "_ensure_watchdog_staged", lambda metadata: (None, target))
+    monkeypatch.setattr(m, "_watchdog_module", lambda installed: FakeWatchdog)
+    result = m._recover_runner({"release_root": str(tmp_path)})
+
+    assert result["handler"] == "recover-runner"
+    assert result["runner"]["restart_requested"] is True
+    assert result["github_pickup_required"] is True
+
+
 def test_install_stages_release_and_marks_uac_pending(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "source"
     scripts = source / "scripts"
