@@ -5,9 +5,11 @@ import base64
 import json
 import os
 import re
+import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -525,7 +527,20 @@ def main() -> int:
         print(json.dumps({"status": "passed", "fabric": result}, ensure_ascii=False))
         return 0
     except (ReportSpecError, FabricApiError, OSError, json.JSONDecodeError) as exc:
-        print(json.dumps({"status": "failed", "error": str(exc)}, ensure_ascii=False))
+        # O detalhe da exceção fica no log (stderr), correlacionado por error_id;
+        # a saída estruturada carrega apenas mensagem genérica e o identificador.
+        error_id = uuid.uuid4().hex[:12]
+        print(f"[{error_id}] {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "error_id": error_id,
+                    "message": "Falha ao processar a solicitação; consulte o log pelo error_id.",
+                },
+                ensure_ascii=False,
+            )
+        )
         return 2
 
 
