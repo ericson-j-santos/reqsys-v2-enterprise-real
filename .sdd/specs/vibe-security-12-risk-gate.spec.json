@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Vibe Coding 12-risk Security Gate",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_vibe_security_gate.py"
+    ],
+    "evidence_contract": "Matriz de 12 riscos; bloqueio apenas de sinais estáticos de alta confiança; riscos contextuais permanecem review_required; no_signal nunca é prova de segurança; artifact vinculado ao HEAD."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/vibe-security-12-risk-gate.requirements.md",
+    "workflow": ".github/workflows/security-baseline-gate.yml",
+    "implementation": "scripts/vibe_security_gate.py",
+    "tests": "tests/test_vibe_security_gate.py",
+    "documentation": "docs/security/VIBE_CODING_12_RISK_CHECKLIST.md"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "scope": "ci-security"
+  },
+  "acceptance_criteria": [
+    "Os 12 riscos estão presentes exatamente uma vez.",
+    "Sinais estáticos de alta confiança podem bloquear; sinais contextuais exigem revisão.",
+    "no_signal não é apresentado como safe ou secure.",
+    "O scanner é offline/read-only e não acessa secrets nem rede.",
+    "O Security Baseline Gate reutiliza o mesmo escopo changed/all e publica os novos relatórios no artifact existente.",
+    "Testes positivos, negativos e de controle passam.",
+    "Pre-PR Readiness fica verde no HEAD exato e behind_by=0.",
+    "Nenhum merge, deploy ou produção é executado neste incremento."
+  ]
+}
