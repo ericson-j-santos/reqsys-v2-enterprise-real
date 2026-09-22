@@ -82,8 +82,6 @@ jobs:
             const node = paths.some(path =>
               startsWithAny(path, [
                 'frontend/',
-                'frontend-angular/',
-                'frontend-vuetify/',
               ]) ||
               matchesAny(path, [
                 /(^|\/)package\.json$/,
