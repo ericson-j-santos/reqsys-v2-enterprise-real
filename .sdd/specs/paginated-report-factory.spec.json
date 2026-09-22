@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Report Builder / Paginated Report Factory P0",
+  "status": "implemented_pending_ci",
+  "classification": "consolidate",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_paginated_report_factory.py"
+    ],
+    "evidence_contract": "Geracao RDL deterministica, sem escrita externa, sem segredo inline e com controles negativos para SQL destrutivo; evidencias devem pertencer ao HEAD exato."
+  },
+  "traceability": {
+    "api": "POST /v1/hub-lowcode/reports/paginated/generate",
+    "service": "backend/app/services/paginated_report_factory.py",
+    "schema": "backend/app/schemas/paginated_report.py"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "external_write": false
+  },
+  "runtime_validation": {
+    "fabric_dev_publish": "pending_explicit_authorization",
+    "export_pdf_xlsx": "pending_after_dev_publish"
+  }
+}
