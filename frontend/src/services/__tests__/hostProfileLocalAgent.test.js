@@ -11,6 +11,7 @@ import { api } from '../api'
 import {
   alterarPerfilNoteri,
   obterPerfilNoteri,
+  __hostProfileLocalAgentInternals,
 } from '../hostProfileLocalAgent'
 
 afterEach(() => {
@@ -123,9 +124,8 @@ describe('hostProfileLocalAgent via same-origin API', () => {
     await expect(obterPerfilNoteri()).rejects.toThrow('diretório do perfil não montado')
   })
 
-  it('não contém fallback browser para loopback 8765', async () => {
-    expect(api.get).not.toHaveBeenCalled()
-    const source = await import('../hostProfileLocalAgent?raw')
-    expect(source.default).not.toContain('127.0.0.1:8765')
+  it('não expõe configuração de agente loopback ao navegador', () => {
+    expect(__hostProfileLocalAgentInternals.DEFAULT_AGENT_URL).toBeUndefined()
+    expect(Object.keys(__hostProfileLocalAgentInternals)).toEqual(['VALID_PROFILES'])
   })
 })
