@@ -1,1 +1,0 @@
-"""ReqSys runtime executável."""

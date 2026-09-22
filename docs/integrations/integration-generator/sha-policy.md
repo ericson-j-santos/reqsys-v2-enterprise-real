@@ -1,1 +1,0 @@
-Toda evidência de CI e E2E deve ser vinculada ao SHA corrente da PR.

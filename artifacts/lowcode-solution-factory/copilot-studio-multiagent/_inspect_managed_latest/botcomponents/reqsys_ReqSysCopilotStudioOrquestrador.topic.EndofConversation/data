@@ -1,8 +1,0 @@
-kind: AdaptiveDialog
-beginDialog:
-  kind: OnEndOfConversation
-  id: main
-  actions:
-    - kind: SendActivity
-      id: sendMessage_eoc
-      activity: Conversa encerrada.

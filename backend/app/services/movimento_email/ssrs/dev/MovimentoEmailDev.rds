@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<RptDataSource xmlns="http://schemas.microsoft.com/sqlserver/reporting/2006/03/reportdatasource">
-  <Name>MovimentoEmailDev</Name>
-  <ConnectionProperties>
-    <Extension>SQL</Extension>
-    <ConnectString>Data Source=localhost;Initial Catalog=ReqSysMovimentoDev</ConnectString>
-    <IntegratedSecurity>true</IntegratedSecurity>
-  </ConnectionProperties>
-</RptDataSource>

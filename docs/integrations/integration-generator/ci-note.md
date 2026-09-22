@@ -1,1 +1,0 @@
-A validação de CI deve sempre referenciar o SHA corrente da PR; checks de commits anteriores não contam como evidência.
