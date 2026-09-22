@@ -42,6 +42,7 @@ on:
       - 'docs/runbooks/trilha-d-qualidade-governanca.md'
       - 'tests/test_trilha_d_qualidade_governanca.py'
       - 'tests/test_trilha_d_odbc_setup_contract.py'
+      - 'backend/**'
 
 concurrency:
   group: trilha-d-qualidade-governanca-${{ github.ref }}
