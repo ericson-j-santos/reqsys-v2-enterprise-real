@@ -65,6 +65,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "codex-worker-pool-smoke-dev.yml|"
         "noteri-desktop-network-probe.yml|"
         "noteri-desktop-watchdog-recovery.yml|"
+        "noteri-desktop-admin-broker-kick.yml|"
         "pc24x7-teams-token-bootstrap.yml|"
         "pc24x7-teams-ephemeral-e2e.yml"
     ) in content
