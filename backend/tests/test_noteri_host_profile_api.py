@@ -355,3 +355,104 @@ def test_control_plane_endpoint_is_fail_closed(monkeypatch):
     finally:
         app.dependency_overrides.clear()
 
+def test_control_plane_transport_uses_only_allowlisted_http_target(monkeypatch):
+    monkeypatch.setenv(
+        "NOTERI_CONTROL_PLANE_URL",
+        "http://host.docker.internal:8787",
+    )
+    observed = {}
+
+    class FakeResponse:
+        status = 200
+
+        def read(self):
+            return b'{"workers": []}'
+
+    class FakeConnection:
+        def __init__(self, host, port, timeout):
+            observed["connection"] = (host, port, timeout)
+
+        def request(self, method, path, body=None, headers=None):
+            observed["request"] = (method, path, body, headers)
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            observed["closed"] = True
+
+    monkeypatch.setattr(profile_service, "HTTPConnection", FakeConnection)
+
+    result = profile_service._control_plane_request("GET", "/v1/workers")
+
+    assert result == {"workers": []}
+    assert observed["connection"] == ("host.docker.internal", 8787, 5.0)
+    assert observed["request"] == (
+        "GET",
+        "/v1/workers",
+        None,
+        {"Accept": "application/json"},
+    )
+    assert observed["closed"] is True
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("DELETE", "/v1/workers"),
+        ("GET", "/v1/untrusted"),
+    ],
+)
+def test_control_plane_transport_rejects_unallowlisted_request(
+    monkeypatch,
+    method,
+    path,
+):
+    monkeypatch.setenv(
+        "NOTERI_CONTROL_PLANE_URL",
+        "http://host.docker.internal:8787",
+    )
+
+    class UnexpectedConnection:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("network transport must not be opened")
+
+    monkeypatch.setattr(profile_service, "HTTPConnection", UnexpectedConnection)
+
+    with pytest.raises(profile_service.NoteriProfileUnavailable):
+        profile_service._control_plane_request(method, path)
+
+
+def test_control_plane_transport_fails_closed_on_http_error(monkeypatch):
+    monkeypatch.setenv(
+        "NOTERI_CONTROL_PLANE_URL",
+        "http://host.docker.internal:8787",
+    )
+    observed = {"closed": False}
+
+    class FakeResponse:
+        status = 503
+
+        def read(self):
+            return b'{"error": "unavailable"}'
+
+    class FakeConnection:
+        def __init__(self, host, port, timeout):
+            pass
+
+        def request(self, method, path, body=None, headers=None):
+            pass
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            observed["closed"] = True
+
+    monkeypatch.setattr(profile_service, "HTTPConnection", FakeConnection)
+
+    with pytest.raises(profile_service.NoteriProfileUnavailable):
+        profile_service._control_plane_request("GET", "/v1/workers")
+
+    assert observed["closed"] is True
+
