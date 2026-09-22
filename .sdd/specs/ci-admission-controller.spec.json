@@ -24,7 +24,8 @@
     "scripts/runtime_health_center.py",
     "tests/test_runtime_health_center.py",
     "scripts/vibe_security_gate.py",
-    "tests/test_vibe_security_gate.py"
+    "tests/test_vibe_security_gate.py",
+    ".github/workflows/security-baseline-gate.yml"
   ],
   "sdd_gate": {
     "tests": [
@@ -34,7 +35,7 @@
       "tests/test_runtime_health_center.py",
       "tests/test_vibe_security_gate.py"
     ],
-    "evidence_contract": "Provar manifesto preventivo vinculado ao HEAD/base exatos, behind_by=0, invariantes sdd:contract/security:changed-diff/workflow:regression-contracts aprovados, rejeição de artifact com nome correto mas conteúdo inválido, segurança incremental limitada a blockers introduzidos no diff, CI caro protegido por admission guard e PR Evidence Gate exigindo o artifact do SHA atual."
+    "evidence_contract": "Provar manifesto preventivo vinculado ao HEAD/base exatos, behind_by=0, invariantes sdd:contract/security:changed-diff/workflow:regression-contracts aprovados, rejeição de artifact com nome correto mas conteúdo inválido, segurança incremental limitada a blockers introduzidos no diff, CI caro protegido por admission guard e PR Evidence Gate exigindo o artifact do SHA atual. O Security Baseline Gate deve usar o mesmo mapa de linhas alteradas do Pre-PR para evitar divergência de decisão entre prevenção e CI de PR."
   },
   "risk": {
     "production": false,
