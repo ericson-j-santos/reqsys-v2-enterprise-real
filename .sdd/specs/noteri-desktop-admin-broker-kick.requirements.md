@@ -13,7 +13,8 @@ Permitir que o runner governado do Noteri solicite somente o start da tarefa já
 5. Proibidos `/Create`, `/Change`, `/Delete`, `/U`, `/P` e argumentos externos.
 6. Nenhum segredo, reboot, deploy ou produção.
 7. Evidência sanitizada como artifact.
-8. Execução somente por workflow self-hosted do Noteri e comando exato no Authorized Actions Gateway.\n9. A validação em `pull_request` é permitida apenas para PRs do mesmo repositório; `pull_request_target` e segredos são proibidos.
+8. Execução somente por workflow self-hosted do Noteri e comando exato no Authorized Actions Gateway.
+9. A operação remota é acionada somente por `workflow_dispatch`; `pull_request`, `pull_request_target` e `push` não podem executar o RPC. Em PR, a validação ocorre apenas por testes de contrato/governança sem mutação remota.
 
 ## Critérios de aceite
 
