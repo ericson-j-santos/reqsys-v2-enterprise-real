@@ -27,6 +27,10 @@ class RepositoryAdminError(RuntimeError):
     pass
 
 
+class RepositoryNotManagedError(RepositoryAdminError):
+    pass
+
+
 def _validate_repository(item: dict[str, Any]) -> dict[str, Any]:
     name = str(item.get('name') or '').strip()
     provider = str(item.get('provider') or '').strip().lower()
@@ -80,7 +84,7 @@ def get_repository(repository: str, path: Path | None = None) -> dict[str, Any]:
     for item in list_repositories(path):
         if item['name'] == repository:
             return item
-    raise RepositoryAdminError(f'Repositorio nao administrado: {repository}.')
+    raise RepositoryNotManagedError('Repositorio nao administrado.')
 
 
 def build_snapshot(repository: str) -> dict[str, Any]:
