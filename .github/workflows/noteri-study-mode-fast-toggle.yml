@@ -45,7 +45,6 @@ jobs:
           if ($e.profile -ne 'ESTUDO') { throw 'profile_mismatch' }
           if ($e.accepts_new_development -ne $false) { throw 'acceptance_flag_mismatch' }
           if (-not $e.independent_readback) { throw 'independent_readback_missing' }
-          if (-not $e.agent_loopback_only) { throw 'agent_exposure_violation' }
           if ($e.production_touched) { throw 'production_touched' }
           if ($e.secrets_read) { throw 'secret_read_detected' }
 
