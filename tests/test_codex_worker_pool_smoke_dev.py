@@ -40,6 +40,8 @@ def test_smoke_script_disables_lane_and_proves_no_execution() -> None:
     assert '"deploy_executed": False' in raw
     assert '["git", "rev-parse", "HEAD"]' in raw
     assert "checkout_sha_mismatch" in raw
+    assert "resolve_token_file" in raw
+    assert "token_file_from_env" not in raw
 
 
 def test_gateway_and_policy_allow_only_fixed_worker_pool_smoke() -> None:
