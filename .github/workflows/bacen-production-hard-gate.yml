@@ -96,6 +96,7 @@ jobs:
             --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
             --reconciliation governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml \
             --family-applicability governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml \
+            --temporary-production-exception governance/bacen/exceptions/CMN4893-SCOPE-DATA-PROD-TECHNICAL-EXCEPTION-2026-09-22.yaml \
             --target-stage PRODUCTION \
             --as-of "$as_of" \
             --output artifacts/bacen-production-hard-gate/gate2.json
@@ -144,6 +145,19 @@ jobs:
                   )
           if not gate2.get("family_applicability_record_uid"):
               raise SystemExit("BACEN Gate 2 contract missing family_applicability_record_uid")
+          if gate2.get("family_applicability_authoritative_decision") == "pending_decision":
+              exception_required = {
+                  "temporary_production_exception_active": True,
+                  "temporary_production_exception_applied": True,
+                  "temporary_production_exception_valid_until": "2026-12-31",
+                  "regulatory_finality_allowed": False,
+                  "regulatory_compliance_claim_allowed": False,
+              }
+              for field, expected in exception_required.items():
+                  if gate2.get(field) != expected:
+                      raise SystemExit(
+                          f"Invalid BACEN temporary PROD exception contract: {field}={gate2.get(field)!r}"
+                      )
 
           legacy_allowed = (
               evidence.get("decision") == "allow"
@@ -212,6 +226,10 @@ jobs:
           print(f"- Family applicability: **{gate2.get('family_applicability_decision')}**")
           print(f"- Applicability record: **{gate2.get('family_applicability_record_uid')}**")
           print(f"- Approval reference: **{gate2.get('family_applicability_approval_reference')}**")
+          print(f"- Exceção PROD temporária ativa: **{gate2.get('temporary_production_exception_active')}**")
+          print(f"- Exceção PROD aplicada: **{gate2.get('temporary_production_exception_applied')}**")
+          print(f"- Exceção válida até: **{gate2.get('temporary_production_exception_valid_until')}**")
+          print(f"- Finalidade regulatória permitida: **{gate2.get('regulatory_finality_allowed')}**")
           print(f"- Production allowed (composite): **{str(legacy_allowed and gate2_allowed).lower()}**")
           print(f"- Blocking controls: **{len(evidence.get('blocking_controls') or [])}**")
           print(f"- Structural findings: **{len(evidence.get('structural_findings') or [])}**")
