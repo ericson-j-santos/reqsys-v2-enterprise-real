@@ -6,11 +6,10 @@ import os
 import tempfile
 import time
 from datetime import UTC, datetime
+from http.client import HTTPConnection, HTTPException as HTTPClientException
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 VALID_PROFILES = {"NORMAL", "ESTUDO"}
 PROFILE_PATH_ENV = "NOTERI_HOST_PROFILE_PATH"
@@ -114,17 +113,33 @@ def _control_plane_request(
     if path not in {"/v1/workers", "/v1/intake"} and not path.startswith("/v1/work-items/"):
         raise NoteriProfileUnavailable("control plane path is not allowlisted")
 
+    normalized_method = str(method or "").strip().upper()
+    if normalized_method not in {"GET", "POST"}:
+        raise NoteriProfileUnavailable("control plane method is not allowlisted")
+
+    parsed = urlparse(base)
+    host = parsed.hostname
+    port = parsed.port
+    if host is None or port is None:
+        raise NoteriProfileUnavailable("control plane endpoint is invalid")
+
     data = None
     headers = {"Accept": "application/json"}
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    request = Request(base + path, data=data, headers=headers, method=method)
+
+    connection = HTTPConnection(host, port, timeout=timeout)
     try:
-        with urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        connection.request(normalized_method, path, body=data, headers=headers)
+        response = connection.getresponse()
+        raw = response.read().decode("utf-8")
+        if response.status < 200 or response.status >= 300:
+            raise NoteriProfileUnavailable("control plane returned non-success status")
+    except (HTTPClientException, TimeoutError, OSError) as exc:
         raise NoteriProfileUnavailable("control plane unavailable") from exc
+    finally:
+        connection.close()
     try:
         decoded = json.loads(raw)
     except json.JSONDecodeError as exc:
