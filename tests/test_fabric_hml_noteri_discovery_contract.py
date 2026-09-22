@@ -20,9 +20,14 @@ class FabricHmlNoteriDiscoveryContractTests(unittest.TestCase):
         self.assertNotIn("Write-Host $graphToken", helper)
         self.assertNotIn("Write-Host $fabricToken", helper)
 
-    def test_apply_is_main_only_and_confirmed(self):
+    def test_apply_is_restricted_to_main_dispatch_or_exact_bootstrap_pr(self):
         workflow = Path(".github/workflows/fabric-hml-noteri-discovery.yml").read_text(encoding="utf-8")
-        self.assertIn("refs/heads/main", workflow)
+        self.assertIn("$authorizedBootstrapPr = (", workflow)
+        self.assertIn('"${{ github.event_name }}" -eq "pull_request"', workflow)
+        self.assertIn('"${{ github.head_ref }}" -eq "ops/fabric-hml-bootstrap-20260921"', workflow)
+        self.assertIn("$authorizedDispatch = (", workflow)
+        self.assertIn('"${{ github.event_name }}" -eq "workflow_dispatch"', workflow)
+        self.assertIn('"${{ github.ref }}" -eq "refs/heads/main"', workflow)
         self.assertIn("APPLY-FABRIC-HML-NONSECRET-VARS", workflow)
 
 
