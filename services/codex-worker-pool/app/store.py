@@ -101,9 +101,15 @@ class WorkerPoolStore:
         heartbeat_ttl_seconds: int = 90,
         default_lease_seconds: int = 120,
         default_max_attempts: int = 3,
+        progress_stall_seconds: int = 900,
         expected_rules_sha: str | None = None,
     ) -> None:
-        if min(heartbeat_ttl_seconds, default_lease_seconds, default_max_attempts) < 1:
+        if min(
+            heartbeat_ttl_seconds,
+            default_lease_seconds,
+            default_max_attempts,
+            progress_stall_seconds,
+        ) < 1:
             raise ValueError("timeouts e tentativas devem ser positivos")
         normalized_rules_sha = (expected_rules_sha or "").strip().lower()
         if normalized_rules_sha and not SHA40.fullmatch(normalized_rules_sha):
@@ -112,6 +118,7 @@ class WorkerPoolStore:
         self.heartbeat_ttl_seconds = heartbeat_ttl_seconds
         self.default_lease_seconds = default_lease_seconds
         self.default_max_attempts = default_max_attempts
+        self.progress_stall_seconds = progress_stall_seconds
         self.expected_rules_sha = normalized_rules_sha or None
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_lock = threading.Lock()
@@ -183,7 +190,8 @@ class WorkerPoolStore:
               attempt_count INTEGER NOT NULL DEFAULT 0,
               max_attempts INTEGER NOT NULL, blocked_reason TEXT, last_error TEXT,
               correlation_id TEXT NOT NULL, created_at TEXT NOT NULL,
-              updated_at TEXT NOT NULL, completed_at TEXT
+              updated_at TEXT NOT NULL, last_material_progress_at TEXT NOT NULL,
+              completed_at TEXT
             );
             CREATE TABLE IF NOT EXISTS quarantine(
               id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL,
@@ -202,6 +210,20 @@ class WorkerPoolStore:
             CREATE INDEX IF NOT EXISTS idx_affinity_worker
               ON worker_repository_affinity(worker_id,repository);
             """)
+                task_columns = {
+                    str(row["name"])
+                    for row in db.execute("PRAGMA table_info(tasks)").fetchall()
+                }
+                if "last_material_progress_at" not in task_columns:
+                    db.execute("ALTER TABLE tasks ADD COLUMN last_material_progress_at TEXT")
+                db.execute(
+                    """UPDATE tasks
+                       SET last_material_progress_at=COALESCE(
+                         last_material_progress_at,updated_at,created_at
+                       )
+                       WHERE last_material_progress_at IS NULL
+                          OR last_material_progress_at=''"""
+                )
                 db.execute(
                     """INSERT OR IGNORE INTO repository_lanes(
                          repository,enabled,max_in_flight,updated_at)
@@ -368,12 +390,13 @@ class WorkerPoolStore:
             if created:
                 db.execute("""INSERT INTO tasks(
                   task_id,repository,issue_number,request_id,idempotency_key,state,priority,
-                  branch,workspace_key,base_sha,max_attempts,correlation_id,created_at,updated_at)
-                  VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?)""",
+                  branch,workspace_key,base_sha,max_attempts,correlation_id,created_at,updated_at,
+                  last_material_progress_at)
+                  VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?)""",
                   (tid, repository.strip(), issue_number, request_id.strip(), key, int(priority),
                    task_branch, workspace(repository, tid),
                    base_sha.lower() if base_sha else None, attempts,
-                   correlation_id.strip(), stamp, stamp))
+                   correlation_id.strip(), stamp, stamp, stamp))
                 row = db.execute("SELECT * FROM tasks WHERE task_id=?", (tid,)).fetchone()
         return self._d(row), created
 
@@ -416,6 +439,79 @@ class WorkerPoolStore:
               WHERE task_id=?""", (state, stamp, row["task_id"]))
         return len(rows)
 
+    def _worker_is_alternative(
+        self, db: sqlite3.Connection, row: sqlite3.Row, worker: sqlite3.Row
+    ) -> bool:
+        if worker["worker_id"] == row["leased_by"]:
+            return False
+        role = "validator" if row["produced_sha"] else "builder"
+        if worker["role"] != role or worker["profile"] != "NORMAL":
+            return False
+        if not worker["gateway_ok"] or not worker["state_validated"]:
+            return False
+        if self.expected_rules_sha and worker["rules_sha"] != self.expected_rules_sha:
+            return False
+        if (
+            self.clock() - parse_iso(worker["last_heartbeat_at"])
+        ).total_seconds() > self.heartbeat_ttl_seconds:
+            return False
+        if db.execute(
+            "SELECT 1 FROM tasks WHERE leased_by=? AND state IN ('leased','running','validating')",
+            (worker["worker_id"],),
+        ).fetchone():
+            return False
+        affinities = db.execute(
+            "SELECT repository FROM worker_repository_affinity WHERE worker_id=?",
+            (worker["worker_id"],),
+        ).fetchall()
+        if affinities and row["repository"] not in {
+            str(item["repository"]) for item in affinities
+        }:
+            return False
+        return True
+
+    def _recover_stalled(self, db: sqlite3.Connection) -> dict[str, int]:
+        now = self.clock()
+        stamp = iso(now)
+        cutoff = iso(now - timedelta(seconds=self.progress_stall_seconds))
+        rows = db.execute(
+            """SELECT * FROM tasks
+               WHERE state IN ('leased','running','validating')
+                 AND last_material_progress_at IS NOT NULL
+                 AND last_material_progress_at<=?""",
+            (cutoff,),
+        ).fetchall()
+        result = {"rerouted": 0, "blocked": 0, "failed": 0}
+        workers = db.execute("SELECT * FROM workers").fetchall()
+        for row in rows:
+            if row["attempt_count"] >= row["max_attempts"]:
+                self._quarantine(db, row, "material_progress_timeout_max_attempts", stamp)
+                state = "failed"
+                blocked_reason = None
+                last_error = "material_progress_timeout_max_attempts"
+                result["failed"] += 1
+            elif any(self._worker_is_alternative(db, row, worker) for worker in workers):
+                state = "validating" if row["produced_sha"] else "queued"
+                blocked_reason = None
+                last_error = "material_progress_timeout_rerouted"
+                result["rerouted"] += 1
+            else:
+                state = "blocked"
+                blocked_reason = "material_progress_timeout_no_alternative"
+                last_error = "material_progress_timeout_no_alternative"
+                result["blocked"] += 1
+            db.execute(
+                """UPDATE tasks SET state=?,leased_by=NULL,lease_token=NULL,
+                   lease_expires_at=NULL,blocked_reason=?,last_error=?,updated_at=?
+                   WHERE task_id=?""",
+                (state, blocked_reason, last_error, stamp, row["task_id"]),
+            )
+        return result
+
+    def recover_stalled_tasks(self) -> dict[str, int]:
+        with self._tx() as db:
+            return self._recover_stalled(db)
+
     def claim_task(
         self, *, worker_id: str, role: str, correlation_id: str,
         lease_seconds: int | None = None,
@@ -426,6 +522,7 @@ class WorkerPoolStore:
         now, stamp = self.clock(), iso(self.clock())
         with self._tx() as db:
             self._recover(db)
+            self._recover_stalled(db)
             self._ready(db, worker_id, role)
             if role == "builder":
                 row = db.execute(
@@ -490,9 +587,10 @@ class WorkerPoolStore:
             validator = worker_id if role == "validator" else row["validator_worker_id"]
             cur = db.execute("""UPDATE tasks SET state=?,leased_by=?,lease_token=?,
               lease_expires_at=?,attempt_count=attempt_count+1,validator_worker_id=?,
-              correlation_id=?,updated_at=? WHERE task_id=? AND state=? AND leased_by IS NULL""",
+              correlation_id=?,updated_at=?,last_material_progress_at=?
+              WHERE task_id=? AND state=? AND leased_by IS NULL""",
               (next_state, worker_id, token, expires, validator, correlation_id,
-               stamp, row["task_id"], wanted))
+               stamp, stamp, row["task_id"], wanted))
             if cur.rowcount != 1:
                 raise ConflictError("task adquirida concorrentemente")
             claimed_column = (
@@ -541,9 +639,10 @@ class WorkerPoolStore:
             self._lease(db, task_id, worker_id, lease_token, ("leased",))
             if self.get_worker(worker_id)["role"] != "builder":
                 raise ConflictError("somente Builder pode iniciar task")
+            stamp = iso(self.clock())
             db.execute("""UPDATE tasks SET state='running',builder_worker_id=?,
-              correlation_id=?,updated_at=? WHERE task_id=?""",
-              (worker_id, correlation_id, iso(self.clock()), task_id))
+              correlation_id=?,updated_at=?,last_material_progress_at=? WHERE task_id=?""",
+              (worker_id, correlation_id, stamp, stamp, task_id))
         return self.get_task(task_id)
 
     def submit_for_validation(
@@ -557,9 +656,11 @@ class WorkerPoolStore:
             row = self._lease(db, task_id, worker_id, lease_token, ("running",))
             if row["builder_worker_id"] != worker_id:
                 raise ConflictError("builder divergente")
+            stamp = iso(self.clock())
             db.execute("""UPDATE tasks SET state='validating',produced_sha=?,leased_by=NULL,
-              lease_token=NULL,lease_expires_at=NULL,correlation_id=?,updated_at=? WHERE task_id=?""",
-              (produced_sha, correlation_id, iso(self.clock()), task_id))
+              lease_token=NULL,lease_expires_at=NULL,correlation_id=?,updated_at=?,
+              last_material_progress_at=? WHERE task_id=?""",
+              (produced_sha, correlation_id, stamp, stamp, task_id))
         return self.get_task(task_id)
 
     def complete_task(self, *, task_id: str, worker_id: str, lease_token: str, correlation_id: str) -> dict[str, Any]:
@@ -571,8 +672,9 @@ class WorkerPoolStore:
                 raise ConflictError("task sem produced_sha")
             stamp = iso(self.clock())
             db.execute("""UPDATE tasks SET state='completed',leased_by=NULL,lease_token=NULL,
-              lease_expires_at=NULL,correlation_id=?,updated_at=?,completed_at=? WHERE task_id=?""",
-              (correlation_id, stamp, stamp, task_id))
+              lease_expires_at=NULL,correlation_id=?,updated_at=?,completed_at=?,
+              last_material_progress_at=? WHERE task_id=?""",
+              (correlation_id, stamp, stamp, stamp, task_id))
         return self.get_task(task_id)
 
     def fail_task(self, *, task_id: str, worker_id: str, lease_token: str,
@@ -597,9 +699,11 @@ class WorkerPoolStore:
             raise ValueError("reason obrigatório")
         with self._tx() as db:
             self._lease(db, task_id, worker_id, lease_token, ACTIVE)
+            stamp = iso(self.clock())
             db.execute("""UPDATE tasks SET state='blocked',leased_by=NULL,lease_token=NULL,
-              lease_expires_at=NULL,blocked_reason=?,correlation_id=?,updated_at=? WHERE task_id=?""",
-              (reason, correlation_id, iso(self.clock()), task_id))
+              lease_expires_at=NULL,blocked_reason=?,correlation_id=?,updated_at=?,
+              last_material_progress_at=? WHERE task_id=?""",
+              (reason, correlation_id, stamp, stamp, task_id))
         return self.get_task(task_id)
 
     def requeue_blocked(self, task_id: str, *, correlation_id: str) -> dict[str, Any]:
@@ -610,9 +714,10 @@ class WorkerPoolStore:
             if row["state"] != "blocked":
                 raise ConflictError("somente task bloqueada pode ser reenfileirada")
             state = "validating" if row["produced_sha"] else "queued"
+            stamp = iso(self.clock())
             db.execute("""UPDATE tasks SET state=?,blocked_reason=NULL,
-              correlation_id=?,updated_at=? WHERE task_id=?""",
-              (state, correlation_id, iso(self.clock()), task_id))
+              correlation_id=?,updated_at=?,last_material_progress_at=? WHERE task_id=?""",
+              (state, correlation_id, stamp, stamp, task_id))
         return self.get_task(task_id)
 
     def recover_expired_leases(self) -> int:
@@ -631,6 +736,7 @@ class WorkerPoolStore:
 
     def snapshot(self) -> dict[str, Any]:
         self.recover_expired_leases()
+        self.recover_stalled_tasks()
         now = self.clock()
         with self._db() as db:
             workers = db.execute("SELECT * FROM workers ORDER BY host,worker_id").fetchall()
@@ -688,9 +794,21 @@ class WorkerPoolStore:
         safe = ("task_id","repository","issue_number","state","priority","branch","workspace_key",
                 "base_sha","produced_sha","builder_worker_id","validator_worker_id","leased_by",
                 "lease_expires_at","attempt_count","max_attempts","blocked_reason","last_error",
-                "correlation_id","updated_at")
+                "correlation_id","updated_at","last_material_progress_at")
+        task_views = []
+        for row in tasks:
+            item = {k: row[k] for k in safe}
+            progress_age = max(
+                0.0,
+                (now - parse_iso(row["last_material_progress_at"])).total_seconds(),
+            )
+            item["progress_age_seconds"] = round(progress_age, 3)
+            item["progress_stalled"] = (
+                row["state"] in ACTIVE and progress_age >= self.progress_stall_seconds
+            )
+            task_views.append(item)
         return {
-            "schema_version":"1.1.0", "generated_at":iso(now), "workers":views,
+            "schema_version":"1.2.0", "generated_at":iso(now), "workers":views,
             "repositories":[
                 {
                     **dict(r),
@@ -701,5 +819,6 @@ class WorkerPoolStore:
                 for r in repositories
             ],
             "queue":{s:counts.get(s,0) for s in STATES}, "quarantine_count":qn,
-            "tasks":[{k:r[k] for k in safe} for r in tasks],
+            "progress_stall_seconds": self.progress_stall_seconds,
+            "tasks": task_views,
         }
