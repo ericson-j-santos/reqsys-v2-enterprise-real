@@ -192,6 +192,25 @@ def validate_temporary_production_exception(
     }
 
 
+def effective_applicability_for_target(
+    authoritative: dict[str, Any],
+    exception_report: dict[str, Any],
+    *,
+    target_stage: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    effective = dict(authoritative)
+    resolved_exception = dict(exception_report)
+    resolved_exception["applied"] = False
+    if (
+        normalize_stage(target_stage) == PRODUCTION_STAGE
+        and authoritative.get("decision") == "pending_decision"
+        and resolved_exception.get("active") is True
+    ):
+        effective["decision"] = "applicable"
+        resolved_exception["applied"] = True
+    return effective, resolved_exception
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--baseline-v2", type=Path, required=True)
@@ -211,7 +230,6 @@ def main() -> int:
 
     decision_payload = load_applicability_yaml(args.family_applicability)
     authoritative = authoritative_applicability(decision_payload)
-    effective = dict(authoritative)
     target_stage = normalize_stage(args.target_stage)
 
     exception_report: dict[str, Any] = {
@@ -231,13 +249,11 @@ def main() -> int:
             authoritative=authoritative,
             as_of=args.as_of,
         )
-        if (
-            target_stage == PRODUCTION_STAGE
-            and authoritative.get("decision") == "pending_decision"
-            and exception_report["active"]
-        ):
-            effective["decision"] = "applicable"
-            exception_report["applied"] = True
+    effective, exception_report = effective_applicability_for_target(
+        authoritative,
+        exception_report,
+        target_stage=target_stage,
+    )
 
     baseline_v2 = load_yaml(args.baseline_v2)
     baseline_v2["applicability"] = effective
