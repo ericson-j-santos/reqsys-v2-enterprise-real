@@ -1,0 +1,63 @@
+#!/bin/sh
+# Boot resiliente para runtime público Fly.io — Trilha A.
+# Garante volume gravável antes de subir uvicorn; fallback opcional para /tmp.
+# Após Fly DEV Fast Deploy verde, o workflow PC24x7 Teams executa o E2E DEV.
+set -eu
+
+DATA_DIR="${REQSYS_DATA_DIR:-/data}"
+PORT="${PORT:-8000}"
+BOOT_FALLBACK="${REQSYS_BOOT_FALLBACK:-false}"
+TEAMS_RECIPIENT_CONFIG_PATH="${TEAMS_RECIPIENT_CONFIG_PATH:-/app/governance/notifications/teams-recipient-policies.json}"
+if [ -n "${REQSYS_BOOT_MAX_ATTEMPTS:-}" ]; then
+  MAX_ATTEMPTS="${REQSYS_BOOT_MAX_ATTEMPTS}"
+elif [ "$BOOT_FALLBACK" = "true" ]; then
+  MAX_ATTEMPTS=8
+else
+  MAX_ATTEMPTS=30
+fi
+
+log() {
+  printf '%s reqsys.boot %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
+}
+
+ensure_writable_data_dir() {
+  mkdir -p "$DATA_DIR"
+  attempt=0
+  while [ "$attempt" -lt "$MAX_ATTEMPTS" ]; do
+    if touch "$DATA_DIR/.write_test" 2>/dev/null; then
+      rm -f "$DATA_DIR/.write_test"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+  return 1
+}
+
+if ensure_writable_data_dir; then
+  log "data_dir_ready path=${DATA_DIR}"
+else
+  log "data_dir_unwritable path=${DATA_DIR} fallback=${BOOT_FALLBACK}"
+  if [ "$BOOT_FALLBACK" = "true" ]; then
+    export DATABASE_URL="${REQSYS_BOOT_FALLBACK_DATABASE_URL:-sqlite:////tmp/reqsys-fallback.db}"
+    log "using_ephemeral_database url=${DATABASE_URL}"
+  else
+    log "boot_aborted reason=volume_not_ready"
+    exit 1
+  fi
+fi
+
+if [ -f "$TEAMS_RECIPIENT_CONFIG_PATH" ]; then
+  log "teams_recipient_bootstrap_start"
+  python -m app.services.teams_recipient_bootstrap --config "$TEAMS_RECIPIENT_CONFIG_PATH"
+  log "teams_recipient_bootstrap_ok"
+else
+  log "teams_recipient_bootstrap_skipped reason=config_not_found"
+fi
+
+log "ai_conversation_schema_repair_start"
+python -m app.services.ai_conversation_schema_repair
+log "ai_conversation_schema_repair_ok"
+
+log "starting_uvicorn port=${PORT}"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

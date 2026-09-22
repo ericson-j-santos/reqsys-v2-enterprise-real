@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/operational-json-artifact.schema.json",
+  "title": "ReqSys Operational JSON Artifact Contract",
+  "description": "Contrato base report-only para artifacts JSON operacionais publicados por workflows, docs ou diretórios de evidência.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "generated_at",
+    "source",
+    "status",
+    "confidence_level",
+    "maturity_percent",
+    "operational_risk",
+    "commit_sha"
+  ],
+  "properties": {
+    "generated_at": { "type": "string", "description": "Timestamp ISO-8601 de geração do artifact." },
+    "source": { "type": "string", "description": "Workflow, script, documento ou componente produtor do artifact." },
+    "status": { "type": "string", "description": "Estado operacional declarado pelo produtor do artifact." },
+    "confidence_level": { "type": "string", "description": "Nível de confiança operacional do dado publicado." },
+    "maturity_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "operational_risk": { "type": "string", "description": "Risco operacional agregado ou declarado." },
+    "commit_sha": { "type": "string", "description": "SHA do commit associado à geração." },
+    "workflow_run_id": { "type": ["string", "number", "integer"], "description": "Identificador do workflow run quando o artifact é produzido no GitHub Actions." }
+  }
+}

@@ -1,0 +1,1 @@
+O incremento permanece parcialmente validado até a confirmação dos checks do SHA corrente e E2E real em DEV.

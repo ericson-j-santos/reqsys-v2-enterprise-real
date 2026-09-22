@@ -1,0 +1,150 @@
+name: Deploy Staging Auth Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: Executar deploy da API staging
+        required: true
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: Executar deploy do frontend staging
+        required: true
+        type: boolean
+        default: true
+  # Deploy automático de staging migrou para Fly Enterprise Sync (push em main).
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-staging-auth-fix
+  cancel-in-progress: false
+
+jobs:
+  validate-bundle:
+    name: Validar bundle local sem callback.html
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend staging
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://reqsys-api-stg.fly.dev
+          VITE_PUBLIC_URL: https://reqsys-app-stg.fly.dev
+        run: npm ci && npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Garantir redirect URI sem /auth/callback.html
+        run: |
+          python scripts/validar_frontend_auth_redirect.py --dist-dir frontend/dist \
+            | tee frontend-auth-redirect-validation.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-auth-redirect-validation
+          path: frontend-auth-redirect-validation.json
+
+  deploy-backend:
+    name: Deploy API staging
+    runs-on: ubuntu-latest
+    needs: validate-bundle
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_backend == true
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver credencial Fly API staging
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-hml-deploy
+          consumer: github-actions:fly-staging
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_HML }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/fly-staging-api-credential-resolution.json
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy backend staging
+        working-directory: backend
+        run: flyctl deploy --remote-only --config fly.staging.toml --app reqsys-api-stg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-staging-api-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/fly-staging-api-credential-resolution.json
+          if-no-files-found: warn
+
+  deploy-frontend:
+    name: Deploy frontend staging
+    runs-on: ubuntu-latest
+    needs: validate-bundle
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_frontend == true
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver credencial Fly frontend staging
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-app-hml-deploy
+          consumer: github-actions:fly-staging
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_HML }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/fly-staging-frontend-credential-resolution.json
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy frontend staging
+        working-directory: frontend
+        run: flyctl deploy --remote-only --config fly.staging.toml --app reqsys-app-stg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-staging-frontend-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/fly-staging-frontend-credential-resolution.json
+          if-no-files-found: warn
+
+  validate-runtime:
+    name: Validar auth Azure em staging
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: always() && needs.validate-bundle.result == 'success' && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validar /v1/auth/config da API staging
+        run: |
+          python scripts/validar_login_azure_operacional.py \
+            --api-url https://reqsys-api-stg.fly.dev \
+            --expected-redirect-uri https://reqsys-app-stg.fly.dev/auth/callback.html \
+            | tee auth-azure-staging-report.json
+
+      - name: Validar bundle publicado do frontend staging
+        run: |
+          python scripts/validar_frontend_auth_redirect.py \
+            --frontend-url https://reqsys-app-stg.fly.dev \
+            | tee frontend-auth-public-report.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-auth-validation-reports
+          path: |
+            auth-azure-staging-report.json
+            frontend-auth-public-report.json

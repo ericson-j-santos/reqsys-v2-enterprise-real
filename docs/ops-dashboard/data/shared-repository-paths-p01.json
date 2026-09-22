@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "artifact": "shared-repository-paths-p01",
+  "generated_at": "2026-06-28T00:00:00-03:00",
+  "status": "implemented",
+  "capability": "Shared Repository Path Helpers",
+  "maturity": "p0_1_test_filesystem_stabilization",
+  "helpers": [
+    {
+      "name": "get_repository_root",
+      "purpose": "resolver raiz do repositorio independente do cwd"
+    },
+    {
+      "name": "resolve_repo_file",
+      "purpose": "resolver arquivos versionados a partir da raiz com validacao opcional"
+    }
+  ],
+  "migrated_tests": [
+    "backend/tests/test_power_automate_provisioning_workflow_contract.py"
+  ],
+  "new_tests": [
+    "tests/test_repository_paths.py"
+  ],
+  "governance": {
+    "reduces_false_negative_ci": true,
+    "supports_root_and_backend_pytest_cwd": true,
+    "centralizes_filesystem_path_resolution": true,
+    "recommended_for_future_workflow_contract_tests": true
+  }
+}

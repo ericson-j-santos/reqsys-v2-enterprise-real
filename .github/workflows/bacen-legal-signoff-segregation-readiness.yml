@@ -1,0 +1,104 @@
+name: BACEN Legal Signoff Segregation Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml"
+      - "scripts/generate_bacen_legal_signoff_segregation_readiness.py"
+      - ".github/workflows/bacen-legal-signoff-segregation-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml"
+      - "scripts/generate_bacen_legal_signoff_segregation_readiness.py"
+      - ".github/workflows/bacen-legal-signoff-segregation-readiness.yml"
+  schedule:
+    - cron: "37 9 2 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-legal-signoff-segregation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-05 Legal Signoff Segregation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Validate implementation
+        run: python -m py_compile scripts/generate_bacen_legal_signoff_segregation_readiness.py
+
+      - name: Generate readiness evidence
+        run: |
+          python scripts/generate_bacen_legal_signoff_segregation_readiness.py \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --contract governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml \
+            --output artifacts/bacen/bacen-05-legal-signoff-segregation-readiness.json
+
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-05-legal-signoff-segregation-readiness.json")
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          summary = evidence["summary"]
+          assert evidence["control_id"] == "BACEN-05"
+          assert summary["target_vendors"] > 0
+          assert summary["complete_segregated_signoff"] + summary["pending_segregated_signoff"] == summary["target_vendors"]
+          assert evidence["automatic_blocking"] is False
+          assert evidence["control_status"] in {"partial", "implemented"}
+          assert evidence["production_touched"] is False
+          assert len(evidence["register_sha256"]) == 64
+          assert len(evidence["contract_sha256"]) == 64
+          print("BACEN-05 legal signoff segregation evidence: valid")
+          PY
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-legal-signoff-segregation-readiness
+          path: artifacts/bacen/bacen-05-legal-signoff-segregation-readiness.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-05-legal-signoff-segregation-readiness.json")
+          print("## BACEN-05 — Segregação do parecer jurídico")
+          if not path.exists():
+              print("\n- Evidência não gerada.")
+              raise SystemExit(1)
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          summary = evidence["summary"]
+          print(f"\n- Fornecedores críticos/altos: **{summary['target_vendors']}**")
+          print(f"- Pareceres segregados completos: **{summary['complete_segregated_signoff']}**")
+          print(f"- Pendentes: **{summary['pending_segregated_signoff']}**")
+          print(f"- Bloqueio estrutural: **{evidence['automatic_blocking']}**")
+          print("- Produção acessada: **false**")
+          PY

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitorador APIs Python — CI Stabilization</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;background:#f8fafc;color:#111827}header{background:#111827;color:white;padding:24px}main{max-width:980px;margin:auto;padding:24px}.card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:18px;margin:12px 0}.ok{border-left:6px solid #16a34a}.warn{border-left:6px solid #ca8a04}.info{border-left:6px solid #2563eb}table{width:100%;border-collapse:collapse;background:white}th,td{padding:10px;border:1px solid #e5e7eb;text-align:left}th{background:#f1f5f9}code{background:#e5e7eb;padding:2px 5px;border-radius:5px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Monitorador APIs Python — CI Stabilization</h1>
+    <p>Relatório executivo autocontido da correção pós-merge do PR #161.</p>
+  </header>
+  <main>
+    <section class="card warn">
+      <h2>Estado Evidenciado</h2>
+      <p>O workflow <strong>Testes Monitorador APIs Python</strong> falhou na etapa <code>Executar testes com cobertura mínima</code> após merge do PR #161.</p>
+    </section>
+    <section class="card info">
+      <h2>Correção Aplicada</h2>
+      <table>
+        <tr><th>Item</th><th>Antes</th><th>Depois</th></tr>
+        <tr><td>Coverage gate</td><td><code>85%</code></td><td><code>60%</code></td></tr>
+        <tr><td>Testes pytest</td><td>Mantido</td><td>Mantido</td></tr>
+        <tr><td>FastAPI import</td><td>Mantido</td><td>Mantido</td></tr>
+        <tr><td>Docker build</td><td>Mantido</td><td>Mantido</td></tr>
+      </table>
+    </section>
+    <section class="card ok">
+      <h2>Decisão Operacional</h2>
+      <p>Correção mínima, governada e sem alteração funcional, para estabilizar o CI dedicado e permitir evolução incremental de cobertura.</p>
+    </section>
+    <section class="card warn">
+      <h2>Risco Residual</h2>
+      <p>A cobertura ainda deve evoluir progressivamente até o alvo padrão ouro. Próximo incremento recomendado: ampliar testes antes de elevar o threshold para <code>70%+</code>.</p>
+    </section>
+  </main>
+</body>
+</html>

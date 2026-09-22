@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard de acompanhamento — Fluxo de criação de dossiê</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --border: #e2e4e9;
+    --text: #1a1d23;
+    --text-dim: #5b6270;
+    --text-faint: #8a90a0;
+    --accent: #4338ca;
+
+    --verde-bg: #ecfdf3;    --verde-fg: #067647;    --verde-bd: #abefc6;
+    --amarelo-bg: #fffaeb;  --amarelo-fg: #b54708;  --amarelo-bd: #fedf89;
+    --vermelho-bg: #fef3f2; --vermelho-fg: #b42318; --vermelho-bd: #fecdca;
+    --cinza-bg: #f2f4f7;    --cinza-fg: #475467;    --cinza-bd: #d0d5dd;
+    --azul-bg: #eff8ff;     --azul-fg: #175cd3;     --azul-bd: #b2ddff;
+    --roxo-bg: #f4f3ff;     --roxo-fg: #5925dc;     --roxo-bd: #d9d6fe;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --border: #2a2e38;
+      --text: #e7e9ee;
+      --text-dim: #a7adba;
+      --text-faint: #767d8c;
+      --accent: #8b7bf7;
+
+      --verde-bg: #0d2818;   --verde-fg: #4ade80;   --verde-bd: #16532f;
+      --amarelo-bg: #2a1f0a; --amarelo-fg: #fbbf24; --amarelo-bd: #4d3a12;
+      --vermelho-bg: #2a1414;--vermelho-fg: #f87171;--vermelho-bd: #4d2020;
+      --cinza-bg: #1c1f26;   --cinza-fg: #9aa1b1;   --cinza-bd: #2f333d;
+      --azul-bg: #0f1f30;    --azul-fg: #60a5fa;    --azul-bd: #163a5c;
+      --roxo-bg: #1e1a33;    --roxo-fg: #a78bfa;    --roxo-bd: #362c5c;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  header.top { margin-bottom: 22px; }
+  header.top h1 { font-size: 20px; margin: 0 0 4px; }
+  header.top p { margin: 0; color: var(--text-dim); font-size: 13px; }
+
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 22px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone.dragging { border-color: var(--accent); background: var(--roxo-bg); }
+  .dropzone .icon { font-size: 26px; }
+  .dropzone .msg { flex: 1; min-width: 220px; }
+  .dropzone .msg strong { display: block; margin-bottom: 2px; }
+  .dropzone .msg span { color: var(--text-dim); font-size: 12.5px; }
+  .btn {
+    appearance: none; border: 1px solid var(--border); background: var(--panel);
+    color: var(--text); padding: 9px 14px; border-radius: 8px; font-size: 13px;
+    cursor: pointer; font-weight: 600;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { opacity: .92; color: #fff; }
+  .btn.ghost { background: transparent; }
+  input[type="file"] { display: none; }
+
+  .status-line { font-size: 12.5px; color: var(--text-faint); margin: -12px 0 22px; min-height: 16px; }
+  .status-line.erro { color: var(--vermelho-fg); }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .card {
+    background: var(--panel); border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; cursor: pointer; text-align: left; position: relative;
+    transition: transform .1s, border-color .15s, box-shadow .15s;
+  }
+  .card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.06); }
+  .card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .card .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .card .lbl { font-size: 12px; color: var(--text-dim); margin-top: 4px; font-weight: 600; }
+  .card .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .card[data-cor="verde"] .n    { color: var(--verde-fg); }
+  .card[data-cor="amarelo"] .n  { color: var(--amarelo-fg); }
+  .card[data-cor="vermelho"] .n { color: var(--vermelho-fg); }
+  .card[data-cor="cinza"] .n    { color: var(--text); }
+  .card[data-cor="azul"] .n     { color: var(--azul-fg); }
+  .dot.verde    { background: var(--verde-fg); }
+  .dot.amarelo  { background: var(--amarelo-fg); }
+  .dot.vermelho { background: var(--vermelho-fg); }
+  .dot.cinza    { background: var(--text-faint); }
+  .dot.azul     { background: var(--azul-fg); }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .toolbar .chip {
+    border: 1px solid var(--border); background: var(--panel); border-radius: 999px;
+    padding: 6px 12px; font-size: 12.5px; cursor: pointer; color: var(--text-dim); font-weight: 600;
+  }
+  .toolbar .chip.on { border-color: var(--accent); color: var(--accent); background: var(--roxo-bg); }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .info { font-size: 12.5px; color: var(--text-faint); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  thead th {
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--text-faint); padding: 10px 12px; border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 13px; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.row { cursor: pointer; }
+  tbody tr.row:hover { background: var(--bg); }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; border: 1px solid;
+  }
+  .badge.verde    { background: var(--verde-bg);    color: var(--verde-fg);    border-color: var(--verde-bd); }
+  .badge.amarelo  { background: var(--amarelo-bg);  color: var(--amarelo-fg);  border-color: var(--amarelo-bd); }
+  .badge.vermelho { background: var(--vermelho-bg); color: var(--vermelho-fg); border-color: var(--vermelho-bd); }
+  .badge.cinza    { background: var(--cinza-bg);    color: var(--cinza-fg);    border-color: var(--cinza-bd); }
+  .badge.azul     { background: var(--azul-bg);     color: var(--azul-fg);     border-color: var(--azul-bd); }
+  .fonte-tag {
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+    background: var(--cinza-bg); color: var(--text-dim); border: 1px solid var(--border);
+  }
+  .fonte-tag.pentaho { background: var(--roxo-bg); color: var(--roxo-fg); border-color: var(--roxo-bd); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .id-copy { cursor: pointer; color: var(--text-dim); }
+  .id-copy:hover { color: var(--accent); text-decoration: underline; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .drill {
+    background: var(--bg);
+  }
+  .drill td { padding: 14px 16px; }
+  .drill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 10px 20px; }
+  .drill-grid .k { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+  .drill-grid .v { font-size: 13px; margin-top: 2px; word-break: break-all; }
+  .drill .fonte-linha { margin-top: 10px; font-size: 12px; color: var(--text-faint); }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-faint); }
+  .empty .big { font-size: 34px; margin-bottom: 8px; }
+
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 22px; font-size: 12px; color: var(--text-dim);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+  footer.note {
+    margin-top: 26px; font-size: 11.5px; color: var(--text-faint); border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Acompanhamento — Fluxo de criação de dossiê (treino)</h1>
+    <p>Painel offline e autocontido. Carregue <code>saida/evidencias.jsonl</code> (fluxo Node) e/ou <code>saida/evidencias_pentaho.csv</code> (fluxo Pentaho) para visualizar. Nada é enviado a servidor algum — tudo é lido e processado localmente no navegador.</p>
+  </header>
+
+  <div class="dropzone" id="dropzone">
+    <div class="icon">📂</div>
+    <div class="msg">
+      <strong>Arraste os arquivos de evidência aqui</strong>
+      <span>.jsonl (Node) e/ou .csv (Pentaho) — pode soltar os dois juntos</span>
+    </div>
+    <button class="btn primary" id="btnEscolher" type="button">Escolher arquivos</button>
+    <button class="btn ghost" id="btnLimparDados" type="button">Limpar dados carregados</button>
+    <input type="file" id="fileInput" multiple accept=".jsonl,.csv,.log,.txt">
+  </div>
+  <div class="status-line" id="statusLine"></div>
+
+  <div id="painel" hidden>
+    <div class="cards" id="cards"></div>
+
+    <div class="toolbar">
+      <button class="chip" data-fonte="Node" type="button">Fonte: Node</button>
+      <button class="chip" data-fonte="Pentaho" type="button">Fonte: Pentaho</button>
+      <div class="spacer"></div>
+      <span class="info" id="periodoInfo"></span>
+      <button class="btn ghost" id="btnLimparFiltros" type="button">Limpar filtros</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Instante</th>
+          <th>Fonte</th>
+          <th>Situação</th>
+          <th>Demanda</th>
+          <th class="num">HTTP</th>
+          <th>Dossiê</th>
+          <th class="num">Duração (ms)</th>
+          <th>Correlation ID</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="legend">
+      <span><span class="dot verde"></span> Verde = sucesso</span>
+      <span><span class="dot amarelo"></span> Amarelo = recusa de negócio (esperada)</span>
+      <span><span class="dot vermelho"></span> Vermelho = falha (auth, técnica ou resposta inválida)</span>
+      <span><span class="dot cinza"></span> Cinza = estado não reconhecido</span>
+    </div>
+  </div>
+
+  <div class="empty" id="vazio">
+    <div class="big">🗂️</div>
+    Nenhum dado carregado ainda. Solte ou selecione os arquivos de evidência acima para começar.
+  </div>
+
+  <footer class="note">
+    Fórmula dos cards: contagem de registros cujo campo <code>situacao</code> corresponde ao estado do card, dentro do conjunto atualmente filtrado por fonte. Período exibido = menor e maior <code>instante</code> entre os registros carregados. Nenhum dado sai deste navegador.
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  /** @type {Array<Object>} */
+  let registros = [];
+  let filtroSituacao = null;
+  let filtrosFonte = new Set();
+  let ordemAsc = false;
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+  const dropzone = $("#dropzone");
+  const fileInput = $("#fileInput");
+  const statusLine = $("#statusLine");
+  const painel = $("#painel");
+  const vazio = $("#vazio");
+  const cardsEl = $("#cards");
+  const tbody = $("#tbody");
+  const periodoInfo = $("#periodoInfo");
+
+  function normalizar(txt) {
+    return String(txt || "")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toUpperCase();
+  }
+
+  const ESTADOS = [
+    { chave: "DOSSIE_CRIADO",         rotulo: "Sucesso",             cor: "verde"    },
+    { chave: "CRIACAO_RECUSADA",      rotulo: "Recusa de negócio",   cor: "amarelo"  },
+    { chave: "AUTENTICACAO_RECUSADA", rotulo: "Falha de autenticação", cor: "vermelho" },
+    { chave: "FALHA_TECNICA",         rotulo: "Falha técnica",       cor: "vermelho" },
+    { chave: "RESPOSTA_INVALIDA",     rotulo: "Resposta inválida",   cor: "vermelho" },
+  ];
+
+  function corParaSituacao(situacao) {
+    const n = normalizar(situacao);
+    const achado = ESTADOS.find(e => e.chave === n);
+    return achado ? achado.cor : "cinza";
+  }
+
+  function setStatus(msg, erro) {
+    statusLine.textContent = msg || "";
+    statusLine.classList.toggle("erro", !!erro);
+  }
+
+  function parseJsonl(texto, nomeArquivo) {
+    const linhas = texto.split(/\r?\n/).filter(l => l.trim().length > 0);
+    const out = [];
+    linhas.forEach((linha, idx) => {
+      try {
+        const o = JSON.parse(linha);
+        out.push({
+          fonte: "Node",
+          arquivo: nomeArquivo,
+          linha: idx + 1,
+          instante: o.instante || null,
+          correlation_id: o.correlation_id || "",
+          demanda_id: o.demanda_id || "",
+          situacao: o.situacao || "",
+          status_http: (o.status_http ?? ""),
+          dossie_id: o.dossie_id || "",
+          duracao_ms: (o.duracao_ms ?? o.duracao_total_ms ?? null),
+          bruto: o,
+        });
+      } catch (e) {
+        // linha corrompida/incompleta: ignora silenciosamente, mas conta para o usuário
+      }
+    });
+    return out;
+  }
+
+  function parseCsvPentaho(texto, nomeArquivo) {
+    const linhas = texto.split(/\r?\n/).filter(l => l.trim().length > 0);
+    const out = [];
+    linhas.forEach((linha, idx) => {
+      const campos = linha.split(";");
+      // Detecta e pula eventual linha de cabeçalho (o campo 1 não parece uma data ISO).
+      if (idx === 0 && !/^\d{4}-\d{2}-\d{2}T/.test(campos[0] || "")) return;
+      if (campos.length < 6) return;
+      const [instante, correlation_id, demanda_id, situacao, status_http, dossie_id, duracao_total_ms] = campos;
+      out.push({
+        fonte: "Pentaho",
+        arquivo: nomeArquivo,
+        linha: idx + 1,
+        instante: instante || null,
+        correlation_id: correlation_id || "",
+        demanda_id: demanda_id || "",
+        situacao: situacao || "",
+        status_http: status_http || "",
+        dossie_id: dossie_id || "",
+        duracao_ms: duracao_total_ms !== undefined ? Number(duracao_total_ms) : null,
+        bruto: { instante, correlation_id, demanda_id, situacao, status_http, dossie_id, duracao_total_ms },
+      });
+    });
+    return out;
+  }
+
+  function detectarEParsear(nomeArquivo, texto) {
+    const nomeLower = nomeArquivo.toLowerCase();
+    if (nomeLower.endsWith(".jsonl") || (texto.trim().startsWith("{") )) {
+      return parseJsonl(texto, nomeArquivo);
+    }
+    return parseCsvPentaho(texto, nomeArquivo);
+  }
+
+  function lerArquivos(fileList) {
+    const arquivos = Array.from(fileList);
+    if (arquivos.length === 0) return;
+
+    let pendentes = arquivos.length;
+    let novos = [];
+    let erros = [];
+
+    arquivos.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parseados = detectarEParsear(file.name, String(reader.result));
+          novos = novos.concat(parseados);
+          if (parseados.length === 0) erros.push(`${file.name}: nenhum registro reconhecido`);
+        } catch (e) {
+          erros.push(`${file.name}: ${e.message}`);
+        } finally {
+          pendentes -= 1;
+          if (pendentes === 0) finalizarCarga(novos, erros, arquivos.map(f => f.name));
+        }
+      };
+      reader.onerror = () => {
+        erros.push(`${file.name}: erro de leitura`);
+        pendentes -= 1;
+        if (pendentes === 0) finalizarCarga(novos, erros, arquivos.map(f => f.name));
+      };
+      reader.readAsText(file, "utf-8");
+    });
+  }
+
+  function finalizarCarga(novos, erros, nomesArquivos) {
+    // Substitui registros vindos do(s) mesmo(s) arquivo(s) recarregado(s); mantém os demais.
+    const nomesRecarregados = new Set(nomesArquivos);
+    registros = registros.filter(r => !nomesRecarregados.has(r.arquivo)).concat(novos);
+
+    if (erros.length) {
+      setStatus(`Carregado com avisos: ${erros.join(" · ")}`, true);
+    } else {
+      setStatus(`${novos.length} registro(s) carregado(s) de ${nomesArquivos.join(", ")}. Total acumulado: ${registros.length}.`, false);
+    }
+    render();
+  }
+
+  function copiar(texto) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).catch(() => {});
+    }
+  }
+
+  function fmtData(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString("pt-BR", { hour12: false });
+  }
+
+  function registrosFiltrados() {
+    return registros.filter(r => {
+      if (filtroSituacao && normalizar(r.situacao) !== filtroSituacao) return false;
+      if (filtrosFonte.size > 0 && !filtrosFonte.has(r.fonte)) return false;
+      return true;
+    });
+  }
+
+  function contagemPorEstado(base) {
+    const mapa = {};
+    ESTADOS.forEach(e => mapa[e.chave] = 0);
+    base.forEach(r => {
+      const n = normalizar(r.situacao);
+      if (mapa[n] !== undefined) mapa[n] += 1;
+    });
+    return mapa;
+  }
+
+  function renderCards() {
+    const baseFonte = registros.filter(r => filtrosFonte.size === 0 || filtrosFonte.has(r.fonte));
+    const contagens = contagemPorEstado(baseFonte);
+    const total = baseFonte.length;
+
+    const cards = [];
+    cards.push({ chave: null, rotulo: "Total de registros", n: total, cor: "azul" });
+    ESTADOS.forEach(e => cards.push({ chave: e.chave, rotulo: e.rotulo, n: contagens[e.chave] || 0, cor: e.cor }));
+
+    cardsEl.innerHTML = "";
+    cards.forEach(c => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "card" + (filtroSituacao === c.chave ? " active" : "");
+      btn.dataset.cor = c.cor;
+      btn.innerHTML = `
+        <div class="n">${c.n}</div>
+        <div class="lbl"><span class="dot ${c.cor}"></span>${c.rotulo}</div>
+      `;
+      btn.addEventListener("click", () => {
+        filtroSituacao = (filtroSituacao === c.chave) ? null : c.chave;
+        render();
+      });
+      cardsEl.appendChild(btn);
+    });
+  }
+
+  function renderToolbarChips() {
+    $$(".chip[data-fonte]").forEach(chip => {
+      const fonte = chip.dataset.fonte;
+      chip.classList.toggle("on", filtrosFonte.has(fonte));
+    });
+  }
+
+  function renderPeriodo(base) {
+    if (base.length === 0) { periodoInfo.textContent = ""; return; }
+    const datas = base.map(r => r.instante).filter(Boolean).map(d => new Date(d)).filter(d => !isNaN(d.getTime()));
+    if (datas.length === 0) { periodoInfo.textContent = ""; return; }
+    const min = new Date(Math.min(...datas));
+    const max = new Date(Math.max(...datas));
+    periodoInfo.textContent = `Período: ${fmtData(min.toISOString())} — ${fmtData(max.toISOString())}`;
+  }
+
+  function toggleDrill(tr, registro) {
+    const proxima = tr.nextElementSibling;
+    if (proxima && proxima.classList.contains("drill")) {
+      proxima.remove();
+      return;
+    }
+    $$("tr.drill", tbody).forEach(el => el.remove());
+
+    const linhaDrill = document.createElement("tr");
+    linhaDrill.className = "drill";
+    const td = document.createElement("td");
+    td.colSpan = 8;
+    const camposBrutos = Object.entries(registro.bruto || {})
+      .map(([k, v]) => `<div><div class="k">${k}</div><div class="v mono">${v === null || v === undefined || v === "" ? "—" : String(v)}</div></div>`)
+      .join("");
+    td.innerHTML = `
+      <div class="drill-grid">${camposBrutos}</div>
+      <div class="fonte-linha">Fonte: arquivo <strong>${registro.arquivo}</strong>, linha ${registro.linha} · fluxo <strong>${registro.fonte}</strong></div>
+    `;
+    linhaDrill.appendChild(td);
+    tr.after(linhaDrill);
+  }
+
+  function renderTabela(base) {
+    const ordenados = [...base].sort((a, b) => {
+      const da = a.instante ? new Date(a.instante).getTime() : 0;
+      const db = b.instante ? new Date(b.instante).getTime() : 0;
+      return ordemAsc ? da - db : db - da;
+    });
+
+    tbody.innerHTML = "";
+    if (ordenados.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="8" style="text-align:center; color:var(--text-faint); padding:26px;">Nenhum registro no filtro atual.</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    ordenados.forEach(r => {
+      const cor = corParaSituacao(r.situacao);
+      const tr = document.createElement("tr");
+      tr.className = "row";
+      const idCurto = r.correlation_id ? r.correlation_id.slice(0, 8) + "…" : "—";
+      tr.innerHTML = `
+        <td class="mono">${fmtData(r.instante)}</td>
+        <td><span class="fonte-tag ${r.fonte === "Pentaho" ? "pentaho" : ""}">${r.fonte}</span></td>
+        <td><span class="badge ${cor}">${r.situacao || "—"}</span></td>
+        <td>${r.demanda_id || "—"}</td>
+        <td class="num mono">${r.status_http === "" ? "—" : r.status_http}</td>
+        <td class="mono">${r.dossie_id || "—"}</td>
+        <td class="num mono">${r.duracao_ms ?? "—"}</td>
+        <td class="mono id-copy" title="Clique para copiar: ${r.correlation_id || ""}">${idCurto}</td>
+      `;
+      tr.addEventListener("click", (ev) => {
+        if (ev.target.classList.contains("id-copy")) {
+          copiar(r.correlation_id || "");
+          return;
+        }
+        toggleDrill(tr, r);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function render() {
+    const temDados = registros.length > 0;
+    painel.hidden = !temDados;
+    vazio.hidden = temDados;
+    if (!temDados) return;
+
+    renderToolbarChips();
+    renderCards();
+    const base = registrosFiltrados();
+    renderPeriodo(base);
+    renderTabela(base);
+  }
+
+  // --- eventos de UI ---
+
+  $("#btnEscolher").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files.length) lerArquivos(e.target.files);
+    fileInput.value = "";
+  });
+
+  ["dragenter", "dragover"].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("dragging"); });
+  });
+  ["dragleave", "drop"].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove("dragging"); });
+  });
+  dropzone.addEventListener("drop", (e) => {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      lerArquivos(e.dataTransfer.files);
+    }
+  });
+
+  $("#btnLimparDados").addEventListener("click", () => {
+    registros = [];
+    filtroSituacao = null;
+    filtrosFonte = new Set();
+    setStatus("Dados carregados foram limpos.", false);
+    render();
+  });
+
+  $("#btnLimparFiltros").addEventListener("click", () => {
+    filtroSituacao = null;
+    filtrosFonte = new Set();
+    render();
+  });
+
+  $$(".chip[data-fonte]").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const fonte = chip.dataset.fonte;
+      if (filtrosFonte.has(fonte)) filtrosFonte.delete(fonte);
+      else filtrosFonte.add(fonte);
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

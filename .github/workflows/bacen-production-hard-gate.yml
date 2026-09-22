@@ -1,0 +1,273 @@
+name: BACEN Production Hard Gate
+
+on:
+  workflow_call:
+    inputs:
+      enforce:
+        description: Fail the caller while production is not formally allowed
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      production_allowed:
+        description: Whether the BACEN evidence authorizes production
+        value: ${{ jobs.gate.outputs.production_allowed }}
+      decision:
+        description: BACEN production decision
+        value: ${{ jobs.gate.outputs.decision }}
+      gate2_readiness:
+        description: Normative and institutional production readiness from Gate 2
+        value: ${{ jobs.gate.outputs.gate2_readiness }}
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: Fail while production is not formally allowed
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-production-hard-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: BACEN production authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      production_allowed: ${{ steps.contract.outputs.production_allowed }}
+      decision: ${{ steps.contract.outputs.decision }}
+      gate2_readiness: ${{ steps.contract.outputs.gate2_readiness }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused dependency
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Validate gate implementation
+        run: |
+          python -m py_compile \
+            scripts/generate_bacen_nonprod_tolerance_decision.py \
+            scripts/bacen_derived_status.py \
+            scripts/validate_bacen_production_gate.py \
+            scripts/validate_bacen_production_readiness.py \
+            scripts/validate_bacen_family_applicability.py \
+            scripts/validate_bacen_production_readiness_authoritative.py
+
+      - name: Validate institutional applicability record
+        run: |
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/validate_bacen_family_applicability.py \
+            --decision-file governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml \
+            --output artifacts/bacen-production-hard-gate/family-applicability.json
+
+      - name: Generate legacy production decision
+        id: decision
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/generate_bacen_nonprod_tolerance_decision.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --policy governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml \
+            --scope prod \
+            --output artifacts/bacen-production-hard-gate/decision.json
+
+      - name: Generate Gate 2 production readiness
+        id: gate2
+        run: |
+          set -euo pipefail
+          as_of="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          python scripts/validate_bacen_production_readiness_authoritative.py \
+            --baseline-v2 governance/bacen/normative/NORMATIVE-BASELINE-V2.yaml \
+            --base-obligations governance/bacen/normative/NORMATIVE-BASELINE.yaml \
+            --extended-obligations governance/bacen/normative/NORMATIVE-OBLIGATIONS-EXTENDED.yaml \
+            --evidence-registry governance/bacen/normative/EVIDENCE-REGISTRY.yaml \
+            --policy governance/bacen/normative/PRODUCTION-READINESS-POLICY.yaml \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --reconciliation governance/bacen/BACEN-GOVERNANCE-RECONCILIATION.yaml \
+            --family-applicability governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml \
+            --target-stage PRODUCTION \
+            --as-of "$as_of" \
+            --output artifacts/bacen-production-hard-gate/gate2.json
+
+      - name: Validate evidence contract
+        id: contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          decision_path = Path("artifacts/bacen-production-hard-gate/decision.json")
+          gate2_path = Path("artifacts/bacen-production-hard-gate/gate2.json")
+          if not decision_path.exists():
+              raise SystemExit("BACEN legacy production decision artifact was not generated")
+          if not gate2_path.exists():
+              raise SystemExit("BACEN Gate 2 production readiness artifact was not generated")
+
+          evidence = json.loads(decision_path.read_text(encoding="utf-8"))
+          gate2 = json.loads(gate2_path.read_text(encoding="utf-8"))
+          required = {
+              "scope": "prod",
+              "mode": "temporary_nonprod_tolerance",
+              "preserved_control_status": True,
+              "production_touched": False,
+          }
+          for field, expected in required.items():
+              if evidence.get(field) != expected:
+                  raise SystemExit(
+                      f"Invalid BACEN production contract: {field}={evidence.get(field)!r}"
+                  )
+
+          gate2_required = {
+              "target_stage": "PRODUCTION",
+              "enforced": True,
+              "automatic_override_allowed": False,
+              "main_branch_blocked_by_institutional_debt": False,
+              "family_applicability_source": "governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml",
+          }
+          for field, expected in gate2_required.items():
+              if gate2.get(field) != expected:
+                  raise SystemExit(
+                      f"Invalid BACEN Gate 2 contract: {field}={gate2.get(field)!r}"
+                  )
+          if not gate2.get("family_applicability_record_uid"):
+              raise SystemExit("BACEN Gate 2 contract missing family_applicability_record_uid")
+
+          legacy_allowed = (
+              evidence.get("decision") == "allow"
+              and evidence.get("automatic_blocking") is False
+              and evidence.get("production_deployment_allowed") is True
+              and not evidence.get("blocking_controls")
+              and not evidence.get("structural_findings")
+          )
+          gate2_allowed = (
+              gate2.get("decision") == "allowed"
+              and gate2.get("production_readiness") == "ready"
+              and gate2.get("would_block_production") is False
+              and not gate2.get("blockers")
+          )
+          allowed = legacy_allowed and gate2_allowed
+          composite_decision = "allow" if allowed else "block"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"production_allowed={str(allowed).lower()}\n")
+              output.write(f"decision={composite_decision}\n")
+              output.write(f"gate2_readiness={gate2.get('production_readiness', 'unknown')}\n")
+          print(json.dumps({
+              "production_allowed": allowed,
+              "decision": composite_decision,
+              "legacy_allowed": legacy_allowed,
+              "legacy_decision": evidence.get("decision"),
+              "gate2_allowed": gate2_allowed,
+              "gate2_readiness": gate2.get("production_readiness"),
+              "gate2_blocker_count": gate2.get("blocker_count"),
+              "family_applicability_decision": gate2.get("family_applicability_decision"),
+              "family_applicability_record_uid": gate2.get("family_applicability_record_uid"),
+              "blocking_controls": evidence.get("blocking_controls") or [],
+          }, ensure_ascii=False))
+          PY
+
+      - name: Publish gate summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          print("## BACEN Production Hard Gate")
+          decision_path = Path("artifacts/bacen-production-hard-gate/decision.json")
+          gate2_path = Path("artifacts/bacen-production-hard-gate/gate2.json")
+          if not decision_path.exists() or not gate2_path.exists():
+              print("\n- Decision artifact: **missing**")
+              raise SystemExit(0)
+          evidence = json.loads(decision_path.read_text(encoding="utf-8"))
+          gate2 = json.loads(gate2_path.read_text(encoding="utf-8"))
+          legacy_allowed = (
+              evidence.get("decision") == "allow"
+              and evidence.get("automatic_blocking") is False
+              and evidence.get("production_deployment_allowed") is True
+              and not evidence.get("blocking_controls")
+              and not evidence.get("structural_findings")
+          )
+          gate2_allowed = (
+              gate2.get("decision") == "allowed"
+              and gate2.get("production_readiness") == "ready"
+              and gate2.get("would_block_production") is False
+              and not gate2.get("blockers")
+          )
+          print(f"\n- Legacy gate allowed: **{str(legacy_allowed).lower()}**")
+          print(f"- Gate 2 readiness: **{gate2.get('production_readiness')}**")
+          print(f"- Gate 2 blockers: **{gate2.get('blocker_count')}**")
+          print(f"- Family applicability: **{gate2.get('family_applicability_decision')}**")
+          print(f"- Applicability record: **{gate2.get('family_applicability_record_uid')}**")
+          print(f"- Approval reference: **{gate2.get('family_applicability_approval_reference')}**")
+          print(f"- Production allowed (composite): **{str(legacy_allowed and gate2_allowed).lower()}**")
+          print(f"- Blocking controls: **{len(evidence.get('blocking_controls') or [])}**")
+          print(f"- Structural findings: **{len(evidence.get('structural_findings') or [])}**")
+          print("- Main bloqueada por dívida institucional: **false**")
+          print("- Produção acessada: **false**")
+          PY
+
+      - name: Publish production decision
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-production-hard-gate-${{ github.run_id }}
+          path: artifacts/bacen-production-hard-gate/
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Enforce production authorization
+        if: always() && inputs.enforce
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path("artifacts/bacen-production-hard-gate/decision.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          gate2 = json.loads(
+              Path("artifacts/bacen-production-hard-gate/gate2.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          legacy_allowed = (
+              evidence.get("decision") == "allow"
+              and evidence.get("automatic_blocking") is False
+              and evidence.get("production_deployment_allowed") is True
+              and not evidence.get("blocking_controls")
+              and not evidence.get("structural_findings")
+          )
+          gate2_allowed = (
+              gate2.get("decision") == "allowed"
+              and gate2.get("production_readiness") == "ready"
+              and gate2.get("would_block_production") is False
+              and not gate2.get("blockers")
+          )
+          if not (legacy_allowed and gate2_allowed):
+              legacy_reasons = list(evidence.get("blocking_controls") or [])
+              gate2_reasons = sorted({
+                  str(item.get("code"))
+                  for item in (gate2.get("blockers") or [])
+                  if item.get("code")
+              })
+              reasons = legacy_reasons + gate2_reasons
+              raise SystemExit(
+                  "Production blocked by BACEN controls/Gate 2: "
+                  + ",".join(reasons or ["production_not_ready"])
+              )
+          PY

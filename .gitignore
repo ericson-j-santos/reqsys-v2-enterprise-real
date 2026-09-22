@@ -1,0 +1,91 @@
+# REST Client scratch files (podem conter tokens/JWTs em variaveis locais)
+*.http
+http-client.env.json
+
+# Tokens de leitura escopados do Cofre (scripts/cofre_human_token.py)
+.cofre/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# Node / Frontend
+node_modules/
+dist/
+coverage/
+.cache/
+.parcel-cache/
+.nuxt/
+.next/
+out/
+.turbo/
+playwright-report/
+test-results/
+.playwright/
+# Sessao MSAL real capturada por setup-msal-storage-state.mjs — contem
+# cookies/tokens reais, nunca deve ser versionada.
+msal-storage-state.json
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Docker / Infra / Secrets
+.env
+.fly-figma-webhook-secret.local.txt
+.env.*
+*.env
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Runtime databases — never commit SQLite files
+*.db
+*.db-shm
+*.db-wal
+
+# .NET build artifacts
+bin/
+obj/
+
+# Runtime-generated artifacts (e.g. LLM telemetry JSONL)
+backend/artifacts/
+
+# Keep the .NET solution scaffold tracked even though IDE solution files are ignored globally
+!backend-dotnet/*.sln
+frontend-angular/.angular/
+
+# Override local do piloto PC 24x7 (docs/runbooks/pc24x7-piloto-dev.md)
+compose.pc24x7-local.yml
+
+# Saída temporária de scripts do runtime (diagnósticos OpenAPI, estado de E2E)
+runtime/.tmp/

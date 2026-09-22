@@ -1,0 +1,23 @@
+name: Runtime Operational Evidence Graph
+
+on:
+  pull_request:
+    paths:
+      - 'tools/product_intelligence/**'
+      - 'docs/operations/**'
+      - '.github/workflows/runtime-operational-evidence-graph.yml'
+
+jobs:
+  runtime-operational-evidence-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate timeline prerequisite
+        run: python tools/product_intelligence/generate_runtime_operational_correlation_timeline.py
+      - name: Generate evidence graph
+        run: python tools/product_intelligence/generate_runtime_operational_evidence_graph.py
+      - name: Validate evidence graph
+        run: python tools/product_intelligence/generate_runtime_operational_evidence_graph.py && test -f reports/github-runtime-analytics/runtime-operational-evidence-graph.json && test -f reports/github-runtime-analytics/runtime-operational-evidence-graph.md

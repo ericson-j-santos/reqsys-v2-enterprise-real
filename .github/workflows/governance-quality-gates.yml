@@ -1,0 +1,71 @@
+name: Governance Quality Gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  governance-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate governance structure
+        run: |
+          set -euo pipefail
+
+          echo "[INFO] Validando estrutura de governança..."
+
+          test -f docs/ai-governance/00_PRIORITY_RULES.md
+          test -f docs/ai-governance/INDEX.md
+          test -f docs/ai-governance/06-DEVOPS/QUALITY_GATES.md
+          test -f docs/ai-governance/09-CHECKLISTS/PR_CHECKLIST.md
+          test -f docs/ai-governance/02-SEGURANCA/SECURITY_BASELINE.md
+
+          echo "[OK] Estrutura de governança validada com sucesso."
+
+      - name: Validate governance content
+        run: |
+          set -euo pipefail
+
+          echo "[INFO] Validando conteúdo de governança..."
+
+          echo "[CHECK] PRIORITY_RULES contém P0"
+          grep -qi "P0" docs/ai-governance/00_PRIORITY_RULES.md
+
+          echo "[CHECK] QUALITY_GATES contém CI"
+          grep -qi "CI" docs/ai-governance/06-DEVOPS/QUALITY_GATES.md
+
+          echo "[CHECK] SECURITY_BASELINE contém LGPD"
+          grep -qi "LGPD" docs/ai-governance/02-SEGURANCA/SECURITY_BASELINE.md
+
+          echo "[OK] Conteúdo de governança validado com sucesso."
+
+      - name: Test JavaScript performance gate
+        run: python -m unittest discover -s tests -p "test_js_performance_gate.py" -v
+
+      - name: Fetch PR base branch
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+      - name: Validate JavaScript performance architecture
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p artifacts/js-performance-gate
+          python scripts/js_performance_gate.py \
+            --base-ref "origin/${{ github.base_ref }}" \
+            --report artifacts/js-performance-gate/report.json

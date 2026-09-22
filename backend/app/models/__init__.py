@@ -1,0 +1,49 @@
+from app.models.agile_runtime import (  # noqa: F401
+    AgileCeremony,
+    AgileCeremonyAction,
+    AgileEvidence,
+    AgileSprint,
+    AgileWorkItem,
+)
+from app.models.ai_conversation import (  # noqa: F401
+    AIConversation,
+    AIConversationMessage,
+)
+from app.models.ai_quality import QualidadeIASnapshot  # noqa: F401
+from app.models.auditoria import AuditoriaEvento  # noqa: F401
+from app.models.bot_conversa_referencia import BotConversaReferencia  # noqa: F401
+from app.models.cdi_rate import CdiRate  # noqa: F401
+from app.models.configuracao_lowcode import ConfiguracaoLowCode  # noqa: F401
+from app.models.copilot_memory import (  # noqa: F401
+    CopilotMemoryHistory,
+    CopilotMemoryRecord,
+)
+from app.models.gestao_ti import RequisitoServico, ServicoTI  # noqa: F401
+from app.models.integracao_log import IntegracaoLog  # noqa: F401
+from app.models.movimento_email_dispatch import MovimentoEmailDispatch  # noqa: F401
+from app.models.orchestrator import (  # noqa: F401
+    AdrCoordinationEvent,
+    AgileProjectPackage,
+    OrchestratorRoutingEvent,
+)
+from app.models.pentaho_integration_batch import PentahoIntegrationBatch  # noqa: F401
+from app.models.planner_publish_attempt import PlannerPublishAttempt  # noqa: F401
+from app.models.power_automate_provisioning import (
+    PowerAutomateProvisioningRegistry,  # noqa: F401
+)
+from app.models.prompt_execution_record import PromptExecutionRecord  # noqa: F401
+from app.models.rag_chunk_embedding import RagChunkEmbedding  # noqa: F401
+from app.models.requisito import (  # noqa: F401
+    RecommendationIA,
+    RecommendationIADecision,
+    RecommendationIAOutcome,
+    Requisito,
+)
+from app.models.security_session_state import SecuritySessionState  # noqa: F401
+from app.models.service_token import ServiceToken  # noqa: F401
+from app.models.teams_flow_bot_owner import TeamsFlowBotOwner  # noqa: F401
+from app.models.teams_notification_queue import TeamsNotificationQueueItem  # noqa: F401
+from app.models.teams_notification_recipient import (
+    TeamsNotificationRecipient,  # noqa: F401
+)
+from app.models.vault_token import VaultToken  # noqa: F401

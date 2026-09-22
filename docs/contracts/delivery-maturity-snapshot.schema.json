@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/schemas/delivery-maturity-snapshot.schema.json",
+  "title": "Delivery Maturity Snapshot",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "repository",
+    "run_id",
+    "event_name",
+    "mode",
+    "runtime_impact",
+    "consolidation_policy",
+    "average_current_percent",
+    "average_target_percent",
+    "average_gap_percent",
+    "lowest_dimension",
+    "highest_gap_dimension",
+    "dimensions"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "event_name": { "type": "string", "minLength": 1 },
+    "mode": { "type": "string", "const": "report_only" },
+    "runtime_impact": { "type": "string", "const": "none" },
+    "consolidation_policy": { "type": "string", "minLength": 1 },
+    "average_current_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "average_target_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "average_gap_percent": { "type": "number" },
+    "lowest_dimension": { "type": "string", "minLength": 1 },
+    "highest_gap_dimension": { "type": "string", "minLength": 1 },
+    "dimensions": {
+      "type": "array",
+      "minItems": 8,
+      "contains": { "type": "object", "properties": { "name": { "const": "técnico" } }, "required": ["name"] },
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "current_percent",
+          "target_percent",
+          "gap_percent",
+          "status_semáforo",
+          "confidence_level",
+          "evidence_links",
+          "next_recommended_action",
+          "state_type"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["técnico", "operacional", "usuário final", "governança", "produção", "observabilidade", "segurança", "evidência"]
+          },
+          "current_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+          "target_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+          "gap_percent": { "type": "number" },
+          "status_semáforo": { "type": "string", "enum": ["verde", "amarelo", "vermelho"] },
+          "confidence_level": { "type": "string", "enum": ["low", "medium", "high"] },
+          "evidence_links": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "next_recommended_action": { "type": "string", "minLength": 1 },
+          "state_type": { "type": "string", "const": "evidenced_current_state" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

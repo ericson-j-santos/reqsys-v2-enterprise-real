@@ -1,0 +1,123 @@
+name: User Experience Recovery Regression Trend
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_recovery_regression_trend.py"
+      - "tests/test_build_ux_recovery_regression_trend.py"
+      - ".github/workflows/user-experience-recovery-regression-trend.yml"
+  workflow_run:
+    workflows: ["User Experience Recovery Ops Dashboard"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-recovery-regression-trend-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test regression trend
+        run: |
+          python -m py_compile scripts/build_ux_recovery_regression_trend.py
+          python -m unittest tests/test_build_ux_recovery_regression_trend.py -v
+      - name: Smoke deterministic regression contract
+        run: |
+          mkdir -p .tmp/ux-regression
+          cat > .tmp/ux-regression/dashboard.json <<'JSON'
+          {"cards":[{"id":"ux-recovery-standard-gold-readiness","confidence_percent":70,"recovery_rate_average":78,"recovery_seconds_average":31,"consecutive_qualified_samples":1,"standard_gold_ready":false}]}
+          JSON
+          cat > .tmp/ux-regression/history.json <<'JSON'
+          [{"source_run_id":"1","confidence_percent":95,"recovery_rate_average":90,"recovery_seconds_average":18,"consecutive_qualified_samples":3}]
+          JSON
+          python scripts/build_ux_recovery_regression_trend.py \
+            --previous .tmp/ux-regression/history.json \
+            --dashboard .tmp/ux-regression/dashboard.json \
+            --run-id 2 \
+            --head-sha abcdef123456 \
+            --history-output .tmp/ux-regression/output/history.json \
+            --report-output .tmp/ux-regression/output/report.json
+          python - <<'PY'
+          import json
+          report = json.load(open('.tmp/ux-regression/output/report.json', encoding='utf-8'))
+          assert report['regression_detected'] is True
+          assert report['production_blocker'] is False
+          assert report['mode'] == 'advisory'
+          print('ux regression trend smoke: OK')
+          PY
+
+  publish-post-merge-trend:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download current Ops Dashboard
+        uses: actions/download-artifact@v4
+        with:
+          name: ux-recovery-ops-dashboard
+          path: .tmp/ux-regression/current
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+      - name: Restore previous regression history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-regression/previous
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-recovery-regression-trend&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/ux-regression/previous.zip
+            unzip -q .tmp/ux-regression/previous.zip -d .tmp/ux-regression/previous
+          else
+            printf '%s\n' '[]' > .tmp/ux-regression/previous/ux-recovery-regression-history.json
+          fi
+      - name: Evaluate operational regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          dashboard="$(find .tmp/ux-regression/current -name ops-dashboard.json -print -quit)"
+          previous="$(find .tmp/ux-regression/previous -name ux-recovery-regression-history.json -print -quit)"
+          test -n "$dashboard"
+          if [ -z "$previous" ]; then
+            previous=.tmp/ux-regression/previous/ux-recovery-regression-history.json
+            printf '%s\n' '[]' > "$previous"
+          fi
+          mkdir -p .tmp/ux-regression/output
+          python scripts/build_ux_recovery_regression_trend.py \
+            --previous "$previous" \
+            --dashboard "$dashboard" \
+            --run-id "$SOURCE_RUN_ID" \
+            --head-sha "$SOURCE_HEAD_SHA" \
+            --history-output .tmp/ux-regression/output/ux-recovery-regression-history.json \
+            --report-output .tmp/ux-regression/output/ux-recovery-regression-report.json
+          cp "$dashboard" .tmp/ux-regression/output/ops-dashboard.json
+      - name: Publish advisory regression evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-recovery-regression-trend
+          path: .tmp/ux-regression/output
+          retention-days: 90

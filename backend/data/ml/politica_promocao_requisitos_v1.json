@@ -1,0 +1,9 @@
+{
+  "versao": "requisitos-ml-promocao-v1",
+  "dataset_versao": "requisitos-classificador-v1",
+  "modelo_versao": "multinomial-nb-word-char-ngram-v1",
+  "macro_f1_minimo": 0.78,
+  "ganho_macro_f1_minimo": 0.05,
+  "minimo_treino_por_categoria": 8,
+  "minimo_validacao_por_categoria": 4
+}

@@ -1,0 +1,66 @@
+name: Path-Based Workflow Router Validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/runtime-risk-scoring.yml"
+      - ".github/workflows/pr-quality-review.yml"
+      - ".github/workflows/predictive-regression-guard.yml"
+      - ".github/workflows/reqsys-required-fast-gate.yml"
+      - ".github/workflows/path-based-workflow-router-validation.yml"
+      - "scripts/validate_path_based_workflow_router.py"
+      - "docs/ci/path-based-workflow-router.md"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/runtime-risk-scoring.yml"
+      - ".github/workflows/pr-quality-review.yml"
+      - ".github/workflows/predictive-regression-guard.yml"
+      - ".github/workflows/reqsys-required-fast-gate.yml"
+      - ".github/workflows/path-based-workflow-router-validation.yml"
+      - "scripts/validate_path_based_workflow_router.py"
+      - "docs/ci/path-based-workflow-router.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: path-based-workflow-router-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate-router:
+    name: Validate path-based router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_path_based_workflow_router.py
+
+      - name: Validate router contract
+        run: python scripts/validate_path_based_workflow_router.py
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "# Path-Based Workflow Router Validation"
+            echo ""
+            echo "Validação do roteamento por paths concluída."
+            echo "Gate obrigatório preservado sem filtro por path: ReqSys Required Fast Gate."
+          } >> "$GITHUB_STEP_SUMMARY"

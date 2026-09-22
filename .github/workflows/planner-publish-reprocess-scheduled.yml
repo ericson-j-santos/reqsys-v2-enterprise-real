@@ -1,0 +1,79 @@
+name: Planner Publish — Reprocessamento Automático
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        type: choice
+        options:
+          - dev
+          - stg
+        default: dev
+      lote_max:
+        description: Máximo de tentativas reprocessadas nesta execução
+        required: true
+        type: string
+        default: "10"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: planner-publish-reprocess-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  ARTIFACT_DIR: artifacts/planner-publish-reprocess
+
+jobs:
+  reprocessar:
+    name: Reprocessar pendentes (${{ github.event.inputs.environment || 'dev' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ (github.event.inputs.environment || 'dev') == 'stg' && 'staging' || 'development' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolver base URL do ambiente
+        id: resolver
+        run: |
+          set -euo pipefail
+          case "${{ github.event.inputs.environment || 'dev' }}" in
+            dev) echo "base_url=https://reqsys-api-dev.fly.dev" >> "$GITHUB_OUTPUT" ;;
+            stg) echo "base_url=https://reqsys-api-stg.fly.dev" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Ambiente desconhecido" >&2; exit 1 ;;
+          esac
+
+      - name: Reprocessar tentativas pendentes
+        env:
+          PLANNER_PUBLISH_SERVICE_TOKEN: ${{ secrets.PLANNER_PUBLISH_SERVICE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PLANNER_PUBLISH_SERVICE_TOKEN:-}" ]; then
+            echo "PLANNER_PUBLISH_SERVICE_TOKEN não configurado neste ambiente — nada a fazer." >&2
+            exit 0
+          fi
+          python scripts/planner_publish_reprocess_pendentes.py \
+            --base-url "${{ steps.resolver.outputs.base_url }}" \
+            --service-token "$PLANNER_PUBLISH_SERVICE_TOKEN" \
+            --lote-max "${{ github.event.inputs.lote_max || '10' }}" \
+            --evidence-file "$ARTIFACT_DIR/resumo.json"
+
+      - name: Upload evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-publish-reprocess-${{ github.event.inputs.environment || 'dev' }}
+          path: ${{ env.ARTIFACT_DIR }}/resumo.json
+          if-no-files-found: ignore

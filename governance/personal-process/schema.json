@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Personal Process Control v1.2",
+  "type": "object",
+  "description": "Contrato documental da fila governada. A validacao operacional completa e implementada sem dependencias externas em scripts/personal_process_control.py.",
+  "required": ["demandas", "biblioteca", "automacoes"],
+  "properties": {
+    "demandas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "titulo",
+          "area",
+          "problema",
+          "impacto",
+          "esforco",
+          "frequencia",
+          "status",
+          "tipo_bloqueio",
+          "proxima_acao",
+          "criterio_conclusao",
+          "origem",
+          "estado_evidenciado_em",
+          "ultima_movimentacao_em",
+          "dependencias"
+        ],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "titulo": {"type": "string", "minLength": 1},
+          "area": {"type": "string", "minLength": 1},
+          "problema": {"type": "string", "minLength": 1},
+          "impacto": {"type": "number", "minimum": 1, "maximum": 5},
+          "esforco": {"type": "number", "minimum": 1, "maximum": 5},
+          "frequencia": {"type": "number", "minimum": 1, "maximum": 5},
+          "status": {
+            "type": "string",
+            "enum": [
+              "Detectada",
+              "Triada",
+              "Pronta para execucao",
+              "Em execucao",
+              "Aguardando evidencia",
+              "Bloqueada externamente",
+              "Concluido",
+              "Cancelado",
+              "Duplicada"
+            ]
+          },
+          "tipo_bloqueio": {
+            "type": "string",
+            "enum": ["Nenhum", "Humano", "Tecnico", "Externo"]
+          },
+          "responsavel_bloqueio": {"type": "string"},
+          "proxima_acao": {"type": "string"},
+          "criterio_conclusao": {"type": "string"},
+          "evidencia": {"type": "string"},
+          "origem": {"type": "string", "minLength": 1},
+          "estado_evidenciado_em": {"type": "string", "format": "date"},
+          "ultima_movimentacao_em": {"type": "string", "format": "date"},
+          "dependencias": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "causa_raiz_id": {"type": "string"},
+          "duplicado_de": {"type": "string"}
+        }
+      }
+    },
+    "biblioteca": {"type": "array"},
+    "automacoes": {"type": "array"}
+  }
+}

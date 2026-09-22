@@ -1,0 +1,124 @@
+name: Runtime Environment Promotion Visual Card
+
+on:
+  pull_request:
+    paths:
+      - "scripts/inject_runtime_executive_environment_promotion_card.py"
+      - "scripts/validate_runtime_executive_environment_promotion_visual.py"
+      - "scripts/enrich_runtime_executive_environment_promotion.py"
+      - "scripts/validate_runtime_executive_environment_promotion.py"
+      - ".github/workflows/runtime-environment-promotion-visual-card.yml"
+      - "docs/ops-dashboard/index.html"
+      - "docs/ops-dashboard/runtime-executive.html"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: runtime-env-promotion-visual-card-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate environment promotion visual card
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile scripts
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/enrich_runtime_executive_environment_promotion.py
+          python -m py_compile scripts/validate_runtime_executive_environment_promotion.py
+          python -m py_compile scripts/inject_runtime_executive_environment_promotion_card.py
+          python -m py_compile scripts/validate_runtime_executive_environment_promotion_visual.py
+
+      - name: Prepare synthetic runtime contract
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/environment-promotion-readiness docs/ops-dashboard/data
+          cat > docs/ops-dashboard/data/runtime-executive-index.json <<'JSON'
+          {
+            "schema_version": "1.2.0",
+            "summary": {
+              "production_ready": true,
+              "status": "passed",
+              "risk": "low"
+            },
+            "cards": {},
+            "links": {},
+            "guardrails": []
+          }
+          JSON
+          cat > artifacts/environment-promotion-readiness/environment-promotion-readiness.json <<'JSON'
+          {
+            "schema_version": "1.0.0",
+            "kind": "environment_promotion_readiness",
+            "decision": "READY_FOR_PROD_PROMOTION",
+            "ready_for_prod_promotion": true,
+            "production_blockers": [],
+            "mode": "report_only",
+            "coverage": {
+              "required_environments": ["dev", "stg", "prod"],
+              "ready_environments": ["dev", "stg", "prod"],
+              "missing_environments": [],
+              "failed_environments": [],
+              "coverage_percent": 100
+            },
+            "environments": [
+              {"environment": "dev", "ok": true},
+              {"environment": "stg", "ok": true},
+              {"environment": "prod", "ok": true}
+            ]
+          }
+          JSON
+          python scripts/enrich_runtime_executive_environment_promotion.py
+          python scripts/validate_runtime_executive_environment_promotion.py
+
+      - name: Inject and validate visual card
+        run: |
+          set -euo pipefail
+          python scripts/inject_runtime_executive_environment_promotion_card.py
+          python scripts/validate_runtime_executive_environment_promotion_visual.py
+
+      - name: Prepare visual artifact
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/runtime-environment-promotion-visual-card
+          cp docs/ops-dashboard/index.html artifacts/runtime-environment-promotion-visual-card/index.html
+          cp docs/ops-dashboard/runtime-executive.html artifacts/runtime-environment-promotion-visual-card/runtime-executive.html
+          cp docs/ops-dashboard/data/runtime-executive-index.json artifacts/runtime-environment-promotion-visual-card/runtime-executive-index.json
+          cp docs/ops-dashboard/data/environment-promotion-readiness.json artifacts/runtime-environment-promotion-visual-card/environment-promotion-readiness.json
+
+      - name: Publish visual card artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-environment-promotion-visual-card
+          path: artifacts/runtime-environment-promotion-visual-card
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize visual card
+        run: |
+          set -euo pipefail
+          {
+            echo "# Runtime Environment Promotion Visual Card"
+            echo ""
+            echo "Artifact publicado: runtime-environment-promotion-visual-card"
+            echo "Card visual: Promoção DEV → STG → PROD"
+            echo "Contrato consumido: cards.environment_promotion_readiness"
+            echo "Escopo: report-only, sem deploy, sem secrets e sem chamadas externas no runtime público."
+          } >> "$GITHUB_STEP_SUMMARY"

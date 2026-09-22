@@ -1,0 +1,103 @@
+name: Runtime UX Telemetry From Homologation
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_runtime_ux_from_homologation.py"
+      - "tests/test_build_runtime_ux_from_homologation.py"
+      - ".github/workflows/runtime-ux-telemetry-from-homologation.yml"
+      - ".github/workflows/reqsys-single-state-runtime-ux.yml"
+  workflow_run:
+    workflows: ["Fly Environment Homologation Gate"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: runtime-ux-telemetry-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_runtime_ux_from_homologation.py
+          python -m unittest tests/test_build_runtime_ux_from_homologation.py -v
+
+  publish-runtime-ux:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download homologation evidence from source run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/runtime-ux/source .tmp/runtime-ux/output
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts | map(select(.expired == false and (.name | test("^fly-homologation-(dev|stg|prod)$")))) | .[0].id // empty')"
+          test -n "$artifact_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/runtime-ux/source.zip
+          unzip -q .tmp/runtime-ux/source.zip -d .tmp/runtime-ux/source
+          evidence_path="$(find .tmp/runtime-ux/source -name 'evidence-*.json' -print -quit)"
+          test -n "$evidence_path"
+          echo "HOMOLOGATION_EVIDENCE=$evidence_path" >> "$GITHUB_ENV"
+
+      - name: Build UX telemetry with homologation identity
+        run: |
+          python scripts/build_runtime_ux_from_homologation.py \
+            --homologation "$HOMOLOGATION_EVIDENCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-head-sha "$SOURCE_HEAD_SHA" \
+            --source-workflow "$SOURCE_WORKFLOW" \
+            --output .tmp/runtime-ux/output/ux-recovery-evidence-chain.json
+
+      - name: Validate correlation identity and guardrails
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          chain = json.loads(Path('.tmp/runtime-ux/output/ux-recovery-evidence-chain.json').read_text())
+          latest = chain[-1]
+          assert latest['evidence_source'] == 'runtime'
+          assert latest['source_run_id'] == os.environ['SOURCE_RUN_ID']
+          assert latest['environment'] in {'dev', 'stg', 'prod'}
+          assert latest['mode'] == 'advisory'
+          assert latest['production_blocker'] is False
+          assert 0 <= latest['recovery_rate'] <= 100
+          assert latest['average_recovery_seconds'] >= 0
+          print(f"runtime UX: environment={latest['environment']}; run={latest['source_run_id']}; rate={latest['recovery_rate']}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-recovery-evidence-chain
+          path: .tmp/runtime-ux/output
+          retention-days: 90

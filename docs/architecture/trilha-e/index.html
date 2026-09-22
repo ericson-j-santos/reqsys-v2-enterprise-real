@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Trilha E — Arquitetura Viva | ReqSys</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #4ade80;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #1e3a5f, #0f172a);
+    }
+    header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+    header p { margin: 0; color: var(--muted); }
+    .badge {
+      display: inline-block;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+    }
+    main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: border-color 0.15s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .card p { margin: 0 0 1rem; color: var(--muted); font-size: 0.875rem; }
+    .card a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      margin-right: 1rem;
+    }
+    .card a:hover { text-decoration: underline; }
+    .status { color: var(--green); font-size: 0.75rem; }
+    section h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
+    .mermaid-wrap {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .links { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 2rem;
+      border-top: 1px solid var(--border);
+    }
+    .error { color: #f87171; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Trilha E — Arquitetura Viva</h1>
+    <p>Diagramas vivos · ADRs · Runtime topology · Fluxo navegável · Inventory · Architecture-as-code</p>
+    <span class="badge">report-only · versionado · auditável</span>
+  </header>
+
+  <main>
+    <div class="grid" id="capabilities"></div>
+
+    <section>
+      <h2>Diagrama da Trilha</h2>
+      <div class="mermaid-wrap" id="trail-diagram"><div class="error" id="diagram-loading">Carregando diagrama…</div></div>
+    </section>
+
+    <section>
+      <h2>Fluxo navegável</h2>
+      <div class="grid" id="flow-nodes"></div>
+    </section>
+
+    <section>
+      <h2>ADRs indexados</h2>
+      <div class="links" id="adr-links"></div>
+    </section>
+
+    <section>
+      <h2>Runtime topology</h2>
+      <div class="grid" id="topology-nodes"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="footer-meta">Trilha E — ReqSys Architecture-as-Code</span>
+  </footer>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+
+    const CAPABILITIES = [
+      { id: 'diagramas-vivos', title: 'Diagramas Vivos', desc: 'Mermaid versionado em JSON, compatível com viewer legado.', json: './diagrams.json', extra: '../arquitetura/index.html', extraLabel: 'Viewer legado' },
+      { id: 'adrs', title: 'ADRs', desc: 'Decisões arquiteturais indexadas e rastreáveis.', json: './inventory.json', extra: '../../adr/ADR-035-trilha-e-arquitetura-viva.md', extraLabel: 'ADR-035' },
+      { id: 'runtime-topology', title: 'Runtime Topology', desc: 'Manifesto estático alinhado ao runtime API.', json: './runtime-topology.json', extra: '/api/runtime/dashboard', extraLabel: 'Dashboard API' },
+      { id: 'inventory', title: 'Inventory', desc: 'Serviços, APIs, workflows, dashboards e ADRs.', json: './inventory.json' },
+      { id: 'fluxo-navegavel', title: 'Fluxo Navegável', desc: 'Grafo de links entre capacidades e evidências.', json: './fluxo-navegavel.json' },
+      { id: 'architecture-as-code', title: 'Architecture-as-Code', desc: 'Manifesto canônico machine-readable da trilha.', json: './architecture-as-code.json', extra: '../../runbooks/trilha-e-arquitetura-viva.md', extraLabel: 'Runbook' },
+    ];
+
+    function renderCapabilities() {
+      const el = document.getElementById('capabilities');
+      el.innerHTML = CAPABILITIES.map((c) => `
+        <article class="card">
+          <h2>${c.title}</h2>
+          <p>${c.desc}</p>
+          <span class="status">● ativo</span><br/><br/>
+          <a href="${c.json}">JSON canônico</a>
+          ${c.extra ? `<a href="${c.extra}">${c.extraLabel}</a>` : ''}
+        </article>
+      `).join('');
+    }
+
+    async function loadJson(path) {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(`HTTP ${r.status} em ${path}`);
+      return r.json();
+    }
+
+    async function renderTrailDiagram() {
+      const diagrams = await loadJson('./diagrams.json');
+      const trail = diagrams.diagrams.find((d) => d.id === 'trilha-e-navegacao');
+      if (!trail) return;
+      const { svg } = await mermaid.render('trail-mermaid', trail.mermaid);
+      document.getElementById('trail-diagram').innerHTML = svg;
+    }
+
+    async function renderFlow() {
+      const fluxo = await loadJson('./fluxo-navegavel.json');
+      const el = document.getElementById('flow-nodes');
+      const navigable = fluxo.nodes.filter((n) => n.href && !n.href.startsWith('/api'));
+      el.innerHTML = navigable.slice(0, 8).map((n) => `
+        <article class="card">
+          <h2>${n.label}</h2>
+          <p>Tipo: ${n.type}</p>
+          <a href="${n.href}">Abrir</a>
+        </article>
+      `).join('');
+    }
+
+    function repoHref(path) {
+      if (!path || path.startsWith('http') || path.startsWith('/api')) return null;
+      const prefix = path.startsWith('docs/') ? '../../' : '../../../';
+      const target = path.startsWith('docs/') ? path.slice(5) : path;
+      return prefix + target;
+    }
+
+    async function renderAdrs() {
+      const inv = await loadJson('./inventory.json');
+      const el = document.getElementById('adr-links');
+      el.innerHTML = inv.adrs.slice(0, 12).map((a) => {
+        const href = repoHref(a.path);
+        return href ? `<a href="${href}">${a.id}</a>` : `<span>${a.id}</span>`;
+      }).join('') + (inv.adrs.length > 12 ? `<span style="color:var(--muted)"> +${inv.adrs.length - 12} em inventory.json</span>` : '');
+    }
+
+    async function renderTopology() {
+      const topo = await loadJson('./runtime-topology.json');
+      const el = document.getElementById('topology-nodes');
+      el.innerHTML = topo.runtime_nodes.map((n) => {
+        const href = n.path ? repoHref(n.path) : null;
+        return `
+        <article class="card">
+          <h2>${n.id}</h2>
+          <p>Tipo: ${n.type}</p>
+          ${href ? `<a href="${href}">${n.path}</a>` : (n.path ? `<span>${n.path}</span>` : '')}
+          ${n.health ? `<br/><a href="${n.health}">${n.health}</a>` : ''}
+        </article>`;
+      }).join('');
+    }
+
+    renderCapabilities();
+    try {
+      await Promise.all([renderTrailDiagram(), renderFlow(), renderAdrs(), renderTopology()]);
+      document.getElementById('footer-meta').textContent =
+        `Trilha E · ${CAPABILITIES.length} capacidades · atualizado via architecture-as-code.json`;
+    } catch (err) {
+      document.getElementById('diagram-loading').textContent = `Erro ao carregar: ${err.message}`;
+    }
+  </script>
+</body>
+</html>

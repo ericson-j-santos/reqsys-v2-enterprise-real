@@ -1,0 +1,35 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: reqsys-codex-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    networks:
+      - codex_local
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: reqsys-codex-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - codex_local
+    profiles:
+      - rag
+
+networks:
+  codex_local:
+    driver: bridge
+
+volumes:
+  ollama_models:
+  qdrant_storage:

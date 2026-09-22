@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T18:28:04.558976Z",
+  "trail_id": "trilha-a",
+  "trail_name": "Runtime Público",
+  "mode": "report_only",
+  "status": "passed",
+  "summary": {
+    "governance_ok": 8,
+    "governance_total": 8,
+    "tracks_ok": 2,
+    "validator_ok": true,
+    "operational_status": "config_ready",
+    "tracks_total": 3,
+    "errors": 0,
+    "warnings": 0
+  },
+  "capabilities": [
+    "boot_resiliente",
+    "healthcheck_camadas",
+    "validador_consolidado",
+    "probe_publico"
+  ],
+  "issues": [],
+  "artifacts": {
+    "architecture_as_code": "docs/architecture/trilha-a/architecture-as-code.json",
+    "adr": "docs/adr/ADR-036-trilha-a-runtime-publico.md",
+    "validator": "scripts/runtime_public_validator.py"
+  }
+}

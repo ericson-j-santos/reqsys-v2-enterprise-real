@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "artifact": "runtime-operational-contract",
+  "generated_at": "2026-06-30T13:20:00-03:00",
+  "objective": "Padronizar métricas operacionais entre runtime, dashboards, CI/CD, evidence gate e documentação viva.",
+  "canonical_fields": {
+    "runtime_score": {
+      "type": "integer",
+      "range": [0, 100],
+      "description": "Indicador consolidado de saúde operacional do ecossistema ReqSys.",
+      "calculation": {
+        "ci_cd_quality": 25,
+        "runtime_health": 25,
+        "observability": 20,
+        "evidence_integrity": 15,
+        "governance": 15
+      },
+      "status_ranges": {
+        "green": [85, 100],
+        "yellow": [60, 84],
+        "red": [0, 59]
+      }
+    },
+    "maturity_percent": {
+      "type": "integer",
+      "range": [0, 100],
+      "description": "Percentual de maturidade consolidada considerando implementação, validação, evidência e governança.",
+      "dimensions": [
+        "implemented",
+        "validated",
+        "evidenced",
+        "governed",
+        "documented"
+      ],
+      "status_ranges": {
+        "green": [80, 100],
+        "yellow": [50, 79],
+        "red": [0, 49]
+      }
+    },
+    "operational_risk": {
+      "type": "string",
+      "allowed_values": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "description": "Risco operacional consolidado baseado em drift, falhas CI, gaps de evidência e regressão.",
+      "mapping": {
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "red"
+      }
+    },
+    "readiness_status": {
+      "type": "string",
+      "allowed_values": [
+        "ready",
+        "partial",
+        "blocked"
+      ],
+      "description": "Estado executivo de prontidão operacional para continuidade incremental.",
+      "mapping": {
+        "ready": "green",
+        "partial": "yellow",
+        "blocked": "red"
+      }
+    }
+  },
+  "cross_contract_rules": [
+    "runtime_score abaixo de 60 deve gerar readiness_status=blocked",
+    "operational_risk=critical nunca pode coexistir com readiness_status=ready",
+    "maturity_percent acima de 80 exige evidência e governança válidas",
+    "CI vermelho reduz runtime_score automaticamente"
+  ],
+  "dashboard_contract": {
+    "required_cards": [
+      "runtime_score",
+      "maturity_percent",
+      "operational_risk",
+      "readiness_status"
+    ],
+    "required_visuals": [
+      "semáforo executivo",
+      "trend",
+      "confidence_level",
+      "last_update"
+    ]
+  },
+  "governance_guardrails": [
+    "Não publicar score operacional sem origem rastreável.",
+    "Não promover readiness_status=ready com CI vermelho.",
+    "Não ocultar operational_risk em dashboards executivos.",
+    "Não usar cálculo divergente entre runtime e documentação viva."
+  ],
+  "example_payload": {
+    "runtime_score": 82,
+    "maturity_percent": 74,
+    "operational_risk": "medium",
+    "readiness_status": "partial",
+    "confidence_level": "medium",
+    "last_update": "2026-06-30T13:20:00-03:00"
+  }
+}

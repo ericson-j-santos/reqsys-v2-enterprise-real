@@ -1,0 +1,38 @@
+name: User Experience Environment Trend Public Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/smoke_user_experience_environment_trend_public.py'
+      - 'tests/test_smoke_user_experience_environment_trend_public.py'
+      - '.github/workflows/user-experience-environment-trend-public-smoke.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 10 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/smoke_user_experience_environment_trend_public.py
+          python -m unittest tests/test_smoke_user_experience_environment_trend_public.py
+      - name: Execute report-only public smoke
+        run: |
+          mkdir -p evidence/ux
+          python scripts/smoke_user_experience_environment_trend_public.py --output evidence/ux/user-experience-environment-trend-public.json
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-environment-trend-public-${{ github.sha }}
+          path: evidence/ux/user-experience-environment-trend-public.json
+          retention-days: 90

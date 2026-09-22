@@ -1,0 +1,36 @@
+{
+  "properties": {
+    "connectionParameters": {
+      "token": {
+        "type": "oauthSetting",
+        "oAuthSettings": {
+          "identityProvider": "aad",
+          "clientId": "",
+          "scopes": [
+            "https://orga258f260.crm2.dynamics.com/user_impersonation"
+          ],
+          "redirectMode": "Global",
+          "redirectUrl": "https://global.consent.azure-apim.net/redirect",
+          "properties": {
+            "IsFirstParty": "False"
+          },
+          "customParameters": {
+            "tenantId": {
+              "value": "6d09c88c-0617-490c-8329-305e577684bc"
+            },
+            "resourceUri": {
+              "value": "https://orga258f260.crm2.dynamics.com"
+            }
+          }
+        }
+      }
+    },
+    "iconBrandColor": "#2563EB",
+    "capabilities": [
+      "actions"
+    ],
+    "scriptOperations": null,
+    "publisher": "ReqSys",
+    "stackOwner": "ReqSys"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "feature_name": "rsm-07-change-traceability",
+  "project": "ReqSys Service Management",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Adiciona o menor contrato de rastreabilidade para ServiceCase CHANGE, vinculando requisito/SDD/PR e evidência de CI ao mesmo SHA completo e exato, sem persistência, merge ou deploy.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_service_management_domain.py"
+    ],
+    "evidence_contract": "O harness deve aceitar CI success no SHA exato e falhar fechado para evidência ausente, SHA divergente, SHA abreviado ou case_type diferente de CHANGE, preservando o estado original."
+  }
+}

@@ -1,0 +1,91 @@
+name: Executive Runtime Evidence Summary
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/executive-runtime-evidence-summary.yml"
+      - "scripts/executive_runtime_evidence_summary.py"
+      - "tests/test_executive_runtime_evidence_summary.py"
+  workflow_run:
+    workflows: ["Post-merge Runtime Smoke Sentinel"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: executive-runtime-evidence-summary-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Validate executive runtime evidence summary
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/executive_runtime_evidence_summary.py
+          python -m pytest tests/test_executive_runtime_evidence_summary.py -q
+
+  summary:
+    name: Build executive summary artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    needs: contract
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build summary
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-runtime-evidence-summary
+          python scripts/executive_runtime_evidence_summary.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --github-run-id "${GITHUB_RUN_ID}" \
+            --output-dir artifacts/executive-runtime-evidence-summary
+
+      - name: Summary
+        if: always()
+        run: |
+          set -euo pipefail
+          summary="artifacts/executive-runtime-evidence-summary/summary.md"
+          if [[ -f "${summary}" ]]; then
+            cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Executive runtime evidence summary unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload executive runtime evidence summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-runtime-evidence-summary
+          path: artifacts/executive-runtime-evidence-summary/
+          if-no-files-found: error
+          retention-days: 30

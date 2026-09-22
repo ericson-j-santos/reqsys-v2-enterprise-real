@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-06-27T18:00:00Z",
+  "trail_id": "trilha-e",
+  "renderer": "mermaid",
+  "legacy_viewer": "docs/arquitetura/index.html",
+  "diagrams": [
+    {
+      "id": "arquitetura-geral",
+      "title": "Arquitetura Geral ReqSys",
+      "description": "Visão de camadas: cliente, frontend Vue, backend FastAPI, cache e integrações.",
+      "mermaid": "flowchart TD\n  subgraph Usuario[\"Usuário\"]\n    A[Browser/Cliente]\n  end\n  subgraph Frontend\n    B[\"Vue 3 + Vite + Vuetify\"]\n  end\n  subgraph Backend\n    C[\"FastAPI (Python)\"]\n    D[(SQLite / SQL Server)]\n    E[\"Redis + RQ\"]\n  end\n  subgraph Integracoes\n    F[\"Redmine\"]\n    G[\"SSRS / Power BI\"]\n    H[\"GitHub\"]\n  end\n  A --> B\n  B -->|/api proxy| C\n  C --> D\n  C --> E\n  C --> F\n  C --> G\n  C --> H",
+      "links": [
+        { "label": "Frontend", "href": "frontend/" },
+        { "label": "Backend", "href": "backend/app/main.py" },
+        { "label": "Viewer legado", "href": "docs/arquitetura/index.html" }
+      ]
+    },
+    {
+      "id": "modelo-dados",
+      "title": "Modelo de Dados Simplificado",
+      "description": "Entidades principais e relacionamentos do domínio ReqSys.",
+      "mermaid": "erDiagram\n  USUARIO ||--o{ SESSAO : acessa\n  USUARIO ||--o{ SOLICITACAO : cria\n  SOLICITACAO ||--o{ ANEXO : possui\n  USUARIO ||--o{ LOG : gera",
+      "links": [
+        { "label": "Config legado", "href": "docs/arquitetura/config.json" }
+      ]
+    },
+    {
+      "id": "fluxo-deploy",
+      "title": "Fluxo de Deploy e Validação",
+      "description": "Estados do pipeline de publicação local e validação de ambiente.",
+      "mermaid": "stateDiagram-v2\n  [*] --> Iniciar\n  Iniciar --> ValidarAmbiente : Validar .env e compose\n  ValidarAmbiente --> SubirServicos : docker-compose up\n  SubirServicos --> TestarAcesso : Testar URLs\n  TestarAcesso --> Login : Credenciais demo\n  Login --> [*] : Acesso concedido\n  Login --> Erro : Falha de autenticação\n  Erro --> [*]",
+      "links": [
+        { "label": "Runbook publicação", "href": "docs/RUNBOOK_PUBLICACAO_1PAGINA.md" },
+        { "label": "ADR ambientes", "href": "docs/adr/ADR-0003-ambientes-dev-hml-prod.md" }
+      ]
+    },
+    {
+      "id": "trilha-e-navegacao",
+      "title": "Trilha E — Fluxo Navegável",
+      "description": "Conexão entre diagramas vivos, ADRs, topology, inventory e architecture-as-code.",
+      "mermaid": "flowchart LR\n  AAC[Architecture-as-Code] --> INV[Inventory]\n  AAC --> DIA[Diagramas Vivos]\n  AAC --> ADR[ADRs]\n  AAC --> TOP[Runtime Topology]\n  AAC --> FLX[Fluxo Navegável]\n  DIA --> HUB[Hub HTML]\n  ADR --> HUB\n  TOP --> HUB\n  INV --> HUB\n  FLX --> HUB\n  HUB --> RT[/api/runtime/dashboard]\n  HUB --> VAL[Workflow Trilha E]",
+      "links": [
+        { "label": "Hub navegável", "href": "docs/architecture/trilha-e/index.html" },
+        { "label": "ADR-035", "href": "docs/adr/ADR-035-trilha-e-arquitetura-viva.md" }
+      ]
+    }
+  ]
+}

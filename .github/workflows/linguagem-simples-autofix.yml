@@ -1,0 +1,242 @@
+name: Linguagem simples - autocorreção governada
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/scripts/fix-user-facing-language.mjs'
+      - 'frontend/scripts/validate-user-facing-language.mjs'
+      - '.github/workflows/linguagem-simples-autofix.yml'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: linguagem-simples-autofix-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PATCH_NAME: linguagem-simples-autofix-${{ github.event.pull_request.number }}-${{ github.run_id }}
+
+jobs:
+  preparar-correcao:
+    name: Preparar correção sem credencial de escrita
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - name: Obter ferramentas confiáveis da base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Obter código candidato sem credencial persistida
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Aplicar corretor confiável sobre o código candidato
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FIXER='frontend/scripts/fix-user-facing-language.mjs'
+          VALIDATOR='frontend/scripts/validate-user-facing-language.mjs'
+
+          cp "trusted/$FIXER" "candidate/$FIXER"
+          (
+            cd candidate
+            node "$FIXER"
+          )
+
+          if git -C candidate cat-file -e "HEAD:$FIXER" 2>/dev/null; then
+            git -C candidate restore --source=HEAD -- "$FIXER"
+          else
+            rm -f "candidate/$FIXER"
+          fi
+
+          cp "trusted/$VALIDATOR" "candidate/$VALIDATOR"
+          (
+            cd candidate
+            node "$VALIDATOR"
+          )
+
+          if git -C candidate cat-file -e "HEAD:$VALIDATOR" 2>/dev/null; then
+            git -C candidate restore --source=HEAD -- "$VALIDATOR"
+          else
+            rm -f "candidate/$VALIDATOR"
+          fi
+
+      - name: Validar integridade e escopo da correção
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git -C candidate diff --check
+
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              frontend/src/*) ;;
+              *)
+                echo "Bloqueado: a autocorreção tentou alterar caminho fora de frontend/src: $path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git -C candidate diff --name-only -z)
+
+      - name: Gerar alteração autocorrigida
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git -C candidate diff --quiet -- frontend/src; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'Nenhuma correção automática necessária.'
+            exit 0
+          fi
+
+          git -C candidate diff --binary -- frontend/src > "$RUNNER_TEMP/linguagem-simples.patch"
+          test -s "$RUNNER_TEMP/linguagem-simples.patch"
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Publicar alteração para aplicação governada
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PATCH_NAME }}
+          path: ${{ runner.temp }}/linguagem-simples.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  aplicar-correcao:
+    name: Aplicar correção com GitHub App
+    needs: preparar-correcao
+    if: needs.preparar-correcao.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Obter branch atual sem credencial persistida
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Confirmar que o PR não mudou durante a preparação
+        id: lease
+        shell: bash
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          CURRENT_SHA="$(git rev-parse HEAD)"
+
+          if [ "$CURRENT_SHA" != "$EXPECTED_HEAD_SHA" ]; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "Execução obsoleta: esperado $EXPECTED_HEAD_SHA, atual $CURRENT_SHA. O evento mais recente fará nova avaliação."
+            exit 0
+          fi
+
+          echo 'stale=false' >> "$GITHUB_OUTPUT"
+
+      - name: Baixar alteração preparada
+        if: steps.lease.outputs.stale == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PATCH_NAME }}
+          path: ${{ runner.temp }}/autofix
+
+      - name: Validar e aplicar alteração sem executar código do PR
+        if: steps.lease.outputs.stale == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PATCH="$RUNNER_TEMP/autofix/linguagem-simples.patch"
+          test -s "$PATCH"
+
+          while IFS=$'\t' read -r added deleted path; do
+            [ -n "$path" ] || continue
+            case "$path" in
+              frontend/src/*) ;;
+              *)
+                echo "Bloqueado: alteração preparada fora de frontend/src: $path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git apply --numstat "$PATCH")
+
+          git apply --check "$PATCH"
+          git apply "$PATCH"
+          git diff --check
+
+      - name: Validar configuração da GitHub App existente
+        if: steps.lease.outputs.stale == 'false'
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo 'Configuração pendente: REQSYS_STACK_REBASE_APP_ID e REQSYS_STACK_REBASE_PRIVATE_KEY são necessárias para o push governado.' >&2
+            exit 1
+          fi
+
+      - name: Gerar token temporário da GitHub App
+        if: steps.lease.outputs.stale == 'false'
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+
+      - name: Registrar e enviar a autocorreção
+        if: steps.lease.outputs.stale == 'false'
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- frontend/src; then
+            echo 'Nenhuma alteração restante para registrar.'
+            exit 0
+          fi
+
+          git config user.name 'reqsys-language-autofix[bot]'
+          git config user.email 'actions@github.com'
+          git add frontend/src
+          git commit -m 'fix(ux): aplica linguagem simples na interface'
+
+          git remote set-url origin "https://x-access-token:$APP_TOKEN@github.com/$GITHUB_REPOSITORY.git"
+          git push origin "HEAD:refs/heads/$HEAD_BRANCH"
+
+      - name: Publicar resumo
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '# Autocorreção governada de linguagem'
+            echo
+            echo "- PR: #${{ github.event.pull_request.number }}"
+            echo "- SHA analisado: ${{ github.event.pull_request.head.sha }}"
+            echo "- Branch: ${{ github.event.pull_request.head.ref }}"
+            echo "- Execução obsoleta: ${{ steps.lease.outputs.stale || 'não' }}"
+            echo "- Resultado: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

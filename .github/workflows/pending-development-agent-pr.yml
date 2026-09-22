@@ -1,0 +1,93 @@
+name: Pending Development Agent PR
+
+on:
+  workflow_run:
+    workflows: ["Pre-PR Readiness Gate"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: pending-development-agent-pr-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  open-governed-pr:
+    name: Abrir PR após READY_FOR_PR
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'copilot/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # workflow_run carrega dados de uma branch mutável; execute automação somente
+      # a partir da branch padrão confiável e use o SHA do evento apenas como dado.
+      - name: Checkout da automação confiável
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar token temporário da GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-actions: read
+          permission-contents: read
+          permission-pull-requests: write
+
+      - name: Abrir ou atualizar PR draft governada
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          READY_FOR_PR_WAIT_SECONDS: "0"
+        run: |
+          set -euo pipefail
+          python scripts/auto_open_agent_pr.py \
+            --base main \
+            --branch "${{ github.event.workflow_run.head_branch }}" \
+            --head-sha "${{ github.event.workflow_run.head_sha }}"
+
+      - name: Validar efeito real da abertura governada
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          artifact = Path("artifacts/auto-pr-request/auto-pr-request.json")
+          if not artifact.is_file():
+              raise SystemExit("auto_pr_effect_missing_artifact")
+
+          payload = json.loads(artifact.read_text(encoding="utf-8"))
+          status = str(payload.get("status") or "")
+          allowed = {"created", "updated", "skipped_merged"}
+          if status not in allowed:
+              error = str(payload.get("error") or "sem detalhe")
+              raise SystemExit(f"auto_pr_effect_not_applied: status={status}; error={error}")
+
+          if status in {"created", "updated"}:
+              if not payload.get("pr_number") or not payload.get("pr_url"):
+                  raise SystemExit(f"auto_pr_effect_incomplete: status={status}")
+
+          print(f"AUTO_PR_EFFECT_OK status={status} pr_number={payload.get('pr_number')}")
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pending-development-agent-pr-${{ github.event.workflow_run.head_sha }}
+          path: artifacts/auto-pr-request/
+          if-no-files-found: error
+          retention-days: 30

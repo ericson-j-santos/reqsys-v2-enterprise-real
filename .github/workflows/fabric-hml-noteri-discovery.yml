@@ -1,0 +1,131 @@
+name: Fabric HML Noteri Discovery
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/fabric-hml-noteri-discovery.yml"
+      - ".github/self-hosted-runner-policy.json"
+      - "scripts/fabric_hml_noteri_discovery.py"
+      - "scripts/fabric_hml_azps_probe.ps1"
+      - "scripts/fabric_hml_secret_bootstrap_temp.py"
+      - "tests/test_fabric_hml_noteri_discovery_contract.py"
+      - ".sdd/specs/fabric-hml-noteri-discovery.requirements.md"
+      - ".sdd/specs/fabric-hml-noteri-discovery.spec.json"
+      - ".sdd/specs/fabric-hml-secret-bootstrap-temp.requirements.md"
+      - ".sdd/specs/fabric-hml-secret-bootstrap-temp.spec.json"
+  workflow_dispatch:
+    inputs:
+      apply_nonsecret_vars:
+        description: "Aplicar FABRIC_TENANT_ID/CLIENT_ID/WORKSPACE_ID no painel-powerbi/homologacao"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fabric-hml-noteri-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: fabric-hml-noteri-discovery
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 8
+    env:
+      EVIDENCE_FILE: artifacts/fabric-hml-noteri-discovery/evidence.json
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Probe read-only ou aplicar apenas variables nao sensiveis
+        shell: powershell
+        run: |
+          $probeArgs = @(
+            "scripts/fabric_hml_noteri_discovery.py",
+            "--evidence-file", "$env:EVIDENCE_FILE"
+          )
+          $authorizedBootstrapPr = (
+            "${{ github.event_name }}" -eq "pull_request" -and
+            "${{ github.head_ref }}" -eq "ops/fabric-hml-bootstrap-20260921"
+          )
+          $authorizedDispatch = (
+            "${{ github.event_name }}" -eq "workflow_dispatch" -and
+            "${{ inputs.apply_nonsecret_vars }}" -eq "true" -and
+            "${{ github.ref }}" -eq "refs/heads/main"
+          )
+          if ($authorizedBootstrapPr -or $authorizedDispatch) {
+            $probeArgs += @("--apply-nonsecret-vars", "--confirm", "APPLY-FABRIC-HML-NONSECRET-VARS")
+          }
+          python @probeArgs
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fabric-hml-noteri-discovery-${{ github.run_id }}
+          path: artifacts/fabric-hml-noteri-discovery/evidence.json
+          if-no-files-found: error
+          retention-days: 7
+
+  bootstrap-secret:
+    name: fabric-hml-secret-bootstrap
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'ops/fabric-hml-secret-bootstrap-20260921' }}
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 8
+    env:
+      EVIDENCE_FILE: artifacts/fabric-hml-secret-bootstrap/evidence.json
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Criar ou capturar secret HML sem expor valor
+        shell: powershell
+        run: python scripts/fabric_hml_secret_bootstrap_temp.py
+
+      - name: Forcar flag E2E para false sem validacao real
+        if: always()
+        shell: powershell
+        run: |
+          if (-not (Test-Path $env:EVIDENCE_FILE)) {
+            exit 0
+          }
+
+          $evidence = Get-Content -Raw $env:EVIDENCE_FILE | ConvertFrom-Json
+          $validated = (
+            $evidence.client_credentials_token_obtained -eq $true -and
+            $evidence.fabric_api_status -eq 200 -and
+            $evidence.target_workspace_visible_to_app -eq $true
+          )
+
+          if ($evidence.e2e_enabled -eq $true -and -not $validated) {
+            gh variable set FABRIC_HML_E2E_ENABLED --env homologacao --repo ericson-j-santos/painel-powerbi --body false
+            if ($LASTEXITCODE -ne 0) {
+              throw "fabric_hml_e2e_fail_closed_write_failed"
+            }
+
+            $evidence.e2e_enabled = $false
+            $evidence.status = "secret_present_validation_required"
+            $json = $evidence | ConvertTo-Json -Depth 8
+            [System.IO.File]::WriteAllText(
+              (Resolve-Path $env:EVIDENCE_FILE),
+              $json + [Environment]::NewLine,
+              [System.Text.UTF8Encoding]::new($false)
+            )
+          }
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fabric-hml-secret-bootstrap-${{ github.run_id }}
+          path: artifacts/fabric-hml-secret-bootstrap/evidence.json
+          if-no-files-found: error
+          retention-days: 7

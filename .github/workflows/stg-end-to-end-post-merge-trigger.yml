@@ -1,0 +1,31 @@
+name: STG End-to-End Post-Merge Trigger (Deprecated)
+
+# Compatibilidade temporária: o gatilho automático foi absorvido por
+# stg-end-to-end-evidence.yml. Este workflow não dispara outros Actions.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stg-e2e-post-merge-trigger-deprecated
+  cancel-in-progress: true
+
+jobs:
+  deprecated:
+    name: Informar consolidação do gatilho
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Publicar orientação
+        run: |
+          {
+            echo "# STG End-to-End Post-Merge Trigger"
+            echo
+            echo "Status: **descontinuado para execução automática**."
+            echo
+            echo "O gatilho push/main foi absorvido diretamente por \`stg-end-to-end-evidence.yml\`."
+            echo "Este workflow permanece temporariamente apenas para compatibilidade e rollback."
+            echo "Nenhum outro workflow é disparado por esta execução."
+          } >> "$GITHUB_STEP_SUMMARY"

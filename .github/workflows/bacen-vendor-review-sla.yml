@@ -1,0 +1,40 @@
+name: BACEN Vendor Review SLA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_vendor_review_sla.py"
+      - ".github/workflows/bacen-vendor-review-sla.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_vendor_review_sla.py"
+  schedule:
+    - cron: "41 8 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML
+      - run: python -m py_compile scripts/generate_bacen_vendor_review_sla.py
+      - run: python scripts/generate_bacen_vendor_review_sla.py --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml --output artifacts/bacen/bacen-05-vendor-review-sla.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-vendor-review-sla
+          path: artifacts/bacen/bacen-05-vendor-review-sla.json
+          if-no-files-found: error
+          retention-days: 365

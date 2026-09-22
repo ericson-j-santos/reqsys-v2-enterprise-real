@@ -1,0 +1,1 @@
+"""Executores concretos da Central."""

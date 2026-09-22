@@ -1,0 +1,136 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import LoginView from '../views/LoginView.vue'
+import DashboardView from '../views/DashboardView.vue'
+import RequisitosView from '../views/RequisitosView.vue'
+import RastreabilidadeView from '../views/RastreabilidadeView.vue'
+import AuditoriaView from '../views/AuditoriaView.vue'
+import PipelineView from '../views/PipelineView.vue'
+import RelatoriosView from '../views/RelatoriosView.vue'
+import SegredosStatusView from '../views/SegredosStatusView.vue'
+import QualidadeIAView from '../views/QualidadeIAView.vue'
+import RecomendacoesIAView from '../views/RecomendacoesIAView.vue'
+import SpecsView from '../views/SpecsView.vue'
+import TaskConsoleView from '../views/TaskConsoleView.vue'
+import AgileRuntimeView from '../views/AgileRuntimeView.vue'
+import ArquiteturaView from '../views/ArquiteturaView.vue'
+import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
+import HubLowCodeView from '../views/HubLowCodeView.vue'
+import CopilotMemoryInstallerView from '../views/CopilotMemoryInstallerView.vue'
+import WsjfPlannerExcelInstallerView from '../views/WsjfPlannerExcelInstallerView.vue'
+import GovBIView from '../views/GovBIView.vue'
+import CodexView from '../views/CodexView.vue'
+import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
+import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
+import PentahoIntegracoesView from '../views/PentahoIntegracoesView.vue'
+import FigmaGithubView from '../views/FigmaGithubView.vue'
+import EstatisticasView from '../views/EstatisticasView.vue'
+import EstatisticaDetalheView from '../views/EstatisticaDetalheView.vue'
+import FinanceiroView from '../views/FinanceiroView.vue'
+import AnalyticsHubView from '../views/AnalyticsHubView.vue'
+import UserFinalShellView from '../views/UserFinalShellView.vue'
+import OrquestradorIAView from '../views/OrquestradorIAView.vue'
+import CoordenacaoAdrView from '../views/CoordenacaoAdrView.vue'
+import ShowcaseView from '../views/ShowcaseView.vue'
+import NotFoundView from '../views/NotFoundView.vue'
+import GitHubMergeConsoleView from '../views/GitHubMergeConsoleView.vue'
+import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
+import OperationalDeployView from '../views/OperationalDeployView.vue'
+import SessionManagementView from '../views/SessionManagementView.vue'
+import OcrReviewView from '../views/OcrReviewView.vue'
+import { useAuthStore } from '../stores/auth'
+
+export const routes = [
+  { path: '/login', component: LoginView, meta: { public: true } },
+  {
+    path: '/showcase',
+    alias: '/demo',
+    name: 'showcase',
+    component: ShowcaseView,
+    meta: { public: true, standalone: true, title: 'Demonstração ReqSys' },
+  },
+  { path: '/', component: DashboardView, meta: { recurso: 'dashboard:read' } },
+  { path: '/home', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
+  { path: '/workspace', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
+  { path: '/analytics', component: AnalyticsHubView, meta: { recurso: 'dashboard:read' } },
+  { path: '/ajuda', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
+  { path: '/requisitos', component: RequisitosView, meta: { recurso: 'requisitos:write' } },
+  { path: '/requisitos/coleta', redirect: '/requisitos?acao=novo' },
+  { path: '/rastreabilidade', component: RastreabilidadeView, meta: { recurso: 'rastreabilidade:read' } },
+  { path: '/auditoria', component: AuditoriaView, meta: { recurso: 'auditoria:read' } },
+  { path: '/pipeline', component: PipelineView, meta: { recurso: 'requisitos:write' } },
+  { path: '/relatorios', component: RelatoriosView, meta: { recurso: 'relatorios:read' } },
+  { path: '/segredos-status', component: SegredosStatusView, meta: { recurso: 'dashboard:read' } },
+  { path: '/qualidade-ia', component: QualidadeIAView, meta: { recurso: 'dashboard:read' } },
+  { path: '/recomendacoes-ia', component: RecomendacoesIAView, meta: { recurso: 'dashboard:read' } },
+  { path: '/task-console', component: TaskConsoleView, meta: { recurso: 'dashboard:read' } },
+  { path: '/agile-runtime', component: AgileRuntimeView, meta: { recurso: 'dashboard:read' } },
+  { path: '/specs', component: SpecsView, meta: { recurso: 'dashboard:read' } },
+  { path: '/hub-lowcode', component: HubLowCodeView, meta: { recurso: 'dashboard:read' } },
+  {
+    path: '/hub-lowcode/copilot-memory/instalar',
+    name: 'copilot-memory-instalar',
+    component: CopilotMemoryInstallerView,
+    meta: { recurso: 'auditoria:read' },
+  },
+  {
+    path: '/hub-lowcode/wsjf/planner-excel/instalar',
+    name: 'wsjf-planner-excel-instalar',
+    component: WsjfPlannerExcelInstallerView,
+    meta: { recurso: 'auditoria:read' },
+  },
+  { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
+  { path: '/notificacoes', redirect: '/painel-integracao' },
+  { path: '/figma-github', component: FigmaGithubView, meta: { recurso: 'dashboard:read' } },
+  { path: '/estatisticas', component: EstatisticasView, meta: { recurso: 'dashboard:read' } },
+  {
+    path: '/estatisticas/:indicadorId',
+    name: 'estatistica-detalhe',
+    component: EstatisticaDetalheView,
+    meta: { recurso: 'dashboard:read' },
+  },
+  { path: '/financeiro', component: FinanceiroView, meta: { recurso: 'dashboard:read' } },
+  { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
+  { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
+  { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
+  { path: '/integracoes/pentaho', component: PentahoIntegracoesView, meta: { recurso: 'dashboard:read' } },
+  { path: '/govbi-ia', alias: '/govbi', component: GovBIView, meta: { recurso: 'dashboard:read' } },
+  { path: '/codex', component: CodexView, meta: { recurso: 'dashboard:read' } },
+  { path: '/orquestrador-ia', component: OrquestradorIAView, meta: { recurso: 'dashboard:read' } },
+  { path: '/coordenacao-adr', component: CoordenacaoAdrView, meta: { recurso: 'dashboard:read' } },
+  { path: '/admin/github-merge', component: GitHubMergeConsoleView, meta: { recurso: 'auditoria:read' } },
+  {
+    path: '/admin/teams-recipient-policies',
+    component: TeamsRecipientPoliciesView,
+    meta: { recurso: 'teams-recipient-policies:admin' },
+  },
+  { path: '/admin/operational-deploy', component: OperationalDeployView, meta: { recurso: 'operational-deploy:admin' } },
+  { path: '/admin/session-management', component: SessionManagementView, meta: { recurso: 'security-sessions:admin' } },
+  { path: '/admin/ocr-review', component: OcrReviewView, meta: { recurso: 'ocr-review:admin' } },
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
+]
+const router = createRouter({ history: createWebHistory(), routes })
+router.beforeEach(async (to) => {
+  const auth = useAuthStore()
+  if (!to.meta.public && !auth.autenticado) {
+    return { path: '/login', query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
+  }
+  if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) {
+    try {
+      await auth.atualizarSessao()
+    } catch {
+      // 401 é tratado como reset de sessão; demais falhas preservam fail-closed.
+    }
+    if (auth.pode(to.meta.recurso)) return true
+    if (!auth.autenticado) {
+      return { path: '/login', query: { redirect: to.fullPath, reset: 'security' } }
+    }
+    return {
+      path: '/',
+      query: {
+        forbidden: String(to.meta.recurso),
+        forbidden_path: to.fullPath,
+      },
+    }
+  }
+})
+export default router

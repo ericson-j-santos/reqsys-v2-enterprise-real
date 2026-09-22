@@ -1,0 +1,49 @@
+name: Trilha E — Arquitetura Viva
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/trilha-e-arquitetura-viva.yml'
+      - 'docs/architecture/trilha-e/**'
+      - 'docs/adr/ADR-035-trilha-e-arquitetura-viva.md'
+      - 'docs/runbooks/trilha-e-arquitetura-viva.md'
+      - 'docs/contracts/trilha-e-arquitetura-viva.schema.json'
+      - 'scripts/trilha_e_arquitetura_viva.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/trilha-e-arquitetura-viva.yml'
+      - 'docs/architecture/trilha-e/**'
+      - 'docs/adr/ADR-035-trilha-e-arquitetura-viva.md'
+      - 'docs/runbooks/trilha-e-arquitetura-viva.md'
+      - 'docs/contracts/trilha-e-arquitetura-viva.schema.json'
+      - 'scripts/trilha_e_arquitetura_viva.py'
+
+concurrency:
+  group: trilha-e-arquitetura-viva-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-trilha-e:
+    name: Validate Trilha E — Arquitetura Viva (report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate architecture-as-code and generate report
+        run: python scripts/trilha_e_arquitetura_viva.py
+
+      - name: Upload Trilha E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trilha-e-arquitetura-viva-${{ github.run_id }}
+          path: audit/trilha-e/
+          if-no-files-found: error
+          retention-days: 30

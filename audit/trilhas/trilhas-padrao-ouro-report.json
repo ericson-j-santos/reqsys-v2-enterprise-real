@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T18:28:04.691478Z",
+  "mode": "report_only",
+  "status": "passed",
+  "summary": {
+    "trails_total": 5,
+    "trails_passed": 5,
+    "trails_warning": 0,
+    "trails_failed": 0,
+    "gold_standard_percent": 100.0
+  },
+  "trails": [
+    {
+      "trail_id": "trilha-a",
+      "trail_name": "Runtime Público",
+      "status": "passed",
+      "criteria": {
+        "adr": true,
+        "runbook": true,
+        "workflow": true,
+        "validator": true,
+        "schema": true,
+        "architecture_as_code": true,
+        "report": true,
+        "tests": true
+      },
+      "missing": [],
+      "report_status": "passed",
+      "report_summary": {
+        "governance_ok": 8,
+        "governance_total": 8,
+        "tracks_ok": 2,
+        "validator_ok": true,
+        "operational_status": "config_ready",
+        "tracks_total": 3,
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "trail_id": "trilha-b",
+      "trail_name": "Observabilidade Enterprise",
+      "status": "passed",
+      "criteria": {
+        "adr": true,
+        "runbook": true,
+        "workflow": true,
+        "validator": true,
+        "schema": true,
+        "architecture_as_code": true,
+        "report": true,
+        "tests": true
+      },
+      "missing": [],
+      "report_status": "passed",
+      "report_summary": {
+        "governance_ok": 4,
+        "code_ok": 5,
+        "code_total": 5,
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "trail_id": "trilha-c",
+      "trail_name": "UX Operacional",
+      "status": "passed",
+      "criteria": {
+        "adr": true,
+        "runbook": true,
+        "workflow": true,
+        "validator": true,
+        "schema": true,
+        "architecture_as_code": true,
+        "report": true,
+        "tests": true
+      },
+      "missing": [],
+      "report_status": "passed",
+      "report_summary": {
+        "governance_ok": 4,
+        "ui_ok": 6,
+        "ui_total": 6,
+        "routes_ok": 2,
+        "views_with_trilha_marker": 2,
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "trail_id": "trilha-d",
+      "trail_name": "Qualidade e Governança",
+      "status": "passed",
+      "criteria": {
+        "adr": true,
+        "runbook": true,
+        "workflow": true,
+        "validator": true,
+        "schema": true,
+        "architecture_as_code": true,
+        "report": true,
+        "tests": true
+      },
+      "missing": [],
+      "report_status": "passed",
+      "report_summary": null
+    },
+    {
+      "trail_id": "trilha-e",
+      "trail_name": "Arquitetura Viva",
+      "status": "passed",
+      "criteria": {
+        "adr": true,
+        "runbook": true,
+        "workflow": true,
+        "validator": true,
+        "schema": true,
+        "architecture_as_code": true,
+        "report": true,
+        "tests": true
+      },
+      "missing": [],
+      "report_status": "passed",
+      "report_summary": {
+        "capabilities": 6,
+        "adrs_indexed": 29,
+        "services": 4,
+        "workflows": 6,
+        "errors": 0,
+        "warnings": 0
+      }
+    }
+  ],
+  "gold_standard_criteria": [
+    "adr",
+    "runbook",
+    "workflow",
+    "validator",
+    "schema",
+    "architecture_as_code",
+    "report",
+    "tests"
+  ],
+  "issues": [],
+  "recommended_actions": []
+}

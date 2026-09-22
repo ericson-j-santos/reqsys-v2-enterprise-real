@@ -1,0 +1,514 @@
+name: CI — ReqSys v2 Enterprise
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  ci-admission:
+    name: CI Admission Controller
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout do controlador
+        uses: actions/checkout@v4
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar manifesto do SHA antes de CI caro
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci_admission_guard.py \
+            --repository "${{ github.repository }}" \
+            --head-sha "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --event-name "${{ github.event_name }}" \
+            --base-ref "${{ github.event.pull_request.base.ref || 'main' }}" \
+            --output "artifacts/ci-admission-guard/${{ github.event.pull_request.head.sha || github.sha }}.json"
+      - name: Publicar evidência do admission controller
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-admission-guard-${{ github.run_id }}
+          path: artifacts/ci-admission-guard/
+          if-no-files-found: error
+          retention-days: 30
+
+  # ──────────────────────────────────────────────
+  # JOB 0: CI Router — decide quais suites precisam rodar
+  # ──────────────────────────────────────────────
+  ci-router:
+    name: CI Router (paths + Pareto)
+    runs-on: ubuntu-latest
+    needs: ci-admission
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      frontend: ${{ steps.detect.outputs.frontend }}
+      docs: ${{ steps.detect.outputs.docs }}
+      codex_static: ${{ steps.detect.outputs.codex_static }}
+      workflows: ${{ steps.detect.outputs.workflows }}
+      governed_contract: ${{ steps.detect.outputs.governed_contract }}
+      full_ci: ${{ steps.detect.outputs.full_ci }}
+      e2e_required: ${{ steps.detect.outputs.e2e_required }}
+      changed_files: ${{ steps.detect.outputs.changed_files }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Detectar arquivos alterados
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+            HEAD_SHA="${{ github.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+            if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+              BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+            fi
+          fi
+
+          git fetch --no-tags --depth=200 origin || true
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || git diff --name-only HEAD^)"
+          echo "$CHANGED_FILES" > /tmp/changed-files.txt
+
+          backend=false
+          frontend=false
+          docs=false
+          codex_static=false
+          workflows=false
+          governed_contract=true
+          full_ci=false
+          e2e_required=false
+
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            case "$file" in
+              backend/*)
+                backend=true
+                ;;
+              frontend/*)
+                frontend=true
+                ;;
+              docs/*|*.md|README.md|CHANGELOG.md)
+                docs=true
+                ;;
+              tools/codex-local-online/*)
+                codex_static=true
+                ;;
+              .github/workflows/*)
+                workflows=true
+                ;;
+              *)
+                full_ci=true
+                ;;
+            esac
+
+            case "$file" in
+              docs/contracts/runtime-operational-contract-v1.json|docs/runbooks/runtime-operational-contract-v1.md|scripts/validate_runtime_operational_contract.py|.github/workflows/runtime-operational-contract.yml|.github/workflows/ci.yml|scripts/build_instrumented_executive_readiness.py|tests/test_build_instrumented_executive_readiness.py|.github/workflows/instrumented-executive-readiness.yml|docs/contracts/instrumented-executive-readiness.md|scripts/update_instrumented_executive_history.py|tests/test_update_instrumented_executive_history.py|.github/workflows/instrumented-executive-history.yml|docs/contracts/instrumented-executive-history.md)
+                ;;
+              *)
+                governed_contract=false
+                ;;
+            esac
+
+            case "$file" in
+              frontend/tests/e2e/*|frontend/playwright.config.*|frontend/src/router/*|frontend/src/views/Login*|frontend/src/views/*Auth*|frontend/src/services/auth*|frontend/src/stores/*auth*)
+                e2e_required=true
+                ;;
+            esac
+          done < /tmp/changed-files.txt
+
+          if [[ "$workflows" == "true" && "$governed_contract" != "true" ]]; then
+            full_ci=true
+          fi
+
+          if [[ "$governed_contract" == "true" ]]; then
+            docs=true
+            full_ci=false
+            e2e_required=false
+          fi
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ! -s /tmp/changed-files.txt ]]; then
+            full_ci=true
+            e2e_required=true
+          fi
+
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            e2e_required=true
+          fi
+
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}" == "true" || "${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}" == "true" ]]; then
+            e2e_required=true
+          fi
+
+          {
+            echo "backend=$backend"
+            echo "frontend=$frontend"
+            echo "docs=$docs"
+            echo "codex_static=$codex_static"
+            echo "workflows=$workflows"
+            echo "governed_contract=$governed_contract"
+            echo "full_ci=$full_ci"
+            echo "e2e_required=$e2e_required"
+            echo "changed_files<<EOF"
+            cat /tmp/changed-files.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resumo visual do roteamento
+        shell: bash
+        run: |
+          {
+            echo "## CI Router — ReqSys v2 Enterprise"
+            echo ""
+            echo "| Área | Rodar? |"
+            echo "|---|---:|"
+            echo "| Backend | ${{ steps.detect.outputs.backend }} |"
+            echo "| Frontend | ${{ steps.detect.outputs.frontend }} |"
+            echo "| Docs | ${{ steps.detect.outputs.docs }} |"
+            echo "| Codex estático | ${{ steps.detect.outputs.codex_static }} |"
+            echo "| Workflows | ${{ steps.detect.outputs.workflows }} |"
+            echo "| Contrato governado | ${{ steps.detect.outputs.governed_contract }} |"
+            echo "| CI completo | ${{ steps.detect.outputs.full_ci }} |"
+            echo "| E2E obrigatório | ${{ steps.detect.outputs.e2e_required }} |"
+            echo ""
+            echo "### Arquivos alterados"
+            echo '```text'
+            cat /tmp/changed-files.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend-lint:
+    name: Backend Lint & Security (ruff + pip-audit + bandit)
+    runs-on: ubuntu-latest
+    needs: ci-router
+    if: needs.ci-router.outputs.backend == 'true' || needs.ci-router.outputs.full_ci == 'true'
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-audit.txt
+      - name: Install lint tools
+        run: python -m pip install --upgrade pip ruff pip-audit bandit
+      - name: Lint — ruff (erros, warnings e imports)
+        run: |
+          ruff check app/ --select E,F,W,I --ignore E501 --output-format json --output-file /tmp/ruff-report.json
+          ruff check app/ --select E,F,W,I --ignore E501
+      - name: Publicar relatório ruff
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backend-ruff-report
+          path: /tmp/ruff-report.json
+          if-no-files-found: ignore
+      - name: Segurança deps — pip-audit
+        run: |
+          pip-audit -r requirements-audit.txt --no-deps --format json --output /tmp/pip-audit-report.json
+          pip-audit -r requirements-audit.txt --no-deps
+      - name: Publicar relatório pip-audit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backend-pip-audit-report
+          path: /tmp/pip-audit-report.json
+          if-no-files-found: ignore
+      - name: Segurança código — bandit
+        run: bandit -r app/ -ll -x app/tests
+
+  backend-test:
+    name: Backend Tests + Coverage (pytest)
+    runs-on: ubuntu-latest
+    needs: ci-router
+    if: needs.ci-router.outputs.backend == 'true' || needs.ci-router.outputs.full_ci == 'true'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_app
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: reqsys_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_app -d reqsys_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install ODBC driver (pyodbc dependency)
+        timeout-minutes: 4
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euo pipefail
+          if dpkg-query -W -f='${Status}' unixodbc-dev 2>/dev/null | grep -q "ok installed"; then
+            echo "unixodbc-dev já está instalado no runner."
+            exit 0
+          fi
+          timeout 120s sudo -E apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 \
+            update -qq
+          timeout 120s sudo -E apt-get \
+            -o DPkg::Lock::Timeout=60 \
+            -o Acquire::Retries=3 \
+            install -y --no-install-recommends unixodbc-dev
+          dpkg-query -W unixodbc-dev
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Verificar encoding UTF-8 (anti-mojibake)
+        run: |
+          echo "Verificando strings com mojibake em app/api/ e app/services/ ..."
+          if grep -rn --include="*.py" -E "Ã§|Ã£|Ã©|Ã¡|Ãº" app/api/ app/services/ 2>/dev/null; then
+            echo "ERRO: Strings com mojibake detectadas. Corrija o encoding do arquivo antes do commit."
+            exit 1
+          fi
+          echo "OK: Nenhum mojibake encontrado."
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql+psycopg2://reqsys_app:ci-postgres-password@localhost:5432/reqsys_test
+          JWT_SECRET_KEY: ci-secret-key-for-testing-only
+          JWT_SECRET: ci-secret-key-for-testing-only-minimum-32-characters
+          JWT_ISSUER: reqsys-ci
+          JWT_AUDIENCE: reqsys-ci-tests
+          JWT_EXP_MINUTES: "60"
+          ALLOW_DEMO_LOGIN: "true"
+          APP_ENV: test
+          AZURE_TENANT_ID: 00000000-0000-0000-0000-000000000000
+          AZURE_CLIENT_ID: 11111111-1111-1111-1111-111111111111
+          AZURE_AUTHORITY: https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000
+          REDMINE_URL: https://placeholder.example.com
+          REDMINE_API_KEY: placeholder
+          ENABLE_GITHUB_REDMINE_IMPORT: "false"
+          SSRS_BASE_URL: ""
+          GITHUB_WEBHOOK_SECRET: ""
+          GITLAB_WEBHOOK_TOKEN: ""
+        run: |
+          set -o pipefail
+          python -m pytest tests/ -v --tb=short \
+            --cov=app \
+            --cov-config=pyproject.toml \
+            --cov-report=term-missing:skip-covered \
+            --cov-report=xml:/tmp/backend-coverage.xml \
+            --cov-fail-under=60 2>&1 | tee /tmp/backend-pytest-output.log
+      - name: Publicar relatório pytest/cobertura
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backend-pytest-coverage-report
+          path: |
+            /tmp/backend-pytest-output.log
+            /tmp/backend-coverage.xml
+          if-no-files-found: ignore
+
+  frontend-build:
+    name: Frontend Build + Security Audit (Vite + npm audit)
+    runs-on: ubuntu-latest
+    needs: ci-router
+    if: needs.ci-router.outputs.frontend == 'true' || needs.ci-router.outputs.full_ci == 'true'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Reconciliar lockfile para o npm do runner
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies
+        run: npm ci
+      - name: Security audit — npm audit
+        run: npm audit --audit-level=high
+      - name: Build production bundle
+        env:
+          VITE_API_URL: /api
+        run: npm run build
+
+  frontend-e2e-responsive:
+    name: Frontend Responsive E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [ci-router, frontend-build]
+    if: always() && needs.ci-router.outputs.e2e_required == 'true' && (needs.ci-router.outputs.frontend == 'true' || needs.ci-router.outputs.full_ci == 'true') && needs.frontend-build.result == 'success'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start Vite dev server
+        env:
+          VITE_API_URL: /api
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/reqsys-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              echo "Vite disponível"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Vite não ficou disponível no tempo esperado"
+          cat /tmp/reqsys-vite.log || true
+          exit 1
+      - name: Run responsive layout tests
+        env:
+          E2E_BASE_URL: http://127.0.0.1:5173
+        run: npx playwright test tests/e2e/responsividade.spec.js
+
+  pipeline-governance:
+    name: Pipeline Governança + Evidence Snapshot
+    runs-on: ubuntu-latest
+    needs: [ci-router, backend-lint, backend-test, frontend-build, frontend-e2e-responsive]
+    if: always()
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Gerar pipeline-governanca-report
+        env:
+          BACKEND_LINT_RESULT: ${{ needs.backend-lint.result }}
+          BACKEND_TEST_RESULT: ${{ needs.backend-test.result }}
+          FRONTEND_BUILD_RESULT: ${{ needs.frontend-build.result }}
+          FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e-responsive.result }}
+          APP_ENV: ci
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p artifacts/pipeline-governanca
+          node scripts/validar-pipeline-governanca.mjs > artifacts/pipeline-governanca/pipeline-governanca-report.json
+          cat artifacts/pipeline-governanca/pipeline-governanca-report.json
+      - name: Gerar baseline operacional local
+        run: python scripts/generate_operational_artifacts_baseline.py
+      - name: Post-workflow evidence snapshot
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python scripts/post_workflow_evidence_snapshot.py \
+            --event "${{ github.event_name }}" \
+            --sha "${{ github.sha }}" \
+            --pipeline-report artifacts/pipeline-governanca/pipeline-governanca-report.json
+      - name: Validar estadoGeral do pipeline
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/pipeline-governanca/pipeline-governanca-report.json").read_text())
+          estado = report.get("estadoGeral")
+          print(f"estadoGeral={estado}")
+          if estado != "verde":
+              raise SystemExit(f"pipeline-governanca bloqueado: estadoGeral={estado}")
+          PY
+      - name: Publicar artifacts de governança
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pipeline-governanca-evidence
+          path: |
+            artifacts/pipeline-governanca/
+            artifacts/post-workflow-evidence/
+            artifacts/runtime-health-center/
+            artifacts/coordenador-status/
+          if-no-files-found: warn
+
+  ci-result:
+    name: CI Router Result
+    runs-on: ubuntu-latest
+    needs: [ci-router, backend-lint, backend-test, frontend-build, frontend-e2e-responsive, pipeline-governance]
+    if: always()
+    steps:
+      - name: Consolidar resultado
+        shell: bash
+        run: |
+          echo "## Resultado consolidado do CI Router" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Resultado |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---:|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| CI Router | ${{ needs.ci-router.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Lint | ${{ needs.backend-lint.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Tests | ${{ needs.backend-test.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend Build | ${{ needs.frontend-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend E2E | ${{ needs.frontend-e2e-responsive.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pipeline Governança | ${{ needs.pipeline-governance.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          for result in \
+            "${{ needs.ci-router.result }}" \
+            "${{ needs.backend-lint.result }}" \
+            "${{ needs.backend-test.result }}" \
+            "${{ needs.frontend-build.result }}" \
+            "${{ needs.frontend-e2e-responsive.result }}" \
+            "${{ needs.pipeline-governance.result }}"; do
+            if [[ "$result" == "failure" ]]; then
+              echo "CI Router Result: falha real detectada em job obrigatório."
+              exit 1
+            fi
+          done
+          echo "CI Router Result: OK. Jobs skipped/cancelled por roteamento ou concorrência não bloqueiam PR pequeno."

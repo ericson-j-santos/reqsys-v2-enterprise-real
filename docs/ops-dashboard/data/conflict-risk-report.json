@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.2.0",
+  "risk": "low",
+  "lane": "runtime-governance",
+  "parallel_safe": true,
+  "blocking_reasons": [],
+  "changed_paths": [
+    "docs/ops-dashboard/index.html",
+    "docs/ops-dashboard/data/runtime-executive-index.json",
+    "scripts/build_runtime_executive_index.py"
+  ],
+  "critical_files": [],
+  "recommendation": "merge_paralelo_seguro",
+  "signals": {
+    "source": "static_seed",
+    "runtime_surface_change": false,
+    "public_contract_change": true,
+    "docs_only": false,
+    "artifact_only": false
+  },
+  "generated_at": "2026-06-27T22:20:00+00:00"
+}

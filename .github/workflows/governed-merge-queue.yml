@@ -1,0 +1,589 @@
+name: Governed Merge Queue
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number for manual governed queue validation"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: governed-merge-queue-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20.19.0"
+  CI: "true"
+  CORRELATION_ID: governed-merge-queue-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  resolve-context:
+    name: Resolver contexto do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      pr_number: ${{ steps.ctx.outputs.pr_number }}
+      head_sha: ${{ steps.ctx.outputs.head_sha }}
+      base_ref: ${{ steps.ctx.outputs.base_ref }}
+      base_sha: ${{ steps.ctx.outputs.base_sha }}
+    steps:
+      - name: Resolver PR, head e base reais
+        id: ctx
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            BASE_REF="${{ github.event.pull_request.base.ref }}"
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            PR_NUMBER="${{ github.event.inputs.pr_number }}"
+            PR_JSON="$(gh pr view "$PR_NUMBER" --json headRefOid,baseRefName,baseRefOid)"
+            HEAD_SHA="$(jq -r '.headRefOid' <<<"$PR_JSON")"
+            BASE_REF="$(jq -r '.baseRefName' <<<"$PR_JSON")"
+            BASE_SHA="$(jq -r '.baseRefOid' <<<"$PR_JSON")"
+          fi
+
+          git check-ref-format --branch "$BASE_REF" >/dev/null
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+
+  sdd-contract:
+    name: SDD — contrato da mudança no SHA do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: resolve-context
+    steps:
+      - name: Checkout do SHA exato do PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-context.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Validar contrato SDD contra a base real do PR
+        env:
+          HEAD_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+          BASE_REF: ${{ needs.resolve-context.outputs.base_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git check-ref-format --branch "$BASE_REF" >/dev/null
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          python scripts/sdd_gate.py \
+            --base-ref "$BASE_REF" \
+            --head-sha "$HEAD_SHA"
+
+  isolated-validation:
+    name: Validação isolada do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: resolve-context
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-context.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Guardrails enterprise
+        run: python scripts/ci_enterprise_guardrails.py
+
+      - name: Smoke Python scripts críticos
+        shell: bash
+        run: |
+          python -m py_compile scripts/ci_enterprise_guardrails.py
+          if [ -f scripts/runtime_health_validator.py ]; then
+            python -m py_compile scripts/runtime_health_validator.py
+          fi
+          if [ -f scripts/runtime_merge_queue_gate.py ]; then
+            python -m py_compile scripts/runtime_merge_queue_gate.py
+          fi
+
+      - name: Detectar frontend
+        id: frontend
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=frontend" >> "$GITHUB_OUTPUT"
+          elif [ -f package.json ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "workdir=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.frontend.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Instalar dependências frontend
+        if: steps.frontend.outputs.enabled == 'true'
+        working-directory: ${{ steps.frontend.outputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Lint e typecheck frontend
+        if: steps.frontend.outputs.enabled == 'true'
+        working-directory: ${{ steps.frontend.outputs.workdir }}
+        shell: bash
+        run: |
+          npm run lint --if-present
+          npm run typecheck --if-present
+
+  temporary-integration:
+    name: Integração temporária contra base real do PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [resolve-context, isolated-validation]
+    steps:
+      - name: Checkout com histórico completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preparar branch temporária de integração
+        env:
+          PR_NUMBER: ${{ needs.resolve-context.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+          BASE_REF: ${{ needs.resolve-context.outputs.base_ref }}
+          BASE_SHA: ${{ needs.resolve-context.outputs.base_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "reqsys-governed-merge-queue"
+          git config user.email "actions@github.com"
+          git check-ref-format --branch "$BASE_REF" >/dev/null
+
+          mkdir -p artifacts/governed-merge-queue
+          jq -n \
+            --arg correlation_id "${{ env.CORRELATION_ID }}" \
+            --arg pr_number "$PR_NUMBER" \
+            --arg head_sha "$HEAD_SHA" \
+            --arg base_ref "$BASE_REF" \
+            --arg base_sha "$BASE_SHA" \
+            '{
+              correlation_id: $correlation_id,
+              pr_number: ($pr_number | tonumber),
+              head_sha: $head_sha,
+              base_ref: $base_ref,
+              base_sha: $base_sha,
+              integration_strategy: "merge-head-onto-real-pr-base"
+            }' > artifacts/governed-merge-queue/integration-context.json
+
+          git fetch --no-tags origin \
+            "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git checkout -B "tmp/governed-merge-queue/${PR_NUMBER}" "origin/${BASE_REF}"
+          git merge --no-commit --no-ff "$HEAD_SHA"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Smoke runtime validator em integração temporária
+        shell: bash
+        run: |
+          python scripts/runtime_health_validator.py \
+            --repo "${{ github.repository }}" \
+            --branch "tmp/governed-merge-queue/${{ needs.resolve-context.outputs.pr_number }}" \
+            --mode report_only \
+            --output-dir artifacts/governed-merge-queue
+
+      - name: Publicar evidências da fila governada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-merge-queue-evidence
+          path: artifacts/governed-merge-queue/
+          if-no-files-found: error
+          retention-days: 30
+
+  # REQSYS_CURRENT_SHA_STABILITY_GATE
+  current-sha-stability:
+    name: Estabilidade dos workflows no SHA atual
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: resolve-context
+    steps:
+      - name: Checkout do SHA avaliado
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-context.outputs.head_sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Aguardar registro e conclusão dos workflows críticos
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.resolve-context.outputs.pr_number }}
+          EVALUATED_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-merge-queue .tmp/current-sha-stability
+          policy="governance/merge/current-sha-required-workflows.json"
+          max_attempts="$(jq -r '.max_attempts' "$policy")"
+          poll_seconds="$(jq -r '.poll_seconds' "$policy")"
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            current_sha="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid' 2>/dev/null)" \
+              || { echo "Aviso: falha transitória ao obter SHA do PR na tentativa $attempt; retentando."; sleep "$poll_seconds"; continue; }
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/runs" \
+              -f head_sha="$EVALUATED_SHA" \
+              -f event="pull_request" \
+              -f per_page=100 \
+              > .tmp/current-sha-stability/workflow-runs.json \
+              || { echo "Aviso: falha transitória na API do GitHub na tentativa $attempt; retentando."; sleep "$poll_seconds"; continue; }
+
+            set +e
+            python scripts/evaluate_current_sha_workflow_stability.py \
+              --runs .tmp/current-sha-stability/workflow-runs.json \
+              --policy "$policy" \
+              --evaluated-sha "$EVALUATED_SHA" \
+              --current-sha "$current_sha" \
+              --output artifacts/governed-merge-queue/current-sha-stability.json
+            evaluation_code=$?
+            set -e
+
+            if [[ "$evaluation_code" == "0" ]]; then
+              echo "Workflows críticos estabilizados para $EVALUATED_SHA na tentativa $attempt."
+              break
+            fi
+
+            decision="$(jq -r '.decision' artifacts/governed-merge-queue/current-sha-stability.json)"
+            echo "Tentativa $attempt/$max_attempts: $decision"
+            if [[ "$decision" == "head_sha_changed" ]]; then
+              echo "O head do PR mudou durante a avaliação; invalidando a decisão anterior."
+              exit 1
+            fi
+            if [[ "$attempt" == "$max_attempts" ]]; then
+              echo "Os workflows críticos não estabilizaram dentro da política governada."
+              exit 1
+            fi
+            sleep "$poll_seconds"
+          done
+
+      - name: Publicar evidência de estabilidade do SHA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-sha-workflow-stability
+          path: artifacts/governed-merge-queue/current-sha-stability.json
+          if-no-files-found: error
+          retention-days: 30
+
+  merge-queue-gate:
+    name: Gate de merge governado
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [resolve-context, sdd-contract, isolated-validation, temporary-integration, current-sha-stability]
+    if: always()
+    outputs:
+      eligible: ${{ steps.policy.outputs.eligible }}
+      allow_auto_merge: ${{ steps.policy.outputs.allow_auto_merge }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Baixar evidência de estabilidade do SHA atual
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: current-sha-workflow-stability
+          path: artifacts/governed-merge-queue
+
+      - name: Garantir fallback de estabilidade do SHA
+        env:
+          EVALUATED_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+          STABILITY_RESULT: ${{ needs.current-sha-stability.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-merge-queue
+          if [ -f artifacts/governed-merge-queue/current-sha-stability.json ]; then
+            exit 0
+          fi
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          policy = json.loads(
+              Path("governance/merge/current-sha-required-workflows.json").read_text(encoding="utf-8")
+          )
+          required = policy.get("required_workflows") or []
+          allowed = policy.get("allowed_conclusions") or ["success", "neutral", "skipped"]
+          report = {
+              "schema_version": "1.0.0",
+              "contract": "reqsys-current-sha-workflow-stability",
+              "observed_at": datetime.now(UTC).isoformat(),
+              "evaluated_sha": os.environ["EVALUATED_SHA"],
+              "current_sha": os.environ["EVALUATED_SHA"],
+              "same_sha": True,
+              "stable": False,
+              "decision": "stability_artifact_missing",
+              "required_workflows": required,
+              "allowed_conclusions": allowed,
+              "missing_workflows": required,
+              "incomplete_workflows": [],
+              "failed_workflows": [],
+              "observed_workflows": [],
+              "absence_is_success": False,
+              "production_touched": False,
+              "notes": [
+                  "Artifact current-sha-workflow-stability ausente na etapa final; bloqueio mantido por fallback governado.",
+                  f"Resultado bruto do job current-sha-stability: {os.environ['STABILITY_RESULT']}.",
+              ],
+          }
+          Path("artifacts/governed-merge-queue/current-sha-stability.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Consolidar política e elegibilidade
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/governed-merge-queue
+
+          SDD="${{ needs.sdd-contract.result }}"
+          ISOLATED="${{ needs.isolated-validation.result }}"
+          INTEGRATION="${{ needs.temporary-integration.result }}"
+          STABILITY="${{ needs.current-sha-stability.result }}"
+          CI_STATUS="green"
+          RUNTIME_SMOKE="green"
+          CONTRACTS="green"
+
+          if [ "$SDD" != "success" ] || [ "$ISOLATED" != "success" ] || [ "$STABILITY" != "success" ]; then
+            CI_STATUS="red"
+          fi
+          if [ "$INTEGRATION" != "success" ]; then
+            RUNTIME_SMOKE="red"
+            CONTRACTS="red"
+          fi
+
+          python scripts/runtime_merge_queue_gate.py \
+            --lane runtime-governance \
+            --ci "$CI_STATUS" \
+            --runtime-smoke "$RUNTIME_SMOKE" \
+            --incidents none-critical \
+            --contracts "$CONTRACTS" \
+            --mergeable true \
+            --output artifacts/governed-merge-queue/runtime-merge-queue-gate.json \
+            --json || true
+
+          ELIGIBLE="false"
+          if python -c "import json; print(json.load(open('artifacts/governed-merge-queue/runtime-merge-queue-gate.json'))['eligible'])" | grep -q True; then
+            ELIGIBLE="true"
+          fi
+
+          ALLOW_AUTO_MERGE="false"
+          if gh api repos/${{ github.repository }} --jq '.allow_auto_merge' 2>/dev/null | grep -q true; then
+            ALLOW_AUTO_MERGE="true"
+          fi
+
+          NATIVE_AUTO_MERGE="false"
+          if [ "$ALLOW_AUTO_MERGE" = "true" ]; then
+            NATIVE_AUTO_MERGE="true"
+          fi
+
+          jq -n \
+            --arg correlation_id "${{ env.CORRELATION_ID }}" \
+            --arg pr_number "${{ needs.resolve-context.outputs.pr_number }}" \
+            --arg head_sha "${{ needs.resolve-context.outputs.head_sha }}" \
+            --arg base_ref "${{ needs.resolve-context.outputs.base_ref }}" \
+            --arg base_sha "${{ needs.resolve-context.outputs.base_sha }}" \
+            --arg eligible "$ELIGIBLE" \
+            --arg allow_auto_merge "$ALLOW_AUTO_MERGE" \
+            --arg native_auto_merge_available "$NATIVE_AUTO_MERGE" \
+            --arg sdd_contract_result "$SDD" \
+            --arg isolated_result "$ISOLATED" \
+            --arg integration_result "$INTEGRATION" \
+            --arg stability_result "$STABILITY" \
+            --arg merge_path "governed_pr_automation" \
+            --slurpfile runtime_gate artifacts/governed-merge-queue/runtime-merge-queue-gate.json \
+            --slurpfile sha_stability artifacts/governed-merge-queue/current-sha-stability.json \
+            '{
+              correlation_id: $correlation_id,
+              pr_number: ($pr_number | tonumber),
+              head_sha: $head_sha,
+              base_ref: $base_ref,
+              base_sha: $base_sha,
+              eligible: ($eligible == "true"),
+              allow_auto_merge: ($allow_auto_merge == "true"),
+              native_auto_merge_available: ($native_auto_merge_available == "true"),
+              merge_path: $merge_path,
+              integration_strategy: "merge-head-onto-real-pr-base",
+              runtime_merge_queue_gate: $runtime_gate[0],
+              preview_environment_contract: "progressive-required-via-workflow",
+              validation_results: {
+                sdd_contract: $sdd_contract_result,
+                isolated_validation: $isolated_result,
+                temporary_integration: $integration_result,
+                current_sha_stability: $stability_result
+              },
+              current_sha_stability: $sha_stability[0],
+              notes: [
+                "A integração temporária usa a base real declarada pelo PR, incluindo PRs empilhados.",
+                "Auto-merge nativo depende de allow_auto_merge=true no repositório.",
+                "Preview Environment Contract é evidencia progressiva obrigatoria quando workflow estiver presente.",
+                "Com allow_auto_merge=false, usar Governed PR Automation ou merge manual após demais gates."
+              ]
+            }' > artifacts/governed-merge-queue/policy.json
+
+          echo "eligible=$ELIGIBLE" >> "$GITHUB_OUTPUT"
+          echo "allow_auto_merge=$ALLOW_AUTO_MERGE" >> "$GITHUB_OUTPUT"
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # Governed Merge Queue
+
+          | Estágio | Resultado |
+          |---|---|
+          | Base real do PR | \`${{ needs.resolve-context.outputs.base_ref }}\` |
+          | Base SHA | \`${{ needs.resolve-context.outputs.base_sha }}\` |
+          | SDD no SHA do PR | \`$SDD\` |
+          | Validação isolada | \`$ISOLATED\` |
+          | Integração temporária | \`$INTEGRATION\` |
+          | Estabilidade do SHA atual | \`$STABILITY\` |
+          | Runtime merge queue gate | \`$ELIGIBLE\` |
+          | Preview Environment Contract | \`progressive-required-via-workflow\` |
+          | allow_auto_merge (repo) | \`$ALLOW_AUTO_MERGE\` |
+
+          ## Decisão
+
+          - \`success\`: PR elegível para fila de merge após demais checks obrigatórios.
+          - \`failure\`: bloquear merge e corrigir regressão antes de revalidar.
+          - PRs empilhados são validados contra sua base declarada, sem falso conflito contra \`main\`.
+          - Auto-merge nativo depende de \`allow_auto_merge=true\` no repositório.
+          - Enquanto \`allow_auto_merge=false\`, o merge segue via **Governed PR Automation** ou manual com label \`governed-merge-approved\`.
+          EOF
+
+          if [ "$ELIGIBLE" != "true" ]; then
+            exit 1
+          fi
+
+      - name: Sincronizar label de elegibilidade
+        if: always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = Number('${{ needs.resolve-context.outputs.pr_number }}');
+            const eligible = '${{ steps.policy.outputs.eligible }}' === 'true';
+            const label = 'merge-queue:eligible';
+            const { owner, repo } = context.repo;
+
+            const ensureLabel = async () => {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: label });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: label,
+                  color: '1d76db',
+                  description: 'PR elegível para fila de merge governada após validação isolada e integração temporária',
+                });
+              }
+            };
+
+            const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const hasLabel = labels.some((item) => item.name === label);
+
+            if (eligible) {
+              await ensureLabel();
+              if (!hasLabel) {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  labels: [label],
+                });
+              }
+              return;
+            }
+
+            if (hasLabel) {
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: prNumber,
+                name: label,
+              });
+            }
+
+      - name: Publicar evidência de política
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-merge-queue-policy-evidence
+          path: |
+            artifacts/governed-merge-queue/policy.json
+            artifacts/governed-merge-queue/runtime-merge-queue-gate.json
+            artifacts/governed-merge-queue/current-sha-stability.json
+          if-no-files-found: error
+          retention-days: 30

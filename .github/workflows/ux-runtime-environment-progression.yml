@@ -1,0 +1,74 @@
+name: UX Runtime Environment Progression
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_runtime_environment_progression.py"
+      - "tests/test_build_ux_runtime_environment_progression.py"
+      - ".github/workflows/ux-runtime-environment-progression.yml"
+  workflow_run:
+    workflows: ["UX Runtime Evidence Ingestion"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-runtime-environment-progression-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_ux_runtime_environment_progression.py
+          python -m unittest tests/test_build_ux_runtime_environment_progression.py -v
+      - name: Download verified runtime ingestion artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: ux-runtime-evidence-post-merge-audit
+          path: .tmp/upstream
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Prepare governed inputs
+        run: |
+          mkdir -p .tmp/progression/output
+          HISTORY=.tmp/upstream/runtime-evidence-history.json
+          test -f "$HISTORY" || printf '%s\n' '[]' > .tmp/progression/history.json
+          if test -f "$HISTORY"; then cp "$HISTORY" .tmp/progression/history.json; fi
+          printf '%s\n' '{"cards":[]}' > .tmp/progression/dashboard.json
+      - name: Build DEV STG PROD progression
+        run: |
+          python scripts/build_ux_runtime_environment_progression.py \
+            --history .tmp/progression/history.json \
+            --dashboard .tmp/progression/dashboard.json \
+            --output-dir .tmp/progression/output
+      - name: Enforce advisory guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('.tmp/progression/output/ux-runtime-environment-progression.json').read_text())
+          assert report['mode'] == 'advisory'
+          assert report['production_blocker'] is False
+          assert report['human_approval_required'] is True
+          assert report['automatic_promotion'] is False
+          assert report['sequence'] == ['dev', 'stg', 'prod']
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-runtime-environment-progression
+          path: .tmp/progression/output
+          retention-days: 90

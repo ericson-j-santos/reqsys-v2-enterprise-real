@@ -1,0 +1,21 @@
+mcs.metadata:
+  componentName: Fallback
+  description: This system topic triggers when the user's utterance does not match any existing topic.
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnUnknownIntent
+  id: main
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_fallback
+      conditions:
+        - id: conditionItem_retry
+          condition: =System.FallbackCount < 3
+          actions:
+            - kind: SendActivity
+              id: sendMessage_fallback
+              activity: Nao entendi seu pedido. Pode reformular? Voce pode falar sobre demandas, aprovacoes ou releases do ReqSys.
+      elseActions:
+        - kind: SendActivity
+          id: sendMessage_escalar
+          activity: Vou encaminhar sua solicitacao para um atendente humano via Teams (guardrail ADR-011, sem acao autonoma).

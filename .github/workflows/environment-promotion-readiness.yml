@@ -1,0 +1,105 @@
+name: Environment Promotion Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "SHA esperado em DEV/STG/PROD. Vazio usa github.sha."
+        required: false
+        type: string
+        default: ""
+      strict:
+        description: "Falhar se não estiver pronto para promoção PROD"
+        required: true
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - "scripts/build_environment_promotion_readiness.py"
+      - "scripts/validate_environment_promotion_readiness.py"
+      - "tests/test_environment_promotion_readiness.py"
+      - ".github/workflows/environment-promotion-readiness.yml"
+      - "artifacts/fly-homologation/**"
+      - "audit/fly-homologation/**"
+      - "docs/ops-dashboard/data/fly-homologation-evidence-*.json"
+      - "artifacts/executive-readiness-gate/**"
+      - "docs/ops-dashboard/data/runtime-executive-index.json"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_environment_promotion_readiness.py"
+      - "scripts/validate_environment_promotion_readiness.py"
+      - "tests/test_environment_promotion_readiness.py"
+      - ".github/workflows/environment-promotion-readiness.yml"
+      - "artifacts/fly-homologation/**"
+      - "audit/fly-homologation/**"
+      - "docs/ops-dashboard/data/fly-homologation-evidence-*.json"
+      - "artifacts/executive-readiness-gate/**"
+      - "docs/ops-dashboard/data/runtime-executive-index.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: environment-promotion-readiness-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build DEV STG PROD promotion readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: python -m unittest tests/test_environment_promotion_readiness.py
+
+      - name: Build promotion readiness evidence
+        run: |
+          set -euo pipefail
+          expected_sha="${{ inputs.expected_sha || github.sha }}"
+          strict_flag=""
+          if [ "${{ inputs.strict || false }}" = "true" ]; then
+            strict_flag="--strict"
+          fi
+          python scripts/build_environment_promotion_readiness.py \
+            --repo "${{ github.repository }}" \
+            --expected-sha "$expected_sha" \
+            --output artifacts/environment-promotion-readiness/environment-promotion-readiness.json \
+            $strict_flag
+          python scripts/validate_environment_promotion_readiness.py
+
+      - name: Upload promotion readiness artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-promotion-readiness
+          path: artifacts/environment-promotion-readiness/environment-promotion-readiness.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          set -euo pipefail
+          echo "# Environment Promotion Readiness" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('artifacts/environment-promotion-readiness/environment-promotion-readiness.json').read_text())
+          print(f"Decision: `{payload['decision']}`")
+          print(f"Ready for PROD promotion: `{payload['ready_for_prod_promotion']}`")
+          print(f"Coverage: `{payload['coverage']['coverage_percent']}%`")
+          print("")
+          print("## Environments")
+          print("| Env | Available | OK | Blocking issues |")
+          print("|---|---:|---:|---:|")
+          for item in payload['environments']:
+              print(f"| {item['environment']} | {item['available']} | {item['ok']} | {item['blocking_issue_count']} |")
+          PY

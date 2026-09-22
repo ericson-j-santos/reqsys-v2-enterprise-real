@@ -1,0 +1,28 @@
+services:
+  teams-24x7-worker:
+    image: python:3.12-slim
+    restart: unless-stopped
+    working_dir: /workspace
+    command:
+      - python
+      - scripts/pc24x7_teams_queue.py
+      - --root
+      - /var/lib/reqsys-24x7/teams
+      - worker
+      - --base-url
+      - ${REQSYS_API_BASE_URL:-https://reqsys-api-dev.fly.dev}
+      - --token-file
+      - /run/secrets/reqsys_api_service_token
+      - --interval
+      - "10"
+    environment:
+      - PC24X7_TEAMS_MAX_ATTEMPTS=${PC24X7_TEAMS_MAX_ATTEMPTS:-5}
+    volumes:
+      - .:/workspace:ro
+      - reqsys-teams-24x7-queue:/var/lib/reqsys-24x7/teams
+      - ${REQSYS_API_SERVICE_TOKEN_FILE:?configure REQSYS_API_SERVICE_TOKEN_FILE}:/run/secrets/reqsys_api_service_token:ro
+    networks:
+      - reqsys-net
+
+volumes:
+  reqsys-teams-24x7-queue:

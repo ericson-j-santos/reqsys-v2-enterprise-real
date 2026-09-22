@@ -1,0 +1,30 @@
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Consultar status
+    triggerQueries:
+      - consultar status da demanda
+      - como esta minha solicitacao
+      - ver andamento do requisito
+
+  actions:
+    - kind: Question
+      id: question_referencia
+      variable: Topic.Referencia
+      prompt: Informe o numero ou referencia.
+      entity: StringPrebuiltEntity
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_consultar_status
+      flow: reqsys_ReqSysConsultarStatus
+      input:
+        referencia: =Topic.Referencia
+        correlation_id: =System.ConversationId
+      output:
+        resultado: Topic.ResultadoFlow
+
+    - kind: SendActivity
+      id: sendMessage_success
+      activity: Status consultado. Correlation-Id: {System.ConversationId}

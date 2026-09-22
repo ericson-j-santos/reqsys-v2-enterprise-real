@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Environments Validation</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --green:#22c55e; --yellow:#f59e0b; --red:#ef4444; --blue:#38bdf8; --border:#334155; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:24px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,#111827,#1e293b); }
+    main { max-width:1280px; margin:0 auto; padding:24px; }
+    h1 { margin:0 0 8px; }
+    h2 { margin-top:0; }
+    .subtitle,.small { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
+    .card { border:1px solid var(--border); background:var(--panel); border-radius:14px; padding:18px; box-shadow:0 10px 24px rgba(0,0,0,.25); }
+    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .value { font-size:28px; font-weight:700; margin-top:8px; word-break:break-word; }
+    .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px; }
+    .ready,.low { background:rgba(34,197,94,.16); color:var(--green); border:1px solid rgba(34,197,94,.45); }
+    .degraded,.medium,.local_only,.unknown { background:rgba(245,158,11,.16); color:var(--yellow); border:1px solid rgba(245,158,11,.45); }
+    .unavailable,.high,.failed { background:rgba(239,68,68,.16); color:var(--red); border:1px solid rgba(239,68,68,.45); }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th,td { border-bottom:1px solid var(--border); padding:12px; text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; }
+    a { color:var(--blue); text-decoration:none; }
+    .links { display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; }
+    .link-btn { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:#0b1220; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#020617; padding:12px; border-radius:10px; border:1px solid var(--border); }
+    section { margin-top:20px; }
+    @media (max-width:900px){ .grid{grid-template-columns:repeat(2,1fr);} }
+    @media (max-width:600px){ main,header{padding:16px;} .grid{grid-template-columns:1fr;} table{font-size:13px;} }
+  </style>
+</head>
+<body>
+  <header><h1>Environments Validation</h1><p class="subtitle">Cards por ambiente e semáforo operacional a partir de <code>data/environments-validation.json</code>.</p></header>
+  <main>
+    <section class="grid">
+      <div class="card"><div class="label">Status geral</div><div id="overall-status" class="value">Carregando</div></div>
+      <div class="card"><div class="label">Readiness médio</div><div id="average-readiness" class="value">-</div></div>
+      <div class="card"><div class="label">Ambientes</div><div id="environment-total" class="value">-</div></div>
+      <div class="card"><div class="label">Modo</div><div id="validation-mode" class="value">-</div></div>
+    </section>
+    <section class="card"><h2>Semáforo por ambiente</h2><div class="grid" id="environment-cards"></div></section>
+    <section class="card"><h2>Detalhamento técnico</h2><table><thead><tr><th>Ambiente</th><th>Frontend</th><th>API</th><th>Status</th><th>Risco</th><th>Readiness</th><th>Checks</th></tr></thead><tbody id="environment-table"><tr><td colspan="7">Carregando...</td></tr></tbody></table></section>
+    <section class="card"><h2>Links e contrato</h2><div class="links"><a class="link-btn" href="./index.html">Ops Dashboard</a><a class="link-btn" href="./strategic-governance.html">Strategic Governance</a><a class="link-btn" href="./data/environments-validation.json">environments-validation.json</a></div><details><summary>Contrato bruto</summary><pre id="raw">{}</pre></details></section>
+  </main>
+  <script>
+    const badgeClass = (value) => ['ready','degraded','unavailable','local_only','unknown','low','medium','high','failed'].includes(value) ? value : 'unknown';
+    const safe = (value, fallback = '-') => value === undefined || value === null || value === '' ? fallback : value;
+    const badge = (value) => `<span class="badge ${badgeClass(value)}">${safe(value, 'unknown')}</span>`;
+    async function fetchOptionalJson(path, fallback) { try { const response = await fetch(path, { cache: 'no-store' }); if (!response.ok) throw new Error(`HTTP ${response.status}`); return { available:true, data:await response.json(), source:path, error:null }; } catch (error) { return { available:false, data:fallback, source:path, error:error.message }; } }
+    function renderEnvironmentCards(environments) { document.getElementById('environment-cards').innerHTML = environments.map((env) => `<div class="card"><div class="label">${safe(env.name)}</div><div class="value">${badge(env.status)}</div><p class="small">Readiness: ${safe(env.readiness_percent, 0)}% · Risco: ${safe(env.operational_risk)}</p><p class="small">${safe(env.notes)}</p></div>`).join('') || '<div class="card">Nenhum ambiente publicado.</div>'; }
+    function renderEnvironmentTable(environments) { document.getElementById('environment-table').innerHTML = environments.map((env) => { const frontend = env.checks?.frontend || {}; const api = env.checks?.api || {}; return `<tr><td>${safe(env.name)}</td><td><a href="${env.frontend}">${env.frontend}</a><br><span class="small">${safe(frontend.status_code)} · ${safe(frontend.mode)} · ${safe(frontend.error, 'sem erro')}</span></td><td><a href="${env.api}">${env.api}</a><br><span class="small">${safe(api.status_code)} · ${safe(api.mode)} · ${safe(api.error, 'sem erro')}</span></td><td>${badge(env.status)}</td><td>${badge(env.operational_risk)}</td><td>${safe(env.readiness_percent, 0)}%</td><td>${safe(env.ok_checks, 0)}/${safe(env.total_checks, 0)} ok · ${safe(env.skipped_checks, 0)} skipped</td></tr>`; }).join('') || '<tr><td colspan="7">Nenhum ambiente publicado.</td></tr>'; }
+    async function loadEnvironmentsValidation() { const fallback = { summary:{ overall_status:'unknown', average_readiness_percent:0, environments_total:0, mode:'fallback_local' }, environments:[], guardrails:['fallback_local'] }; const response = await fetchOptionalJson('./data/environments-validation.json', fallback); const payload = response.data || fallback; const summary = payload.summary || fallback.summary; const environments = payload.environments || []; document.getElementById('overall-status').innerHTML = badge(summary.overall_status || 'unknown'); document.getElementById('average-readiness').textContent = `${safe(summary.average_readiness_percent, 0)}%`; document.getElementById('environment-total').textContent = safe(summary.environments_total, environments.length); document.getElementById('validation-mode').textContent = safe(summary.mode); renderEnvironmentCards(environments); renderEnvironmentTable(environments); document.getElementById('raw').textContent = JSON.stringify({ available:response.available, source:response.source, fallback_error:response.error, payload }, null, 2); }
+    loadEnvironmentsValidation().catch((error) => { document.getElementById('overall-status').innerHTML = badge('failed'); document.getElementById('environment-table').innerHTML = `<tr><td colspan="7">Falha ao carregar environments-validation.json: ${error.message}</td></tr>`; document.getElementById('raw').textContent = JSON.stringify({ error:error.message }, null, 2); });
+  </script>
+</body>
+</html>

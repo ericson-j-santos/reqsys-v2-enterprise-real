@@ -1,0 +1,37 @@
+name: Validar Painel de Ciclo ReqSys
+
+on:
+  pull_request:
+    paths:
+      - "docs/painel-ciclo-completo-reqsys.html"
+      - "docs/ciclo-completo/**"
+      - "scripts/validar_painel_ciclo.py"
+      - ".github/workflows/validar-painel-ciclo.yml"
+  workflow_dispatch:
+
+jobs:
+  validar-painel-ciclo:
+    name: Validar painel HTML + JSON
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar painel de ciclo
+        run: python scripts/validar_painel_ciclo.py
+
+      - name: Publicar painel como artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reqsys-painel-ciclo-completo
+          path: |
+            docs/painel-ciclo-completo-reqsys.html
+            docs/ciclo-completo/estado-ciclo-reqsys.json
+            docs/ciclo-completo/TEST_REPORT.md
+          if-no-files-found: error

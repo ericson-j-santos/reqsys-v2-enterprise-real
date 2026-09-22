@@ -1,0 +1,63 @@
+{
+  "ok": true,
+  "schema_version": "1.1.0",
+  "strategy": "fly-enterprise-sync",
+  "promotion_order": [
+    "dev",
+    "hml",
+    "prod"
+  ],
+  "environments": [
+    {
+      "environment": "dev",
+      "ok": true,
+      "fly_config": "backend/fly.dev.toml",
+      "api_app": "reqsys-api-dev",
+      "app_env": "development",
+      "volume": "reqsys_data_dev",
+      "min_machines_running": 1,
+      "smoke_endpoints": [
+        "/health",
+        "/api/runtime/health",
+        "/api/runtime/readiness",
+        "/api/runtime/liveness"
+      ],
+      "approval_required": false
+    },
+    {
+      "environment": "hml",
+      "ok": true,
+      "fly_config": "backend/fly.staging.toml",
+      "api_app": "reqsys-api-stg",
+      "app_env": "staging",
+      "volume": "reqsys_data_stg",
+      "min_machines_running": 1,
+      "smoke_endpoints": [
+        "/health",
+        "/api/runtime/health",
+        "/api/runtime/readiness",
+        "/api/runtime/liveness"
+      ],
+      "approval_required": true
+    },
+    {
+      "environment": "prod",
+      "ok": true,
+      "fly_config": "backend/fly.toml",
+      "api_app": "reqsys-api",
+      "app_env": "production",
+      "volume": "reqsys_data",
+      "min_machines_running": 1,
+      "smoke_endpoints": [
+        "/health",
+        "/api/runtime/health",
+        "/api/runtime/readiness",
+        "/api/runtime/liveness",
+        "/api/runtime/metrics"
+      ],
+      "approval_required": true
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}

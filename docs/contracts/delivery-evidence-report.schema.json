@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/delivery-evidence-report.schema.json",
+  "title": "ReqSys Delivery Evidence Report Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "evidence_count", "type_counts", "coverage_percent", "status", "evidences", "mode"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "evidence_count": { "type": "integer", "minimum": 0 },
+    "type_counts": { "type": "object" },
+    "coverage_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "status": { "type": "string" },
+    "evidences": { "type": "array", "items": { "type": "object" } },
+    "mode": { "type": "string", "enum": ["report_only"] }
+  }
+}

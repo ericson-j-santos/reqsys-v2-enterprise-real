@@ -1,0 +1,134 @@
+name: Runtime Environment Promotion Dashboard
+
+on:
+  pull_request:
+    paths:
+      - "scripts/enrich_runtime_executive_environment_promotion.py"
+      - "scripts/validate_runtime_executive_environment_promotion.py"
+      - "scripts/build_environment_promotion_readiness.py"
+      - "scripts/validate_environment_promotion_readiness.py"
+      - "tests/test_runtime_executive_environment_promotion.py"
+      - ".github/workflows/runtime-environment-promotion-dashboard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: runtime-env-promotion-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate environment promotion dashboard contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile scripts
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/build_environment_promotion_readiness.py
+          python -m py_compile scripts/validate_environment_promotion_readiness.py
+          python -m py_compile scripts/enrich_runtime_executive_environment_promotion.py
+          python -m py_compile scripts/validate_runtime_executive_environment_promotion.py
+
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          python -m unittest tests/test_environment_promotion_readiness.py
+          python -m unittest tests/test_runtime_executive_environment_promotion.py
+
+      - name: Build synthetic green environment evidence
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-readiness-gate artifacts/fly-homologation docs/ops-dashboard/data
+          cat > artifacts/executive-readiness-gate/executive-readiness-gate.json <<'JSON'
+          {
+            "executive_readiness": {
+              "ready_for_production": true,
+              "decision": "READY_FOR_PRODUCTION",
+              "score": 99,
+              "risk": "low",
+              "blockers": []
+            }
+          }
+          JSON
+          cat > docs/ops-dashboard/data/runtime-executive-index.json <<'JSON'
+          {
+            "schema_version": "1.2.0",
+            "summary": {
+              "production_ready": true,
+              "status": "passed",
+              "risk": "low"
+            },
+            "cards": {},
+            "links": {},
+            "guardrails": []
+          }
+          JSON
+          for env in dev stg prod; do
+            cat > "artifacts/fly-homologation/evidence-${env}.json" <<JSON
+          {
+            "ok": true,
+            "environment": "${env}",
+            "base_url": "https://${env}.example.test",
+            "expected_sha": "${GITHUB_SHA}",
+            "observed_sha": "${GITHUB_SHA}",
+            "probes": [{"name": "synthetic-smoke", "ok": true}],
+            "blocking_issues": []
+          }
+          JSON
+          done
+
+      - name: Generate and validate promotion readiness
+        run: |
+          set -euo pipefail
+          python scripts/build_environment_promotion_readiness.py \
+            --repo "${{ github.repository }}" \
+            --expected-sha "${{ github.sha }}"
+          python scripts/validate_environment_promotion_readiness.py
+
+      - name: Enrich runtime executive index
+        run: |
+          set -euo pipefail
+          python scripts/enrich_runtime_executive_environment_promotion.py
+          python scripts/validate_runtime_executive_environment_promotion.py
+          python -m json.tool docs/ops-dashboard/data/runtime-executive-index.json >/tmp/runtime-executive-index.validated.json
+          python -m json.tool docs/ops-dashboard/data/environment-promotion-readiness.json >/tmp/environment-promotion-readiness.validated.json
+
+      - name: Publish runtime promotion contract
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-environment-promotion-dashboard
+          path: |
+            docs/ops-dashboard/data/runtime-executive-index.json
+            docs/ops-dashboard/data/environment-promotion-readiness.json
+            artifacts/environment-promotion-readiness/environment-promotion-readiness.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize readiness
+        run: |
+          set -euo pipefail
+          {
+            echo "# Runtime Environment Promotion Dashboard"
+            echo ""
+            echo "Artifact publicado: runtime-environment-promotion-dashboard"
+            echo "Contrato público: data/environment-promotion-readiness.json"
+            echo "Runtime executive index enriquecido: data/runtime-executive-index.json"
+            echo "Guardrail: DEV/STG/PROD exigidos antes de promoção produtiva."
+            echo "Escopo: report-only, sem deploy, sem secrets e sem chamada externa no runtime público."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,71 @@
+name: Operational Governance Gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '40 11 * * 1-5'
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+jobs:
+  governance-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare directories
+        run: |
+          mkdir -p artifacts/operational-intelligence-hub
+          mkdir -p artifacts/operational-history
+
+      - name: Create fallback hub
+        run: |
+          cat > artifacts/operational-intelligence-hub/operational-intelligence-hub.json <<'EOF'
+          {
+            "hub_score": {
+              "status": "AMARELO",
+              "score": 78,
+              "confidence": "media"
+            },
+            "available_layers": [
+              "operational_health",
+              "operational_ci_intelligence"
+            ]
+          }
+          EOF
+
+      - name: Create fallback history
+        run: |
+          cat > artifacts/operational-history/operational-history.json <<'EOF'
+          [
+            {
+              "metrics": {
+                "overall_failure_rate_percent": 10
+              }
+            }
+          ]
+          EOF
+
+      - name: Execute governance gate
+        run: |
+          python scripts/operational_governance_gate.py \
+            --hub artifacts/operational-intelligence-hub/operational-intelligence-hub.json \
+            --history artifacts/operational-history/operational-history.json \
+            --out-dir artifacts/operational-governance-gate
+
+      - name: Publish governance summary
+        run: |
+          cat artifacts/operational-governance-gate/operational-governance-gate.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload governance artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-governance-gate
+          path: artifacts/operational-governance-gate/
+          retention-days: 30

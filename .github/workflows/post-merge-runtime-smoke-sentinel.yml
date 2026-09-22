@@ -1,0 +1,93 @@
+name: Post-merge Runtime Smoke Sentinel
+
+on:
+  workflow_run:
+    workflows: ["Runtime Production Smoke Governed"]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/post-merge-runtime-smoke-sentinel.yml"
+      - "scripts/post_merge_runtime_smoke_sentinel.py"
+      - "tests/test_post_merge_runtime_smoke_sentinel.py"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: post-merge-runtime-smoke-sentinel-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Validate sentinel contract
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/post_merge_runtime_smoke_sentinel.py
+          python -m pytest tests/test_post_merge_runtime_smoke_sentinel.py -q
+
+  sentinel:
+    name: Validate post-merge smoke evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    needs: contract
+    if: github.event_name == 'workflow_run'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate runtime smoke run and artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/post_merge_runtime_smoke_sentinel.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --event-path "${GITHUB_EVENT_PATH}" \
+            --output-dir artifacts/post-merge-runtime-smoke-sentinel
+
+      - name: Summary
+        if: always()
+        run: |
+          set -euo pipefail
+          summary="artifacts/post-merge-runtime-smoke-sentinel/summary.md"
+          if [[ -f "${summary}" ]]; then
+            cat "${summary}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Post-merge runtime smoke sentinel summary unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload sentinel evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-runtime-smoke-sentinel
+          path: artifacts/post-merge-runtime-smoke-sentinel/
+          if-no-files-found: error
+          retention-days: 30

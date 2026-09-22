@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0.0",
+  "control_id": "BACEN-03",
+  "exercise_id": "bacen-03-tabletop-ransomware-v1",
+  "exercise_type": "automated_tabletop_simulation",
+  "scenario": {
+    "title": "Indisponibilidade e suspeita de ransomware em serviço crítico",
+    "severity": "critical",
+    "affected_asset": "reqsys-api",
+    "initial_signal": "Taxa de erros elevada, indisponibilidade parcial e alerta de alteração anômala de arquivos",
+    "objectives": [
+      "validar detecção e classificação do incidente",
+      "validar acionamento de papéis e comunicação",
+      "validar contenção, recuperação e preservação de evidências",
+      "registrar decisões e ações corretivas"
+    ]
+  },
+  "participants": [
+    {"role": "INCIDENT_COMMANDER", "required": true},
+    {"role": "SECURITY", "required": true},
+    {"role": "RUNTIME_OPERATOR", "required": true},
+    {"role": "GOVERNANCE", "required": true}
+  ],
+  "timeline_minutes": {
+    "detection": 3,
+    "classification": 7,
+    "containment_started": 12,
+    "stakeholder_notification": 18,
+    "service_recovery": 42
+  },
+  "thresholds_minutes": {
+    "max_detection": 10,
+    "max_classification": 15,
+    "max_containment_started": 30,
+    "max_stakeholder_notification": 60,
+    "max_service_recovery": 240
+  },
+  "decisions": [
+    "declarar incidente crítico e abrir canal de comando",
+    "isolar o componente afetado e bloquear credenciais suspeitas",
+    "preservar logs, traces e snapshots para investigação",
+    "acionar recuperação a partir de artefatos íntegros",
+    "comunicar governança e responsáveis pelo ativo"
+  ],
+  "corrective_actions": [
+    {
+      "id": "BACEN03-ACTION-001",
+      "description": "Revisar regras de detecção para alteração anômala de arquivos",
+      "owner": "SECURITY",
+      "due_days": 30,
+      "status": "planned"
+    },
+    {
+      "id": "BACEN03-ACTION-002",
+      "description": "Executar revisão do runbook de contenção e recuperação",
+      "owner": "RUNTIME_OPERATOR",
+      "due_days": 30,
+      "status": "planned"
+    }
+  ],
+  "review_cycle_days": 90,
+  "production_touched": false
+}

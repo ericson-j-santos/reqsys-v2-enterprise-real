@@ -1,0 +1,135 @@
+name: Noteri Headless Control Plane Activation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-headless-control-plane-activation
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    name: Stage governed AtStartup S4U activation
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 3
+    env:
+      EVIDENCE_FILE: artifacts/noteri-control-plane/headless-activation.json
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Stage immutable one-click UAC launcher on Noteri desktop
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          if ([string]::IsNullOrWhiteSpace($desktop)) { throw 'Desktop path unavailable' }
+
+          $sourceSha = '${{ github.sha }}'
+          if ($sourceSha -notmatch '^[0-9a-fA-F]{40}$') { throw 'Invalid workflow source SHA' }
+
+          $pythonCommand = Get-Command python -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw 'Python executable unavailable for immutable launcher'
+          }
+
+          $stageRoot = Join-Path $env:LOCALAPPDATA "ReqSys\NoteriControlPlaneBootstrap\$sourceSha"
+          $stageScripts = Join-Path $stageRoot 'scripts'
+          New-Item -ItemType Directory -Force $stageScripts | Out-Null
+
+          $files = @(
+            'noteri_control_plane_watchdog.py',
+            'noteri_control_plane_watchdog_uac_launcher.py'
+          )
+          foreach ($name in $files) {
+            $source = Join-Path $env:GITHUB_WORKSPACE "scripts\$name"
+            $target = Join-Path $stageScripts $name
+            if (-not (Test-Path -LiteralPath $source)) { throw "Required source missing: $name" }
+            Copy-Item -LiteralPath $source -Destination $target -Force
+            $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+            $targetHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            if ($sourceHash -ne $targetHash) { throw "Staged file hash mismatch: $name" }
+          }
+
+          $ps1 = Join-Path $desktop 'Ativar-Noteri-Headless.ps1'
+          $cmd = Join-Path $desktop 'Ativar-Noteri-Headless.cmd'
+          @"
+          `$ErrorActionPreference = 'Stop'
+          `$p = Join-Path `$env:LOCALAPPDATA 'ReqSys\NoteriControlPlaneBootstrap\$sourceSha'
+          `$sha = '$sourceSha'
+          `$pythonExe = '$pythonExe'
+          `$launcher = Join-Path `$p 'scripts\noteri_control_plane_watchdog_uac_launcher.py'
+          `$runtime = Join-Path `$env:LOCALAPPDATA 'ReqSys\NoteriControlPlaneWatchdog'
+          `$resultPath = Join-Path `$runtime 'interactive-launch-result.json'
+          `$logPath = Join-Path `$runtime 'interactive-launch.log'
+          New-Item -ItemType Directory -Force `$runtime | Out-Null
+          if (-not (Test-Path -LiteralPath `$launcher)) { throw 'Launcher imutável não encontrado' }
+          if (-not (Test-Path -LiteralPath `$pythonExe)) { throw 'Python imutável não encontrado' }
+          try {
+            `$output = & `$pythonExe "`$launcher" --repo-root "`$p" --source-sha "`$sha" --confirm LAUNCH-NOTERI-CONTROL-PLANE-WATCHDOG-UAC --timeout-seconds 180 2>&1
+            `$exitCode = `$LASTEXITCODE
+            `$output | Out-File -LiteralPath `$logPath -Encoding utf8
+            @{
+              ok = (`$exitCode -eq 0)
+              exit_code = `$exitCode
+              source_sha = `$sha
+              result = if (`$exitCode -eq 0) { 'interactive_launcher_completed' } else { 'interactive_launcher_failed' }
+              observed_at = [DateTimeOffset]::UtcNow.ToString('o')
+            } | ConvertTo-Json -Compress | Set-Content -LiteralPath `$resultPath -Encoding UTF8
+            if (`$exitCode -ne 0) { exit `$exitCode }
+          } catch {
+            @{
+              ok = $false
+              exit_code = 2
+              source_sha = `$sha
+              result = 'interactive_launcher_exception'
+              error_type = `$_.Exception.GetType().Name
+              error = [string]`$_.Exception.Message
+              observed_at = [DateTimeOffset]::UtcNow.ToString('o')
+            } | ConvertTo-Json -Compress | Set-Content -LiteralPath `$resultPath -Encoding UTF8
+            exit 2
+          }
+          Write-Host ''
+          Write-Host 'Ativação concluída. Pressione Enter para fechar.'
+          [void](Read-Host)
+          "@ | Set-Content -LiteralPath $ps1 -Encoding UTF8
+          @'
+          @echo off
+          powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Ativar-Noteri-Headless.ps1"
+          '@ | Set-Content -LiteralPath $cmd -Encoding ASCII
+
+          Write-Host "NOTERI_INTERACTIVE_UAC_LAUNCHER_STAGED=$cmd"
+          Write-Host "NOTERI_IMMUTABLE_SOURCE_SHA=$sourceSha"
+          Write-Host "NOTERI_IMMUTABLE_STAGE_ROOT=$stageRoot"
+
+      - name: Publish staged activation evidence
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force (Split-Path $env:EVIDENCE_FILE) | Out-Null
+          @{
+            ok = $true
+            launcher_staged = $true
+            activation_pending = $true
+            requires_uac_activation = $true
+            remote_uac_attempted = $false
+            source_sha = '${{ github.sha }}'
+            rdc_required = $false
+            production_touched = $false
+            reboot_performed = $false
+          } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:EVIDENCE_FILE -Encoding UTF8
+
+      - name: Upload sanitized activation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-headless-control-plane-${{ github.run_id }}
+          path: artifacts/noteri-control-plane/headless-activation.json
+          if-no-files-found: error
+          retention-days: 30

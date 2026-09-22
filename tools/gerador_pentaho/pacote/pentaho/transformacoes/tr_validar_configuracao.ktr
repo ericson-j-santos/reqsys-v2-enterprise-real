@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transformation>
+  <info>
+    <name>TR_VALIDAR_CONFIGURACAO</name><description>Valida parâmetros antes da transformação principal.</description><extended_description/><trans_version>2.0.0-treino</trans_version><trans_status>0</trans_status><directory>/</directory>
+    <parameters>
+      <parameter><name>API_BASE_URL</name><default_value>http://127.0.0.1:8080</default_value><description>Base da API sintética</description></parameter>
+      <parameter><name>CLIENT_ID</name><default_value>cliente-treinamento</default_value><description>Identidade sintética</description></parameter>
+      <parameter><name>CLIENT_SECRET</name><default_value>segredo-exclusivo-de-treino</default_value><description>Somente treino; injetar em ambientes reais</description></parameter>
+    </parameters>
+    <log><trans-log-table><connection/><schema/><table/><size_limit_lines/><interval/><timeout_days/><field><id>ID_BATCH</id><enabled>Y</enabled><name>ID_BATCH</name></field></trans-log-table></log>
+    <maxdate><connection/><table/><field/><offset>0.0</offset><maxdiff>0.0</maxdiff></maxdate><size_rowset>1000</size_rowset><sleep_time_empty>50</sleep_time_empty><sleep_time_full>50</sleep_time_full><unique_connections>N</unique_connections><feedback_shown>Y</feedback_shown><feedback_size>50000</feedback_size><using_thread_priorities>Y</using_thread_priorities><shared_objects_file/><capture_step_performance>N</capture_step_performance><step_performance_capturing_delay>1000</step_performance_capturing_delay><step_performance_capturing_size_limit>100</step_performance_capturing_size_limit><dependencies/><partitionschemas/><slaveservers/><clusterschemas/>
+  </info>
+  <step>
+    <name>CRIAR_CONTEXTO</name><type>RowGenerator</type><description/><distribute>Y</distribute><copies>1</copies><partitioning><method>none</method><schema_name/></partitioning>
+    <fields><field><name>linha</name><type>Integer</type><format/><currency/><decimal/><group/><nullif>1</nullif><length>-1</length><precision>-1</precision></field></fields><limit>1</limit><never_ending>N</never_ending><interval_in_ms>5000</interval_in_ms><row_time_field/><last_time_field/><GUI><xloc>96</xloc><yloc>144</yloc><draw>Y</draw></GUI>
+  </step>
+  <step>
+    <name>VALIDAR_PARAMETROS</name><type>ScriptValueMod</type><description/><distribute>Y</distribute><copies>1</copies><partitioning><method>none</method><schema_name/></partitioning><compatible>N</compatible><optimizationLevel>9</optimizationLevel>
+    <jsScripts><jsScript><jsScript_type>0</jsScript_type><jsScript_name>validacao</jsScript_name><jsScript_script><![CDATA[
+var apiBaseUrl = getVariable("API_BASE_URL", "");
+var clientId = getVariable("CLIENT_ID", "");
+var clientSecret = getVariable("CLIENT_SECRET", "");
+var configuracao_valida = apiBaseUrl.length > 0 && clientId.length > 0 && clientSecret.length > 0;
+var mensagem_validacao = configuracao_valida ? "CONFIGURACAO_VALIDA" : "PARAMETRO_OBRIGATORIO_AUSENTE";
+if (!configuracao_valida) { throw mensagem_validacao; }
+]]></jsScript_script></jsScript></jsScripts>
+    <fields><field><name>configuracao_valida</name><rename>configuracao_valida</rename><type>Boolean</type><length>-1</length><precision>-1</precision><replace>N</replace></field><field><name>mensagem_validacao</name><rename>mensagem_validacao</rename><type>String</type><length>100</length><precision>-1</precision><replace>N</replace></field></fields><GUI><xloc>304</xloc><yloc>144</yloc><draw>Y</draw></GUI>
+  </step>
+  <step><name>REGISTRAR_VALIDACAO</name><type>WriteToLog</type><description/><distribute>Y</distribute><copies>1</copies><partitioning><method>none</method><schema_name/></partitioning><loglevel>log_level_basic</loglevel><displayHeader>Y</displayHeader><limitRows>N</limitRows><limitRowsNumber>0</limitRowsNumber><logmessage>Configuração de treino validada.</logmessage><fields><field><name>configuracao_valida</name></field><field><name>mensagem_validacao</name></field></fields><GUI><xloc>528</xloc><yloc>144</yloc><draw>Y</draw></GUI></step>
+  <order><hop><from>CRIAR_CONTEXTO</from><to>VALIDAR_PARAMETROS</to><enabled>Y</enabled></hop><hop><from>VALIDAR_PARAMETROS</from><to>REGISTRAR_VALIDACAO</to><enabled>Y</enabled></hop></order>
+  <step_error_handling/>
+</transformation>
+

@@ -1,0 +1,36 @@
+name: User Experience Dashboard Continuous Reliability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 8 * * *'
+  pull_request:
+    paths:
+      - 'scripts/build_user_experience_dashboard_continuous_reliability.py'
+      - 'tests/test_build_user_experience_dashboard_continuous_reliability.py'
+      - '.github/workflows/user-experience-dashboard-continuous-reliability.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile scripts/build_user_experience_dashboard_continuous_reliability.py
+      - name: Test
+        run: python -m unittest tests/test_build_user_experience_dashboard_continuous_reliability.py
+      - name: Build audit artifact
+        run: |
+          mkdir -p artifacts
+          printf '%s\n' '{"status":"validated","mode":"report-only","production_blocker":false,"human_approval_required":true}' > artifacts/user-experience-dashboard-continuous-reliability.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-dashboard-continuous-reliability
+          path: artifacts/user-experience-dashboard-continuous-reliability.json
+          retention-days: 90

@@ -1,0 +1,13 @@
+{
+  "source_pr": 910,
+  "increment": "empty-state-advisory-governance",
+  "state": "implemented",
+  "functional_implementation_already_on_main": true,
+  "governance_gaps_closed": [
+    "unit_test_ranking_and_safe_fallback_in_ci",
+    "post_merge_validation_on_main",
+    "workflow_path_coverage_for_specific_unit_test"
+  ],
+  "production_blocker": false,
+  "human_approval_required": true
+}

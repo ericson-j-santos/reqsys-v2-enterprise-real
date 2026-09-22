@@ -1,0 +1,11 @@
+# ReqSys Enterprise — CODEOWNERS
+# Objetivo: exigir revisão explícita em mudanças sensíveis quando branch protection/rulesets estiverem ativos.
+
+* @ericson-j-santos
+
+/.github/ @ericson-j-santos
+/.github/workflows/ @ericson-j-santos
+/scripts/ @ericson-j-santos
+/backend/ @ericson-j-santos
+/frontend/ @ericson-j-santos
+/docs/ @ericson-j-santos

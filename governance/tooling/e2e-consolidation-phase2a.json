@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "as_of": "2026-08-25",
+  "phase": "2A",
+  "objective": "Retirar dependencias operacionais de frontend-angular e frontend-vuetify sem excluir os diretorios fisicos.",
+  "canonical_frontend": "frontend",
+  "canonical_e2e_suite": "frontend/tests/e2e",
+  "retired_legacy_specs": [
+    "e2e/login-angular.spec.ts",
+    "e2e/login-vuetify.spec.ts"
+  ],
+  "preserved_legacy_directories": [
+    "frontend-angular",
+    "frontend-vuetify"
+  ],
+  "operational_surfaces": [
+    "playwright.config.ts",
+    "package.json",
+    "scripts/validar_qualidade.sh",
+    ".github/workflows/*.yml",
+    ".github/workflows/*.yaml"
+  ],
+  "canonical_replacements": {
+    "root_playwright": "frontend/tests/e2e",
+    "quality_build": "frontend",
+    "teams_gateway_trigger": "frontend/src/services/teamsGateway.js"
+  },
+  "guardrail": {
+    "script": "scripts/check_legacy_frontend_references.py",
+    "test": "tests/test_legacy_frontend_retirement.py",
+    "policy": "Falhar quando frontend-angular ou frontend-vuetify reaparecerem em superficies operacionais."
+  },
+  "exit_criteria": [
+    "Os dois specs de login legados nao existem mais.",
+    "O Playwright raiz nao inicia webServers nem projetos Angular/Vuetify.",
+    "O fluxo validar_qualidade.sh compila e testa somente o frontend canonico.",
+    "O smoke de Teams observa o servico canonico frontend/src/services/teamsGateway.js.",
+    "O guardrail encontra zero referencias operacionais aos frontends legados.",
+    "Os diretorios frontend-angular e frontend-vuetify permanecem fisicamente presentes para a Fase 2B.",
+    "CI completo da PR fica verde antes do merge."
+  ],
+  "next_phase": "2B: remover fisicamente frontend-angular e frontend-vuetify em PR separada, somente apos a Fase 2A permanecer verde e sem consumidores operacionais."
+}

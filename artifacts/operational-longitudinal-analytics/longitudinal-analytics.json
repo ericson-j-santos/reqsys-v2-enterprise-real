@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28T14:45:43Z",
+  "source": "operational-longitudinal-analytics",
+  "status": "unknown",
+  "confidence_level": "low",
+  "maturity_percent": 0.0,
+  "operational_risk": "low",
+  "commit_sha": "local",
+  "correlation_id": "0f8de6e7-1e73-415c-b8ff-cb76a61bc800",
+  "mode": "report_only",
+  "history_points_total": 0,
+  "trend": {
+    "direction": "unknown",
+    "points": 0
+  },
+  "windows": {
+    "7d": {
+      "points": 0
+    },
+    "30d": {
+      "points": 0
+    }
+  },
+  "latest_snapshot_at": null,
+  "metrics": {}
+}

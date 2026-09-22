@@ -1,0 +1,54 @@
+name: Figma GitHub E2E DEV
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: figma-github-e2e-dev
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Figma ↔ GitHub E2E on PC24x7 DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 15
+    env:
+      CORRELATION_ID: figma-github-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/figma-github-e2e-dev/evidence.json
+      E2E_GITHUB_READ_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Execute governed Figma GitHub E2E
+        shell: powershell
+        run: python scripts/figma_github_dev_e2e.py --expected-sha "${{ github.sha }}" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Upload sanitized E2E evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: figma-github-e2e-dev-${{ github.run_id }}
+          path: artifacts/figma-github-e2e-dev/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        shell: powershell
+        run: |
+          "## Figma GitHub E2E DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Figma file: SHA-256 only in artifact" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Repo: ericson-j-santos/reqsys-v2-enterprise-real" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Node controlado: 1:44" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Valores sensíveis publicados: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY

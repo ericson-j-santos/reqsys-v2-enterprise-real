@@ -1,0 +1,44 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - reqsys-runtime-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    environment: &runtime-env
+      QUEUE_BACKEND: redis
+      STORAGE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+      ENABLE_ASYNC_WORKER: "false"
+      ASYNC_JOB_MAX_TENTATIVAS: "3"
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker_main"]
+    environment: *runtime-env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  reqsys-runtime-redis:

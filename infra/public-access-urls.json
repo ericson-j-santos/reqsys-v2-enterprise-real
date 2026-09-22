@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.2.0",
+  "updated_at": "2026-09-20T21:55:00Z",
+  "source": "docs/adr/ADR-047-pc24x7-public-ingress.md",
+  "runbook": "docs/runbooks/pc24x7-piloto-dev.md",
+  "validation_script": "scripts/validar-acessos-publicos.mjs",
+  "runtime_discovery": {
+    "dev": {
+      "runtime_target": "pc24x7",
+      "gateway": "http://127.0.0.1:8083",
+      "public_transport": "cloudflare_quick_tunnel",
+      "runtime_state_file": "%LOCALAPPDATA%/ReqSys/PublicRuntime/dev-supervisor.json",
+      "stable_url_target": "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/",
+      "stable_url_status": "signed_runtime_locator",
+      "locator_channel": "ntfy_signed_ed25519",
+      "cost_policy": "zero_additional_cost"
+    },
+    "hml": {
+      "runtime_target": "not_promoted",
+      "stable_url_target": "https://tierin.duckdns.org/"
+    },
+    "prod": {
+      "runtime_target": "not_promoted",
+      "stable_url_target": "https://tieriprod.duckdns.org/"
+    }
+  },
+  "targets": [
+    {
+      "name": "dev-stable-entrypoint",
+      "environment": "dev",
+      "type": "locator",
+      "provider": "github_pages",
+      "url": "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/",
+      "expectedStatus": [200],
+      "required": true,
+      "lifecycle": "zero_cost_stable_entrypoint"
+    },
+    {
+      "name": "hml-frontend-duckdns",
+      "environment": "hml",
+      "type": "frontend",
+      "provider": "duckdns",
+      "url": "https://tierin.duckdns.org/",
+      "expectedStatus": [200, 301, 302],
+      "required": false,
+      "lifecycle": "not_promoted"
+    },
+    {
+      "name": "prod-frontend-duckdns",
+      "environment": "prod",
+      "type": "frontend",
+      "provider": "duckdns",
+      "url": "https://tieriprod.duckdns.org/",
+      "expectedStatus": [200, 301, 302],
+      "required": false,
+      "lifecycle": "not_promoted"
+    }
+  ]
+}

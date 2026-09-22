@@ -1,0 +1,22 @@
+{
+  "feature_name": "ai-metrics-incident-report",
+  "project": "ReqSys v2 Enterprise — subsistema IA (Python/FastAPI), com contrato desenhado para extracao futura como servico 'AI Metrics Backend' standalone",
+  "created_at": "2026-08-16",
+  "updated_at": "2026-08-16",
+  "phase": "requirements",
+  "approvals": {
+    "requirements": false,
+    "design": false,
+    "tasks": false
+  },
+  "description": "Relatorio unificado de incidentes/qualidade de IA, consolidando fontes hoje fragmentadas dentro do ReqSys (qualidade_ia_snapshots, incidentes/recomendacoes_ia, telemetria por provider LLM, correlacao de incidentes de runtime). Estrategia hibrida deliberada: fase 1 vive dentro do backend do ReqSys reusando os modulos reais existentes; o contrato de dados e desenhado desde o inicio para poder ser extraido depois como servico standalone 'AI Metrics Backend', sem reescrita.",
+  "hybrid_strategy_note": "Decisao do usuario em 2026-08-16: nao existe hoje um repositorio 'AI Metrics Backend' separado. Em vez de escolher entre 'e so o ReqSys' ou 'e um repo externo', a spec assume as duas coisas ao mesmo tempo — comeca embutida (requisitos abaixo apontam para codigo real do ReqSys), mas o Requirement 2 exige que a saida seja um contrato estavel e desacoplado, exatamente para permitir a extracao futura sem retrabalho.",
+  "evidence": [
+    "backend/app/models/ai_quality.py — QualidadeIASnapshot (score_geral, acuracia, relevancia, consistencia, seguranca, cobertura_dados, incidentes_criticos, amostra_total)",
+    "backend/app/services/ai_quality.py — calcular_resumo_qualidade_ia, registrar_snapshot_qualidade_ia, listar_tendencia, exportar_tendencia_csv/pdf",
+    "backend/app/api/incidentes.py + services/recomendacoes_ia.py — GET /v1/incidentes, GET /v1/incidentes/{id}",
+    "backend/app/services/llm_telemetry.py — telemetria por provider LLM (eventos, retencao, snapshot)",
+    "backend/app/core/runtime_analytics.py — build_incident_event, build_mttr, build_lead_time, build_correlation_report, build_observability_report (ja existe correlacao de incidentes de runtime, nao especifico de IA)"
+  ],
+  "known_gap": "As 4 fontes de evidencia acima usam modelos de dados e chaves diferentes entre si (nenhuma tem 'incident_id' compartilhado). Unificar isso em um unico relatorio e o proprio problema que este spec resolve — nao ha hoje endpoint que faca essa consolidacao."
+}

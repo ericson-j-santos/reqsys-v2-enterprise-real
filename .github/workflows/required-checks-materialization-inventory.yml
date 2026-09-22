@@ -1,0 +1,63 @@
+name: Required Checks Materialization Inventory
+on:
+  pull_request:
+    branches: [main]
+    paths: ["scripts/evaluate_required_checks_materialization.py", "tests/test_evaluate_required_checks_materialization.py", ".github/workflows/required-checks-materialization-inventory.yml"]
+  schedule:
+    - cron: "5 6 * * *"
+  workflow_dispatch:
+    inputs:
+      strict: {description: "Fail on missing or inconclusive evidence", required: false, default: false, type: boolean}
+permissions: {contents: read, actions: read, checks: read, pull-requests: read}
+concurrency:
+  group: required-checks-materialization-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'daily' }}
+  cancel-in-progress: true
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --disable-pip-version-check pytest
+      - run: python -m pytest -q tests/test_evaluate_required_checks_materialization.py
+  inventory:
+    if: github.event_name != 'pull_request'
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env: {GH_TOKEN: "${{ github.token }}"}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect protection and merged PR samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp artifacts/required-checks-materialization
+          if ! gh api "repos/${GITHUB_REPOSITORY}/branches/main/protection/required_status_checks" > .tmp/protection.json 2> .tmp/protection.err; then
+            jq -n --arg reason "$(tr '\n' ' ' < .tmp/protection.err | cut -c1-500)" '{unavailable:true,reason:$reason}' > .tmp/protection.json
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30" | jq '[.[] | select(.merged_at != null)][0:10]' > .tmp/pulls.json
+          : > .tmp/samples.ndjson
+          while IFS=$'\t' read -r number sha; do
+            gh api -H "Accept: application/vnd.github+json" "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" > .tmp/check-runs.json
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/status" > .tmp/status.json
+            jq -n --argjson pr_number "$number" --arg sha "$sha" --slurpfile checks .tmp/check-runs.json --slurpfile statuses .tmp/status.json '{pr_number:$pr_number,sha:$sha,contexts:((($checks[0].check_runs//[])|map(.name))+(($statuses[0].statuses//[])|map(.context))|unique)}' >> .tmp/samples.ndjson
+          done < <(jq -r '.[] | [.number,.head.sha] | @tsv' .tmp/pulls.json)
+          jq -s '{samples:.}' .tmp/samples.ndjson > .tmp/samples.json
+      - name: Evaluate materialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          strict_arg=(); [[ "${{ inputs.strict || false }}" == "true" ]] && strict_arg=(--strict)
+          python scripts/evaluate_required_checks_materialization.py --protection .tmp/protection.json --samples .tmp/samples.json --output artifacts/required-checks-materialization/report.json "${strict_arg[@]}"
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## Required Checks Materialization" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Decision: \`$(jq -r '.decision // "inconclusive"' artifacts/required-checks-materialization/report.json)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production touched: \`false\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: required-checks-materialization-inventory, path: artifacts/required-checks-materialization/report.json, if-no-files-found: error, retention-days: 30}

@@ -1,0 +1,56 @@
+name: Noteri → Desktop Watchdog Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-desktop-watchdog-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Run existing Desktop watchdog through Windows RPC
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/noteri-desktop-watchdog-recovery/evidence.json
+
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Query and run exact existing Desktop watchdog
+        shell: powershell
+        run: |
+          python scripts/noteri_desktop_watchdog_rpc_recovery.py --confirm RUN-EXISTING-DESKTOP-WATCHDOG --evidence-file "$env:EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noteri-desktop-watchdog-recovery-${{ github.run_id }}
+          path: artifacts/noteri-desktop-watchdog-recovery/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        shell: powershell
+        run: |
+          "## Noteri → Desktop Watchdog Recovery" | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (Test-Path "$env:EVIDENCE_FILE") {
+            $e = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
+            "- Resultado: $($e.result)" | Add-Content $env:GITHUB_STEP_SUMMARY
+            "- Target: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+            "- Task criada/alterada: $($e.task_created_or_modified)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          }
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Credenciais fornecidas: não" | Add-Content $env:GITHUB_STEP_SUMMARY

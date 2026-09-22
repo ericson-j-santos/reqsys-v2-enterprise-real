@@ -1,0 +1,30 @@
+services:
+  api:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "${BACKEND_PORT:-8210}:8000"
+    environment:
+      - SDD_SPECS_PATH=/sdd
+    volumes:
+      - ./backend:/app
+      - ${SDD_SPECS_HOST_PATH:-../../my-first-spec-project/.sdd}:/sdd:ro
+
+  db:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  frontend:
+    expose:
+      - "5173"
+    volumes:
+      - ./frontend:/app
+      - reqsys-frontend-node-modules:/app/node_modules
+
+  nginx:
+    ports:
+      - "${GATEWAY_PORT:-8081}:80"
+    volumes:
+      - ./infra/nginx/default.dev.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  reqsys-frontend-node-modules:

@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "rule": "Nenhum mock, stub ou catálogo estático pode ser apresentado como integração externa real.",
+    "evidence_classes": {
+      "real-external": "Fluxo executado contra dependência externa real, com efeito confirmado fora do processo sob teste.",
+      "integration-local": "Integração executada com componentes reais do repositório e persistência/estado local de teste, sem provar dependência externa.",
+      "controlled-ui-mock": "Jornada de interface exercitada no navegador com APIs deliberadamente controladas/mocadas.",
+      "static-contract": "Validação estrutural ou determinística sem alegação de efeito de negócio em runtime."
+    }
+  },
+  "journeys": [
+    {
+      "id": "reqsys-360-navigation-compatibility",
+      "name": "Compatibilidade e consolidação de navegação ReqSys 360",
+      "entry": "/requisitos/coleta, /notificacoes, /analytics e Administração",
+      "action": "Navegar por deep link e por ação visível da interface",
+      "api": [],
+      "effect": "Renderizar a experiência canônica correta e direcionar detalhes operacionais a /monitoramento-operacional",
+      "persistence": "none",
+      "evidence_class": "controlled-ui-mock",
+      "evidence_scope": "ui-navigation",
+      "evidence_files": [
+        "frontend/tests/e2e/reqsys-360-navigation.spec.js"
+      ],
+      "mutable_effect": false,
+      "positive_control": true,
+      "negative_control": true,
+      "independent_read": "URL final e data-testid da tela canônica após cada navegação",
+      "idempotency_applicable": false,
+      "idempotency_verified": false,
+      "limitation": "As APIs são controladas por mockResponsiveApis; comprova navegação/UX, não integração backend externa."
+    },
+    {
+      "id": "operational-mesh-canonical-drilldown",
+      "name": "Malha operacional aponta para Monitoramento",
+      "entry": "/api/runtime/dashboard e /analytics",
+      "action": "Produzir cards de malha e abrir o resumo de saúde operacional",
+      "api": [
+        "GET /api/runtime/dashboard",
+        "GET /api/runtime/operational-mesh"
+      ],
+      "effect": "Todo spa_drilldown operacional aponta para /monitoramento-operacional e a interface navega à fonte canônica",
+      "persistence": "none",
+      "evidence_class": "integration-local",
+      "evidence_scope": "backend-contract-plus-controlled-ui",
+      "evidence_files": [
+        "backend/tests/test_operational_mesh_signal.py",
+        "frontend/tests/e2e/reqsys-360-navigation.spec.js"
+      ],
+      "mutable_effect": false,
+      "positive_control": true,
+      "negative_control": true,
+      "independent_read": "Resposta do endpoint TestClient e URL/DOM após navegação",
+      "idempotency_applicable": false,
+      "idempotency_verified": false,
+      "limitation": "O backend é exercitado localmente e o navegador usa APIs controladas; não representa execução Fly externa."
+    },
+    {
+      "id": "requirements-complete-ui-flow",
+      "name": "Receber, validar, estruturar e publicar requisito pela interface",
+      "entry": "/pipeline",
+      "action": "Executar fluxo completo de requisitos",
+      "api": [
+        "POST /api/v1/solicitacoes",
+        "POST /api/v1/requisitos/validar",
+        "POST /api/v1/requisitos/estruturar/{id}",
+        "POST /api/v1/backlog/publicar-redmine/{id}"
+      ],
+      "effect": "Interface encadeia as quatro etapas e preserva um correlation_id",
+      "persistence": "mocked",
+      "evidence_class": "controlled-ui-mock",
+      "evidence_scope": "partial-contract",
+      "evidence_files": [
+        "frontend/tests/e2e/fluxo-completo-reqsys.spec.js"
+      ],
+      "mutable_effect": false,
+      "positive_control": true,
+      "negative_control": false,
+      "independent_read": "Chamadas capturadas pelo Playwright e resultado renderizado",
+      "idempotency_applicable": false,
+      "idempotency_verified": false,
+      "limitation": "Todas as APIs são interceptadas com page.route; não comprova persistência real nem publicação externa."
+    },
+    {
+      "id": "pentaho-batch-ingestion",
+      "name": "Receber, processar e consultar lote Pentaho",
+      "entry": "POST /api/integracoes/pentaho/lotes",
+      "action": "Enviar lote com Idempotency-Key e X-Correlation-Id",
+      "api": [
+        "POST /api/integracoes/pentaho/lotes",
+        "GET /api/integracoes/pentaho/lotes/{id}",
+        "POST /api/integracoes/pentaho/lotes/{id}/reprocessar"
+      ],
+      "effect": "Lote atinge estado terminal, pode ir para quarentena e não duplica sob repetição idempotente",
+      "persistence": "test-database",
+      "evidence_class": "integration-local",
+      "evidence_scope": "api-persistence",
+      "evidence_files": [
+        "backend/tests/test_pentaho_integration_api.py"
+      ],
+      "mutable_effect": true,
+      "positive_control": true,
+      "negative_control": true,
+      "independent_read": "GET do lote após POST valida estado, contagens e tentativas",
+      "idempotency_applicable": true,
+      "idempotency_verified": true,
+      "limitation": "Comprova API, persistência e idempotência no ambiente de teste local; não comprova Pentaho externo."
+    },
+    {
+      "id": "reqsys-360-audit-self-test",
+      "name": "Auditor ReqSys 360 detecta falha conhecida",
+      "entry": "npm run test:reqsys-360",
+      "action": "Executar fixtures positiva e negativa do auditor",
+      "api": [],
+      "effect": "Rota inexistente e item oculto por subgrupo são detectados; aliases válidos e arquivos de teste não geram crítico",
+      "persistence": "none",
+      "evidence_class": "static-contract",
+      "evidence_scope": "test-the-test",
+      "evidence_files": [
+        "frontend/scripts/reqsys-360-audit.test.mjs",
+        "tests/test_reqsys_360_repository_audit.py"
+      ],
+      "mutable_effect": false,
+      "positive_control": true,
+      "negative_control": true,
+      "independent_read": "Código de saída e lista estruturada de achados do auditor",
+      "idempotency_applicable": false,
+      "idempotency_verified": false,
+      "limitation": "Valida o mecanismo de auditoria, não uma integração externa."
+    }
+  ]
+}

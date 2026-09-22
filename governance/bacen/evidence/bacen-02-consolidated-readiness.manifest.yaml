@@ -1,0 +1,15 @@
+schema_version: 1.0.0
+control_id: BACEN-02
+evidence_status: canonical_reference
+artifact_path: artifacts/bacen/bacen-02-consolidated-readiness.json
+artifact_name: bacen-02-consolidated-readiness
+workflow_path: .github/workflows/bacen-02-consolidated-readiness.yml
+source_policy: governance/bacen/ACCESS-CONTROL-POLICY.md
+source_register: governance/bacen/ACCESS-REVIEW-REGISTER.yaml
+source_linkage: governance/bacen/BACEN-02-EVIDENCE-LINKAGE.yaml
+control_status: partial
+quarterly_review_status: pending_first_formal_review
+mfa_evidence_status: pending_idp_integration
+production_touched: false
+contains_sensitive_content: false
+purpose: resolver_evidencia_canonica_sem_simular_revisao_formal_ou_mfa_real

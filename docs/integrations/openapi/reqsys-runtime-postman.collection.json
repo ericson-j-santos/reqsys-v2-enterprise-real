@@ -1,0 +1,238 @@
+{
+  "info": {
+    "name": "ReqSys Runtime OpenAPI (generated)",
+    "description": "Coleção gerada do contrato governado para smoke Newman CI.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "reqsys-openapi-generated",
+    "version": "0.3.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8765"
+    }
+  ],
+  "item": [
+    {
+      "name": "/api/requisitos",
+      "item": [
+        {
+          "name": "GET /api/requisitos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "reqsys-postman-smoke",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requisitos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requisitos"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/requisitos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "reqsys-postman-smoke",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requisitos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requisitos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"titulo\": \"Smoke Newman ReqSys\", \"descricao\": \"Payload mínimo para validação CI report-only.\", \"tipo\": \"funcional\", \"prioridade\": \"media\", \"origem\": \"newman_ci\", \"metadata\": {\"versao_contrato\": \"0.3.0\", \"correlation_id\": \"newman-smoke-0001\"}}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "/api/requisitos/{id}",
+      "item": [
+        {
+          "name": "GET /api/requisitos/{id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "reqsys-postman-smoke",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requisitos/REQ-001",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requisitos",
+                "REQ-001"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "/api/runtime/analytics",
+      "item": [
+        {
+          "name": "GET /api/runtime/analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "reqsys-postman-smoke",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/runtime/analytics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "runtime",
+                "analytics"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "/api/runtime/dashboard",
+      "item": [
+        {
+          "name": "GET /api/runtime/dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "reqsys-postman-smoke",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/runtime/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "runtime",
+                "dashboard"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "/api/runtime/health",
+      "item": [
+        {
+          "name": "GET /api/runtime/health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "reqsys-postman-smoke",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/runtime/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "runtime",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "/health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "reqsys-postman-smoke",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// generated_at_epoch=1782689869",
+          "// source=docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json"
+        ]
+      }
+    }
+  ]
+}

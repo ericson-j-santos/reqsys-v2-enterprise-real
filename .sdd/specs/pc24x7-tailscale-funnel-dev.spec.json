@@ -1,0 +1,27 @@
+{
+  "feature_name": "pc24x7-tailscale-funnel-dev",
+  "project": "ReqSys v2 Enterprise — runtime público DEV",
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Publica o gateway DEV do ReqSys no PC24x7 por Tailscale Funnel, usando hostname HTTPS estável *.ts.net sem domínio próprio, sem abrir portas e sem depender do Fly.io.",
+  "runtime_target": "pc24x7",
+  "environment": "dev",
+  "controls": {
+    "production_enabled": false,
+    "hml_enabled": false,
+    "backend_direct_publication": false,
+    "secrets_in_git": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_tailscale_funnel.py"
+    ],
+    "evidence_contract": "Tailscale deve estar autenticado com MagicDNS ativo; Funnel deve apontar somente para o gateway DEV :8083; /api/health e /task-console precisam retornar HTTP 200; HML/PROD permanecem bloqueados."
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/runtime-predictive-analytics.schema.json",
+  "title": "ReqSys Runtime Predictive Analytics Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "repository", "event_name", "run_id", "inputs", "risk_score", "risk_level", "predictions", "recommendations", "mode", "guardrails"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string" },
+    "event_name": { "type": "string" },
+    "run_id": { "type": "string" },
+    "inputs": { "type": "object" },
+    "risk_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "risk_level": { "type": "string", "enum": ["low", "medium_low", "medium", "high"] },
+    "predictions": { "type": "array", "items": { "type": "string" } },
+    "recommendations": { "type": "array", "items": { "type": "string" } },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "guardrails": { "type": "object" }
+  }
+}

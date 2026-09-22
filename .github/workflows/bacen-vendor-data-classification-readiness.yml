@@ -1,0 +1,60 @@
+name: BACEN Vendor Data Classification Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_vendor_data_classification_readiness.py"
+      - ".github/workflows/bacen-vendor-data-classification-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_vendor_data_classification_readiness.py"
+      - ".github/workflows/bacen-vendor-data-classification-readiness.yml"
+  schedule:
+    - cron: "41 7 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-vendor-data-classification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-05 Vendor Data Classification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML
+      - run: python -m py_compile scripts/generate_bacen_vendor_data_classification_readiness.py
+      - name: Generate evidence
+        run: |
+          python scripts/generate_bacen_vendor_data_classification_readiness.py \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --output artifacts/bacen/bacen-05-vendor-data-classification.json
+      - name: Validate artifact
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-05-vendor-data-classification.json").read_text())
+          assert report["control_id"] == "BACEN-05"
+          assert report["production_touched"] is False
+          assert report["control_status"] in {"partial", "implemented"}
+          PY
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-vendor-data-classification
+          path: artifacts/bacen/bacen-05-vendor-data-classification.json
+          if-no-files-found: error
+          retention-days: 365

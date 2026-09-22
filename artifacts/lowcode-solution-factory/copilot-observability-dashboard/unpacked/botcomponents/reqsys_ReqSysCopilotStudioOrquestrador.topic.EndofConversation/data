@@ -1,0 +1,15 @@
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Encerrar conversa
+    triggerQueries:
+      - encerrar conversa
+      - finalizar atendimento
+      - pode encerrar
+
+  actions:
+    - kind: SendActivity
+      id: sendMessage_eoc
+      activity: Conversa encerrada.

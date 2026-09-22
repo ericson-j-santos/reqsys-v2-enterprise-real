@@ -1,0 +1,55 @@
+mcs.metadata:
+  componentName: CriarDemanda
+  description: Registrar nova solicitacao como demanda governada no Dataverse.
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Criar demanda
+    triggerQueries:
+      - quero registrar uma demanda
+      - preciso abrir uma solicitacao
+      - criar nova demanda
+      - abrir demanda no reqsys
+
+  actions:
+    - kind: Question
+      id: question_titulo
+      variable: Topic.Titulo
+      prompt: Qual o titulo da demanda?
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_resultado
+      variable: Topic.ResultadoEsperado
+      prompt: Qual o resultado esperado?
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_origem
+      variable: Topic.Origem
+      prompt: Qual a origem?
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_confirmacao
+      variable: Topic.Confirmacao
+      prompt: Confirma a execucao de criar demanda?
+      entity: BooleanPrebuiltEntity
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_criar_demanda
+      flowId: ae83d82a-8e04-5eb4-bf4a-dfadd5443a7a
+      flow: reqsys_ReqSysIntakeDeDemanda
+      input:
+        titulo: =Topic.Titulo
+        resultado_esperado: =Topic.ResultadoEsperado
+        origem: =Topic.Origem
+        correlation_id: =System.Conversation.Id
+      output:
+        resultado: Topic.ResultadoFlow
+
+    - kind: SendActivity
+      id: sendMessage_success
+      activity: Demanda registrada com sucesso. Correlation-Id: {System.Conversation.Id}

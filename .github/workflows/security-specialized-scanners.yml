@@ -1,0 +1,580 @@
+name: Security Specialized Scanners
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Falhar quando scanner suportado encontrar vulnerabilidade crítica"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: security-specialized-scanners-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    name: Security scan scope router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.scope.outputs.python }}
+      node: ${{ steps.scope.outputs.node }}
+      deep: ${{ steps.scope.outputs.deep }}
+    steps:
+      - name: Classify changed paths
+        id: scope
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.setOutput('python', 'true');
+              core.setOutput('node', 'true');
+              core.setOutput('deep', 'true');
+              return;
+            }
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              },
+            );
+            const paths = files.map(file => file.filename);
+
+            const startsWithAny = (path, prefixes) =>
+              prefixes.some(prefix => path.startsWith(prefix));
+            const matchesAny = (path, patterns) =>
+              patterns.some(pattern => pattern.test(path));
+
+            const python = paths.some(path =>
+              startsWithAny(path, [
+                'backend/',
+                'runtime/',
+                'services/',
+                'scripts/',
+                'tools/',
+              ]) ||
+              matchesAny(path, [
+                /(^|\/)requirements[^/]*\.txt$/,
+                /(^|\/)pyproject\.toml$/,
+              ])
+            );
+
+            const node = paths.some(path =>
+              startsWithAny(path, [
+                'frontend/',
+              ]) ||
+              matchesAny(path, [
+                /(^|\/)package\.json$/,
+                /(^|\/)package-lock\.json$/,
+                /(^|\/)yarn\.lock$/,
+                /(^|\/)pnpm-lock\.yaml$/,
+              ])
+            );
+
+            const deep = python || node || paths.some(path =>
+              startsWithAny(path, [
+                'backend-dotnet/',
+                'infra/',
+                'governance/',
+                'config/',
+                '.github/actions/',
+                '.github/workflows/',
+              ]) ||
+              matchesAny(path, [
+                /(^|\/)Dockerfile[^/]*$/,
+                /(^|\/)docker-compose[^/]*\.ya?ml$/,
+              ])
+            );
+
+            core.info(`security scan scope: python=${python} node=${node} deep=${deep}`);
+            core.setOutput('python', String(python));
+            core.setOutput('node', String(node));
+            core.setOutput('deep', String(deep));
+
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: ${{ (inputs.strict || 'false') != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
+          GITLEAKS_ENABLE_SUMMARY: true
+
+  python-dependency-audit:
+    name: pip-audit Python Dependencies
+    needs: scope
+    if: needs.scope.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: Discover Python dependency files
+        id: discover
+        shell: bash
+        run: |
+          mkdir -p artifacts/security-scanners/pip-audit
+          find . \
+            -path './.git' -prune -o \
+            -path './.venv' -prune -o \
+            -path './venv' -prune -o \
+            -path './node_modules' -prune -o \
+            \( -name 'requirements*.txt' -o -name 'pyproject.toml' \) -print \
+            > artifacts/security-scanners/pip-audit/python-dependency-files.txt
+
+          if [ -s artifacts/security-scanners/pip-audit/python-dependency-files.txt ]; then
+            echo "has_python_deps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_python_deps=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run pip-audit
+        if: steps.discover.outputs.has_python_deps == 'true'
+        shell: bash
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          set +e
+          exit_code=0
+          while IFS= read -r file; do
+            safe_name=$(echo "$file" | sed 's#^./##; s#[/ ]#_#g')
+            if [[ "$file" == *requirements*.txt ]]; then
+              pip-audit -r "$file" --format json --output "artifacts/security-scanners/pip-audit/${safe_name}.json"
+              current=$?
+            elif [[ "$file" == *pyproject.toml ]]; then
+              dir=$(dirname "$file")
+              (cd "$dir" && pip-audit --format json --output "$GITHUB_WORKSPACE/artifacts/security-scanners/pip-audit/${safe_name}.json")
+              current=$?
+            else
+              current=0
+            fi
+            if [ "$current" -ne 0 ]; then
+              exit_code=$current
+            fi
+          done < artifacts/security-scanners/pip-audit/python-dependency-files.txt
+
+          if [ "$STRICT_INPUT" = "true" ]; then
+            exit "$exit_code"
+          fi
+          exit 0
+
+      - name: No Python dependency files found
+        if: steps.discover.outputs.has_python_deps != 'true'
+        run: echo "Nenhum requirements*.txt ou pyproject.toml encontrado para pip-audit." | tee artifacts/security-scanners/pip-audit/README.md
+
+      - name: Upload pip-audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: artifacts/security-scanners/pip-audit/
+          if-no-files-found: warn
+          retention-days: 30
+
+  npm-audit:
+    name: npm Audit Frontend Dependencies
+    needs: scope
+    if: needs.scope.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Discover package-lock files
+        id: discover
+        shell: bash
+        run: |
+          mkdir -p artifacts/security-scanners/npm-audit
+          find . \
+            -path './.git' -prune -o \
+            -path './node_modules' -prune -o \
+            -name 'package-lock.json' -print \
+            > artifacts/security-scanners/npm-audit/package-lock-files.txt
+
+          if [ -s artifacts/security-scanners/npm-audit/package-lock-files.txt ]; then
+            echo "has_node_deps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_node_deps=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run npm audit
+        if: steps.discover.outputs.has_node_deps == 'true'
+        shell: bash
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          set +e
+          exit_code=0
+          while IFS= read -r lock_file; do
+            dir=$(dirname "$lock_file")
+            safe_name=$(echo "$dir" | sed 's#^./##; s#[/ ]#_#g')
+            [ -z "$safe_name" ] && safe_name="root"
+            (cd "$dir" && npm audit --json > "$GITHUB_WORKSPACE/artifacts/security-scanners/npm-audit/${safe_name}.json")
+            current=$?
+            if [ "$current" -ne 0 ]; then
+              exit_code=$current
+            fi
+          done < artifacts/security-scanners/npm-audit/package-lock-files.txt
+
+          if [ "$STRICT_INPUT" = "true" ]; then
+            exit "$exit_code"
+          fi
+          exit 0
+
+      - name: No Node dependency lockfiles found
+        if: steps.discover.outputs.has_node_deps != 'true'
+        run: echo "Nenhum package-lock.json encontrado para npm audit." | tee artifacts/security-scanners/npm-audit/README.md
+
+      - name: Upload npm audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: artifacts/security-scanners/npm-audit/
+          if-no-files-found: warn
+          retention-days: 30
+
+  sbom:
+    name: SBOM CycloneDX
+    needs: scope
+    if: needs.scope.outputs.deep == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Prepare SBOM output directory
+        run: mkdir -p artifacts/security-scanners/sbom
+
+      - name: Install pinned Syft with bounded retries
+        shell: bash
+        env:
+          SYFT_VERSION: "1.51.0"
+          SYFT_ARCHIVE_SHA256: "2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f"
+        run: |
+          set -euo pipefail
+          archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${archive}"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-delay 2 --retry-all-errors \
+            "$url" -o "$tmp_dir/$archive"
+
+          printf '%s  %s\n' "$SYFT_ARCHIVE_SHA256" "$tmp_dir/$archive" | sha256sum --check -
+          tar -xzf "$tmp_dir/$archive" -C "$tmp_dir" syft
+          install -m 0755 "$tmp_dir/syft" "$RUNNER_TEMP/syft"
+          "$RUNNER_TEMP/syft" version
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Generate SBOM
+        shell: bash
+        env:
+          SYFT_CHECK_FOR_APP_UPDATE: "false"
+        run: |
+          set -euo pipefail
+          syft . -o cyclonedx-json=artifacts/security-scanners/sbom/reqsys-sbom.cyclonedx.json
+          test -s artifacts/security-scanners/sbom/reqsys-sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-sbom-cyclonedx
+          path: artifacts/security-scanners/sbom/
+          if-no-files-found: error
+          retention-days: 30
+
+  codeql-generate:
+    name: CodeQL SAST (${{ matrix.language }})
+    needs: scope
+    if: needs.scope.outputs.deep == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+          - python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Prepare CodeQL evidence directory
+        shell: bash
+        run: mkdir -p "artifacts/security-scanners/codeql/${{ matrix.language }}"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended,security-and-quality
+
+      - name: Generate CodeQL SARIF without publishing
+        id: analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+          output: "artifacts/security-scanners/codeql/${{ matrix.language }}/raw"
+          post-processed-sarif-path: "artifacts/security-scanners/codeql/${{ matrix.language }}/processed"
+          upload: never
+
+      - name: Validate generated SARIF evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="artifacts/security-scanners/codeql/${{ matrix.language }}"
+          sarif_count=$(find "$evidence_dir" -type f -name '*.sarif' | wc -l | tr -d ' ')
+          echo "sarif_count=$sarif_count" | tee "$evidence_dir/evidence.env"
+          if [ "$sarif_count" -eq 0 ]; then
+            echo "CodeQL concluiu sem preservar arquivo SARIF; evidência não renderizável." >&2
+            exit 1
+          fi
+
+      - name: Publish CodeQL job summary
+        if: always()
+        shell: bash
+        env:
+          ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+        run: |
+          evidence_dir="artifacts/security-scanners/codeql/${{ matrix.language }}"
+          sarif_count=$(find "$evidence_dir" -type f -name '*.sarif' | wc -l | tr -d ' ')
+          {
+            echo "## CodeQL — ${{ matrix.language }}"
+            echo
+            echo "| Evidência | Valor |"
+            echo "|---|---|"
+            echo "| Resultado da análise | \`${ANALYZE_OUTCOME:-unknown}\` |"
+            echo "| SARIF preservado | \`${sarif_count}\` arquivo(s) |"
+            echo "| Publicação | \`adiada para lote atômico\` |"
+            echo "| Categoria | \`/language:${{ matrix.language }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload CodeQL SARIF evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif-${{ matrix.language }}
+          path: artifacts/security-scanners/codeql/${{ matrix.language }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  codeql:
+    name: CodeQL Publish Atomic
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: codeql-generate
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download both CodeQL SARIF artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: codeql-sarif-*
+          path: artifacts/security-scanners/codeql-upload
+
+      - name: Stage and validate both CodeQL configurations
+        shell: bash
+        run: |
+          set -euo pipefail
+          publish_dir="artifacts/security-scanners/codeql-publish"
+          mkdir -p "$publish_dir"
+          python - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path("artifacts/security-scanners/codeql-upload")
+          publish = Path("artifacts/security-scanners/codeql-publish")
+          expected = {
+              "/language:javascript-typescript/": "javascript-typescript.sarif",
+              "/language:python/": "python.sarif",
+          }
+          found = set()
+          for sarif in root.glob("codeql-sarif-*/processed/upload.sarif"):
+              payload = json.loads(sarif.read_text(encoding="utf-8"))
+              categories = {
+                  run.get("automationDetails", {}).get("id")
+                  for run in payload.get("runs", [])
+              }
+              if len(categories) != 1:
+                  raise SystemExit(f"Categoria CodeQL inválida em {sarif}: {categories}")
+              category = categories.pop()
+              if category not in expected:
+                  raise SystemExit(f"Categoria CodeQL inesperada: {category}")
+              if category in found:
+                  raise SystemExit(f"Categoria CodeQL duplicada: {category}")
+              shutil.copy2(sarif, publish / expected[category])
+              found.add(category)
+          missing = set(expected) - found
+          if missing:
+              raise SystemExit(f"Configurações CodeQL ausentes: {sorted(missing)}")
+          print("CodeQL configurations staged:", sorted(found))
+          PY
+
+      - name: Publish both CodeQL analyses in one upload
+        id: upload
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: artifacts/security-scanners/codeql-publish
+          wait-for-processing: true
+
+      - name: Publish atomic CodeQL summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## CodeQL — publicação atômica"
+            echo
+            echo "As configurações \`javascript-typescript\` e \`python\` são publicadas juntas."
+            echo "Isso impede avaliação intermediária do gate com apenas uma linguagem disponível."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  security-executive-summary:
+    name: Security Executive Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - scope
+      - gitleaks
+      - python-dependency-audit
+      - npm-audit
+      - sbom
+      - codeql
+    if: always()
+    steps:
+      - name: Fail closed when security scope routing fails
+        if: needs.scope.result != 'success'
+        shell: bash
+        run: |
+          echo "Security scan scope router failed; refusing to publish a green summary." >&2
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download scanner artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts/security-scanners/downloaded
+
+      - name: Normalize downloaded artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/security-scanners/pip-audit
+          mkdir -p artifacts/security-scanners/npm-audit
+          mkdir -p artifacts/security-scanners/sbom
+          mkdir -p artifacts/security-scanners/gitleaks
+          mkdir -p artifacts/security-scanners/codeql
+
+          if [ -d artifacts/security-scanners/downloaded/pip-audit-report ]; then
+            cp -R artifacts/security-scanners/downloaded/pip-audit-report/. artifacts/security-scanners/pip-audit/
+          fi
+          if [ -d artifacts/security-scanners/downloaded/npm-audit-report ]; then
+            cp -R artifacts/security-scanners/downloaded/npm-audit-report/. artifacts/security-scanners/npm-audit/
+          fi
+          if [ -d artifacts/security-scanners/downloaded/reqsys-sbom-cyclonedx ]; then
+            cp -R artifacts/security-scanners/downloaded/reqsys-sbom-cyclonedx/. artifacts/security-scanners/sbom/
+          fi
+          for codeql_artifact in artifacts/security-scanners/downloaded/codeql-sarif-*; do
+            if [ -d "$codeql_artifact" ]; then
+              language="${codeql_artifact##*/codeql-sarif-}"
+              mkdir -p "artifacts/security-scanners/codeql/$language"
+              cp -R "$codeql_artifact"/. "artifacts/security-scanners/codeql/$language/"
+            fi
+          done
+          find artifacts/security-scanners/downloaded -iname '*gitleaks*.json' -exec cp {} artifacts/security-scanners/gitleaks/ \; || true
+
+      - name: Build security executive summary
+        shell: bash
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'false' }}
+        run: |
+          strict_flag=""
+          if [ "$STRICT_INPUT" = "true" ]; then
+            strict_flag="--strict"
+          fi
+          python scripts/build_security_executive_summary.py \
+            --repo "${{ github.repository }}" \
+            --branch "${{ github.ref_name }}" \
+            --output-dir artifacts/security-executive-summary \
+            $strict_flag
+
+      - name: Upload security executive summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-executive-summary
+          path: artifacts/security-executive-summary/
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,473 @@
+# REQSYS_PRODUCTION_GOVERNANCE_GATE
+name: Deploy Production Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: "Deploy API produção (reqsys-api)"
+        required: true
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: "Deploy frontend produção (reqsys-app)"
+        required: true
+        type: boolean
+        default: true
+      approve_prod_deploy:
+        description: "Confirmação obrigatória para produção: APROVO-PROD"
+        required: true
+        type: string
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production-sync
+  cancel-in-progress: true
+
+env:
+  CORRELATION_ID: deploy-production-sync-${{ github.run_id }}-${{ github.run_attempt }}
+  PUBLIC_API_URL: https://reqsys-api.fly.dev
+  PUBLIC_FRONTEND_URL: https://reqsys-app.fly.dev
+
+jobs:
+  gate:
+    name: Gate publicação produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      production_allowed: ${{ steps.authorization.outputs.production_allowed }}
+      decision: ${{ steps.authorization.outputs.decision }}
+    steps:
+      - name: Exigir confirmação textual em produção
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ github.event.inputs.approve_prod_deploy }}" != "APROVO-PROD" ]; then
+            echo "Produção exige approve_prod_deploy=APROVO-PROD" >&2
+            exit 1
+          fi
+      - name: Checkout sem secrets
+        uses: actions/checkout@v4
+      - name: Preparar Python sem ambiente produtivo
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependência focada
+        run: python -m pip install --disable-pip-version-check PyYAML
+      - name: Gerar decisão BACEN de produção
+        id: bacen
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts/bacen-production-hard-gate
+          python scripts/generate_bacen_nonprod_tolerance_decision.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --policy governance/bacen/NONPROD-TEMPORARY-TOLERANCE-POLICY.yaml \
+            --scope prod \
+            --output artifacts/bacen-production-hard-gate/deploy-production-sync-decision.json
+      - name: Resolver autorização de produção
+        id: authorization
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path("artifacts/bacen-production-hard-gate/deploy-production-sync-decision.json")
+          evidence = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+          allowed = (
+              evidence.get("scope") == "prod"
+              and evidence.get("decision") == "allow"
+              and evidence.get("automatic_blocking") is False
+              and evidence.get("production_deployment_allowed") is True
+              and not evidence.get("blocking_controls")
+              and not evidence.get("structural_findings")
+              and evidence.get("production_touched") is False
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"production_allowed={str(allowed).lower()}\n")
+              output.write(f"decision={evidence.get('decision', 'missing')}\n")
+          print(json.dumps({
+              "production_allowed": allowed,
+              "decision": evidence.get("decision", "missing"),
+              "blocking_controls": evidence.get("blocking_controls") or [],
+          }, ensure_ascii=False))
+          PY
+      - name: Publicar decisão BACEN
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-production-hard-gate-deploy-sync
+          path: artifacts/bacen-production-hard-gate/deploy-production-sync-decision.json
+          if-no-files-found: warn
+          retention-days: 365
+      - name: Falhar solicitação manual não autorizada
+        if: >-
+          always() &&
+          github.event_name == 'workflow_dispatch' &&
+          steps.authorization.outputs.production_allowed != 'true'
+        run: |
+          echo "Produção bloqueada pelo gate BACEN: ${{ steps.authorization.outputs.decision }}" >&2
+          exit 1
+
+  pre-sync-check:
+    name: Diagnóstico pré-sync (read-only)
+    runs-on: ubuntu-latest
+    needs: gate
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true'
+    outputs:
+      prod_synced: ${{ steps.check.outputs.prod_synced }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar drift repo ↔ runtime
+        id: check
+        run: |
+          set -uo pipefail
+          python scripts/validate_publication_sync.py \
+            --environment prod \
+            --expected-sha "${{ github.sha }}" \
+            --timeout 8 \
+            --output publication-sync-pre.json || true
+          if python -c "import json; d=json.load(open('publication-sync-pre.json')); exit(0 if d.get('ok') else 1)"; then
+            echo "prod_synced=true" >> "$GITHUB_OUTPUT"
+            echo "Produção já sincronizada — deploy omitido no push (gate rápido)."
+          else
+            echo "prod_synced=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Drift em produção — deploy será executado."
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: publication-sync-pre
+          path: publication-sync-pre.json
+          if-no-files-found: warn
+
+  validate-runtime:
+    name: Validar config Fly/runtime
+    runs-on: ubuntu-latest
+    needs: [gate, pre-sync-check]
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
+      needs.pre-sync-check.result == 'success' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        needs.pre-sync-check.outputs.prod_synced != 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar Trilha A
+        run: |
+          python scripts/runtime_public_validator.py \
+            --artifact-root . \
+            --output artifacts/runtime/runtime-public-validation.json \
+            --strict
+      - name: Validar matriz enterprise Fly
+        run: python scripts/validate_fly_enterprise_sync.py --output fly-enterprise-sync-validation.json
+
+  configure-prod-secrets:
+    name: Configurar secrets auth produção
+    runs-on: ubuntu-latest
+    needs: [gate, pre-sync-check, validate-runtime]
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
+      needs.pre-sync-check.result == 'success' &&
+      needs.validate-runtime.result == 'success' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
+        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+      )
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolver credencial Fly API produção
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-prod-deploy
+          consumer: github-actions:fly-production
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_PROD }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/deploy-production-configure-api-credential.json
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Aplicar secrets JWT/Azure no reqsys-api
+        env:
+          COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
+          VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}
+          AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AZURE_TENANT_ID_SECRET:-}" ] || [ -z "${AZURE_CLIENT_ID_SECRET:-}" ]; then
+            echo "::warning::AZURE_TENANT_ID/AZURE_CLIENT_ID ausentes no GitHub — pulando apply (assumindo secrets já configurados no Fly)"
+            printf '%s\n' '{"success": true, "skipped": true, "reason": "github_azure_secrets_empty"}' > fly-auth-azure-report-production.json
+            exit 0
+          fi
+          python scripts/configurar_fly_auth_azure.py \
+            --fly-app reqsys-api \
+            --app-env production \
+            --app-public-url "$PUBLIC_FRONTEND_URL" \
+            --api-public-url "$PUBLIC_API_URL" \
+            --azure-tenant-id "$AZURE_TENANT_ID_SECRET" \
+            --azure-client-id "$AZURE_CLIENT_ID_SECRET" \
+            --cofre-tenant-key AZURE_TENANT_ID \
+            --cofre-client-key AZURE_CLIENT_ID \
+            | tee fly-auth-azure-report-production.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fly-auth-azure-report-production
+          path: |
+            fly-auth-azure-report-production.json
+            audit/deploy-production-configure-api-credential.json
+          if-no-files-found: warn
+
+  deploy-backend:
+    name: Deploy API produção
+    runs-on: ubuntu-latest
+    needs: [gate, pre-sync-check, validate-runtime, configure-prod-secrets]
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
+      needs.pre-sync-check.result == 'success' &&
+      needs.validate-runtime.result == 'success' &&
+      needs.configure-prod-secrets.result == 'success' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
+        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+      )
+    environment: production
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver credencial Fly API produção
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-api-prod-deploy
+          consumer: github-actions:fly-production
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_PROD }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/deploy-production-api-credential.json
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy reqsys-api
+        run: |
+          set -euo pipefail
+          deploy_log="$(mktemp)"
+          max_attempts=3
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "::group::API deploy attempt ${attempt}/${max_attempts}"
+            set +e
+            flyctl deploy --remote-only \
+              --config fly.toml \
+              --app reqsys-api \
+              --build-arg "GITHUB_SHA=${{ github.sha }}" 2>&1 | tee "$deploy_log"
+            status="${PIPESTATUS[0]}"
+            set -e
+            echo "::endgroup::"
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            if ! grep -Eiq "timeout reached waiting for health checks|request canceled|failed to get VM" "$deploy_log"; then
+              exit "$status"
+            fi
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              exit "$status"
+            fi
+            sleep 60
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deploy-production-api-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/deploy-production-api-credential.json
+          if-no-files-found: warn
+
+  deploy-frontend:
+    name: Deploy frontend produção
+    runs-on: ubuntu-latest
+    needs: [gate, pre-sync-check, validate-runtime]
+    if: >-
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.gate.outputs.production_allowed == 'true' &&
+      needs.pre-sync-check.result == 'success' &&
+      needs.validate-runtime.result == 'success' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == true) ||
+        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+      )
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver credencial Fly frontend produção
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: fly-app-prod-deploy
+          consumer: github-actions:fly-production
+          export-env: FLY_API_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_PROD }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/deploy-production-frontend-credential.json
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy reqsys-app
+        working-directory: frontend
+        run: flyctl deploy --remote-only --config fly.toml --app reqsys-app
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deploy-production-frontend-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit/deploy-production-frontend-credential.json
+          if-no-files-found: warn
+
+  post-sync-check:
+    name: Validar sync pós-deploy
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: >-
+      always() &&
+      (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Aguardar estabilização do runtime
+        if: needs.deploy-backend.result == 'success'
+        run: sleep 10
+      - name: Smoke API /api/runtime/*
+        if: needs.deploy-backend.result == 'success'
+        run: |
+          python scripts/runtime_public_validator.py \
+            --probe \
+            --base-url "$PUBLIC_API_URL" \
+            --environment prod \
+            --include-optional-evidence \
+            --timeout 20 \
+            --probe-attempts 4 \
+            --probe-delay 15 \
+            --artifact-root . \
+            --output artifacts/runtime/runtime-public-probe.json
+      - name: Validar publicação sincronizada
+        if: needs.deploy-backend.result == 'success'
+        run: |
+          python scripts/validate_publication_sync.py \
+            --environment prod \
+            --expected-sha "${{ github.sha }}" \
+            --timeout 20 \
+            --output publication-sync-post.json
+      - name: Validar login produção
+        if: needs.deploy-backend.result == 'success'
+        run: |
+          python scripts/validar_login_multi_ambiente.py \
+            --environment prod \
+            --timeout 20 \
+            --output login-validation-prod.json
+      - name: Validar bundle frontend publicado
+        if: needs.deploy-frontend.result == 'success'
+        run: |
+          set -euo pipefail
+          python scripts/validar_frontend_auth_redirect.py \
+            --frontend-url "$PUBLIC_FRONTEND_URL" \
+            | tee login-frontend-prod-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: publication-sync-post
+          path: |
+            publication-sync-post.json
+            artifacts/runtime/runtime-public-probe.json
+            login-validation-prod.json
+            login-frontend-prod-report.json
+          if-no-files-found: warn
+
+  summary:
+    name: Resumo publicação
+    runs-on: ubuntu-latest
+    needs: [gate, pre-sync-check, validate-runtime, configure-prod-secrets, deploy-backend, deploy-frontend, post-sync-check]
+    if: always()
+    steps:
+      - name: Resumo
+        run: |
+          {
+            echo "## Deploy Production Sync"
+            echo "- Correlation ID: \`$CORRELATION_ID\`"
+            echo "- SHA alvo: \`${{ github.sha }}\`"
+            echo "- Produção autorizada: \`${{ needs.gate.outputs.production_allowed || 'false' }}\`"
+            echo "| Job | Resultado |"
+            echo "|---|---|"
+            echo "| Gate BACEN | ${{ needs.gate.result || 'skipped' }} (${{ needs.gate.outputs.decision || 'missing' }}) |"
+            echo "| Pré-sync | ${{ needs.pre-sync-check.result || 'skipped' }} (prod_synced=${{ needs.pre-sync-check.outputs.prod_synced || 'n/a' }}) |"
+            echo "| Validate runtime | ${{ needs.validate-runtime.result || 'skipped' }} |"
+            echo "| Configure secrets | ${{ needs.configure-prod-secrets.result || 'skipped' }} |"
+            echo "| Deploy API | ${{ needs.deploy-backend.result || 'skipped' }} |"
+            echo "| Deploy frontend | ${{ needs.deploy-frontend.result || 'skipped' }} |"
+            echo "| Pós-sync | ${{ needs.post-sync-check.result || 'skipped' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: needs.gate.outputs.production_allowed == 'true'
+      - uses: actions/setup-python@v5
+        if: needs.gate.outputs.production_allowed == 'true'
+        with:
+          python-version: "3.12"
+      - name: Notificar Teams (ambiente produção)
+        if: needs.gate.outputs.production_allowed == 'true'
+        continue-on-error: true
+        env:
+          TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
+          RESULTADO_DEPLOY_API: ${{ needs.deploy-backend.result || 'skipped' }}
+          RESULTADO_DEPLOY_FRONTEND: ${{ needs.deploy-frontend.result || 'skipped' }}
+          RESULTADO_POS_SYNC: ${{ needs.post-sync-check.result || 'skipped' }}
+        run: |
+          set -euo pipefail
+          FALHOU="false"
+          if [ "$RESULTADO_DEPLOY_API" = "failure" ] || [ "$RESULTADO_DEPLOY_FRONTEND" = "failure" ] || [ "$RESULTADO_POS_SYNC" = "failure" ]; then
+            FALHOU="true"
+          fi
+          TITULO="ReqSys - Deploy produção OK"
+          if [ "$FALHOU" = "true" ]; then
+            TITULO="ReqSys - Deploy produção FALHOU"
+          fi
+          TEXTO="$(printf 'Ambiente: producao\nSHA: %s\nDeploy API: %s\nDeploy frontend: %s\nPós-sync: %s\nDetalhes: %s/%s/actions/runs/%s' \
+            "$CORRELATION_ID" "$RESULTADO_DEPLOY_API" "$RESULTADO_DEPLOY_FRONTEND" "$RESULTADO_POS_SYNC" \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          python scripts/notificar_teams.py \
+            --titulo "$TITULO" \
+            --texto "$TEXTO" \
+            --modo auto \
+            --destino-tipo chat \
+            --output notify-teams-deploy-producao.json
+      - uses: actions/upload-artifact@v4
+        if: always() && needs.gate.outputs.production_allowed == 'true'
+        with:
+          name: notify-teams-deploy-producao
+          path: notify-teams-deploy-producao.json
+          if-no-files-found: warn

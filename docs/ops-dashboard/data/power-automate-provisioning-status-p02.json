@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "artifact": "power-automate-provisioning-status-p02",
+  "generated_at": "2026-06-28T00:00:00-03:00",
+  "status": "implemented",
+  "maturity": "p0_2_workflow_registry_callbacks",
+  "capability": "Power Automate Provisioning Status Automation",
+  "workflow": {
+    "path": ".github/workflows/power-automate-flow-provisioning-p0.yml",
+    "callbacks": [
+      {
+        "event": "workflow_started",
+        "registry_status": "running"
+      },
+      {
+        "event": "workflow_success",
+        "registry_status": "succeeded"
+      },
+      {
+        "event": "workflow_failure",
+        "registry_status": "failed"
+      }
+    ]
+  },
+  "required_secrets": [
+    "REQSYS_API_BASE_URL"
+  ],
+  "optional_secrets": [
+    "REQSYS_PROVISIONING_STATUS_TOKEN"
+  ],
+  "registry_fields_updated": [
+    "status",
+    "workflow_run_url",
+    "artifact_url",
+    "erro"
+  ],
+  "governance": {
+    "callback_continue_on_error": true,
+    "does_not_block_provisioning_if_reqsys_callback_fails": true,
+    "correlation_id_required_for_callback": true,
+    "status_evidence_real_urls": true
+  }
+}

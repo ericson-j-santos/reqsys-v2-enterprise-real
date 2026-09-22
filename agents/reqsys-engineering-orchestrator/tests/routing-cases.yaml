@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "cases": [
+    {
+      "id": "ci_pr",
+      "input": "Corrija o CI da PR #1798 no mesmo PR.",
+      "expected_route": "ci_remediator"
+    },
+    {
+      "id": "implementation",
+      "input": "Implemente esta funcionalidade no ReqSys.",
+      "expected_route": "builder"
+    },
+    {
+      "id": "e2e_failure",
+      "input": "Analise por que o E2E falhou e valide falso positivo.",
+      "expected_route": "e2e_validator"
+    },
+    {
+      "id": "planning",
+      "input": "Qual o próximo passo da arquitetura do ReqSys?",
+      "expected_route": "planner"
+    }
+  ]
+}

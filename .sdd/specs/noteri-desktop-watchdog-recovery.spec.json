@@ -1,0 +1,38 @@
+{
+  "feature_name": "noteri-desktop-watchdog-recovery",
+  "project": "ReqSys v2 Enterprise — Desktop control plane",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Fallback governado Noteri→Desktop que consulta e inicia somente a tarefa watchdog já existente via Windows schtasks remoto.",
+  "scope": "local-dev",
+  "files": [
+    "scripts/noteri_desktop_watchdog_rpc_recovery.py",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    ".github/self-hosted-runner-policy.json",
+    "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
+    "tests/test_reqsys_authorized_actions_gateway.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "Fixed target/task, Query+Run only, AtStartup+S4U, negative RPC/config tests, exact gateway dispatch and independent Desktop runner pickup. Workflow shell must be Windows PowerShell (`powershell`) on Noteri; `pwsh` is not required."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "reboot": false,
+    "secrets": false,
+    "task_creation_or_mutation": false
+  },
+  "runtime_shell": "powershell"
+}

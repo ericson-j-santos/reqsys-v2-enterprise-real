@@ -1,0 +1,75 @@
+name: User Experience Public Availability State
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/consolidate_user_experience_public_availability.py'
+      - 'tests/test_consolidate_user_experience_public_availability.py'
+      - '.github/workflows/user-experience-public-availability-state.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/consolidate_user_experience_public_availability.py'
+      - 'tests/test_consolidate_user_experience_public_availability.py'
+      - '.github/workflows/user-experience-public-availability-state.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consolidate-public-availability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/consolidate_user_experience_public_availability.py
+          python -m unittest tests/test_consolidate_user_experience_public_availability.py
+      - name: Build governed evidence
+        run: |
+          mkdir -p evidence/ux out
+          cat > evidence/ux/public-availability.json <<'JSON'
+          {
+            "environments": {
+              "dev": {"pass_rate": 100.0},
+              "stg": {"pass_rate": 100.0},
+              "prod": {"pass_rate": 100.0}
+            },
+            "sample_count": 3,
+            "stable_sequence": 3,
+            "common_fingerprint": "ci-contract",
+            "drift_detected": false,
+            "degradation_detected": false
+          }
+          JSON
+          echo '{"readiness":"unchanged"}' > out/state.json
+          echo '{"production_ready":false}' > out/brief.json
+          python scripts/consolidate_user_experience_public_availability.py \
+            --evidence evidence/ux/public-availability.json \
+            --state out/state.json \
+            --brief out/brief.json
+      - name: Validate guardrails
+        run: |
+          python - <<'PY'
+          import json
+          state=json.load(open('out/state.json'))
+          brief=json.load(open('out/brief.json'))
+          card=state['cards']['user_experience_public_availability']
+          assert card['mode']=='report-only'
+          assert card['production_blocker'] is False
+          assert card['human_approval_required'] is True
+          assert state['readiness']=='unchanged'
+          assert brief['production_ready'] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-public-availability-state-${{ github.sha }}
+          path: |
+            evidence/ux/public-availability.json
+            out/state.json
+            out/brief.json
+          retention-days: 90

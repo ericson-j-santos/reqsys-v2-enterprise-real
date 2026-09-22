@@ -1,0 +1,55 @@
+name: BACEN Third-Party Classification Risk
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_third_party_classification_risk.py"
+      - "tests/test_generate_bacen_third_party_classification_risk.py"
+      - ".github/workflows/bacen-third-party-classification-risk.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_third_party_classification_risk.py"
+      - "tests/test_generate_bacen_third_party_classification_risk.py"
+      - ".github/workflows/bacen-third-party-classification-risk.yml"
+  schedule:
+    - cron: "41 5 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-third-party-classification-risk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML pytest
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/generate_bacen_third_party_classification_risk.py
+          python -m py_compile tests/test_generate_bacen_third_party_classification_risk.py
+          python -m pytest tests/test_generate_bacen_third_party_classification_risk.py -q
+      - name: Generate classification risk artifact
+        run: |
+          python scripts/generate_bacen_third_party_classification_risk.py \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --output artifacts/bacen/bacen-05-classification-risk.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-classification-risk
+          path: artifacts/bacen/bacen-05-classification-risk.json
+          if-no-files-found: error
+          retention-days: 365

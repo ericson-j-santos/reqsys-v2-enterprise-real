@@ -1,0 +1,273 @@
+name: Teams Notification Dashboard
+
+on:
+  schedule:
+    - cron: "35 12 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - docs/ops-dashboard/teams-notification/**
+      - .github/workflows/teams-notification-dashboard.yml
+      - .github/workflows/teams-gold-certification.yml
+      - .github/workflows/teams-provisional-gold-certification.yml
+      - .github/workflows/teams-certification-progress-status.yml
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+
+concurrency:
+  group: teams-notification-dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Gerar dashboard executivo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SLO_TARGET: "99.0"
+      WINDOW_DAYS: "30"
+      PROVISIONAL_DAYS: "7"
+      MIN_RUNS: "20"
+      DELIVERY_WORKFLOW: teams-commit-notification.yml
+      MONITOR_WORKFLOW: teams-dashboard-availability-monitor.yml
+      STATUS_ISSUE_TITLE: "[STATUS][TEAMS] Progresso da certificação operacional"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Calcular dados públicos do dashboard
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import math
+          import os
+          import subprocess
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          window_days = int(os.environ["WINDOW_DAYS"])
+          provisional_days = int(os.environ["PROVISIONAL_DAYS"])
+          target = float(os.environ["SLO_TARGET"])
+          min_runs = int(os.environ["MIN_RUNS"])
+          now = datetime.now(timezone.utc)
+          cutoff = now - timedelta(days=window_days)
+
+          def workflow_runs(filename: str, newest_first: bool = True) -> list[dict]:
+              completed = subprocess.run(
+                  [
+                      "gh", "api", "--paginate", "-q", ".workflow_runs[]",
+                      f"repos/{repository}/actions/workflows/{filename}/runs?per_page=100",
+                  ],
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              if completed.returncode != 0:
+                  raise SystemExit(completed.stderr or f"Falha ao consultar {filename}")
+              runs: list[dict] = []
+              for document in completed.stdout.splitlines():
+                  if not document.strip():
+                      continue
+                  run = json.loads(document)
+                  created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                  if created >= cutoff and run.get("status") == "completed":
+                      runs.append(run)
+              runs.sort(key=lambda item: item["created_at"], reverse=newest_first)
+              return runs
+
+          def metrics(runs: list[dict]) -> dict:
+              total = len(runs)
+              successes = sum(run.get("conclusion") == "success" for run in runs)
+              failures = total - successes
+              rate = round(successes / total * 100.0, 2) if total else 0.0
+              ordered = sorted(runs, key=lambda item: item["created_at"])
+              observed_days = 0.0
+              first_run_at = None
+              if ordered:
+                  first_run_at = ordered[0]["created_at"]
+                  first = datetime.fromisoformat(first_run_at.replace("Z", "+00:00"))
+                  observed_days = round((now - first).total_seconds() / 86400, 2)
+              return {
+                  "total": total,
+                  "successes": successes,
+                  "failures": failures,
+                  "success_rate_percent": rate,
+                  "observed_days": observed_days,
+                  "first_run_at": first_run_at,
+              }
+
+          delivery_runs = workflow_runs(os.environ["DELIVERY_WORKFLOW"])
+          monitor_runs = workflow_runs(os.environ["MONITOR_WORKFLOW"])
+          delivery = metrics(delivery_runs)
+          monitor = metrics(monitor_runs)
+
+          allowed_failures = math.floor(delivery["total"] * (100.0 - target) / 100.0)
+          remaining_budget = allowed_failures - delivery["failures"]
+          durations = []
+          for run in delivery_runs:
+              start_value = run.get("run_started_at") or run.get("created_at")
+              end_value = run.get("updated_at")
+              if start_value and end_value:
+                  start = datetime.fromisoformat(start_value.replace("Z", "+00:00"))
+                  end = datetime.fromisoformat(end_value.replace("Z", "+00:00"))
+                  durations.append(max(0.0, (end - start).total_seconds()))
+          mean_duration = round(sum(durations) / len(durations), 2) if durations else 0.0
+          consecutive_failures = 0
+          for run in delivery_runs:
+              if run.get("conclusion") == "success":
+                  break
+              consecutive_failures += 1
+
+          state = "insufficient_data" if delivery["total"] == 0 else ("healthy" if delivery["success_rate_percent"] >= target else "breached")
+          observed_days = min(delivery["observed_days"], monitor["observed_days"])
+          sample_ready = delivery["total"] >= min_runs and monitor["total"] >= min_runs
+          quality_ready = delivery["success_rate_percent"] >= target and monitor["success_rate_percent"] >= target
+          provisional_window_ready = observed_days >= provisional_days
+          definitive_window_ready = observed_days >= window_days
+
+          if sample_ready and quality_ready and definitive_window_ready:
+              certification_state = "gold_certified"
+          elif sample_ready and quality_ready and provisional_window_ready:
+              certification_state = "provisional_gold"
+          elif sample_ready and not quality_ready:
+              certification_state = "quality_blocked"
+          else:
+              certification_state = "observation"
+
+          blockers = []
+          if delivery["total"] < min_runs:
+              blockers.append(f"faltam {min_runs - delivery['total']} entregas")
+          if monitor["total"] < min_runs:
+              blockers.append(f"faltam {min_runs - monitor['total']} monitores")
+          if not provisional_window_ready:
+              blockers.append(f"faltam {max(0.0, provisional_days - observed_days):.2f} dias para ouro provisório")
+          elif not definitive_window_ready:
+              blockers.append(f"faltam {max(0.0, window_days - observed_days):.2f} dias para ouro definitivo")
+          if delivery["success_rate_percent"] < target:
+              blockers.append("SLO de entregas abaixo de 99%")
+          if monitor["success_rate_percent"] < target:
+              blockers.append("SLO do monitor abaixo de 99%")
+
+          first_candidates = [value for value in (delivery["first_run_at"], monitor["first_run_at"]) if value]
+          first_observation = max(first_candidates) if len(first_candidates) == 2 else (first_candidates[0] if first_candidates else None)
+          provisional_eta = None
+          definitive_eta = None
+          if first_observation:
+              first = datetime.fromisoformat(first_observation.replace("Z", "+00:00"))
+              provisional_eta = (first + timedelta(days=provisional_days)).isoformat()
+              definitive_eta = (first + timedelta(days=window_days)).isoformat()
+
+          issue_lookup = subprocess.run(
+              ["gh", "issue", "list", "--repo", repository, "--state", "open", "--search", f'\"{os.environ["STATUS_ISSUE_TITLE"]}\" in:title', "--json", "url", "--jq", ".[0].url // empty"],
+              text=True,
+              capture_output=True,
+              check=False,
+          )
+          status_issue_url = issue_lookup.stdout.strip() if issue_lookup.returncode == 0 else ""
+
+          requirements = {
+              "amostra de entregas suficiente": delivery["total"] >= min_runs,
+              "amostra do monitor suficiente": monitor["total"] >= min_runs,
+              "janela provisória de 7 dias completa": provisional_window_ready,
+              "janela definitiva de 30 dias completa": definitive_window_ready,
+              "SLO de entregas atendido": delivery["success_rate_percent"] >= target,
+              "SLO de disponibilidade atendido": monitor["success_rate_percent"] >= target,
+          }
+          certification_payload = {
+              "state": certification_state,
+              "delivery_rate": delivery["success_rate_percent"],
+              "delivery_runs": delivery["total"],
+              "monitor_rate": monitor["success_rate_percent"],
+              "monitor_runs": monitor["total"],
+              "observed_days": observed_days,
+              "minimum_delivery_runs": min_runs,
+              "minimum_monitor_runs": min_runs,
+              "provisional_observation_days": provisional_days,
+              "definitive_observation_days": window_days,
+              "sample_progress_percent": round(min(100.0, min(delivery["total"] / min_runs, monitor["total"] / min_runs) * 100.0), 2),
+              "provisional_time_progress_percent": round(min(100.0, observed_days / provisional_days * 100.0), 2),
+              "definitive_time_progress_percent": round(min(100.0, observed_days / window_days * 100.0), 2),
+              "provisional_eta": provisional_eta,
+              "definitive_eta": definitive_eta,
+              "blockers": blockers,
+              "requirements": requirements,
+              "status_issue_url": status_issue_url,
+              "run_url": f"{os.environ['GITHUB_SERVER_URL']}/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          canonical = json.dumps(certification_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+          certification_payload["evidence_sha256"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+          report = {
+              "schema_version": "3.0.0",
+              "service": "github-teams-commit-notification",
+              "generated_at": now.isoformat(),
+              "window_days": window_days,
+              "target_percent": target,
+              "state": state,
+              "total_runs": delivery["total"],
+              "successful_runs": delivery["successes"],
+              "failed_runs": delivery["failures"],
+              "success_rate_percent": delivery["success_rate_percent"],
+              "allowed_failures": allowed_failures,
+              "remaining_error_budget": remaining_budget,
+              "consecutive_failures": consecutive_failures,
+              "mean_duration_seconds": mean_duration,
+              "certification": certification_payload,
+              "recent_runs": [
+                  {"id": run.get("id"), "event": run.get("event"), "conclusion": run.get("conclusion"), "created_at": run.get("created_at"), "html_url": run.get("html_url")}
+                  for run in delivery_runs[:20]
+              ],
+          }
+
+          site = Path("site")
+          site.mkdir(exist_ok=True)
+          source = Path("docs/ops-dashboard/teams-notification/index.html")
+          (site / "index.html").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+          (site / "data.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          (site / "certification-status.json").write_text(json.dumps(certification_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          (site / ".nojekyll").write_text("", encoding="utf-8")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("### Teams Notification Dashboard\n")
+              summary.write(f"- SLO: **{delivery['success_rate_percent']:.2f}%**\n")
+              summary.write(f"- Certificação: **{certification_state}**\n")
+              summary.write(f"- Observação: **{observed_days:.2f}/{window_days} dias**\n")
+              summary.write(f"- Bloqueios: **{len(blockers)}**\n")
+              summary.write(f"- Evidência: `{certification_payload['evidence_sha256']}`\n")
+          PY
+
+      - name: Validar conteúdo público
+        run: |
+          test -s site/index.html
+          test -s site/data.json
+          test -s site/certification-status.json
+          python -m json.tool site/data.json >/dev/null
+          python -m json.tool site/certification-status.json >/dev/null
+          grep -Fq '"certification"' site/data.json
+          python -c "
+          import json, sys
+          state = json.load(open('site/certification-status.json'))['state']
+          valid = {'gold_certified', 'provisional_gold', 'quality_blocked', 'observation'}
+          sys.exit(0 if state in valid else f'estado de certificação inesperado: {state}')
+          "
+          grep -Fq 'evidence_sha256' site/certification-status.json
+          ! grep -R "TEAMS_WEBHOOK_URL\|AZURE_CLIENT_SECRET" site/
+
+      - name: Publicar artefato para o publicador canônico
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-dashboard-site
+          path: site
+          if-no-files-found: error
+          retention-days: 1

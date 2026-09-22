@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.dev/schemas/minimum-controlled-version.schema.json",
+  "title": "ReqSys Minimum Controlled Version Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reqsys_schema", "version", "maturity", "controls", "contextual_controls", "release_allowed"],
+  "properties": {
+    "reqsys_schema": {"const": "1.0"},
+    "version": {"type": "string", "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"},
+    "maturity": {"enum": ["EXPERIMENTAL", "MINIMUM_CONTROLLED", "OPERATIONAL", "GOLD_STANDARD"]},
+    "controls": {
+      "type": "object",
+      "additionalProperties": {"enum": ["PASS", "FAIL"]},
+      "required": ["versioning", "artifact_manifest", "environment_configuration", "secret_scanning", "input_validation", "error_handling", "structured_logging", "automated_tests", "ci", "changelog", "execution_instructions", "rollback", "evidence"]
+    },
+    "contextual_controls": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {"enum": ["PASS", "FAIL"]},
+          {"type": "object", "additionalProperties": false, "required": ["status", "justification"], "properties": {"status": {"const": "NOT_APPLICABLE"}, "justification": {"type": "string", "minLength": 3}}}
+        ]
+      }
+    },
+    "release_allowed": {"type": "boolean"}
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Noteri control-plane fallback without RDC",
+  "status": "code_ready_activation_pending",
+  "approvals": {
+    "requirements": true
+  },
+  "architecture": {
+    "external_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "self_hosted_workflow": ".github/workflows/noteri-control-plane-probe.yml",
+    "probe": "scripts/noteri_control_plane_probe.py",
+    "watchdog": "scripts/noteri_control_plane_watchdog.py",
+    "bootstrap": "scripts/activate_noteri_free_control_plane.py",
+    "runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "noteri",
+      "reqsys-dev"
+    ],
+    "rdc_required": false,
+    "environment": "DEV",
+    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml"
+  },
+  "security": {
+    "arbitrary_shell": false,
+    "gui_input": false,
+    "secrets_stored": false,
+    "production": false,
+    "reboot": false,
+    "fail_closed_on_missing_runner": true,
+    "elevated_result_contains_secrets": false
+  },
+  "runtime_gate": {
+    "prerequisite": "GitHub CLI autenticado e bootstrap governado capaz de provisionar ou reutilizar o runner do Noteri",
+    "activation_pending_until": [
+      "AtStartup+S4U watchdog proven",
+      "Runner.Listener.exe proven",
+      "workflow pickup proven"
+    ],
+    "unavailable_error": "SELF_HOSTED_RUNNER_UNAVAILABLE",
+    "abandoned_run_cleanup": "cancel_exact_run_and_record_terminal_state"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_control_plane_fallback.py",
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_self_hosted_runner_governance.py",
+      "tests/test_activate_noteri_free_control_plane.py",
+      "tests/test_noteri_runtime_auto_watch_workflow.py"
+    ],
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
+    "workflow": ".github/workflows/noteri-control-plane-probe.yml",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "probe": "scripts/noteri_control_plane_probe.py",
+    "watchdog": "scripts/noteri_control_plane_watchdog.py",
+    "bootstrap": "scripts/activate_noteri_free_control_plane.py",
+    "policy": ".github/self-hosted-runner-policy.json",
+    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml"
+  },
+  "artifacts": {
+    "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
+    "headless_uac_launcher": "scripts/noteri_control_plane_watchdog_uac_launcher.py",
+    "headless_interactive_stage_root": "%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneBootstrap\\<sha>"
+  },
+  "commands": {
+    "headless_activation": "/reqsys run noteri-headless-control-plane-activation"
+  },
+  "runtime_acceptance": {
+    "headless_task": {
+      "trigger": "AtStartup",
+      "logon_type": "S4U",
+      "host": "Noteri",
+      "rdc_required": false,
+      "shell": "powershell",
+      "shell_reason": "Noteri uses Windows PowerShell; pwsh is not installed in the self-hosted runner PATH",
+      "task_folder": "\\Automation",
+      "validator": "schtasks_xml",
+      "elevated_result": "required",
+      "failure_contract": "elevated child must persist sanitized result and fail closed",
+      "uac_brokers": [
+        "ShellExecuteW(runas)",
+        "Windows PowerShell Start-Process -Verb RunAs",
+        "Shell.Application.ShellExecute(runas)"
+      ],
+      "uac_bypass_allowed": false,
+      "principal_resolution": [
+        "current user SID from whoami /user",
+        "resolved whoami account name fallback"
+      ],
+      "principal_value_logged": false,
+      "s4u_logon_failure_code": "0x8007052E",
+      "local_interactive_fallback": {
+        "staged_by": "GitHub self-hosted runner",
+        "desktop_files": [
+          "Ativar-Noteri-Headless.cmd",
+          "Ativar-Noteri-Headless.ps1"
+        ],
+        "purpose": "single-click legitimate UAC consent when remote runner cannot invoke runas",
+        "rdc_required": false,
+        "uac_bypass_allowed": false,
+        "source_binding": "workflow_checkout_sha",
+        "git_ref_dependency": false,
+        "staged_files_sha256_verified": true,
+        "python_executable_source": "resolved_by_runner_and_embedded_as_absolute_path",
+        "remote_uac_attempted": false,
+        "diagnostics": {
+          "interactive_result": "%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneWatchdog\\interactive-launch-result.json",
+          "elevated_result": "%LOCALAPPDATA%\\ReqSys\\NoteriControlPlaneWatchdog\\elevated-install-result.json",
+          "probe_exposes_sanitized_fields_only": true
+        }
+      },
+      "registration_strategies": [
+        "Task Scheduler COM with caller identity and null password",
+        "schtasks /Create /SC ONSTART /NP /RL LIMITED fallback"
+      ],
+      "native_fallback_contract": {
+        "password_stored": false,
+        "interactive": false,
+        "local_resources_only": true,
+        "accepted_only_when_schtasks_xml_proves_boot_and_s4u": true,
+        "cleanup_on_contract_mismatch": true
+      },
+      "error_evidence": {
+        "outer_com_hresult": true,
+        "nested_task_scheduler_hresult": true,
+        "principal_value_logged": false
+      }
+    },
+    "probe_workflow": {
+      "host": "Noteri",
+      "shell": "powershell",
+      "forbidden_shell": "pwsh",
+      "reason": "Noteri self-hosted runner exposes Windows PowerShell; PowerShell 7 (pwsh) is not available on PATH",
+      "headless_task_status": {
+        "validator": "schtasks_xml",
+        "required_fields": [
+          "exists",
+          "enabled",
+          "trigger_at_startup",
+          "logon_type"
+        ],
+        "ready_when": "exists=true && enabled=true && trigger_at_startup=true && logon_type=S4U",
+        "requires_admin": false,
+        "rdc_required": false
+      }
+    },
+    "auto_watch": {
+      "workflow": ".github/workflows/noteri-runtime-auto-watch.yml",
+      "schedule": "every_10_minutes",
+      "runner": "ubuntu-latest",
+      "dispatch_target": "noteri-control-plane-probe.yml",
+      "cancel_without_pickup": true,
+      "validates_exact_main_sha": true,
+      "reads_sanitized_probe_artifact": true,
+      "states": [
+        "runner_unavailable",
+        "runner_online_headless_not_ready",
+        "runtime_active",
+        "probe_failed"
+      ],
+      "reboot": false,
+      "rdc_required": false,
+      "production_touched": false,
+      "secrets_read": false
+    }
+  }
+}

@@ -1,0 +1,19 @@
+﻿{
+    "generated_at_local":  "2026-07-14",
+    "environment":  "ReqSys Test",
+    "environment_id":  "b6717f20-2dcb-ed70-8b1c-e9a3c236afe7",
+    "environment_url":  "https://orgf2ca7436.crm2.dynamics.com/",
+    "validation":  "live_copilot_rbac_configuration",
+    "bot_name":  "ReqSys Copilot Studio Orquestrador",
+    "bot_id":  "5da35c84-3153-4b22-857c-56dc6415365e",
+    "statecode":  "Com atividade",
+    "statuscode":  "Provisionado",
+    "schema_name":  "reqsys_ReqSysCopilotStudioOrquestrador",
+    "authenticationmode":  "Integrado",
+    "authenticationtrigger":  "Sempre",
+    "accesscontrolpolicy":  "Associacao de grupo",
+    "authorized_user_checked":  "ericsonjosedossantos@tieri659.onmicrosoft.com",
+    "authorized_user_result":  "PAC connected and listed Copilot in STG/Test",
+    "unauthorized_user_negative_test":  "not_executed_no_secondary_test_principal_available",
+    "passed":  true
+}

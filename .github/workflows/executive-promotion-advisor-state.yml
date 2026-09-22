@@ -1,0 +1,123 @@
+name: Executive Promotion Advisor State
+
+on:
+  workflow_run:
+    workflows:
+      - "Executive Promotion Advisor"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID do Executive Promotion Advisor"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: executive-promotion-advisor-state-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    name: Consolidate advisor into State and Brief
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/enrich_executive_promotion_advisor_state.py
+          python -m unittest tests/test_enrich_executive_promotion_advisor_state.py
+
+      - name: Resolve source run
+        id: source
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_RUN_ID"
+          echo "run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download advisor artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: executive-promotion-advisor
+          path: artifacts/executive-promotion-advisor
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Prepare State contracts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-promotion-advisor-state
+          cp docs/ops-dashboard/data/runtime-executive-index.json \
+            artifacts/executive-promotion-advisor-state/runtime-executive-index.json
+          cp docs/ops-dashboard/data/executive-brief.json \
+            artifacts/executive-promotion-advisor-state/executive-brief.json
+
+      - name: Consolidate advisor evidence
+        run: |
+          set -euo pipefail
+          python scripts/enrich_executive_promotion_advisor_state.py \
+            --advisor artifacts/executive-promotion-advisor/executive-promotion-advisor.json \
+            --runtime-index artifacts/executive-promotion-advisor-state/runtime-executive-index.json \
+            --executive-brief artifacts/executive-promotion-advisor-state/executive-brief.json
+
+      - name: Validate non-blocking State contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/executive-promotion-advisor-state')
+          runtime = json.loads((root / 'runtime-executive-index.json').read_text())
+          brief = json.loads((root / 'executive-brief.json').read_text())
+          card = runtime['cards']['executive_promotion_advisor']
+          assert card['mode'] == 'report-only'
+          assert card['production_blocker'] is False
+          assert card['human_approval_required'] is True
+          assert 'executive_promotion_advisor' in brief['evidencias']
+          PY
+
+      - name: Publish consolidated State evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-state
+          path: artifacts/executive-promotion-advisor-state
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize consolidation
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          runtime = json.loads(Path('artifacts/executive-promotion-advisor-state/runtime-executive-index.json').read_text())
+          card = runtime['cards']['executive_promotion_advisor']
+          print('# Executive Promotion Advisor — Estado Único')
+          print()
+          print(f"- Decisão: {card['decision']}")
+          print(f"- Confiança: {card['confidence_percent']}%")
+          print(f"- Domínios de risco: {len(card['risk_domains'])}")
+          print('- Modo: report-only')
+          print('- Aprovação humana: obrigatória')
+          print('- Bloqueio automático de produção: não')
+          PY

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/operational-slo-evidence.schema.json",
+  "title": "ReqSys Operational SLO Evidence",
+  "description": "Evidência report-only de SLO/SLA operacional derivada de histórico CI, probes e MTTR.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "source",
+    "status",
+    "commit_sha",
+    "correlation_id",
+    "summary",
+    "slos",
+    "mode"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.0\\.[0-9]+$" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "source": { "const": "operational-slo-evidence" },
+    "status": { "type": "string", "enum": ["healthy", "watch", "degraded"] },
+    "commit_sha": { "type": "string", "minLength": 1 },
+    "correlation_id": { "type": "string", "minLength": 1 },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "summary": {
+      "type": "object",
+      "required": ["slo_count", "breach_count", "met_count", "no_data_count"],
+      "properties": {
+        "slo_count": { "type": "integer", "minimum": 0 },
+        "breach_count": { "type": "integer", "minimum": 0 },
+        "met_count": { "type": "integer", "minimum": 0 },
+        "no_data_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "slos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slo_id",
+          "name",
+          "environment",
+          "target_percent",
+          "window_days",
+          "breach",
+          "status"
+        ],
+        "properties": {
+          "slo_id": { "type": "string" },
+          "name": { "type": "string" },
+          "environment": { "type": "string" },
+          "target_percent": { "type": "number" },
+          "window_days": { "type": "integer", "minimum": 1 },
+          "actual_percent": { "type": ["number", "null"] },
+          "error_budget_remaining": { "type": ["number", "null"] },
+          "breach": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["met", "breach", "no_data"] }
+        }
+      }
+    }
+  }
+}

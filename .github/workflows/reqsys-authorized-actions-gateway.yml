@@ -1,0 +1,334 @@
+name: ReqSys Authorized Actions Gateway
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Dispatch allowlisted GitHub Action
+    if: >-
+      github.event.issue.number == 1705 &&
+      github.event.comment.user.login == 'ericson-j-santos' &&
+      (
+        github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev' ||
+        github.event.comment.body == '/reqsys run fly-dev-fast-deploy' ||
+        github.event.comment.body == '/reqsys run runtime-e2e-dev' ||
+        github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
+        github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
+        github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
+        github.event.comment.body == '/reqsys run desktop-rdc-recovery' ||
+        github.event.comment.body == '/reqsys run noteri-control-plane-probe' ||
+        github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation' ||
+        github.event.comment.body == '/reqsys run figma-github-e2e-dev' ||
+        github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe' ||
+        github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap' ||
+        github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
+        github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
+        github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery' ||
+        github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair' ||
+        github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
+        github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
+        github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Resolve static allowlist
+        id: route
+        shell: bash
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          case "$COMMENT_BODY" in
+            '/reqsys run bootstrap-wsjf-m365-dev')
+              target='bootstrap-wsjf-m365-dev.yml'
+              ;;
+            '/reqsys run fly-dev-fast-deploy')
+              target='fly-dev-fast-deploy.yml'
+              ;;
+            '/reqsys run runtime-e2e-dev')
+              target='runtime-e2e-continuous.yml'
+              ;;
+            '/reqsys run pending-agent-pr-permission-watch')
+              target='pending-development-agent-pr-permission-watch.yml'
+              ;;
+            '/reqsys run bacen-57-simulation-assessment')
+              target='bacen-57-simulation-assessment.yml'
+              ;;
+            '/reqsys run cofre-runtime-evidence-dev')
+              target='cofre-runtime-evidence-gate.yml'
+              ;;
+            '/reqsys run desktop-rdc-recovery')
+              target='desktop-rdc-recovery.yml'
+              ;;
+            '/reqsys run noteri-control-plane-probe')
+              target='noteri-control-plane-probe.yml'
+              ;;
+            '/reqsys run noteri-headless-control-plane-activation')
+              target='noteri-headless-control-plane-activation.yml'
+              ;;
+            '/reqsys run figma-github-e2e-dev')
+              target='figma-github-e2e-dev.yml'
+              ;;
+            '/reqsys run fabric-oidc-readonly-probe')
+              target='fabric-oidc-readonly-probe.yml'
+              ;;
+            '/reqsys run report-factory-fabric-dev-access-bootstrap')
+              target='report-factory-fabric-dev-access-bootstrap.yml'
+              ;;
+            '/reqsys run codex-ollama-e2e-dev')
+              target='codex-ollama-e2e-dev.yml'
+              ;;
+            '/reqsys run codex-worker-pool-smoke-dev')
+              target='codex-worker-pool-smoke-dev.yml'
+              ;;
+            '/reqsys run noteri-desktop-network-probe')
+              target='noteri-desktop-network-probe.yml'
+              ;;
+            '/reqsys run noteri-desktop-watchdog-recovery')
+              target='noteri-desktop-watchdog-recovery.yml'
+              ;;
+            '/reqsys run noteri-desktop-admin-broker-kick')
+              target='noteri-desktop-admin-broker-kick.yml'
+              ;;
+            '/reqsys run pc24x7-runner-registry-repair')
+              target='pc24x7-runner-registry-repair.yml'
+              ;;
+            '/reqsys run pc24x7-teams-token-bootstrap-dev')
+              target='pc24x7-teams-token-bootstrap.yml'
+              ;;
+            '/reqsys run pc24x7-teams-e2e-dev')
+              target='pc24x7-teams-ephemeral-e2e.yml'
+              ;;
+            '/reqsys run noteri-study-mode-dev-reconcile')
+              target='noteri-study-mode-dev-reconcile.yml'
+              ;;
+            *)
+              echo 'command_not_allowlisted' >&2
+              exit 2
+              ;;
+          esac
+          printf 'target=%s\n' "$target" >> "$GITHUB_OUTPUT"
+
+      - name: Capture current main SHA
+        id: main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          test -n "$sha"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch fixed workflow on main
+        id: dispatch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_WORKFLOW" in
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|noteri-study-mode-dev-reconcile.yml) ;;
+            *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
+          esac
+          if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f deploy=true)"
+          elif [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f environment=dev \
+              -f timeout_seconds=20)"
+          else
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main)"
+          fi
+
+          case "$run_url" in
+            "https://github.com/${GITHUB_REPOSITORY}/actions/runs/"*) ;;
+            *) echo 'dispatch_run_url_invalid' >&2; exit 4 ;;
+          esac
+          run_id="${run_url##*/}"
+          case "$run_id" in
+            ''|*[!0-9]*) echo 'dispatch_run_id_invalid' >&2; exit 4 ;;
+          esac
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+          printf 'run_url=%s\n' "$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Validate exact dispatched run evidence
+        id: evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
+        run: |
+          set -euo pipefail
+          run_json=''
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            run_json="$(gh run view "$TARGET_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json databaseId,url,headSha,status,event 2>/dev/null || true)"
+            [ -n "$run_json" ] && break
+            sleep 5
+          done
+          test -n "$run_json"
+          RUN_JSON="$run_json" python - <<'PY'
+          import json, os
+          run = json.loads(os.environ['RUN_JSON'])
+          expected_id = int(os.environ['TARGET_RUN_ID'])
+          expected_url = os.environ['TARGET_RUN_URL']
+          expected_sha = os.environ['EXPECTED_SHA']
+          if run.get('databaseId') != expected_id:
+              raise SystemExit('dispatched_run_id_mismatch')
+          if run.get('url') != expected_url:
+              raise SystemExit('dispatched_run_url_mismatch')
+          if run.get('headSha') != expected_sha:
+              raise SystemExit('dispatched_run_sha_mismatch')
+          if run.get('event') != 'workflow_dispatch':
+              raise SystemExit('dispatched_run_event_mismatch')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f"run_id={run['databaseId']}\n")
+              fh.write(f"run_url={run['url']}\n")
+              fh.write(f"run_status={run['status']}\n")
+          PY
+
+      - name: Validate self-hosted runner pickup
+        id: pickup
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          status='pending'
+          wait_seconds=0
+          for attempt in $(seq 1 36); do
+            status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
+            case "$status" in
+              pending|queued|requested|waiting)
+                sleep 5
+                wait_seconds=$((wait_seconds + 5))
+                ;;
+              *) break ;;
+            esac
+          done
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          printf 'wait_seconds=%s\n' "$wait_seconds" >> "$GITHUB_OUTPUT"
+          case "$status" in
+            pending|queued|requested|waiting)
+              printf 'error=SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\n' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Cancel self-hosted run without pickup
+        id: cleanup
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          cleanup_status='cancel_failed'
+          cleanup_error=''
+          if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
+            cleanup_status='cancel_requested'
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
+              if [ -n "$state" ]; then
+                IFS=$'\t' read -r status conclusion <<< "$state"
+                if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
+                  cleanup_status='cancelled'
+                  break
+                fi
+              fi
+              sleep 5
+            done
+            if [ "$cleanup_status" != 'cancelled' ]; then
+              cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+            fi
+          else
+            cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+          fi
+          printf 'status=%s\n' "$cleanup_status" >> "$GITHUB_OUTPUT"
+          printf 'error=%s\n' "$cleanup_error" >> "$GITHUB_OUTPUT"
+
+      - name: Write sanitized dispatch evidence
+        shell: bash
+        env:
+          COMMAND: ${{ github.event.comment.body }}
+          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
+          TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
+          RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
+          RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
+          RUNNER_PICKUP_WAIT_SECONDS: ${{ steps.pickup.outputs.wait_seconds }}
+          TARGET_CLEANUP_STATUS: ${{ steps.cleanup.outputs.status }}
+          TARGET_CLEANUP_ERROR: ${{ steps.cleanup.outputs.error }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          evidence = {
+              'status': 'dispatched',
+              'authorization': 'exact_issue_actor_command_allowlist',
+              'issue_number': 1705,
+              'actor': os.environ['GITHUB_ACTOR'],
+              'command': os.environ['COMMAND'],
+              'target_workflow': os.environ['TARGET_WORKFLOW'],
+              'target_ref': 'main',
+              'target_sha': os.environ['EXPECTED_SHA'],
+              'target_run_id': int(os.environ['TARGET_RUN_ID']),
+              'target_run_url': os.environ['TARGET_RUN_URL'],
+              'target_run_status': os.environ['TARGET_RUN_STATUS'],
+              'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
+              'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
+              'runner_pickup_wait_seconds': int(os.environ.get('RUNNER_PICKUP_WAIT_SECONDS') or '0'),
+              'target_cleanup_status': os.environ.get('TARGET_CLEANUP_STATUS') or None,
+              'target_cleanup_error': os.environ.get('TARGET_CLEANUP_ERROR') or None,
+              'gateway_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'secrets_read': False,
+              'production_touched': False,
+          }
+          with open('authorized-action-dispatch.json', 'w', encoding='utf-8') as fh:
+              json.dump(evidence, fh, indent=2, sort_keys=True)
+              fh.write('\n')
+          PY
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: authorized-action-dispatch-${{ github.run_id }}
+          path: authorized-action-dispatch.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail closed when self-hosted runner pickup times out or is busy
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        shell: bash
+        run: |
+          echo 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' >&2
+          exit 4

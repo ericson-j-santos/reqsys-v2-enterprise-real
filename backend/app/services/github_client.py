@@ -1,0 +1,194 @@
+import json
+import time
+from typing import Any
+from urllib import parse, request
+from urllib.error import HTTPError, URLError
+
+from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry
+from app.core.secrets import get_secret
+
+GITHUB_MAX_RETRIES = 3
+GITHUB_RETRY_BACKOFF_SECONDS = 0.5
+GITHUB_CIRCUIT_FAILURE_THRESHOLD = 3
+GITHUB_CIRCUIT_COOLDOWN_SECONDS = 60
+
+_github_circuit = CircuitBreaker(
+    name='github_api',
+    failure_threshold=GITHUB_CIRCUIT_FAILURE_THRESHOLD,
+    cooldown_seconds=GITHUB_CIRCUIT_COOLDOWN_SECONDS,
+)
+
+
+class GitHubError(RuntimeError):
+    pass
+
+
+def reset_circuit_breaker() -> None:
+    """Reseta o estado do circuit breaker (uso em testes)."""
+    _github_circuit.reset()
+
+
+def _parse_repo(repo: str) -> tuple[str, str]:
+    clean = (repo or '').strip().strip('/')
+    parts = clean.split('/')
+    if len(parts) != 2 or not all(parts):
+        raise GitHubError('Repo invalido. Use owner/repo.')
+    return parts[0], parts[1]
+
+
+def _do_request(req: request.Request) -> Any:
+    try:
+        with request.urlopen(req, timeout=20) as resp:  # nosec B310
+            raw = resp.read().decode('utf-8')
+            return json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        # Resposta HTTP definitiva do GitHub (4xx/5xx): nao e falha de rede transitoria,
+        # entao convertemos aqui para nao ser capturada pelo retry_on=(URLError,) do
+        # call_with_retry (HTTPError e subclasse de URLError em urllib).
+        detail = exc.read().decode('utf-8', errors='ignore')
+        raise GitHubError(f'HTTP {exc.code} no GitHub: {detail[:400]}') from exc
+
+
+def _request_json(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    sleep=time.sleep,
+    max_retries: int = GITHUB_MAX_RETRIES,
+    api_version: str = '2022-11-28',
+) -> Any:
+    token = (get_secret('GITHUB_TOKEN', '') or '').strip()
+    if not token:
+        raise GitHubError('GITHUB_TOKEN nao configurado.')
+
+    body = json.dumps(payload).encode('utf-8') if payload is not None else None
+    headers = {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': f'Bearer {token}',
+        'X-GitHub-Api-Version': api_version,
+        'User-Agent': 'reqsys-figma-github-sync/1.0',
+    }
+    if body is not None:
+        headers['Content-Type'] = 'application/json'
+
+    req = request.Request(url=f'https://api.github.com{path}', data=body, headers=headers, method=method)
+    try:
+        return call_with_retry(
+            lambda: _do_request(req),
+            max_retries=max_retries,
+            backoff_seconds=GITHUB_RETRY_BACKOFF_SECONDS,
+            retry_on=(URLError,),
+            sleep=sleep,
+            circuit=_github_circuit,
+        )
+    except CircuitBreakerOpenError as exc:
+        raise GitHubError(str(exc)) from exc
+    except URLError as exc:
+        raise GitHubError(f'Falha de rede no GitHub: {exc.reason}') from exc
+
+
+def list_issues(repo: str, state: str = 'all', limit: int = 100) -> list[dict[str, Any]]:
+    owner, name = _parse_repo(repo)
+    query = parse.urlencode({'state': state, 'per_page': str(max(1, min(limit, 100)))})
+    payload = _request_json('GET', f'/repos/{owner}/{name}/issues?{query}')
+    return [item for item in payload if not item.get('pull_request')]
+
+
+def create_issue(repo: str, title: str, body: str, labels: list[str] | None = None) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    payload: dict[str, Any] = {'title': title, 'body': body}
+    if labels:
+        payload['labels'] = labels
+    return _request_json('POST', f'/repos/{owner}/{name}/issues', payload)
+
+
+def update_issue(repo: str, number: int, title: str | None = None, body: str | None = None, state: str | None = None) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    payload = {k: v for k, v in {'title': title, 'body': body, 'state': state}.items() if v is not None}
+    return _request_json('PATCH', f'/repos/{owner}/{name}/issues/{number}', payload)
+
+
+def create_issue_comment(repo: str, number: int, body: str) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    return _request_json('POST', f'/repos/{owner}/{name}/issues/{number}/comments', {'body': body})
+
+
+def find_issue_by_marker(repo: str, marker: str) -> dict[str, Any] | None:
+    for issue in list_issues(repo=repo, state='all', limit=100):
+        if marker in (issue.get('body') or ''):
+            return issue
+    return None
+
+
+def github_token_configurado() -> bool:
+    return bool((get_secret('GITHUB_TOKEN', '') or '').strip())
+
+
+def get_branch_sha(repo: str, branch: str) -> str | None:
+    owner, name = _parse_repo(repo)
+    branch_path = parse.quote(branch, safe='')
+    try:
+        payload = _request_json('GET', f'/repos/{owner}/{name}/git/ref/heads/{branch_path}')
+        objeto = payload.get('object') or {}
+        return objeto.get('sha')
+    except GitHubError as exc:
+        if 'HTTP 404' in str(exc):
+            return None
+        raise
+
+
+def create_branch(repo: str, branch_name: str, from_sha: str) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    return _request_json(
+        'POST',
+        f'/repos/{owner}/{name}/git/refs',
+        {'ref': f'refs/heads/{branch_name}', 'sha': from_sha},
+    )
+
+
+def get_pull_request(repo: str, pull_number: int) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    return _request_json('GET', f'/repos/{owner}/{name}/pulls/{pull_number}')
+
+
+def list_check_runs(repo: str, commit_sha: str) -> list[dict[str, Any]]:
+    owner, name = _parse_repo(repo)
+    sha = parse.quote(commit_sha, safe='')
+    payload = _request_json('GET', f'/repos/{owner}/{name}/commits/{sha}/check-runs?per_page=100')
+    return payload.get('check_runs') or []
+
+
+def request_async_merge(
+    repo: str,
+    pull_number: int,
+    *,
+    expected_sha: str,
+    merge_method: str,
+    merge_action: str,
+    commit_title: str,
+    commit_message: str,
+) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    return _request_json(
+        'PUT',
+        f'/repos/{owner}/{name}/pulls/{pull_number}/merge-async',
+        {
+            'sha': expected_sha,
+            'merge_method': merge_method,
+            'merge_action': merge_action,
+            'commit_title': commit_title,
+            'commit_message': commit_message,
+        },
+        api_version='2026-03-10',
+    )
+
+
+def get_async_merge(repo: str, pull_number: int, merge_uuid: str) -> dict[str, Any]:
+    owner, name = _parse_repo(repo)
+    safe_uuid = parse.quote(merge_uuid, safe='')
+    return _request_json(
+        'GET',
+        f'/repos/{owner}/{name}/pulls/{pull_number}/merge-async/{safe_uuid}',
+        api_version='2026-03-10',
+    )

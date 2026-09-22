@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T13:30:00-03:00",
+  "scope": "correlation_evidence_contract",
+  "runtime_impact": "none",
+  "correlation_id_pattern": "reqsys-<domain>-<yyyyMMddHHmmss>-<short_suffix>",
+  "required_fields": [
+    "correlation_id",
+    "source",
+    "environment",
+    "status",
+    "timestamp",
+    "risk_level"
+  ],
+  "optional_fields": [
+    "evidence_ref",
+    "rollback"
+  ],
+  "allowed_statuses": [
+    "success",
+    "warning",
+    "failed",
+    "blocked",
+    "unknown"
+  ],
+  "allowed_risk_levels": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "security_rules": [
+    "no_pii",
+    "no_secrets",
+    "mask_personal_identifiers",
+    "preserve_correlation_across_derived_reports"
+  ]
+}

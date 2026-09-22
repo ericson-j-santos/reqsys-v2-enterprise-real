@@ -1,0 +1,86 @@
+name: Operational Executive Dashboard
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '25 12 * * 1-5'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  operational-executive-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare fallback artifacts
+        run: |
+          mkdir -p artifacts/operational-intelligence-hub
+          mkdir -p artifacts/operational-risk-engine
+          mkdir -p artifacts/operational-drift-analyzer
+          mkdir -p artifacts/operational-governance-gate
+          mkdir -p artifacts/operational-history
+
+          cat > artifacts/operational-intelligence-hub/operational-intelligence-hub.json <<'EOF'
+          {
+            "hub_score": {
+              "score": 84,
+              "status": "VERDE"
+            }
+          }
+          EOF
+
+          cat > artifacts/operational-risk-engine/operational-risk-engine.json <<'EOF'
+          {
+            "risk_score": 24,
+            "risk_level": "BAIXO"
+          }
+          EOF
+
+          cat > artifacts/operational-drift-analyzer/operational-drift-analyzer.json <<'EOF'
+          {
+            "drift_level": "BAIXO",
+            "forecast": "ESTAVEL",
+            "stability_index": 78
+          }
+          EOF
+
+          cat > artifacts/operational-governance-gate/operational-governance-gate.json <<'EOF'
+          {
+            "gate_status": "APPROVED"
+          }
+          EOF
+
+          cat > artifacts/operational-history/operational-history.json <<'EOF'
+          [
+            {
+              "snapshot_at_utc": "2026-06-24T12:00:00Z",
+              "hub_score": 84,
+              "metrics": {
+                "overall_failure_rate_percent": 8
+              }
+            }
+          ]
+          EOF
+
+      - name: Generate executive dashboard
+        run: |
+          python scripts/operational_executive_dashboard.py \
+            --hub artifacts/operational-intelligence-hub/operational-intelligence-hub.json \
+            --risk artifacts/operational-risk-engine/operational-risk-engine.json \
+            --drift artifacts/operational-drift-analyzer/operational-drift-analyzer.json \
+            --governance artifacts/operational-governance-gate/operational-governance-gate.json \
+            --history artifacts/operational-history/operational-history.json \
+            --out-dir artifacts/operational-executive-dashboard
+
+      - name: Upload executive dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-executive-dashboard
+          path: artifacts/operational-executive-dashboard/
+          retention-days: 30

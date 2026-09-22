@@ -1,0 +1,24 @@
+{
+  "generated_at_utc": "2026-06-28T00:08:29.879559+00:00",
+  "gate_status": "BLOCKED",
+  "hub_status": "VERMELHO",
+  "hub_score": 0.0,
+  "hub_confidence": "media",
+  "minimum_score_required": 70,
+  "minimum_confidence_required": "media",
+  "recent_failure_snapshots": 0,
+  "reasons": [
+    "Score operacional abaixo do limite minimo: 0.0 < 70"
+  ],
+  "allowed_actions": [
+    "generate_artifacts",
+    "collect_evidence",
+    "manual_review"
+  ],
+  "blocked_actions": [
+    "auto_merge",
+    "auto_rerun",
+    "deploy_without_review",
+    "bypass_ci"
+  ]
+}

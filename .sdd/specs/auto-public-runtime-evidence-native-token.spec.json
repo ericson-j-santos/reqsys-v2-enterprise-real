@@ -1,0 +1,20 @@
+{
+  "feature_name": "auto-public-runtime-evidence-native-token",
+  "project": "ReqSys v2 Enterprise — CI/CD e evidência de runtime",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Mantém o GITHUB_TOKEN efêmero nativo e corrige o roteamento automático para o pipeline atual de promoção, selecionando a URL pública DEV conforme REQSYS_DEV_RUNTIME_PROVIDER (fly ou pc24x7) em modo fail-closed.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_auto_public_runtime_evidence_token_contract.py",
+      "tests/test_pr_quality_review.py"
+    ],
+    "evidence_contract": "O workflow automático deve ser disparado pelo Fly Automatic Environment Promotion, selecionar fly ou pc24x7 explicitamente, exigir PC24X7_DEV_BASE_URL HTTPS quando aplicável, executar strict=true e continuar usando somente GITHUB_TOKEN efêmero."
+  }
+}

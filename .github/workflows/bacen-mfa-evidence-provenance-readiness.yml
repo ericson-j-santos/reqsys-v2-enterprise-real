@@ -1,0 +1,95 @@
+name: BACEN MFA Evidence Provenance Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json"
+      - "scripts/generate_bacen_mfa_evidence_provenance_readiness.py"
+      - ".github/workflows/bacen-mfa-evidence-provenance-readiness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json"
+      - "scripts/generate_bacen_mfa_evidence_provenance_readiness.py"
+      - ".github/workflows/bacen-mfa-evidence-provenance-readiness.yml"
+  schedule:
+    - cron: "41 8 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-mfa-evidence-provenance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-02 MFA Evidence Provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: python -m py_compile scripts/generate_bacen_mfa_evidence_provenance_readiness.py
+
+      - name: Generate readiness evidence
+        run: |
+          python scripts/generate_bacen_mfa_evidence_provenance_readiness.py \
+            --contract governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json \
+            --output artifacts/bacen/bacen-02-mfa-evidence-provenance-readiness.json
+
+      - name: Validate evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-02-mfa-evidence-provenance-readiness.json")
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          assert evidence["control_id"] == "BACEN-02"
+          assert evidence["structural_checks_passed"] is True
+          assert evidence["validated_evidence_ready"] is False
+          assert evidence["readiness_status"] == "pending"
+          assert evidence["production_touched"] is False
+          assert len(evidence["contract_sha256"]) == 64
+          print("BACEN-02 MFA provenance evidence: valid")
+          PY
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-02-mfa-evidence-provenance-readiness
+          path: artifacts/bacen/bacen-02-mfa-evidence-provenance-readiness.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-02-mfa-evidence-provenance-readiness.json")
+          print("## BACEN-02 — Proveniência da evidência MFA")
+          if not path.exists():
+              print("\n- Evidência não gerada.")
+              raise SystemExit(1)
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          print(f"\n- Integridade estrutural: **{evidence['structural_checks_passed']}**")
+          print(f"- Evidência validada pronta: **{evidence['validated_evidence_ready']}**")
+          print(f"- Evidência vencida: **{evidence['evidence_stale']}**")
+          print(f"- Prontidão: **{evidence['readiness_status']}**")
+          print(f"- Achados: **{len(evidence['findings'])}**")
+          print("- Produção acessada: **false**")
+          PY

@@ -1,0 +1,95 @@
+name: DEV Runtime Repair 1272 Once
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-runtime-repair-1272-once.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  observe:
+    name: Observar remediação governada DEV #1272
+    if: github.head_ref == 'fix/dev-runtime-auth-diagnostics-1272'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DISPATCHED_SHA: e9b439fbcd3ea250180e556723baa74d89e6b57c
+    steps:
+      - name: Localizar run disparado
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=''
+          run_url=''
+          for attempt in $(seq 1 20); do
+            payload="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow fly-environment-homologation-gate.yml \
+              --event workflow_dispatch \
+              --limit 20 \
+              --json databaseId,headSha,url,createdAt,status,conclusion)"
+            run_id="$(printf '%s' "$payload" | jq -r --arg sha "$DISPATCHED_SHA" '[.[] | select(.headSha == $sha)] | sort_by(.createdAt) | last | .databaseId // empty')"
+            run_url="$(printf '%s' "$payload" | jq -r --arg sha "$DISPATCHED_SHA" '[.[] | select(.headSha == $sha)] | sort_by(.createdAt) | last | .url // empty')"
+            if [ -n "$run_id" ]; then
+              break
+            fi
+            sleep 3
+          done
+          if [ -z "$run_id" ]; then
+            echo 'Não foi possível localizar o run de homologação DEV disparado.' >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Aguardar conclusão do gate
+        id: watch
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+        run: |
+          set +e
+          timeout 12m gh run watch "$RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status >/dev/null 2>&1
+          watch_rc=$?
+          echo "watch_rc=$watch_rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Registrar resultado sanitizado
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+          RUN_URL: ${{ steps.run.outputs.run_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/dev-runtime-auth-diagnostics
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,status,conclusion,createdAt,updatedAt,headSha,event,url \
+            > artifacts/dev-runtime-auth-diagnostics/repair-observation.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('artifacts/dev-runtime-auth-diagnostics/repair-observation.json').read_text(encoding='utf-8'))
+          with open('/tmp/repair-summary.md', 'w', encoding='utf-8') as out:
+              out.write('## Remediação governada DEV #1272\n\n')
+              out.write(f"- Run: `{data['databaseId']}`\n")
+              out.write(f"- Status: `{data['status']}`\n")
+              out.write(f"- Conclusão: `{data.get('conclusion')}`\n")
+              out.write(f"- SHA: `{data['headSha']}`\n")
+              out.write(f"- URL: {data['url']}\n")
+              out.write('- production_touched: `false`\n')
+          PY
+          cat /tmp/repair-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload da observação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-runtime-repair-1272-observation
+          path: artifacts/dev-runtime-auth-diagnostics/repair-observation.json
+          if-no-files-found: warn
+          retention-days: 30

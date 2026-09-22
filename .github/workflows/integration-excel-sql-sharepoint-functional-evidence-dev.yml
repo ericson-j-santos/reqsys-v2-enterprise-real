@@ -1,0 +1,65 @@
+name: Integration Excel SQL SharePoint — Functional Evidence DEV
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/integration-excel-sql-sharepoint-functional-evidence-dev.yml"
+      - ".github/workflows/integration-excel-sql-sharepoint-oidc-dev.yml"
+      - "backend/app/services/integration_excel_sql_sharepoint_flow.py"
+      - "scripts/integration_excel_sql_sharepoint_dataverse.py"
+      - "scripts/integration_excel_sql_sharepoint_oidc_discovery.py"
+      - "scripts/integration_excel_sql_sharepoint_e2e_oidc.py"
+      - "scripts/integration_excel_sql_sharepoint_e2e_cleanup_oidc.py"
+      - "scripts/select_integration_excel_sql_sharepoint_real_candidate.py"
+      - "scripts/validate_integration_excel_sql_sharepoint_functional_evidence.py"
+      - "tests/test_integration_excel_sql_sharepoint_dataverse.py"
+      - "tests/test_integration_excel_sql_sharepoint_oidc_discovery.py"
+      - "tests/test_integration_excel_sql_sharepoint_e2e_oidc.py"
+      - "tests/test_integration_excel_sql_sharepoint_e2e_cleanup_oidc.py"
+      - "tests/test_integration_excel_sql_sharepoint_flow.py"
+      - "tests/test_integration_excel_sql_sharepoint_workflow_contract.py"
+      - "tests/test_select_integration_excel_sql_sharepoint_real_candidate.py"
+      - "tests/test_validate_integration_excel_sql_sharepoint_functional_evidence.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: integration-excel-sql-sharepoint-functional-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  functional-evidence:
+    if: github.event_name == 'pull_request'
+    name: Functional Evidence DEV — Excel → SQL Server → SharePoint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar contratos e controles contra falso positivo
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest httpx openpyxl
+          pytest -q \
+            tests/test_integration_excel_sql_sharepoint_dataverse.py \
+            tests/test_integration_excel_sql_sharepoint_oidc_discovery.py \
+            tests/test_integration_excel_sql_sharepoint_e2e_oidc.py \
+            tests/test_integration_excel_sql_sharepoint_e2e_cleanup_oidc.py \
+            tests/test_integration_excel_sql_sharepoint_flow.py \
+            tests/test_integration_excel_sql_sharepoint_workflow_contract.py \
+            tests/test_select_integration_excel_sql_sharepoint_real_candidate.py \
+            tests/test_validate_integration_excel_sql_sharepoint_functional_evidence.py
+
+  real-e2e:
+    if: github.event_name == 'workflow_dispatch'
+    name: Functional Evidence DEV — Excel → SQL Server → SharePoint
+    uses: ./.github/workflows/integration-excel-sql-sharepoint-oidc-dev.yml
+    secrets: inherit

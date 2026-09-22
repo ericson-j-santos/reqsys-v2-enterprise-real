@@ -1,0 +1,176 @@
+name: Governed Auto Remediation Engine
+
+# Push main: Main Operational Validation Fast. workflow_run removido (anti-cascata).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "31 10 * * 1-5"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: governed-auto-remediation-engine
+  cancel-in-progress: false
+
+jobs:
+  governance-gate:
+    name: Classificar fonte e suprimir ruído mesh
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.govern.outputs.should_run }}
+      source_workflow: ${{ steps.govern.outputs.source_workflow }}
+      source_conclusion: ${{ steps.govern.outputs.source_conclusion }}
+    steps:
+      - name: Avaliar fonte do evento
+        id: govern
+        env:
+          RUN_NAME: ${{ github.event.workflow_run.name || 'manual' }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+        run: |
+          set -euo pipefail
+          MESH_NOISE=(
+            "Operational Realtime Event Mesh"
+            "Realtime Operational Mesh"
+            "Realtime Operational Streaming Layer"
+            "Live Operational Control Center"
+            "Operational Alert Intelligence"
+            "Operational Runtime Mesh Hub"
+            "Unified Operational Event Bus"
+            "Governed Auto Remediation Engine"
+          )
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "source_workflow=${RUN_NAME}" >> "$GITHUB_OUTPUT"
+            echo "source_conclusion=${RUN_CONCLUSION}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          should_run=true
+          for item in "${MESH_NOISE[@]}"; do
+            if [ "$RUN_NAME" = "$item" ]; then
+              should_run=false
+              break
+            fi
+          done
+
+          {
+            echo "should_run=${should_run}"
+            echo "source_workflow=${RUN_NAME}"
+            echo "source_conclusion=${RUN_CONCLUSION}"
+          } >> "$GITHUB_OUTPUT"
+
+  governed-auto-remediation:
+    name: Analisar remediação governada
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate governed remediation analysis
+        env:
+          WORKFLOW_NAME: ${{ needs.governance-gate.outputs.source_workflow }}
+          WORKFLOW_CONCLUSION: ${{ needs.governance-gate.outputs.source_conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          echo "# Governed Auto Remediation Engine" > governed-auto-remediation.md
+          echo "" >> governed-auto-remediation.md
+          echo "- Workflow: ${WORKFLOW_NAME}" >> governed-auto-remediation.md
+          echo "- Conclusion: ${WORKFLOW_CONCLUSION}" >> governed-auto-remediation.md
+          echo "- Branch: ${HEAD_BRANCH}" >> governed-auto-remediation.md
+          echo "- Commit: ${HEAD_SHA}" >> governed-auto-remediation.md
+          echo "- URL: ${WORKFLOW_URL}" >> governed-auto-remediation.md
+          echo "" >> governed-auto-remediation.md
+
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          
+          workflow = os.getenv('WORKFLOW_NAME', '')
+          conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+          
+          severity = 'LOW'
+          action = 'NO_ACTION'
+          retry_policy = 'BLOCKED'
+          audit_status = 'RECORDED'
+          retry_storm_risk = 'LOW'
+          
+          if conclusion != 'success':
+              severity = 'MEDIUM'
+              action = 'ANALYZE_AND_CONTROLLED_RERUN'
+              retry_policy = 'LIMITED_RERUN'
+          
+          if 'Monitorador' in workflow:
+              severity = 'HIGH'
+              retry_storm_risk = 'MEDIUM'
+          
+          if severity == 'HIGH':
+              retry_policy = 'MANUAL_APPROVAL_REQUIRED'
+          
+          lines = []
+          lines.append('## Governed Remediation Analysis')
+          lines.append(f'- Severity: {severity}')
+          lines.append(f'- Suggested action: {action}')
+          lines.append(f'- Retry policy: {retry_policy}')
+          lines.append(f'- Retry storm risk: {retry_storm_risk}')
+          lines.append(f'- Audit trail: {audit_status}')
+          lines.append('')
+          lines.append('## Governance Rules')
+          lines.append('- Do not execute uncontrolled reruns.')
+          lines.append('- Preserve mandatory CI gates.')
+          lines.append('- Require manual approval for high severity.')
+          lines.append('- Avoid infinite retry loops.')
+          lines.append('- Preserve auditability and operational traceability.')
+          lines.append('')
+          lines.append('## Operational Recommendations')
+          
+          if severity == 'LOW':
+              lines.append('- Workflow stable. Monitoring only.')
+          elif severity == 'MEDIUM':
+              lines.append('- Controlled rerun may be executed.')
+              lines.append('- Validate flaky indicators before escalation.')
+          else:
+              lines.append('- Manual operational intervention recommended.')
+              lines.append('- Block autonomous remediation escalation.')
+          
+          Path('governed-remediation-analysis.md').write_text('\n'.join(lines), encoding='utf-8')
+          PY
+
+          cat governed-remediation-analysis.md >> governed-auto-remediation.md
+
+      - name: Publish governed remediation summary
+        run: |
+          cat governed-auto-remediation.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload governed remediation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-auto-remediation
+          path: governed-auto-remediation.md
+          if-no-files-found: error
+
+  skip-cascade:
+    name: Skip governado (cascata mesh suprimida)
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run != 'true'
+    steps:
+      - name: Registrar skip esperado
+        run: |
+          echo "## Governed Auto Remediation Engine — skip governado" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Fonte: \`${{ needs.governance-gate.outputs.source_workflow }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Motivo: cascata mesh suprimida para evitar ruído operacional" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Classificação: \`governed_skip\`" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.0.0",
+  "default_route": "planner",
+  "execution_order": [
+    "human_gate",
+    "e2e_validator",
+    "ci_remediator",
+    "builder",
+    "planner"
+  ],
+  "routes": [
+    {
+      "id": "human_gate",
+      "risk": "red",
+      "requires_human_approval": true,
+      "any_keywords": [
+        "merge",
+        "deploy",
+        "produção",
+        "production",
+        "force-push",
+        "force push",
+        "excluir permanentemente",
+        "delete permanently",
+        "branch protegida",
+        "protected branch",
+        "permissão administrativa",
+        "administrative permission"
+      ]
+    },
+    {
+      "id": "e2e_validator",
+      "risk": "green",
+      "requires_human_approval": false,
+      "any_keywords": [
+        "e2e",
+        "end-to-end",
+        "ponta a ponta",
+        "falso positivo",
+        "false positive",
+        "validador",
+        "validator"
+      ]
+    },
+    {
+      "id": "ci_remediator",
+      "risk": "yellow",
+      "requires_human_approval": false,
+      "any_keywords": [
+        "ci",
+        "check",
+        "checks",
+        "workflow",
+        "github actions",
+        "pipeline",
+        "job failed",
+        "falha no ci",
+        "erro do ci"
+      ]
+    },
+    {
+      "id": "builder",
+      "risk": "yellow",
+      "requires_human_approval": false,
+      "any_keywords": [
+        "implemente",
+        "implementar",
+        "desenvolva",
+        "desenvolver",
+        "corrija",
+        "correção",
+        "refatorar",
+        "refatore",
+        "código",
+        "codigo"
+      ]
+    },
+    {
+      "id": "planner",
+      "risk": "green",
+      "requires_human_approval": false,
+      "any_keywords": [
+        "planeje",
+        "arquitetura",
+        "requisito",
+        "analise",
+        "análise",
+        "próximo passo",
+        "proximo passo"
+      ]
+    }
+  ],
+  "handoff": {
+    "builder": [
+      "e2e_validator"
+    ],
+    "ci_remediator": [
+      "e2e_validator"
+    ],
+    "e2e_validator": [],
+    "planner": [
+      "builder"
+    ],
+    "human_gate": []
+  },
+  "runtime_bridge": "docs/architecture/operational-orchestrator-v1.md"
+}

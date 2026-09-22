@@ -1,0 +1,42 @@
+name: Frontend Empty State CI Regression
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/components/GovBIEmptyStateBridge.vue"
+      - "frontend/src/components/GovBIEmptyStateBridge.test.js"
+      - "frontend/src/services/api.js"
+      - "frontend/src/services/emptyStateEvents.js"
+      - "frontend/src/services/dashboardEmptyStateIntegration.js"
+      - "frontend/src/services/dashboardFilterReset.js"
+      - "frontend/src/services/__tests__/dashboardFilterReset.test.js"
+      - ".github/workflows/frontend-empty-state-ci-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-empty-state-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-frontend-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run complete unit suite
+        working-directory: frontend
+        run: npm run test:unit
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build

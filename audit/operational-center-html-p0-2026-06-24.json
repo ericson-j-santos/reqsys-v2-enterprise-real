@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-24T02:00:00Z",
+  "increment": "Operational Center HTML P0",
+  "branch": "feat/operational-center-html-p0",
+  "implemented_files": [
+    "scripts/operational_center_html.py",
+    ".github/workflows/operational-center-html.yml",
+    "docs/OPERATIONAL_CENTER_HTML_P0.md"
+  ],
+  "capabilities": [
+    "zero_cdn_html",
+    "responsive_cards",
+    "operational_score_view",
+    "layer_availability_view",
+    "recommendation_view",
+    "blocked_actions_view",
+    "embedded_consolidated_json",
+    "auditable_artifact"
+  ],
+  "blocked_actions": [
+    "auto_merge",
+    "auto_fix_in_production",
+    "unrestricted_rerun",
+    "bypass_ci",
+    "deploy_without_gate"
+  ],
+  "next_increment": "Operational Center History P0"
+}
