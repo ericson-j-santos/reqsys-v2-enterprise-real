@@ -87,6 +87,7 @@ def main() -> int:
         "service_principal_api_setting_found": False,
         "service_principal_api_setting_enabled": None,
         "service_principal_api_setting_scoped_group_count": 0,
+        "developer_setting_summaries": [],
         "secret_value_exposed": False,
         "identifiers_exposed": False,
     }
@@ -216,6 +217,17 @@ def main() -> int:
             )
 
         if evidence["tenant_settings_status"] == 200:
+            evidence["developer_setting_summaries"] = [
+                {
+                    "settingName": str(row.get("settingName") or ""),
+                    "title": str(row.get("title") or ""),
+                    "enabled": bool(row.get("enabled")),
+                    "enabled_group_count": len(row.get("enabledSecurityGroups") or []),
+                    "excluded_group_count": len(row.get("excludedSecurityGroups") or []),
+                }
+                for row in tenant_rows
+                if "developer" in str(row.get("tenantSettingGroup") or "").casefold()
+            ]
             candidates = []
             for row in tenant_rows:
                 title = str(row.get("title") or "").casefold()
@@ -263,6 +275,7 @@ def main() -> int:
             "service_principal_api_setting_found",
             "service_principal_api_setting_enabled",
             "service_principal_api_setting_scoped_group_count",
+            "developer_setting_summaries",
             "secret_value_exposed",
             "identifiers_exposed",
         ):
