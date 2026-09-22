@@ -330,7 +330,9 @@ def _change_close_guard(
     try:
         assert_change_can_close(_record_evidence(latest) if latest else None)
     except ServiceManagementValidationError as exc:
-        raise ServiceCaseConflictError(str(exc)) from exc
+        raise ServiceCaseConflictError(
+            "operação CHANGE rejeitada por pré-condição"
+        ) from exc
 
 
 register_transition_guard(_change_close_guard)
