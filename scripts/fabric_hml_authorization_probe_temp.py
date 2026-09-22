@@ -195,13 +195,29 @@ def main() -> int:
             role in {"Contributor", "Member", "Admin"} for role in target_roles
         )
 
-        tenant_status, tenant_payload = get_json(
-            "https://api.fabric.microsoft.com/v1/admin/tenantsettings", token
-        )
-        evidence["tenant_settings_status"] = tenant_status
-        if tenant_status == 200:
+        tenant_rows: list[dict] = []
+        tenant_url = "https://api.fabric.microsoft.com/v1/admin/tenantsettings"
+        while tenant_url:
+            tenant_status, tenant_payload = get_json(tenant_url, token)
+            evidence["tenant_settings_status"] = tenant_status
+            if tenant_status != 200:
+                break
+            tenant_rows.extend(
+                row for row in tenant_payload.get("value", [])
+                if isinstance(row, dict)
+            )
+            next_tenant_url = str(
+                tenant_payload.get("continuationUri") or ""
+            ).strip()
+            tenant_url = (
+                next_tenant_url
+                if next_tenant_url.startswith("https://api.fabric.microsoft.com/")
+                else ""
+            )
+
+        if evidence["tenant_settings_status"] == 200:
             candidates = []
-            for row in tenant_payload.get("value", []):
+            for row in tenant_rows:
                 title = str(row.get("title") or "").casefold()
                 setting_name = str(row.get("settingName") or "").casefold()
                 if (
