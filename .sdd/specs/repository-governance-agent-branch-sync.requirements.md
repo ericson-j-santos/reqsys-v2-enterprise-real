@@ -20,8 +20,10 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 8. O fan-out máximo por avanço da `main` deve ser 3 PRs para evitar tempestade de CI.
 9. O agente não pode executar merge, deploy, promoção, force-push, alteração de segredo ou branch protection.
 10. O `Governed Merge Queue` e o `Governed PR Automation` existentes continuam responsáveis pela validação e pelo merge depois que os gates do novo HEAD ficarem verdes.
-11. O workflow deve usar `contents: write` e `pull-requests: write`, menor combinação comprovada pelo E2E para a API `update-branch`; não pode receber `actions: write`, `issues: write` ou permissão administrativa.
-12. Execuções concorrentes de sincronização devem compartilhar uma única lane e cancelar execução obsoleta.
+11. O `GITHUB_TOKEN` nativo do workflow deve permanecer read-only (`contents: read`). A mutação `update-branch` deve usar token temporário da GitHub App governada `REQSYS_STACK_REBASE_APP_ID`/`REQSYS_STACK_REBASE_PRIVATE_KEY`, solicitando somente `contents: write` e `pull-requests: write`; não pode usar PAT nem fallback para `GITHUB_TOKEN`.
+12. O self-sync de PR deve usar `pull_request_target`, executando a definição confiável da `main` e sem checkout/execução de código controlado pela branch do PR.
+13. Execuções concorrentes de sincronização devem usar lane determinística e cancelar execução obsoleta.
+14. Ausência da configuração da GitHub App ou incapacidade de emitir o escopo solicitado deve falhar fechado antes de qualquer mutação.
 
 ## Controles negativos
 
@@ -31,15 +33,21 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 - mergeabilidade desconhecida => não atualiza;
 - HEAD mudou entre leitura e mutação => `stale_noop`;
 - orçamento de 3 atualizações esgotado => `deferred`;
-- token sem permissão de conteúdo para `update-branch` => falha explícita;\n- API aceita a atualização, mas `behind_by` não chega a zero => job falha;
+- uso do `GITHUB_TOKEN` para `update-branch` é inválido: o E2E mostrou HTTP 403 com escopo insuficiente e, depois da ampliação, SHAs criados pelo `github-actions[bot]` produziram workflows `action_required`;
+- GitHub App ausente ou sem o escopo solicitado => falha antes da mutação;
+- API aceita a atualização, mas `behind_by` não chega a zero => job falha;
 - nenhum caminho do workflow chama API de merge.
 
 ## Critérios de aceite
 
-- `tests/test_repository_governance_agent.py` verde;\n- controle E2E comprova que `contents: read` era insuficiente (HTTP 403) e a permissão corrigida permite a atualização sem ampliar para outras famílias;
+- `tests/test_repository_governance_agent.py` verde;
+- SDD Gate verde no HEAD final;
 - CI do PR verde no HEAD atual;
+- `GITHUB_TOKEN` nativo continua read-only;
+- token de mutação é emitido pela GitHub App já governada, sem PAT/fallback;
 - após merge deste hotfix, o `push` da própria `main` dispara o agente;
-- ao menos uma PR previamente atrasada deve ter HEAD alterado e `behind_by=0`, se existir candidata segura;
+- se houver PR segura atrasada, leitura independente deve observar novo HEAD e `behind_by=0`;
+- o novo SHA produzido pela GitHub App deve disparar workflows de PR normalmente, sem `action_required`;
 - PR com gate pendente pode ter branch sincronizada, mas não pode ser mergeada por este agente;
-- leitura independente confirma que nenhuma PR foi mergeada por `Repository Governance Agent`;
+- leitura independente confirma que nenhuma PR foi mergeada pelo `Repository Governance Agent`;
 - nenhuma ação de deploy/promoção é executada.
