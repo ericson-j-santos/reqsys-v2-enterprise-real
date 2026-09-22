@@ -41,7 +41,9 @@ RUNTIME_FILES = {
 
 
 class ReconcileError(RuntimeError):
-    pass
+    def __init__(self, code: str):
+        self.code = str(code or "reconcile_error").strip()[:160]
+        super().__init__(self.code)
 
 
 def run(
@@ -85,12 +87,41 @@ def inspect(container: str, repo_root: Path) -> dict[str, Any]:
     raw = run(["docker", "inspect", container], cwd=repo_root, timeout=60).stdout
     payload = json.loads(raw)
     if not isinstance(payload, list) or len(payload) != 1:
-        raise ReconcileError(f"docker_inspect_invalid:{container}")
+        raise ReconcileError("docker_inspect_invalid")
     return payload[0]
 
 
 def labels(item: dict[str, Any]) -> dict[str, str]:
     return (item.get("Config") or {}).get("Labels") or {}
+
+
+def discover_runtime(repo_root: Path) -> dict[str, dict[str, Any]]:
+    raw = run(
+        [
+            "docker",
+            "ps",
+            "-q",
+            "--filter",
+            f"label=com.docker.compose.project={PROJECT}",
+        ],
+        cwd=repo_root,
+        timeout=60,
+    ).stdout
+    runtime: dict[str, dict[str, Any]] = {}
+    for container_id in [line.strip() for line in raw.splitlines() if line.strip()]:
+        item = inspect(container_id, repo_root)
+        service = labels(item).get("com.docker.compose.service")
+        if service in {"api", "frontend", "nginx"}:
+            runtime[service] = item
+    missing = sorted({"api", "frontend", "nginx"} - set(runtime))
+    if missing:
+        raise ReconcileError("runtime_services_missing_" + "_".join(missing))
+    return runtime
+
+
+def container_name(item: dict[str, Any]) -> str:
+    value = str(item.get("Name") or item.get("Id") or "").lstrip("/")
+    return value or "unknown"
 
 
 def bind_source(item: dict[str, Any], destination: str) -> Path:
@@ -145,6 +176,8 @@ def compose_context(
     for raw in files_raw.split(","):
         if raw.strip():
             candidate = windows_path(raw.strip())
+            if not candidate.is_absolute():
+                candidate = working_dir / candidate
             if candidate.is_file():
                 files.append(candidate)
 
@@ -252,7 +285,7 @@ def wait_container_healthy(repo_root: Path, timeout_seconds: int = 180) -> None:
     deadline = time.monotonic() + timeout_seconds
     last = "unknown"
     while time.monotonic() < deadline:
-        item = inspect(API_CONTAINER, repo_root)
+        item = discover_runtime(repo_root)["api"]
         state = item.get("State") or {}
         health = state.get("Health") or {}
         last = str(health.get("Status") or state.get("Status") or "unknown").lower()
@@ -465,6 +498,16 @@ def browser_e2e(profile_path: Path) -> dict[str, Any]:
             timeout=30000,
         )
         read_profile_file(profile_path, "NORMAL")
+
+        study.click()
+        page.wait_for_function(
+            """() => {
+              const card = document.querySelector('[data-testid="noteri-study-mode-card"]')
+              return card && card.textContent.includes('ESTUDO')
+            }""",
+            timeout=30000,
+        )
+        read_profile_file(profile_path, "ESTUDO")
         browser.close()
 
     return {
@@ -472,7 +515,8 @@ def browser_e2e(profile_path: Path) -> dict[str, Any]:
         "study_button_clicked": True,
         "estudo_observed_in_ui": True,
         "normal_restored_in_ui": True,
-        "final_profile": "NORMAL",
+        "estudo_reapplied_in_ui": True,
+        "final_profile": "ESTUDO",
     }
 
 
@@ -484,9 +528,10 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     if git_head(repo_root) != args.expected_sha:
         raise ReconcileError("git_head_mismatch")
 
-    api_before = inspect(API_CONTAINER, repo_root)
-    frontend_before = inspect(FRONTEND_CONTAINER, repo_root)
-    nginx_before = inspect(NGINX_CONTAINER, repo_root)
+    runtime_before = discover_runtime(repo_root)
+    api_before = runtime_before["api"]
+    frontend_before = runtime_before["frontend"]
+    nginx_before = runtime_before["nginx"]
     for item, service in (
         (api_before, "api"),
         (frontend_before, "frontend"),
@@ -533,7 +578,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         wait_container_healthy(repo_root, args.health_timeout)
 
-        api_after = inspect(API_CONTAINER, repo_root)
+        api_after = discover_runtime(repo_root)["api"]
         env_items = (api_after.get("Config") or {}).get("Env") or []
         env_map = dict(entry.split("=", 1) for entry in env_items if "=" in entry)
         mounts = api_after.get("Mounts") or []
@@ -572,9 +617,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "host": EXPECTED_HOST,
         "project": PROJECT,
         "expected_sha": args.expected_sha,
-        "api_container": API_CONTAINER,
-        "frontend_container": FRONTEND_CONTAINER,
-        "gateway_container": NGINX_CONTAINER,
+        "api_container": container_name(api_after),
+        "frontend_container": container_name(frontend_before),
+        "gateway_container": container_name(nginx_before),
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": True,
         "profile_mount_rw": True,
@@ -616,6 +661,7 @@ def main() -> int:
             "ok": False,
             "error": "noteri_study_mode_reconcile_failed",
             "error_type": type(exc).__name__,
+            "error_code": getattr(exc, "code", "unexpected_error"),
             "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
             "expected_sha": args.expected_sha,
             "environment": "dev",
