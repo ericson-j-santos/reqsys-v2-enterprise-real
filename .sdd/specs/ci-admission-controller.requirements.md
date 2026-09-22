@@ -29,6 +29,7 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 13. O manifesto de admissão deve carregar os invariantes preventivos e somente ficar `admitted` quando todos estiverem `passed`, `behind_by=0` e o SHA/base forem válidos.
 14. O Admission Controller deve baixar o artifact `ci-admission-<head_sha>`, ler o JSON interno e validar schema, tipo, status, HEAD, base SHA e invariantes; validar apenas nome/metadado do artifact é insuficiente.
 15. O download do artifact não pode encaminhar o bearer token do GitHub ao host externo do redirect assinado.
+16. O SDD pode declarar `sdd_gate.pre_pr_tests` para separar testes determinísticos de pré-PR dos testes completos que exigem runtime/E2E; quando presente, o Pre-PR deve executar essa lista e preservar `sdd_gate.tests` como contrato completo.
 
 ## Controles negativos
 
@@ -52,6 +53,7 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 - Manifesto preventivo contém `sdd:contract`, `security:changed-diff` e `workflow:regression-contracts` com status `passed`.
 - Teste negativo prova que artifact com nome correto e conteúdo/base/invariante inválido é rejeitado.
 - Teste negativo prova que o security gate distingue dívida legada não tocada de blocker introduzido no diff.
+- Teste de controle prova que `pre_pr_tests` impede execução prematura de testes dependentes de runtime sem remover esses testes do contrato completo.
 - `tests/test_vibe_security_gate.py` verde junto aos testes de admission/readiness.
 - Nenhum merge/deploy executado por este incremento.
 
