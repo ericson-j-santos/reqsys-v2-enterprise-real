@@ -392,45 +392,98 @@ def ensure_runner_binaries(root: Path) -> None:
         raise ActivationError("runner_install_incomplete", "binários oficiais do runner incompletos")
 
 
+def configure_runner_with_token(root: Path, token: str) -> None:
+    cmd = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "cmd.exe"
+    if not cmd.is_file():
+        raise ActivationError("cmd_required", "cmd.exe não encontrado")
+    args = [
+        str(root / "config.cmd"),
+        "--unattended",
+        "--url", REPOSITORY_URL,
+        "--token", token,
+        "--name", RUNNER_NAME,
+        "--labels", RUNNER_LABELS,
+        "--work", "_work",
+        "--replace",
+    ]
+    cp = subprocess.run(
+        [str(cmd), "/d", "/s", "/c", subprocess.list2cmdline(args)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+    if cp.returncode != 0:
+        raise ActivationError(
+            "runner_registration_failed",
+            f"registro do runner falhou (exit={cp.returncode})",
+        )
+    if not runner_contract(root):
+        raise ActivationError("runner_registration_failed", "contrato local do runner não foi criado")
+
+
 def register_runner(root: Path, gh: Path, *, allow_interactive_auth: bool = True) -> bool:
     if runner_contract(root):
         return False
     token = registration_token(gh, allow_interactive=allow_interactive_auth)
     try:
-        cmd = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "cmd.exe"
-        if not cmd.is_file():
-            raise ActivationError("cmd_required", "cmd.exe não encontrado")
-        args = [
-            str(root / "config.cmd"),
-            "--unattended",
-            "--url", REPOSITORY_URL,
-            "--token", token,
-            "--name", RUNNER_NAME,
-            "--labels", RUNNER_LABELS,
-            "--work", "_work",
-            "--replace",
-        ]
-        cp = subprocess.run(
-            [str(cmd), "/d", "/s", "/c", subprocess.list2cmdline(args)],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=120,
-            check=False,
-        )
-        if cp.returncode != 0:
-            raise ActivationError(
-                "runner_registration_failed",
-                f"registro do runner falhou (exit={cp.returncode})",
-            )
+        configure_runner_with_token(root, token)
     finally:
         token = ""
-    if not runner_contract(root):
-        raise ActivationError("runner_registration_failed", "contrato local do runner não foi criado")
     return True
 
+
+def repair_missing_registry(
+    root: Path,
+    gh: Path,
+    *,
+    allow_interactive_auth: bool = True,
+) -> dict[str, Any]:
+    root = root.resolve()
+    if not runner_contract(root):
+        raise ActivationError(
+            "runner_stale_registration_contract_invalid",
+            "reparo de registro ausente exige contrato local completo",
+        )
+
+    # Adquirir autorização antes de qualquer mutação local.
+    token = registration_token(gh, allow_interactive=allow_interactive_auth)
+    try:
+        watchdog = _load_watchdog_runtime()
+        try:
+            stopped = watchdog.stop_runner(root)
+        except Exception as exc:
+            raise ActivationError(
+                "runner_stale_registration_stop_failed",
+                "listener governado não pôde ser interrompido para reparar registro ausente",
+            ) from exc
+        if not isinstance(stopped, dict):
+            raise ActivationError(
+                "runner_stale_registration_stop_failed",
+                "resultado inválido ao interromper listener governado",
+            )
+
+        marker = root / ".runner"
+        try:
+            marker.unlink()
+        except OSError as exc:
+            raise ActivationError(
+                "runner_stale_registration_cleanup_failed",
+                "marcador local de registro obsoleto não pôde ser removido",
+            ) from exc
+
+        # O GitHub documenta a remoção de .runner como reset local para permitir novo registro.
+        configure_runner_with_token(root, token)
+        return {
+            "registered": True,
+            "previous_listener_pid": stopped.get("previous_listener_pid"),
+            "termination_scope": stopped.get("termination_scope"),
+        }
+    finally:
+        token = ""
 
 def _load_watchdog_runtime():
     if not WATCHDOG.is_file():
@@ -552,6 +605,8 @@ def main() -> int:
         ensure_gh_auth(gh, allow_interactive=not args.non_interactive_auth)
 
         runner = discover_runner(args.runner_home)
+        stale_registration_repaired = False
+        stale_registration_previous_listener_pid: int | None = None
         if runner is None:
             runner = (args.runner_home or default_runner_home()).resolve()
             ensure_runner_binaries(runner)
@@ -561,6 +616,18 @@ def main() -> int:
                 allow_interactive_auth=not args.non_interactive_auth,
             )
             token_consumed = registration_performed
+        else:
+            initial_registry = wait_runner_registry_online(gh, timeout_seconds=8.0)
+            if not initial_registry.get("present"):
+                repair = repair_missing_registry(
+                    runner,
+                    gh,
+                    allow_interactive_auth=not args.non_interactive_auth,
+                )
+                registration_performed = bool(repair.get("registered"))
+                token_consumed = registration_performed
+                stale_registration_repaired = registration_performed
+                stale_registration_previous_listener_pid = repair.get("previous_listener_pid")
 
         started_now = start_runner(runner)
         registry = wait_runner_registry_online(gh, timeout_seconds=8.0)
@@ -604,6 +671,8 @@ def main() -> int:
             "runner_registered_now": registration_performed,
             "runner_started_now": started_now,
             "runner_running": local_running,
+            "runner_registry_repaired_missing": stale_registration_repaired,
+            "runner_registry_repair_previous_listener_pid": stale_registration_previous_listener_pid,
             "runner_restarted_offline": restart_evidence is not None,
             "runner_restart_previous_listener_pid": (
                 restart_evidence.get("previous_listener_pid") if restart_evidence else None
