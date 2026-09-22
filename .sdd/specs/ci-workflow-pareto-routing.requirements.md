@@ -88,3 +88,41 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - `push` e `pull_request` para a mesma branch resolvem para `pre-pr-readiness-<head-ref>`.
 - `cancel-in-progress: true` permanece ativo.
 - A cobertura antes da abertura do PR e dentro do PR é preservada sem dois runners simultâneos para o mesmo HEAD.
+
+## Incremento Pareto — orçamento bloqueante e workflows especializados
+
+24. O caminho crítico de pull request deve possuir orçamento explícito de no máximo 10 workflows bloqueantes, versionado em `config/ci-workflow-pareto-policy.json`.
+25. O orçamento deve ser validado dentro de `CI — ReqSys v2 Enterprise`, sem criar um workflow adicional apenas para o budget guard.
+26. `ReqSys 360 Coherence Gate` não deve executar em PR por alterações genéricas de backend, runtime, services ou frontend; em PR deve reagir somente às superfícies de navegação/ReqSys 360, mantendo a cobertura ampla em `push/main`.
+27. `Trilha D — Qualidade e Governança` não deve executar em todo PR de backend; os gatilhos de contrato permanecem no PR e a validação ampla de backend permanece em `push/main`.
+28. `Kindle Knowledge Local Cache` deve executar somente o contrato estático em pull request. Qualquer job físico em Noteri/Desktop deve falhar fechado quando `github.event_name == 'pull_request'` e permanecer disponível em `push/main`, `schedule` e `workflow_dispatch`.
+29. A política deve falhar quando um workflow protegido também for classificado como report-only ou quando a quantidade de workflows protegidos exceder o orçamento.
+30. O cenário de regressão deve usar como fixture os 15 arquivos reais da PR #1954 e comprovar deterministicamente que ReqSys 360, Trilha D e Kindle não seriam selecionados como workflows especializados de PR.
+
+### Critérios de aceite — CI Budget Guard
+
+- `tests/test_ci_budget_guard.py` verde, incluindo os controles negativos.
+- `blocking_workflow_budget=10` e `blocking_workflow_count <= 10`.
+- A fixture da PR #1954 resulta em `specialized_candidates_for_diff=[]`.
+- `backend-lint`, `backend-test` e `frontend-build` dependem do `ci-budget-guard`, impedindo CI caro quando o contrato de orçamento falha.
+- O job de governança final também depende do budget guard.
+- Nenhum gate em `protected_workflows` é removido.
+- O E2E físico Kindle não executa em PR; a rede de segurança pós-merge continua materializável.
+- Repetir a avaliação com a mesma entrada gera a mesma decisão.
+
+## Incremento Pareto — consolidação report-only pós-CI
+
+31. Workflows consultivos não devem competir com os gates bloqueantes durante `pull_request`. `Runtime Risk Scoring`, `PR Quality Review`, `Predictive Regression Guard`, `Preview Environment Contract` e `PR Fast Classifier` devem permanecer disponíveis via `workflow_dispatch`, mas sem gatilho direto de PR.
+32. Um único `CI Advisory Router` deve consumir a conclusão bem-sucedida de `CI — ReqSys v2 Enterprise`, resolver o PR pelo SHA e registrar quais diagnósticos consultivos são aplicáveis.
+33. O `CI Advisory Router` é estritamente report-only: não pode possuir `actions: write`, não deve disparar workflows automaticamente, não pode bloquear merge e não toca produção.
+34. `Deep Governance Review` deve materializar em PR somente no evento `labeled`; novos SHAs não devem criar execuções vazias via `synchronize`.
+
+### Critérios de aceite — report-only fora do caminho crítico
+
+- Os cinco workflows consultivos não contêm `pull_request:` em seu bloco de gatilho.
+- Todos os cinco preservam `workflow_dispatch:`.
+- `CI Advisory Router` possui `workflow_run` para `CI — ReqSys v2 Enterprise` com `types: [completed]`.
+- A execução automática do router só aceita fonte `pull_request` concluída com `success`.
+- O artifact consolidado declara `automatic_dispatch=false`, `critical_path_blocker=false` e `production_touched=false`.
+- `Deep Governance Review` contém `types: [labeled]` e não contém `synchronize` no trigger.
+- `scripts/validate_path_based_workflow_router.py` e `tests/test_report_only_workflow_pareto.py` ficam verdes.

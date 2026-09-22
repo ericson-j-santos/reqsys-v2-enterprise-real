@@ -100,3 +100,11 @@ def test_pr_evidence_gate_keeps_real_failures_blocking():
     assert 'Governed workflow failed on current head SHA:' in text
     assert "status: rateLimited ? 'deferred' : 'failed'" in text
     assert 'PR Evidence Gate failed with status:' in text
+
+
+def test_pr_evidence_gate_skips_default_branch_workflow_run_after_merge():
+    text = read_workflow()
+
+    assert 'workflow_run_default_branch_post_merge' in text
+    assert 'github.event.workflow_run.head_branch' in text
+    assert 'github.event.repository.default_branch' in text

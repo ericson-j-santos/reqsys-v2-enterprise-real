@@ -115,3 +115,22 @@ Após estabilização do auto-merge nativo:
 2. relatório executivo de PRs paralelos elegíveis;
 3. dashboard operacional de capacidade segura por domínio;
 4. classificação automática de risco de conflito por arquivos alterados.
+
+
+## Sincronização federada de branches
+
+O workflow `.github/workflows/repository-governance-agent.yml` complementa a fila sem criar uma segunda rota de merge.
+
+Quando a `main` avança:
+
+1. lista PRs abertas com base `main`;
+2. ignora draft, forks externos, conflitos e mergeabilidade desconhecida;
+3. compara `main...HEAD` e seleciona somente PRs com `behind_by > 0`;
+4. relê o PR imediatamente antes da mutação;
+5. chama a API `update-branch` com `expected_head_sha`;
+6. relê o PR até observar novo HEAD e `behind_by=0`;
+7. limita a três atualizações por execução para conter o fan-out de CI.
+
+A sincronização **não autoriza merge**. O novo HEAD reinicia os checks do PR e somente a `Governed Merge Queue` / `Governed PR Automation` pode avançar a integração após revalidar os gates.
+
+Falhas de confirmação pós-ação deixam o workflow vermelho. Um HTTP aceito pela API, isoladamente, não é considerado sucesso funcional.
