@@ -1,0 +1,65 @@
+schema_version: 1.0.0
+record: bacen_temporary_production_scope_exception
+exception_id: REQSYS-BACEN-CMN4893-SCOPE-DATA-PROD-EXCEPTION-2026-09-22
+status: active
+
+subject:
+  family: CMN-4893
+  issue: 1505
+  authoritative_decision_file: governance/bacen/normative/FAMILY-APPLICABILITY-DECISION.yaml
+
+approval:
+  approved_by: ericson-j-santos
+  approved_local_date: 2026-09-22
+  approval_reference: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1505#issuecomment-5782326463
+  decision_intent: applicable
+
+purpose: >-
+  Permitir que a prontidão técnica para PROD seja avaliada até 2026-12-31
+  enquanto institutional_scope.legal_entity e institutional_scope.entity_type
+  permanecem indisponíveis em fonte institucional autoritativa, sem fabricar
+  evidência e sem converter a exceção em decisão regulatória final.
+
+temporarily_deferred_fields:
+  - institutional_scope.legal_entity
+  - institutional_scope.entity_type
+
+allowed_scopes:
+  - prod
+
+covered_blocker_codes:
+  - family_applicability_pending
+
+constraints:
+  technical_production_deployment_may_be_evaluated: true
+  regulatory_finality_allowed: false
+  regulatory_compliance_claim_allowed: false
+  fabricated_values_allowed: false
+  automatic_inference_allowed: false
+  authoritative_decision_must_remain: pending_decision
+  no_other_gate_bypass_allowed: true
+  preserve_conditional_unknowns:
+    - institutional_scope.rsfn_connection
+    - institutional_scope.pix_participant
+    - institutional_scope.str_participant
+    - institutional_scope.smf_scope
+
+validity:
+  valid_from: 2026-09-22
+  valid_until: 2026-12-31
+  renewal_requires_explicit_human_approval: true
+  expires_fail_closed: true
+
+exit_criteria:
+  - institutional_scope.legal_entity obtido de fonte institucional real
+  - institutional_scope.entity_type obtido de fonte institucional real
+  - arquivo autoritativo atualizado com a decisão formal
+  - exceção encerrada quando a decisão autoritativa se tornar final
+  - nova aprovação humana explícita se houver necessidade após 2026-12-31
+
+audit:
+  issue_url: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1505
+  authorization_reference: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1505#issuecomment-5782326463
+  production_touched_by_exception_creation: false
+  replaces_regulatory_evidence: false
+  compliance_claim_allowed: false
