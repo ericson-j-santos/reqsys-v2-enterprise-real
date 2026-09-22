@@ -45,14 +45,34 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Resolve governed target
         run: |
           set -euo pipefail
           case "$TARGET_ENVIRONMENT" in
-            dev|development) resolved_url="${TARGET_URL:-https://reqsys-app-dev.fly.dev}" ;;
-            stg|staging) resolved_url="${TARGET_URL:-https://reqsys-app-stg.fly.dev}" ;;
-            prod|production) resolved_url="${TARGET_URL:-https://reqsys-app.fly.dev}" ;;
+            dev|development)
+              mkdir -p artifacts/pc24x7-dev
+              node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-dev/signed-locator.json >/dev/null
+              resolved_url="$(python -c 'import json; from pathlib import Path; print(json.loads(Path("artifacts/pc24x7-dev/signed-locator.json").read_text(encoding="utf-8"))["selected_url"])')"
+              ;;
+            stg|staging|prod|production)
+              test -n "$TARGET_URL" || {
+                echo "::error::Ambiente $TARGET_ENVIRONMENT não possui runtime canônico publicado; fallback Fly.io é proibido."
+                exit 2
+              }
+              resolved_url="$TARGET_URL"
+              ;;
             *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
+          case "$resolved_url" in
+            https://*.fly.dev|https://*.fly.dev/*)
+              echo "::error::Runtime legado Fly.io rejeitado: $resolved_url"
+              exit 2
+              ;;
           esac
           echo "TARGET_URL=$resolved_url" >> "$GITHUB_ENV"
 
@@ -146,6 +166,15 @@ jobs:
           print(f"- Classificação: **{data['classification']}**")
           print(f"- Revisão humana necessária: **{data['human_review_required']}**")
           print(f"- Checks com divergência: `{', '.join(data['failed_checks']) or 'nenhum'}`")
-          print("- Modo: **report-only**")
-          print("- Bloqueio automático: **false**")
+          print("- Artefato: **report-only para decisão executiva**")
+          print("- Gate técnico: **falha de smoke torna o workflow vermelho**")
           PY
+
+      - name: Enforce confirmed smoke result
+        if: always()
+        run: |
+          set -euo pipefail
+          test "${FINAL_SYNC_RC:-1}" = "0" && test "${ADVISOR_RC:-1}" = "0" || {
+            echo "::error::Confirmação pública detectou divergência; sucesso verde é proibido."
+            exit 1
+          }
