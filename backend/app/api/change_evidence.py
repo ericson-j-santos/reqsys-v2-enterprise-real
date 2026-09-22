@@ -337,12 +337,19 @@ register_transition_guard(_change_close_guard)
 
 
 def _raise_http(exc: Exception) -> None:
+    """Converte falhas conhecidas sem expor texto interno da exceção."""
     if isinstance(exc, ServiceCaseNotFoundError):
-        raise HTTPException(status_code=404, detail=str(exc)) from None
+        raise HTTPException(status_code=404, detail="recurso RSM não encontrado") from None
     if isinstance(exc, ServiceCaseConflictError):
-        raise HTTPException(status_code=409, detail=str(exc)) from None
+        raise HTTPException(
+            status_code=409,
+            detail="operação CHANGE rejeitada por pré-condição",
+        ) from None
     if isinstance(exc, ServiceManagementValidationError):
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+        raise HTTPException(
+            status_code=422,
+            detail="evidência CHANGE inválida",
+        ) from None
     raise exc
 
 
