@@ -1,24 +1,6 @@
 name: Noteri → Desktop Admin Broker Kick
 
 on:
-  push:
-    branches:
-      - "fix/noteri-desktop-admin-broker-kick-1930"
-    paths:
-      - ".github/workflows/noteri-desktop-admin-broker-kick.yml"
-      - ".github/self-hosted-runner-policy.json"
-      - "scripts/noteri_desktop_admin_broker_kick.py"
-      - "tests/test_noteri_desktop_admin_broker_kick.py"
-      - ".sdd/specs/noteri-desktop-admin-broker-kick.requirements.md"
-      - ".sdd/specs/noteri-desktop-admin-broker-kick.spec.json"
-  pull_request:
-    paths:
-      - ".github/workflows/noteri-desktop-admin-broker-kick.yml"
-      - ".github/self-hosted-runner-policy.json"
-      - "scripts/noteri_desktop_admin_broker_kick.py"
-      - "tests/test_noteri_desktop_admin_broker_kick.py"
-      - ".sdd/specs/noteri-desktop-admin-broker-kick.requirements.md"
-      - ".sdd/specs/noteri-desktop-admin-broker-kick.spec.json"
   workflow_dispatch:
 
 permissions:
@@ -31,12 +13,12 @@ concurrency:
 jobs:
   kick:
     name: Start existing Desktop Admin Broker through Windows RPC
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
       EVIDENCE_FILE: artifacts/noteri-desktop-admin-broker-kick/evidence.json
-      EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVALUATED_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout immutable workflow SHA
