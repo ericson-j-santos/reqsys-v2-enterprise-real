@@ -144,3 +144,21 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - `push/main` e `workflow_dispatch` continuam selecionando Python, JavaScript/TypeScript, auditorias de dependência e SBOM.
 - A publicação CodeQL valida exatamente as categorias selecionadas e rejeita categoria ausente, inesperada ou duplicada.
 - `tests/test_codeql_atomic_publish_workflow.py` permanece verde.
+
+
+## Incremento Pareto — fila de merge como consumidora do CI canônico
+
+40. `Governed Merge Queue` não deve repetir validações de SDD, guardrails enterprise, lint/typecheck frontend ou outras verificações já comprovadas pelos gates canônicos do mesmo SHA.
+41. A decisão de CI da fila deve consumir `current-sha-stability`, cuja política exige `Pre-PR Readiness Gate`, `CI — ReqSys v2 Enterprise`, `CI Enterprise Fast` e demais workflows protegidos aplicáveis no HEAD exato.
+42. A integração temporária contra a base real do PR permanece obrigatória e independente da eliminação dos jobs duplicados.
+43. Ausência, falha, pendência ou troca do HEAD durante a avaliação deve continuar falhando fechado.
+44. A consolidação não altera produção, deploy, secrets, permissões administrativas nem branch protection.
+
+### Critérios de aceite — consolidação da fila
+
+- `governed-merge-queue.yml` não contém os jobs `sdd-contract` nem `isolated-validation`.
+- `temporary-integration` depende diretamente apenas da resolução de contexto e continua executando contra a base real do PR.
+- `merge-queue-gate` depende de `temporary-integration` e `current-sha-stability`, sem reexecutar validações já cobertas pelos gates canônicos.
+- `current-sha-required-workflows.json` continua exigindo `Pre-PR Readiness Gate`, `CI — ReqSys v2 Enterprise` e `CI Enterprise Fast`.
+- Um controle negativo comprova que remover um dos gates canônicos da política faz o teste de contrato falhar.
+- O HEAD exato passa no Pre-PR Readiness antes da abertura do PR.
