@@ -95,7 +95,7 @@ def scan_bases() -> list[tuple[str, Path]]:
         _add(items, "onedrive", onedrive)
     _add(items, "c-dev", r"C:\dev")
     _add(items, "d-dev", r"D:\dev")
-    _add(items, "d-root", r"D:\")
+    _add(items, "d-root", "D:/")
     return [(label, path) for label, path in items if path.is_dir()]
 
 
