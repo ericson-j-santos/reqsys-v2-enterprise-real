@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: reqsys-authorized-actions-gateway
+  group: reqsys-authorized-actions-gateway-${{ github.event.comment.id }}
   cancel-in-progress: false
 
 jobs:
