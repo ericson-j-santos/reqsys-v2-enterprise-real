@@ -12,11 +12,11 @@ Eliminar o estado em que o Desktop Admin Broker e o watchdog estão instalados, 
 4. Baixar somente a versão de runner fixada no código e validar SHA-256 antes da extração.
 5. O token de registro deve ser solicitado pelo GitHub CLI autenticado do owner, existir apenas em memória e nunca aparecer em output, logs ou arquivos.
 6. O bootstrap pode instalar GitHub CLI por winget quando ausente; autenticação interativa permanece limite legítimo na execução local, mas o modo `--non-interactive-auth` usado pelo broker deve falhar fechado antes de login ou refresh interativo.
-7. Reutilizar runner já registrado quando o contrato local `.runner + run.cmd + bin\\Runner.Listener.exe` estiver válido.
+7. Reutilizar runner já registrado somente quando o contrato local `.runner + run.cmd + bin\\Runner.Listener.exe` e o registro GitHub correspondente coexistirem; contrato local órfão não pode ser tratado como registro válido.
 8. Iniciar `Runner.Listener.exe` e exigir prova local e registro `online` no GitHub antes de declarar runtime ativo.
 8.1. A prova local deve pertencer ao executável `bin\\Runner.Listener.exe` do `runner_home` governado; listener de outro runner ou identidade não verificável deve falhar fechado.
 8.2. Se o runner governado estiver localmente ativo, registrado com labels corretas, porém `offline` no GitHub, o bootstrap pode executar exatamente um reinício controlado desse listener e revalidar o registro.
-8.3. O reinício por estado `offline` não se aplica a registro ausente, labels divergentes ou processo não verificável.
+8.3. O reinício por estado `offline` não se aplica a labels divergentes ou processo não verificável. Quando o registro GitHub estiver ausente, mas existir contrato local completo, o bootstrap deve obter autorização de registro antes de qualquer mutação, parar somente o listener do `runner_home` governado, remover apenas o marcador `.runner` obsoleto e registrar novamente com nome/labels fixos.
 9. Reutilizar `desktop_control_plane_watchdog.py` para persistência AtStartup+S4U.
 10. Não tocar produção, não reiniciar o host e não aceitar shell, repositório, labels, nome de runner ou token arbitrários.
 11. Sucesso terminal exige pickup real posterior de workflow `[self-hosted, Windows, X64, pc24x7, reqsys-dev]`.
@@ -31,6 +31,7 @@ Eliminar o estado em que o Desktop Admin Broker e o watchdog estão instalados, 
 - A API do GitHub deve retornar exatamente o runner `DESKTOP-PDQK954` com `status=online`.
 - As labels `self-hosted`, `Windows`, `X64`, `pc24x7` e `reqsys-dev` são obrigatórias; divergência produz estado explícito e falha fechada.
 - Ausência no registro, status offline e processo local ausente devem produzir estados distintos.
+- Contrato local com `.runner` presente e registro GitHub ausente deve ser reparado de forma governada; falha de permissão/token deve ocorrer antes da remoção do marcador local.
 - Um listener local de outro runner não deve satisfazer a prova do `DESKTOP-PDQK954`.
 - O estado `offline` com registro/labels válidos permite no máximo um reinício do listener governado por invocação antes de falhar fechado.
 - O watchdog do Desktop é instalado ou fica explicitamente `activation_pending` sem falso positivo.
