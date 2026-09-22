@@ -9,13 +9,13 @@
     "design": true,
     "tasks": true
   },
-  "description": "Conecta a Governed Merge Queue ao merge automático fail-closed no HEAD exato, exigindo autorização explícita por PR via governed-merge-approved e sem cron/deploy/promoção.",
+  "description": "Conecta a Governed Merge Queue ao merge automático fail-closed no HEAD exato sob autorização operacional permanente do owner, sem exigir aprovação por PR e sem cron/deploy/promoção.",
   "environment": "GitHub CI",
   "production_enabled": false,
   "sdd_gate": {
     "tests": [
       "tests/test_governed_pr_automation_dispatch_contract.py"
     ],
-    "evidence_contract": "workflow_run success da Governed Merge Queue; labels merge-queue:eligible + governed-merge-approved; revalidação da autorização e do HEAD imediatamente antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção."
+    "evidence_contract": "workflow_run success da Governed Merge Queue; label merge-queue:eligible; autorização operacional permanente do owner; revalidação do HEAD e mergeabilidade imediatamente antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção."
   }
 }

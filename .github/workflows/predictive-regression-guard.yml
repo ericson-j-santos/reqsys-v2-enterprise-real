@@ -1,20 +1,20 @@
 name: Predictive Regression Guard
 
 on:
-  pull_request:
-    branches: [main, master, develop]
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      # Predição automática só quando há potencial de regressão executável.
-      # Testes/workflows/documentação usam gates especializados.
-      - "backend/**"
-      - "frontend/**"
-      - "runtime/**"
-      - "services/**"
-      - "config/**"
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Branch base para avaliação manual"
+        required: false
+        default: "main"
+        type: string
+      head_sha:
+        description: "SHA exato para avaliação manual"
+        required: false
+        type: string
 
 concurrency:
-  group: predictive-regression-guard-${{ github.event.pull_request.number }}
+  group: predictive-regression-guard-${{ github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -33,6 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Setup Python
@@ -43,7 +44,7 @@ jobs:
       - name: Coletar arquivos alterados
         id: collect
         env:
-          BASE_REF: ${{ github.base_ref }}
+          BASE_REF: ${{ inputs.base_ref || 'main' }}
         run: |
           set -euo pipefail
           git fetch origin "${BASE_REF}"

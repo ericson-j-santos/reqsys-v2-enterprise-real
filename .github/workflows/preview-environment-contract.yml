@@ -1,29 +1,14 @@
 name: Preview Environment Contract
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
-    # Preview só agrega evidência quando a mudança pode alterar runtime,
-    # empacotamento ou a própria definição deste contrato.
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "runtime/**"
-      - "services/**"
-      - "infra/**"
-      - "docker/**"
-      - "nginx/**"
-      - "fly*.toml"
-      - "frontend/fly*.toml"
-      - "Dockerfile*"
-      - "docker-compose*.yml"
-      - "docker-compose*.yaml"
-      - ".github/workflows/preview-environment-contract.yml"
   workflow_dispatch:
     inputs:
       pr_number:
         description: "Numero do PR para gerar evidencia dry-run"
+        required: false
+        type: string
+      head_sha:
+        description: "SHA exato do PR; opcional"
         required: false
         type: string
 
@@ -33,7 +18,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: preview-environment-contract-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  group: preview-environment-contract-${{ inputs.pr_number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -48,8 +33,8 @@ jobs:
       - name: Build preview evidence
         shell: bash
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number || 0 }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_NUMBER: ${{ inputs.pr_number || 0 }}
+          HEAD_SHA: ${{ inputs.head_sha || github.sha }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/preview-environment

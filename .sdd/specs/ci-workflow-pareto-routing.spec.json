@@ -2,14 +2,14 @@
   "feature_name": "ci-workflow-pareto-routing",
   "project": "ReqSys v2 Enterprise — CI/CD Governance",
   "created_at": "2026-09-21",
-  "updated_at": "2026-09-21",
+  "updated_at": "2026-09-22",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Reduz fan-out e contenção de runners por roteamento de scanners, workflows advisory, PR CI Watch, gates específicos de domínio, autoauditorias de CI, lifecycle e deduplicação do Pre-PR Readiness, preservando checks protegidos e comportamento fail-closed.",
+  "description": "Reduz fan-out e contenção de runners por orçamento bloqueante no CI canônico, roteamento especializado e consolidação das análises report-only fora do caminho crítico do pull request, preservando checks protegidos e comportamento fail-closed.",
   "scope": "governance-ci-routing",
   "files": [
     ".github/workflows/security-specialized-scanners.yml",
@@ -32,15 +32,29 @@
     ".github/workflows/pr-governed-ci-validation.yml",
     ".github/workflows/test-quality-gate.yml",
     ".github/workflows/requirement-lifecycle-evidence.yml",
-    ".github/workflows/pre-pr-readiness.yml"
+    ".github/workflows/pre-pr-readiness.yml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/reqsys-360-coherence-gate.yml",
+    ".github/workflows/trilha-d-qualidade-governanca.yml",
+    ".github/workflows/kindle-knowledge-local-cache.yml",
+    "config/ci-workflow-pareto-policy.json",
+    "scripts/ci_budget_guard.py",
+    "tests/test_ci_budget_guard.py",
+    "tests/fixtures/ci-budget/pr-1954-changed-files.txt",
+    ".github/workflows/ci-advisory-router.yml",
+    ".github/workflows/deep-governance-review.yml",
+    ".github/workflows/governed-pr-automation.yml",
+    "tests/test_governed_pr_automation_dispatch_contract.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_codeql_atomic_publish_workflow.py",
       "tests/test_report_only_workflow_pareto.py",
-      "tests/test_workflow_governance_consolidator.py"
+      "tests/test_workflow_governance_consolidator.py",
+      "tests/test_ci_budget_guard.py",
+      "tests/test_governed_pr_automation_dispatch_contract.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis; Gitleaks permanece global; scans, advisory workflows, PR CI Watch e gates específicos de domínio só materializam em superfícies aplicáveis; push e pull_request do Pre-PR compartilham concorrência por branch; o consolidator audita o SHA completo; referências legadas não retornam."
+    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge."
   },
   "risk": {
     "production": false,
@@ -48,5 +62,21 @@
     "secrets_mutation": false,
     "admin_permissions": false,
     "reboot": false
-  }
+  },
+  "acceptance_criteria": [
+    "O orçamento bloqueante é no máximo 10 e é aplicado dentro de CI — ReqSys v2 Enterprise, sem criar um novo workflow de pull_request.",
+    "Nenhum workflow listado em protected_workflows é removido ou reclassificado como report-only.",
+    "A fixture dos 15 arquivos da PR #1954 não seleciona ReqSys 360, Trilha D nem Kindle Knowledge Local Cache como workflow especializado de PR.",
+    "ReqSys 360 não usa frontend/**, backend/**, backend-dotnet/**, runtime/** ou services/** no pull_request; o push/main mantém backend/** e frontend/**.",
+    "Trilha D não usa backend/** no pull_request; o push/main mantém backend/**.",
+    "Os jobs físicos Noteri/Desktop do Kindle falham fechados para pull_request e continuam disponíveis em push/main, schedule e workflow_dispatch.",
+    "O controle negativo bloqueia política acima do orçamento e sobreposição protected_workflows/report_only_workflows.",
+    "A mesma entrada produz a mesma seleção e o mesmo resultado de orçamento.",
+    "Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier não possuem gatilho pull_request e preservam workflow_dispatch.",
+    "CI Advisory Router é acionado somente após CI — ReqSys v2 Enterprise concluído ou manualmente e publica evidência report-only.",
+    "CI Advisory Router não possui actions:write, não dispara automaticamente os workflows consultivos e declara critical_path_blocker=false.",
+    "Deep Governance Review não materializa em synchronize; mantém labeled, schedule e workflow_dispatch.",
+    "Governed PR Automation não falha o workflow quando governed-merge-approved está ausente após a fila verde; registra espera governada e não executa merge.",
+    "Adicionar governed-merge-approved dispara nova avaliação pelo evento labeled e o merge continua condicionado a HEAD exato, merge-queue:eligible e workflows obrigatórios verdes."
+  ]
 }

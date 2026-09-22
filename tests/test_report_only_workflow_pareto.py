@@ -28,28 +28,19 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         self.assertNotIn("- reopened", trigger)
         self.assertNotIn("- ready_for_review", trigger)
 
-    def test_fast_classifier_does_not_rerun_for_label_only_changes(self):
+    def test_fast_classifier_is_manual_only_after_canonical_router(self):
         text = (WORKFLOWS / "pr-fast-classifier.yml").read_text(encoding="utf-8")
         trigger = text.split("permissions:", 1)[0]
-        self.assertIn("opened, synchronize, reopened, ready_for_review", trigger)
-        self.assertNotIn("labeled", trigger)
-        self.assertNotIn("unlabeled", trigger)
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertNotIn("pull_request:", trigger)
 
-    def test_preview_contract_is_path_scoped_to_runtime_surface(self):
+    def test_preview_contract_is_manual_only_after_canonical_router(self):
         text = (WORKFLOWS / "preview-environment-contract.yml").read_text(encoding="utf-8")
-        trigger = text.split("workflow_dispatch:", 1)[0]
-        self.assertIn("paths:", trigger)
-        for expected in (
-            '"backend/**"',
-            '"frontend/**"',
-            '"runtime/**"',
-            '"services/**"',
-            '"infra/**"',
-            '".github/workflows/preview-environment-contract.yml"',
-        ):
-            self.assertIn(expected, trigger)
+        trigger = text.split("permissions:", 1)[0]
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertNotIn("pull_request:", trigger)
 
-    def test_advisory_risk_quality_and_predictive_skip_non_executable_prs(self):
+    def test_advisory_risk_quality_and_predictive_leave_pr_critical_path(self):
         for workflow in (
             "runtime-risk-scoring.yml",
             "pr-quality-review.yml",
@@ -57,52 +48,27 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         ):
             text = (WORKFLOWS / workflow).read_text(encoding="utf-8")
             trigger = text.split("permissions:", 1)[0]
-            self.assertIn('"backend/**"', trigger)
-            self.assertIn('"frontend/**"', trigger)
-            self.assertIn('"runtime/**"', trigger)
-            self.assertIn('"services/**"', trigger)
-            self.assertNotIn('".github/workflows/**"', trigger)
-            self.assertNotIn('"docs/ci/**"', trigger)
-            self.assertNotIn('"docs/adr/**"', trigger)
-            self.assertNotIn('"tests/**"', trigger)
-            self.assertNotIn('"scripts/**"', trigger)
+            self.assertIn("workflow_dispatch:", trigger, workflow)
+            self.assertNotIn("pull_request:", trigger, workflow)
 
-    def test_router_contract_rejects_broad_advisory_paths(self):
+    def test_router_contract_moves_advisory_workflows_post_ci(self):
         router = load_router()
-        runtime_forbidden = "\n".join(
-            router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
-                ".github/workflows/runtime-risk-scoring.yml"
-            ]
-        )
-        quality_forbidden = "\n".join(
-            router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
-                ".github/workflows/pr-quality-review.yml"
-            ]
-        )
-        predictive_forbidden = "\n".join(
-            router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
-                ".github/workflows/predictive-regression-guard.yml"
-            ]
-        )
-        self.assertIn('".github/workflows/**"', runtime_forbidden)
-        self.assertIn('"tests/**"', quality_forbidden)
-        self.assertIn('"docs/ops-dashboard/**"', predictive_forbidden)
-        for workflow in (
+        self.assertIn(
             ".github/workflows/runtime-risk-scoring.yml",
-            ".github/workflows/pr-quality-review.yml",
-            ".github/workflows/predictive-regression-guard.yml",
-        ):
-            self.assertTrue(
-                any(
-                    '"scripts/**"' in token
-                    for token in router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[workflow]
-                ),
-                workflow,
-            )
-        for workflow, tokens in router.REQUIRED_ROUTING.items():
-            token_text = "\n".join(tokens)
-            self.assertIn('"runtime/**"', token_text, workflow)
-            self.assertIn('"services/**"', token_text, workflow)
+            router.MANUAL_ONLY_ADVISORY,
+        )
+        self.assertEqual(
+            router.POST_CI_ROUTER,
+            ".github/workflows/ci-advisory-router.yml",
+        )
+        advisory = (WORKFLOWS / "ci-advisory-router.yml").read_text(encoding="utf-8")
+        trigger = advisory.split("permissions:", 1)[0]
+        self.assertIn("workflow_run:", trigger)
+        self.assertIn("CI — ReqSys v2 Enterprise", trigger)
+        self.assertIn("types: [completed]", trigger)
+        self.assertIn("automatic_dispatch: false", advisory)
+        self.assertIn("critical_path_blocker: false", advisory)
+        self.assertNotIn("actions: write", advisory)
 
     def test_pr_ci_watch_uses_only_canonical_completion_signals(self):
         text = (WORKFLOWS / "pr-ci-watch.yml").read_text(encoding="utf-8")
@@ -191,6 +157,12 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
             text,
         )
         self.assertIn("cancel-in-progress: true", text)
+
+    def test_deep_governance_review_only_materializes_on_label(self):
+        text = (WORKFLOWS / "deep-governance-review.yml").read_text(encoding="utf-8")
+        trigger = text.split("permissions:", 1)[0]
+        self.assertIn("types: [labeled]", trigger)
+        self.assertNotIn("synchronize", trigger)
 
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
