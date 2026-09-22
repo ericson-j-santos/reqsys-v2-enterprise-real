@@ -558,8 +558,9 @@ def repair_missing_registration(
     allow_interactive_auth: bool = True,
 ) -> dict[str, Any]:
     remove_value = remove_token(gh, allow_interactive=allow_interactive_auth)
-    registration_value = registration_token(gh, allow_interactive=allow_interactive_auth)
+    registration_value = ""
     try:
+        registration_value = registration_token(gh, allow_interactive=allow_interactive_auth)
         stopped = stop_runner(root)
         _remove_runner_with_token(root, remove_value)
         _register_runner_with_token(root, registration_value)
