@@ -2,14 +2,14 @@
   "feature_name": "ollama-ci-triage-worker-pool",
   "project": "ReqSys v2 Enterprise — CI Intelligence",
   "created_at": "2026-09-21",
-  "updated_at": "2026-09-21",
+  "updated_at": "2026-09-22",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Triagem Ollama-first para falhas CI e escalonamento determinístico ao Worker Pool na mesma branch do PR, fail-closed para segurança, forks, SHA obsoleto e baixa confiança.",
+  "description": "Triagem Ollama-first para falhas CI, com degradação fail-closed quando a inferência/saída estruturada do modelo falha, e escalonamento determinístico ao Worker Pool somente na mesma branch do PR.",
   "scope": "local-dev-pc24x7",
   "files": [
     "scripts/ollama_ci_triage.py",
@@ -28,7 +28,7 @@
       "services/codex-worker-pool/tests/test_store.py",
       "services/codex-worker-pool/tests/test_api.py"
     ],
-    "evidence_contract": "Provar triagem Ollama estruturada sem ferramentas, decisão determinística, controles negativos, branch do mesmo PR, replay idempotente, leitura independente e dry_run real no PC24x7 antes de ativação automática."
+    "evidence_contract": "Provar triagem Ollama estruturada sem ferramentas; quando Ollama falhar, produzir DEGRADED/unknown/confidence=0 sem enqueue; manter decisão determinística, controles negativos, branch do mesmo PR, replay idempotente, leitura independente e dry_run real no PC24x7."
   },
   "risk": {
     "production": false,
