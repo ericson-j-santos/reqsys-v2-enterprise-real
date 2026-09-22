@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -431,52 +432,48 @@ def register_runner(root: Path, gh: Path, *, allow_interactive_auth: bool = True
     return True
 
 
-def runner_running() -> bool:
-    tasklist = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "tasklist.exe"
-    cp = subprocess.run(
-        [str(tasklist), "/FI", "IMAGENAME eq Runner.Listener.exe", "/FO", "CSV", "/NH"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=20,
-        check=False,
-    )
-    return cp.returncode == 0 and "runner.listener.exe" in cp.stdout.casefold()
+def _load_watchdog_runtime():
+    if not WATCHDOG.is_file():
+        raise ActivationError("watchdog_missing", "watchdog governado ausente")
+    spec = importlib.util.spec_from_file_location("reqsys_pc24x7_watchdog_runtime", WATCHDOG)
+    if spec is None or spec.loader is None:
+        raise ActivationError("watchdog_invalid", "watchdog governado não carregável")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _runner_log_path(root: Path) -> Path:
+    log_root = Path(os.environ.get("LOCALAPPDATA") or str(root)) / "ReqSys" / "Pc24x7GitHubRunner" / "logs"
+    return log_root / "runner.log"
+
+
+def runner_running(root: Path) -> bool:
+    watchdog = _load_watchdog_runtime()
+    return bool(watchdog.runner_running(root))
 
 
 def start_runner(root: Path) -> bool:
-    if runner_running():
-        return False
-    log_root = Path(os.environ.get("LOCALAPPDATA") or str(root)) / "ReqSys" / "Pc24x7GitHubRunner" / "logs"
-    log_root.mkdir(parents=True, exist_ok=True)
-    log_handle = (log_root / "runner.log").open("a", encoding="utf-8", buffering=1)
-    try:
-        flags = 0
-        if os.name == "nt":
-            flags = (
-                subprocess.CREATE_NEW_PROCESS_GROUP
-                | subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NO_WINDOW
-            )
-        subprocess.Popen(
-            [str(Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "cmd.exe"),
-             "/d", "/s", "/c", str(root / "run.cmd")],
-            cwd=str(root),
-            stdin=subprocess.DEVNULL,
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            close_fds=True,
-            creationflags=flags,
-        )
-    finally:
-        log_handle.close()
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
-        if runner_running():
-            return True
-        time.sleep(1)
-    raise ActivationError("runner_start_timeout", "timeout aguardando Runner.Listener.exe")
+    watchdog = _load_watchdog_runtime()
+    result = watchdog.start_runner(root, _runner_log_path(root))
+    return bool(result.get("started"))
+
+
+def restart_runner(root: Path) -> dict[str, Any]:
+    watchdog = _load_watchdog_runtime()
+    result = watchdog.restart_runner(root, _runner_log_path(root))
+    if not isinstance(result, dict):
+        raise ActivationError("runner_restart_invalid", "resultado de restart do runner inválido")
+    return result
+
+
+def should_restart_offline_runner(registry: dict[str, Any], local_running: bool) -> bool:
+    return bool(
+        local_running
+        and registry.get("present")
+        and registry.get("labels_ok")
+        and str(registry.get("status") or "").casefold() == "offline"
+    )
 
 
 def install_watchdog(repo_root: Path, source_sha: str, runner: Path) -> dict[str, Any]:
@@ -566,8 +563,22 @@ def main() -> int:
             token_consumed = registration_performed
 
         started_now = start_runner(runner)
-        registry = wait_runner_registry_online(gh)
-        local_running = runner_running()
+        registry = wait_runner_registry_online(gh, timeout_seconds=8.0)
+        local_running = runner_running(runner)
+        restart_evidence: dict[str, Any] | None = None
+
+        if should_restart_offline_runner(registry, local_running):
+            restart_evidence = restart_runner(runner)
+            started_now = bool(restart_evidence.get("started")) or started_now
+            registry = wait_runner_registry_online(gh)
+            local_running = runner_running(runner)
+        elif not (
+            registry.get("present")
+            and registry.get("labels_ok")
+            and registry.get("status") == "online"
+        ):
+            registry = wait_runner_registry_online(gh)
+            local_running = runner_running(runner)
 
         if not local_running:
             state = "runner_process_not_running"
@@ -593,6 +604,10 @@ def main() -> int:
             "runner_registered_now": registration_performed,
             "runner_started_now": started_now,
             "runner_running": local_running,
+            "runner_restarted_offline": restart_evidence is not None,
+            "runner_restart_previous_listener_pid": (
+                restart_evidence.get("previous_listener_pid") if restart_evidence else None
+            ),
             "runner_registry_present": bool(registry.get("present")),
             "runner_registry_status": str(registry.get("status") or "unknown"),
             "runner_registry_busy": bool(registry.get("busy")),
