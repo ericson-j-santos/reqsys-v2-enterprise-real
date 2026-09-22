@@ -118,7 +118,12 @@ def labels(item: dict[str, Any]) -> dict[str, str]:
     return (item.get("Config") or {}).get("Labels") or {}
 
 
-def bind_source(item: dict[str, Any], destination: str) -> Path:
+def bind_source(
+    item: dict[str, Any],
+    destination: str,
+    *,
+    stage: str,
+) -> Path:
     for mount in item.get("Mounts") or []:
         if (
             mount.get("Destination") == destination
@@ -126,7 +131,7 @@ def bind_source(item: dict[str, Any], destination: str) -> Path:
             and mount.get("RW") is True
         ):
             return windows_path(str(mount.get("Source") or ""))
-    raise ReconcileError(f"rw_bind_missing:{destination}")
+    raise ReconcileError(f"rw_bind_missing:{destination}", stage=stage)
 
 
 def windows_path(raw: str) -> Path:
@@ -523,8 +528,16 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         if item_labels.get("com.docker.compose.service") != service:
             raise ReconcileError(f"runtime_service_mismatch:{service}")
 
-    api_source = bind_source(api_before, "/app")
-    frontend_source = bind_source(frontend_before, "/app")
+    api_source = bind_source(
+        api_before,
+        "/app",
+        stage="api_source_bind",
+    )
+    frontend_source = bind_source(
+        frontend_before,
+        "/app",
+        stage="frontend_source_bind",
+    )
     working_dir, compose_files = compose_context(api_before, repo_root)
 
     profile_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "ReqSys" / "TodoGlobal24x7"
