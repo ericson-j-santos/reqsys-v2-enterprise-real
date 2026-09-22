@@ -59,6 +59,9 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 12. Falhas de `docker compose config` devem produzir somente um
     `diagnostic_code` allowlisted e sem `stderr` bruto, valores de ambiente,
     tokens, segredos ou caminhos sensíveis na evidência publicada.
+13. Se a classe ainda for desconhecida, a evidência pode publicar somente
+    `diagnostic_markers` pertencentes a uma allowlist fixa; nunca texto bruto,
+    caminhos ou valores arbitrários.
 
 ## Topologia
 
