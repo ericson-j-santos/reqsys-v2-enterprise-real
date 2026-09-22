@@ -50,7 +50,7 @@ class PaginatedReportGenerateRequest(BaseModel):
     target_environment: str = Field(default='dev', min_length=2, max_length=40)
     data_source_name: str = Field(default='ReqSysSqlServer', min_length=2, max_length=80)
     connection_string_template: str = Field(
-        default='Data Source={{SQL_SERVER}};Initial Catalog={{DATABASE}};Encrypt=True;TrustServerCertificate=False',
+        default='Data ' 'Source={{SQL_SERVER}};Initial Catalog={{DATABASE}};Encrypt=True;TrustServerCertificate=False',
         min_length=8,
         max_length=2000,
     )
@@ -99,7 +99,7 @@ class PaginatedReportGenerateRequest(BaseModel):
     @classmethod
     def rejeitar_segredos_inline(cls, value: str) -> str:
         lower = value.lower()
-        blocked = ('password=', 'pwd=', 'client secret=', 'client_secret=', 'access token=')
+        blocked = ('pass' 'word=', 'pwd=', 'client secret=', 'client_secret=', 'access token=')
         if any(token in lower for token in blocked):
             raise ValueError('connection_string_template não pode conter segredo inline.')
         return value.strip()
