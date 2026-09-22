@@ -154,7 +154,7 @@ def test_change_cannot_close_before_runtime_evidence_and_closes_after_exact_sha(
 
     blocked = _transition(case, "CLOSED")
     assert blocked.status_code == 409
-    assert "sem evidência runtime" in blocked.json()["detail"]
+    assert blocked.json()["detail"] == "operação CHANGE rejeitada por pré-condição"
 
     db = TestingSession()
     try:
@@ -229,7 +229,7 @@ def test_runtime_sha_mismatch_fails_without_persistence(service_id):
         json=payload,
     )
     assert response.status_code == 422
-    assert "runtime SHA divergente" in response.json()["detail"]
+    assert response.json()["detail"] == "evidência CHANGE inválida"
 
     db = TestingSession()
     try:
@@ -255,7 +255,7 @@ def test_failed_post_deploy_evidence_keeps_change_open(service_id):
 
     blocked = _transition(case, "CLOSED")
     assert blocked.status_code == 409
-    assert "rollback não foi comprovado" in blocked.json()["detail"]
+    assert blocked.json()["detail"] == "operação CHANGE rejeitada por pré-condição"
 
 
 def test_change_evidence_is_rejected_for_non_change_case(service_id):
