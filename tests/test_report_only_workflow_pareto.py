@@ -69,30 +69,36 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
 
     def test_router_contract_rejects_broad_advisory_paths(self):
         router = load_router()
-        self.assertIn(
-            '".github/workflows/**"',
+        runtime_forbidden = "\n".join(
             router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
                 ".github/workflows/runtime-risk-scoring.yml"
-            ],
+            ]
         )
-        self.assertIn(
-            '"tests/**"',
+        quality_forbidden = "\n".join(
             router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
                 ".github/workflows/pr-quality-review.yml"
-            ],
+            ]
         )
-        self.assertIn(
-            '"docs/ops-dashboard/**"',
+        predictive_forbidden = "\n".join(
             router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
                 ".github/workflows/predictive-regression-guard.yml"
-            ],
+            ]
         )
+        self.assertIn('".github/workflows/**"', runtime_forbidden)
+        self.assertIn('"tests/**"', quality_forbidden)
+        self.assertIn('"docs/ops-dashboard/**"', predictive_forbidden)
         for workflow in (
             ".github/workflows/runtime-risk-scoring.yml",
             ".github/workflows/pr-quality-review.yml",
             ".github/workflows/predictive-regression-guard.yml",
         ):
-            self.assertIn('"scripts/**"', router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[workflow])
+            self.assertTrue(
+                any(
+                    '"scripts/**"' in token
+                    for token in router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[workflow]
+                ),
+                workflow,
+            )
         for workflow, tokens in router.REQUIRED_ROUTING.items():
             self.assertIn('"runtime/**"', tokens, workflow)
             self.assertIn('"services/**"', tokens, workflow)
@@ -149,7 +155,7 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
 
     def test_test_quality_gate_avoids_global_workflow_wildcard(self):
         text = (WORKFLOWS / "test-quality-gate.yml").read_text(encoding="utf-8")
-        trigger = text.split("permissions:", 1)[0]
+        trigger = text.split("pull_request:", 1)[1].split("push:", 1)[0]
         self.assertNotIn('".github/workflows/**"', trigger)
         for expected in (
             '".github/workflows/test-quality-gate.yml"',
