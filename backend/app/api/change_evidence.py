@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -158,7 +158,11 @@ def _record_evidence(record: ChangeEvidenceRecord) -> ChangeExecutionEvidence:
         post_deploy_evidence_uri=record.post_deploy_evidence_uri,
         post_deploy_evidence_sha256=record.post_deploy_evidence_sha256,
         status=ChangeValidationStatus(record.status),
-        observed_at=record.observed_at,
+        observed_at=(
+            record.observed_at
+            if record.observed_at.tzinfo is not None
+            else record.observed_at.replace(tzinfo=timezone.utc)
+        ),
         rollback_ref=record.rollback_ref,
         rollback_runtime_sha=record.rollback_runtime_sha,
         rollback_evidence_uri=record.rollback_evidence_uri,
@@ -204,10 +208,6 @@ def record_change_evidence(
         raise ServiceCaseNotFoundError("ServiceCase não encontrado")
     if case.case_type != ServiceCaseType.CHANGE.value:
         raise ServiceCaseConflictError("evidência de CHANGE exige case_type CHANGE")
-    if case.state != ServiceCaseState.RESOLVED.value:
-        raise ServiceCaseConflictError(
-            "evidência pós-deploy só pode ser registrada com CHANGE em RESOLVED"
-        )
 
     payload_sha256 = _fingerprint(payload)
     existing = db.get(ChangeEvidenceRecord, str(payload.event_id))
@@ -219,6 +219,11 @@ def record_change_evidence(
     event = db.get(ServiceCaseEventRecord, str(payload.event_id))
     if event is not None:
         raise ServiceCaseConflictError("event_id já utilizado por outro efeito")
+
+    if case.state != ServiceCaseState.RESOLVED.value:
+        raise ServiceCaseConflictError(
+            "evidência pós-deploy só pode ser registrada com CHANGE em RESOLVED"
+        )
 
     traceability = ChangeTraceability(
         requirement=ExternalReference(
