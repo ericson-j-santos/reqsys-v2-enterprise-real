@@ -59,7 +59,14 @@ jobs:
               node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-dev/signed-locator.json >/dev/null
               resolved_url="$(python -c 'import json; from pathlib import Path; print(json.loads(Path("artifacts/pc24x7-dev/signed-locator.json").read_text(encoding="utf-8"))["selected_url"])')"
               ;;
-            stg|staging|prod|production)
+            stg|staging)
+              test -n "$TARGET_URL" || {
+                echo "::error::Ambiente $TARGET_ENVIRONMENT não possui runtime canônico publicado; fallback Fly.io é proibido."
+                exit 2
+              }
+              resolved_url="$TARGET_URL"
+              ;;
+            prod|production)
               test -n "$TARGET_URL" || {
                 echo "::error::Ambiente $TARGET_ENVIRONMENT não possui runtime canônico publicado; fallback Fly.io é proibido."
                 exit 2
