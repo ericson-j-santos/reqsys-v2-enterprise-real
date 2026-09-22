@@ -18,8 +18,9 @@ describe('ambientesOperacionais', () => {
     expect(normalizarAmbienteId('production')).toBe('producao')
   })
 
-  it('detecta ambiente pelo hostname Fly.io', () => {
-    expect(detectarAmbientePorHostname('reqsys-app-dev.fly.dev')).toBe('desenvolvimento')
+  it('detecta DEV pelo locator/runtime PC24x7 e mantém os demais ambientes explícitos', () => {
+    expect(detectarAmbientePorHostname('abc.trycloudflare.com')).toBe('desenvolvimento')
+    expect(detectarAmbientePorHostname('ericson-j-santos.github.io')).toBe('desenvolvimento')
     expect(detectarAmbientePorHostname('reqsys-app-stg.fly.dev')).toBe('homologacao')
     expect(detectarAmbientePorHostname('reqsys-app.fly.dev')).toBe('producao')
     expect(detectarAmbientePorHostname('127.0.0.1')).toBe('local')
@@ -29,13 +30,13 @@ describe('ambientesOperacionais', () => {
     expect(
       resolverAmbienteAtual({
         environmentHint: 'producao',
-        hostname: 'reqsys-app-dev.fly.dev',
+        hostname: 'abc.trycloudflare.com',
       }),
     ).toBe('desenvolvimento')
   })
 
   it('lista local apenas quando hostname é local', () => {
-    const remoto = ambientesNavegaveis({ hostname: 'reqsys-app-dev.fly.dev' })
+    const remoto = ambientesNavegaveis({ hostname: 'abc.trycloudflare.com' })
     expect(remoto.some((item) => item.id === 'local')).toBe(false)
     expect(remoto).toHaveLength(3)
 
@@ -47,6 +48,14 @@ describe('ambientesOperacionais', () => {
   it('monta URL preservando rota informada', () => {
     const url = montarUrlAmbiente('homologacao', { path: '/governanca', preserveRoute: false })
     expect(url).toBe('https://reqsys-app-stg.fly.dev/governanca')
+  })
+
+  it('navega para DEV somente pelo locator assinado e preserva a rota como target relativo', () => {
+    const url = montarUrlAmbiente('desenvolvimento', { path: '/task-console?tab=study', preserveRoute: false })
+    expect(url).toBe(
+      'https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/?target=%2Ftask-console%3Ftab%3Dstudy',
+    )
+    expect(url).not.toContain('fly.dev')
   })
 
   it('expõe catálogo com URLs canônicas', () => {
