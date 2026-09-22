@@ -27,6 +27,13 @@ class FabricHmlAuthorizationProbeContractTests(unittest.TestCase):
         self.assertTrue(PROBE_WORKFLOW.is_file())
         self.assertIn("name: Fabric HML Authorization Probe", self.workflow)
 
+    def test_probe_is_allowlisted_for_self_hosted_runners(self) -> None:
+        policy = Path(".github/self-hosted-runner-policy.json").read_text(encoding="utf-8")
+        self.assertIn(
+            "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]", self.workflow
+        )
+        self.assertIn(".github/workflows/fabric-hml-authorization-probe.yml", policy)
+
     def test_probe_does_not_replace_the_discovery_workflow(self) -> None:
         discovery = DISCOVERY_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("name: Fabric HML Noteri Discovery", discovery)
