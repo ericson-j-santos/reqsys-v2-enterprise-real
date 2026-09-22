@@ -9,12 +9,12 @@
     "design": true,
     "tasks": true
   },
-  "description": "Provisiona ou reutiliza de forma idempotente e fail-closed o GitHub Actions runner do DESKTOP-PDQK954, com nome e labels fixos, runner oficial com SHA-256 fixado, token de registro efêmero somente em memória e reutilização do desktop_control_plane_watchdog.py.",
+  "description": "Provisiona ou reutiliza de forma idempotente e fail-closed o GitHub Actions runner do DESKTOP-PDQK954 e só declara runtime ativo quando o processo local está vivo e o GitHub confirma o runner online com todas as labels governadas.",
   "sdd_gate": {
     "tests": [
       "tests/test_activate_desktop_free_control_plane.py"
     ],
-    "evidence_contract": "O bootstrap somente executa em DESKTOP-PDQK954, usa repositório/nome/labels fixos, nunca persiste ou registra o token de registro, exige Runner.Listener.exe ativo para runtime_active, reutiliza o watchdog governado e mantém rdc_required=false e production_touched=false."
+    "evidence_contract": "O bootstrap somente executa em DESKTOP-PDQK954, usa repositório/nome/labels fixos, nunca persiste ou registra o token de registro, exige Runner.Listener.exe ativo, registro GitHub presente, status online e labels self-hosted/Windows/X64/pc24x7/reqsys-dev para runtime_active; reutiliza o watchdog governado e mantém rdc_required=false e production_touched=false."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-free-control-plane-bootstrap.requirements.md",
