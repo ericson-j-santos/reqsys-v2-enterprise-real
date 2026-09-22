@@ -1,0 +1,36 @@
+{
+  "feature_name": "report-factory-rdl-mvp",
+  "project": "ReqSys v2 Enterprise — Report Factory",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "issue": 1933,
+  "increment_type": "consolidate",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Consolida a capacidade RDL/SSRS existente em um gerador declarativo e determinístico com payload e cliente opcionais para Microsoft Fabric.",
+  "scope": "report-spec-to-rdl-and-fabric",
+  "files": [
+    "tools/geradores/report_factory.py",
+    "schemas/report-factory-spec.schema.json",
+    "examples/report-factory/demandas_por_status.json",
+    "tests/test_report_factory_rdl.py",
+    "docs/runbooks/report-factory-rdl.md"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_report_factory_rdl.py"
+    ],
+    "evidence_contract": "Provar fluxo spec->RDL->payload, controle negativo de segredo/dataset/componente e idempotência. Publicação Fabric DEV exige evidência externa vinculada ao SHA."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "external_dev_publish": "explicit_credentials_and_workspace_required"
+  }
+}

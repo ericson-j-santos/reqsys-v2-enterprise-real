@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/schemas/report-factory-spec.schema.json",
+  "title": "ReqSys Report Factory Spec 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report", "datasource", "datasets", "components"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$"},
+        "title": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "maxLength": 256},
+        "page": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"orientation": {"enum": ["portrait", "landscape"]}}
+        }
+      }
+    },
+    "datasource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "provider", "connect_string", "integrated_security"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "provider": {"const": "SQL"},
+        "connect_string": {"type": "string", "minLength": 1},
+        "integrated_security": {"const": true}
+      }
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+          "data_type": {"enum": ["String", "Integer", "Float", "Boolean", "DateTime"]},
+          "prompt": {"type": "string"},
+          "default": {}
+        }
+      }
+    },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "query", "fields"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+          "query": {"type": "string", "minLength": 1},
+          "parameters": {"type": "object", "additionalProperties": {"type": "string"}},
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "properties": {
+                "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+                "data_field": {"type": "string", "minLength": 1},
+                "type": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "name", "dataset", "columns"],
+        "properties": {
+          "type": {"const": "table"},
+          "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+          "dataset": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+          "columns": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["field"],
+              "properties": {
+                "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+                "title": {"type": "string"},
+                "width": {"type": "string", "pattern": "^\\d+(?:\\.\\d+)?(?:in|cm|mm|pt)$"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
