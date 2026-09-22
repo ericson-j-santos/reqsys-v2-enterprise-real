@@ -2,6 +2,15 @@ name: Noteri Study Mode DEV Reconcile
 
 on:
   workflow_dispatch:
+  # Gatilho efêmero de diagnóstico: executa somente neste branch governado.
+  # Deve ser removido antes da integração na main.
+  push:
+    branches:
+      - fix/noteri-study-runtime-diagnostics-20260922-r2
+    paths:
+      - '.github/workflows/noteri-study-mode-dev-reconcile.yml'
+      - 'scripts/noteri_study_mode_dev_reconcile.py'
+      - 'docker-compose.noteri-study-mode.yml'
 
 permissions:
   contents: read
@@ -17,7 +26,7 @@ jobs:
     timeout-minutes: 15
     environment: development
     steps:
-      - name: Checkout immutable main SHA
+      - name: Checkout immutable source SHA
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}

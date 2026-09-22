@@ -18,7 +18,9 @@
     "A mudança NORMAL -> ESTUDO é persistida no host-profile.json canônico e confirmada por leitura independente.",
     "O replay de ESTUDO é idempotente e informa changed=false sem efeito duplicado.",
     "O fluxo retorna a NORMAL ao final e comprova o estado por API, arquivo e interface do Task Console.",
-    "A execução permanece restrita ao Noteri/DEV, sem HML/PROD, segredos ou exposição pública do agente loopback."
+    "A execução permanece restrita ao Noteri/DEV, sem HML/PROD, segredos ou exposição pública do agente loopback.",
+    "Falhas do reconciliador registram somente código e etapa sanitizados, sem expor mensagem bruta de exceção, para permitir correção objetiva do runtime.",
+    "Quando o frontend DEV real não possuir bind RW em /app, o reconciliador usa o diretório Compose real, rebuilda/recria somente o frontend e também o restaura no rollback."
   ],
   "controls": {
     "hml_enabled": false,
@@ -35,6 +37,6 @@
       "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
       "tests/test_noteri_study_mode_dev_reconcile.py"
     ],
-    "evidence_contract": "No Noteri DEV, o Task Console deve alternar NORMAL->ESTUDO->NORMAL pela mesma origem do ReqSys, com estado persistido no host-profile.json, leitura independente, replay idempotente, controle 401 sem autenticação e restauração final NORMAL."
+    "evidence_contract": "No Noteri DEV, o Task Console deve alternar NORMAL->ESTUDO->NORMAL pela mesma origem do ReqSys, com estado persistido no host-profile.json, leitura independente, replay idempotente, controle 401 sem autenticação e restauração final NORMAL. Em falha, a evidência deve indicar failure_stage e error_code sanitizados sem mensagem bruta de exceção. O runtime deve tolerar frontend sem bind /app: nesse caso usa a fonte Compose real, rebuilda/recria o frontend e preserva rollback."
   }
 }
