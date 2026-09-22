@@ -17,12 +17,12 @@ class ProfileChangeInput(BaseModel):
 
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, profiles.NoteriProfileUnavailable):
-        return HTTPException(status_code=503, detail=str(exc))
+        return HTTPException(status_code=503, detail="Perfil do Noteri indisponível.")
     if isinstance(exc, profiles.NoteriProfileInvalid):
-        return HTTPException(status_code=409, detail=str(exc))
+        return HTTPException(status_code=409, detail="Estado do perfil do Noteri inválido.")
     if isinstance(exc, ValueError):
-        return HTTPException(status_code=422, detail=str(exc))
-    return HTTPException(status_code=500, detail="Falha ao atualizar perfil do Noteri")
+        return HTTPException(status_code=422, detail="Solicitação de perfil inválida.")
+    return HTTPException(status_code=500, detail="Falha ao atualizar perfil do Noteri.")
 
 
 @router.get("/profile")
