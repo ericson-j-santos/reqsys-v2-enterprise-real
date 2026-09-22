@@ -1,0 +1,96 @@
+name: OCR Real Corpus Noteri One-shot
+
+on:
+  push:
+    branches:
+      - "fix/ocr-real-corpus-noteri-oneshot-*"
+    paths:
+      - ".github/workflows/ocr-real-corpus-noteri-oneshot.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocr-real-corpus-noteri-oneshot
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    name: Discover and certify local OCR corpus on Noteri
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 20
+    env:
+      RULES_SHA: 1c69d1d950a4735ac2eac885db925d9457c12d05
+      MAIN_SHA: 51b0c283d72355bf5f54ba499927af29102c7678
+      SESSION_ID: ocr-oneshot-${{ github.run_id }}-${{ github.run_attempt }}
+      CORRELATION_ID: ocr-oneshot-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: ${{ github.workspace }}\artifacts\ocr-real-corpus-noteri-oneshot\evidence.json
+
+    steps:
+      - name: Checkout immutable one-shot branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout canonical operational rules
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _operational-rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap governed session and execute OCR one-shot
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'Noteri') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+          $rules = Join-Path $env:GITHUB_WORKSPACE '_operational-rules'
+          $launcher = Join-Path $rules 'scripts\session_launcher.py'
+          $gateway = Join-Path $rules 'scripts\command_gateway.py'
+          $policy = Join-Path $rules 'config\command-gateway.policy.json'
+          $repo = 'C:\dev\reqsys-v2-enterprise-real'
+          $executor = Join-Path $env:GITHUB_WORKSPACE 'scripts\ocr_real_corpus_noteri_oneshot.py'
+
+          $launchArgs = @(
+            $launcher, '--policy', $policy, '--repo', $repo,
+            '--session-id', $env:SESSION_ID,
+            '--correlation-id', "$env:CORRELATION_ID-bootstrap",
+            '--expected-head', $env:MAIN_SHA,
+            '--sync-ref', 'origin/main'
+          )
+          $launchRaw = & python @launchArgs 2>&1
+          $launchExit = $LASTEXITCODE
+          $launchRaw | ForEach-Object { Write-Host $_ }
+          if ($launchExit -ne 0) { throw "SESSION_LAUNCH_BLOCKED:$launchExit" }
+
+          $launchJson = $launchRaw | Where-Object { $_ -match '^\{' } | Select-Object -Last 1 | ConvertFrom-Json
+          if ($launchJson.result -ne 'SESSION_LAUNCH_OK' -or -not $launchJson.state_validated) {
+            throw 'SESSION_LAUNCH_NOT_VALIDATED'
+          }
+
+          $target = [string]$launchJson.target_path
+          $gatewayArgs = @(
+            $gateway, '--policy', $policy, '--correlation-id', $env:CORRELATION_ID,
+            'run', '--cwd', $target, '--session-id', $env:SESSION_ID,
+            '--risk', '1', '--timeout', '900', '--expected-head', $env:MAIN_SHA, '--',
+            'python', $executor, '--output', $env:EVIDENCE_FILE
+          )
+          & python @gatewayArgs
+          $gatewayExit = $LASTEXITCODE
+          if ($gatewayExit -ne 0) { throw "COMMAND_GATEWAY_FAILED:$gatewayExit" }
+
+      - name: Upload sanitized OCR evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ocr-real-corpus-noteri-oneshot-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 30
