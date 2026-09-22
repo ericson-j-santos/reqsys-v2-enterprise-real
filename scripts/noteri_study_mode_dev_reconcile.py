@@ -29,6 +29,7 @@ from typing import Any
 
 EXPECTED_HOST = "DESKTOP-PDQK954"
 DEV_GATEWAY_PORT = "8083"
+DEV_API_PORT = "8210"
 CONFIRM = "RECONCILE-NOTERI-STUDY-MODE-DEV"
 GATEWAY = "http://127.0.0.1:8083"
 ADMIN_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
@@ -123,29 +124,29 @@ def container_name(item: dict[str, Any]) -> str:
 
 
 def discover_runtime(repo_root: Path) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]:
-    gateway_ids = [
+    api_ids = [
         line.strip()
         for line in run(
-            ["docker", "ps", "--filter", f"publish={DEV_GATEWAY_PORT}", "--format", "{{.ID}}"],
+            ["docker", "ps", "--filter", f"publish={DEV_API_PORT}", "--format", "{{.ID}}"],
             cwd=repo_root,
             timeout=60,
-            stage="discover_gateway",
+            stage="discover_api",
         ).stdout.splitlines()
         if line.strip()
     ]
-    if len(gateway_ids) != 1:
-        raise ReconcileError("dev_gateway_8083_not_unique", stage="discover_gateway")
+    if len(api_ids) != 1:
+        raise ReconcileError("dev_api_8210_not_unique", stage="discover_api")
 
-    nginx_item = inspect(gateway_ids[0], repo_root, stage="discover_gateway")
-    nginx_labels = labels(nginx_item)
-    project = str(nginx_labels.get("com.docker.compose.project") or "").strip()
-    service = str(nginx_labels.get("com.docker.compose.service") or "").strip()
-    if not project or service != "nginx":
-        raise ReconcileError("dev_gateway_compose_identity_invalid", stage="discover_gateway")
+    api_item = inspect(api_ids[0], repo_root, stage="discover_api")
+    api_labels = labels(api_item)
+    project = str(api_labels.get("com.docker.compose.project") or "").strip()
+    service = str(api_labels.get("com.docker.compose.service") or "").strip()
+    if not project or service != "api":
+        raise ReconcileError("dev_api_compose_identity_invalid", stage="discover_api")
     if any(token in project.casefold() for token in ("prod", "production", "hml", "stg", "staging")):
-        raise ReconcileError("non_dev_compose_project_blocked", stage="discover_gateway")
-    if container_host_port(nginx_item, "80/tcp") != DEV_GATEWAY_PORT:
-        raise ReconcileError("dev_gateway_port_mismatch", stage="discover_gateway")
+        raise ReconcileError("non_dev_compose_project_blocked", stage="discover_api")
+    if container_host_port(api_item, "8000/tcp") != DEV_API_PORT:
+        raise ReconcileError("dev_api_port_mismatch", stage="discover_api")
 
     def service_item(expected_service: str) -> dict[str, Any]:
         ids = [
@@ -174,8 +175,8 @@ def discover_runtime(repo_root: Path) -> tuple[str, dict[str, Any], dict[str, An
             )
         return inspect(ids[0], repo_root, stage="discover_runtime")
 
-    api_item = service_item("api")
     frontend_item = service_item("frontend")
+    nginx_item = service_item("nginx")
     return project, api_item, frontend_item, nginx_item
 
 
@@ -754,7 +755,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "api_container": api_container,
         "frontend_container": frontend_container,
         "gateway_container": nginx_container,
-        "runtime_discovery": "gateway_port_8083_compose_labels",
+        "runtime_discovery": "api_port_8210_compose_labels",
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": not frontend_requires_rebuild,
         "frontend_runtime_refresh": (
