@@ -10,7 +10,6 @@ on:
       - "frontend/**"
       - "runtime/**"
       - "services/**"
-      - "scripts/**"
       - "config/**"
       - "infra/**"
       - "docker/**"

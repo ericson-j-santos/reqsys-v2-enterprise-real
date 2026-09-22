@@ -65,6 +65,7 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
             self.assertNotIn('"docs/ci/**"', trigger)
             self.assertNotIn('"docs/adr/**"', trigger)
             self.assertNotIn('"tests/**"', trigger)
+            self.assertNotIn('"scripts/**"', trigger)
 
     def test_router_contract_rejects_broad_advisory_paths(self):
         router = load_router()
@@ -86,6 +87,12 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
                 ".github/workflows/predictive-regression-guard.yml"
             ],
         )
+        for workflow in (
+            ".github/workflows/runtime-risk-scoring.yml",
+            ".github/workflows/pr-quality-review.yml",
+            ".github/workflows/predictive-regression-guard.yml",
+        ):
+            self.assertIn('"scripts/**"', router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[workflow])
         for workflow, tokens in router.REQUIRED_ROUTING.items():
             self.assertIn('"runtime/**"', tokens, workflow)
             self.assertIn('"services/**"', tokens, workflow)

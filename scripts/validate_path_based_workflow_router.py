@@ -13,7 +13,6 @@ REQUIRED_ROUTING = {
         '      - "frontend/**"',
         '      - "runtime/**"',
         '      - "services/**"',
-        '      - "scripts/**"',
         "workflow_dispatch:",
     ],
     ".github/workflows/pr-quality-review.yml": [
@@ -22,7 +21,6 @@ REQUIRED_ROUTING = {
         '      - "frontend/**"',
         '      - "runtime/**"',
         '      - "services/**"',
-        '      - "scripts/**"',
         "workflow_dispatch:",
     ],
     ".github/workflows/predictive-regression-guard.yml": [
@@ -31,21 +29,23 @@ REQUIRED_ROUTING = {
         '      - "frontend/**"',
         '      - "runtime/**"',
         '      - "services/**"',
-        '      - "scripts/**"',
         "continue-on-error: true",
     ],
 }
 
 FORBIDDEN_ADVISORY_ROUTING_TOKENS = {
     ".github/workflows/runtime-risk-scoring.yml": [
+        '      - "scripts/**"',
         '      - ".github/workflows/**"',
         '      - "docs/ops-dashboard/**"',
     ],
     ".github/workflows/pr-quality-review.yml": [
+        '      - "scripts/**"',
         '      - "tests/**"',
         '      - ".github/workflows/**"',
     ],
     ".github/workflows/predictive-regression-guard.yml": [
+        '      - "scripts/**"',
         '      - "tests/**"',
         '      - ".github/workflows/**"',
         '      - "docs/ops-dashboard/**"',
