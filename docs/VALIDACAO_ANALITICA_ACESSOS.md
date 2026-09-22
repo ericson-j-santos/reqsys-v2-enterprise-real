@@ -52,6 +52,7 @@ O workflow **não depende de `workflow_run`** para comprovar pós-merge. Isso ev
 - Concorrência: `validacao-acessos-${{ github.ref }}`.
 - O checkout pós-merge usa explicitamente `github.event.pull_request.merge_commit_sha`.
 - A execução falha fechado se o SHA observado divergir do SHA esperado.
+- Evidência produzida por SHA anterior não pode liberar a validação pós-merge atual.
 - O relatório é publicado como artifact `validacao-acessos-publicos` mesmo quando a validação encontra falha.
 - O runtime DEV público obrigatório é a entrada estável `/dev/`, que resolve somente locator assinado vigente.
 
