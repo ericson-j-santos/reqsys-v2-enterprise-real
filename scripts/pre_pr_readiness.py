@@ -229,7 +229,12 @@ def sdd_declared_pytests(files: list[str], root: Path) -> list[str]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        tests = payload.get("sdd_gate", {}).get("tests", [])
+        gate = payload.get("sdd_gate", {})
+        if not isinstance(gate, dict):
+            continue
+        tests = gate.get("pre_pr_tests")
+        if tests is None:
+            tests = gate.get("tests", [])
         if not isinstance(tests, list):
             continue
         for item in tests:
