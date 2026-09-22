@@ -10,6 +10,14 @@ on:
   pull_request:
     # Mudança de label não altera o SHA validado; evita rerun redundante.
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/ci-security.yml"
+      - ".github/workflows/ci-e2e-governado.yml"
+      - ".github/workflows/ci-observability.yml"
+      - ".github/workflows/pr-governed-ci-validation.yml"
+      - "scripts/select_backend_tests.py"
+      - "docs/ci/CI_ACCELERATION_STRATEGY.md"
 
 permissions:
   contents: read
