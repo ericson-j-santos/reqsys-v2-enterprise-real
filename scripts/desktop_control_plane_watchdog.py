@@ -311,7 +311,7 @@ def _taskkill_runner(pid: int) -> subprocess.CompletedProcess[str]:
     )
 
 
-def restart_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
+def stop_runner(runner_home: Path) -> dict[str, Any]:
     runner_home = validate_runner_home(runner_home)
     snapshot = runner_process_snapshot(runner_home)
     matching = snapshot["matching_pids"]
@@ -327,12 +327,21 @@ def restart_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
         if runner_running(runner_home):
             raise WatchdogError("timeout encerrando listener governado")
 
+    return {
+        "stopped": previous_pid is not None,
+        "previous_listener_pid": previous_pid,
+        "termination_scope": "exact_runner_home",
+    }
+
+
+def restart_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
+    stopped = stop_runner(runner_home)
     result = start_runner(runner_home, log_path)
     return {
         **result,
         "restart_requested": True,
-        "previous_listener_pid": previous_pid,
-        "termination_scope": "exact_runner_home",
+        "previous_listener_pid": stopped["previous_listener_pid"],
+        "termination_scope": stopped["termination_scope"],
         "github_connectivity_verified": False,
         "pickup_required": True,
     }
