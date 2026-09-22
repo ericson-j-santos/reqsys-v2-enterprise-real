@@ -106,8 +106,8 @@ ALLOWLIST_MARKER = re.compile(r"(?i)(allowlist|allowed_hosts|allowed_urls|truste
 PASSWORD_PERSISTENCE = re.compile(r"(?i)(?:password|senha)\s*[:=]\s*(?:password|senha)\b")
 AUTH_ENDPOINT = re.compile(r"(?i)(/login\b|/signup\b|/register\b|def\s+(?:login|signup|register)\b|function\s+(?:login|signup|register)\b)")
 RATE_LIMIT_MARKER = re.compile(r"(?i)(rate[_-]?limit|throttl|limiter|too many requests|\b429\b)")
-ADMIN_ROUTE = re.compile(r"(?i)(/admin(?:/|['"]|\b)|admin[_-]?(?:route|router|endpoint))")
-ADMIN_AUTH_MARKER = re.compile(r"(?i)(require_admin|is_admin|role\s*[=!]=?\s*['"]admin|permission|authorize|rbac|Depends\s*\([^)]*admin)")
+ADMIN_ROUTE = re.compile(r"""(?i)(/admin(?:/|['"]|\b)|admin[_-]?(?:route|router|endpoint))""")
+ADMIN_AUTH_MARKER = re.compile(r"""(?i)(require_admin|is_admin|role\s*[=!]=?\s*['"]admin|permission|authorize|rbac|Depends\s*\([^)]*admin)""")
 BOT_ENDPOINT = re.compile(r"(?i)(/signup\b|/register\b|create[_-]?account|cadastro)")
 BOT_CONTROL_MARKER = re.compile(r"(?i)(turnstile|captcha|recaptcha|hcaptcha|rate[_-]?limit|throttl|limiter)")
 
