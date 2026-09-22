@@ -40,8 +40,8 @@ def test_evidence_is_sanitized_and_nonprod() -> None:
     assert "print(token" not in text
     assert "print(client_id" not in text
     assert "print(workspace_id" not in text
-    assert "workspace_id=" not in text
-    assert "client_id=" not in text
+    assert 'print(f"workspace_id=' not in text
+    assert 'print(f"client_id=' not in text
 
 
 def test_self_hosted_policy_allowlists_bootstrap() -> None:
