@@ -119,7 +119,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
+    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
@@ -261,3 +261,12 @@ def test_gateway_worker_pool_smoke_dev_is_exact_inputless_and_fail_closed() -> N
     assert "-f repository=" not in content
     assert "-f issue_number=" not in content
     assert "-f request_id=" not in content
+
+
+def test_gateway_noteri_desktop_admin_broker_kick_is_exact_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick'" in content
+    assert "'/reqsys run noteri-desktop-admin-broker-kick')" in content
+    assert "target='noteri-desktop-admin-broker-kick.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml'" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
