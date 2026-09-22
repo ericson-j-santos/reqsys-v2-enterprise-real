@@ -267,3 +267,30 @@ def test_pre_pr_executes_core_preventive_invariants() -> None:
     assert '"workflow:regression-contracts"' in source
     assert "scripts/vibe_security_gate.py" in source
     assert "scripts/validate_workflow_regression_contracts.py" in source
+
+
+def test_sdd_pre_pr_tests_override_runtime_test_list(tmp_path: Path) -> None:
+    pre_pr = tmp_path / "tests" / "test_fast.py"
+    runtime = tmp_path / "tests" / "test_runtime.py"
+    pre_pr.parent.mkdir(parents=True)
+    pre_pr.write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    runtime.write_text("def test_runtime():\n    assert True\n", encoding="utf-8")
+
+    spec = tmp_path / ".sdd" / "specs" / "sample.spec.json"
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        json.dumps(
+            {
+                "sdd_gate": {
+                    "pre_pr_tests": ["tests/test_fast.py"],
+                    "tests": ["tests/test_fast.py", "tests/test_runtime.py"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert MODULE.sdd_declared_pytests(
+        [".sdd/specs/sample.spec.json"],
+        tmp_path,
+    ) == ["tests/test_fast.py"]
