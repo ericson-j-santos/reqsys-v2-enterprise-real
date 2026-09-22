@@ -55,7 +55,7 @@ jobs:
           $launcher = Join-Path $rules 'scripts\session_launcher.py'
           $gateway = Join-Path $rules 'scripts\command_gateway.py'
           $policy = Join-Path $rules 'config\command-gateway.policy.json'
-          $repo = 'C:\dev\reqsys-v2-enterprise-real'
+          $repo = 'C:\dev\chatgpt-workers\reqsys-central-item1-source-20260920'
           $executor = Join-Path $env:GITHUB_WORKSPACE 'scripts\ocr_real_corpus_noteri_oneshot.py'
 
           $launchArgs = @(
