@@ -258,13 +258,16 @@ def test_preventive_invariant_summary_fails_closed_when_check_missing() -> None:
     statuses = {item["name"]: item["status"] for item in summary}
     assert statuses["sdd:contract"] == "passed"
     assert statuses["security:changed-diff"] == "passed"
+    assert statuses["workflow:surface-budget"] == "missing"
     assert statuses["workflow:regression-contracts"] == "missing"
 
 
 def test_pre_pr_executes_core_preventive_invariants() -> None:
     source = MODULE_PATH.read_text(encoding="utf-8")
     assert '"security:changed-diff"' in source
+    assert '"workflow:surface-budget"' in source
     assert '"workflow:regression-contracts"' in source
+    assert "scripts/workflow_surface_budget.py" in source
     assert "scripts/vibe_security_gate.py" in source
     assert "scripts/validate_workflow_regression_contracts.py" in source
 

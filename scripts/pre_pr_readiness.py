@@ -24,6 +24,7 @@ from typing import Iterable
 CORE_PREVENTIVE_INVARIANTS = (
     "sdd:contract",
     "security:changed-diff",
+    "workflow:surface-budget",
     "workflow:regression-contracts",
 )
 
@@ -471,6 +472,22 @@ def main() -> int:
     checks.append(security_changed_diff_check(files, args.base_ref, root))
     checks.append(
         _timed_check(
+            "workflow:surface-budget",
+            [
+                sys.executable,
+                "scripts/workflow_surface_budget.py",
+                "--base-ref",
+                args.base_ref,
+                "--registry",
+                "config/workflow-governance-registry.json",
+                "--output",
+                "artifacts/pre-pr-readiness/workflow-surface-budget.json",
+            ],
+            cwd=root,
+        )
+    )
+    checks.append(
+        _timed_check(
             "workflow:regression-contracts",
             [sys.executable, "scripts/validate_workflow_regression_contracts.py"],
             cwd=root,
@@ -503,7 +520,7 @@ def main() -> int:
     status = "passed" if not blockers else "blocked"
 
     evidence = ReadinessEvidence(
-        schema_version="1.2.0",
+        schema_version="1.3.0",
         status=status,
         correlation_id=args.correlation_id,
         base_ref=args.base_ref,
