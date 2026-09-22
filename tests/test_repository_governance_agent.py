@@ -112,6 +112,34 @@ def test_self_sync_only_runs_from_pull_request_target() -> None:
     assert "actions/checkout" not in block
 
 
+def test_self_sync_defers_write_token_until_mutation_is_needed() -> None:
+    text = _text()
+    block = text.split("sync-current-pr:", maxsplit=1)[1].split(
+        "sync-open-prs:", maxsplit=1
+    )[0]
+    assert "Inspecionar necessidade de sincronização" in block
+    assert "result-encoding: string" in block
+    assert "comparison.behind_by" in block
+    assert "credencial de escrita não será emitida" in block
+    assert block.index("Inspecionar necessidade de sincronização") < block.index(
+        "Validar configuração da GitHub App"
+    )
+    assert block.count("if: steps.sync-check.outputs.result == 'true'") == 3
+
+
+def test_global_sync_defers_write_token_when_there_is_no_stale_eligible_pr() -> None:
+    text = _text()
+    block = text.split("sync-open-prs:", maxsplit=1)[1]
+    assert "Inspecionar PRs que podem exigir sincronização" in block
+    assert "result-encoding: string" in block
+    assert "comparison.behind_by" in block
+    assert "Nenhuma PR elegível está atrasada" in block
+    assert block.index("Inspecionar PRs que podem exigir sincronização") < block.index(
+        "Validar configuração da GitHub App"
+    )
+    assert block.count("if: steps.sync-scan.outputs.result == 'true'") == 3
+
+
 def test_mutation_api_errors_fail_the_job() -> None:
     text = _text()
     assert "update_branch_api_" in text
