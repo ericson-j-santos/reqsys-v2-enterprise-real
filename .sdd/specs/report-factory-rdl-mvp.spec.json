@@ -26,16 +26,19 @@
     "scripts/bootstrap_report_factory_fabric_fic.py",
     ".github/workflows/report-factory-fabric-fic-bootstrap.yml",
     "tests/test_bootstrap_report_factory_fabric_fic.py",
-    "docs/runbooks/report-factory-rdl.md"
+    "docs/runbooks/report-factory-rdl.md",
+    ".github/self-hosted-runner-policy.json",
+    "tests/test_self_hosted_runner_governance.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_report_factory_rdl.py",
       "tests/test_report_factory_fabric_dev_preflight.py",
       "tests/test_report_factory_fabric_fic_preflight.py",
-      "tests/test_bootstrap_report_factory_fabric_fic.py"
+      "tests/test_bootstrap_report_factory_fabric_fic.py",
+      "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Provar spec->RDL->payload; autenticação OIDC Fabric; workspace existente e role Contributor por descoberta independente; ausência/presença exata da FIC; bootstrap idempotente e restrito, sem segredo, com execução mutadora somente por workflow_dispatch e confirmação literal."
+    "evidence_contract": "Provar spec->RDL->payload; autenticação OIDC Fabric; workspace existente e role Contributor por descoberta independente; ausência/presença exata da FIC; bootstrap idempotente e restrito, sem segredo, com execução mutadora somente por workflow_dispatch e confirmação literal. A governança self-hosted deve allowlistar explicitamente os dois workflows Noteri do FIC e permanecer verde."
   },
   "risk": {
     "production": false,

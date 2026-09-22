@@ -12,7 +12,8 @@
 - [x] Adicionar e executar preflight somente leitura da FIC no Noteri.
 - [x] Run `35736166631`, HEAD `d2e54a92fea1104afffaf4711bbde6961d6b51d2`: app/workspace únicos, `Contributor`, `fic_list_status=200`, `fic_exact_count=0`, `fic_ready=false`, nenhuma mutação/exposição.
 - [x] Adicionar bootstrap idempotente da única FIC faltante, limitado a `ReqSys ALM Pipeline`, Environment `development`, `workflow_dispatch` e confirmação literal.
-- [ ] Validar contrato/Pre-PR do bootstrap no HEAD exato.
+- [x] Corrigir contrato da PR #1950: instalar `pytest` no job Ubuntu e registrar os workflows FIC na allowlist self-hosted com teste explícito.
+- [ ] Revalidar contrato/Pre-PR do bootstrap no HEAD exato.
 - [ ] Executar o bootstrap em modo `apply` somente após autorização explícita para a mutação Entra.
 - [ ] Revalidar por GET independente: `fic_exact_count=1` e `fic_ready=true`.
 - [ ] Autenticar GitHub Actions como `ReqSys ALM Pipeline` via OIDC e comprovar visibilidade do workspace DEV.
