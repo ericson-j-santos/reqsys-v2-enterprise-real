@@ -3,6 +3,9 @@ name: Repository Governance Agent
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -14,6 +17,106 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sync-current-pr:
+    name: Sincronizar a própria PR quando a main avançar
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Atualizar PR atual com proteção por HEAD
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const repository = owner + '/' + repo;
+            const prNumber = Number(context.payload.pull_request.number);
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            const { data: observed } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+            const expectedHeadSha = observed.head.sha;
+
+            if (
+              observed.state !== 'open' ||
+              observed.draft ||
+              observed.base.ref !== 'main' ||
+              observed.head.repo?.full_name !== repository
+            ) {
+              core.notice('PR fora do escopo seguro de auto-sincronização.');
+              return;
+            }
+            if (observed.mergeable === false || observed.mergeable_state === 'dirty') {
+              core.notice('PR com conflito; sincronização automática bloqueada.');
+              return;
+            }
+            if (observed.mergeable === null) {
+              core.notice('Mergeabilidade ainda desconhecida; mantendo fail-closed.');
+              return;
+            }
+
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: 'main...' + expectedHeadSha,
+            });
+            if (Number(comparison.behind_by || 0) <= 0) {
+              core.notice('PR já está atualizada com a main.');
+              return;
+            }
+
+            const { data: current } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+            if (
+              current.state !== 'open' ||
+              current.draft ||
+              current.head.sha !== expectedHeadSha ||
+              current.head.repo?.full_name !== repository ||
+              current.mergeable === false ||
+              current.mergeable_state === 'dirty'
+            ) {
+              core.notice('Estado mudou antes do update-branch; nenhuma mutação executada.');
+              return;
+            }
+
+            await github.rest.pulls.updateBranch({
+              owner,
+              repo,
+              pull_number: prNumber,
+              expected_head_sha: expectedHeadSha,
+            });
+
+            for (let attempt = 1; attempt <= 8; attempt += 1) {
+              await sleep(Math.min(attempt * 1000, 5000));
+              const { data: after } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+              if (after.head.sha === expectedHeadSha) {
+                continue;
+              }
+              const { data: afterComparison } =
+                await github.rest.repos.compareCommitsWithBasehead({
+                  owner,
+                  repo,
+                  basehead: 'main...' + after.head.sha,
+                });
+              if (Number(afterComparison.behind_by || 0) === 0) {
+                core.notice(
+                  'PR sincronizada: ' + expectedHeadSha + ' -> ' + after.head.sha
+                );
+                return;
+              }
+            }
+
+            core.setFailed('update-branch aceito, mas behind_by=0 não foi confirmado.');
+
   sync-open-prs:
     name: Sincronizar PRs atrasadas após avanço da main
     runs-on: ubuntu-latest
