@@ -2,6 +2,12 @@ name: Noteri Study Mode DEV Reconcile
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - fix/noteri-study-ui-runtime-20260922
+    paths:
+      - scripts/noteri_study_mode_dev_reconcile.py
+      - .github/workflows/noteri-study-mode-dev-reconcile.yml
 
 permissions:
   contents: read
@@ -47,7 +53,8 @@ jobs:
           if (-not $e.api_e2e.idempotent_replay) { throw 'idempotency_missing' }
           if ($e.api_e2e.final_profile -ne 'NORMAL') { throw 'api_final_profile_not_normal' }
           if (-not $e.browser_e2e.estudo_observed_in_ui) { throw 'ui_estudo_not_observed' }
-          if ($e.browser_e2e.final_profile -ne 'NORMAL') { throw 'ui_final_profile_not_normal' }
+          if (-not $e.browser_e2e.estudo_reapplied_in_ui) { throw 'ui_estudo_reapply_missing' }
+          if ($e.browser_e2e.final_profile -ne 'ESTUDO') { throw 'ui_final_profile_not_estudo' }
 
       - name: Upload runtime evidence
         if: always()
