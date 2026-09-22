@@ -485,7 +485,7 @@ jobs:
                 "A integração temporária usa a base real declarada pelo PR, incluindo PRs empilhados.",
                 "Auto-merge nativo depende de allow_auto_merge=true no repositório.",
                 "Preview Environment Contract é evidencia progressiva obrigatoria quando workflow estiver presente.",
-                "Com allow_auto_merge=false, usar Governed PR Automation ou merge manual após demais gates."
+                "Com allow_auto_merge=false, usar Governed PR Automation automaticamente após elegibilidade e demais gates; o caminho manual permanece apenas como contingência."
               ]
             }' > artifacts/governed-merge-queue/policy.json
 
@@ -513,7 +513,7 @@ jobs:
           - \`failure\`: bloquear merge e corrigir regressão antes de revalidar.
           - PRs empilhados são validados contra sua base declarada, sem falso conflito contra \`main\`.
           - Auto-merge nativo depende de \`allow_auto_merge=true\` no repositório.
-          - Enquanto \`allow_auto_merge=false\`, o merge segue via **Governed PR Automation** ou manual com label \`governed-merge-approved\`.
+          - Enquanto \`allow_auto_merge=false\`, o merge segue automaticamente via **Governed PR Automation** após elegibilidade e gates verdes; o caminho manual permanece apenas como contingência.
           EOF
 
           if [ "$ELIGIBLE" != "true" ]; then

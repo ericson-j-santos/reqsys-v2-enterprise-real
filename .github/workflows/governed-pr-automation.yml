@@ -221,17 +221,10 @@ jobs:
   auto-merge-after-governed-queue:
     name: Auto-merge CI-driven após fila governada
     if: >-
-      (
-        github.event_name == 'workflow_run' &&
-        github.event.workflow_run.name == 'Governed Merge Queue' &&
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'pull_request'
-      ) ||
-      (
-        github.event_name == 'pull_request' &&
-        github.event.action == 'labeled' &&
-        github.event.label.name == 'governed-merge-approved'
-      )
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'Governed Merge Queue' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -239,20 +232,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            let prNumber;
-            let triggerHeadSha;
-            if (context.eventName === 'workflow_run') {
-              const pullRequests = context.payload.workflow_run.pull_requests || [];
-              if (pullRequests.length !== 1) {
-                core.notice(`Merge governado ignorado: workflow_run associado a ${pullRequests.length} PR(s).`);
-                return;
-              }
-              prNumber = Number(pullRequests[0].number);
-              triggerHeadSha = context.payload.workflow_run.head_sha;
-            } else {
-              prNumber = Number(context.payload.pull_request.number);
-              triggerHeadSha = context.payload.pull_request.head.sha;
+            const pullRequests = context.payload.workflow_run.pull_requests || [];
+            if (pullRequests.length !== 1) {
+              core.notice(`Merge governado ignorado: workflow_run associado a ${pullRequests.length} PR(s).`);
+              return;
             }
+            const prNumber = Number(pullRequests[0].number);
+            const triggerHeadSha = context.payload.workflow_run.head_sha;
 
             const { owner, repo } = context.repo;
             const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
@@ -287,13 +273,6 @@ jobs:
               per_page: 100,
             });
             const labelNames = labels.map((label) => label.name);
-            const approvalLabel = 'governed-merge-approved';
-            if (!labelNames.includes(approvalLabel)) {
-              core.notice(
-                `Merge governado aguardando autorizacao explicita: label ${approvalLabel} ausente no PR #${prNumber}.`
-              );
-              return;
-            }
             if (!labelNames.includes('merge-queue:eligible')) {
               failures.push('Label merge-queue:eligible ausente.');
             }
@@ -349,11 +328,10 @@ jobs:
               current.draft ||
               current.mergeable !== true ||
               current.head.sha !== triggerHeadSha ||
-              !currentLabelNames.includes('merge-queue:eligible') ||
-              !currentLabelNames.includes(approvalLabel)
+              !currentLabelNames.includes('merge-queue:eligible')
             ) {
               core.setFailed(
-                `Estado ou autorizacao mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
+                `Estado mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
               );
               return;
             }
@@ -366,7 +344,7 @@ jobs:
               sha: triggerHeadSha,
               commit_title: `chore: governed CI-driven merge PR #${prNumber}`,
               commit_message:
-                'Merge governado autorizado explicitamente por governed-merge-approved apos todos os gates obrigatorios verdes no HEAD exato.',
+                'Merge governado executado sob autorizacao operacional permanente do owner apos todos os gates obrigatorios verdes no HEAD exato.',
             });
 
             if (!result.data.merged) {

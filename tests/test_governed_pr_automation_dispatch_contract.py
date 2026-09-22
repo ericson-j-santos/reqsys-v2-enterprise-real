@@ -77,38 +77,25 @@ def test_ci_driven_automerge_e_fail_closed_por_head_sha() -> None:
     assert 'Deploy/promoção: não executados por este workflow.' in block
 
 
-def test_ci_driven_automerge_exige_autorizacao_explicita_por_pr() -> None:
+def test_ci_driven_automerge_usa_autorizacao_operacional_permanente_do_owner() -> None:
     text = _text()
 
     marker = 'auto-merge-after-governed-queue:'
-    block = text.split(marker, maxsplit=1)[1]
-    assert "const approvalLabel = 'governed-merge-approved';" in block
-    assert "labelNames.includes(approvalLabel)" in block
-    assert 'Merge governado aguardando autorizacao explicita' in block
-    assert 'Autorizacao explicita ausente' not in block
+    block = text.split(marker, maxsplit=1)[1].split('  governed-pr-check:', maxsplit=1)[0]
     assert 'merge-queue:eligible' in block
+    assert 'governed-merge-approved' not in block
+    assert 'approvalLabel' not in block
+    assert 'autorizacao operacional permanente do owner' in block
 
 
-def test_ci_driven_automerge_reage_a_label_de_aprovacao_sem_falso_ci_vermelho() -> None:
+def test_ci_driven_automerge_revalida_estado_e_sha_imediatamente_antes_do_merge() -> None:
     text = _text()
 
     marker = 'auto-merge-after-governed-queue:'
-    block = text.split(marker, maxsplit=1)[1]
-    assert "github.event_name == 'pull_request'" in block
-    assert "github.event.action == 'labeled'" in block
-    assert "github.event.label.name == 'governed-merge-approved'" in block
-    assert "context.eventName === 'workflow_run'" in block
-    assert 'context.payload.pull_request.head.sha' in block
-
-
-def test_ci_driven_automerge_revalida_autorizacao_imediatamente_antes_do_merge() -> None:
-    text = _text()
-
-    marker = 'auto-merge-after-governed-queue:'
-    block = text.split(marker, maxsplit=1)[1]
+    block = text.split(marker, maxsplit=1)[1].split('  governed-pr-check:', maxsplit=1)[0]
     assert 'const currentLabels = await github.paginate' in block
     assert "currentLabelNames.includes('merge-queue:eligible')" in block
-    assert 'currentLabelNames.includes(approvalLabel)' in block
-    assert 'Estado ou autorizacao mudou antes do merge' in block
+    assert 'current.head.sha !== triggerHeadSha' in block
+    assert 'Estado mudou antes do merge' in block
     assert "github.rest.pulls.merge({" in block
-    assert block.index('currentLabelNames.includes(approvalLabel)') < block.index("github.rest.pulls.merge({")
+    assert block.index("currentLabelNames.includes('merge-queue:eligible')") < block.index("github.rest.pulls.merge({")
