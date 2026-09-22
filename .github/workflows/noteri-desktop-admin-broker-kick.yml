@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: noteri-desktop-admin-broker-kick
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   kick:
