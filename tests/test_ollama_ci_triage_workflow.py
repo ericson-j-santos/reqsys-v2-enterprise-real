@@ -57,3 +57,9 @@ def test_self_hosted_workflow_is_allowlisted() -> None:
     assert policy["self_hosted_allowed"] is True
     assert ".github/workflows/ollama-ci-triage.yml" in policy["approved_workflows"]
     assert policy["required_adr"]
+
+
+def test_automatic_triage_never_runs_on_default_branch_post_merge() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "github.event.workflow_run.head_branch != github.event.repository.default_branch" in raw
+    assert "github.event.workflow_run.pull_requests[0].number" in raw
