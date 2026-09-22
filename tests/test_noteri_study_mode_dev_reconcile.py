@@ -157,7 +157,7 @@ def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
         "CreateFile compose.yml: The system cannot find the file specified",
         stage="compose_config",
     )
-    assert markers == ("windows_file_missing", "createfile")
+    assert markers == ("windows_file_missing", "createfile", "not_found")
     assert module.safe_command_failure_markers(
         "permission denied",
         stage="api_recreate",
