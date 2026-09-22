@@ -1,0 +1,44 @@
+{
+  "feature_name": "ci-admission-controller",
+  "project": "ReqSys v2 Enterprise — CI/CD",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Gap fix Pareto: manifesto de admissão por SHA, fail-fast dos CIs caros, fallback determinístico da triagem Ollama e consumo do manifesto no Evidence Gate.",
+  "scope": "github-ci-dev",
+  "files": [
+    "scripts/ci_admission_manifest.py",
+    "scripts/ci_admission_guard.py",
+    ".github/workflows/pre-pr-readiness.yml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/ci-enterprise-fast.yml",
+    ".github/workflows/ci-e2e-governado.yml",
+    ".github/workflows/pr-evidence-gate.yml",
+    "scripts/ollama_ci_triage.py",
+    ".github/workflows/ollama-ci-triage.yml",
+    "tests/test_ci_admission_control.py",
+    "tests/test_ollama_ci_triage.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ci_admission_control.py",
+      "tests/test_ollama_ci_triage.py",
+      "tests/test_ollama_ci_triage_workflow.py",
+      "tests/test_pre_pr_readiness.py"
+    ],
+    "evidence_contract": "Provar manifesto vinculado ao HEAD exato, bloqueio para SHA antigo/Pre-PR ausente, CI caro protegido por admission guard, fallback determinístico quando Ollama degrada e Evidence Gate exigindo o artefato do SHA atual."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "deploy": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "protected_branch_write": false
+  }
+}\n

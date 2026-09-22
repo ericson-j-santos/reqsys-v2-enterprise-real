@@ -189,3 +189,71 @@ def test_worker_pool_rejects_protected_target_branch(tmp_path: Path) -> None:
             repository="owner/repo", issue_number=1890, request_id="protected",
             correlation_id="corr", base_sha="a" * 40, target_branch="main",
         )
+
+
+
+def test_deterministic_fallback_keeps_technical_signal_without_ollama() -> None:
+    report = {
+        "matches": [
+            {
+                "pattern_id": "pytest-failed",
+                "category": "test_failure",
+                "confidence": 0.93,
+                "recommended_action": "corrigir teste determinístico",
+            }
+        ]
+    }
+    result = triage.deterministic_fallback_triage(report, "ollama_structured_output_invalid")
+    assert result["category"] == "test"
+    assert result["confidence"] == 0.93
+    assert "ollama_structured_output_invalid" in result["root_cause"]
+    decision = triage.escalation_policy(result, run(), pr(), report)
+    assert decision["eligible"] is True
+
+
+def test_deterministic_fallback_never_overrides_blocking_signal() -> None:
+    report = {
+        "matches": [
+            {
+                "pattern_id": "gha-timeout",
+                "category": "timeout",
+                "confidence": 0.99,
+                "recommended_action": "revalidar infraestrutura",
+            }
+        ]
+    }
+    result = triage.deterministic_fallback_triage(report, "ollama_unreachable")
+    assert result["category"] == "transient"
+    decision = triage.escalation_policy(result, run(), pr(), report)
+    assert decision == {"eligible": False, "reason": "category_transient_not_auto_fixable"}
+
+
+def test_triage_with_fallback_degrades_on_invalid_structured_output(monkeypatch) -> None:
+    monkeypatch.setattr(triage, "select_model", lambda *_args, **_kwargs: "local-model")
+
+    def invalid(*_args, **_kwargs):
+        raise triage.TriageError("ollama_structured_output_invalid")
+
+    monkeypatch.setattr(triage, "run_ollama_triage", invalid)
+    report = {
+        "matches": [
+            {
+                "pattern_id": "quality",
+                "category": "quality_gate",
+                "confidence": 0.88,
+                "recommended_action": "corrigir lint",
+            }
+        ]
+    }
+    result, state, source = triage.triage_with_fallback(
+        "http://127.0.0.1:11434",
+        "",
+        run(),
+        [],
+        [],
+        report,
+    )
+    assert source == "deterministic_fallback"
+    assert state["status"] == "degraded"
+    assert state["failure_policy"] == "deterministic_fallback"
+    assert result["category"] == "code"
