@@ -372,8 +372,8 @@ def wait_frontend_source() -> None:
                 view = response.read().decode("utf-8", "replace")
             service_ready = "/v1/noteri/profile" in service and "127.0.0.1:8765" not in service
             view_ready = (
-                'data-testid="route-task-console"' in view
-                and 'data-testid="noteri-study-mode-card"' in view
+                "route-task-console" in view
+                and "noteri-study-mode-card" in view
                 and "Quero estudar agora" in view
             )
             if service_ready and view_ready:

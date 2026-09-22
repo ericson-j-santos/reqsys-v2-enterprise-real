@@ -48,8 +48,8 @@ def test_overlay_mounts_only_canonical_noteri_profile_into_api():
 def test_reconciler_syncs_task_console_view_into_runtime():
     assert module.RUNTIME_FILES["frontend/src/views/TaskConsoleView.vue"] == "src/views/TaskConsoleView.vue"
     raw = SCRIPT.read_text(encoding="utf-8")
-    assert 'data-testid="route-task-console"' in raw
-    assert 'data-testid="noteri-study-mode-card"' in raw
+    assert '"route-task-console" in view' in raw
+    assert '"noteri-study-mode-card" in view' in raw
     assert "frontend_study_mode_source_not_observed" in raw
 
 
