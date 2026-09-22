@@ -84,8 +84,8 @@ def load_spec(path: str | Path) -> dict[str, Any]:
 
 
 def validate_spec(spec: dict[str, Any]) -> None:
-    if spec.get("schema_version") != "1.0":
-        raise ReportSpecError("schema_version suportado: 1.0")
+    if spec.get("schema_version") != "1.0.0":
+        raise ReportSpecError("schema_version suportado: 1.0.0")
 
     report = spec.get("report")
     datasource = spec.get("datasource")
