@@ -11,7 +11,7 @@ Eliminar o estado em que o Desktop Admin Broker e o watchdog estão instalados, 
 3. Registrar nome fixo `DESKTOP-PDQK954` com labels adicionais `pc24x7,reqsys-dev`.
 4. Baixar somente a versão de runner fixada no código e validar SHA-256 antes da extração.
 5. O token de registro deve ser solicitado pelo GitHub CLI autenticado do owner, existir apenas em memória e nunca aparecer em output, logs ou arquivos.
-6. O bootstrap pode instalar GitHub CLI por winget quando ausente; autenticação interativa permanece limite legítimo quando necessária.
+6. O bootstrap pode instalar GitHub CLI por winget quando ausente; autenticação interativa permanece limite legítimo na execução local, mas o modo `--non-interactive-auth` usado pelo broker deve falhar fechado antes de login ou refresh interativo.
 7. Reutilizar runner já registrado quando o contrato local `.runner + run.cmd + bin\\Runner.Listener.exe` estiver válido.
 8. Iniciar `Runner.Listener.exe` e exigir prova local e registro `online` no GitHub antes de declarar runtime ativo.
 9. Reutilizar `desktop_control_plane_watchdog.py` para persistência AtStartup+S4U.
