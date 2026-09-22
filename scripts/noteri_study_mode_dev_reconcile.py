@@ -42,7 +42,13 @@ NGINX_CONFIG = Path("infra/nginx/default.dev.conf")
 
 
 class ReconcileError(RuntimeError):
-    def __init__(self, code: str, *, stage: str | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        *,
+        stage: str | None = None,
+        diagnostic_code: str | None = None,
+    ) -> None:
         parts = code.split(":")
         self.code = (
             ":".join(parts[:2])
@@ -50,7 +56,40 @@ class ReconcileError(RuntimeError):
             else (parts[0] if parts else "reconcile_error")
         )
         self.stage = stage
+        self.diagnostic_code = diagnostic_code
         super().__init__(code)
+
+
+def classify_command_failure(stderr: str, *, stage: str) -> str | None:
+    if stage != "compose_config":
+        return None
+
+    value = (stderr or "").casefold()
+    if "permission denied" in value or "access is denied" in value:
+        return "docker_permission_denied"
+    if (
+        "cannot connect to the docker daemon" in value
+        or "error during connect" in value
+        or "docker engine is not running" in value
+    ):
+        return "docker_daemon_unavailable"
+    if "env file" in value and (
+        "not found" in value or "no such file" in value or "cannot find" in value
+    ):
+        return "compose_env_file_missing"
+    if "no configuration file provided" in value:
+        return "compose_config_file_missing"
+    if "neither an image nor a build context specified" in value:
+        return "compose_service_definition_incomplete"
+    if "invalid interpolation format" in value:
+        return "compose_interpolation_invalid"
+    if "is not set" in value and "required" in value:
+        return "compose_required_environment_missing"
+    if "additional property" in value and "not allowed" in value:
+        return "compose_schema_invalid"
+    if "no such file or directory" in value or "failed to read" in value:
+        return "compose_file_read_failed"
+    return "compose_config_failed_unclassified"
 
 
 def run(
@@ -77,6 +116,10 @@ def run(
         raise ReconcileError(
             f"command_failed:{Path(args[0]).name}:exit_{completed.returncode}",
             stage=stage,
+            diagnostic_code=classify_command_failure(
+                completed.stderr or "",
+                stage=stage,
+            ),
         )
     return completed
 
@@ -809,6 +852,11 @@ def main() -> int:
             ),
             "failure_stage": (
                 exc.stage if isinstance(exc, ReconcileError) and exc.stage else "unknown"
+            ),
+            "diagnostic_code": (
+                exc.diagnostic_code
+                if isinstance(exc, ReconcileError) and exc.diagnostic_code
+                else None
             ),
             "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
             "expected_sha": args.expected_sha,

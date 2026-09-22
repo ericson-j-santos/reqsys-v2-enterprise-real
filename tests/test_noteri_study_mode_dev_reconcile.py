@@ -102,7 +102,26 @@ def test_reconcile_failure_is_sanitized_and_stage_aware():
     raw = SCRIPT.read_text(encoding="utf-8")
     assert '"error_code"' in raw
     assert '"failure_stage"' in raw
+    assert '"diagnostic_code"' in raw
     assert 'str(exc)' not in raw
+
+
+def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
+    cases = {
+        "permission denied while trying to connect": "docker_permission_denied",
+        "error during connect: docker engine is not running": "docker_daemon_unavailable",
+        "env file C:\\secret\\runtime.env not found; TOKEN=should-not-leak": "compose_env_file_missing",
+        "no configuration file provided: not found": "compose_config_file_missing",
+        "service api has neither an image nor a build context specified": "compose_service_definition_incomplete",
+        "invalid interpolation format for services.api.environment": "compose_interpolation_invalid",
+        "required variable POSTGRES_PASSWORD is not set": "compose_required_environment_missing",
+        "services.api Additional property bogus is not allowed": "compose_schema_invalid",
+        "failed to read compose file: no such file or directory": "compose_file_read_failed",
+        "some unknown docker compose failure TOKEN=should-not-leak": "compose_config_failed_unclassified",
+    }
+    for stderr, expected in cases.items():
+        assert module.classify_command_failure(stderr, stage="compose_config") == expected
+    assert module.classify_command_failure("permission denied", stage="api_recreate") is None
 
 
 def test_reconciler_rebuilds_frontend_when_runtime_bind_is_absent():
