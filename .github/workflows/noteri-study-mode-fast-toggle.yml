@@ -1,0 +1,59 @@
+name: Noteri Study Mode Fast Toggle
+
+on:
+  push:
+    branches:
+      - ops/noteri-study-fast-toggle-20260922
+    paths:
+      - .github/workflows/noteri-study-mode-fast-toggle.yml
+      - .github/self-hosted-runner-policy.json
+      - scripts/noteri_study_mode_fast_toggle.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-study-mode-fast-toggle
+  cancel-in-progress: true
+
+jobs:
+  toggle:
+    name: Set Noteri to ESTUDO
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 3
+    steps:
+      - name: Checkout exact branch SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Toggle ESTUDO and prove readback
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/noteri-study-fast-toggle | Out-Null
+          python scripts/noteri_study_mode_fast_toggle.py | Tee-Object -FilePath artifacts/noteri-study-fast-toggle/evidence.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate evidence
+        shell: powershell
+        run: |
+          $e = Get-Content -Raw -Encoding UTF8 artifacts/noteri-study-fast-toggle/evidence.json | ConvertFrom-Json
+          if (-not $e.ok) { throw 'study_mode_fast_toggle_failed' }
+          if ($e.host -ne 'Noteri') { throw 'host_mismatch' }
+          if ($e.profile -ne 'ESTUDO') { throw 'profile_mismatch' }
+          if ($e.accepts_new_development -ne $false) { throw 'acceptance_flag_mismatch' }
+          if (-not $e.independent_readback) { throw 'independent_readback_missing' }
+          if (-not $e.agent_loopback_only) { throw 'agent_exposure_violation' }
+          if ($e.production_touched) { throw 'production_touched' }
+          if ($e.secrets_read) { throw 'secret_read_detected' }
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noteri-study-mode-fast-toggle-${{ github.run_id }}
+          path: artifacts/noteri-study-fast-toggle/evidence.json
+          if-no-files-found: error
+          retention-days: 7
