@@ -113,6 +113,43 @@ def classify_drift(issue_count: int, high_count: int, medium_count: int) -> str:
     return "low"
 
 
+DEFERRED_RUNTIME_TARGETS = {"", "not_promoted", "disabled", "out_of_scope"}
+
+
+def runtime_environment_scope(root: Path) -> dict[str, Any]:
+    relative = Path("infra/public-access-urls.json")
+    payload = load_json(root / relative)
+    discovery = payload.get("runtime_discovery") if isinstance(payload, dict) else None
+    if not isinstance(discovery, dict) or not discovery:
+        return {
+            "source": relative.as_posix(),
+            "source_valid": False,
+            "active_runtime_environments": ["dev", "prod"],
+            "deferred_runtime_environments": [],
+            "runtime_targets": {},
+            "fallback_policy": "legacy_strict_prod",
+        }
+
+    targets = {
+        str(env): str(config.get("runtime_target") or "").strip()
+        for env, config in discovery.items()
+        if isinstance(config, dict)
+    }
+    active = sorted(
+        env for env, target in targets.items()
+        if target.casefold() not in DEFERRED_RUNTIME_TARGETS
+    )
+    deferred = sorted(env for env, target in targets.items() if target.casefold() in DEFERRED_RUNTIME_TARGETS)
+    return {
+        "source": relative.as_posix(),
+        "source_valid": True,
+        "active_runtime_environments": active,
+        "deferred_runtime_environments": deferred,
+        "runtime_targets": targets,
+        "fallback_policy": None,
+    }
+
+
 def detect_environment_drift(root: Path) -> dict[str, Any]:
     files = {
         "dev": Path("docker-compose.dev.yml"),
@@ -120,30 +157,57 @@ def detect_environment_drift(root: Path) -> dict[str, Any]:
         "prod": Path("docker-compose.prod.yml"),
     }
     signatures = {env: extract_compose_signature(root / rel) for env, rel in files.items()}
+    scope = runtime_environment_scope(root)
+    prod_required = not scope["source_valid"] or "prod" in scope["active_runtime_environments"]
+    compared = ["dev", "test"] + (["prod"] if prod_required else [])
     findings: list[dict[str, str]] = []
-    for env, signature in signatures.items():
+
+    for env in compared:
+        signature = signatures[env]
         if not signature["exists"]:
             findings.append({"severity": "high", "environment": env, "message": "arquivo de configuração ausente"})
-    common_services = set(signatures["dev"]["services"]) & set(signatures["test"]["services"]) & set(signatures["prod"]["services"])
+        elif not signature["services"]:
+            findings.append({"severity": "high", "environment": env, "message": "arquivo de configuração vazio ou sem services"})
+
+    available_service_sets = [set(signatures[env]["services"]) for env in compared if signatures[env]["services"]]
+    common_services = set.intersection(*available_service_sets) if available_service_sets else set()
     if common_services != {"api", "frontend", "nginx"}:
-        findings.append({"severity": "medium", "environment": "all", "message": "serviços base não estão alinhados entre dev/test/prod"})
-    if signatures["prod"]["direct_api_ports"]:
-        findings.append({"severity": "high", "environment": "prod", "message": "produção expõe porta direta do backend"})
-    if not signatures["prod"]["has_healthcheck"]:
-        findings.append({"severity": "medium", "environment": "prod", "message": "produção sem healthcheck local"})
-    if not signatures["prod"]["uses_prod_env"] or not signatures["prod"]["uses_demo_login_false"]:
-        findings.append({"severity": "high", "environment": "prod", "message": "gates produtivos APP_ENV/ALLOW_DEMO_LOGIN não detectados"})
-    env_key_sets = {env: set(sig["env_keys"]) for env, sig in signatures.items()}
-    prod_extra = sorted(env_key_sets["prod"] - env_key_sets["dev"] - env_key_sets["test"])
-    if prod_extra:
-        findings.append({"severity": "low", "environment": "prod", "message": "produção possui chaves operacionais extras esperadas", "keys": ",".join(prod_extra)})
+        findings.append(
+            {
+                "severity": "medium",
+                "environment": "all",
+                "message": f"serviços base não estão alinhados entre {','.join(compared)}",
+            }
+        )
+
+    if prod_required:
+        if signatures["prod"]["direct_api_ports"]:
+            findings.append({"severity": "high", "environment": "prod", "message": "produção expõe porta direta do backend"})
+        if not signatures["prod"]["has_healthcheck"]:
+            findings.append({"severity": "medium", "environment": "prod", "message": "produção sem healthcheck local"})
+        if not signatures["prod"]["uses_prod_env"] or not signatures["prod"]["uses_demo_login_false"]:
+            findings.append({"severity": "high", "environment": "prod", "message": "gates produtivos APP_ENV/ALLOW_DEMO_LOGIN não detectados"})
+        env_key_sets = {env: set(sig["env_keys"]) for env, sig in signatures.items()}
+        prod_extra = sorted(env_key_sets["prod"] - env_key_sets["dev"] - env_key_sets["test"])
+        if prod_extra:
+            findings.append(
+                {
+                    "severity": "low",
+                    "environment": "prod",
+                    "message": "produção possui chaves operacionais extras esperadas",
+                    "keys": ",".join(prod_extra),
+                }
+            )
+
     high = sum(1 for item in findings if item["severity"] == "high")
     medium = sum(1 for item in findings if item["severity"] == "medium")
     level = classify_drift(len(findings), high, medium)
     return {
         "status": "passed" if level in {"none", "low"} else "warning",
         "drift_level": level,
-        "compared_environments": sorted(files),
+        "compared_environments": compared,
+        "deferred_runtime_environments": scope["deferred_runtime_environments"],
+        "runtime_scope": scope,
         "files": {env: rel.as_posix() for env, rel in files.items()},
         "signatures": signatures,
         "findings": findings,

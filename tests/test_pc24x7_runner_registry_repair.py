@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "scripts" / "pc24x7_runner_registry_repair.py"
+WORKFLOW = ROOT / ".github" / "workflows" / "pc24x7-runner-registry-repair.yml"
 SPEC = importlib.util.spec_from_file_location("pc24x7_runner_registry_repair", MODULE)
 assert SPEC and SPEC.loader
 m = importlib.util.module_from_spec(SPEC)
@@ -66,3 +67,10 @@ def test_failure_output_does_not_echo_exception_details() -> None:
     source = MODULE.read_text(encoding="utf-8")
     assert '"error": str(exc)' not in source
     assert '"error_type": type(exc)' not in source
+
+
+def test_workflow_uses_governed_pat_not_github_token() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    assert "GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}" in source
+    assert "GH_TOKEN: ${{ github.token }}" not in source
+    assert "GH_PAT_ACTIONS is not configured." in source

@@ -245,12 +245,6 @@ def update_public_access_validation(validation: dict[str, Any]) -> None:
 
 
 def persist_public_runtime_evidence(validation: dict[str, Any]) -> None:
-    readiness = validation.get("readiness") or {}
-    strict_passed = (
-        validation.get("ok") == validation.get("total")
-        and readiness.get("readiness_percent", 0) >= 100
-        and readiness.get("api_ready") is True
-    )
     _run(
         [
             sys.executable,
@@ -328,6 +322,29 @@ def assert_gold_standard_targets(runtime_report: dict[str, Any], validation: dic
     if pareto.get("current_score", 0) < 100:
         errors.append(f"pareto_score={pareto.get('current_score')}")
     if errors:
+        ingested = runtime_report.get("ingested_artifacts") or {}
+        diagnostic = {
+            "errors": errors,
+            "axes": {
+                name: {"status": value.get("status"), "score": value.get("score")}
+                for name, value in (depth.get("axes") or {}).items()
+                if isinstance(value, dict)
+            },
+            "artifacts": {
+                str(item.get("id")): str(item.get("status"))
+                for item in (ingested.get("artifacts") or [])
+                if isinstance(item, dict)
+            },
+            "domains": {
+                name: {"status": value.get("status"), "score": value.get("score")}
+                for name, value in (runtime_report.get("domains") or {}).items()
+                if isinstance(value, dict)
+            },
+        }
+        print(
+            "PADRAO_OURO_DIAGNOSTIC=" + json.dumps(diagnostic, ensure_ascii=False, sort_keys=True),
+            file=sys.stderr,
+        )
         raise RuntimeError("Consolidação não atingiu 100%: " + ", ".join(errors))
 
 
