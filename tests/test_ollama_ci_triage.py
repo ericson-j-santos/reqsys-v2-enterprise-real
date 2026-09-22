@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -227,3 +228,50 @@ def test_worker_pool_rejects_protected_target_branch(tmp_path: Path) -> None:
             repository="owner/repo", issue_number=1890, request_id="protected",
             correlation_id="corr", base_sha="a" * 40, target_branch="main",
         )
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "github_http_403",
+        "github_http_429",
+        "github_unreachable",
+        "github_invalid_json",
+        "github_job_log_http_403",
+        "github_job_log_download_failed",
+    ],
+)
+def test_optional_triage_infrastructure_failures_are_degradable(reason: str) -> None:
+    assert triage.is_degradable_triage_infrastructure_error(triage.TriageError(reason)) is True
+
+
+def test_main_degrades_github_403_without_second_red_ci(monkeypatch, tmp_path: Path) -> None:
+    output = tmp_path / "evidence.json"
+
+    def fail_execute(args):
+        raise triage.TriageError("github_http_403")
+
+    monkeypatch.setattr(triage, "execute", fail_execute)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "ollama_ci_triage.py",
+            "--repository",
+            "owner/repo",
+            "--run-id",
+            "123",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert triage.main() == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["result"] == "OLLAMA_CI_TRIAGE_DEGRADED"
+    assert payload["degraded_reason"] == "github_http_403"
+    assert payload["escalation"] == {
+        "eligible": False,
+        "reason": "triage_infrastructure_degraded",
+    }
+    assert payload["worker_pool"] is None

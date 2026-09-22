@@ -6,9 +6,9 @@ Automatizar a validação de PRs verdes, **bloquear abertura de novas frentes** 
 
 ## Princípio operacional
 
-A automação não faz merge por padrão.
+O caminho CI-driven executa merge automaticamente quando a `Governed Merge Queue` e todos os workflows obrigatórios estão verdes no HEAD exato, o PR está aberto, não-draft, mergeável e contém `merge-queue:eligible`.
 
-O modo padrão é `dry-run`, usado para validar se o PR está elegível.
+A autorização operacional permanente do owner está nas regras canônicas do ReqSys; não é necessária solicitação ou label adicional por PR. O `workflow_dispatch` permanece como contingência manual e mantém modo `dry-run`.
 
 ## Workflow
 
@@ -30,7 +30,7 @@ Governed PR Automation
 |---|---|---|
 | `pull_request` (`opened`, `reopened`, `ready_for_review`, `labeled`) | `increment-gate-on-open` | Bloquear abertura quando `new_front_allowed=false` |
 | `workflow_dispatch` | `governed-pr-check` | Validar merge + executar squash merge opcional |
-| `workflow_run` da `Governed Merge Queue` | `auto-merge-after-governed-queue` | Avaliar merge automático somente com autorização explícita por PR |
+| `workflow_run` da `Governed Merge Queue` | `auto-merge-after-governed-queue` | Revalidar HEAD/gates e executar merge automático sob autorização operacional permanente |
 
 ## Entradas (`workflow_dispatch`)
 
@@ -78,18 +78,30 @@ O PR será bloqueado no merge se:
 - estiver fechado;
 - estiver em draft;
 - não estiver mergeable;
-- não possuir a label obrigatória `governed-merge-approved`;
-- no caminho CI-driven, não possuir simultaneamente `merge-queue:eligible` e `governed-merge-approved`;
-- a autorização explícita for removida antes da mutação;
+- no caminho CI-driven, não possuir `merge-queue:eligible`;
+- o HEAD, mergeabilidade ou elegibilidade mudar antes da mutação;
 - algum workflow obrigatório estiver ausente;
 - algum workflow obrigatório ainda estiver em execução;
 - algum workflow obrigatório não estiver com `success`.
 
 ## Uso recomendado
 
-### 1. Validação sem merge
+### 1. Fluxo normal
 
-Executar manualmente com:
+Nenhuma ação humana adicional é necessária após abrir a PR. O fluxo normal é:
+
+```text
+PR aberta
+→ gates obrigatórios no HEAD atual
+→ Governed Merge Queue verde
+→ merge-queue:eligible
+→ revalidação final
+→ squash merge automático com SHA esperado
+```
+
+### 2. Contingência manual
+
+O `workflow_dispatch` permanece disponível para diagnóstico/dry-run e operação de contingência:
 
 ```text
 pr_number=<numero>
@@ -97,28 +109,12 @@ execute_merge=false
 required_label=governed-merge-approved
 ```
 
-### 2. Aprovação explícita
-
-Adicionar a label:
-
-```text
-governed-merge-approved
-```
-
-### 3. Merge governado
-
-Executar novamente com:
-
-```text
-pr_number=<numero>
-execute_merge=true
-required_label=governed-merge-approved
-```
+Esse caminho manual não é pré-requisito do auto-merge CI-driven.
 
 ## Segurança
 
-- Não executa merge sem `governed-merge-approved`, inclusive no caminho CI-driven.
-- Revalida `governed-merge-approved`, `merge-queue:eligible` e o HEAD imediatamente antes da mutação.
+- O caminho CI-driven só executa merge após a `Governed Merge Queue` verde e `merge-queue:eligible`.
+- Revalida `merge-queue:eligible`, mergeabilidade e o HEAD imediatamente antes da mutação.
 - Não executa merge em PR draft.
 - Não executa merge com CI pendente.
 - Não executa merge com CI vermelho.

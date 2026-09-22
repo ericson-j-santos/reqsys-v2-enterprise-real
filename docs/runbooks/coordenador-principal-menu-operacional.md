@@ -83,11 +83,11 @@ Apenas estes workflows no ciclo normal. Demais workflows existem para governanç
 | **Runtime Health Validator** | `dry_run` → depois `execute` | Só reruns allowlisted; **nunca** `failure` real |
 | **Workflow Command Center** | dispatch opcional | Só: `main-smoke-ci.yml`, `main-operational-health.yml`, `pr-ci-watch.yml`, `ci-fast-operational.yml` |
 
-### Merge (exige aprovação humana)
+### Merge automático governado
 
 | Workflow | Pré-requisitos |
 |---|---|
-| **Governed PR Automation** | CI verde nos gates obrigatórios (incl. **Governed Merge Queue**), PR não-draft, mergeable, label `governed-merge-approved`, `execute_merge=true` |
+| **Governed PR Automation** | CI verde nos gates obrigatórios (incl. **Governed Merge Queue**), HEAD exato, PR aberto, não-draft, mergeável e `merge-queue:eligible`. A autorização operacional permanente do owner dispensa solicitação/label adicional por PR. |
 
 Runbook: [governed-pr-automation](governed-pr-automation.md).
 
@@ -113,7 +113,7 @@ validação (artifacts 3–4 + CI obrigatório)
   → Frontend Responsive E2E
 
 evidência (artifacts no PR)
-decisão humana (merge / deploy / produção)
+merge automático governado / decisão humana para deploy e produção
 ```
 
 Estados de entrega: [agile-runtime-workflow](../agile-runtime-workflow.md).
@@ -121,7 +121,7 @@ Estados de entrega: [agile-runtime-workflow](../agile-runtime-workflow.md).
 ## O que o coordenador **não** faz
 
 - Não trata chat fixo como agente autônomo paralelo.
-- Não faz merge/deploy/produção sem label, gate e revisão quando sensível.
+- Não faz merge sem gates objetivos e revalidação do HEAD; deploy/produção continuam exigindo autorização específica.
 - Não dispara workflows fora do menu sem runbook explícito.
 - Não ignora `OPS-GAP-*` com remediação `execute`.
 - Não commita `backend/reqsys.db` modificado localmente.

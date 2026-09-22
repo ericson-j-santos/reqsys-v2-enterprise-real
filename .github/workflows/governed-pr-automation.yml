@@ -237,9 +237,9 @@ jobs:
               core.notice(`Merge governado ignorado: workflow_run associado a ${pullRequests.length} PR(s).`);
               return;
             }
-
             const prNumber = Number(pullRequests[0].number);
             const triggerHeadSha = context.payload.workflow_run.head_sha;
+
             const { owner, repo } = context.repo;
             const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
               .split('\n')
@@ -273,12 +273,8 @@ jobs:
               per_page: 100,
             });
             const labelNames = labels.map((label) => label.name);
-            const approvalLabel = 'governed-merge-approved';
             if (!labelNames.includes('merge-queue:eligible')) {
               failures.push('Label merge-queue:eligible ausente.');
-            }
-            if (!labelNames.includes(approvalLabel)) {
-              failures.push(`Autorizacao explicita ausente: ${approvalLabel}.`);
             }
 
             const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
@@ -332,11 +328,10 @@ jobs:
               current.draft ||
               current.mergeable !== true ||
               current.head.sha !== triggerHeadSha ||
-              !currentLabelNames.includes('merge-queue:eligible') ||
-              !currentLabelNames.includes(approvalLabel)
+              !currentLabelNames.includes('merge-queue:eligible')
             ) {
               core.setFailed(
-                `Estado ou autorizacao mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
+                `Estado mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
               );
               return;
             }
@@ -349,7 +344,7 @@ jobs:
               sha: triggerHeadSha,
               commit_title: `chore: governed CI-driven merge PR #${prNumber}`,
               commit_message:
-                'Merge governado autorizado explicitamente por governed-merge-approved apos todos os gates obrigatorios verdes no HEAD exato.',
+                'Merge governado executado sob autorizacao operacional permanente do owner apos todos os gates obrigatorios verdes no HEAD exato.',
             });
 
             if (!result.data.merged) {
