@@ -78,6 +78,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "noteri-headless-control-plane-activation.yml|"
         "figma-github-e2e-dev.yml|"
         "fabric-oidc-readonly-probe.yml|"
+        "report-factory-fabric-dev-access-bootstrap.yml|"
         "codex-ollama-e2e-dev.yml|"
         "codex-worker-pool-smoke-dev.yml|"
         "noteri-desktop-network-probe.yml|"
