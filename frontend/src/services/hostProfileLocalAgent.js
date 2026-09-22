@@ -1,54 +1,40 @@
-const DEFAULT_AGENT_URL = import.meta.env.VITE_NOTERI_HOST_PROFILE_AGENT_URL || 'http://127.0.0.1:8765'
-const VALID_PROFILES = new Set(['NORMAL', 'ESTUDO'])
-const DEFAULT_TIMEOUT_MS = 2500
+import { api } from './api'
 
-function normalizarBaseUrl(value) {
-  return String(value || DEFAULT_AGENT_URL).replace(/\/$/, '')
-}
+const VALID_PROFILES = new Set(['NORMAL', 'ESTUDO'])
 
 function validarPayload(payload) {
-  if (!payload || payload.ok !== true) throw new Error(payload?.error || 'Agente local retornou resposta inválida.')
-  if (!VALID_PROFILES.has(payload.profile)) throw new Error('Agente local retornou perfil inválido.')
-  if (String(payload.host || '').toLowerCase() !== 'noteri') {
-    throw new Error(`Agente local pertence ao host ${payload.host || 'desconhecido'}, não ao Noteri.`)
+  if (!payload || payload.success !== true || !payload.data) {
+    const detail = payload?.detail || payload?.errors?.[0]?.message || 'API do modo ESTUDO retornou resposta inválida.'
+    throw new Error(detail)
   }
-  return payload
+  const data = payload.data
+  if (!VALID_PROFILES.has(data.profile)) throw new Error('API retornou perfil inválido.')
+  if (String(data.host || '').toLowerCase() !== 'noteri') {
+    throw new Error(`Estado pertence ao host ${data.host || 'desconhecido'}, não ao Noteri.`)
+  }
+  return data
 }
 
-async function localFetch(path, options = {}, { baseUrl = DEFAULT_AGENT_URL, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+function normalizarErro(error) {
+  const detail = error?.response?.data?.detail
+    || error?.response?.data?.errors?.[0]?.message
+    || error?.message
+    || 'Modo ESTUDO indisponível.'
+  return new Error(String(detail))
+}
+
+export async function obterPerfilNoteri() {
   try {
-    const response = await fetch(`${normalizarBaseUrl(baseUrl)}${path}`, {
-      ...options,
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {}),
-      },
-      signal: controller.signal,
+    const response = await api.get('/v1/noteri/profile', {
+      headers: { 'Cache-Control': 'no-store' },
     })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      const message = payload?.error || 'Agente local indisponível.'
-      throw new Error(message)
-    }
-    return payload
+    return validarPayload(response.data)
   } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw new Error('Agente local do Noteri não respondeu no tempo esperado.')
-    }
-    throw error
-  } finally {
-    clearTimeout(timer)
+    throw normalizarErro(error)
   }
 }
 
-export async function obterPerfilNoteri(options = {}) {
-  return validarPayload(await localFetch('/v1/profile', {}, options))
-}
-
-export async function alterarPerfilNoteri(profile, correlationId, options = {}) {
+export async function alterarPerfilNoteri(profile, correlationId) {
   const normalized = String(profile || '').trim().toUpperCase()
   if (!VALID_PROFILES.has(normalized)) throw new Error('Perfil deve ser NORMAL ou ESTUDO.')
   const correlation = String(correlationId || '').trim()
@@ -56,19 +42,25 @@ export async function alterarPerfilNoteri(profile, correlationId, options = {}) 
     throw new Error('Correlation ID deve ter entre 8 e 128 caracteres.')
   }
 
-  const changed = validarPayload(await localFetch('/v1/profile', {
-    method: 'POST',
-    body: JSON.stringify({
-      host: 'Noteri',
+  let changed
+  try {
+    const response = await api.post('/v1/noteri/profile', {
       profile: normalized,
       correlation_id: correlation,
-    }),
-  }, options))
+    })
+    changed = validarPayload(response.data)
+  } catch (error) {
+    throw normalizarErro(error)
+  }
 
-  const readback = await obterPerfilNoteri(options)
-  if (readback.profile !== normalized || readback.accepts_new_development !== (normalized === 'NORMAL')) {
+  const readback = await obterPerfilNoteri()
+  if (
+    readback.profile !== normalized
+    || readback.accepts_new_development !== (normalized === 'NORMAL')
+  ) {
     throw new Error('Leitura independente divergiu do perfil solicitado.')
   }
+
   return {
     ...readback,
     changed: Boolean(changed.changed),
@@ -77,7 +69,5 @@ export async function alterarPerfilNoteri(profile, correlationId, options = {}) 
 }
 
 export const __hostProfileLocalAgentInternals = {
-  DEFAULT_AGENT_URL,
   VALID_PROFILES,
-  normalizarBaseUrl,
 }
