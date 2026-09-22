@@ -169,6 +169,27 @@ def test_runner_process_snapshot_fails_closed_when_identity_is_unverifiable(
         m.runner_process_snapshot(runner_home)
 
 
+def test_stop_runner_is_noop_when_governed_listener_is_absent(monkeypatch, tmp_path: Path) -> None:
+    runner_home = make_runner_home(tmp_path)
+    monkeypatch.setattr(
+        m,
+        "runner_process_snapshot",
+        lambda runner: {"matching_pids": [], "unresolved_pids": [], "observed": []},
+    )
+    monkeypatch.setattr(
+        m,
+        "_taskkill_runner",
+        lambda pid: (_ for _ in ()).throw(AssertionError("must not terminate another process")),
+    )
+
+    result = m.stop_runner(runner_home)
+
+    assert result["status"] == "not_running"
+    assert result["stopped"] is False
+    assert result["previous_listener_pid"] is None
+    assert result["termination_scope"] == "exact_runner_home"
+
+
 def test_restart_runner_terminates_only_exact_governed_listener(monkeypatch, tmp_path: Path) -> None:
     runner_home = make_runner_home(tmp_path)
     snapshots = iter([
