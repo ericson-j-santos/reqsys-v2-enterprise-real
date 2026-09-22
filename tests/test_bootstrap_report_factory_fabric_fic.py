@@ -1,5 +1,4 @@
 import importlib.util
-from argparse import Namespace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,8 +23,8 @@ def test_contract_is_exact_and_environment_scoped() -> None:
 def test_workflow_requires_dispatch_and_literal_confirmation_for_apply() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "workflow_dispatch:" in text
-    assert 'mode:' in text
-    assert 'confirm:' in text
+    assert "mode:" in text
+    assert "confirm:" in text
     assert "CRIAR-FIC-REPORT-FACTORY-DEV" in text
     assert "github.event_name == 'workflow_dispatch'" in text
     assert "pull_request_target" not in text

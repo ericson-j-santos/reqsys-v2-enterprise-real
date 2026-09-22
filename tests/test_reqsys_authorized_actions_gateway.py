@@ -44,6 +44,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev'" in content
     assert "github.event.comment.body == '/reqsys run noteri-desktop-network-probe'" in content
     assert "github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair'" in content
     assert "github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev'" in content
     assert "github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev'" in content
 
@@ -66,6 +67,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='codex-worker-pool-smoke-dev.yml'" in content
     assert "target='noteri-desktop-network-probe.yml'" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "target='pc24x7-runner-registry-repair.yml'" in content
     assert "target='pc24x7-teams-token-bootstrap.yml'" in content
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert (
@@ -84,6 +86,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "noteri-desktop-network-probe.yml|"
         "noteri-desktop-watchdog-recovery.yml|"
         "noteri-desktop-admin-broker-kick.yml|"
+        "pc24x7-runner-registry-repair.yml|"
         "pc24x7-teams-token-bootstrap.yml|"
         "pc24x7-teams-ephemeral-e2e.yml"
     ) in content
@@ -138,7 +141,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
+    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
@@ -301,3 +304,13 @@ def test_gateway_report_factory_fabric_access_bootstrap_is_exact_inputless_and_f
     assert "-f workspace=" not in content
     assert "-f role=" not in content
     assert "-f principal=" not in content
+
+
+def test_gateway_pc24x7_runner_registry_repair_is_exact_and_github_hosted() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair'" in content
+    assert "'/reqsys run pc24x7-runner-registry-repair')" in content
+    assert "target='pc24x7-runner-registry-repair.yml'" in content
+    assert "steps.route.outputs.target == 'pc24x7-runner-registry-repair.yml'" not in content
+    assert "-f runner=" not in content
+    assert "-f labels=" not in content
