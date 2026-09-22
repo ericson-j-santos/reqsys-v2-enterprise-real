@@ -24,6 +24,17 @@ outro dispositivo, `127.0.0.1` aponta para o dispositivo do navegador.
    e restauração final NORMAL.
 10. HML e PROD não podem ser alterados.
 
+
+## Critérios de aceite
+
+1. O Task Console usa somente a API same-origin `/api/v1/noteri/profile` e não acessa `127.0.0.1:8765` pelo navegador.
+2. GET sem autenticação retorna 401; POST exige administrador.
+3. NORMAL → ESTUDO persiste no `host-profile.json` canônico e é confirmado por leitura independente da API e do arquivo.
+4. Repetir ESTUDO quando já ESTUDO retorna `changed=false`, sem efeito duplicado.
+5. O fluxo pela interface observa ESTUDO e restaura NORMAL ao final.
+6. HML/PROD, segredos e exposição pública do agente loopback permanecem fora do escopo.
+7. Erros HTTP não expõem caminhos, exceções internas ou outros detalhes sensíveis.
+
 ## Aplicação no runtime
 
 A reconciliação deve ocorrer pelo runner self-hosted já autorizado do Noteri,
