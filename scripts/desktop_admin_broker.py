@@ -45,6 +45,7 @@ MAX_COMMENT_AGE_SECONDS = 300
 WATCHDOG_SCRIPT = "desktop_control_plane_watchdog.py"
 WATCHDOG_UAC_SCRIPT = "desktop_control_plane_watchdog_uac_launcher.py"
 RDC_RECOVERY_SCRIPT = "pc24x7_rdc_recovery.py"
+RUNNER_BOOTSTRAP_SCRIPT = "activate_desktop_free_control_plane.py"
 
 ALLOWED_COMMANDS = {
     "/reqsys admin desktop status": "status",
@@ -238,18 +239,59 @@ def _activate_watchdog(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 def _recover_runner(metadata: dict[str, Any]) -> dict[str, Any]:
-    _, target = _ensure_watchdog_staged(metadata)
-    installed = json.loads(target.read_text(encoding="utf-8"))
-    watchdog = _watchdog_module(installed)
-    runner_home = watchdog.discover_runner_home(Path(installed["runner_home"]) if installed.get("runner_home") else None)
-    result = watchdog.restart_runner(
-        runner_home,
-        Path(installed["runtime_root"]) / "logs" / "github-runner.log",
+    release_root = Path(metadata["release_root"])
+    script = release_root / "scripts" / RUNNER_BOOTSTRAP_SCRIPT
+    if not script.is_file():
+        raise BrokerError("runner bootstrap governado ausente na release")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--confirm",
+            "ACTIVATE-DESKTOP-FREE-CONTROL-PLANE",
+            "--repo-root",
+            str(release_root),
+            "--source-sha",
+            validate_sha(str(metadata["source_sha"])),
+            "--non-interactive-auth",
+        ],
+        cwd=release_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=420,
+        check=False,
     )
+    payload: dict[str, Any] = {}
+    for line in reversed(completed.stdout.splitlines()):
+        line = line.strip()
+        if not (line.startswith("{") and line.endswith("}")):
+            continue
+        try:
+            candidate = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict):
+            payload = candidate
+            break
+
+    if not payload:
+        raise BrokerError("runner_bootstrap_evidence_missing")
+    state = str(payload.get("state") or "unknown")[:120]
+    if completed.returncode != 0 or payload.get("ok") is not True:
+        raise BrokerError(f"runner_bootstrap_failed:{state}")
+
     return {
         "handler": "recover-runner",
-        "runner": result,
-        "github_pickup_required": True,
+        "bootstrap_state": state,
+        "runner_running": bool(payload.get("runner_running")),
+        "runner_registry_present": bool(payload.get("runner_registry_present")),
+        "runner_registry_status": str(payload.get("runner_registry_status") or "unknown")[:40],
+        "runner_registry_labels_ok": bool(payload.get("runner_registry_labels_ok")),
+        "runner_registered_now": bool(payload.get("runner_registered_now")),
+        "runner_started_now": bool(payload.get("runner_started_now")),
     }
 
 
@@ -546,6 +588,7 @@ def _copy_release(source_root: Path, release_root: Path) -> None:
         WATCHDOG_SCRIPT,
         WATCHDOG_UAC_SCRIPT,
         RDC_RECOVERY_SCRIPT,
+        RUNNER_BOOTSTRAP_SCRIPT,
     ):
         source = source_root / "scripts" / name
         if not source.is_file():

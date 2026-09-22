@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature_name": "Desktop PC24x7 governed administrative broker",
   "increment_type": "gap_fix",
-  "status": "code_pending_validation",
+  "status": "implementation",
   "approvals": {
     "requirements": true
   },
@@ -30,15 +30,16 @@
     "tests": [
       "tests/test_desktop_admin_broker.py",
       "tests/test_desktop_admin_broker_uac_launcher.py",
-      "tests/test_desktop_control_plane_watchdog.py"
+      "tests/test_activate_desktop_free_control_plane.py"
     ],
-    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, invoke only versioned allowlisted handlers from an immutable release, and never equate a local Runner.Listener.exe process with GitHub runner health. Explicit recover-runner may restart only the listener executable belonging to the governed runner_home; external pickup remains terminal evidence."
+    "evidence_contract": "The broker must accept only fresh exact unedited owner commands, persist comment-id anti-replay before execution, invoke only immutable versioned handlers, and recover a missing runner only through the fixed noninteractive desktop control-plane bootstrap."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-admin-broker.requirements.md",
     "implementation": "scripts/desktop_admin_broker.py",
     "uac_launcher": "scripts/desktop_admin_broker_uac_launcher.py",
-    "tests": "tests/test_desktop_admin_broker.py"
+    "tests": "tests/test_desktop_admin_broker.py",
+    "runner_bootstrap": "scripts/activate_desktop_free_control_plane.py"
   },
   "acceptance": {
     "code": [
@@ -46,14 +47,13 @@
       "negative_controls_green",
       "anti_replay_green",
       "pre_pr_ready_current_sha",
-      "ci_green_current_sha",
-      "governed_runner_process_identity_green"
+      "ci_green_current_sha"
     ],
     "runtime": [
       "broker_task_atstartup_s4u_highest",
       "status_comment_consumed_once",
       "unsupported_command_no_effect",
-      "runner_recovery_exact_process_restart_proven",
+      "runner_recovery_proven",
       "rdc_recovery_proven",
       "fresh_self_hosted_workflow_pickup"
     ],

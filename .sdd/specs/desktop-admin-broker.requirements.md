@@ -37,11 +37,8 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 12. Não armazenar token GitHub, senha ou segredo; o transporte usa leitura HTTPS pública da issue.
 13. O broker deve executar apenas: status, recuperação do runner, recuperação RDC, ativação do watchdog e recuperação do plano de controle.
 14. A recuperação RDC deve reutilizar `pc24x7_rdc_recovery.py`.
-15. A recuperação do runner e do plano de controle deve reutilizar `desktop_control_plane_watchdog.py`.
-15.1. `recover-runner` deve reiniciar somente o `Runner.Listener.exe` cujo caminho executável pertença ao `runner_home` governado; processo de outro runner ou identidade não verificável deve falhar fechado.
-15.2. Presença local de `Runner.Listener.exe` prova somente processo local, nunca saúde ou conectividade com GitHub; o estado deve exigir pickup externo para conclusão.
-15.3. O ciclo automático normal não deve reiniciar continuamente um listener já em execução; reinício forçado é reservado ao handler explícito `recover-runner`.
-16. A ativação do watchdog deve reutilizar `desktop_control_plane_watchdog_uac_launcher.py`; quando chamada pelo broker já elevado, nenhuma nova aprovação UAC deve ser necessária.
+15. A recuperação do runner deve reutilizar `activate_desktop_free_control_plane.py` da mesma release imutável, com `source_sha` fixo e autenticação não interativa; runner ausente deve ser provisionado, e autenticação/escopo insuficiente deve falhar fechado sem abrir navegador.
+16. A recuperação do plano de controle deve reutilizar `desktop_control_plane_watchdog.py`; a ativação do watchdog deve reutilizar `desktop_control_plane_watchdog_uac_launcher.py` e, quando chamada pelo broker já elevado, nenhuma nova aprovação UAC deve ser necessária.
 17. O broker deve ser instalado em release imutável vinculada ao SHA fonte completo.
 18. A tarefa do broker deve ser `AtStartup + S4U + highest`, com instância única e restart automático.
 19. Se a criação da tarefa elevada for negada, persistir `activation_pending=true` e `requires_uac_activation=true`.
@@ -65,6 +62,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 - anti-replay comprovado;
 - comentário de ator incorreto, associação incorreta, editado, antigo ou fora da allowlist deve ser ignorado;
 - UAC launcher deve elevar somente a release imutável e somente com metadata governada;
+- `recover-runner` deve usar apenas o bootstrap fixo da release, sem login/refresh interativo do GitHub;
 - Pre-PR Readiness no HEAD exato deve produzir `READY_FOR_PR=passed`.
 
 ## Critérios de aceite runtime
@@ -73,7 +71,7 @@ Após integração e autorização explícita de instalação administrativa:
 1. broker instalado e verificado como `AtStartup + S4U + highest`;
 2. comentário `status` novo é consumido exatamente uma vez;
 3. controle negativo com comando não allowlisted não produz efeito;
-4. `recover-runner` reinicia de forma controlada somente o listener do `runner_home` governado e um workflow self-hosted faz pickup;
+4. `recover-runner` recupera `Runner.Listener.exe` e um workflow self-hosted faz pickup;
 5. `recover-rdc` produz leitura independente do RDC;
 6. repetição do mesmo comentário não produz segundo efeito;
 7. nenhum reboot, segredo ou produção é tocado.
