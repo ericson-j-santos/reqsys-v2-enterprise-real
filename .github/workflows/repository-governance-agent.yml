@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 concurrency:
@@ -119,6 +119,7 @@ jobs:
 
   sync-open-prs:
     name: Sincronizar PRs atrasadas após avanço da main
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -306,6 +307,14 @@ jobs:
               ].join('\n'))
               .write();
 
-            if (failures.some((item) => item.reason === 'update_not_confirmed')) {
-              core.setFailed('Uma ou mais atualizações não foram confirmadas por leitura independente.');
+            const mutationFailures = failures.filter(
+              (item) =>
+                item.reason === 'update_not_confirmed' ||
+                String(item.reason || '').startsWith('update_branch_api_')
+            );
+            if (mutationFailures.length) {
+              core.setFailed(
+                'Uma ou mais mutações falharam ou não foram confirmadas: ' +
+                  JSON.stringify(mutationFailures)
+              );
             }
