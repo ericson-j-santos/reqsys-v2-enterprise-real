@@ -1,0 +1,21 @@
+# Tarefas — ReqSys Report Factory RDL/Fabric MVP
+
+- [x] Registrar issue de consolidação #1933.
+- [x] Criar branch isolada a partir da `main` corrente.
+- [x] Definir ReportSpec 1.0 e JSON Schema.
+- [x] Implementar validador fail-closed.
+- [x] Implementar gerador RDL determinístico.
+- [x] Implementar `PaginatedReportDefinition` em Base64.
+- [x] Implementar cliente Fabric create/update com LRO limitado.
+- [x] Criar especificação exemplo `DemandasPorStatus`.
+- [x] Criar testes positivo, negativos e idempotência.
+- [x] Criar runbook.
+- [x] Executar testes no primeiro HEAD publicado: 5/5 Report Factory, 25/25 operacionais.
+- [x] Executar `Pre-PR Readiness Gate` no primeiro HEAD: passed, behind_by=0.
+- [x] Abrir PR #1939 após `READY_FOR_PR=passed`.
+- [x] Adicionar preflight Fabric DEV que reutiliza a identidade OIDC governada existente sem segredo.
+- [ ] Executar preflight Fabric DEV no HEAD atualizado e capturar workspace/estado real.
+- [ ] Se necessário, provisionar apenas a menor permissão/role faltante com identidade governada.
+- [ ] Executar E2E real de publicação e getDefinition no Fabric DEV.
+- [ ] Adicionar exportação PDF/XLSX em incremento posterior.
+- [ ] Adicionar chart/matrix em incremento posterior.
