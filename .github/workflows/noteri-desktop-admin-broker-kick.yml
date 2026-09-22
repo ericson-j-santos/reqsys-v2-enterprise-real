@@ -1,6 +1,16 @@
 name: Noteri → Desktop Admin Broker Kick
 
 on:
+  push:
+    branches:
+      - "fix/noteri-desktop-admin-broker-kick-1930"
+    paths:
+      - ".github/workflows/noteri-desktop-admin-broker-kick.yml"
+      - ".github/self-hosted-runner-policy.json"
+      - "scripts/noteri_desktop_admin_broker_kick.py"
+      - "tests/test_noteri_desktop_admin_broker_kick.py"
+      - ".sdd/specs/noteri-desktop-admin-broker-kick.requirements.md"
+      - ".sdd/specs/noteri-desktop-admin-broker-kick.spec.json"
   pull_request:
     paths:
       - ".github/workflows/noteri-desktop-admin-broker-kick.yml"
@@ -21,7 +31,7 @@ concurrency:
 jobs:
   kick:
     name: Start existing Desktop Admin Broker through Windows RPC
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
