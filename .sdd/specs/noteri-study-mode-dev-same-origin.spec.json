@@ -23,7 +23,8 @@
     "O E2E prova NORMAL->ESTUDO->ESTUDO->NORMAL e leitura imediata pelo control plane.",
     "HML/PROD, segredos, GUI, RDC e comando arbitrário permanecem fora do escopo.",
     "A reconciliação sincroniza o Nginx DEV efetivo, recria o proxy e exige HTTP 200 em /api/health e /api/runtime/health antes do E2E.",
-    "O reconciliador descobre o runtime DEV pela API única na porta 8210 e deriva projeto/serviços pelos labels Docker Compose; o gateway 8083 permanece validado funcionalmente por HTTP."
+    "O reconciliador descobre o runtime DEV pela API única na porta 8210 e deriva projeto/serviços pelos labels Docker Compose; o gateway 8083 permanece validado funcionalmente por HTTP.",
+    "Falhas de docker compose config publicam somente diagnostic_code allowlisted, sem stderr bruto, valores de ambiente, tokens, segredos ou caminhos sensíveis."
   ],
   "controls": {
     "hml_enabled": false,
@@ -43,6 +44,6 @@
       "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
       "tests/test_noteri_study_mode_dev_reconcile.py"
     ],
-    "evidence_contract": "O Task Console DEV deve alternar NORMAL/ESTUDO pela API same-origin; a API deve observar um único worker Noteri fresco/online/autenticado no Engineering Orchestrator; somente host.profile.set.v1 pode alterar o perfil; a tarefa deve comprovar leitura local independente e heartbeat imediato; ESTUDO não pode liberar trabalho normal; replay não cria nova tarefa. A reconciliação também deve reparar drift do Nginx DEV, recriar o proxy e comprovar /api/health e /api/runtime/health HTTP 200 antes de declarar o runtime apto. A identidade Docker do runtime deve ser descoberta pela API DEV 8210 e labels Compose; o gateway 8083 deve ser validado funcionalmente por HTTP; ambiguidades ou projetos não-DEV falham fechado."
+    "evidence_contract": "O Task Console DEV deve alternar NORMAL/ESTUDO pela API same-origin; a API deve observar um único worker Noteri fresco/online/autenticado no Engineering Orchestrator; somente host.profile.set.v1 pode alterar o perfil; a tarefa deve comprovar leitura local independente e heartbeat imediato; ESTUDO não pode liberar trabalho normal; replay não cria nova tarefa. A reconciliação também deve reparar drift do Nginx DEV, recriar o proxy e comprovar /api/health e /api/runtime/health HTTP 200 antes de declarar o runtime apto. A identidade Docker do runtime deve ser descoberta pela API DEV 8210 e labels Compose; o gateway 8083 deve ser validado funcionalmente por HTTP; ambiguidades ou projetos não-DEV falham fechado. Falhas de docker compose config devem ser classificadas por diagnostic_code allowlisted sem publicar stderr bruto ou dados sensíveis."
   }
 }
