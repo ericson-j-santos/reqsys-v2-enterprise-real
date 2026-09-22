@@ -1,4 +1,6 @@
 import importlib.util
+
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,3 +88,94 @@ def test_bootstrap_delegates_process_identity_and_restart_to_watchdog() -> None:
     assert "watchdog.restart_runner(root, _runner_log_path(root))" in text
     assert "runner_restarted_offline" in text
     assert "runner_restart_previous_listener_pid" in text
+
+def _make_registered_runner(tmp_path: Path) -> Path:
+    runner = tmp_path / "runner"
+    (runner / "bin").mkdir(parents=True)
+    (runner / "config.cmd").write_text("@echo off\n", encoding="utf-8")
+    (runner / "run.cmd").write_text("@echo off\n", encoding="utf-8")
+    (runner / "bin" / "Runner.Listener.exe").write_bytes(b"runner")
+    (runner / ".runner").write_text("{}", encoding="utf-8")
+    return runner
+
+
+def test_missing_registry_repair_authorizes_before_local_mutation(monkeypatch, tmp_path: Path) -> None:
+    runner = _make_registered_runner(tmp_path)
+    marker = runner / ".runner"
+    order: list[tuple[str, bool]] = []
+
+    monkeypatch.setattr(
+        m,
+        "registration_token",
+        lambda gh, allow_interactive=True: order.append(("token", marker.exists())) or ("t" * 32),
+    )
+
+    class FakeWatchdog:
+        @staticmethod
+        def stop_runner(root):
+            order.append(("stop", marker.exists()))
+            assert root == runner.resolve()
+            return {
+                "status": "stopped",
+                "stopped": True,
+                "previous_listener_pid": 4321,
+                "termination_scope": "exact_runner_home",
+            }
+
+    monkeypatch.setattr(m, "_load_watchdog_runtime", lambda: FakeWatchdog)
+
+    def fake_configure(root, token):
+        order.append(("configure", marker.exists()))
+        assert root == runner.resolve()
+        assert token == "t" * 32
+        marker.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(m, "configure_runner_with_token", fake_configure)
+
+    result = m.repair_missing_registry(
+        runner,
+        Path("gh"),
+        allow_interactive_auth=False,
+    )
+
+    assert order == [("token", True), ("stop", True), ("configure", False)]
+    assert result["registered"] is True
+    assert result["previous_listener_pid"] == 4321
+    assert marker.is_file()
+
+
+def test_missing_registry_repair_preserves_local_contract_when_authorization_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner = _make_registered_runner(tmp_path)
+    marker = runner / ".runner"
+
+    def denied(*args, **kwargs):
+        raise m.ActivationError(
+            "github_runner_admin_permission_required",
+            "sem permissão",
+        )
+
+    monkeypatch.setattr(m, "registration_token", denied)
+    monkeypatch.setattr(
+        m,
+        "_load_watchdog_runtime",
+        lambda: (_ for _ in ()).throw(AssertionError("must not stop before authorization")),
+    )
+
+    with pytest.raises(m.ActivationError, match="sem permissão"):
+        m.repair_missing_registry(
+            runner,
+            Path("gh"),
+            allow_interactive_auth=False,
+        )
+
+    assert marker.is_file()
+
+
+def test_main_path_can_repair_local_contract_missing_from_github_registry() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "initial_registry = wait_runner_registry_online" in text
+    assert "repair_missing_registry(" in text
+    assert '"runner_registry_repaired_missing"' in text
+
