@@ -242,11 +242,15 @@ def _recover_runner(metadata: dict[str, Any]) -> dict[str, Any]:
     installed = json.loads(target.read_text(encoding="utf-8"))
     watchdog = _watchdog_module(installed)
     runner_home = watchdog.discover_runner_home(Path(installed["runner_home"]) if installed.get("runner_home") else None)
-    result = watchdog.start_runner(
+    result = watchdog.restart_runner(
         runner_home,
         Path(installed["runtime_root"]) / "logs" / "github-runner.log",
     )
-    return {"handler": "recover-runner", "runner": result}
+    return {
+        "handler": "recover-runner",
+        "runner": result,
+        "github_pickup_required": True,
+    }
 
 
 def _recover_rdc(metadata: dict[str, Any], correlation_id: str) -> dict[str, Any]:
