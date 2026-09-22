@@ -36,12 +36,13 @@ jobs:
     timeout-minutes: 5
     env:
       EVIDENCE_FILE: artifacts/noteri-desktop-admin-broker-kick/evidence.json
+      EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.EVALUATED_SHA }}
           fetch-depth: 1
           persist-credentials: false
 
