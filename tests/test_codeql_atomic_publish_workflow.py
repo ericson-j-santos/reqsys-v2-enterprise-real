@@ -78,8 +78,11 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
     def test_executive_summary_waits_for_atomic_publish(self):
         section = self.text.split("  security-executive-summary:\n", 1)[1]
         needs = section.split("    if: always()", 1)[0]
+        self.assertIn("- scope", needs)
         self.assertIn("- codeql", needs)
         self.assertNotIn("- codeql-generate", needs)
+        self.assertIn("if: needs.scope.result != 'success'", section)
+        self.assertIn("refusing to publish a green summary", section)
 
     def test_summary_backticks_are_escaped_for_bash(self):
         section = self.section("  codeql-generate:\n", "  security-executive-summary:\n")
