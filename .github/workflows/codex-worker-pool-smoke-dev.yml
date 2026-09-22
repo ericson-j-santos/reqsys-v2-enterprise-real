@@ -28,14 +28,14 @@ jobs:
           fetch-depth: 1
 
       - name: Verificar host DEV exato
-        shell: pwsh
+        shell: powershell
         run: |
           if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
             throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
           }
 
       - name: Executar smoke governado do Worker Pool
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           python scripts/codex_worker_pool_smoke_dev.py `
@@ -44,7 +44,7 @@ jobs:
             --output "$env:EVIDENCE_FILE"
 
       - name: Validar evidência independente
-        shell: pwsh
+        shell: powershell
         run: |
           $evidence = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
           if ($evidence.result -ne "WORKER_POOL_SMOKE_PASSED") { throw "Smoke não aprovado." }
@@ -68,7 +68,7 @@ jobs:
 
       - name: Resumo
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
           "## Codex Worker Pool Smoke DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
