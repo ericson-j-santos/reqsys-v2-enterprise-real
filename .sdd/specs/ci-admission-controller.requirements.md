@@ -48,3 +48,8 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 ## Diagnóstico do gate agregado
 
 Quando a consolidação Padrão Ouro não atingir a meta, o processo deve emitir diagnóstico estruturado dos artifacts ingeridos, eixos e domínios. Esse diagnóstico é somente observabilidade: não reduz limiares, não converte warning em sucesso e não substitui a correção da causa raiz.
+
+
+## Escopo de ambientes
+
+O detector de drift deve consumir `infra/public-access-urls.json` como contrato machine-readable do runtime atual. Ambientes com `runtime_target=not_promoted` não participam do comparativo obrigatório do incremento corrente. A ausência dessa fonte mantém o comportamento legado estrito. Se PROD mudar para um runtime ativo, configuração PROD vazia/ausente, healthcheck ausente, porta direta ou gates `APP_ENV/ALLOW_DEMO_LOGIN` inválidos voltam a bloquear automaticamente.

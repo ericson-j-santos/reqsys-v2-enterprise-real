@@ -20,15 +20,18 @@
     ".github/workflows/ci-e2e-governado.yml",
     ".github/workflows/pr-evidence-gate.yml",
     "tests/test_ci_admission_control.py",
-    "scripts/padrao_ouro_maturity_consolidator.py"
+    "scripts/padrao_ouro_maturity_consolidator.py",
+    "scripts/runtime_health_center.py",
+    "tests/test_runtime_health_center.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_ci_admission_control.py",
       "tests/test_pre_pr_readiness.py",
-      "tests/test_padrao_ouro_maturity_consolidator.py"
+      "tests/test_padrao_ouro_maturity_consolidator.py",
+      "tests/test_runtime_health_center.py"
     ],
-    "evidence_contract": "Provar manifesto vinculado ao HEAD exato, branch não-atrasada em relação à base corrente, bloqueio para SHA antigo/Pre-PR ausente, CI caro protegido por admission guard e PR Evidence Gate exigindo o artefato do SHA atual. Quando a consolidação falhar, registrar estados dos artifacts/axes para diagnóstico da causa raiz sem alterar o gate."
+    "evidence_contract": "Provar manifesto vinculado ao HEAD exato, branch não-atrasada em relação à base corrente, bloqueio para SHA antigo/Pre-PR ausente, CI caro protegido por admission guard e PR Evidence Gate exigindo o artefato do SHA atual. Quando a consolidação falhar, registrar estados dos artifacts/axes para diagnóstico da causa raiz sem alterar o gate. O detector de drift deve usar infra/public-access-urls.json e voltar a falhar fechado se PROD for promovido sem configuração."
   },
   "risk": {
     "production": false,
