@@ -50,3 +50,10 @@ como falso.
    (`if-no-files-found: error`).
 7. A evidência declara ausência de exposição de segredo e de identificadores.
 8. A PR permanece sem merge, deploy e produção.
+
+## Execução efêmera 2026-09-22
+
+Reexecução autorizada para diagnosticar o bloqueio do Report Factory após o
+preflight OIDC comprovar token Fabric válido com zero workspaces visíveis.
+Esta seção existe apenas para produzir um novo SHA do probe; a PR correspondente
+deve permanecer draft, não ser mergeada e ser encerrada após a captura da evidência.
