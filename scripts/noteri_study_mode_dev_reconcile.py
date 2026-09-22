@@ -118,12 +118,7 @@ def labels(item: dict[str, Any]) -> dict[str, str]:
     return (item.get("Config") or {}).get("Labels") or {}
 
 
-def bind_source(
-    item: dict[str, Any],
-    destination: str,
-    *,
-    stage: str,
-) -> Path:
+def rw_bind_source(item: dict[str, Any], destination: str) -> Path | None:
     for mount in item.get("Mounts") or []:
         if (
             mount.get("Destination") == destination
@@ -131,7 +126,19 @@ def bind_source(
             and mount.get("RW") is True
         ):
             return windows_path(str(mount.get("Source") or ""))
-    raise ReconcileError(f"rw_bind_missing:{destination}", stage=stage)
+    return None
+
+
+def required_bind_source(
+    item: dict[str, Any],
+    destination: str,
+    *,
+    stage: str,
+) -> Path:
+    source = rw_bind_source(item, destination)
+    if source is None:
+        raise ReconcileError(f"rw_bind_missing:{destination}", stage=stage)
+    return source
 
 
 def windows_path(raw: str) -> Path:
@@ -528,17 +535,21 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         if item_labels.get("com.docker.compose.service") != service:
             raise ReconcileError(f"runtime_service_mismatch:{service}")
 
-    api_source = bind_source(
+    api_source = required_bind_source(
         api_before,
         "/app",
         stage="api_source_bind",
     )
-    frontend_source = bind_source(
-        frontend_before,
-        "/app",
-        stage="frontend_source_bind",
-    )
     working_dir, compose_files = compose_context(api_before, repo_root)
+
+    frontend_bind_source = rw_bind_source(frontend_before, "/app")
+    frontend_requires_rebuild = frontend_bind_source is None
+    frontend_source = frontend_bind_source or (working_dir / "frontend")
+    if not frontend_source.is_dir():
+        raise ReconcileError(
+            "frontend_source_dir_missing",
+            stage="frontend_source_fallback",
+        )
 
     profile_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "ReqSys" / "TodoGlobal24x7"
     profile_dir.mkdir(parents=True, exist_ok=True)
@@ -578,6 +589,23 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         wait_container_healthy(repo_root, args.health_timeout)
 
+        if frontend_requires_rebuild:
+            run(
+                [
+                    *base,
+                    "up",
+                    "-d",
+                    "--no-deps",
+                    "--build",
+                    "--force-recreate",
+                    "frontend",
+                ],
+                cwd=working_dir,
+                timeout=900,
+                env=compose_env,
+                stage="frontend_rebuild",
+            )
+
         api_after = inspect(
             API_CONTAINER,
             repo_root,
@@ -612,6 +640,22 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                 env=compose_env,
                 stage="rollback_api_recreate",
             )
+            if frontend_requires_rebuild:
+                run(
+                    [
+                        *original_base,
+                        "up",
+                        "-d",
+                        "--no-deps",
+                        "--build",
+                        "--force-recreate",
+                        "frontend",
+                    ],
+                    cwd=working_dir,
+                    timeout=900,
+                    env=compose_env,
+                    stage="rollback_frontend_rebuild",
+                )
         except Exception:
             pass
         raise
@@ -626,7 +670,10 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "frontend_container": FRONTEND_CONTAINER,
         "gateway_container": NGINX_CONTAINER,
         "api_source_bind_observed": True,
-        "frontend_source_bind_observed": True,
+        "frontend_source_bind_observed": not frontend_requires_rebuild,
+        "frontend_runtime_refresh": (
+            "rebuild_from_compose_source" if frontend_requires_rebuild else "bind"
+        ),
         "profile_mount_rw": True,
         "loopback_agent_exposed": False,
         "browser_loopback_dependency_removed": True,
