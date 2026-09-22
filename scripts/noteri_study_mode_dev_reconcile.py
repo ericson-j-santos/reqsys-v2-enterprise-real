@@ -3,7 +3,8 @@
 
 O script é propositalmente restrito:
 - runtime fixo DESKTOP-PDQK954;
-- projeto Docker fixo reqsys-live;
+- ambiente DEV descoberto pelo gateway local exclusivo na porta 8083;
+- projeto/containers derivados dos labels Docker Compose do gateway observado;
 - transporte de perfil pelo Engineering Orchestrator;
 - destino lógico fixo Noteri;
 - sem HML/PROD;
@@ -27,10 +28,7 @@ from pathlib import Path
 from typing import Any
 
 EXPECTED_HOST = "DESKTOP-PDQK954"
-PROJECT = "reqsys-live"
-API_CONTAINER = "reqsys-live-api-1"
-FRONTEND_CONTAINER = "reqsys-live-frontend-1"
-NGINX_CONTAINER = "reqsys-live-nginx-1"
+DEV_GATEWAY_PORT = "8083"
 CONFIRM = "RECONCILE-NOTERI-STUDY-MODE-DEV"
 GATEWAY = "http://127.0.0.1:8083"
 ADMIN_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
@@ -120,6 +118,67 @@ def labels(item: dict[str, Any]) -> dict[str, str]:
     return (item.get("Config") or {}).get("Labels") or {}
 
 
+def container_name(item: dict[str, Any]) -> str:
+    return str(item.get("Name") or "").lstrip("/")
+
+
+def discover_runtime(repo_root: Path) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    gateway_ids = [
+        line.strip()
+        for line in run(
+            ["docker", "ps", "--filter", f"publish={DEV_GATEWAY_PORT}", "--format", "{{.ID}}"],
+            cwd=repo_root,
+            timeout=60,
+            stage="discover_gateway",
+        ).stdout.splitlines()
+        if line.strip()
+    ]
+    if len(gateway_ids) != 1:
+        raise ReconcileError("dev_gateway_8083_not_unique", stage="discover_gateway")
+
+    nginx_item = inspect(gateway_ids[0], repo_root, stage="discover_gateway")
+    nginx_labels = labels(nginx_item)
+    project = str(nginx_labels.get("com.docker.compose.project") or "").strip()
+    service = str(nginx_labels.get("com.docker.compose.service") or "").strip()
+    if not project or service != "nginx":
+        raise ReconcileError("dev_gateway_compose_identity_invalid", stage="discover_gateway")
+    if any(token in project.casefold() for token in ("prod", "production", "hml", "stg", "staging")):
+        raise ReconcileError("non_dev_compose_project_blocked", stage="discover_gateway")
+    if container_host_port(nginx_item, "80/tcp") != DEV_GATEWAY_PORT:
+        raise ReconcileError("dev_gateway_port_mismatch", stage="discover_gateway")
+
+    def service_item(expected_service: str) -> dict[str, Any]:
+        ids = [
+            line.strip()
+            for line in run(
+                [
+                    "docker",
+                    "ps",
+                    "--filter",
+                    f"label=com.docker.compose.project={project}",
+                    "--filter",
+                    f"label=com.docker.compose.service={expected_service}",
+                    "--format",
+                    "{{.ID}}",
+                ],
+                cwd=repo_root,
+                timeout=60,
+                stage="discover_runtime",
+            ).stdout.splitlines()
+            if line.strip()
+        ]
+        if len(ids) != 1:
+            raise ReconcileError(
+                f"runtime_service_not_unique:{expected_service}",
+                stage="discover_runtime",
+            )
+        return inspect(ids[0], repo_root, stage="discover_runtime")
+
+    api_item = service_item("api")
+    frontend_item = service_item("frontend")
+    return project, api_item, frontend_item, nginx_item
+
+
 def rw_bind_source(item: dict[str, Any], destination: str) -> Path | None:
     for mount in item.get("Mounts") or []:
         if (
@@ -166,10 +225,11 @@ def container_host_port(item: dict[str, Any], port: str) -> str | None:
 def compose_context(
     api_item: dict[str, Any],
     repo_root: Path,
+    expected_project: str,
 ) -> tuple[Path, list[Path]]:
     info = labels(api_item)
     project = info.get("com.docker.compose.project")
-    if project != PROJECT:
+    if project != expected_project:
         raise ReconcileError(f"compose_project_mismatch:{project}")
 
     working_raw = info.get("com.docker.compose.project.working_dir") or ""
@@ -300,11 +360,15 @@ def rollback_files(changes: list[tuple[Path, Path | None]]) -> None:
             pass
 
 
-def wait_container_healthy(repo_root: Path, timeout_seconds: int = 180) -> None:
+def wait_container_healthy(
+    container: str,
+    repo_root: Path,
+    timeout_seconds: int = 180,
+) -> None:
     deadline = time.monotonic() + timeout_seconds
     last = "unknown"
     while time.monotonic() < deadline:
-        item = inspect(API_CONTAINER, repo_root, stage="api_health")
+        item = inspect(container, repo_root, stage="api_health")
         state = item.get("State") or {}
         health = state.get("Health") or {}
         last = str(health.get("Status") or state.get("Status") or "unknown").lower()
@@ -523,26 +587,30 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     if git_head(repo_root) != args.expected_sha:
         raise ReconcileError("git_head_mismatch")
 
-    api_before = inspect(API_CONTAINER, repo_root)
-    frontend_before = inspect(FRONTEND_CONTAINER, repo_root)
-    nginx_before = inspect(NGINX_CONTAINER, repo_root)
+    project, api_before, frontend_before, nginx_before = discover_runtime(repo_root)
     for item, service in (
         (api_before, "api"),
         (frontend_before, "frontend"),
         (nginx_before, "nginx"),
     ):
         item_labels = labels(item)
-        if item_labels.get("com.docker.compose.project") != PROJECT:
+        if item_labels.get("com.docker.compose.project") != project:
             raise ReconcileError(f"runtime_project_mismatch:{service}")
         if item_labels.get("com.docker.compose.service") != service:
             raise ReconcileError(f"runtime_service_mismatch:{service}")
+
+    api_container = container_name(api_before)
+    frontend_container = container_name(frontend_before)
+    nginx_container = container_name(nginx_before)
+    if not all((api_container, frontend_container, nginx_container)):
+        raise ReconcileError("runtime_container_name_missing", stage="discover_runtime")
 
     api_source = required_bind_source(
         api_before,
         "/app",
         stage="api_source_bind",
     )
-    working_dir, compose_files = compose_context(api_before, repo_root)
+    working_dir, compose_files = compose_context(api_before, repo_root, project)
 
     frontend_bind_source = rw_bind_source(frontend_before, "/app")
     frontend_requires_rebuild = frontend_bind_source is None
@@ -569,7 +637,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     if gateway_port:
         compose_env["GATEWAY_PORT"] = gateway_port
 
-    base = compose_base(PROJECT, compose_files, working_dir)
+    base = compose_base(project, compose_files, working_dir)
     try:
         run(
             [*base, "config"],
@@ -585,7 +653,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             env=compose_env,
             stage="api_recreate",
         )
-        wait_container_healthy(repo_root, args.health_timeout)
+        wait_container_healthy(api_container, repo_root, args.health_timeout)
 
         if frontend_requires_rebuild:
             run(
@@ -620,7 +688,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         }
 
         api_after = inspect(
-            API_CONTAINER,
+            api_container,
             repo_root,
             stage="verify_runtime_profile",
         )
@@ -642,7 +710,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         rollback_files(changes)
         try:
             original_files = [path for path in compose_files if "StudyModeDeploy" not in str(path)]
-            original_base = compose_base(PROJECT, original_files, working_dir)
+            original_base = compose_base(project, original_files, working_dir)
             run(
                 [*original_base, "up", "-d", "--no-deps", "--force-recreate", "api"],
                 cwd=working_dir,
@@ -681,11 +749,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "ok": True,
         "environment": "dev",
         "host": EXPECTED_HOST,
-        "project": PROJECT,
+        "project": project,
         "expected_sha": args.expected_sha,
-        "api_container": API_CONTAINER,
-        "frontend_container": FRONTEND_CONTAINER,
-        "gateway_container": NGINX_CONTAINER,
+        "api_container": api_container,
+        "frontend_container": frontend_container,
+        "gateway_container": nginx_container,
+        "runtime_discovery": "gateway_port_8083_compose_labels",
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": not frontend_requires_rebuild,
         "frontend_runtime_refresh": (

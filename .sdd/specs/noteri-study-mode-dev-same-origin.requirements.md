@@ -70,3 +70,10 @@ Browser
   -> heartbeat imediato
   -> leitura same-origin
 ```
+
+
+## Correção preventiva de descoberta do runtime — 22/09/2026
+
+O reconciliador não pode depender de nomes históricos de projeto/container Docker. O runtime DEV deve ser descoberto pelo único gateway em execução que publica a porta host 8083; o projeto e os serviços `api`, `frontend` e `nginx` são validados pelos labels oficiais do Docker Compose. Projetos com identidade HML/STG/PROD são rejeitados antes de qualquer alteração.
+
+Critério adicional: ausência ou ambiguidade do gateway 8083, serviço Compose duplicado/ausente ou identidade não-DEV deve falhar fechado sem tocar HML/PROD.
