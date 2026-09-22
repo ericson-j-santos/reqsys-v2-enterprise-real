@@ -9,13 +9,13 @@
     "design": true,
     "tasks": true
   },
-  "description": "Provisiona ou reutiliza de forma idempotente e fail-closed o GitHub Actions runner do DESKTOP-PDQK954, vincula a prova local ao executável do runner_home governado e executa no máximo um reinício controlado quando o registro GitHub válido permanece offline.",
+  "description": "Provisiona ou reutiliza de forma idempotente e fail-closed o GitHub Actions runner do DESKTOP-PDQK954, repara contrato local órfão quando o registro GitHub estiver ausente, vincula a prova local ao executável do runner_home governado e executa no máximo um reinício controlado quando o registro GitHub válido permanece offline.",
   "sdd_gate": {
     "tests": [
       "tests/test_activate_desktop_free_control_plane.py",
       "tests/test_desktop_control_plane_watchdog.py"
     ],
-    "evidence_contract": "O bootstrap somente executa em DESKTOP-PDQK954, usa repositório/nome/labels fixos, nunca persiste ou registra o token, aceita somente o Runner.Listener.exe do runner_home governado, exige registro GitHub presente/online com labels self-hosted/Windows/X64/pc24x7/reqsys-dev para runtime_active e limita a um reinício controlado quando esse registro válido permanece offline; pickup externo continua sendo a prova terminal."
+    "evidence_contract": "O bootstrap somente executa em DESKTOP-PDQK954, usa repositório/nome/labels fixos, nunca persiste ou registra o token, obtém autorização antes de remover um marcador .runner obsoleto, aceita somente o Runner.Listener.exe do runner_home governado, re-registra contrato local órfão quando o registro GitHub estiver ausente, exige registro GitHub presente/online com labels self-hosted/Windows/X64/pc24x7/reqsys-dev para runtime_active e limita a um reinício controlado quando esse registro válido permanece offline; pickup externo continua sendo a prova terminal."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-free-control-plane-bootstrap.requirements.md",
