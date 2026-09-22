@@ -106,6 +106,40 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         self.assertIn("github.event.workflow_run.pull_requests[0].number", text)
         self.assertIn("cancel-in-progress: true", text)
 
+    def test_domain_specific_gates_are_path_scoped_on_pull_request(self):
+        expectations = {
+            "bacen-production-formal-gate.yml": (
+                '"governance/bacen/BACEN-CONTROL-MATRIX.yaml"',
+                '"scripts/validate_bacen_production_gate.py"',
+            ),
+            "enterprise-runtime-governance-gates.yml": (
+                '"backend/**"',
+                '"infra/**"',
+                '"scripts/governance/enterprise_runtime_governance_gates.py"',
+            ),
+            "disposable-probe-base-guard.yml": (
+                '".github/workflows/**"',
+                '"scripts/validate_disposable_probe_base.py"',
+            ),
+            "minimum-controlled-version-gate.yml": (
+                '"governance/minimum-controlled-version.json"',
+                '"scripts/validate_minimum_controlled_version.py"',
+            ),
+        }
+        for workflow, tokens in expectations.items():
+            text = (WORKFLOWS / workflow).read_text(encoding="utf-8")
+            trigger = text.split("permissions:", 1)[0]
+            self.assertIn("pull_request:", trigger)
+            self.assertIn("paths:", trigger)
+            for token in tokens:
+                self.assertIn(token, trigger, workflow)
+
+    def test_pr_governed_ci_does_not_rerun_on_label_change(self):
+        text = (WORKFLOWS / "pr-governed-ci-validation.yml").read_text(encoding="utf-8")
+        trigger = text.split("permissions:", 1)[0]
+        self.assertIn("opened, synchronize, reopened, ready_for_review", trigger)
+        self.assertNotIn("labeled", trigger)
+
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         optimized = {

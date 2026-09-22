@@ -48,3 +48,20 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - Os cinco produtores auxiliares removidos do watcher permanecem disponíveis como gates independentes; nenhum gate protegido é excluído.
 - `Workflow Governance Consolidator` publica `execution_surface` para o inventário completo e não classifica `PR CI Watch` como fan-out alto.
 - Testes focados de Pareto e consolidação ficam verdes no HEAD exato.
+
+## Incremento Pareto — gates específicos de domínio
+
+14. Gates específicos de domínio devem usar filtro de `pull_request.paths` quando sua decisão depende de arquivos versionados específicos e imutáveis fora daquele domínio.
+15. `BACEN Production Formal Gate` deve materializar em PR somente quando matriz/reconciliação, validador, teste, workflow ou contrato de SHA requerido forem alterados.
+16. `Enterprise Runtime Governance Gates` deve materializar em PR somente quando houver mudança em runtime/config/infra produtivos ou no próprio contrato do gate; o `push main` completo permanece inalterado.
+17. `Minimum Controlled Version Gate` deve materializar em PR somente quando manifesto, validador, testes ou o próprio workflow forem alterados.
+18. `Guard Rail — Base de probes descartáveis` deve materializar em PR apenas para alteração de workflows ou de seu validador/teste.
+19. `PR Governed CI Validation` não deve rerodar por mudança de label, pois o SHA validado não mudou.
+
+### Critérios de aceite adicionais
+
+- PR sem alteração BACEN não materializa `BACEN Production Formal Gate`.
+- PR sem alteração de runtime/config/infra não materializa `Enterprise Runtime Governance Gates`.
+- PR sem alteração do contrato de versão mínima não materializa `Minimum Controlled Version Gate`.
+- PR sem alteração de workflows/probe não materializa `Guard Rail — Base de probes descartáveis`.
+- Evento de label não dispara `PR Governed CI Validation`.
