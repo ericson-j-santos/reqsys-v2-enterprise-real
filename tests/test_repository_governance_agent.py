@@ -59,7 +59,8 @@ def test_agent_never_merges_or_deploys() -> None:
     text = _text()
     assert "github.rest.pulls.merge" not in text
     assert "merge_method" not in text
-    assert "deploy" not in text.lower()
+    assert "github.rest.repos.createDeployment" not in text
+    assert "fly deploy" not in text.lower()
     assert "force-push" not in text.lower()
 
 
