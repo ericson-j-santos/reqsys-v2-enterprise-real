@@ -19,6 +19,33 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
         after_start = self.text.split(start, 1)[1]
         return after_start.split(end, 1)[0]
 
+    def test_scope_router_keeps_secret_scan_global_and_deep_scans_conditional(self):
+        scope = self.section("  scope:\n", "  gitleaks:\n")
+        self.assertIn("github.rest.pulls.listFiles", scope)
+        self.assertIn("core.setOutput('python', String(python))", scope)
+        self.assertIn("core.setOutput('node', String(node))", scope)
+        self.assertIn("core.setOutput('deep', String(deep))", scope)
+
+        gitleaks = self.section("  gitleaks:\n", "  python-dependency-audit:\n")
+        self.assertNotIn("needs: scope", gitleaks)
+        self.assertNotIn("needs.scope.outputs", gitleaks)
+
+        python_audit = self.section("  python-dependency-audit:\n", "  npm-audit:\n")
+        self.assertIn("needs: scope", python_audit)
+        self.assertIn("if: needs.scope.outputs.python == 'true'", python_audit)
+
+        npm_audit = self.section("  npm-audit:\n", "  sbom:\n")
+        self.assertIn("needs: scope", npm_audit)
+        self.assertIn("if: needs.scope.outputs.node == 'true'", npm_audit)
+
+        sbom = self.section("  sbom:\n", "  codeql-generate:\n")
+        self.assertIn("needs: scope", sbom)
+        self.assertIn("if: needs.scope.outputs.deep == 'true'", sbom)
+
+        codeql_generate = self.section("  codeql-generate:\n", "  codeql:\n")
+        self.assertIn("needs: scope", codeql_generate)
+        self.assertIn("if: needs.scope.outputs.deep == 'true'", codeql_generate)
+
     def test_language_jobs_generate_without_incremental_publish(self):
         section = self.section("  codeql-generate:\n", "  codeql:\n")
         self.assertIn("- javascript-typescript", section)
@@ -51,8 +78,11 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
     def test_executive_summary_waits_for_atomic_publish(self):
         section = self.text.split("  security-executive-summary:\n", 1)[1]
         needs = section.split("    if: always()", 1)[0]
+        self.assertIn("- scope", needs)
         self.assertIn("- codeql", needs)
         self.assertNotIn("- codeql-generate", needs)
+        self.assertIn("if: needs.scope.result != 'success'", section)
+        self.assertIn("refusing to publish a green summary", section)
 
     def test_summary_backticks_are_escaped_for_bash(self):
         section = self.section("  codeql-generate:\n", "  security-executive-summary:\n")

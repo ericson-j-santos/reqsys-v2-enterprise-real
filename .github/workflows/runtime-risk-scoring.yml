@@ -4,20 +4,18 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
+      # Autoexecução somente para superfície executável/runtime.
+      # Workflow/docs continuam disponíveis via workflow_dispatch.
       - "backend/**"
       - "frontend/**"
-      - "scripts/**"
+      - "runtime/**"
+      - "services/**"
       - "config/**"
       - "infra/**"
       - "docker/**"
       - "nginx/**"
       - "fly*.toml"
       - "frontend/fly*.toml"
-      - ".github/workflows/**"
-      - "docs/ops-dashboard/**"
-      - "docs/dashboard/**"
-      - "docs/ci/**"
-      - "docs/adr/**"
   workflow_dispatch:
     inputs:
       pr_number:

@@ -4,6 +4,22 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+    # Preview só agrega evidência quando a mudança pode alterar runtime,
+    # empacotamento ou a própria definição deste contrato.
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "runtime/**"
+      - "services/**"
+      - "infra/**"
+      - "docker/**"
+      - "nginx/**"
+      - "fly*.toml"
+      - "frontend/fly*.toml"
+      - "Dockerfile*"
+      - "docker-compose*.yml"
+      - "docker-compose*.yaml"
+      - ".github/workflows/preview-environment-contract.yml"
   workflow_dispatch:
     inputs:
       pr_number:

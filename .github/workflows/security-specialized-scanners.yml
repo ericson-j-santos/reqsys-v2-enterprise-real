@@ -28,6 +28,89 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Security scan scope router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.scope.outputs.python }}
+      node: ${{ steps.scope.outputs.node }}
+      deep: ${{ steps.scope.outputs.deep }}
+    steps:
+      - name: Classify changed paths
+        id: scope
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.setOutput('python', 'true');
+              core.setOutput('node', 'true');
+              core.setOutput('deep', 'true');
+              return;
+            }
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              },
+            );
+            const paths = files.map(file => file.filename);
+
+            const startsWithAny = (path, prefixes) =>
+              prefixes.some(prefix => path.startsWith(prefix));
+            const matchesAny = (path, patterns) =>
+              patterns.some(pattern => pattern.test(path));
+
+            const python = paths.some(path =>
+              startsWithAny(path, [
+                'backend/',
+                'runtime/',
+                'services/',
+                'scripts/',
+                'tools/',
+              ]) ||
+              matchesAny(path, [
+                /(^|\/)requirements[^/]*\.txt$/,
+                /(^|\/)pyproject\.toml$/,
+              ])
+            );
+
+            const node = paths.some(path =>
+              startsWithAny(path, [
+                'frontend/',
+              ]) ||
+              matchesAny(path, [
+                /(^|\/)package\.json$/,
+                /(^|\/)package-lock\.json$/,
+                /(^|\/)yarn\.lock$/,
+                /(^|\/)pnpm-lock\.yaml$/,
+              ])
+            );
+
+            const deep = python || node || paths.some(path =>
+              startsWithAny(path, [
+                'backend-dotnet/',
+                'infra/',
+                'governance/',
+                'config/',
+                '.github/actions/',
+                '.github/workflows/',
+              ]) ||
+              matchesAny(path, [
+                /(^|\/)Dockerfile[^/]*$/,
+                /(^|\/)docker-compose[^/]*\.ya?ml$/,
+              ])
+            );
+
+            core.info(`security scan scope: python=${python} node=${node} deep=${deep}`);
+            core.setOutput('python', String(python));
+            core.setOutput('node', String(node));
+            core.setOutput('deep', String(deep));
+
   gitleaks:
     name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
@@ -48,6 +131,8 @@ jobs:
 
   python-dependency-audit:
     name: pip-audit Python Dependencies
+    needs: scope
+    if: needs.scope.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -128,6 +213,8 @@ jobs:
 
   npm-audit:
     name: npm Audit Frontend Dependencies
+    needs: scope
+    if: needs.scope.outputs.node == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -197,6 +284,8 @@ jobs:
 
   sbom:
     name: SBOM CycloneDX
+    needs: scope
+    if: needs.scope.outputs.deep == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -250,6 +339,8 @@ jobs:
 
   codeql-generate:
     name: CodeQL SAST (${{ matrix.language }})
+    needs: scope
+    if: needs.scope.outputs.deep == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -411,6 +502,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs:
+      - scope
       - gitleaks
       - python-dependency-audit
       - npm-audit
@@ -418,6 +510,13 @@ jobs:
       - codeql
     if: always()
     steps:
+      - name: Fail closed when security scope routing fails
+        if: needs.scope.result != 'success'
+        shell: bash
+        run: |
+          echo "Security scan scope router failed; refusing to publish a green summary." >&2
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
