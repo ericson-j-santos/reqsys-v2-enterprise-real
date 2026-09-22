@@ -8,6 +8,7 @@ from app.core.security import get_current_user
 from app.core.service_tokens import require_admin_or_service_token
 from app.db import get_db
 from app.schemas.lowcode_solution import LowCodeSolutionGenerateRequest
+from app.schemas.paginated_report import PaginatedReportGenerateRequest
 from app.schemas.planner_publish import PublishPlannerTaskRequest
 from app.services.hub_lowcode import (
     criar_chat_e_enviar_como_usuario,
@@ -34,6 +35,7 @@ from app.services.lowcode_adr_coordinator import (
     planejar_coordenacao_por_adr,
 )
 from app.services.lowcode_solution_factory import gerar_lowcode_solution
+from app.services.paginated_report_factory import gerar_paginated_report
 from app.services.planner_publish import (
     listar_tentativas as listar_tentativas_planner_publish,
 )
@@ -114,6 +116,17 @@ def lowcode_solution_generate_canvas(payload: LowCodeSolutionGenerateRequest):
         },
         solution['correlation_id'],
     )
+
+
+# ---------------------------------------------------------------------------
+# Report Builder / Paginated Report Factory P0
+# ---------------------------------------------------------------------------
+
+@router.post('/reports/paginated/generate')
+def paginated_report_generate(payload: PaginatedReportGenerateRequest):
+    """Gera RDL e payload Fabric sem executar publicação externa."""
+    report = gerar_paginated_report(payload)
+    return ok(report, report['correlation_id'])
 
 
 # ---------------------------------------------------------------------------
