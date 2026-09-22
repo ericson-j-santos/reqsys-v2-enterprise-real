@@ -38,7 +38,7 @@ PC24x7 --Ed25519--> ntfy.sh
 10. HML e PROD permanecem fora deste incremento.
 11. Merge, push, schedule e conclusão de outro workflow não podem publicar GitHub Pages automaticamente; o deploy deve aceitar somente `workflow_dispatch` explícito a partir de `main`.
 12. O deploy deve exigir `authorization=DEPLOY_PAGES` e `expected_sha` completo igual ao HEAD atual de `main`; divergência deve falhar antes do checkout/publicação. O run produtor do dashboard Teams deve ser resolvido separadamente e validado como bem-sucedido.
-13. A `Validação de Acessos Públicos — ReqSys` deve executar após `Governed PR Automation` concluído com sucesso no caminho `workflow_run`, mantendo a URL `/dev/` como alvo obrigatório.
+13. A `Validação de Acessos Públicos — ReqSys` deve executar após qualquer Pull Request realmente mergeada em `main`, usando `pull_request: closed`, exigindo `merged=true` e validando o `merge_commit_sha` exato. O gatilho `workflow_run` não deve ser usado para essa prova pós-merge.
 14. Consumidores CI do runtime DEV não podem depender de uma URL Quick Tunnel estática; devem resolver o locator público assinado vigente.
 15. A resolução em CI deve validar Ed25519, ambiente DEV, TTL máximo de 15 minutos, `issued_at`, `selected_url` pertencente à lista e somente HTTPS `*.trycloudflare.com`; qualquer divergência falha fechada.
 16. O publisher local só pode publicar URLs que respondam HTTP 200 em `/api/health`, `/api/runtime/health` e `/api/runtime/build-info`.
@@ -56,7 +56,7 @@ PC24x7 --Ed25519--> ntfy.sh
 - merge, push, schedule e `workflow_run` não disparam publicação de Pages;
 - `workflow_dispatch` com autorização ausente/incorreta ou SHA divergente falha fechado antes da publicação;
 - `workflow_dispatch` autorizado opera somente sobre o SHA exato da `main` informado em `expected_sha`;
-- validação pública pós-merge é disparada automaticamente e falha se o alvo obrigatório estiver indisponível;
+- validação pública pós-merge é disparada automaticamente por `pull_request: closed` somente quando `merged=true`, valida o `merge_commit_sha` exato e falha se o alvo obrigatório estiver indisponível;
 - nenhuma dependência paga é introduzida;
 - o workflow de promoção automática resolve o tunnel vigente pelo locator assinado e não usa `vars.PC24X7_DEV_BASE_URL`/`vars.PC24X7_DEV_FRONTEND_URL` como URL efêmera estática;
 - runtime parcial (health básico verde, mas runtime health/build-info ausentes) nunca é republicado pelo locator.
