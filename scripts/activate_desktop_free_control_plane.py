@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -305,17 +306,21 @@ def register_runner(root: Path, gh: Path) -> bool:
         return False
     token = registration_token(gh)
     try:
+        cmd = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "cmd.exe"
+        if not cmd.is_file():
+            raise ActivationError("cmd_required", "cmd.exe não encontrado")
+        args = [
+            str(root / "config.cmd"),
+            "--unattended",
+            "--url", REPOSITORY_URL,
+            "--token", token,
+            "--name", RUNNER_NAME,
+            "--labels", RUNNER_LABELS,
+            "--work", "_work",
+            "--replace",
+        ]
         cp = subprocess.run(
-            [
-                str(root / "config.cmd"),
-                "--unattended",
-                "--url", REPOSITORY_URL,
-                "--token", token,
-                "--name", RUNNER_NAME,
-                "--labels", RUNNER_LABELS,
-                "--work", "_work",
-                "--replace",
-            ],
+            [str(cmd), "/d", "/s", "/c", subprocess.list2cmdline(args)],
             cwd=root,
             capture_output=True,
             text=True,
@@ -325,7 +330,10 @@ def register_runner(root: Path, gh: Path) -> bool:
             check=False,
         )
         if cp.returncode != 0:
-            raise ActivationError("runner_registration_failed", "registro do runner falhou")
+            raise ActivationError(
+                "runner_registration_failed",
+                f"registro do runner falhou (exit={cp.returncode})",
+            )
     finally:
         token = ""
     if not runner_contract(root):
@@ -491,6 +499,45 @@ def main() -> int:
             "ok": False,
             "state": exc.state,
             "error": str(exc)[:1000],
+            "rdc_required": False,
+            "production_touched": False,
+            "registration_token_consumed_in_memory": token_consumed,
+            "registration_token_persisted": False,
+            "registration_token_logged": False,
+        })
+        return 4
+    except subprocess.TimeoutExpired as exc:
+        emit({
+            "ok": False,
+            "state": "command_timeout",
+            "error": str(exc)[:1000],
+            "error_type": type(exc).__name__,
+            "rdc_required": False,
+            "production_touched": False,
+            "registration_token_consumed_in_memory": token_consumed,
+            "registration_token_persisted": False,
+            "registration_token_logged": False,
+        })
+        return 4
+    except urllib.error.URLError as exc:
+        emit({
+            "ok": False,
+            "state": "network_error",
+            "error": str(exc.reason)[:1000],
+            "error_type": type(exc).__name__,
+            "rdc_required": False,
+            "production_touched": False,
+            "registration_token_consumed_in_memory": token_consumed,
+            "registration_token_persisted": False,
+            "registration_token_logged": False,
+        })
+        return 4
+    except OSError as exc:
+        emit({
+            "ok": False,
+            "state": "os_error",
+            "error": str(exc)[:1000],
+            "error_type": type(exc).__name__,
             "rdc_required": False,
             "production_touched": False,
             "registration_token_consumed_in_memory": token_consumed,
