@@ -66,117 +66,11 @@ jobs:
           echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
           echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
 
-  sdd-contract:
-    name: SDD — contrato da mudança no SHA do PR
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: resolve-context
-    steps:
-      - name: Checkout do SHA exato do PR
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve-context.outputs.head_sha }}
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Validar contrato SDD contra a base real do PR
-        env:
-          HEAD_SHA: ${{ needs.resolve-context.outputs.head_sha }}
-          BASE_REF: ${{ needs.resolve-context.outputs.base_ref }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git check-ref-format --branch "$BASE_REF" >/dev/null
-          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-          python scripts/sdd_gate.py \
-            --base-ref "$BASE_REF" \
-            --head-sha "$HEAD_SHA"
-
-  isolated-validation:
-    name: Validação isolada do PR
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    needs: resolve-context
-    steps:
-      - name: Checkout PR
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve-context.outputs.head_sha }}
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Guardrails enterprise
-        run: python scripts/ci_enterprise_guardrails.py
-
-      - name: Smoke Python scripts críticos
-        shell: bash
-        run: |
-          python -m py_compile scripts/ci_enterprise_guardrails.py
-          if [ -f scripts/runtime_health_validator.py ]; then
-            python -m py_compile scripts/runtime_health_validator.py
-          fi
-          if [ -f scripts/runtime_merge_queue_gate.py ]; then
-            python -m py_compile scripts/runtime_merge_queue_gate.py
-          fi
-
-      - name: Detectar frontend
-        id: frontend
-        shell: bash
-        run: |
-          if [ -f frontend/package.json ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "workdir=frontend" >> "$GITHUB_OUTPUT"
-          elif [ -f package.json ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "workdir=." >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "workdir=." >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Node
-        if: steps.frontend.outputs.enabled == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            frontend/package-lock.json
-
-      - name: Instalar dependências frontend
-        if: steps.frontend.outputs.enabled == 'true'
-        working-directory: ${{ steps.frontend.outputs.workdir }}
-        shell: bash
-        run: |
-          if [ -f package-lock.json ]; then
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
-
-      - name: Lint e typecheck frontend
-        if: steps.frontend.outputs.enabled == 'true'
-        working-directory: ${{ steps.frontend.outputs.workdir }}
-        shell: bash
-        run: |
-          npm run lint --if-present
-          npm run typecheck --if-present
-
   temporary-integration:
     name: Integração temporária contra base real do PR
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [resolve-context, isolated-validation]
+    needs: resolve-context
     steps:
       - name: Checkout com histórico completo
         uses: actions/checkout@v4
@@ -322,7 +216,7 @@ jobs:
     name: Gate de merge governado
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [resolve-context, sdd-contract, isolated-validation, temporary-integration, current-sha-stability]
+    needs: [resolve-context, temporary-integration, current-sha-stability]
     if: always()
     outputs:
       eligible: ${{ steps.policy.outputs.eligible }}
@@ -404,15 +298,15 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/governed-merge-queue
 
-          SDD="${{ needs.sdd-contract.result }}"
-          ISOLATED="${{ needs.isolated-validation.result }}"
           INTEGRATION="${{ needs.temporary-integration.result }}"
           STABILITY="${{ needs.current-sha-stability.result }}"
           CI_STATUS="green"
           RUNTIME_SMOKE="green"
           CONTRACTS="green"
 
-          if [ "$SDD" != "success" ] || [ "$ISOLATED" != "success" ] || [ "$STABILITY" != "success" ]; then
+          # Pre-PR Readiness + CI canônico são exigidos por current-sha-stability.
+          # A fila não repete SDD/guardrails/frontend; apenas consome a evidência do mesmo SHA.
+          if [ "$STABILITY" != "success" ]; then
             CI_STATUS="red"
           fi
           if [ "$INTEGRATION" != "success" ]; then
@@ -454,8 +348,6 @@ jobs:
             --arg eligible "$ELIGIBLE" \
             --arg allow_auto_merge "$ALLOW_AUTO_MERGE" \
             --arg native_auto_merge_available "$NATIVE_AUTO_MERGE" \
-            --arg sdd_contract_result "$SDD" \
-            --arg isolated_result "$ISOLATED" \
             --arg integration_result "$INTEGRATION" \
             --arg stability_result "$STABILITY" \
             --arg merge_path "governed_pr_automation" \
@@ -475,8 +367,7 @@ jobs:
               runtime_merge_queue_gate: $runtime_gate[0],
               preview_environment_contract: "progressive-required-via-workflow",
               validation_results: {
-                sdd_contract: $sdd_contract_result,
-                isolated_validation: $isolated_result,
+                canonical_ci_same_sha: $stability_result,
                 temporary_integration: $integration_result,
                 current_sha_stability: $stability_result
               },
