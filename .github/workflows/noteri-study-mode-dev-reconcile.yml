@@ -1,0 +1,59 @@
+name: Noteri Study Mode DEV Reconcile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-study-mode-dev-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile Study Mode on Noteri DEV
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 15
+    environment: development
+    steps:
+      - name: Checkout immutable main SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Reconcile same-origin Study Mode and execute physical E2E
+        shell: powershell
+        env:
+          EVIDENCE_FILE: artifacts/noteri-study-mode-dev/evidence.json
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/noteri_study_mode_dev_reconcile.py --repo-root "$env:GITHUB_WORKSPACE" --expected-sha "${{ github.sha }}" --confirm RECONCILE-NOTERI-STUDY-MODE-DEV --evidence-path "$env:EVIDENCE_FILE"
+
+      - name: Validate sanitized evidence
+        shell: powershell
+        env:
+          EVIDENCE_FILE: artifacts/noteri-study-mode-dev/evidence.json
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $e = Get-Content -Raw -Encoding UTF8 $env:EVIDENCE_FILE | ConvertFrom-Json
+          if (-not $e.ok) { throw 'study_mode_e2e_failed' }
+          if ($e.environment -ne 'dev') { throw 'environment_mismatch' }
+          if ($e.host -ne 'Noteri') { throw 'host_mismatch' }
+          if ($e.production_touched) { throw 'production_touched' }
+          if ($e.secrets_read) { throw 'secret_read_detected' }
+          if (-not $e.api_e2e.estudo_readback) { throw 'api_readback_missing' }
+          if (-not $e.api_e2e.idempotent_replay) { throw 'idempotency_missing' }
+          if ($e.api_e2e.final_profile -ne 'NORMAL') { throw 'api_final_profile_not_normal' }
+          if (-not $e.browser_e2e.estudo_observed_in_ui) { throw 'ui_estudo_not_observed' }
+          if ($e.browser_e2e.final_profile -ne 'NORMAL') { throw 'ui_final_profile_not_normal' }
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noteri-study-mode-dev-evidence
+          path: artifacts/noteri-study-mode-dev/evidence.json
+          if-no-files-found: error
+          retention-days: 14
