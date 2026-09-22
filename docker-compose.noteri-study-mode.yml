@@ -1,10 +1,5 @@
 services:
   api:
     environment:
-      - NOTERI_HOST_PROFILE_PATH=/noteri-runtime/host-profile.json
-      - NOTERI_HOST_PROFILE_AUDIT_PATH=/noteri-runtime/host-profile-api-audit.jsonl
+      - NOTERI_CONTROL_PLANE_URL=http://host.docker.internal:8787
       - NOTERI_HOST_PROFILE_EXPECTED_HOST=Noteri
-    volumes:
-      - type: bind
-        source: ${LOCALAPPDATA}/ReqSys/TodoGlobal24x7
-        target: /noteri-runtime

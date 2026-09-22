@@ -2,15 +2,6 @@ name: Noteri Study Mode DEV Reconcile
 
 on:
   workflow_dispatch:
-  # Gatilho efêmero de diagnóstico: executa somente neste branch governado.
-  # Deve ser removido antes da integração na main.
-  push:
-    branches:
-      - fix/noteri-study-runtime-diagnostics-20260922-r2
-    paths:
-      - '.github/workflows/noteri-study-mode-dev-reconcile.yml'
-      - 'scripts/noteri_study_mode_dev_reconcile.py'
-      - 'docker-compose.noteri-study-mode.yml'
 
 permissions:
   contents: read
@@ -21,8 +12,8 @@ concurrency:
 
 jobs:
   reconcile:
-    name: Reconcile Study Mode on Noteri DEV
-    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    name: Reconcile Study Mode on PC24x7 DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 15
     environment: development
     steps:
@@ -49,9 +40,11 @@ jobs:
           $e = Get-Content -Raw -Encoding UTF8 $env:EVIDENCE_FILE | ConvertFrom-Json
           if (-not $e.ok) { throw 'study_mode_e2e_failed' }
           if ($e.environment -ne 'dev') { throw 'environment_mismatch' }
-          if ($e.host -ne 'Noteri') { throw 'host_mismatch' }
+          if ($e.host -ne 'DESKTOP-PDQK954') { throw 'host_mismatch' }
           if ($e.production_touched) { throw 'production_touched' }
           if ($e.secrets_read) { throw 'secret_read_detected' }
+          if (-not $e.control_plane_bridge) { throw 'control_plane_bridge_missing' }
+          if ($e.profile_mount_rw) { throw 'legacy_profile_mount_detected' }
           if (-not $e.api_e2e.estudo_readback) { throw 'api_readback_missing' }
           if (-not $e.api_e2e.idempotent_replay) { throw 'idempotency_missing' }
           if ($e.api_e2e.final_profile -ne 'NORMAL') { throw 'api_final_profile_not_normal' }

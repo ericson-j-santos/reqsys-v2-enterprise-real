@@ -19,8 +19,8 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
-def test_reconciler_is_fixed_to_noteri_dev_and_reqsys_live():
-    assert module.EXPECTED_HOST == "Noteri"
+def test_reconciler_is_fixed_to_pc24x7_dev_and_reqsys_live():
+    assert module.EXPECTED_HOST == "DESKTOP-PDQK954"
     assert module.PROJECT == "reqsys-live"
     assert module.API_CONTAINER == "reqsys-live-api-1"
     assert module.FRONTEND_CONTAINER == "reqsys-live-frontend-1"
@@ -34,13 +34,13 @@ def test_windows_path_normalizes_docker_desktop_mounts():
     assert str(module.windows_path("/host_mnt/c/dev/reqsys")).replace("\\", "/") == "C:/dev/reqsys"
 
 
-def test_overlay_mounts_only_canonical_noteri_profile_into_api():
+def test_overlay_routes_profile_through_allowlisted_control_plane():
     raw = OVERLAY.read_text(encoding="utf-8")
-    assert "NOTERI_HOST_PROFILE_PATH=/noteri-runtime/host-profile.json" in raw
-    assert "NOTERI_HOST_PROFILE_AUDIT_PATH=/noteri-runtime/host-profile-api-audit.jsonl" in raw
+    assert "NOTERI_CONTROL_PLANE_URL=http://host.docker.internal:8787" in raw
     assert "NOTERI_HOST_PROFILE_EXPECTED_HOST=Noteri" in raw
-    assert "TodoGlobal24x7" in raw
-    assert "target: /noteri-runtime" in raw
+    assert "NOTERI_HOST_PROFILE_PATH" not in raw
+    assert "TodoGlobal24x7" not in raw
+    assert "/noteri-runtime" not in raw
     assert "frontend:" not in raw
     assert "prod" not in raw.lower()
 
@@ -63,11 +63,11 @@ def test_backend_requires_auth_for_read_and_admin_for_write():
     assert "correlation_id_mismatch" in raw
 
 
-def test_workflow_is_inputless_noteri_only_and_no_production():
+def test_workflow_is_inputless_pc24x7_only_and_no_production():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert "workflow_dispatch:" in raw
     assert "inputs:" not in raw
-    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
     assert "environment: development" in raw
     assert "--confirm RECONCILE-NOTERI-STUDY-MODE-DEV" in raw
     assert "production_touched" in raw
@@ -89,8 +89,8 @@ def test_reconciler_has_positive_negative_idempotency_and_restore_controls():
     assert '"profile": "ESTUDO"' in raw
     assert "estudo_idempotency_failed" in raw
     assert '"profile": "NORMAL"' in raw
-    assert 'read_profile_file(profile_path, "ESTUDO")' in raw
-    assert 'read_profile_file(profile_path, "NORMAL")' in raw
+    assert "NOTERI_CONTROL_PLANE_URL" in OVERLAY.read_text(encoding="utf-8")
+    assert '"control_plane_bridge": True' in raw
     assert "rollback_files(changes)" in raw
     assert "loopback_agent_exposed" in raw
 
