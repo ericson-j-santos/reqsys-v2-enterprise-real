@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import socket
+import shutil
 import subprocess
 import urllib.error
 import urllib.request
@@ -108,6 +109,57 @@ def runtime_port_reachable() -> bool:
             return True
     except OSError:
         return False
+
+
+def github_runner_registry_probe() -> dict[str, Any]:
+    gh = shutil.which("gh")
+    if not gh:
+        return {"available": False, "result": "gh_not_found"}
+    try:
+        completed = subprocess.run(
+            [
+                gh, "api",
+                "repos/ericson-j-santos/reqsys-v2-enterprise-real/actions/runners",
+                "--jq",
+                '.runners[] | select(.name == "DESKTOP-PDQK954") | {name,status,busy,labels:[.labels[].name]}',
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=False,
+            env={k: v for k, v in os.environ.items() if k not in {"GH_TOKEN", "GITHUB_TOKEN"}},
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"available": False, "result": type(exc).__name__}
+    if completed.returncode != 0:
+        return {
+            "available": True,
+            "result": "query_failed",
+            "returncode": completed.returncode,
+            "error": "gh_api_failed",
+        }
+    line = next((item.strip() for item in completed.stdout.splitlines() if item.strip()), "")
+    if not line:
+        return {"available": True, "result": "runner_missing"}
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return {"available": True, "result": "invalid_json"}
+    labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
+    safe_labels = sorted(
+        str(item) for item in labels
+        if str(item).casefold() in {"self-hosted", "windows", "x64", "pc24x7", "reqsys-dev"}
+    )
+    return {
+        "available": True,
+        "result": "ok",
+        "name": "DESKTOP-PDQK954",
+        "status": str(payload.get("status") or "unknown"),
+        "busy": bool(payload.get("busy")),
+        "labels": safe_labels,
+    }
 
 
 def runtime_health_probe() -> dict[str, Any]:
@@ -232,6 +284,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "central_worker_enabled": runtime_health["central_worker_enabled"],
         "runtime_environment": runtime_health["environment"],
         "command_gateway_configured": "command_gateway" in runtime_health["central_executors"],
+        "github_runner_registry": github_runner_registry_probe(),
         "desktop_reachable": desktop_reachable,
         "network_state": state,
         "correlation_id": correlation_id,
