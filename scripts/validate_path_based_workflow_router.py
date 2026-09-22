@@ -11,27 +11,44 @@ REQUIRED_ROUTING = {
         "paths:",
         '      - "backend/**"',
         '      - "frontend/**"',
+        '      - "runtime/**"',
+        '      - "services/**"',
         '      - "scripts/**"',
-        '      - ".github/workflows/**"',
-        '      - "docs/ops-dashboard/**"',
         "workflow_dispatch:",
     ],
     ".github/workflows/pr-quality-review.yml": [
         "paths:",
         '      - "backend/**"',
         '      - "frontend/**"',
+        '      - "runtime/**"',
+        '      - "services/**"',
         '      - "scripts/**"',
-        '      - "tests/**"',
-        '      - ".github/workflows/**"',
         "workflow_dispatch:",
     ],
     ".github/workflows/predictive-regression-guard.yml": [
         "paths:",
         '      - "backend/**"',
         '      - "frontend/**"',
+        '      - "runtime/**"',
+        '      - "services/**"',
         '      - "scripts/**"',
-        '      - "docs/ops-dashboard/**"',
         "continue-on-error: true",
+    ],
+}
+
+FORBIDDEN_ADVISORY_ROUTING_TOKENS = {
+    ".github/workflows/runtime-risk-scoring.yml": [
+        '      - ".github/workflows/**"',
+        '      - "docs/ops-dashboard/**"',
+    ],
+    ".github/workflows/pr-quality-review.yml": [
+        '      - "tests/**"',
+        '      - ".github/workflows/**"',
+    ],
+    ".github/workflows/predictive-regression-guard.yml": [
+        '      - "tests/**"',
+        '      - ".github/workflows/**"',
+        '      - "docs/ops-dashboard/**"',
     ],
 }
 
@@ -54,6 +71,15 @@ def main() -> int:
         missing = [token for token in tokens if token not in content]
         if missing:
             return fail(f"{path_text}: tokens de roteamento ausentes: {missing}")
+
+    for path_text, tokens in FORBIDDEN_ADVISORY_ROUTING_TOKENS.items():
+        path = Path(path_text)
+        if not path.exists():
+            return fail(f"workflow advisory ausente: {path_text}")
+        content = path.read_text(encoding="utf-8")
+        present = [token for token in tokens if token in content]
+        if present:
+            return fail(f"{path_text}: roteamento advisory amplo demais: {present}")
 
     for path_text, tokens in FORBIDDEN_REQUIRED_GATE_TOKENS.items():
         path = Path(path_text)
