@@ -53,3 +53,13 @@ def test_runtime_active_requires_github_registry_online_and_labels() -> None:
     assert '"runner_github_offline"' in text
     assert '"runner_labels_mismatch"' in text
     assert 'state == "runtime_active"' in text
+
+
+def test_noninteractive_mode_fails_closed_before_browser_auth() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'parser.add_argument("--non-interactive-auth", action="store_true")' in text
+    assert "allow_interactive=not args.non_interactive_auth" in text
+    assert "allow_interactive_auth=not args.non_interactive_auth" in text
+    assert "if not allow_interactive:" in text
+    assert "login interativo desabilitado neste modo" in text
+    assert "refresh interativo desabilitado" in text
