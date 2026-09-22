@@ -11,6 +11,12 @@ from typing import Any
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
+REQUIRED_PREVENTIVE_INVARIANTS = {
+    "sdd:contract",
+    "security:changed-diff",
+    "workflow:regression-contracts",
+}
+
 PROFILE_WORKFLOWS = {
     "backend": {"CI — ReqSys v2 Enterprise", "CI Enterprise Fast"},
     "frontend": {"CI — ReqSys v2 Enterprise", "CI Enterprise Fast", "CI E2E Governado"},
@@ -36,9 +42,41 @@ def classify_blocker(message: str) -> str:
         return "EMPTY_CHANGE"
     if any(token in text for token in ("sdd:contract", "json:", "yaml:", "workflow sem")):
         return "CONTRACT_INVALID"
+    if "preventive invariant" in text or any(name in text for name in REQUIRED_PREVENTIVE_INVARIANTS):
+        return "PREVENTIVE_INVARIANT_FAILED"
     if any(token in text for token in ("pytest", "ruff", "py_compile", "frontend:build", "bash-n")):
         return "CODE_FAILURE"
     return "UNKNOWN_BLOCKER"
+
+
+def normalize_preventive_invariants(readiness: dict[str, Any]) -> tuple[list[dict[str, str]], list[str]]:
+    raw = readiness.get("preventive_invariants")
+    if not isinstance(raw, list):
+        return [], ["preventive invariants ausentes"]
+
+    normalized: dict[str, dict[str, str]] = {}
+    errors: list[str] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        status = str(item.get("status") or "").strip().lower()
+        detail = str(item.get("detail") or "").strip()
+        if not name:
+            continue
+        if name in normalized:
+            errors.append(f"preventive invariant duplicado: {name}")
+            continue
+        normalized[name] = {"name": name, "status": status or "missing", "detail": detail}
+
+    for name in sorted(REQUIRED_PREVENTIVE_INVARIANTS):
+        item = normalized.get(name)
+        if item is None:
+            errors.append(f"preventive invariant ausente: {name}")
+        elif item["status"] != "passed":
+            errors.append(f"preventive invariant falhou: {name}: status={item['status']}")
+
+    return [normalized[name] for name in sorted(normalized)], errors
 
 
 def required_workflows(profiles: list[str]) -> list[str]:
@@ -67,10 +105,20 @@ def build_manifest(readiness: dict[str, Any], expected_head_sha: str = "") -> di
     changed = [str(item) for item in (readiness.get("changed_files") or []) if str(item).strip()]
     blockers = [str(item) for item in (readiness.get("blockers") or []) if str(item).strip()]
     readiness_status = str(readiness.get("status") or "").strip().lower()
-    admitted = readiness_status == "passed" and not blockers
+    try:
+        behind_by = int(readiness.get("behind_by") or 0)
+    except (TypeError, ValueError) as exc:
+        raise AdmissionError("behind_by_invalid") from exc
+
+    preventive_invariants, invariant_errors = normalize_preventive_invariants(readiness)
+    manifest_blockers = list(blockers)
+    manifest_blockers.extend(invariant_errors)
+    if behind_by != 0:
+        manifest_blockers.append(f"source stale: behind_by={behind_by}")
+    admitted = readiness_status == "passed" and not manifest_blockers
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "manifest_type": "reqsys_ci_admission",
         "generated_at_utc": utc_now(),
         "status": "admitted" if admitted else "blocked",
@@ -84,6 +132,7 @@ def build_manifest(readiness: dict[str, Any], expected_head_sha: str = "") -> di
             "changed_files": changed,
         },
         "required_workflows": required_workflows(profiles),
+        "preventive_invariants": preventive_invariants,
         "dependencies": [
             {
                 "name": "pre_pr_readiness",
@@ -109,7 +158,7 @@ def build_manifest(readiness: dict[str, Any], expected_head_sha: str = "") -> di
         ],
         "blocker_reason": [
             {"code": classify_blocker(message), "message": message}
-            for message in blockers
+            for message in manifest_blockers
         ],
     }
 
