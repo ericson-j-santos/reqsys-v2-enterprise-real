@@ -41,3 +41,15 @@ def test_bootstrap_has_no_arbitrary_target_inputs() -> None:
     assert "parser.add_argument(\"--labels\"" not in text
     assert "parser.add_argument(\"--runner-name\"" not in text
     assert "parser.add_argument(\"--token\"" not in text
+
+
+def test_runtime_active_requires_github_registry_online_and_labels() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "runner_registry_snapshot" in text
+    assert "wait_runner_registry_online" in text
+    assert 'repos/{REPOSITORY}/actions/runners' in text
+    assert 'REQUIRED_RUNNER_LABELS = ("self-hosted", "Windows", "X64", "pc24x7", "reqsys-dev")' in text
+    assert '"runner_registry_missing"' in text
+    assert '"runner_github_offline"' in text
+    assert '"runner_labels_mismatch"' in text
+    assert 'state == "runtime_active"' in text
