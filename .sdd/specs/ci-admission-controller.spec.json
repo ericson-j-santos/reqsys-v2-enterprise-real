@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Gap fix Pareto: manifesto preventivo por SHA, invariantes antecipados no Pre-PR, validação de conteúdo do artifact e fail-fast dos CIs caros.",
+  "description": "Gap fix Pareto: manifesto preventivo por SHA, invariantes antecipados no Pre-PR, orçamento bloqueante da superfície de workflows e fail-fast dos CIs caros.",
   "scope": "github-ci-dev",
   "files": [
     "scripts/ci_admission_manifest.py",
@@ -25,7 +25,11 @@
     "tests/test_runtime_health_center.py",
     "scripts/vibe_security_gate.py",
     "tests/test_vibe_security_gate.py",
-    ".github/workflows/security-baseline-gate.yml"
+    ".github/workflows/security-baseline-gate.yml",
+    "config/workflow-governance-registry.json",
+    "scripts/workflow_surface_budget.py",
+    "tests/test_workflow_surface_budget.py",
+    "docs/ci/WORKFLOW_SURFACE_BUDGET.md"
   ],
   "sdd_gate": {
     "tests": [
@@ -33,13 +37,15 @@
       "tests/test_pre_pr_readiness.py",
       "tests/test_padrao_ouro_maturity_consolidator.py",
       "tests/test_runtime_health_center.py",
-      "tests/test_vibe_security_gate.py"
+      "tests/test_vibe_security_gate.py",
+      "tests/test_workflow_surface_budget.py"
     ],
-    "evidence_contract": "Provar manifesto preventivo vinculado ao HEAD/base exatos, behind_by=0, invariantes sdd:contract/security:changed-diff/workflow:regression-contracts aprovados, rejeição de artifact com nome correto mas conteúdo inválido, segurança incremental limitada a blockers introduzidos no diff, CI caro protegido por admission guard e PR Evidence Gate exigindo o artifact do SHA atual. O Security Baseline Gate deve usar o mesmo mapa de linhas alteradas do Pre-PR para evitar divergência de decisão entre prevenção e CI de PR. Testes que dependem de runtime/E2E permanecem no contrato completo em sdd_gate.tests; o Pre-PR executa somente sdd_gate.pre_pr_tests quando explicitado.",
+    "evidence_contract": "Provar manifesto preventivo vinculado ao HEAD/base exatos, behind_by=0, invariantes sdd:contract/security:changed-diff/workflow:surface-budget/workflow:regression-contracts aprovados, orçamento líquido de workflows <= 0, bloqueio de novo pull_request amplo fora do caminho canônico, rejeição de artifact com conteúdo inválido, segurança incremental limitada a blockers introduzidos no diff e CI caro protegido por admission guard.",
     "pre_pr_tests": [
       "tests/test_ci_admission_control.py",
       "tests/test_pre_pr_readiness.py",
-      "tests/test_vibe_security_gate.py"
+      "tests/test_vibe_security_gate.py",
+      "tests/test_workflow_surface_budget.py"
     ]
   },
   "risk": {
@@ -59,6 +65,9 @@
     "Artifact com HEAD/base/schema/invariante inválido é rejeitado.",
     "Download do redirect assinado não encaminha o token GitHub ao host externo.",
     "tests/test_pre_pr_readiness.py, tests/test_ci_admission_control.py e tests/test_vibe_security_gate.py passam.",
-    "Nenhum merge, deploy ou promoção de ambiente é realizado por este incremento."
+    "Nenhum merge, deploy ou promoção de ambiente é realizado por este incremento.",
+    "Pre-PR Readiness executa workflow:surface-budget e falha fechado quando a superfície líquida de .github/workflows cresce.",
+    "Novo pull_request amplo fora do caminho canônico é bloqueado; substituição delimitada com saldo líquido zero é aceita.",
+    "tests/test_workflow_surface_budget.py passa junto aos testes de admission/readiness."
   ]
 }
