@@ -21,9 +21,12 @@ Increment type: `consolidate`
 10. Criar ou atualizar um relatório paginado no Fabric somente com identidade temporária autorizada em runtime; segredo estático não é requisito da arquitetura final.
 11. Acompanhar operações `202 Accepted` por `Location` com timeout limitado.
 12. Não registrar nem persistir token de acesso.
-13. Antes de qualquer mutação Fabric DEV, reutilizar o GitHub Environment `development` e a identidade OIDC governada `CCP_AZURE_*` para executar probe somente leitura.
-14. O preflight deve comprovar tenant esperado, obtenção de token temporário Fabric, HTTP 200 em `/v1/workspaces` e ao menos um workspace candidato, sem mutações.
-15. Se o preflight comprovar que a identidade governada já possui acesso Fabric suficiente, preferir reutilizá-la em vez de criar outra App Registration sem necessidade.
+13. Antes de qualquer mutação Fabric DEV, executar descoberta somente leitura.
+14. O probe OIDC governado deve comprovar tenant e token Fabric; HTTP 200 com zero workspaces é evidência válida de autenticação, mas não de autorização de workspace.
+15. Reutilizar o workspace existente `ReqSys - Observabilidade` quando a descoberta independente comprovar unicidade e a App Registration `ReqSys ALM Pipeline` possuir `Contributor` ou superior.
+16. Antes de criar qualquer Federated Identity Credential, executar preflight somente leitura no Noteri e comprovar se já existe exatamente uma FIC `reqsys-report-factory-development` para o subject `repo:ericson-j-santos/reqsys-v2-enterprise-real:environment:development`.
+17. O preflight FIC não pode criar credencial, alterar RBAC, persistir token ou expor Application ID/Workspace ID.
+18. Se a FIC já existir, reutilizá-la. Se estiver ausente, qualquer criação posterior deve ser idempotente, limitada à App Registration já autorizada e tratada como mutação Entra separada.
 
 ## Critérios de aceite
 
@@ -34,8 +37,10 @@ Increment type: `consolidate`
 - controle negativo rejeita dataset inexistente;
 - controle negativo rejeita componente ainda não suportado;
 - duas execuções produzem RDL idêntico;
-- testes `tests/test_report_factory_rdl.py` e `tests/test_report_factory_fabric_dev_preflight.py` verdes no HEAD exato;
-- preflight Fabric DEV publica evidência sanitizada vinculada ao SHA;
+- testes do Report Factory e dos preflights verdes no HEAD exato;
+- evidência OIDC atual registra `tenant_match=true`, token Fabric obtido e HTTP 200;
+- evidência independente comprova exatamente um `ReqSys - Observabilidade` e `Contributor` para `ReqSys ALM Pipeline`;
+- preflight FIC atual publica `fic_ready=true/false` sem mutação e sem identificadores;
 - publicação real no Fabric DEV somente pode ser declarada validada após execução real e leitura independente da definição/artefato no mesmo SHA.
 
 ## Fora do escopo deste MVP
