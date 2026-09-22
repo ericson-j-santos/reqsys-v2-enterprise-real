@@ -26,6 +26,7 @@
   "optional_when_not_registered": [
     "PR Quality Review",
     "Test Quality Gate — Padrão Ouro",
+    "Minimum Controlled Version Gate",
     "BACEN Production Formal Gate",
     "BACEN Gate 1.5 — as_of Congelado",
     "BACEN Production Readiness Gate 2"
