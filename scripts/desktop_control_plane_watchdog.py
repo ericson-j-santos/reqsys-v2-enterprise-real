@@ -311,27 +311,44 @@ def _taskkill_runner(pid: int) -> subprocess.CompletedProcess[str]:
     )
 
 
-def restart_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
+def stop_runner(runner_home: Path) -> dict[str, Any]:
     runner_home = validate_runner_home(runner_home)
     snapshot = runner_process_snapshot(runner_home)
     matching = snapshot["matching_pids"]
     previous_pid: int | None = matching[0] if matching else None
 
-    if previous_pid is not None:
-        stopped = _taskkill_runner(previous_pid)
-        if stopped.returncode != 0 and runner_running(runner_home):
-            raise WatchdogError(f"listener governado não pôde ser encerrado: exit={stopped.returncode}")
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline and runner_running(runner_home):
-            time.sleep(0.5)
-        if runner_running(runner_home):
-            raise WatchdogError("timeout encerrando listener governado")
+    if previous_pid is None:
+        return {
+            "status": "not_running",
+            "stopped": False,
+            "previous_listener_pid": None,
+            "termination_scope": "exact_runner_home",
+        }
 
+    stopped = _taskkill_runner(previous_pid)
+    if stopped.returncode != 0 and runner_running(runner_home):
+        raise WatchdogError(f"listener governado não pôde ser encerrado: exit={stopped.returncode}")
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and runner_running(runner_home):
+        time.sleep(0.5)
+    if runner_running(runner_home):
+        raise WatchdogError("timeout encerrando listener governado")
+
+    return {
+        "status": "stopped",
+        "stopped": True,
+        "previous_listener_pid": previous_pid,
+        "termination_scope": "exact_runner_home",
+    }
+
+
+def restart_runner(runner_home: Path, log_path: Path) -> dict[str, Any]:
+    stopped = stop_runner(runner_home)
     result = start_runner(runner_home, log_path)
     return {
         **result,
         "restart_requested": True,
-        "previous_listener_pid": previous_pid,
+        "previous_listener_pid": stopped.get("previous_listener_pid"),
         "termination_scope": "exact_runner_home",
         "github_connectivity_verified": False,
         "pickup_required": True,
