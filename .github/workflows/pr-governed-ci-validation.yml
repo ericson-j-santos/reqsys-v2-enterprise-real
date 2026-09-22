@@ -8,7 +8,8 @@ on:
         required: true
         default: "108"
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    # Mudança de label não altera o SHA validado; evita rerun redundante.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read

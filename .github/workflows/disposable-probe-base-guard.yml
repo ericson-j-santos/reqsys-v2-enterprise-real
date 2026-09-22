@@ -3,6 +3,11 @@ name: Guard Rail — Base de probes descartáveis
 on:
   pull_request:
     branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/validate_disposable_probe_base.py"
+      - "tests/test_validate_disposable_probe_base.py"
+      - ".github/workflows/disposable-probe-base-guard.yml"
   push:
     branches: [main]
   workflow_dispatch:
