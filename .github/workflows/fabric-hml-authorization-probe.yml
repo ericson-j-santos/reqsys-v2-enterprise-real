@@ -1,43 +1,42 @@
-name: Fabric HML Authorization Probe
+name: Fabric HML Contributor Grant Temp
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/fabric-hml-authorization-probe.yml"
-      - "scripts/fabric_hml_authorization_probe_temp.py"
-      - ".sdd/specs/fabric-hml-authorization-probe.spec.json"
-      - ".sdd/specs/fabric-hml-authorization-probe.requirements.md"
-      - "tests/test_fabric_hml_authorization_probe_contract.py"
+  push:
+    branches:
+      - "ops/fabric-hml-contributor-grant-20260922"
 
 permissions:
   contents: read
 
 concurrency:
-  group: fabric-hml-authorization-probe-temp
+  group: fabric-hml-contributor-grant-temp
   cancel-in-progress: false
 
 jobs:
-  authorization-probe:
-    name: fabric-hml-authorization-probe
-    if: ${{ github.head_ref == 'probe/fabric-hml-authorization-20260921' }}
+  grant-contributor:
+    name: fabric-hml-contributor-grant
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     steps:
       - name: Checkout immutable SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Probe read-only da autorização Fabric
+      - name: Validate executor syntax
         shell: powershell
-        run: python scripts/fabric_hml_authorization_probe_temp.py
+        run: python -m py_compile scripts/fabric_hml_role_assignment_apply_temp.py
+
+      - name: Grant minimal Fabric HML role
+        shell: powershell
+        run: python scripts/fabric_hml_role_assignment_apply_temp.py --confirm GRANT-FABRIC-HML-CONTRIBUTOR
 
       - name: Upload sanitized evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: fabric-hml-authorization-probe-${{ github.run_id }}
-          path: artifacts/fabric-hml-authorization-probe/evidence.json
+          name: fabric-hml-role-assignment-${{ github.run_id }}
+          path: artifacts/fabric-hml-role-assignment/evidence.json
           if-no-files-found: error
           retention-days: 7
