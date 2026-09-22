@@ -6,6 +6,7 @@ on:
       - "fix/ocr-real-corpus-noteri-oneshot-*"
     paths:
       - ".github/workflows/ocr-real-corpus-noteri-oneshot.yml"
+      - "scripts/ocr_real_corpus_noteri_oneshot.py"
 
 permissions:
   contents: read
