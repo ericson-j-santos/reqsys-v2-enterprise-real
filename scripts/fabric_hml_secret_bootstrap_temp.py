@@ -305,7 +305,11 @@ def main() -> int:
 
         if evidence["target_secret_present_before"]:
             evidence["target_secret_present_after"] = True
-            evidence["status"] = "secret_already_present"
+            set_variable(gh, "FABRIC_HML_E2E_ENABLED", "true")
+            evidence["e2e_enabled"] = (
+                "FABRIC_HML_E2E_ENABLED" in gh_names(gh, "variable")
+            )
+            evidence["status"] = "secret_present_e2e_enabled"
             return 0
 
         credential_name = (
