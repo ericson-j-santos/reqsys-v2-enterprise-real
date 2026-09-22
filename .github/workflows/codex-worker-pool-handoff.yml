@@ -49,7 +49,7 @@ jobs:
           fetch-depth: 1
 
       - name: Handoff governado para o Worker Pool
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           python scripts/pending_development_worker_pool_bridge.py `
@@ -61,7 +61,7 @@ jobs:
             --output "$env:EVIDENCE_FILE"
 
       - name: Validar request_id e evidência independente
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           $evidence = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
@@ -93,7 +93,7 @@ jobs:
 
       - name: Resumo
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
           "## Codex Worker Pool Handoff" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Issue: #${{ inputs.issue_number }}" | Add-Content $env:GITHUB_STEP_SUMMARY
