@@ -26,8 +26,8 @@ def test_builtin_token_is_read_only_and_app_token_is_minimum_write_scope() -> No
     assert "actions/create-github-app-token@v2" in text
     assert "app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}" in text
     assert "private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}" in text
-    assert "permission-contents: write" in text
-    assert "permission-pull-requests: write" in text
+    assert "permission-contents: write" not in text
+    assert text.count("permission-pull-requests: write") == 2
     assert "permission-actions: write" not in text
     assert "permission-issues: write" not in text
 
