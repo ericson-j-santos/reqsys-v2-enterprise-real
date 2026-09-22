@@ -20,7 +20,10 @@ def listar_repositorios(_: dict = Depends(require_admin)):
     try:
         repositories = repository_admin.list_repositories()
     except repository_admin.RepositoryAdminError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=500,
+            detail='Registry de repositorios indisponivel.',
+        ) from exc
     return ok({'repositories': repositories})
 
 
@@ -33,13 +36,20 @@ def consultar_snapshot(
     target = _repo(owner, repository)
     try:
         snapshot = repository_admin.build_snapshot(target)
+    except repository_admin.RepositoryNotManagedError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail='Repositorio nao administrado.',
+        ) from exc
     except repository_admin.RepositoryAdminError as exc:
-        code = 404 if 'nao administrado' in str(exc) else 422
-        raise HTTPException(status_code=code, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=422,
+            detail='Snapshot de repositorio indisponivel.',
+        ) from exc
     except GitHubError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
+            detail='Falha ao consultar o provedor de repositorios.',
         ) from exc
     return ok(snapshot)
 
@@ -54,11 +64,19 @@ def consultar_decisao_pr(
     target = _repo(owner, repository)
     try:
         decision = repository_admin.decide_pull_request(target, pull_request)
+    except repository_admin.RepositoryNotManagedError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail='Repositorio nao administrado.',
+        ) from exc
     except repository_admin.RepositoryAdminError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=422,
+            detail='Decisao de pull request indisponivel.',
+        ) from exc
     except GitHubError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
+            detail='Falha ao consultar o provedor de repositorios.',
         ) from exc
     return ok(decision)
