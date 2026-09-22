@@ -480,7 +480,6 @@ def browser_e2e() -> dict[str, Any]:
             }""",
             timeout=30000,
         )
-        read_profile_file(profile_path, "ESTUDO")
 
         back = page.get_by_role("button", name="Voltar ao desenvolvimento")
         back.click()
@@ -491,7 +490,6 @@ def browser_e2e() -> dict[str, Any]:
             }""",
             timeout=30000,
         )
-        read_profile_file(profile_path, "NORMAL")
         browser.close()
 
     return {
