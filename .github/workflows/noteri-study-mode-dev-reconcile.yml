@@ -29,13 +29,20 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
+      - name: Prepare isolated browser E2E dependency
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m venv .e2e-venv
+          .\.e2e-venv\Scripts\python.exe -m pip install --disable-pip-version-check playwright
+
       - name: Reconcile same-origin Study Mode and execute physical E2E
         shell: powershell
         env:
           EVIDENCE_FILE: artifacts/noteri-study-mode-dev/evidence.json
         run: |
           $ErrorActionPreference = 'Stop'
-          python scripts/noteri_study_mode_dev_reconcile.py --repo-root "$env:GITHUB_WORKSPACE" --expected-sha "${{ github.sha }}" --confirm RECONCILE-NOTERI-STUDY-MODE-DEV --evidence-path "$env:EVIDENCE_FILE"
+          .\.e2e-venv\Scripts\python.exe scripts/noteri_study_mode_dev_reconcile.py --repo-root "$env:GITHUB_WORKSPACE" --expected-sha "${{ github.sha }}" --confirm RECONCILE-NOTERI-STUDY-MODE-DEV --evidence-path "$env:EVIDENCE_FILE"
 
       - name: Validate sanitized evidence
         shell: powershell
