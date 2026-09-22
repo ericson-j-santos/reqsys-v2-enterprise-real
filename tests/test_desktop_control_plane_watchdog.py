@@ -106,10 +106,13 @@ def test_recover_rdc_uses_governed_local_script(monkeypatch, tmp_path: Path) -> 
     assert result["fallback_armed"] is True
 
 
-def test_start_runner_recovers_without_github_api(monkeypatch, tmp_path: Path) -> None:
+def test_start_runner_recovers_without_claiming_github_health(monkeypatch, tmp_path: Path) -> None:
     runner_home = make_runner_home(tmp_path)
-    states = iter([False, True])
-    monkeypatch.setattr(m, "runner_running", lambda: next(states))
+    states = iter([
+        {"matching_pids": [], "unresolved_pids": [], "observed": []},
+        {"matching_pids": [4321], "unresolved_pids": [], "observed": []},
+    ])
+    monkeypatch.setattr(m, "runner_process_snapshot", lambda runner: next(states))
     monkeypatch.setattr(m, "_creationflags", lambda: 0)
 
     class FakeProcess:
@@ -130,8 +133,72 @@ def test_start_runner_recovers_without_github_api(monkeypatch, tmp_path: Path) -
     result = m.start_runner(runner_home, tmp_path / "runner.log")
     assert result["status"] == "recovered"
     assert result["launcher_pid"] == 1234
+    assert result["listener_pid"] == 4321
+    assert result["github_connectivity_verified"] is False
+    assert result["pickup_required"] is True
     assert observed["cwd"] == str(runner_home.resolve())
     assert "run.cmd" in " ".join(str(x) for x in observed["args"])
+
+
+def test_existing_listener_is_process_running_not_healthy(monkeypatch, tmp_path: Path) -> None:
+    runner_home = make_runner_home(tmp_path)
+    monkeypatch.setattr(
+        m,
+        "runner_process_snapshot",
+        lambda runner: {"matching_pids": [2222], "unresolved_pids": [], "observed": []},
+    )
+    monkeypatch.setattr(
+        m.subprocess,
+        "Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not launch")),
+    )
+    result = m.start_runner(runner_home, tmp_path / "runner.log")
+    assert result["status"] == "process_running"
+    assert result["listener_pid"] == 2222
+    assert result["github_connectivity_verified"] is False
+    assert result["pickup_required"] is True
+
+
+def test_runner_process_snapshot_fails_closed_when_identity_is_unverifiable(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner_home = make_runner_home(tmp_path)
+    monkeypatch.setattr(m, "_runner_process_ids", lambda: [1111])
+    monkeypatch.setattr(m, "_process_executable_path", lambda pid: None)
+    with pytest.raises(m.WatchdogError, match="identidade"):
+        m.runner_process_snapshot(runner_home)
+
+
+def test_restart_runner_terminates_only_exact_governed_listener(monkeypatch, tmp_path: Path) -> None:
+    runner_home = make_runner_home(tmp_path)
+    snapshots = iter([
+        {"matching_pids": [3333], "unresolved_pids": [], "observed": []},
+        {"matching_pids": [], "unresolved_pids": [], "observed": []},
+        {"matching_pids": [], "unresolved_pids": [], "observed": []},
+    ])
+    monkeypatch.setattr(m, "runner_process_snapshot", lambda runner: next(snapshots))
+    killed = []
+    monkeypatch.setattr(
+        m,
+        "_taskkill_runner",
+        lambda pid: killed.append(pid) or subprocess.CompletedProcess(["taskkill"], 0, "", ""),
+    )
+    monkeypatch.setattr(
+        m,
+        "start_runner",
+        lambda *args, **kwargs: {
+            "status": "recovered",
+            "started": True,
+            "listener_pid": 4444,
+            "github_connectivity_verified": False,
+            "pickup_required": True,
+        },
+    )
+    result = m.restart_runner(runner_home, tmp_path / "runner.log")
+    assert killed == [3333]
+    assert result["previous_listener_pid"] == 3333
+    assert result["termination_scope"] == "exact_runner_home"
+    assert result["pickup_required"] is True
 
 
 def test_cycle_recovers_rdc_and_runner_and_writes_sanitized_state(monkeypatch, tmp_path: Path) -> None:
@@ -309,3 +376,24 @@ def test_runner_config_is_validated_but_never_read() -> None:
     assert 'RUNNER_REQUIRED = ((".runner",), ("run.cmd",), ("bin", "Runner.Listener.exe"))' in text
     assert 'resolved.joinpath(*parts).is_file()' in text
     assert '.runner").read_' not in text
+
+
+def test_stop_runner_terminates_only_exact_governed_listener(monkeypatch, tmp_path: Path) -> None:
+    runner_home = make_runner_home(tmp_path)
+    snapshots = iter([
+        {"matching_pids": [7777], "unresolved_pids": [], "observed": []},
+        {"matching_pids": [], "unresolved_pids": [], "observed": []},
+        {"matching_pids": [], "unresolved_pids": [], "observed": []},
+    ])
+    monkeypatch.setattr(m, "runner_process_snapshot", lambda runner: next(snapshots))
+    killed = []
+    monkeypatch.setattr(
+        m,
+        "_taskkill_runner",
+        lambda pid: killed.append(pid) or subprocess.CompletedProcess(["taskkill"], 0, "", ""),
+    )
+    result = m.stop_runner(runner_home)
+    assert killed == [7777]
+    assert result["stopped"] is True
+    assert result["previous_listener_pid"] == 7777
+    assert result["termination_scope"] == "exact_runner_home"

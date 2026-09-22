@@ -4,14 +4,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_run:
+    # Dois sinais canônicos bastam: o watcher reavalia o estado completo do PR.
+    # Evita uma execução adicional para cada gate auxiliar concluído.
     workflows:
-      - CI — ReqSys v2 Enterprise
       - CI Enterprise Fast
-      - Governance Quality Gates
-      - Governança Padrão Ouro
-      - PR Conflict Guard
-      - Branch Protection Audit
-      - Governed Merge Queue
+      - CI — ReqSys v2 Enterprise
     types: [completed]
   schedule:
     - cron: "17 * * * *"
@@ -34,8 +31,9 @@ on:
 permissions: {}
 
 concurrency:
-  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.event.inputs.pr_number || github.event_name || github.run_id }}
-  cancel-in-progress: false
+  # Agrupa pelo PR, inclusive em workflow_run, para substituir diagnóstico obsoleto.
+  group: pr-ci-watch-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.inputs.pr_number || github.event.workflow_run.head_sha || github.event_name || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   watch-pr:

@@ -4,18 +4,16 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
+      # Revisão report-only automática apenas para superfície executável.
+      # Testes/workflows/documentação ficam cobertos pelos gates determinísticos.
       - "backend/**"
       - "frontend/**"
-      - "scripts/**"
-      - "tests/**"
+      - "runtime/**"
+      - "services/**"
       - "config/**"
       - "infra/**"
       - "docker/**"
       - "nginx/**"
-      - ".github/workflows/**"
-      - "docs/ci/**"
-      - "docs/adr/**"
-      - "docs/ops-dashboard/**"
       - "pyproject.toml"
       - "package*.json"
       - "frontend/package*.json"
