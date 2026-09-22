@@ -92,6 +92,7 @@ jobs:
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: reqsys-v2-enterprise-real
+          permission-contents: write
           permission-pull-requests: write
 
       - name: Atualizar PR atual com proteção por HEAD
@@ -274,6 +275,7 @@ jobs:
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: reqsys-v2-enterprise-real
+          permission-contents: write
           permission-pull-requests: write
 
       - name: Atualizar branches com proteção por HEAD
