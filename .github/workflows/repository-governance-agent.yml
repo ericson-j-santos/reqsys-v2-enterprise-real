@@ -3,29 +3,52 @@ name: Repository Governance Agent
 on:
   push:
     branches: [main]
-  pull_request:
+  pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
-  group: repository-governance-agent-main-sync
+  group: repository-governance-agent-${{ github.event_name == 'push' && 'main-sync' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   sync-current-pr:
     name: Sincronizar a própria PR quando a main avançar
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Validar configuração da GitHub App
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::GitHub App governada não configurada."
+            exit 1
+          fi
+
+      - name: Gerar token temporário de branch sync
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Atualizar PR atual com proteção por HEAD
         uses: actions/github-script@v7
         with:
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { owner, repo } = context.repo;
             const repository = owner + '/' + repo;
@@ -75,6 +98,7 @@ jobs:
             if (
               current.state !== 'open' ||
               current.draft ||
+              current.base.ref !== 'main' ||
               current.head.sha !== expectedHeadSha ||
               current.head.repo?.full_name !== repository ||
               current.mergeable === false ||
@@ -109,7 +133,10 @@ jobs:
                 });
               if (Number(afterComparison.behind_by || 0) === 0) {
                 core.notice(
-                  'PR sincronizada: ' + expectedHeadSha + ' -> ' + after.head.sha
+                  'PR sincronizada pela GitHub App: ' +
+                    expectedHeadSha +
+                    ' -> ' +
+                    after.head.sha
                 );
                 return;
               }
@@ -123,11 +150,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Validar configuração da GitHub App
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::GitHub App governada não configurada."
+            exit 1
+          fi
+
+      - name: Gerar token temporário de branch sync
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Atualizar branches com proteção por HEAD
         uses: actions/github-script@v7
         env:
           MAX_BRANCH_SYNCS: "3"
         with:
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { owner, repo } = context.repo;
             const repository = owner + '/' + repo;
