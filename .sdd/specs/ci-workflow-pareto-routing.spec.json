@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Reduz fan-out e contenção de runners por orçamento bloqueante no CI canônico, roteamento especializado e consolidação das análises report-only fora do caminho crítico do pull request, preservando checks protegidos e comportamento fail-closed.",
+  "description": "Reduz fan-out e contenção de runners por orçamento bloqueante, roteamento especializado e scanners de segurança selecionados pela superfície alterada, preservando Gitleaks global, checks protegidos e comportamento fail-closed.",
   "scope": "governance-ci-routing",
   "files": [
     ".github/workflows/security-specialized-scanners.yml",
@@ -54,7 +54,7 @@
       "tests/test_ci_budget_guard.py",
       "tests/test_governed_pr_automation_dispatch_contract.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge."
+    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge. Security Specialized Scanners deve distinguir código-fonte de manifestos de dependência: Gitleaks permanece global; pip-audit/npm audit/SBOM executam apenas para suas superfícies; CodeQL analisa somente linguagens alteradas no PR e publica atomicamente o conjunto selecionado; push/main mantém scan completo."
   },
   "risk": {
     "production": false,
@@ -77,6 +77,10 @@
     "CI Advisory Router não possui actions:write, não dispara automaticamente os workflows consultivos e declara critical_path_blocker=false.",
     "Deep Governance Review não materializa em synchronize; mantém labeled, schedule e workflow_dispatch.",
     "Governed PR Automation não falha o workflow quando governed-merge-approved está ausente após a fila verde; registra espera governada e não executa merge.",
-    "Adicionar governed-merge-approved dispara nova avaliação pelo evento labeled e o merge continua condicionado a HEAD exato, merge-queue:eligible e workflows obrigatórios verdes."
+    "Adicionar governed-merge-approved dispara nova avaliação pelo evento labeled e o merge continua condicionado a HEAD exato, merge-queue:eligible e workflows obrigatórios verdes.",
+    "Security Specialized Scanners mantém Gitleaks em todo PR e separa código-fonte de manifestos de dependência.",
+    "CodeQL seleciona somente as linguagens alteradas no PR e preserva publicação SARIF atômica do conjunto selecionado.",
+    "pip-audit/npm audit/SBOM não executam por mera alteração de código sem mudança de dependência/empacotamento.",
+    "push/main e workflow_dispatch preservam o scan completo de segurança."
   ]
 }
