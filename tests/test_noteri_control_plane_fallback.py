@@ -427,3 +427,71 @@ def test_watchdog_s4u_registration_never_embeds_password() -> None:
     assert '"/RP"' not in text
     assert "explicit_null_password" in text
     assert "0x8007052E" not in text
+
+
+def test_probe_runner_registry_uses_local_gh_without_workflow_token(monkeypatch) -> None:
+    observed = []
+
+    class Completed:
+        def __init__(self, returncode=0, stdout=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(argv, **kwargs):
+        observed.append((list(argv), dict(kwargs.get("env") or {})))
+        if argv[2:4] == ["user", "--jq"]:
+            return Completed(stdout="ericson-j-santos\n")
+        return Completed(
+            stdout=json.dumps(
+                {
+                    "runners": [
+                        {
+                            "name": "DESKTOP-PDQK954",
+                            "status": "offline",
+                            "busy": False,
+                            "labels": [
+                                {"name": "self-hosted"},
+                                {"name": "Windows"},
+                                {"name": "X64"},
+                                {"name": "pc24x7"},
+                                {"name": "reqsys-dev"},
+                            ],
+                        }
+                    ]
+                }
+            )
+        )
+
+    monkeypatch.setattr(probe.shutil, "which", lambda name: r"C:\Program Files\GitHub CLI\gh.exe")
+    monkeypatch.setattr(probe.subprocess, "run", fake_run)
+    monkeypatch.setenv("GH_TOKEN", "must-not-be-used")
+    monkeypatch.setenv("GITHUB_TOKEN", "must-not-be-used")
+
+    result = probe.github_runner_registry_probe()
+    assert result["ok"] is True
+    assert result["admin_access"] is True
+    assert result["runner_status"] == "offline"
+    assert result["runner_labels"] == ["Windows", "X64", "pc24x7", "reqsys-dev", "self-hosted"]
+    assert all("GH_TOKEN" not in env and "GITHUB_TOKEN" not in env for _, env in observed)
+
+
+def test_probe_runner_registry_reports_access_denied_without_secret_leak(monkeypatch) -> None:
+    class Completed:
+        def __init__(self, returncode=0, stdout=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = "sensitive detail"
+
+    calls = iter([
+        Completed(stdout="ericson-j-santos\n"),
+        Completed(returncode=1),
+    ])
+    monkeypatch.setattr(probe.shutil, "which", lambda name: "gh.exe")
+    monkeypatch.setattr(probe.subprocess, "run", lambda *args, **kwargs: next(calls))
+    result = probe.github_runner_registry_probe()
+    assert result == {
+        "ok": False,
+        "state": "runner_registry_access_denied",
+        "http_hint": "forbidden_or_missing_permission",
+    }

@@ -1,4 +1,4 @@
-name: RSM ServiceCase E2E
+name: RSM ServiceCase & CHANGE Evidence E2E
 
 on:
   push:
@@ -6,18 +6,28 @@ on:
       - main
     paths:
       - "backend/app/api/service_cases.py"
+      - "backend/app/api/change_evidence.py"
+      - "backend/app/domain/change_evidence.py"
       - "backend/app/main.py"
       - "backend/tests/test_service_cases_api.py"
+      - "backend/tests/test_change_evidence_*.py"
       - "scripts/rsm_service_case_e2e.py"
+      - "scripts/rsm_change_evidence_e2e.py"
       - ".sdd/specs/rsm-02-service-case-persistence.*"
+      - ".sdd/specs/rsm-07-change-traceability.*"
       - ".github/workflows/rsm-service-case-e2e.yml"
   pull_request:
     paths:
       - "backend/app/api/service_cases.py"
+      - "backend/app/api/change_evidence.py"
+      - "backend/app/domain/change_evidence.py"
       - "backend/app/main.py"
       - "backend/tests/test_service_cases_api.py"
+      - "backend/tests/test_change_evidence_*.py"
       - "scripts/rsm_service_case_e2e.py"
+      - "scripts/rsm_change_evidence_e2e.py"
       - ".sdd/specs/rsm-02-service-case-persistence.*"
+      - ".sdd/specs/rsm-07-change-traceability.*"
       - ".github/workflows/rsm-service-case-e2e.yml"
 
 permissions:
@@ -112,5 +122,98 @@ jobs:
         with:
           name: rsm-service-case-e2e-${{ env.RSM_EXPECTED_SHA }}
           path: artifacts/rsm/rsm-service-case-e2e.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  change-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_app
+          POSTGRES_PASSWORD: rsm_e2e_password
+          POSTGRES_DB: reqsys
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_app -d reqsys"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      APP_ENV: development
+      PUBLIC_ENVIRONMENT: development
+      ALLOW_DEMO_LOGIN: "true"
+      REQSYS_ROLE_BINDINGS: '{"rsm-e2e@example.com":"admin"}'
+      DATABASE_URL: postgresql+psycopg2://reqsys_app:rsm_e2e_password@127.0.0.1:5432/reqsys
+      JWT_SECRET: reqsys-rsm-e2e-secret-with-minimum-safe-length
+      JWT_ISSUER: reqsys-api
+      JWT_AUDIENCE: reqsys-frontend
+      RSM_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RSM_EXPECTED_SHA }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar backend
+        run: python -m pip install --disable-pip-version-check -r backend/requirements.txt
+
+      - name: Iniciar API real
+        working-directory: backend
+        run: |
+          GITHUB_SHA="$RSM_EXPECTED_SHA" python -m uvicorn app.main:app --host 127.0.0.1 --port 8213 > ../rsm-change-api.log 2>&1 &
+          echo $! > ../rsm-change-api.pid
+
+      - name: Aguardar health
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:8213/health', timeout=2) as response:
+                      if response.status == 200:
+                          raise SystemExit(0)
+              except Exception:
+                  time.sleep(1)
+          raise SystemExit('API RSM CHANGE não ficou saudável dentro do timeout')
+          PY
+
+      - name: Executar Change Evidence Loop E2E
+        run: |
+          python scripts/rsm_change_evidence_e2e.py \
+            --base-url http://127.0.0.1:8213 \
+            --database-url "$DATABASE_URL" \
+            --expected-sha "$RSM_EXPECTED_SHA" \
+            --output artifacts/rsm/rsm-change-evidence-e2e.json
+
+      - name: Testes direcionados
+        working-directory: backend
+        run: >-
+          python -m pytest
+          tests/test_service_management_domain.py
+          tests/test_service_cases_api.py
+          tests/test_change_evidence_domain.py
+          tests/test_change_evidence_api.py
+          -q
+
+      - name: Log da API em caso de falha
+        if: failure()
+        run: tail -200 rsm-change-api.log || true
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsm-change-evidence-e2e-${{ env.RSM_EXPECTED_SHA }}
+          path: artifacts/rsm/rsm-change-evidence-e2e.json
           if-no-files-found: warn
           retention-days: 30

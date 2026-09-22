@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import socket
 import subprocess
 import xml.etree.ElementTree as ET
@@ -181,6 +182,100 @@ def activation_diagnostic() -> dict[str, Any]:
     }
 
 
+def github_runner_registry_probe() -> dict[str, Any]:
+    gh = shutil.which("gh")
+    if not gh:
+        return {"ok": False, "state": "gh_not_found"}
+
+    env = os.environ.copy()
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+
+    who = subprocess.run(
+        [gh, "api", "user", "--jq", ".login"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+        env=env,
+    )
+    login = who.stdout.strip()
+    if who.returncode != 0:
+        return {"ok": False, "state": "gh_local_auth_unavailable"}
+    if login.casefold() != "ericson-j-santos".casefold():
+        return {"ok": False, "state": "gh_account_mismatch", "login": login or None}
+
+    runners = subprocess.run(
+        [
+            gh,
+            "api",
+            "repos/ericson-j-santos/reqsys-v2-enterprise-real/actions/runners",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+        env=env,
+    )
+    if runners.returncode != 0:
+        return {
+            "ok": False,
+            "state": "runner_registry_access_denied",
+            "http_hint": "forbidden_or_missing_permission",
+        }
+
+    try:
+        payload = json.loads(runners.stdout)
+    except json.JSONDecodeError:
+        return {"ok": False, "state": "runner_registry_invalid_response"}
+
+    items = payload.get("runners") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        return {"ok": False, "state": "runner_registry_invalid_response"}
+
+    matches = [
+        item for item in items
+        if isinstance(item, dict)
+        and str(item.get("name") or "").casefold() == "DESKTOP-PDQK954".casefold()
+    ]
+    if not matches:
+        return {
+            "ok": True,
+            "state": "runner_not_registered",
+            "runner_found": False,
+            "admin_access": True,
+        }
+    if len(matches) != 1:
+        return {
+            "ok": False,
+            "state": "runner_registry_ambiguous",
+            "runner_found": True,
+            "match_count": len(matches),
+            "admin_access": True,
+        }
+
+    item = matches[0]
+    labels_raw = item.get("labels") if isinstance(item.get("labels"), list) else []
+    labels = sorted(
+        str(label.get("name") or "")
+        for label in labels_raw
+        if isinstance(label, dict) and str(label.get("name") or "")
+    )
+    return {
+        "ok": True,
+        "state": "runner_observed",
+        "runner_found": True,
+        "admin_access": True,
+        "runner_status": str(item.get("status") or "unknown"),
+        "runner_busy": bool(item.get("busy")),
+        "runner_labels": labels,
+    }
+
+
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     if confirm != CONFIRM:
         raise ProbeError("confirmação inválida")
@@ -209,6 +304,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "headless_task": task,
         "headless_ready": task_headless_ready(task),
         "activation_diagnostic": activation_diagnostic(),
+        "github_runner_registry": github_runner_registry_probe(),
         "correlation_id": correlation_id,
         "rdc_required": False,
         "production_touched": False,
