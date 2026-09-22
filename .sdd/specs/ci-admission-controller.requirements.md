@@ -30,6 +30,9 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 14. O Admission Controller deve baixar o artifact `ci-admission-<head_sha>`, ler o JSON interno e validar schema, tipo, status, HEAD, base SHA e invariantes; validar apenas nome/metadado do artifact é insuficiente.
 15. O download do artifact não pode encaminhar o bearer token do GitHub ao host externo do redirect assinado.
 16. O SDD pode declarar `sdd_gate.pre_pr_tests` para separar testes determinísticos de pré-PR dos testes completos que exigem runtime/E2E; quando presente, o Pre-PR deve executar essa lista e preservar `sdd_gate.tests` como contrato completo.
+17. O Pre-PR deve executar `workflow:surface-budget` como invariante preventiva obrigatória e falhar fechado quando a quantidade líquida de arquivos em `.github/workflows` aumentar.
+18. O caminho canônico de PR deve ser versionado em `config/workflow-governance-registry.json`; novo workflow com `pull_request` amplo só pode substituir outro workflow sem aumentar a superfície e deve pertencer ao caminho canônico.
+19. Workflows informativos novos devem preferir gatilhos delimitados (`paths`, `workflow_run`, `schedule` ou `workflow_dispatch`) em vez de ampliar o fan-out global de PR.
 
 ## Controles negativos
 
@@ -50,7 +53,10 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 - Caso negativo detecta SHA divergente, artefato expirado e base atrasada/divergida.
 - Os três workflows caros têm dependência transitiva do job `ci-admission`.
 - PR Evidence Gate rejeita ausência do manifesto do mesmo SHA.
-- Manifesto preventivo contém `sdd:contract`, `security:changed-diff` e `workflow:regression-contracts` com status `passed`.
+- Manifesto preventivo contém `sdd:contract`, `security:changed-diff`, `workflow:surface-budget` e `workflow:regression-contracts` com status `passed`.
+- Alteração que adiciona workflow sem remover outro é bloqueada antes da PR.
+- Substituição com saldo líquido zero é aceita quando o novo workflow é delimitado; `pull_request` amplo fora do caminho canônico é bloqueado.
+- `tests/test_workflow_surface_budget.py` verde junto aos testes de admission/readiness.
 - Teste negativo prova que artifact com nome correto e conteúdo/base/invariante inválido é rejeitado.
 - Teste negativo prova que o security gate distingue dívida legada não tocada de blocker introduzido no diff.
 - Teste de controle prova que `pre_pr_tests` impede execução prematura de testes dependentes de runtime sem remover esses testes do contrato completo.
