@@ -88,7 +88,8 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "noteri-desktop-admin-broker-kick.yml|"
         "pc24x7-runner-registry-repair.yml|"
         "pc24x7-teams-token-bootstrap.yml|"
-        "pc24x7-teams-ephemeral-e2e.yml"
+        "pc24x7-teams-ephemeral-e2e.yml|"
+        "noteri-study-mode-dev-reconcile.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
