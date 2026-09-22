@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.runtime_health_center import build_report, main  # noqa: E402
+from scripts.runtime_health_center import build_report, detect_environment_drift, main  # noqa: E402
 
 
 class RuntimeHealthCenterTests(unittest.TestCase):
@@ -113,6 +113,66 @@ class RuntimeHealthCenterTests(unittest.TestCase):
         self.assertEqual(report["environment_drift"]["drift_level"], "low")
         self.assertEqual(report["environment_drift"]["status"], "passed")
         self.assertEqual(report["operational_risk"], "high")
+
+
+    def test_environment_drift_uses_runtime_scope_and_ignores_not_promoted_prod(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "infra").mkdir(parents=True)
+            (root / "infra/public-access-urls.json").write_text(json.dumps({
+                "runtime_discovery": {
+                    "dev": {"runtime_target": "pc24x7"},
+                    "hml": {"runtime_target": "not_promoted"},
+                    "prod": {"runtime_target": "not_promoted"},
+                }
+            }), encoding="utf-8")
+            for name in ("dev", "test"):
+                (root / f"docker-compose.{name}.yml").write_text("""services:
+  api:
+  frontend:
+  nginx:
+""", encoding="utf-8")
+            (root / "docker-compose.prod.yml").write_text("", encoding="utf-8")
+
+            drift = detect_environment_drift(root)
+
+        self.assertEqual(drift["status"], "passed")
+        self.assertEqual(drift["drift_level"], "none")
+        self.assertEqual(drift["compared_environments"], ["dev", "test"])
+        self.assertEqual(drift["deferred_runtime_environments"], ["hml", "prod"])
+        self.assertEqual(drift["runtime_scope"]["runtime_targets"]["prod"], "not_promoted")
+
+    def test_environment_drift_blocks_empty_prod_after_promotion(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "infra").mkdir(parents=True)
+            (root / "infra/public-access-urls.json").write_text(json.dumps({
+                "runtime_discovery": {
+                    "dev": {"runtime_target": "pc24x7"},
+                    "prod": {"runtime_target": "pc24x7"},
+                }
+            }), encoding="utf-8")
+            for name in ("dev", "test"):
+                (root / f"docker-compose.{name}.yml").write_text("""services:
+  api:
+  frontend:
+  nginx:
+""", encoding="utf-8")
+            (root / "docker-compose.prod.yml").write_text("", encoding="utf-8")
+
+            drift = detect_environment_drift(root)
+
+        self.assertEqual(drift["status"], "warning")
+        self.assertEqual(drift["drift_level"], "high")
+        self.assertIn("prod", drift["compared_environments"])
+        self.assertTrue(any(
+            finding["environment"] == "prod" and finding["severity"] == "high"
+            for finding in drift["findings"]
+        ))
 
 
     def test_public_access_artifact_updates_environment_status(self):
