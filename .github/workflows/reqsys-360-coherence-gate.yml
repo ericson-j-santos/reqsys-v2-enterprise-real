@@ -3,11 +3,13 @@ name: ReqSys 360 Coherence Gate
 on:
   pull_request:
     paths:
-      - 'frontend/**'
-      - 'backend/**'
-      - 'backend-dotnet/**'
-      - 'runtime/**'
-      - 'services/**'
+      - 'frontend/scripts/reqsys-360-audit.mjs'
+      - 'frontend/scripts/reqsys-360-audit.test.mjs'
+      - 'frontend/src/constants/navCatalog.js'
+      - 'frontend/src/constants/navCatalog.test.js'
+      - 'frontend/src/constants/navCatalog.reqsys360.test.js'
+      - 'frontend/src/router/**'
+      - 'frontend/tests/e2e/reqsys-360-navigation.spec.js'
       - 'governance/reqsys-360/**'
       - 'scripts/reqsys_360_*.py'
       - 'tests/test_reqsys_360_*.py'

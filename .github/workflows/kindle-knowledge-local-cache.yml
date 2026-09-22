@@ -9,6 +9,12 @@ on:
       - 'scripts/kindle_knowledge_local_cache.py'
       - 'tests/test_kindle_knowledge_local_cache.py'
       - '.github/workflows/kindle-knowledge-local-cache.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/kindle_knowledge_local_cache.py'
+      - 'tests/test_kindle_knowledge_local_cache.py'
+      - '.github/workflows/kindle-knowledge-local-cache.yml'
       - '.github/self-hosted-runner-policy.json'
 
 permissions:
@@ -41,7 +47,7 @@ jobs:
   noteri:
     name: Materialize and replay on Noteri
     needs: contract
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:
@@ -90,7 +96,7 @@ jobs:
   desktop_recover:
     name: Request existing Desktop runner watchdog
     needs: [contract, noteri]
-    if: ${{ always() && needs.contract.result == 'success' && needs.noteri.result == 'success' }}
+    if: ${{ always() && github.event_name != 'pull_request' && needs.contract.result == 'success' && needs.noteri.result == 'success' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
@@ -123,7 +129,7 @@ jobs:
   desktop:
     name: Materialize and replay on PC24x7
     needs: [contract, desktop_recover]
-    if: ${{ always() && needs.contract.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ always() && github.event_name != 'pull_request' && needs.contract.result == 'success' }}
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 8
     env:

@@ -23,5 +23,6 @@
     "Preview Environment Contract",
     "PR Scope Labeler",
     "PR Fast Classifier"
-  ]
+  ],
+  "blocking_workflow_budget": 10
 }
