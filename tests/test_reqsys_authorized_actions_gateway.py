@@ -39,6 +39,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run noteri-control-plane-probe'" in content
     assert "github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation'" in content
     assert "github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe'" in content
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap'" in content
     assert "github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'" in content
     assert "github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev'" in content
     assert "github.event.comment.body == '/reqsys run noteri-desktop-network-probe'" in content
@@ -60,6 +61,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='noteri-control-plane-probe.yml'" in content
     assert "target='noteri-headless-control-plane-activation.yml'" in content
     assert "target='fabric-oidc-readonly-probe.yml'" in content
+    assert "target='report-factory-fabric-dev-access-bootstrap.yml'" in content
     assert "target='codex-ollama-e2e-dev.yml'" in content
     assert "target='codex-worker-pool-smoke-dev.yml'" in content
     assert "target='noteri-desktop-network-probe.yml'" in content
@@ -135,7 +137,7 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
+    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
@@ -286,3 +288,15 @@ def test_gateway_noteri_desktop_admin_broker_kick_is_exact_and_fail_closed() -> 
     assert "target='noteri-desktop-admin-broker-kick.yml'" in content
     assert "steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml'" in content
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+
+
+def test_gateway_report_factory_fabric_access_bootstrap_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap'" in content
+    assert "'/reqsys run report-factory-fabric-dev-access-bootstrap')" in content
+    assert "target='report-factory-fabric-dev-access-bootstrap.yml'" in content
+    assert "steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f workspace=" not in content
+    assert "-f role=" not in content
+    assert "-f principal=" not in content
