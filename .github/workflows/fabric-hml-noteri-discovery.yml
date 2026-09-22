@@ -4,61 +4,37 @@ on:
   pull_request:
     paths:
       - ".github/workflows/fabric-hml-noteri-discovery.yml"
-      - ".github/self-hosted-runner-policy.json"
-      - "scripts/fabric_hml_noteri_discovery.py"
-      - "scripts/fabric_hml_azps_probe.ps1"
-      - "tests/test_fabric_hml_noteri_discovery_contract.py"
-      - ".sdd/specs/fabric-hml-noteri-discovery.requirements.md"
-      - ".sdd/specs/fabric-hml-noteri-discovery.spec.json"
-  workflow_dispatch:
-    inputs:
-      apply_nonsecret_vars:
-        description: "Aplicar FABRIC_TENANT_ID/CLIENT_ID/WORKSPACE_ID no painel-powerbi/homologacao"
-        required: true
-        default: false
-        type: boolean
+      - "scripts/fabric_hml_authorization_probe_temp.py"
 
 permissions:
   contents: read
 
 concurrency:
-  group: fabric-hml-noteri-discovery
+  group: fabric-hml-authorization-probe-temp
   cancel-in-progress: false
 
 jobs:
-  discover:
-    name: fabric-hml-noteri-discovery
+  authorization-probe:
+    name: fabric-hml-authorization-probe
+    if: ${{ github.head_ref == 'probe/fabric-hml-authorization-20260921' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
-    env:
-      EVIDENCE_FILE: artifacts/fabric-hml-noteri-discovery/evidence.json
     steps:
       - name: Checkout immutable SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
-      - name: Probe read-only ou aplicar apenas variables nao sensiveis
+      - name: Probe read-only da autorização Fabric
         shell: powershell
-        run: |
-          $probeArgs = @(
-            "scripts/fabric_hml_noteri_discovery.py",
-            "--evidence-file", "$env:EVIDENCE_FILE"
-          )
-          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.apply_nonsecret_vars }}" -eq "true") {
-            if ("${{ github.ref }}" -ne "refs/heads/main") {
-              throw "apply_nonsecret_vars_only_on_main"
-            }
-            $probeArgs += @("--apply-nonsecret-vars", "--confirm", "APPLY-FABRIC-HML-NONSECRET-VARS")
-          }
-          python @probeArgs
+        run: python scripts/fabric_hml_authorization_probe_temp.py
 
       - name: Upload sanitized evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: fabric-hml-noteri-discovery-${{ github.run_id }}
-          path: artifacts/fabric-hml-noteri-discovery/evidence.json
+          name: fabric-hml-authorization-probe-${{ github.run_id }}
+          path: artifacts/fabric-hml-authorization-probe/evidence.json
           if-no-files-found: error
           retention-days: 7
