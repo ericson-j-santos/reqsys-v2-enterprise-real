@@ -40,6 +40,7 @@ def readiness(*, status: str = "passed", blockers: list[str] | None = None, prof
         "preventive_invariants": [
             {"name": "sdd:contract", "status": "passed", "detail": "ok"},
             {"name": "security:changed-diff", "status": "passed", "detail": "ok"},
+            {"name": "workflow:surface-budget", "status": "passed", "detail": "ok"},
             {"name": "workflow:regression-contracts", "status": "passed", "detail": "ok"},
         ],
         "blockers": blockers or [],

@@ -14,6 +14,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REQUIRED_PREVENTIVE_INVARIANTS = {
     "sdd:contract",
     "security:changed-diff",
+    "workflow:surface-budget",
     "workflow:regression-contracts",
 }
 
