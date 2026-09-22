@@ -9,15 +9,17 @@
     "design": true,
     "tasks": true
   },
-  "description": "Corrige o Modo ESTUDO no ambiente DEV público removendo a dependência browser->127.0.0.1:8765 e usando API ReqSys same-origin autenticada sobre o mesmo host-profile.json do Noteri.",
+  "description": "Corrige e valida o Modo ESTUDO no DEV do Noteri usando API ReqSys same-origin, sincronização explícita da View do Task Console no runtime e estado final ESTUDO protegido por fail-safe.",
   "environment": "dev",
   "runtime_target": "Noteri",
   "acceptance_criteria": [
     "O navegador usa somente a API same-origin /api/v1/noteri/profile e não acessa 127.0.0.1:8765.",
     "GET exige autenticação e POST exige privilégio administrativo, sem expor detalhes internos de exceções.",
+    "A reconciliação sincroniza no runtime tanto hostProfileLocalAgent.js quanto TaskConsoleView.vue e confirma os fontes servidos antes do E2E.",
     "A mudança NORMAL -> ESTUDO é persistida no host-profile.json canônico e confirmada por leitura independente.",
     "O replay de ESTUDO é idempotente e informa changed=false sem efeito duplicado.",
-    "O fluxo retorna a NORMAL ao final e comprova o estado por API, arquivo e interface do Task Console.",
+    "O E2E físico prova Task Console -> ESTUDO -> NORMAL -> ESTUDO e deixa o estado final ESTUDO.",
+    "Em falha posterior à validação de API, um fail-safe tenta restaurar ESTUDO antes do rollback do runtime.",
     "A execução permanece restrita ao Noteri/DEV, sem HML/PROD, segredos ou exposição pública do agente loopback."
   ],
   "controls": {
@@ -35,6 +37,6 @@
       "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
       "tests/test_noteri_study_mode_dev_reconcile.py"
     ],
-    "evidence_contract": "No Noteri DEV, o Task Console deve alternar NORMAL->ESTUDO->NORMAL pela mesma origem do ReqSys, com estado persistido no host-profile.json, leitura independente, replay idempotente, controle 401 sem autenticação e restauração final NORMAL."
+    "evidence_contract": "No Noteri DEV, o Task Console deve alternar NORMAL->ESTUDO->NORMAL->ESTUDO pela mesma origem do ReqSys, com estado persistido no host-profile.json, leitura independente, replay idempotente, controle 401 sem autenticação, View do Task Console sincronizada no runtime e estado final ESTUDO."
   }
 }

@@ -20,9 +20,14 @@ outro dispositivo, `127.0.0.1` aponta para o dispositivo do navegador.
 7. Escrita deve ser atômica e seguida de leitura independente.
 8. Repetir ESTUDO quando já ESTUDO deve retornar `changed=false`.
 9. O E2E físico deve provar controle 401 sem autenticação, transição para ESTUDO,
-   leitura independente por API/arquivo, replay idempotente, observação na UI
-   e restauração final NORMAL.
-10. HML e PROD não podem ser alterados.
+   leitura independente por API/arquivo, replay idempotente e observação real na UI.
+10. O runtime deve receber explicitamente o serviço same-origin e a `TaskConsoleView.vue`
+    antes do teste, com confirmação dos fontes servidos pelo frontend.
+11. O E2E deve exercitar ESTUDO → NORMAL → ESTUDO e terminar em ESTUDO.
+12. Em falha após a fase de API, o reconciliador deve tentar restaurar ESTUDO antes
+    do rollback dos arquivos de runtime.
+13. HML e PROD não podem ser alterados.
+
 
 
 ## Critérios de aceite
@@ -31,7 +36,7 @@ outro dispositivo, `127.0.0.1` aponta para o dispositivo do navegador.
 2. GET sem autenticação retorna 401; POST exige administrador.
 3. NORMAL → ESTUDO persiste no `host-profile.json` canônico e é confirmado por leitura independente da API e do arquivo.
 4. Repetir ESTUDO quando já ESTUDO retorna `changed=false`, sem efeito duplicado.
-5. O fluxo pela interface observa ESTUDO e restaura NORMAL ao final.
+5. O fluxo pela interface observa ESTUDO, volta a NORMAL, reaplica ESTUDO e confirma ESTUDO como estado final.
 6. HML/PROD, segredos e exposição pública do agente loopback permanecem fora do escopo.
 7. Erros HTTP não expõem caminhos, exceções internas ou outros detalhes sensíveis.
 

@@ -45,6 +45,14 @@ def test_overlay_mounts_only_canonical_noteri_profile_into_api():
     assert "prod" not in raw.lower()
 
 
+def test_reconciler_syncs_task_console_view_into_runtime():
+    assert module.RUNTIME_FILES["frontend/src/views/TaskConsoleView.vue"] == "src/views/TaskConsoleView.vue"
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert 'data-testid="route-task-console"' in raw
+    assert 'data-testid="noteri-study-mode-card"' in raw
+    assert "frontend_study_mode_source_not_observed" in raw
+
+
 def test_frontend_uses_same_origin_backend_not_browser_loopback():
     raw = FRONTEND.read_text(encoding="utf-8")
     assert "api.get('/v1/noteri/profile'" in raw
@@ -92,4 +100,6 @@ def test_reconciler_has_positive_negative_idempotency_and_restore_controls():
     assert 'read_profile_file(profile_path, "ESTUDO")' in raw
     assert 'read_profile_file(profile_path, "NORMAL")' in raw
     assert "rollback_files(changes)" in raw
+    assert "ensure_estudo(profile)" in raw
+    assert '"final_profile": "ESTUDO"' in raw
     assert "loopback_agent_exposed" in raw

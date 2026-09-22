@@ -37,6 +37,7 @@ RUNTIME_FILES = {
     "backend/app/services/noteri_host_profile.py": "app/services/noteri_host_profile.py",
     "backend/app/api/noteri_host_profile.py": "app/api/noteri_host_profile.py",
     "frontend/src/services/hostProfileLocalAgent.js": "src/services/hostProfileLocalAgent.js",
+    "frontend/src/views/TaskConsoleView.vue": "src/views/TaskConsoleView.vue",
 }
 
 
@@ -361,18 +362,26 @@ def read_profile_file(profile_path: Path, expected: str) -> dict[str, Any]:
 
 def wait_frontend_source() -> None:
     deadline = time.monotonic() + 90
-    url = GATEWAY + "/src/services/hostProfileLocalAgent.js"
-    last = ""
+    service_url = GATEWAY + "/src/services/hostProfileLocalAgent.js"
+    view_url = GATEWAY + "/src/views/TaskConsoleView.vue"
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=10) as response:
-                last = response.read().decode("utf-8", "replace")
-            if "/v1/noteri/profile" in last and "127.0.0.1:8765" not in last:
+            with urllib.request.urlopen(service_url, timeout=10) as response:
+                service = response.read().decode("utf-8", "replace")
+            with urllib.request.urlopen(view_url, timeout=10) as response:
+                view = response.read().decode("utf-8", "replace")
+            service_ready = "/v1/noteri/profile" in service and "127.0.0.1:8765" not in service
+            view_ready = (
+                'data-testid="route-task-console"' in view
+                and 'data-testid="noteri-study-mode-card"' in view
+                and "Quero estudar agora" in view
+            )
+            if service_ready and view_ready:
                 return
         except OSError:
             pass
         time.sleep(2)
-    raise ReconcileError("frontend_same_origin_source_not_observed")
+    raise ReconcileError("frontend_study_mode_source_not_observed")
 
 
 def api_e2e(profile_path: Path) -> dict[str, Any]:
@@ -492,6 +501,8 @@ def browser_e2e(profile_path: Path) -> dict[str, Any]:
             page.goto(GATEWAY + "/task-console", wait_until="domcontentloaded", timeout=15000)
             if "/login" in page.url:
                 raise ReconcileError("browser_auth_redirected")
+            if not page.url.startswith(GATEWAY + "/task-console"):
+                raise ReconcileError("browser_task_console_redirected")
 
             stage = "task_console_route"
             page.locator('[data-testid="route-task-console"]').wait_for(state="visible", timeout=15000)
