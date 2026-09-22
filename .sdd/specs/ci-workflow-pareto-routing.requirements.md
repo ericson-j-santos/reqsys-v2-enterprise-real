@@ -127,3 +127,15 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - `Deep Governance Review` contém `types: [labeled]` e não contém `synchronize` no trigger.
 - `scripts/validate_path_based_workflow_router.py` e `tests/test_report_only_workflow_pareto.py` ficam verdes.
 
+## Incremento corretivo — aprovação explícita sem falso CI vermelho
+
+35. Quando a `Governed Merge Queue` concluir com sucesso e `governed-merge-approved` estiver ausente, `Governed PR Automation` deve permanecer fail-closed para merge, registrar estado de espera governada e concluir sem erro de CI.
+36. A inclusão posterior da label `governed-merge-approved` deve disparar nova avaliação pelo evento `pull_request.labeled`, reutilizando o HEAD atual e revalidando `merge-queue:eligible`, workflows obrigatórios e SHA imediatamente antes do merge.
+
+### Critérios de aceite — aprovação governada
+
+- Ausência de `governed-merge-approved` não chama `pulls.merge`, não usa `core.setFailed` por esse motivo e não deixa o PR vermelho.
+- O evento `labeled` para `governed-merge-approved` alcança o mesmo caminho de validação do auto-merge.
+- A revalidação imediatamente anterior ao merge continua exigindo HEAD exato, `merge-queue:eligible` e `governed-merge-approved`.
+- `tests/test_governed_pr_automation_dispatch_contract.py` cobre espera sem falso vermelho e reentrada por label.
+
