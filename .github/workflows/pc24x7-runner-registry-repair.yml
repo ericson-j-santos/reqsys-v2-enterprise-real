@@ -18,8 +18,17 @@ jobs:
     timeout-minutes: 5
     env:
       EVIDENCE_FILE: artifacts/pc24x7-runner-registry-repair/evidence.json
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
     steps:
+      - name: Validate governed runner admin credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_PAT_ACTIONS is not configured."
+            exit 2
+          fi
+
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
         with:

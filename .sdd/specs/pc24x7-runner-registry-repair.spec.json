@@ -8,7 +8,7 @@
   "description": "Probe e repair GitHub-hosted do registro do runner DESKTOP-PDQK954, limitado a labels customizadas quando o runner já está online.",
   "sdd_gate": {
     "tests": ["tests/test_pc24x7_runner_registry_repair.py", "tests/test_reqsys_authorized_actions_gateway.py"],
-    "evidence_contract": "Falha fechado para runner ausente/offline/duplicado; mutação limitada a pc24x7 e reqsys-dev; nenhuma execução no Desktop; sucesso somente com status online e labels completas."
+    "evidence_contract": "Falha fechado para runner ausente/offline/duplicado; mutação limitada a pc24x7 e reqsys-dev; nenhuma execução no Desktop; credencial governada GH_PAT_ACTIONS obrigatória sem fallback para github.token; sucesso somente com status online e labels completas."
   },
   "traceability": {
     "requirements": ".sdd/specs/pc24x7-runner-registry-repair.requirements.md",

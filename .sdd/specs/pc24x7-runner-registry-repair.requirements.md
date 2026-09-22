@@ -16,6 +16,7 @@ Diagnosticar e corrigir, sem executar shell no Desktop, divergências de labels 
 8. Não executar comando, shell, reboot, deploy ou acesso a segredo no Desktop.
 9. Publicar artifact sanitizado com estado, busy, labels antes/depois e indicador de mutação.
 10. O Authorized Actions Gateway aceita somente `/reqsys run pc24x7-runner-registry-repair`, sem inputs.
+11. A consulta e a mutação do registro devem usar exclusivamente a credencial governada `GH_PAT_ACTIONS`; `github.token` não é aceito porque o endpoint de runners exige permissão administrativa. O workflow deve falhar fechado se a credencial governada não estiver provisionada.
 
 ## Critérios de aceite
 
@@ -23,4 +24,5 @@ Diagnosticar e corrigir, sem executar shell no Desktop, divergências de labels 
 - `runner_offline` quando existe mas está offline.
 - `runner_labels_mismatch` quando as labels obrigatórias ainda não convergem.
 - `runner_registry_ready` somente com status online e labels completas.
+- Ausência de `GH_PAT_ACTIONS` deve bloquear antes do probe e nunca provocar fallback para `github.token`.
 - Após `runner_registry_ready`, a prova terminal continua sendo pickup real de workflow PC24x7.
