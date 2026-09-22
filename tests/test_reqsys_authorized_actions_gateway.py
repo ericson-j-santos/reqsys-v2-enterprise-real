@@ -9,6 +9,13 @@ def _workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
+def test_gateway_isola_concorrencia_por_comentario_sem_cancelar_pendente() -> None:
+    content = _workflow()
+
+    assert "group: reqsys-authorized-actions-gateway-${{ github.event.comment.id }}" in content
+    assert "group: reqsys-authorized-actions-gateway\n" not in content
+    assert "cancel-in-progress: false" in content
+
 def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     content = _workflow()
 
