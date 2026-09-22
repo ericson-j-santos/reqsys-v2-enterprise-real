@@ -37,7 +37,9 @@ def test_evidence_is_sanitized_and_nonprod() -> None:
     assert '"identifiers_exposed": False' in text
     assert '"production_touched": False' in text
     assert 'print(f"reason={evidence[\'reason\']}")' in text
-    assert "accessToken" not in text
+    assert "print(token" not in text
+    assert "print(client_id" not in text
+    assert "print(workspace_id" not in text
     assert "workspace_id=" not in text
     assert "client_id=" not in text
 
