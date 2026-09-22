@@ -392,6 +392,20 @@ def api_e2e(profile_path: Path) -> dict[str, Any]:
     )
     before = profile_data(before_payload)
 
+    if before.get("profile") != "NORMAL":
+        corr0 = f"study-dev-e2e-{int(time.time())}-0"
+        _, normalized_payload = http_json(
+            "POST",
+            "/api/v1/noteri/profile",
+            token=token,
+            correlation_id=corr0,
+            body={"profile": "NORMAL", "correlation_id": corr0},
+        )
+        normalized = profile_data(normalized_payload)
+        if normalized.get("profile") != "NORMAL":
+            raise ReconcileError("normal_precondition_failed")
+        read_profile_file(profile_path, "NORMAL")
+
     corr1 = f"study-dev-e2e-{int(time.time())}-1"
     _, changed_payload = http_json(
         "POST",
