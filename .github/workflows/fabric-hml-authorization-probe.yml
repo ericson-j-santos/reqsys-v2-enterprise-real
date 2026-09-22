@@ -1,4 +1,4 @@
-name: Fabric HML Contributor Grant Temp
+name: Fabric HML Authorization Verify Temp
 
 on:
   push:
@@ -9,12 +9,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: fabric-hml-contributor-grant-temp
+  group: fabric-hml-authorization-verify-temp
   cancel-in-progress: false
 
 jobs:
-  grant-contributor:
-    name: fabric-hml-contributor-grant
+  authorization-verify:
+    name: fabric-hml-authorization-verify
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     steps:
@@ -24,19 +24,15 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Validate executor syntax
+      - name: Verify Fabric HML authorization read-only
         shell: powershell
-        run: python -m py_compile scripts/fabric_hml_role_assignment_apply_temp.py
-
-      - name: Grant minimal Fabric HML role
-        shell: powershell
-        run: python scripts/fabric_hml_role_assignment_apply_temp.py --confirm GRANT-FABRIC-HML-CONTRIBUTOR
+        run: python scripts/fabric_hml_authorization_probe_temp.py
 
       - name: Upload sanitized evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: fabric-hml-role-assignment-${{ github.run_id }}
-          path: artifacts/fabric-hml-role-assignment/evidence.json
+          name: fabric-hml-authorization-verify-${{ github.run_id }}
+          path: artifacts/fabric-hml-authorization-probe/evidence.json
           if-no-files-found: error
           retention-days: 7
