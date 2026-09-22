@@ -64,13 +64,7 @@ jobs:
             dev|development)
               mkdir -p artifacts/pc24x7-dev
               node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-dev/signed-locator.json >/dev/null
-              resolved_url="$(python - <<'PY'
-import json
-from pathlib import Path
-payload=json.loads(Path("artifacts/pc24x7-dev/signed-locator.json").read_text(encoding="utf-8"))
-print(payload["selected_url"])
-PY
-)"
+              resolved_url="$(python -c 'import json; from pathlib import Path; print(json.loads(Path("artifacts/pc24x7-dev/signed-locator.json").read_text(encoding="utf-8"))["selected_url"])')"
               ;;
             stg|staging|prod|production)
               test -n "$TARGET_URL" || {
