@@ -20,12 +20,9 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
-def test_reconciler_is_fixed_to_pc24x7_dev_and_reqsys_live():
+def test_reconciler_is_fixed_to_pc24x7_dev_gateway():
     assert module.EXPECTED_HOST == "DESKTOP-PDQK954"
-    assert module.PROJECT == "reqsys-live"
-    assert module.API_CONTAINER == "reqsys-live-api-1"
-    assert module.FRONTEND_CONTAINER == "reqsys-live-frontend-1"
-    assert module.NGINX_CONTAINER == "reqsys-live-nginx-1"
+    assert module.DEV_GATEWAY_PORT == "8083"
     assert module.GATEWAY == "http://127.0.0.1:8083"
     assert module.CONFIRM == "RECONCILE-NOTERI-STUDY-MODE-DEV"
 
@@ -127,3 +124,15 @@ def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     assert '"nginx_runtime_contract_refreshed": True' in raw
     assert "location ~ ^/api/(runtime|" in nginx
     assert "proxy_pass http://api:8000;" in nginx
+
+
+def test_reconciler_discovers_compose_runtime_from_dev_gateway_port():
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert '["docker", "ps", "--filter", f"publish={DEV_GATEWAY_PORT}", "--format", "{{.ID}}"]' in raw
+    assert "com.docker.compose.project" in raw
+    assert "com.docker.compose.service" in raw
+    assert "non_dev_compose_project_blocked" in raw
+    assert '"runtime_discovery": "gateway_port_8083_compose_labels"' in raw
+    assert "reqsys-live-api-1" not in raw
+    assert "reqsys-live-frontend-1" not in raw
+    assert "reqsys-live-nginx-1" not in raw
