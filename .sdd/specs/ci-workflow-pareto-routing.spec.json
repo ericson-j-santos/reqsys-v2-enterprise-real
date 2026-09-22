@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Reduz fan-out e contenção de runners por roteamento de scanners, workflows advisory, PR CI Watch, gates específicos de domínio, autoauditorias de CI e lifecycle sem rerun por SHA, preservando checks protegidos e comportamento fail-closed.",
+  "description": "Reduz fan-out e contenção de runners por roteamento de scanners, workflows advisory, PR CI Watch, gates específicos de domínio, autoauditorias de CI, lifecycle e deduplicação do Pre-PR Readiness, preservando checks protegidos e comportamento fail-closed.",
   "scope": "governance-ci-routing",
   "files": [
     ".github/workflows/security-specialized-scanners.yml",
@@ -31,7 +31,8 @@
     ".github/workflows/minimum-controlled-version-gate.yml",
     ".github/workflows/pr-governed-ci-validation.yml",
     ".github/workflows/test-quality-gate.yml",
-    ".github/workflows/requirement-lifecycle-evidence.yml"
+    ".github/workflows/requirement-lifecycle-evidence.yml",
+    ".github/workflows/pre-pr-readiness.yml"
   ],
   "sdd_gate": {
     "tests": [
@@ -39,7 +40,7 @@
       "tests/test_report_only_workflow_pareto.py",
       "tests/test_workflow_governance_consolidator.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis; Gitleaks permanece global; scans, advisory workflows, PR CI Watch e gates específicos de domínio só materializam em superfícies aplicáveis; o consolidator audita o SHA completo; referências legadas não retornam."
+    "evidence_contract": "Checks protegidos permanecem materializáveis; Gitleaks permanece global; scans, advisory workflows, PR CI Watch e gates específicos de domínio só materializam em superfícies aplicáveis; push e pull_request do Pre-PR compartilham concorrência por branch; o consolidator audita o SHA completo; referências legadas não retornam."
   },
   "risk": {
     "production": false,

@@ -100,8 +100,9 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
                 workflow,
             )
         for workflow, tokens in router.REQUIRED_ROUTING.items():
-            self.assertIn('"runtime/**"', tokens, workflow)
-            self.assertIn('"services/**"', tokens, workflow)
+            token_text = "\n".join(tokens)
+            self.assertIn('"runtime/**"', token_text, workflow)
+            self.assertIn('"services/**"', token_text, workflow)
 
     def test_pr_ci_watch_uses_only_canonical_completion_signals(self):
         text = (WORKFLOWS / "pr-ci-watch.yml").read_text(encoding="utf-8")
@@ -182,6 +183,14 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         trigger = text.split("permissions:", 1)[0]
         self.assertIn("opened, reopened, closed", trigger)
         self.assertNotIn("synchronize", trigger)
+
+    def test_pre_pr_push_and_pull_request_share_concurrency_group(self):
+        text = (WORKFLOWS / "pre-pr-readiness.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "pre-pr-readiness-${{ github.event.pull_request.head.ref || github.ref_name }}",
+            text,
+        )
+        self.assertIn("cancel-in-progress: true", text)
 
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))

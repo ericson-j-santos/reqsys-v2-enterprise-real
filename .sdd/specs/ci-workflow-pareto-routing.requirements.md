@@ -80,3 +80,11 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 
 - Novo SHA em PR existente não materializa `Requirement Lifecycle Evidence`.
 - `opened`, `reopened`, `closed`, `workflow_dispatch` e `workflow_call` permanecem disponíveis.
+
+23. `Pre-PR Readiness Gate` deve usar a mesma chave de concorrência para `push` da branch e `pull_request` do mesmo PR, de modo que a execução mais nova cancele a duplicata sem remover nenhum dos dois gatilhos.
+
+### Critério de aceite — deduplicação Pre-PR
+
+- `push` e `pull_request` para a mesma branch resolvem para `pre-pr-readiness-<head-ref>`.
+- `cancel-in-progress: true` permanece ativo.
+- A cobertura antes da abertura do PR e dentro do PR é preservada sem dois runners simultâneos para o mesmo HEAD.
