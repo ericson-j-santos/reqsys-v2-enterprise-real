@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import unittest
 from pathlib import Path
@@ -6,6 +7,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 POLICY = ROOT / "config" / "ci-workflow-pareto-policy.json"
+ROUTER = ROOT / "scripts" / "validate_path_based_workflow_router.py"
+
+
+def load_router():
+    spec = importlib.util.spec_from_file_location("validate_path_based_workflow_router", ROUTER)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class ReportOnlyWorkflowParetoTest(unittest.TestCase):
@@ -55,6 +65,30 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
             self.assertNotIn('"docs/ci/**"', trigger)
             self.assertNotIn('"docs/adr/**"', trigger)
             self.assertNotIn('"tests/**"', trigger)
+
+    def test_router_contract_rejects_broad_advisory_paths(self):
+        router = load_router()
+        self.assertIn(
+            '".github/workflows/**"',
+            router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
+                ".github/workflows/runtime-risk-scoring.yml"
+            ],
+        )
+        self.assertIn(
+            '"tests/**"',
+            router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
+                ".github/workflows/pr-quality-review.yml"
+            ],
+        )
+        self.assertIn(
+            '"docs/ops-dashboard/**"',
+            router.FORBIDDEN_ADVISORY_ROUTING_TOKENS[
+                ".github/workflows/predictive-regression-guard.yml"
+            ],
+        )
+        for workflow, tokens in router.REQUIRED_ROUTING.items():
+            self.assertIn('"runtime/**"', tokens, workflow)
+            self.assertIn('"services/**"', tokens, workflow)
 
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
