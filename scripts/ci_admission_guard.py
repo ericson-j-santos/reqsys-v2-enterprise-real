@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
-"""Fail-fast guard para impedir CI caro sem manifesto Pre-PR do SHA exato."""
+"""Fail-fast guard para impedir CI caro sem manifesto Pre-PR do SHA exato e base atual."""
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 WORKFLOW_NAME = "Pre-PR Readiness Gate"
+RETRYABLE_REASONS = {
+    "pre_pr_pending_for_head_sha",
+    "pre_pr_success_missing_for_head_sha",
+    "admission_manifest_missing_for_head_sha",
+}
 
 
 class AdmissionGuardError(RuntimeError):
@@ -78,16 +84,43 @@ def matching_artifact(artifacts: list[dict[str, Any]], head_sha: str) -> dict[st
     return None
 
 
-def verify_admission(repository: str, head_sha: str, token: str) -> dict[str, Any]:
-    sha = head_sha.strip().lower()
-    if not SHA40.fullmatch(sha):
-        raise AdmissionGuardError("head_sha_invalid")
+def evaluate_compare(compare: dict[str, Any], base_sha: str, head_sha: str) -> dict[str, Any]:
+    behind_by = int(compare.get("behind_by") or 0)
+    status = str(compare.get("status") or "")
+    if behind_by > 0 or status not in {"ahead", "identical"}:
+        raise AdmissionGuardError(
+            f"source_stale_or_diverged:base={base_sha}:head={head_sha}:status={status}:behind_by={behind_by}"
+        )
+    return {"status": status, "behind_by": behind_by, "ahead_by": int(compare.get("ahead_by") or 0)}
 
-    query = urlencode({"head_sha": sha, "per_page": 100})
+
+def assert_base_freshness(repository: str, base_ref: str, head_sha: str, token: str) -> dict[str, Any]:
+    branch = github_json(repository, f"branches/{quote(base_ref, safe='')}", token)
+    commit = branch.get("commit") if isinstance(branch.get("commit"), dict) else {}
+    base_sha = str(commit.get("sha") or "").strip().lower()
+    if not SHA40.fullmatch(base_sha):
+        raise AdmissionGuardError("base_sha_invalid")
+    compare = github_json(repository, f"compare/{base_sha}...{head_sha}", token)
+    state = evaluate_compare(compare, base_sha, head_sha)
+    return {"base_ref": base_ref, "base_sha": base_sha, **state}
+
+
+def verify_evidence(repository: str, head_sha: str, token: str) -> dict[str, Any]:
+    query = urlencode({"head_sha": head_sha, "per_page": 100})
     runs_payload = github_json(repository, f"actions/runs?{query}", token)
     runs = runs_payload.get("workflow_runs") if isinstance(runs_payload.get("workflow_runs"), list) else []
-    candidates = successful_pre_pr_runs(runs, sha)
+    matching = [
+        run for run in runs
+        if isinstance(run, dict)
+        and run.get("name") == WORKFLOW_NAME
+        and str(run.get("head_sha") or "").lower() == head_sha
+    ]
+    candidates = successful_pre_pr_runs(runs, head_sha)
     if not candidates:
+        if any(run.get("status") != "completed" for run in matching):
+            raise AdmissionGuardError("pre_pr_pending_for_head_sha")
+        if any(run.get("status") == "completed" and run.get("conclusion") not in {"success", "neutral", "skipped"} for run in matching):
+            raise AdmissionGuardError("pre_pr_failed_for_head_sha")
         raise AdmissionGuardError("pre_pr_success_missing_for_head_sha")
 
     for run in candidates:
@@ -96,13 +129,9 @@ def verify_admission(repository: str, head_sha: str, token: str) -> dict[str, An
             continue
         artifacts_payload = github_json(repository, f"actions/runs/{run_id}/artifacts?per_page=100", token)
         artifacts = artifacts_payload.get("artifacts") if isinstance(artifacts_payload.get("artifacts"), list) else []
-        artifact = matching_artifact(artifacts, sha)
+        artifact = matching_artifact(artifacts, head_sha)
         if artifact:
             return {
-                "schema_version": "1.0.0",
-                "result": "ADMISSION_ACCEPTED",
-                "generated_at_utc": utc_now(),
-                "head_sha": sha,
                 "workflow": WORKFLOW_NAME,
                 "pre_pr_run_id": run_id,
                 "artifact": {
@@ -114,11 +143,42 @@ def verify_admission(repository: str, head_sha: str, token: str) -> dict[str, An
     raise AdmissionGuardError("admission_manifest_missing_for_head_sha")
 
 
+def wait_for_admission(
+    repository: str,
+    head_sha: str,
+    base_ref: str,
+    token: str,
+    max_wait_seconds: int,
+    poll_seconds: int,
+) -> dict[str, Any]:
+    freshness = assert_base_freshness(repository, base_ref, head_sha, token)
+    deadline = time.monotonic() + max(0, max_wait_seconds)
+    while True:
+        try:
+            evidence = verify_evidence(repository, head_sha, token)
+            return {
+                "schema_version": "1.0.0",
+                "result": "ADMISSION_ACCEPTED",
+                "generated_at_utc": utc_now(),
+                "head_sha": head_sha,
+                "base": freshness,
+                **evidence,
+            }
+        except AdmissionGuardError as exc:
+            reason = str(exc)
+            if reason not in RETRYABLE_REASONS or time.monotonic() >= deadline:
+                raise
+            time.sleep(max(1, poll_seconds))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Valida manifesto de admissão antes de CI caro.")
     parser.add_argument("--repository", default=os.getenv("GITHUB_REPOSITORY", ""))
     parser.add_argument("--head-sha", default=os.getenv("GITHUB_SHA", ""))
     parser.add_argument("--event-name", default=os.getenv("GITHUB_EVENT_NAME", ""))
+    parser.add_argument("--base-ref", default="main")
+    parser.add_argument("--max-wait-seconds", type=int, default=120)
+    parser.add_argument("--poll-seconds", type=int, default=10)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -135,8 +195,28 @@ def main() -> int:
         print(json.dumps(result, sort_keys=True))
         return 0
 
+    sha = args.head_sha.strip().lower()
+    if not SHA40.fullmatch(sha):
+        blocked = {
+            "schema_version": "1.0.0",
+            "result": "ADMISSION_BLOCKED",
+            "generated_at_utc": utc_now(),
+            "head_sha": args.head_sha,
+            "reason": "head_sha_invalid",
+        }
+        args.output.write_text(json.dumps(blocked, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps(blocked, sort_keys=True))
+        return 1
+
     try:
-        result = verify_admission(args.repository, args.head_sha, os.getenv("GITHUB_TOKEN", "").strip())
+        result = wait_for_admission(
+            args.repository,
+            sha,
+            args.base_ref,
+            os.getenv("GITHUB_TOKEN", "").strip(),
+            args.max_wait_seconds,
+            args.poll_seconds,
+        )
         args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(result, sort_keys=True))
         return 0
@@ -145,7 +225,8 @@ def main() -> int:
             "schema_version": "1.0.0",
             "result": "ADMISSION_BLOCKED",
             "generated_at_utc": utc_now(),
-            "head_sha": args.head_sha,
+            "head_sha": sha,
+            "base_ref": args.base_ref,
             "reason": str(exc),
         }
         args.output.write_text(json.dumps(blocked, indent=2, sort_keys=True) + "\n", encoding="utf-8")

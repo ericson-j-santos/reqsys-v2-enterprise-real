@@ -42,6 +42,7 @@ jobs:
             --repository "${{ github.repository }}" \
             --head-sha "${{ github.event.pull_request.head.sha || github.sha }}" \
             --event-name "${{ github.event_name }}" \
+            --base-ref "${{ github.event.pull_request.base.ref || 'main' }}" \
             --output "artifacts/ci-admission-guard/${{ github.event.pull_request.head.sha || github.sha }}.json"
       - name: Publicar evidência do admission controller
         if: always()

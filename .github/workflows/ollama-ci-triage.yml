@@ -93,13 +93,6 @@ jobs:
           if (Test-Path "$env:EVIDENCE_FILE") {
             $e = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
             "- Resultado: $($e.result)" | Add-Content $env:GITHUB_STEP_SUMMARY
-            "- Fonte da triagem: $($e.triage_source)" | Add-Content $env:GITHUB_STEP_SUMMARY
-            if ($null -ne $e.ollama) {
-              "- Ollama: $($e.ollama.status)" | Add-Content $env:GITHUB_STEP_SUMMARY
-              if ($null -ne $e.ollama.reason) {
-                "- Degradação: $($e.ollama.reason)" | Add-Content $env:GITHUB_STEP_SUMMARY
-              }
-            }
             "- Run: $($e.run_id)" | Add-Content $env:GITHUB_STEP_SUMMARY
             if ($null -ne $e.triage) {
               "- Categoria: $($e.triage.category)" | Add-Content $env:GITHUB_STEP_SUMMARY

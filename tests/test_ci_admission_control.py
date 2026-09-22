@@ -87,6 +87,29 @@ def test_guard_rejects_old_or_expired_admission_artifact() -> None:
     assert guard.matching_artifact([artifact], head) == artifact
 
 
+def test_guard_rejects_stale_or_diverged_source() -> None:
+    try:
+        guard.evaluate_compare(
+            {"status": "diverged", "behind_by": 1, "ahead_by": 2},
+            "b" * 40,
+            "a" * 40,
+        )
+    except guard.AdmissionGuardError as exc:
+        assert "source_stale_or_diverged" in str(exc)
+        assert "behind_by=1" in str(exc)
+    else:
+        raise AssertionError("branch atrás/divergida deveria ser bloqueada")
+
+
+def test_guard_accepts_head_based_on_current_base() -> None:
+    result = guard.evaluate_compare(
+        {"status": "ahead", "behind_by": 0, "ahead_by": 1},
+        "b" * 40,
+        "a" * 40,
+    )
+    assert result == {"status": "ahead", "behind_by": 0, "ahead_by": 1}
+
+
 def test_pre_pr_generates_and_enforces_admission_manifest() -> None:
     raw = (ROOT / ".github/workflows/pre-pr-readiness.yml").read_text(encoding="utf-8")
     assert "scripts/ci_admission_manifest.py" in raw
@@ -104,6 +127,7 @@ def test_expensive_pr_workflows_are_guarded_before_router_or_guardrails() -> Non
         raw = (ROOT / rel).read_text(encoding="utf-8")
         assert "CI Admission Controller" in raw
         assert "scripts/ci_admission_guard.py" in raw
+        assert "--base-ref" in raw
         assert expected in raw
 
 

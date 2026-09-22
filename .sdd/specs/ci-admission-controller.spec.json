@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Gap fix Pareto: manifesto de admissão por SHA, fail-fast dos CIs caros, fallback determinístico da triagem Ollama e consumo do manifesto no Evidence Gate.",
+  "description": "Gap fix Pareto: manifesto de admissão por SHA, fail-fast dos CIs caros, validação da base corrente e consumo do manifesto no PR Evidence Gate.",
   "scope": "github-ci-dev",
   "files": [
     "scripts/ci_admission_manifest.py",
@@ -19,19 +19,14 @@
     ".github/workflows/ci-enterprise-fast.yml",
     ".github/workflows/ci-e2e-governado.yml",
     ".github/workflows/pr-evidence-gate.yml",
-    "scripts/ollama_ci_triage.py",
-    ".github/workflows/ollama-ci-triage.yml",
-    "tests/test_ci_admission_control.py",
-    "tests/test_ollama_ci_triage.py"
+    "tests/test_ci_admission_control.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_ci_admission_control.py",
-      "tests/test_ollama_ci_triage.py",
-      "tests/test_ollama_ci_triage_workflow.py",
       "tests/test_pre_pr_readiness.py"
     ],
-    "evidence_contract": "Provar manifesto vinculado ao HEAD exato, bloqueio para SHA antigo/Pre-PR ausente, CI caro protegido por admission guard, fallback determinístico quando Ollama degrada e Evidence Gate exigindo o artefato do SHA atual."
+    "evidence_contract": "Provar manifesto vinculado ao HEAD exato, branch não-atrasada em relação à base corrente, bloqueio para SHA antigo/Pre-PR ausente, CI caro protegido por admission guard e PR Evidence Gate exigindo o artefato do SHA atual."
   },
   "risk": {
     "production": false,
@@ -41,4 +36,4 @@
     "admin_permissions": false,
     "protected_branch_write": false
   }
-}\n
+}

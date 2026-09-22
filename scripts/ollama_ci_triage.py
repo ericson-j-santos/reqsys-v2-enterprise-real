@@ -46,6 +46,16 @@ SENSITIVE_WORKFLOW_WORDS = ("governance", "governança", "security", "segurança
 CONFIDENCE_THRESHOLD = 0.75
 MAX_LOG_CHARS_PER_JOB = 30000
 MAX_PROMPT_LOG_CHARS = 90000
+DEGRADABLE_OLLAMA_ERRORS = {
+    "ollama_unreachable",
+    "ollama_invalid_json",
+    "ollama_unexpected_payload",
+    "ollama_model_unavailable",
+    "ollama_structured_output_invalid",
+    "ollama_category_invalid",
+    "ollama_confidence_invalid",
+}
+DEGRADABLE_OLLAMA_PREFIXES = ("ollama_http_",)
 
 WorkerRequestFn = Callable[[str, str, str, dict[str, Any] | None], tuple[int, dict[str, Any]]]
 
@@ -345,6 +355,29 @@ def run_ollama_triage(base_url: str, model: str, run: dict[str, Any], jobs: list
     return normalize_triage(parsed)
 
 
+def is_degradable_ollama_error(exc: TriageError) -> bool:
+    reason = one_line(exc, 200)
+    return reason in DEGRADABLE_OLLAMA_ERRORS or reason.startswith(DEGRADABLE_OLLAMA_PREFIXES)
+
+
+def degraded_triage(reason: str, deterministic: dict[str, Any]) -> dict[str, Any]:
+    evidence = [f"ollama_degraded:{one_line(reason, 180)}"]
+    for item in (deterministic.get("matches") or [])[:4]:
+        if not isinstance(item, dict):
+            continue
+        pattern_id = one_line(item.get("pattern_id"), 80)
+        category = one_line(item.get("category"), 80)
+        if pattern_id or category:
+            evidence.append(f"deterministic:{pattern_id or 'pattern'}:{category or 'unknown'}")
+    return {
+        "category": "unknown",
+        "confidence": 0.0,
+        "root_cause": "Ollama indisponível ou resposta estruturada inválida; causa automática não determinada.",
+        "recommended_action": "Usar a evidência determinística do CI e revisar a falha original; não autoescalar.",
+        "evidence": evidence[:5],
+    }
+
+
 def run_head_sha(run: dict[str, Any]) -> str:
     prs = run.get("pull_requests")
     if isinstance(prs, list) and prs and isinstance(prs[0], dict):
@@ -391,95 +424,6 @@ def deterministic_categories(report: dict[str, Any]) -> set[str]:
         for item in (report.get("matches") or [])
         if isinstance(item, dict) and str(item.get("category") or "").strip()
     }
-
-
-def deterministic_fallback_triage(report: dict[str, Any], reason: str) -> dict[str, Any]:
-    """Converte sinais determinísticos em triagem segura quando o Ollama degrada."""
-    matches = [item for item in (report.get("matches") or []) if isinstance(item, dict)]
-    categories = deterministic_categories(report)
-    blocked = sorted(categories & DETERMINISTIC_BLOCKED_CATEGORIES)
-
-    if blocked:
-        category = "transient" if set(blocked) & {"timeout", "quota", "artifact"} else "unknown"
-        selected_categories = set(blocked)
-    elif "dependencies" in categories:
-        category = "dependency"
-        selected_categories = {"dependencies"}
-    elif "test_failure" in categories:
-        category = "test"
-        selected_categories = {"test_failure"}
-    elif "quality_gate" in categories:
-        category = "code"
-        selected_categories = {"quality_gate"}
-    else:
-        category = "unknown"
-        selected_categories = set()
-
-    selected = [
-        item for item in matches
-        if str(item.get("category") or "").strip().lower() in selected_categories
-    ] or matches
-
-    confidence_values: list[float] = []
-    for item in selected:
-        try:
-            confidence_values.append(float(item.get("confidence")))
-        except (TypeError, ValueError):
-            continue
-    confidence = max(confidence_values, default=0.5)
-    if category == "unknown":
-        confidence = min(confidence, 0.5)
-
-    recommended = next(
-        (one_line(item.get("recommended_action"), 1000) for item in selected if item.get("recommended_action")),
-        "revisar a evidência determinística e corrigir a causa observada",
-    )
-    signals = ",".join(sorted(categories)) or "none"
-    evidence = [
-        f"deterministic:{one_line(item.get('pattern_id') or item.get('category'), 120)}"
-        for item in selected[:4]
-    ]
-    evidence.append(f"ollama_degraded:{one_line(reason, 180)}")
-
-    return normalize_triage(
-        {
-            "category": category,
-            "confidence": confidence,
-            "root_cause": f"fallback determinístico; sinais={signals}; ollama={one_line(reason, 240)}",
-            "recommended_action": recommended,
-            "evidence": evidence,
-        }
-    )
-
-
-def triage_with_fallback(
-    base_url: str,
-    explicit_model: str,
-    run: dict[str, Any],
-    jobs: list[dict[str, Any]],
-    log_paths: list[Path],
-    deterministic: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any], str]:
-    """Usa Ollama como acelerador; qualquer falha do modelo degrada para sinais determinísticos."""
-    try:
-        ollama_url = validate_ollama_url(base_url)
-        model = select_model(ollama_url, explicit_model)
-        triage = run_ollama_triage(ollama_url, model, run, jobs, log_paths, deterministic)
-        return triage, {"status": "ok", "base_url": ollama_url, "model": model}, "ollama"
-    except TriageError as exc:
-        reason = one_line(exc)
-        triage = deterministic_fallback_triage(deterministic, reason)
-        return (
-            triage,
-            {
-                "status": "degraded",
-                "base_url": "loopback-only",
-                "model": None,
-                "reason": reason,
-                "failure_policy": "deterministic_fallback",
-            },
-            "deterministic_fallback",
-        )
 
 
 def escalation_policy(triage: dict[str, Any], run: dict[str, Any], pr: dict[str, Any], deterministic: dict[str, Any]) -> dict[str, Any]:
@@ -618,20 +562,25 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     output.parent.mkdir(parents=True, exist_ok=True)
     run, jobs, log_paths = collect_run_evidence(repository, args.run_id, github_token, output.parent)
     deterministic = compact_pattern_report(build_pattern_report(load_catalog(args.catalog), log_paths))
-    triage, ollama_state, triage_source = triage_with_fallback(
-        args.ollama_url,
-        args.model,
-        run,
-        jobs,
-        log_paths,
-        deterministic,
-    )
+    ollama_url = validate_ollama_url(args.ollama_url)
+    model = ""
+    ollama_status = "ok"
+    ollama_reason = ""
+    try:
+        model = select_model(ollama_url, args.model)
+        triage = run_ollama_triage(ollama_url, model, run, jobs, log_paths, deterministic)
+    except TriageError as exc:
+        if not is_degradable_ollama_error(exc):
+            raise
+        ollama_status = "degraded"
+        ollama_reason = one_line(exc, 200)
+        triage = degraded_triage(ollama_reason, deterministic)
     pr = resolve_pr_context(repository, run, github_token, args.pr_number)
     escalation = escalation_policy(triage, run, pr, deterministic)
     correlation_id = f"ollama-ci-triage-{args.run_id}-{os.getenv('GITHUB_RUN_ATTEMPT', '1')}"[:128]
     evidence: dict[str, Any] = {
         "schema_version": "1.0.0",
-        "result": "OLLAMA_CI_TRIAGE_OK" if triage_source == "ollama" else "OLLAMA_CI_TRIAGE_DEGRADED",
+        "result": "OLLAMA_CI_TRIAGE_DEGRADED" if ollama_status == "degraded" else "OLLAMA_CI_TRIAGE_OK",
         "generated_at_utc": utc_now(),
         "repository": repository,
         "run_id": args.run_id,
@@ -640,8 +589,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "conclusion": run.get("conclusion"),
         "analyzed_sha": run_head_sha(run) or run.get("head_sha"),
         "pr": pr,
-        "ollama": ollama_state,
-        "triage_source": triage_source,
+        "ollama": {
+            "base_url": ollama_url,
+            "model": model or None,
+            "status": ollama_status,
+            "reason": ollama_reason or None,
+        },
         "deterministic": deterministic,
         "triage": triage,
         "escalation": escalation,
