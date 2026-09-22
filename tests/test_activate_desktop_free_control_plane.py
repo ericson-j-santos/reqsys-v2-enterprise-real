@@ -1,7 +1,12 @@
+import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "activate_desktop_free_control_plane.py"
+SPEC = importlib.util.spec_from_file_location("activate_desktop_free_control_plane", SCRIPT)
+assert SPEC and SPEC.loader
+m = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(m)
 
 
 def test_contract_is_host_repo_and_labels_pinned() -> None:
@@ -53,3 +58,31 @@ def test_runtime_active_requires_github_registry_online_and_labels() -> None:
     assert '"runner_github_offline"' in text
     assert '"runner_labels_mismatch"' in text
     assert 'state == "runtime_active"' in text
+
+
+def test_noninteractive_mode_fails_closed_before_browser_auth() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'parser.add_argument("--non-interactive-auth", action="store_true")' in text
+    assert "allow_interactive=not args.non_interactive_auth" in text
+    assert "allow_interactive_auth=not args.non_interactive_auth" in text
+    assert "if not allow_interactive:" in text
+    assert "login interativo desabilitado neste modo" in text
+    assert "refresh interativo desabilitado" in text
+
+
+def test_offline_restart_policy_is_narrow_and_fail_closed() -> None:
+    offline = {"present": True, "status": "offline", "labels_ok": True}
+    assert m.should_restart_offline_runner(offline, True) is True
+    assert m.should_restart_offline_runner({**offline, "status": "online"}, True) is False
+    assert m.should_restart_offline_runner({**offline, "present": False}, True) is False
+    assert m.should_restart_offline_runner({**offline, "labels_ok": False}, True) is False
+    assert m.should_restart_offline_runner(offline, False) is False
+
+
+def test_bootstrap_delegates_process_identity_and_restart_to_watchdog() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "watchdog.runner_running(root)" in text
+    assert "watchdog.start_runner(root, _runner_log_path(root))" in text
+    assert "watchdog.restart_runner(root, _runner_log_path(root))" in text
+    assert "runner_restarted_offline" in text
+    assert "runner_restart_previous_listener_pid" in text

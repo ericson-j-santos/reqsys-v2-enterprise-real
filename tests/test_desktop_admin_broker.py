@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -144,6 +145,7 @@ def test_install_stages_release_and_marks_uac_pending(monkeypatch, tmp_path: Pat
         m.WATCHDOG_SCRIPT,
         m.WATCHDOG_UAC_SCRIPT,
         m.RDC_RECOVERY_SCRIPT,
+        m.RUNNER_BOOTSTRAP_SCRIPT,
     ):
         (scripts / name).write_text("# stub\n", encoding="utf-8")
     runtime = tmp_path / "runtime"
@@ -177,6 +179,68 @@ def test_install_stages_release_and_marks_uac_pending(monkeypatch, tmp_path: Pat
     assert "--metadata" in activation_text
     assert "--command" not in activation_text
     assert "--action" not in activation_text
+
+
+def test_recover_runner_uses_fixed_noninteractive_bootstrap(monkeypatch, tmp_path: Path) -> None:
+    release = tmp_path / "release"
+    scripts = release / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / m.RUNNER_BOOTSTRAP_SCRIPT).write_text("# stub\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **kwargs):
+        calls.append([str(item) for item in argv])
+        payload = {
+            "ok": True,
+            "state": "runtime_active",
+            "runner_running": True,
+            "runner_registry_present": True,
+            "runner_registry_status": "online",
+            "runner_registry_labels_ok": True,
+            "runner_registered_now": True,
+            "runner_started_now": True,
+        }
+        return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(payload) + "\n", stderr="")
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    result = m._recover_runner(
+        {
+            "release_root": str(release),
+            "source_sha": "a" * 40,
+        }
+    )
+
+    assert result["bootstrap_state"] == "runtime_active"
+    assert result["runner_registry_status"] == "online"
+    assert len(calls) == 1
+    argv = calls[0]
+    assert "--non-interactive-auth" in argv
+    assert argv[argv.index("--repo-root") + 1] == str(release)
+    assert argv[argv.index("--source-sha") + 1] == "a" * 40
+
+
+def test_recover_runner_fails_closed_on_bootstrap_error(monkeypatch, tmp_path: Path) -> None:
+    release = tmp_path / "release"
+    scripts = release / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / m.RUNNER_BOOTSTRAP_SCRIPT).write_text("# stub\n", encoding="utf-8")
+    monkeypatch.setattr(
+        m.subprocess,
+        "run",
+        lambda argv, **kwargs: subprocess.CompletedProcess(
+            argv,
+            4,
+            stdout='{"ok": false, "state": "github_auth_required"}\n',
+            stderr="",
+        ),
+    )
+    with pytest.raises(m.BrokerError, match="runner_bootstrap_failed:github_auth_required"):
+        m._recover_runner(
+            {
+                "release_root": str(release),
+                "source_sha": "b" * 40,
+            }
+        )
 
 
 def test_register_task_contract_requires_s4u_highest() -> None:
