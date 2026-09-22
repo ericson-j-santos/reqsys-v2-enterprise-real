@@ -58,7 +58,7 @@ jobs:
           persist-credentials: false
 
       - name: Executar triagem governada
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           $cliArgs = @(
@@ -87,7 +87,7 @@ jobs:
 
       - name: Resumo
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
           "## Ollama CI Triage" | Add-Content $env:GITHUB_STEP_SUMMARY
           if (Test-Path "$env:EVIDENCE_FILE") {
