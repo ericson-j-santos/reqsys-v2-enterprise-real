@@ -126,3 +126,21 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - O artifact consolidado declara `automatic_dispatch=false`, `critical_path_blocker=false` e `production_touched=false`.
 - `Deep Governance Review` contém `types: [labeled]` e não contém `synchronize` no trigger.
 - `scripts/validate_path_based_workflow_router.py` e `tests/test_report_only_workflow_pareto.py` ficam verdes.
+
+## Incremento Pareto — scanners por superfície alterada
+
+35. `Security Specialized Scanners` deve separar alteração de código-fonte de alteração de manifesto de dependência; mudar um arquivo Python/JavaScript não deve, por si só, disparar auditoria completa de dependências.
+36. `pip-audit` deve executar em pull request somente quando `requirements*.txt` ou `pyproject.toml` forem alterados; `npm audit` deve executar somente quando manifesto/lockfile Node for alterado.
+37. CodeQL deve selecionar dinamicamente apenas as linguagens cuja superfície de código-fonte foi alterada no PR. A publicação SARIF permanece atômica para o conjunto selecionado.
+38. SBOM deve executar em PR apenas quando dependências, container ou infraestrutura empacotável forem alterados. `push/main` e execução manual preservam o scan completo.
+39. Gitleaks permanece global em todos os pull requests e falha do roteador de escopo continua impedindo summary verde.
+
+### Critérios de aceite — scanner Pareto
+
+- Diff apenas de Python não materializa CodeQL JavaScript/TypeScript.
+- Diff apenas de JavaScript/TypeScript não materializa CodeQL Python.
+- Mudança de código sem mudança de manifesto não executa `pip-audit`/`npm audit`.
+- Mudança de manifesto executa a auditoria de dependência correspondente e SBOM.
+- `push/main` e `workflow_dispatch` continuam selecionando Python, JavaScript/TypeScript, auditorias de dependência e SBOM.
+- A publicação CodeQL valida exatamente as categorias selecionadas e rejeita categoria ausente, inesperada ou duplicada.
+- `tests/test_codeql_atomic_publish_workflow.py` permanece verde.
