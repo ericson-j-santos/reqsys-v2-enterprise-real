@@ -5,15 +5,13 @@ on:
     branches: [main, master, develop]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
+      # Predição automática só quando há potencial de regressão executável.
+      # Testes/workflows/documentação usam gates especializados.
       - "backend/**"
       - "frontend/**"
+      - "runtime/**"
+      - "services/**"
       - "scripts/**"
-      - "tests/**"
-      - ".github/workflows/**"
-      - "docs/ops-dashboard/**"
-      - "docs/dashboard/**"
-      - "docs/ci/**"
-      - "docs/adr/**"
       - "config/**"
 
 concurrency:
