@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from scripts.validate_dev_runtime_cutover import (
     CRITICAL_FILES,
     FORBIDDEN_DEV_RUNTIME_URLS,
