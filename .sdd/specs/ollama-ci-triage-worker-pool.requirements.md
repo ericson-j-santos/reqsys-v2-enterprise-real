@@ -23,6 +23,7 @@ Usar Ollama no PC24x7 como primeiro nível automático de análise de falhas de 
 15. Em modo `execute`, comentário sanitizado é publicado uma vez por run; logs brutos não são reproduzidos.
 16. Nenhum caminho deste incremento executa merge, deploy, promoção, segredo, bypass de gate ou administração.
 17. O workflow oferece `dry_run` manual para validar Ollama e evidência antes da ativação automática na `main`.
+18. Falha de inferência do Ollama, indisponibilidade do runtime ou resposta estruturada inválida deve degradar para `OLLAMA_CI_TRIAGE_DEGRADED`, categoria `unknown`, confiança `0` e **sem** enqueue no Worker Pool; a falha original do CI continua sendo a fonte de verdade e a triagem auxiliar não gera uma segunda falha enganosa.
 
 ## Critérios de aceite
 
@@ -32,7 +33,8 @@ Usar Ollama no PC24x7 como primeiro nível automático de análise de falhas de 
 - contrato do workflow comprova checkout seguro, permissões mínimas, allowlist e ausência de loop;
 - Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato e `behind_by=0`;
 - `dry_run` real no PC24x7 produz JSON estruturado do Ollama vinculado a run real sem comentar/enfileirar;
-- integração externa permanece parcial até `execute` real enfileirar a branch do mesmo PR e leitura independente confirmar a task.
+- integração externa permanece parcial até `execute` real enfileirar a branch do mesmo PR e leitura independente confirmar a task;
+- saída Ollama inválida/indisponível produz evidência `DEGRADED`, preserva o diagnóstico determinístico e comprova ausência de autoescalonamento.
 
 ## Fora de escopo
 
