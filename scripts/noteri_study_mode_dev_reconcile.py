@@ -39,6 +39,7 @@ RUNTIME_FILES = {
     "backend/app/api/noteri_host_profile.py": "app/api/noteri_host_profile.py",
     "frontend/src/services/hostProfileLocalAgent.js": "src/services/hostProfileLocalAgent.js",
 }
+NGINX_CONFIG = Path("infra/nginx/default.dev.conf")
 
 
 class ReconcileError(RuntimeError):
@@ -224,6 +225,7 @@ def backup_and_copy(
     repo_root: Path,
     api_source: Path,
     frontend_source: Path,
+    working_dir: Path,
     expected_sha: str,
 ) -> tuple[Path, list[tuple[Path, Path | None]]]:
     stable_root = Path(os.environ.get("LOCALAPPDATA", "")) / "ReqSys" / "StudyModeDeploy"
@@ -244,6 +246,18 @@ def backup_and_copy(
             shutil.copy2(target, backup)
         shutil.copy2(source, target)
         changes.append((target, backup))
+
+    nginx_source = repo_root / NGINX_CONFIG
+    nginx_target = working_dir / NGINX_CONFIG
+    if not nginx_source.is_file():
+        raise ReconcileError("nginx_config_source_missing")
+    nginx_target.parent.mkdir(parents=True, exist_ok=True)
+    nginx_backup = None
+    if nginx_target.exists():
+        nginx_backup = backup_root / "infra__nginx__default.dev.conf"
+        shutil.copy2(nginx_target, nginx_backup)
+    shutil.copy2(nginx_source, nginx_target)
+    changes.append((nginx_target, nginx_backup))
 
     main_path = api_source / "app" / "main.py"
     if not main_path.is_file():
@@ -543,6 +557,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         repo_root,
         api_source,
         frontend_source,
+        working_dir,
         args.expected_sha,
     )
 
@@ -588,6 +603,21 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                 env=compose_env,
                 stage="frontend_rebuild",
             )
+
+        run(
+            [*base, "up", "-d", "--no-deps", "--force-recreate", "nginx"],
+            cwd=working_dir,
+            timeout=300,
+            env=compose_env,
+            stage="nginx_recreate",
+        )
+
+        _, public_health = http_json("GET", "/api/health")
+        _, runtime_health = http_json("GET", "/api/runtime/health")
+        gateway_contract = {
+            "api_health": public_health.get("status") is not None,
+            "runtime_health": runtime_health.get("status") is not None,
+        }
 
         api_after = inspect(
             API_CONTAINER,
@@ -636,6 +666,13 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                     env=compose_env,
                     stage="rollback_frontend_rebuild",
                 )
+            run(
+                [*original_base, "up", "-d", "--no-deps", "--force-recreate", "nginx"],
+                cwd=working_dir,
+                timeout=300,
+                env=compose_env,
+                stage="rollback_nginx_recreate",
+            )
         except Exception:
             pass
         raise
@@ -660,6 +697,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "loopback_agent_exposed": False,
         "browser_loopback_dependency_removed": True,
         "backup_created": backup_root.is_dir(),
+        "nginx_runtime_contract_refreshed": True,
+        "gateway_contract": gateway_contract,
         "api_e2e": api_result,
         "browser_e2e": browser_result,
         "production_touched": False,
