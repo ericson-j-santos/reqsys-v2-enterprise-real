@@ -2,28 +2,28 @@
 
 ## Objetivo
 
-Consolidar as URLs públicas conhecidas da solução, os critérios de validação operacional e o modelo analítico mínimo para acompanhar disponibilidade, status HTTP e tempo de resposta.
+Consolidar os acessos públicos atualmente válidos, os critérios de validação operacional e a evidência pós-merge do runtime vigente.
 
-## URLs de acesso
+## Estado de ambientes
 
-| Ambiente | Aplicação | API / Health | Finalidade |
+| Ambiente | Estado | Entrada pública | Runtime |
 | --- | --- | --- | --- |
-| Produção | `https://reqsys-app.fly.dev/` | `https://reqsys-api.fly.dev/health` | Uso principal da solução |
-| Staging / interno | `https://reqsys-app-stg.fly.dev/` | `https://reqsys-api-stg.fly.dev/health` | Homologação e validação controlada |
-| Desenvolvimento | `https://reqsys-app-dev.fly.dev/` | `https://reqsys-api-dev.fly.dev/health` | Testes técnicos e validação incremental |
-| Produção local Docker | `http://localhost:8081` | `http://localhost:8081/api/docs` | Execução local com compose de produção |
-| Desenvolvimento local Docker | `http://localhost:8083` | `http://localhost:8211/docs` | Execução local de desenvolvimento |
-| Testes E2E local Docker | `http://localhost:8084` | `http://localhost:8212/docs` | Execução local dedicada para testes |
+| DEV | ativo | `https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/` | PC24x7 + Cloudflare Quick Tunnel resolvido por locator Ed25519 |
+| HML | não promovido | sem endpoint público canônico ativo | `runtime_target=not_promoted` |
+| PROD | não promovido | sem endpoint público canônico ativo | `runtime_target=not_promoted` |
+| DEV local | ativo quando host disponível | `http://127.0.0.1:8083` | gateway Nginx local |
+
+A fonte machine-readable é `infra/public-access-urls.json`. Referências históricas Fly.io não definem o runtime atual.
 
 ## Validação automatizada
 
-Script criado:
+Comando:
 
 ```bash
 npm run validate:access
 ```
 
-Arquivo:
+Script:
 
 ```text
 scripts/validar-acessos-publicos.mjs
@@ -37,66 +37,43 @@ Workflow:
 
 ## Gatilhos do workflow
 
-| Gatilho | Quando executa | Comportamento esperado |
+| Gatilho | Quando executa | Comportamento |
 | --- | --- | --- |
-| `workflow_dispatch` | Execução manual pela UI ou GitHub CLI | Permite escolher `fail_on_unavailable=true` ou `false` |
-| `push` em `main` | Após merge ou push direto na branch principal | Executa validação bloqueante com `fail_on_unavailable=true` |
-| `schedule` | Diariamente às 10:17 UTC | Executa validação recorrente com `fail_on_unavailable=true` |
+| `pull_request: closed` em `main` | Após qualquer PR realmente mergeada | Executa somente com `merged=true`, faz checkout do `merge_commit_sha` exato e valida com `fail_on_unavailable=true` |
+| `push` em `main` | Fallback para push direto permitido pela governança | Validação bloqueante |
+| `workflow_dispatch` | Execução manual | Permite escolher `fail_on_unavailable=true` ou `false` |
+| `schedule` | Diariamente às 10:17 UTC | Validação bloqueante recorrente |
 
-## Governança do workflow
+O workflow **não depende de `workflow_run`** para comprovar pós-merge. Isso evita corrida com automações de merge e elimina execuções `skipped` quando o merge é realizado via `GITHUB_TOKEN`.
 
-- Permissão mínima declarada: `contents: read`.
-- Concorrência controlada por branch via `validacao-acessos-${{ github.ref }}`.
-- Execuções novas cancelam execuções anteriores ainda em andamento para a mesma referência.
-- O relatório analítico é publicado sempre que o job executa, inclusive em falha controlada.
-- O artefato publicado é `validacao-acessos-publicos.json`.
+## Governança
 
-## Campos analíticos gerados
+- Permissão mínima: `contents: read`.
+- Concorrência: `validacao-acessos-${{ github.ref }}`.
+- O checkout pós-merge usa explicitamente `github.event.pull_request.merge_commit_sha`.
+- A execução falha fechado se o SHA observado divergir do SHA esperado.
+- Evidência produzida por SHA anterior não pode liberar a validação pós-merge atual.
+- O relatório é publicado como artifact `validacao-acessos-publicos` mesmo quando a validação encontra falha.
+- O runtime DEV público obrigatório é a entrada estável `/dev/`, que resolve somente locator assinado vigente.
 
-O relatório JSON contém:
+## Campos analíticos
 
-| Campo | Descrição |
-| --- | --- |
-| `generatedAt` | Data/hora UTC da execução |
-| `timeoutMs` | Timeout aplicado por chamada |
-| `analytics.total` | Total de URLs avaliadas |
-| `analytics.reachable` | Quantidade de URLs alcançadas |
-| `analytics.expected` | Quantidade com status HTTP esperado |
-| `analytics.unavailable` | Quantidade indisponível |
-| `analytics.unexpectedStatus` | Quantidade com status inesperado |
-| `analytics.reachablePercent` | Percentual de disponibilidade técnica |
-| `analytics.expectedPercent` | Percentual de conformidade por status |
-| `analytics.avgDurationMs` | Tempo médio de resposta das URLs alcançadas |
-| `analytics.maxDurationMs` | Maior tempo de resposta observado |
-| `analytics.byEnvironment` | Quebra por ambiente: produção, staging e desenvolvimento |
-| `results[]` | Evidência por URL validada |
+O relatório JSON contém `generatedAt`, timeout, totais, alcançáveis, status esperados, indisponíveis, latência média/máxima, quebra por ambiente e evidência por URL.
 
 ## Critérios de aceite operacionais
 
 | Critério | Regra |
 | --- | --- |
-| API Health | Deve retornar `200` |
-| Aplicação Web | Pode retornar `200`, `301`, `302`, `401` ou `403`, desde que esteja alcançável |
-| Timeout | Cada URL deve responder dentro de `ACCESS_VALIDATION_TIMEOUT_MS` |
-| Falha controlada | `ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE=false` permite relatório sem quebrar a pipeline manual |
-| Falha bloqueante | `ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE=true` falha a execução em indisponibilidade/status inesperado |
-| Pós-merge | Todo `push` na `main` deve gerar relatório de validação pública |
+| Entrada DEV estável | HTTP 200 na URL GitHub Pages `/dev/` |
+| Runtime resolvido | Locator Ed25519 vigente, DEV, não expirado e limitado a HTTPS `*.trycloudflare.com` |
+| API/runtime | Endpoints obrigatórios devem retornar HTTP 200 conforme contrato do publisher |
+| SHA pós-merge | Checkout deve corresponder ao `merge_commit_sha` do PR fechado |
+| Falha bloqueante | Pós-merge, push e schedule usam `ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE=true` |
+| HML/PROD | Não são exigidos enquanto `runtime_target=not_promoted` |
 
-## Observação da validação externa neste ambiente
+## Interpretação
 
-A tentativa de validação direta a partir do ambiente desta sessão não conseguiu resolver os domínios públicos `fly.dev`. Por isso, a validação definitiva foi materializada como workflow GitHub Actions, que deve executar em ambiente com rede pública funcional e publicar o relatório como artefato.
-
-## Interpretação recomendada
-
-| Cenário | Decisão recomendada |
-| --- | --- |
-| `reachablePercent = 100` e `expectedPercent = 100` | Acesso público íntegro |
-| `reachablePercent = 100` e `expectedPercent < 100` | Ambiente responde, mas há divergência de status HTTP |
-| `reachablePercent < 100` | Investigar DNS, deploy, healthcheck, Fly.io, TLS ou roteamento |
-| `avgDurationMs` crescente por vários dias | Investigar latência, cold start, plano gratuito, recursos ou dependências externas |
-| Produção falha e dev/staging passam | Priorizar rollback ou verificação de secrets/variáveis de produção |
-| Dev falha e produção passa | Bloquear promoção de novas mudanças até estabilizar ambiente técnico |
-
-## Próximo incremento recomendado
-
-Persistir o JSON de validação em um histórico versionado ou storage externo para gerar tendência temporal de disponibilidade e latência por ambiente.
+- 100% alcançável e status esperado: acesso público íntegro para o escopo ativo.
+- Entrada estável disponível, mas locator expirado/sem runtime: runtime DEV indisponível; não tratar Pages isoladamente como sucesso funcional.
+- Runtime DEV falho: bloquear promoção e corrigir o PC24x7/Cloudflare antes de ampliar escopo.
+- HML/PROD só entram na validação obrigatória após promoção explícita no manifesto de runtime.
