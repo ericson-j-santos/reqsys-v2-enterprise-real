@@ -21,7 +21,7 @@ def test_agent_runs_when_main_advances_and_uses_trusted_pr_target() -> None:
 def test_builtin_token_is_read_only_and_app_token_is_minimum_write_scope() -> None:
     text = _text()
     header = text.split("jobs:", maxsplit=1)[0]
-    assert "permissions:\n  contents: read" in header
+    assert "permissions:\n  contents: read\n  pull-requests: read" in header
     assert "pull-requests: write" not in header
     assert "actions/create-github-app-token@v2" in text
     assert "app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}" in text
