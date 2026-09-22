@@ -24,6 +24,7 @@ from app.api import (
     figma_github,
     financeiro,
     github_merge_console,
+    repository_admin,
     govbi,
     hub_lowcode,
     ia,
@@ -153,6 +154,7 @@ app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
 app.include_router(github_merge_console.router)
+app.include_router(repository_admin.router)
 app.include_router(rag_governado.router)
 app.include_router(operational_autonomy.router)
 app.include_router(ocr_review.router)
