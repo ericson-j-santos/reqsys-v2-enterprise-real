@@ -44,6 +44,10 @@ PC24x7 --Ed25519--> ntfy.sh
 16. O publisher local só pode publicar URLs que respondam HTTP 200 em `/api/health`, `/api/runtime/health` e `/api/runtime/build-info`.
 17. O supervisor não pode publicar locator quando o contrato runtime local estiver parcial; nesse caso deve registrar `local_runtime_contract_failed`, manter `ready=false` e deixar o locator anterior expirar naturalmente.
 18. Toda validação de publicação same-SHA deve comparar o SHA observado exclusivamente com o `expected_sha` imutável da execução; coincidir apenas com o HEAD atual de `main` não é evidência válida e deve falhar fechado.
+19. O cutover DEV não é concluído apenas pela existência do PC24x7: caminhos críticos de navegação, configuração e smoke não podem depender, redirecionar ou usar fallback silencioso para `reqsys-app-dev.fly.dev` ou `reqsys-api-dev.fly.dev`.
+20. Smokes públicos de DEV devem resolver o mesmo locator Ed25519 vigente; um resultado funcional diferente de `passed` deve produzir workflow vermelho, mesmo quando o artefato de análise continuar `report-only` para decisão executiva.
+21. A navegação para DEV deve usar a entrada estável GitHub Pages e encaminhar somente uma rota relativa validada ao Quick Tunnel selecionado; URL absoluta ou `//host` não pode ser aceita como destino.
+22. Alterações do Modo ESTUDO integradas em `main` devem disparar reconciliação DEV no runner `pc24x7` e validar NORMAL→ESTUDO→replay idempotente→NORMAL sem tocar HML/PROD.
 
 ## Critérios de aceite
 
@@ -61,3 +65,7 @@ PC24x7 --Ed25519--> ntfy.sh
 - o workflow de promoção automática resolve o tunnel vigente pelo locator assinado e não usa `vars.PC24X7_DEV_BASE_URL`/`vars.PC24X7_DEV_FRONTEND_URL` como URL efêmera estática;
 - runtime parcial (health básico verde, mas runtime health/build-info ausentes) nunca é republicado pelo locator.
 - teste negativo comprova que runtime no SHA atual de `main`, porém diferente do `expected_sha`, é rejeitado como `sha_mismatch`.
+- gate preventivo bloqueia referências Fly.io DEV nos caminhos críticos do cutover;
+- navegação DEV usa `/dev/?target=<rota-relativa>` e o locator rejeita alvo absoluto/protocol-relative;
+- smoke DEV com falha funcional não pode terminar verde;
+- merge em `main` de arquivos do Modo ESTUDO dispara reconciliação física no PC24x7.
