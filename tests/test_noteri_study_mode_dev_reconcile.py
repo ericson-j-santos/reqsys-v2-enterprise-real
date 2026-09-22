@@ -12,6 +12,7 @@ POLICY = ROOT / ".github" / "self-hosted-runner-policy.json"
 OVERLAY = ROOT / "docker-compose.noteri-study-mode.yml"
 FRONTEND = ROOT / "frontend" / "src" / "services" / "hostProfileLocalAgent.js"
 BACKEND_API = ROOT / "backend" / "app" / "api" / "noteri_host_profile.py"
+NGINX_DEV = ROOT / "infra" / "nginx" / "default.dev.conf"
 
 spec = importlib.util.spec_from_file_location("noteri_study_mode_dev_reconcile", SCRIPT)
 assert spec and spec.loader
@@ -113,3 +114,16 @@ def test_reconciler_rebuilds_frontend_when_runtime_bind_is_absent():
     assert 'stage="frontend_rebuild"' in raw
     assert '"--build"' in raw
     assert 'stage="rollback_frontend_rebuild"' in raw
+
+
+def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
+    raw = SCRIPT.read_text(encoding="utf-8")
+    nginx = NGINX_DEV.read_text(encoding="utf-8")
+    assert 'NGINX_CONFIG = Path("infra/nginx/default.dev.conf")' in raw
+    assert 'stage="nginx_recreate"' in raw
+    assert 'stage="rollback_nginx_recreate"' in raw
+    assert 'http_json("GET", "/api/health")' in raw
+    assert 'http_json("GET", "/api/runtime/health")' in raw
+    assert '"nginx_runtime_contract_refreshed": True' in raw
+    assert "location ~ ^/api/(runtime|" in nginx
+    assert "proxy_pass http://api:8000;" in nginx

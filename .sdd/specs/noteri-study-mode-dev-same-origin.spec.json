@@ -21,7 +21,8 @@
     "ESTUDO permite somente a tarefa de controle do perfil; trabalho normal continua bloqueado.",
     "Replay do mesmo perfil retorna changed=false sem novo enqueue.",
     "O E2E prova NORMAL->ESTUDO->ESTUDO->NORMAL e leitura imediata pelo control plane.",
-    "HML/PROD, segredos, GUI, RDC e comando arbitrário permanecem fora do escopo."
+    "HML/PROD, segredos, GUI, RDC e comando arbitrário permanecem fora do escopo.",
+    "A reconciliação sincroniza o Nginx DEV efetivo, recria o proxy e exige HTTP 200 em /api/health e /api/runtime/health antes do E2E."
   ],
   "controls": {
     "hml_enabled": false,
@@ -38,8 +39,9 @@
   "sdd_gate": {
     "tests": [
       "backend/tests/test_noteri_host_profile_api.py",
-      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js"
+      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
+      "tests/test_noteri_study_mode_dev_reconcile.py"
     ],
-    "evidence_contract": "O Task Console DEV deve alternar NORMAL/ESTUDO pela API same-origin; a API deve observar um único worker Noteri fresco/online/autenticado no Engineering Orchestrator; somente host.profile.set.v1 pode alterar o perfil; a tarefa deve comprovar leitura local independente e heartbeat imediato; ESTUDO não pode liberar trabalho normal; replay não cria nova tarefa."
+    "evidence_contract": "O Task Console DEV deve alternar NORMAL/ESTUDO pela API same-origin; a API deve observar um único worker Noteri fresco/online/autenticado no Engineering Orchestrator; somente host.profile.set.v1 pode alterar o perfil; a tarefa deve comprovar leitura local independente e heartbeat imediato; ESTUDO não pode liberar trabalho normal; replay não cria nova tarefa. A reconciliação também deve reparar drift do Nginx DEV, recriar o proxy e comprovar /api/health e /api/runtime/health HTTP 200 antes de declarar o runtime apto."
   }
 }

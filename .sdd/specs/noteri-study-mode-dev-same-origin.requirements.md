@@ -9,7 +9,10 @@ Desktop altera o host errado e não pode ser usado como transporte.
 
 O runtime público observado também respondeu 404 para
 `/api/v1/noteri/profile`, comprovando que a publicação vigente está atrás do
-contrato de código atual.
+contrato de código atual. Em 22/09/2026, o gate externo confirmou outro drift:
+`/api/health` respondeu 200, mas `/api/runtime/health` respondeu 404. Como o
+backend atual expõe essa rota e o Nginx DEV atual preserva `/api/runtime/*`,
+esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 
 ## Estado alvo
 
@@ -33,6 +36,9 @@ contrato de código atual.
     segredo faz parte deste fluxo.
 12. O E2E deve provar NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL, autenticação,
     leitura independente e bloqueio de trabalho normal durante ESTUDO.
+13. A reconciliação deve sincronizar `infra/nginx/default.dev.conf` para a
+    árvore efetiva do runtime, recriar o Nginx e comprovar HTTP 200 em
+    `/api/health` e `/api/runtime/health` antes do E2E funcional.
 
 ## Critérios de aceite
 
@@ -47,6 +53,9 @@ contrato de código atual.
 8. ESTUDO→NORMAL funciona mesmo quando desenvolvimento normal está bloqueado.
 9. Erros HTTP não expõem caminhos, exceções internas ou dados sensíveis.
 10. HML/PROD, deploy e merge permanecem fora deste incremento sem autorização.
+11. Drift de proxy que faça `/api/runtime/health` retornar 404 deve falhar
+    fechado; a reconciliação só conclui após restaurar o contrato público e
+    confirmar as duas rotas de saúde por leitura HTTP independente.
 
 ## Topologia
 
