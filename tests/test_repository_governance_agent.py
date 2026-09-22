@@ -16,11 +16,12 @@ def test_agent_runs_when_main_advances() -> None:
     assert "schedule:" not in text
 
 
-def test_agent_has_minimum_write_permission() -> None:
+def test_agent_has_minimum_write_permission_for_update_branch() -> None:
     text = _text()
-    assert "contents: read" in text
+    assert "contents: write" in text
     assert "pull-requests: write" in text
-    assert "contents: write" not in text
+    assert "issues: write" not in text
+    assert "actions: write" not in text
 
 
 def test_agent_limits_ci_fanout() -> None:
@@ -68,3 +69,17 @@ def test_agent_has_single_concurrency_lane() -> None:
     text = _text()
     assert "group: repository-governance-agent-main-sync" in text
     assert "cancel-in-progress: true" in text
+
+
+def test_global_sync_only_runs_for_main_push_or_manual_dispatch() -> None:
+    text = _text()
+    marker = "sync-open-prs:"
+    block = text.split(marker, maxsplit=1)[1]
+    assert "if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'" in block
+
+
+def test_mutation_api_errors_fail_the_job() -> None:
+    text = _text()
+    assert "update_branch_api_" in text
+    assert "mutationFailures" in text
+    assert "core.setFailed" in text
