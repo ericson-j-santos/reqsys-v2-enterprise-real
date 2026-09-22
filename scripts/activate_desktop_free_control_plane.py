@@ -42,6 +42,7 @@ RUNNER_ASSET_URL = (
 RUNNER_ASSET_SHA256 = "1150692afa94e71f872017e254ea55b6eece1eece3fe7e3a6d4c93d0a1b85cfc"
 RUNNER_NAME = "DESKTOP-PDQK954"
 RUNNER_LABELS = "pc24x7,reqsys-dev"
+REQUIRED_RUNNER_LABELS = ("self-hosted", "Windows", "X64", "pc24x7", "reqsys-dev")
 
 CANDIDATES = (
     Path(r"C:\actions-runner"),
@@ -258,6 +259,85 @@ def registration_token(gh: Path) -> str:
     )
 
 
+def runner_registry_snapshot(gh: Path) -> dict[str, Any]:
+    cp = subprocess.run(
+        [str(gh), "api", f"repos/{REPOSITORY}/actions/runners"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+        env=gh_env(),
+    )
+    if cp.returncode != 0:
+        raise ActivationError(
+            "runner_registry_query_failed",
+            f"consulta ao registro de runners falhou (exit={cp.returncode})",
+        )
+    try:
+        payload = json.loads(cp.stdout)
+    except json.JSONDecodeError as exc:
+        raise ActivationError(
+            "runner_registry_invalid",
+            "resposta inválida ao consultar runners",
+        ) from exc
+    runners = payload.get("runners") if isinstance(payload, dict) else None
+    if not isinstance(runners, list):
+        raise ActivationError("runner_registry_invalid", "lista de runners ausente")
+
+    matches = [
+        item for item in runners
+        if isinstance(item, dict)
+        and str(item.get("name") or "").casefold() == RUNNER_NAME.casefold()
+    ]
+    if not matches:
+        return {
+            "present": False,
+            "status": "missing",
+            "busy": False,
+            "labels": [],
+            "labels_ok": False,
+        }
+    if len(matches) != 1:
+        raise ActivationError(
+            "runner_registry_ambiguous",
+            "mais de um runner com o nome governado foi encontrado",
+        )
+
+    item = matches[0]
+    labels_raw = item.get("labels")
+    labels = sorted(
+        {
+            str(label.get("name") or "")
+            for label in labels_raw
+            if isinstance(label, dict) and str(label.get("name") or "")
+        }
+    ) if isinstance(labels_raw, list) else []
+    observed = {label.casefold() for label in labels}
+    required = {label.casefold() for label in REQUIRED_RUNNER_LABELS}
+    return {
+        "present": True,
+        "status": str(item.get("status") or "unknown").casefold(),
+        "busy": bool(item.get("busy")),
+        "labels": labels,
+        "labels_ok": required.issubset(observed),
+    }
+
+
+def wait_runner_registry_online(gh: Path, timeout_seconds: float = 45.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last = runner_registry_snapshot(gh)
+    while time.monotonic() < deadline:
+        if last.get("present") and last.get("status") == "online" and last.get("labels_ok"):
+            return last
+        if last.get("present") and not last.get("labels_ok"):
+            return last
+        time.sleep(2)
+        last = runner_registry_snapshot(gh)
+    return last
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -460,20 +540,36 @@ def main() -> int:
         repo_root = args.repo_root.resolve()
         source_sha = resolve_source_sha(repo_root, args.source_sha)
 
+        gh = ensure_gh()
+        ensure_gh_auth(gh)
+
         runner = discover_runner(args.runner_home)
         if runner is None:
             runner = (args.runner_home or default_runner_home()).resolve()
-            gh = ensure_gh()
-            ensure_gh_auth(gh)
             ensure_runner_binaries(runner)
             registration_performed = register_runner(runner, gh)
             token_consumed = registration_performed
 
         started_now = start_runner(runner)
+        registry = wait_runner_registry_online(gh)
+        local_running = runner_running()
+
+        if not local_running:
+            state = "runner_process_not_running"
+        elif not registry.get("present"):
+            state = "runner_registry_missing"
+        elif not registry.get("labels_ok"):
+            state = "runner_labels_mismatch"
+        elif registry.get("status") != "online":
+            state = "runner_github_offline"
+        else:
+            state = "runtime_active"
+
         watchdog = install_watchdog(repo_root, source_sha, runner)
+        runtime_ok = state == "runtime_active"
         result = {
-            "ok": runner_running(),
-            "state": "runtime_active" if runner_running() else "runner_not_running",
+            "ok": runtime_ok,
+            "state": state,
             "host": host,
             "runner_home": str(runner),
             "runner_version": RUNNER_VERSION,
@@ -481,7 +577,12 @@ def main() -> int:
             "runner_labels": RUNNER_LABELS,
             "runner_registered_now": registration_performed,
             "runner_started_now": started_now,
-            "runner_running": runner_running(),
+            "runner_running": local_running,
+            "runner_registry_present": bool(registry.get("present")),
+            "runner_registry_status": str(registry.get("status") or "unknown"),
+            "runner_registry_busy": bool(registry.get("busy")),
+            "runner_registry_labels": registry.get("labels") or [],
+            "runner_registry_labels_ok": bool(registry.get("labels_ok")),
             "watchdog_activation_pending": bool(watchdog.get("activation_pending")),
             "watchdog_requires_uac_activation": bool(watchdog.get("requires_uac_activation")),
             "watchdog_task": watchdog.get("task"),
@@ -493,7 +594,7 @@ def main() -> int:
             "registration_token_logged": False,
         }
         emit(result)
-        return 0 if result["ok"] else 3
+        return 0 if runtime_ok else 3
     except ActivationError as exc:
         emit({
             "ok": False,
