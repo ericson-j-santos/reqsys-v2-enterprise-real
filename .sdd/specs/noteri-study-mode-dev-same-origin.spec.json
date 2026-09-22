@@ -12,6 +12,14 @@
   "description": "Corrige o Modo ESTUDO no ambiente DEV público removendo a dependência browser->127.0.0.1:8765 e usando API ReqSys same-origin autenticada sobre o mesmo host-profile.json do Noteri.",
   "environment": "dev",
   "runtime_target": "Noteri",
+  "acceptance_criteria": [
+    "O navegador usa somente a API same-origin /api/v1/noteri/profile e não acessa 127.0.0.1:8765.",
+    "GET exige autenticação e POST exige privilégio administrativo, sem expor detalhes internos de exceções.",
+    "A mudança NORMAL -> ESTUDO é persistida no host-profile.json canônico e confirmada por leitura independente.",
+    "O replay de ESTUDO é idempotente e informa changed=false sem efeito duplicado.",
+    "O fluxo retorna a NORMAL ao final e comprova o estado por API, arquivo e interface do Task Console.",
+    "A execução permanece restrita ao Noteri/DEV, sem HML/PROD, segredos ou exposição pública do agente loopback."
+  ],
   "controls": {
     "hml_enabled": false,
     "production_enabled": false,
