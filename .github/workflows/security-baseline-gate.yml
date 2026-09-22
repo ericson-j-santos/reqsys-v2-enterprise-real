@@ -52,8 +52,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Compile validator
-        run: python -m py_compile scripts/validate_security_baseline.py
+      - name: Compile validators
+        run: |
+          python -m py_compile scripts/validate_security_baseline.py
+          python -m py_compile scripts/vibe_security_gate.py
 
       - name: Resolve scan scope
         id: scope
@@ -106,6 +108,19 @@ jobs:
             python scripts/validate_security_baseline.py --strict "${args[@]}"
           fi
 
+      - name: Run Vibe Coding 12-risk gate
+        env:
+          SCAN_SCOPE: ${{ steps.scope.outputs.scope }}
+          CHANGED_FILES: ${{ steps.scope.outputs.changed_files }}
+        shell: bash
+        run: |
+          python scripts/vibe_security_gate.py --self-test-negative
+          args=("--output-dir" "artifacts/security-baseline/vibe-security" "--scope" "$SCAN_SCOPE")
+          if [ "$SCAN_SCOPE" = "changed" ]; then
+            args+=("--changed-files" "$CHANGED_FILES")
+          fi
+          python scripts/vibe_security_gate.py --strict "${args[@]}"
+
       - name: Publish security baseline artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -122,5 +137,13 @@ jobs:
             cat artifacts/security-baseline/security-baseline-report.md >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Security baseline report não foi gerado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if [ -f artifacts/security-baseline/vibe-security/vibe-security-report.md ]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/security-baseline/vibe-security/vibe-security-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Vibe security report não foi gerado." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
