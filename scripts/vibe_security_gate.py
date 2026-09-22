@@ -122,6 +122,30 @@ def load_changed_file_paths(path: Path) -> set[str]:
     return {normalize_repo_path(line) for line in path.read_text(encoding="utf-8").splitlines() if normalize_repo_path(line)}
 
 
+def load_changed_line_map(path: Path) -> dict[str, set[int]]:
+    """Carrega linhas adicionadas por arquivo para bloquear somente dívida nova no Pre-PR."""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("changed-lines deve ser um objeto JSON")
+    result: dict[str, set[int]] = {}
+    for raw_path, raw_lines in payload.items():
+        normalized = normalize_repo_path(str(raw_path))
+        if not normalized or not isinstance(raw_lines, list):
+            continue
+        lines: set[int] = set()
+        for item in raw_lines:
+            try:
+                line = int(item)
+            except (TypeError, ValueError):
+                continue
+            if line > 0:
+                lines.add(line)
+        result[normalized] = lines
+    return result
+
+
 def is_ignored(relative: Path) -> bool:
     normalized = relative.as_posix()
     if normalized in EXCLUDED_FILES or normalized.startswith(EXCLUDED_PREFIXES):
@@ -249,6 +273,18 @@ def scan_repository(root: Path, include_paths: set[str] | None = None) -> tuple[
     return findings, len(files)
 
 
+def filter_blockers_to_changed_lines(
+    findings: list[Finding],
+    changed_lines: dict[str, set[int]],
+) -> list[Finding]:
+    """Mantém reviews contextuais, mas bloqueia apenas sinais novos nas linhas adicionadas."""
+    return [
+        item
+        for item in findings
+        if item.enforcement != "block" or item.line in changed_lines.get(item.path, set())
+    ]
+
+
 def risk_statuses(findings: list[Finding]) -> list[dict]:
     by_risk: dict[str, list[Finding]] = {risk.risk_id: [] for risk in RISK_DEFINITIONS}
     for finding in findings:
@@ -345,6 +381,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--strict", action="store_true", help="Falha quando houver achado com enforcement=block.")
     parser.add_argument("--scope", choices={"all", "changed"}, default="all")
     parser.add_argument("--changed-files", default=None)
+    parser.add_argument(
+        "--changed-lines",
+        default=None,
+        help="JSON opcional path -> linhas adicionadas; em scope=changed limita blockers à dívida nova.",
+    )
     parser.add_argument("--self-test-negative", action="store_true")
     return parser.parse_args()
 
@@ -358,12 +399,20 @@ def main() -> int:
 
     root = Path(args.root).resolve()
     include_paths: set[str] | None = None
+    changed_lines: dict[str, set[int]] | None = None
     if args.scope == "changed":
         if not args.changed_files:
             raise SystemExit("--changed-files é obrigatório quando --scope=changed")
         include_paths = load_changed_file_paths((root / args.changed_files).resolve())
+        if args.changed_lines:
+            try:
+                changed_lines = load_changed_line_map((root / args.changed_lines).resolve())
+            except (OSError, json.JSONDecodeError, ValueError) as exc:
+                raise SystemExit(f"changed-lines inválido: {exc}") from exc
 
     findings, scanned_files = scan_repository(root, include_paths=include_paths)
+    if changed_lines is not None:
+        findings = filter_blockers_to_changed_lines(findings, changed_lines)
     payload = write_reports(root, (root / args.output_dir).resolve(), args.scope, scanned_files, findings)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     if args.strict and payload["summary"]["blockers"] > 0:

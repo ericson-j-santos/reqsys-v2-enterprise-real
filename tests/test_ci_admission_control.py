@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
 import sys
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +37,11 @@ def readiness(*, status: str = "passed", blockers: list[str] | None = None, prof
         "changed_files": ["scripts/ci_admission_guard.py"],
         "profiles": profiles or ["operational"],
         "checks": [],
+        "preventive_invariants": [
+            {"name": "sdd:contract", "status": "passed", "detail": "ok"},
+            {"name": "security:changed-diff", "status": "passed", "detail": "ok"},
+            {"name": "workflow:regression-contracts", "status": "passed", "detail": "ok"},
+        ],
         "blockers": blockers or [],
         "warnings": [],
     }
@@ -45,6 +53,7 @@ def test_manifest_admits_exact_sha_and_marks_ollama_optional() -> None:
     assert result["head_sha"] == "a" * 40
     assert "Pre-PR Readiness Gate" in result["required_workflows"]
     assert "CI — ReqSys v2 Enterprise" in result["required_workflows"]
+    assert {item["name"] for item in result["preventive_invariants"]} == manifest.REQUIRED_PREVENTIVE_INVARIANTS
     ollama = next(item for item in result["dependencies"] if item["name"] == "ollama_ci_triage")
     assert ollama["required"] is False
     assert ollama["failure_policy"] == "deterministic_fallback"
@@ -137,3 +146,55 @@ def test_pr_evidence_gate_requires_manifest_from_current_sha() -> None:
     assert "Admission manifest missing for current head SHA" in raw
     assert "artifact.name === admissionArtifactName" in raw
     assert "head_sha: headSha" in raw
+
+
+def test_manifest_blocks_when_required_preventive_invariant_is_missing() -> None:
+    payload = readiness()
+    payload["preventive_invariants"] = [
+        {"name": "sdd:contract", "status": "passed", "detail": "ok"},
+        {"name": "security:changed-diff", "status": "passed", "detail": "ok"},
+    ]
+    result = manifest.build_manifest(payload, "a" * 40)
+    assert result["status"] == "blocked"
+    assert any(
+        item["code"] == "PREVENTIVE_INVARIANT_FAILED"
+        and "workflow:regression-contracts" in item["message"]
+        for item in result["blocker_reason"]
+    )
+
+
+def test_guard_validates_manifest_content_not_only_artifact_name() -> None:
+    head = "a" * 40
+    base = "b" * 40
+    payload = manifest.build_manifest(readiness(), head)
+    validated = guard.validate_manifest_payload(payload, head, base)
+    assert validated["status"] == "admitted"
+    assert validated["head_sha"] == head
+
+    payload["preventive_invariants"][0]["status"] = "failed"
+    try:
+        guard.validate_manifest_payload(payload, head, base)
+    except guard.AdmissionGuardError as exc:
+        assert "invariants_failed" in str(exc)
+    else:
+        raise AssertionError("manifesto com invariante falho deveria ser rejeitado")
+
+
+def test_guard_rejects_manifest_with_wrong_base_sha() -> None:
+    head = "a" * 40
+    payload = manifest.build_manifest(readiness(), head)
+    try:
+        guard.validate_manifest_payload(payload, head, "c" * 40)
+    except guard.AdmissionGuardError as exc:
+        assert "base_sha_mismatch" in str(exc)
+    else:
+        raise AssertionError("manifesto de outra base deveria ser rejeitado")
+
+
+def test_guard_extracts_exact_manifest_file_from_artifact_zip() -> None:
+    head = "a" * 40
+    payload = manifest.build_manifest(readiness(), head)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(f"{head}.json", json.dumps(payload))
+    assert guard.manifest_from_zip(buffer.getvalue(), head)["head_sha"] == head

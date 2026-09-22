@@ -99,3 +99,47 @@ def test_report_always_contains_12_risk_rows_and_no_signal_is_not_pass_claim(tmp
 
 def test_negative_self_test_detects_known_failure():
     assert gate.self_test_negative() is True
+
+
+def test_changed_line_scope_blocks_only_new_static_debt(tmp_path):
+    write(
+        tmp_path,
+        "backend/app/api.py",
+        "raise HTTPException(status_code=500, detail=str(exc))\nvalue = 1\n",
+    )
+    findings, _ = gate.scan_repository(tmp_path, include_paths={"backend/app/api.py"})
+
+    legacy_filtered = gate.filter_blockers_to_changed_lines(
+        findings,
+        {"backend/app/api.py": {2}},
+    )
+    assert [item for item in legacy_filtered if item.enforcement == "block"] == []
+
+    new_debt = gate.filter_blockers_to_changed_lines(
+        findings,
+        {"backend/app/api.py": {1}},
+    )
+    assert any(item.risk_id == "12" and item.enforcement == "block" for item in new_debt)
+
+
+def test_load_changed_line_map_normalizes_and_rejects_noise(tmp_path):
+    path = tmp_path / "changed-lines.json"
+    path.write_text(
+        json.dumps({"./backend/app/api.py": [1, "2", 0, "x"], "docs/x.md": []}),
+        encoding="utf-8",
+    )
+    assert gate.load_changed_line_map(path) == {
+        "backend/app/api.py": {1, 2},
+        "docs/x.md": set(),
+    }
+
+
+def test_security_baseline_passes_changed_line_map_to_vibe_gate() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "security-baseline-gate.yml"
+    ).read_text(encoding="utf-8")
+    assert "changed-lines.json" in workflow
+    assert 'args+=("--changed-files" "$CHANGED_FILES" "--changed-lines" "$CHANGED_LINES")' in workflow
