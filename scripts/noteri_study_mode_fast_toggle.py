@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -51,9 +52,31 @@ def main() -> int:
     if socket.gethostname().casefold() != EXPECTED_HOST.casefold():
         return fail("host_not_allowed")
 
-    health_status, health = http_json("GET", "/health")
+    try:
+        health_status, health = http_json("GET", "/health")
+    except OSError:
+        health_status, health = 0, {}
+
     if health_status != 200 or health.get("ok") is not True:
-        return fail("profile_agent_unavailable")
+        control = Path(__file__).resolve().with_name("noteri_host_profile_agent_control.py")
+        completed = subprocess.run(
+            [sys.executable, str(control), "start", "--host", EXPECTED_HOST],
+            cwd=str(Path(__file__).resolve().parents[1]),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=False,
+        )
+        if completed.returncode != 0:
+            return fail("profile_agent_start_failed")
+        try:
+            health_status, health = http_json("GET", "/health")
+        except OSError:
+            health_status, health = 0, {}
+        if health_status != 200 or health.get("ok") is not True:
+            return fail("profile_agent_unavailable")
 
     correlation_id = f"study-fast-toggle-{int(time.time())}"
     status, changed = http_json(
