@@ -75,11 +75,16 @@ def test_pages_deploy_requires_explicit_sha_bound_authorization():
     assert "teams-notification-dashboard.yml/runs?status=success" in raw
 
 
-def test_public_access_validation_runs_after_governed_merge():
+def test_public_access_validation_runs_after_merged_pr_close():
     workflow = (ROOT / ".github" / "workflows" / "validacao-acessos.yml").read_text(encoding="utf-8")
-    assert "Governed PR Automation" in workflow
-    assert "github.event.workflow_run.conclusion == 'success'" in workflow
-    assert "github.event.workflow_run.event == 'workflow_run'" in workflow
+    trigger_block = workflow.split("permissions:", 1)[0]
+    assert "pull_request:" in trigger_block
+    assert "types:" in trigger_block
+    assert "- closed" in trigger_block
+    assert "workflow_run:" not in trigger_block
+    assert "github.event.pull_request.merged == true" in workflow
+    assert "github.event.pull_request.merge_commit_sha" in workflow
+    assert 'test "$observed_sha" = "$EXPECTED_SHA"' in workflow
     assert "ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE" in workflow
 
 
