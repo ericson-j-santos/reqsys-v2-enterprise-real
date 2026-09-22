@@ -15,6 +15,7 @@ from app.api import (
     auditoria,
     auth,
     codex_governado,
+    change_evidence,
     cofre,
     cofre_runtime_control,
     connectors,
@@ -135,6 +136,7 @@ app.include_router(cofre.router)
 app.include_router(cofre_runtime_control.router)
 app.include_router(service_tokens.router)
 app.include_router(service_cases.router)
+app.include_router(change_evidence.router)
 app.include_router(service_catalog.router)
 app.include_router(service_case_operations.router)
 app.include_router(connectors.router)
