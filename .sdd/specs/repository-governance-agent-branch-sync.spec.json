@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Hotfix federado: sincronizar com segurança PRs atrasadas após avanço da main, mantendo a Governed Merge Queue como rota exclusiva de merge.",
+  "description": "Hotfix federado: sincronizar PRs atrasadas com token de GitHub App limitado a contents:write, sem depender de pull_requests:write e mantendo a fila governada como rota exclusiva de integração na main.",
   "scope": "github-ci-dev",
   "files": [
     ".github/workflows/repository-governance-agent.yml",
@@ -20,11 +20,11 @@
     "tests": [
       "tests/test_repository_governance_agent.py"
     ],
-    "evidence_contract": "Provar update_branch somente para PR aberta, same-repo, não-draft, sem conflito e behind_by>0; expected_head_sha obrigatório; leitura pós-ação deve observar novo HEAD e behind_by=0; fan-out máximo 3; nenhum caminho executa merge ou deploy."
+    "evidence_contract": "Provar sincronização somente para PR aberta, same-repo, não-draft, sem conflito e behind_by>0; reler HEAD/base antes da escrita; confirmar os mesmos SHAs no Git remoto; criar merge em repositório bare por merge-tree/commit-tree; push não-forçado exclusivamente para a branch head; leitura pós-ação deve comprovar novo HEAD contendo a base observada e behind_by=0; fan-out máximo 3; nenhum caminho integra PR na main ou executa deploy."
   },
   "risk": {
     "production": false,
-    "merge": false,
+    "merge_to_main": false,
     "deploy": false,
     "secrets_mutation": false,
     "admin_permissions": false,
