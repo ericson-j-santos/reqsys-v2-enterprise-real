@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 1
 
       - name: Execute governed Figma GitHub E2E
-        shell: pwsh
+        shell: powershell
         run: python scripts/figma_github_dev_e2e.py --expected-sha "${{ github.sha }}" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
 
       - name: Upload sanitized E2E evidence
@@ -42,7 +42,7 @@ jobs:
 
       - name: Summary
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
           "## Figma GitHub E2E DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Host: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
