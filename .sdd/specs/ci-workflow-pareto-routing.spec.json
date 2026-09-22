@@ -42,16 +42,19 @@
     "tests/test_ci_budget_guard.py",
     "tests/fixtures/ci-budget/pr-1954-changed-files.txt",
     ".github/workflows/ci-advisory-router.yml",
-    ".github/workflows/deep-governance-review.yml"
+    ".github/workflows/deep-governance-review.yml",
+    ".github/workflows/governed-pr-automation.yml",
+    "tests/test_governed_pr_automation_dispatch_contract.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_codeql_atomic_publish_workflow.py",
       "tests/test_report_only_workflow_pareto.py",
       "tests/test_workflow_governance_consolidator.py",
-      "tests/test_ci_budget_guard.py"
+      "tests/test_ci_budget_guard.py",
+      "tests/test_governed_pr_automation_dispatch_contract.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico."
+    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge."
   },
   "risk": {
     "production": false,
@@ -72,6 +75,8 @@
     "Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier não possuem gatilho pull_request e preservam workflow_dispatch.",
     "CI Advisory Router é acionado somente após CI — ReqSys v2 Enterprise concluído ou manualmente e publica evidência report-only.",
     "CI Advisory Router não possui actions:write, não dispara automaticamente os workflows consultivos e declara critical_path_blocker=false.",
-    "Deep Governance Review não materializa em synchronize; mantém labeled, schedule e workflow_dispatch."
+    "Deep Governance Review não materializa em synchronize; mantém labeled, schedule e workflow_dispatch.",
+    "Governed PR Automation não falha o workflow quando governed-merge-approved está ausente após a fila verde; registra espera governada e não executa merge.",
+    "Adicionar governed-merge-approved dispara nova avaliação pelo evento labeled e o merge continua condicionado a HEAD exato, merge-queue:eligible e workflows obrigatórios verdes."
   ]
 }
