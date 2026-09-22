@@ -43,3 +43,11 @@ def test_study_mode_reconciles_on_main_after_merge():
     assert "push:" in trigger
     assert "- main" in trigger
     assert "pc24x7" in raw
+
+def test_backend_catalog_uses_stable_entrypoint_and_same_origin_api():
+    raw = (ROOT / "backend/app/core/config.py").read_text(encoding="utf-8")
+    assert STABLE_DEV_ENTRYPOINT in raw
+    assert "same-origin:/api" in raw
+    assert "reqsys-app-dev.fly.dev" not in raw
+    assert "reqsys-api-dev.fly.dev" not in raw
+
