@@ -51,7 +51,7 @@ def test_authorized_gateway_has_exact_ollama_e2e_route_and_cleanup() -> None:
     assert "github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'" in raw
     assert "target='codex-ollama-e2e-dev.yml'" in raw
     assert "steps.route.outputs.target == 'codex-ollama-e2e-dev.yml'" in raw
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in raw
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in raw
     assert 'gh run cancel "$TARGET_RUN_ID"' in raw
 
 
