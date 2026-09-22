@@ -68,3 +68,13 @@ def test_workflow_is_explicitly_allowlisted() -> None:
     )
     assert ".github/workflows/noteri-desktop-admin-broker-kick.yml" in policy["approved_workflows"]
     assert "Desktop Admin Broker" in policy["rationale"]
+
+
+def test_workflow_pr_runtime_is_same_repo_only() -> None:
+    raw = (
+        ROOT / ".github" / "workflows" / "noteri-desktop-admin-broker-kick.yml"
+    ).read_text(encoding="utf-8")
+    assert "pull_request:" in raw
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in raw
+    assert "pull_request_target:" not in raw
+    assert "secrets." not in raw
