@@ -93,3 +93,14 @@ def test_reconciler_has_positive_negative_idempotency_and_restore_controls():
     assert 'read_profile_file(profile_path, "NORMAL")' in raw
     assert "rollback_files(changes)" in raw
     assert "loopback_agent_exposed" in raw
+
+
+def test_reconcile_failure_is_sanitized_and_stage_aware():
+    err = module.ReconcileError("command_failed:docker:exit_1", stage="inspect_runtime")
+    assert err.code == "command_failed:docker"
+    assert err.stage == "inspect_runtime"
+
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert '"error_code"' in raw
+    assert '"failure_stage"' in raw
+    assert 'str(exc)' not in raw
