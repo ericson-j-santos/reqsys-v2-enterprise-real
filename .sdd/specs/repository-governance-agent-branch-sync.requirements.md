@@ -24,6 +24,7 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 12. O self-sync de PR deve usar `pull_request_target`, executando a definição confiável da `main` e sem checkout/execução de código controlado pela branch do PR.
 13. Execuções concorrentes de sincronização devem usar lane determinística e cancelar execução obsoleta.
 14. Ausência da configuração da GitHub App ou incapacidade de emitir o escopo solicitado deve falhar fechado antes de qualquer mutação.
+15. Antes de solicitar qualquer token de escrita, cada job deve fazer uma inspeção somente leitura com o token nativo para comprovar que existe mutação elegível. Se a PR atual já estiver com `behind_by=0`, ou se não houver PR elegível atrasada no fan-out global, a execução deve terminar como `no-op` sem emitir token da GitHub App.
 
 ## Controles negativos
 
@@ -35,6 +36,7 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 - orçamento de 3 atualizações esgotado => `deferred`;
 - uso do `GITHUB_TOKEN` para `update-branch` é inválido: o E2E mostrou HTTP 403 com escopo insuficiente e, depois da ampliação, SHAs criados pelo `github-actions[bot]` produziram workflows `action_required`;
 - GitHub App ausente ou sem o escopo solicitado => falha antes da mutação;
+- execução sem mutação elegível (`behind_by=0` no self-sync ou nenhuma PR elegível atrasada no fan-out) => não solicita token de escrita e não falha por permissão administrativa desnecessária;
 - API aceita a atualização, mas `behind_by` não chega a zero => job falha;
 - nenhum caminho do workflow chama API de merge.
 
@@ -45,6 +47,7 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 - CI do PR verde no HEAD atual;
 - `GITHUB_TOKEN` nativo continua read-only;
 - token de mutação é emitido pela GitHub App já governada, sem PAT/fallback;
+- token de escrita só é solicitado depois de uma leitura `contents: read` comprovar `behind_by > 0` em uma PR elegível;
 - após merge deste hotfix, o `push` da própria `main` dispara o agente;
 - se houver PR segura atrasada, leitura independente deve observar novo HEAD e `behind_by=0`;
 - o novo SHA produzido pela GitHub App deve disparar workflows de PR normalmente, sem `action_required`;
