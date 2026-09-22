@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Reconcilia e valida o Modo ESTUDO no runtime DEV físico do Noteri.
+"""Reconcilia e valida o Modo ESTUDO no runtime DEV público do PC24x7.
 
 O script é propositalmente restrito:
-- host fixo Noteri;
+- runtime fixo DESKTOP-PDQK954;
 - projeto Docker fixo reqsys-live;
-- containers DEV fixos;
+- transporte de perfil pelo Engineering Orchestrator;
+- destino lógico fixo Noteri;
 - sem HML/PROD;
 - sem leitura de segredos;
 - sem shell;
@@ -25,7 +26,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-EXPECTED_HOST = "Noteri"
+EXPECTED_HOST = "DESKTOP-PDQK954"
 PROJECT = "reqsys-live"
 API_CONTAINER = "reqsys-live-api-1"
 FRONTEND_CONTAINER = "reqsys-live-frontend-1"
@@ -354,15 +355,6 @@ def profile_data(payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def read_profile_file(profile_path: Path, expected: str) -> dict[str, Any]:
-    payload = json.loads(profile_path.read_text(encoding="utf-8"))
-    if payload.get("profile") != expected:
-        raise ReconcileError(f"profile_file_mismatch:{expected}")
-    if payload.get("accepts_new_development") is not (expected == "NORMAL"):
-        raise ReconcileError("profile_file_acceptance_mismatch")
-    return payload
-
-
 def wait_frontend_source() -> None:
     deadline = time.monotonic() + 90
     url = GATEWAY + "/src/services/hostProfileLocalAgent.js"
@@ -379,7 +371,7 @@ def wait_frontend_source() -> None:
     raise ReconcileError("frontend_same_origin_source_not_observed")
 
 
-def api_e2e(profile_path: Path) -> dict[str, Any]:
+def api_e2e() -> dict[str, Any]:
     no_auth, _ = http_json(
         "GET",
         "/api/v1/noteri/profile",
@@ -416,7 +408,6 @@ def api_e2e(profile_path: Path) -> dict[str, Any]:
     readback = profile_data(readback_payload)
     if readback.get("profile") != "ESTUDO" or readback.get("accepts_new_development") is not False:
         raise ReconcileError("estudo_readback_failed")
-    read_profile_file(profile_path, "ESTUDO")
 
     corr2 = f"study-dev-e2e-{int(time.time())}-2"
     _, replay_payload = http_json(
@@ -441,7 +432,6 @@ def api_e2e(profile_path: Path) -> dict[str, Any]:
     restored = profile_data(restored_payload)
     if restored.get("profile") != "NORMAL" or restored.get("accepts_new_development") is not True:
         raise ReconcileError("normal_restore_failed")
-    read_profile_file(profile_path, "NORMAL")
 
     return {
         "negative_unauthenticated_status": 401,
@@ -454,7 +444,7 @@ def api_e2e(profile_path: Path) -> dict[str, Any]:
     }
 
 
-def browser_e2e(profile_path: Path) -> dict[str, Any]:
+def browser_e2e() -> dict[str, Any]:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
@@ -551,10 +541,6 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             stage="frontend_source_fallback",
         )
 
-    profile_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "ReqSys" / "TodoGlobal24x7"
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    profile = profile_dir / "host-profile.json"
-
     backup_root, changes = backup_and_copy(
         repo_root,
         api_source,
@@ -569,7 +555,6 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         compose_env["BACKEND_PORT"] = api_port
     if gateway_port:
         compose_env["GATEWAY_PORT"] = gateway_port
-    compose_env["LOCALAPPDATA"] = str(Path(os.environ["LOCALAPPDATA"]).resolve())
 
     base = compose_base(PROJECT, compose_files, working_dir)
     try:
@@ -614,20 +599,17 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         env_items = (api_after.get("Config") or {}).get("Env") or []
         env_map = dict(entry.split("=", 1) for entry in env_items if "=" in entry)
         mounts = api_after.get("Mounts") or []
-        profile_mounts = [
-            item for item in mounts
-            if item.get("Destination") == "/noteri-runtime"
-            and item.get("Type") == "bind"
-            and item.get("RW") is True
-        ]
-        if env_map.get("NOTERI_HOST_PROFILE_PATH") != "/noteri-runtime/host-profile.json":
-            raise ReconcileError("runtime_profile_env_missing")
-        if not profile_mounts:
-            raise ReconcileError("runtime_profile_mount_missing")
+        if (
+            env_map.get("NOTERI_CONTROL_PLANE_URL")
+            != "http://host.docker.internal:8787"
+        ):
+            raise ReconcileError("runtime_control_plane_env_missing")
+        if any(item.get("Destination") == "/noteri-runtime" for item in mounts):
+            raise ReconcileError("legacy_noteri_profile_mount_present")
 
         wait_frontend_source()
-        api_result = api_e2e(profile)
-        browser_result = browser_e2e(profile)
+        api_result = api_e2e()
+        browser_result = browser_e2e()
     except Exception:
         rollback_files(changes)
         try:
@@ -674,7 +656,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "frontend_runtime_refresh": (
             "rebuild_from_compose_source" if frontend_requires_rebuild else "bind"
         ),
-        "profile_mount_rw": True,
+        "profile_mount_rw": False,
+        "control_plane_bridge": True,
+        "control_plane_url": "http://host.docker.internal:8787",
         "loopback_agent_exposed": False,
         "browser_loopback_dependency_removed": True,
         "backup_created": backup_root.is_dir(),
@@ -687,7 +671,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Reconcilia Modo ESTUDO DEV no Noteri")
+    parser = argparse.ArgumentParser(description="Reconcilia Modo ESTUDO DEV no PC24x7")
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--confirm", required=True)
