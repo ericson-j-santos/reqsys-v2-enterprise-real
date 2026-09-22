@@ -147,6 +147,30 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         self.assertIn("opened, synchronize, reopened, ready_for_review", trigger)
         self.assertNotIn("labeled", trigger)
 
+    def test_test_quality_gate_avoids_global_workflow_wildcard(self):
+        text = (WORKFLOWS / "test-quality-gate.yml").read_text(encoding="utf-8")
+        trigger = text.split("permissions:", 1)[0]
+        self.assertNotIn('".github/workflows/**"', trigger)
+        for expected in (
+            '".github/workflows/test-quality-gate.yml"',
+            '".github/workflows/ci.yml"',
+            '".github/workflows/ci-enterprise-fast.yml"',
+            '".github/workflows/ci-e2e-governado.yml"',
+        ):
+            self.assertIn(expected, trigger)
+
+    def test_pr_governed_ci_is_path_scoped_to_ci_contract(self):
+        text = (WORKFLOWS / "pr-governed-ci-validation.yml").read_text(encoding="utf-8")
+        trigger = text.split("permissions:", 1)[0]
+        self.assertIn("paths:", trigger)
+        for expected in (
+            '".github/workflows/ci.yml"',
+            '".github/workflows/ci-security.yml"',
+            '".github/workflows/ci-e2e-governado.yml"',
+            '"scripts/select_backend_tests.py"',
+        ):
+            self.assertIn(expected, trigger)
+
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         optimized = {

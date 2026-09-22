@@ -65,3 +65,11 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - PR sem alteração do contrato de versão mínima não materializa `Minimum Controlled Version Gate`.
 - PR sem alteração de workflows/probe não materializa `Guard Rail — Base de probes descartáveis`.
 - Evento de label não dispara `PR Governed CI Validation`.
+
+20. `Test Quality Gate — Padrão Ouro` não deve usar wildcard global de workflows; deve reagir apenas aos workflows que alteram execução/cobertura de testes.
+21. `PR Governed CI Validation` deve materializar automaticamente apenas quando os contratos de CI que ele próprio valida forem alterados; execução manual permanece disponível.
+
+### Critérios de aceite — autoauditorias de CI
+
+- Alteração em workflow não relacionado a testes não materializa `Test Quality Gate — Padrão Ouro`.
+- PR sem alteração em `ci.yml`, `ci-security.yml`, `ci-e2e-governado.yml`, `ci-observability.yml`, seletor backend ou estratégia de aceleração não materializa `PR Governed CI Validation`.
