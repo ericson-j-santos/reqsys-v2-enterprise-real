@@ -20,7 +20,7 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 8. O fan-out máximo por avanço da `main` deve ser 3 PRs para evitar tempestade de CI.
 9. O agente não pode executar merge, deploy, promoção, force-push, alteração de segredo ou branch protection.
 10. O `Governed Merge Queue` e o `Governed PR Automation` existentes continuam responsáveis pela validação e pelo merge depois que os gates do novo HEAD ficarem verdes.
-11. O `GITHUB_TOKEN` nativo do workflow deve permanecer read-only (`contents: read`). A mutação `update-branch` deve usar token temporário da GitHub App governada `REQSYS_STACK_REBASE_APP_ID`/`REQSYS_STACK_REBASE_PRIVATE_KEY`, solicitando somente `contents: write` e `pull-requests: write`; não pode usar PAT nem fallback para `GITHUB_TOKEN`.
+11. O `GITHUB_TOKEN` nativo do workflow deve permanecer estritamente read-only (`contents: read` e `pull-requests: read`) para as inspeções. A mutação `update-branch` deve usar token temporário da GitHub App governada `REQSYS_STACK_REBASE_APP_ID`/`REQSYS_STACK_REBASE_PRIVATE_KEY`, solicitando somente `contents: write` e `pull-requests: write`; não pode usar PAT nem fallback para `GITHUB_TOKEN`.
 12. O self-sync de PR deve usar `pull_request_target`, executando a definição confiável da `main` e sem checkout/execução de código controlado pela branch do PR.
 13. Execuções concorrentes de sincronização devem usar lane determinística e cancelar execução obsoleta.
 14. Ausência da configuração da GitHub App ou incapacidade de emitir o escopo solicitado deve falhar fechado antes de qualquer mutação.
