@@ -35,3 +35,16 @@ Registrar HEAD, base SHA, quantidade de workflows materializados, workflows evit
 ## Rollback
 
 Reverter apenas os commits deste incremento de roteamento. Não há efeito em runtime ou produção.
+
+## Incremento Pareto — fan-out do watcher e auditoria total
+
+11. O `PR CI Watch` deve usar apenas `CI Enterprise Fast` e `CI — ReqSys v2 Enterprise` como produtores automáticos de `workflow_run`; gates auxiliares continuam sendo lidos como evidência, mas não devem gerar novas execuções do watcher.
+12. Execuções obsoletas do `PR CI Watch` para o mesmo PR devem ser canceladas quando chegar novo sinal ou novo SHA.
+13. `Workflow Governance Consolidator` deve inventariar todos os workflows presentes no SHA e separar `pull_request`, PR com/sem `paths`, `workflow_run`, fan-out alto, `schedule` e `workflow_dispatch` isolado.
+
+### Critérios de aceite adicionais
+
+- `PR CI Watch` possui exatamente dois produtores canônicos de `workflow_run` e `cancel-in-progress: true`.
+- Os cinco produtores auxiliares removidos do watcher permanecem disponíveis como gates independentes; nenhum gate protegido é excluído.
+- `Workflow Governance Consolidator` publica `execution_surface` para o inventário completo e não classifica `PR CI Watch` como fan-out alto.
+- Testes focados de Pareto e consolidação ficam verdes no HEAD exato.

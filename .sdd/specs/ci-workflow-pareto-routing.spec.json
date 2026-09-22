@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Reduz fan-out e contenção de runners por roteamento de scanners e workflows advisory/report-only, preservando checks protegidos e comportamento fail-closed.",
+  "description": "Reduz fan-out e contenção de runners por roteamento de scanners, workflows advisory e PR CI Watch, preservando checks protegidos e comportamento fail-closed.",
   "scope": "governance-ci-routing",
   "files": [
     ".github/workflows/security-specialized-scanners.yml",
@@ -21,14 +21,18 @@
     ".github/workflows/predictive-regression-guard.yml",
     "scripts/validate_path_based_workflow_router.py",
     "tests/test_codeql_atomic_publish_workflow.py",
-    "tests/test_report_only_workflow_pareto.py"
+    "tests/test_report_only_workflow_pareto.py",
+    ".github/workflows/pr-ci-watch.yml",
+    "scripts/workflow_governance_consolidator.py",
+    "tests/test_workflow_governance_consolidator.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_codeql_atomic_publish_workflow.py",
-      "tests/test_report_only_workflow_pareto.py"
+      "tests/test_report_only_workflow_pareto.py",
+      "tests/test_workflow_governance_consolidator.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis; Gitleaks permanece global; scans e advisory workflows ficam condicionados a superfícies aplicáveis; roteadores falham fechado; referências legadas não retornam."
+    "evidence_contract": "Checks protegidos permanecem materializáveis; Gitleaks permanece global; scans e advisory workflows ficam condicionados a superfícies aplicáveis; PR CI Watch reage apenas aos dois sinais canônicos e cancela diagnósticos obsoletos; o consolidator audita todos os workflows no SHA."
   },
   "risk": {
     "production": false,

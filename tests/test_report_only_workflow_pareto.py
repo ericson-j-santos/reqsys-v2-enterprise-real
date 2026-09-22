@@ -90,6 +90,22 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
             self.assertIn('"runtime/**"', tokens, workflow)
             self.assertIn('"services/**"', tokens, workflow)
 
+    def test_pr_ci_watch_uses_only_canonical_completion_signals(self):
+        text = (WORKFLOWS / "pr-ci-watch.yml").read_text(encoding="utf-8")
+        trigger = text.split("permissions: {}", 1)[0]
+        self.assertIn("- CI Enterprise Fast", trigger)
+        self.assertIn("- CI — ReqSys v2 Enterprise", trigger)
+        for redundant in (
+            "Governance Quality Gates",
+            "Governança Padrão Ouro",
+            "PR Conflict Guard",
+            "Branch Protection Audit",
+            "Governed Merge Queue",
+        ):
+            self.assertNotIn(redundant, trigger)
+        self.assertIn("github.event.workflow_run.pull_requests[0].number", text)
+        self.assertIn("cancel-in-progress: true", text)
+
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         optimized = {
