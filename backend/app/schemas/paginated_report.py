@@ -84,6 +84,34 @@ class PaginatedReportGenerateRequest(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError('query é obrigatória.')
+        normalized = re.sub(r'--.*?
+    @field_validator('connection_string_template')
+    @classmethod
+    def rejeitar_segredos_inline(cls, value: str) -> str:
+        lower = value.lower()
+        blocked = ('password=', 'pwd=', 'client secret=', 'client_secret=', 'access token=')
+        if any(token in lower for token in blocked):
+            raise ValueError('connection_string_template não pode conter segredo inline.')
+        return value.strip()
+
+    @model_validator(mode='after')
+    def validar_unicidade(self):
+        field_names = [item.name.casefold() for item in self.fields]
+        if len(field_names) != len(set(field_names)):
+            raise ValueError('fields contém nomes duplicados.')
+        parameter_names = [item.name.casefold() for item in self.parameters]
+        if len(parameter_names) != len(set(parameter_names)):
+            raise ValueError('parameters contém nomes duplicados.')
+        return self
+, ' ', value, flags=re.MULTILINE)
+        normalized = re.sub(r'/\\*.*?\\*/', ' ', normalized, flags=re.DOTALL).strip()
+        if not re.match(r'(?is)^(select|with)\\b', normalized):
+            raise ValueError('A consulta do relatório deve ser somente leitura (SELECT/CTE).')
+        forbidden = re.compile(
+            r'(?is)\\b(insert|update|delete|merge|drop|alter|truncate|create|grant|revoke|exec(?:ute)?)\\b'
+        )
+        if forbidden.search(normalized):
+            raise ValueError('A consulta contém comando não permitido para relatório.')
         return value
 
     @field_validator('connection_string_template')
