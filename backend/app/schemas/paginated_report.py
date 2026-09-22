@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
 RDLDataType = Literal['String', 'Integer', 'Float', 'Decimal', 'DateTime', 'Boolean']
 
 
