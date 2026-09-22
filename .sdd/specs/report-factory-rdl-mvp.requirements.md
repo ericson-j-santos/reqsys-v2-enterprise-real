@@ -18,9 +18,12 @@ Increment type: `consolidate`
 7. Gerar RDL no namespace `2016/01/reportdefinition`.
 8. Produzir saída determinística: mesma especificação deve gerar os mesmos bytes.
 9. Gerar `PaginatedReportDefinition` com RDL em Base64 e `payloadType=InlineBase64`.
-10. Criar ou atualizar um relatório paginado no Fabric somente quando `FABRIC_ACCESS_TOKEN` e `workspace_id` forem fornecidos em runtime.
+10. Criar ou atualizar um relatório paginado no Fabric somente com identidade temporária autorizada em runtime; segredo estático não é requisito da arquitetura final.
 11. Acompanhar operações `202 Accepted` por `Location` com timeout limitado.
-12. Não registrar nem persistir o token de acesso.
+12. Não registrar nem persistir token de acesso.
+13. Antes de qualquer mutação Fabric DEV, reutilizar o GitHub Environment `development` e a identidade OIDC governada `CCP_AZURE_*` para executar probe somente leitura.
+14. O preflight deve comprovar tenant esperado, obtenção de token temporário Fabric, HTTP 200 em `/v1/workspaces` e ao menos um workspace candidato, sem mutações.
+15. Se o preflight comprovar que a identidade governada já possui acesso Fabric suficiente, preferir reutilizá-la em vez de criar outra App Registration sem necessidade.
 
 ## Critérios de aceite
 
@@ -31,8 +34,8 @@ Increment type: `consolidate`
 - controle negativo rejeita dataset inexistente;
 - controle negativo rejeita componente ainda não suportado;
 - duas execuções produzem RDL idêntico;
-- teste automatizado `tests/test_report_factory_rdl.py` verde no HEAD exato;
-- `Pre-PR Readiness Gate` verde no HEAD exato antes da abertura de PR;
+- testes `tests/test_report_factory_rdl.py` e `tests/test_report_factory_fabric_dev_preflight.py` verdes no HEAD exato;
+- preflight Fabric DEV publica evidência sanitizada vinculada ao SHA;
 - publicação real no Fabric DEV somente pode ser declarada validada após execução real e leitura independente da definição/artefato no mesmo SHA.
 
 ## Fora do escopo deste MVP

@@ -10,9 +10,12 @@
 - [x] Criar especificação exemplo `DemandasPorStatus`.
 - [x] Criar testes positivo, negativos e idempotência.
 - [x] Criar runbook.
-- [ ] Executar testes no HEAD publicado.
-- [ ] Executar `Pre-PR Readiness Gate` no HEAD exato.
-- [ ] Abrir PR somente se `READY_FOR_PR=passed`.
-- [ ] Executar E2E real no Fabric DEV quando workspace/token autorizados estiverem disponíveis.
+- [x] Executar testes no primeiro HEAD publicado: 5/5 Report Factory, 25/25 operacionais.
+- [x] Executar `Pre-PR Readiness Gate` no primeiro HEAD: passed, behind_by=0.
+- [x] Abrir PR #1939 após `READY_FOR_PR=passed`.
+- [x] Adicionar preflight Fabric DEV que reutiliza a identidade OIDC governada existente sem segredo.
+- [ ] Executar preflight Fabric DEV no HEAD atualizado e capturar workspace/estado real.
+- [ ] Se necessário, provisionar apenas a menor permissão/role faltante com identidade governada.
+- [ ] Executar E2E real de publicação e getDefinition no Fabric DEV.
 - [ ] Adicionar exportação PDF/XLSX em incremento posterior.
 - [ ] Adicionar chart/matrix em incremento posterior.
