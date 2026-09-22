@@ -1,0 +1,32 @@
+{
+  "feature_name": "noteri-study-mode-dev-same-origin",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Corrige o Modo ESTUDO no ambiente DEV público removendo a dependência browser->127.0.0.1:8765 e usando API ReqSys same-origin autenticada sobre o mesmo host-profile.json do Noteri.",
+  "environment": "dev",
+  "runtime_target": "Noteri",
+  "controls": {
+    "hml_enabled": false,
+    "production_enabled": false,
+    "local_agent_publicly_exposed": false,
+    "browser_loopback_dependency": false,
+    "post_requires_admin": true,
+    "independent_readback_required": true,
+    "idempotency_required": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_noteri_host_profile_api.py",
+      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
+      "tests/test_noteri_study_mode_dev_reconcile.py"
+    ],
+    "evidence_contract": "No Noteri DEV, o Task Console deve alternar NORMAL->ESTUDO->NORMAL pela mesma origem do ReqSys, com estado persistido no host-profile.json, leitura independente, replay idempotente, controle 401 sem autenticação e restauração final NORMAL."
+  }
+}
