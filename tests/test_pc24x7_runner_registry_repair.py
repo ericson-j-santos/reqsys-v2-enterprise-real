@@ -60,3 +60,9 @@ def test_missing_runner_fails_closed():
     result = m.repair("token", fake)
     assert result["state"] == "runner_missing"
     assert result["mutated"] is False
+
+
+def test_failure_output_does_not_echo_exception_details() -> None:
+    source = MODULE.read_text(encoding="utf-8")
+    assert '"error": str(exc)' not in source
+    assert '"error_type": type(exc)' not in source
