@@ -2,6 +2,18 @@ name: Noteri Study Mode DEV Reconcile
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/noteri-study-mode-dev-reconcile.yml'
+      - 'backend/app/services/noteri_host_profile.py'
+      - 'backend/tests/test_noteri_host_profile_api.py'
+      - 'docker-compose.noteri-study-mode.yml'
+      - 'frontend/src/services/hostProfileLocalAgent.js'
+      - 'frontend/src/views/TaskConsoleView.vue'
+      - 'scripts/noteri_study_mode_dev_reconcile.py'
+      - 'tests/test_noteri_study_mode_dev_reconcile.py'
 
 permissions:
   contents: read
