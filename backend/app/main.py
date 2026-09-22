@@ -41,6 +41,7 @@ from app.api import (
     recomendacoes_ia,
     redmine_sync,
     relatorios,
+    repository_admin,
     requisitos,
     runtime_analytics,
     service_case_operations,
@@ -153,6 +154,7 @@ app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
 app.include_router(github_merge_console.router)
+app.include_router(repository_admin.router)
 app.include_router(rag_governado.router)
 app.include_router(operational_autonomy.router)
 app.include_router(ocr_review.router)

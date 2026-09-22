@@ -17,7 +17,7 @@ NGINX_CONFS = [
 # Prefixos que o backend registra literalmente com `/api/...` (ver `@app.get('/api/runtime/...')`
 # em backend/app/main.py e os routers com `prefix='/api/...'`).
 PREFIXOS_LITERAIS = [
-    'runtime', 'requisitos', 'operational-autonomy', 'integracoes', 'govbi', 'rag', 'connectors', 'workflows',
+    'runtime', 'requisitos', 'operational-autonomy', 'integracoes', 'govbi', 'rag', 'connectors', 'workflows', 'internal',
 ]
 COMPOSE = Path('docker-compose.yml')
 RUNBOOK = Path('docs/runbooks/pc24x7-piloto-dev.md')
@@ -64,9 +64,9 @@ def test_compose_repassa_variaveis_da_ia_para_a_api() -> None:
         assert f'- {var}=${{{var}:-' in compose, var
 
 
-def test_runbook_documenta_lacunas_encontradas_no_piloto() -> None:
+def test_runbook_documenta_operacao_atual_do_piloto() -> None:
     runbook = RUNBOOK.read_text(encoding='utf-8')
-    assert 'build: ../../kb' in runbook
-    assert 'GEMINI_API_KEY' in runbook
-    assert 'curl http://localhost:8081/api/runtime/health' in runbook
-    assert 'compose.pc24x7-local.yml' in runbook
+    assert 'http://127.0.0.1:8083' in runbook
+    assert 'host.docker.internal:8083' in runbook
+    assert 'pc24x7_public_dev_tunnel.py --apply' in runbook
+    assert 'HML e PROD não são promovidos' in runbook
