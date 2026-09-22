@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: reqsys-authorized-actions-gateway
+  group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
@@ -210,23 +210,28 @@ jobs:
         run: |
           set -euo pipefail
           status='pending'
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          wait_seconds=0
+          for attempt in $(seq 1 36); do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
             case "$status" in
-              pending|queued|requested|waiting) sleep 5 ;;
+              pending|queued|requested|waiting)
+                sleep 5
+                wait_seconds=$((wait_seconds + 5))
+                ;;
               *) break ;;
             esac
           done
           printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          printf 'wait_seconds=%s\n' "$wait_seconds" >> "$GITHUB_OUTPUT"
           case "$status" in
             pending|queued|requested|waiting)
-              printf 'error=SELF_HOSTED_RUNNER_UNAVAILABLE\n' >> "$GITHUB_OUTPUT"
+              printf 'error=SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\n' >> "$GITHUB_OUTPUT"
               ;;
           esac
 
       - name: Cancel self-hosted run without pickup
         id: cleanup
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -268,6 +273,7 @@ jobs:
           TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
           RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
           RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
+          RUNNER_PICKUP_WAIT_SECONDS: ${{ steps.pickup.outputs.wait_seconds }}
           TARGET_CLEANUP_STATUS: ${{ steps.cleanup.outputs.status }}
           TARGET_CLEANUP_ERROR: ${{ steps.cleanup.outputs.error }}
         run: |
@@ -288,6 +294,7 @@ jobs:
               'target_run_status': os.environ['TARGET_RUN_STATUS'],
               'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
               'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
+              'runner_pickup_wait_seconds': int(os.environ.get('RUNNER_PICKUP_WAIT_SECONDS') or '0'),
               'target_cleanup_status': os.environ.get('TARGET_CLEANUP_STATUS') or None,
               'target_cleanup_error': os.environ.get('TARGET_CLEANUP_ERROR') or None,
               'gateway_run_id': int(os.environ['GITHUB_RUN_ID']),
@@ -307,9 +314,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Fail closed when self-hosted runner is unavailable
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'
+      - name: Fail closed when self-hosted runner pickup times out or is busy
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
         shell: bash
         run: |
-          echo 'SELF_HOSTED_RUNNER_UNAVAILABLE' >&2
+          echo 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' >&2
           exit 4
