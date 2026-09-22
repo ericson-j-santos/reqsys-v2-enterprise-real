@@ -174,7 +174,7 @@ def gh_active_login(gh: Path) -> str:
     return cp.stdout.strip() if cp.returncode == 0 else ""
 
 
-def ensure_gh_auth(gh: Path) -> None:
+def ensure_gh_auth(gh: Path, *, allow_interactive: bool = True) -> None:
     status = subprocess.run(
         [str(gh), "auth", "status", "--hostname", "github.com"],
         stdout=subprocess.DEVNULL,
@@ -200,6 +200,11 @@ def ensure_gh_auth(gh: Path) -> None:
         )
         if switch.returncode == 0 and gh_active_login(gh).casefold() == EXPECTED_GITHUB_LOGIN.casefold():
             return
+    if not allow_interactive:
+        raise ActivationError(
+            "github_auth_required",
+            "autenticação GitHub local requerida; login interativo desabilitado neste modo",
+        )
     login = subprocess.run(
         [
             str(gh), "auth", "login", "--hostname", "github.com",
@@ -243,10 +248,15 @@ def request_registration_token(gh: Path) -> str:
     return token if cp.returncode == 0 and len(token) >= 20 else ""
 
 
-def registration_token(gh: Path) -> str:
+def registration_token(gh: Path, *, allow_interactive: bool = True) -> str:
     token = request_registration_token(gh)
     if token:
         return token
+    if not allow_interactive:
+        raise ActivationError(
+            "github_runner_admin_permission_required",
+            "a autenticação local não autorizou o endpoint de registro do runner; refresh interativo desabilitado",
+        )
     refresh_repo_scope(gh)
     if gh_active_login(gh).casefold() != EXPECTED_GITHUB_LOGIN.casefold():
         raise ActivationError("github_account_mismatch", "conta GitHub ativa divergente")
@@ -381,10 +391,10 @@ def ensure_runner_binaries(root: Path) -> None:
         raise ActivationError("runner_install_incomplete", "binários oficiais do runner incompletos")
 
 
-def register_runner(root: Path, gh: Path) -> bool:
+def register_runner(root: Path, gh: Path, *, allow_interactive_auth: bool = True) -> bool:
     if runner_contract(root):
         return False
-    token = registration_token(gh)
+    token = registration_token(gh, allow_interactive=allow_interactive_auth)
     try:
         cmd = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "cmd.exe"
         if not cmd.is_file():
@@ -527,6 +537,7 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--source-sha")
     parser.add_argument("--runner-home", type=Path)
+    parser.add_argument("--non-interactive-auth", action="store_true")
     args = parser.parse_args()
 
     if args.confirm != CONFIRM:
@@ -541,13 +552,17 @@ def main() -> int:
         source_sha = resolve_source_sha(repo_root, args.source_sha)
 
         gh = ensure_gh()
-        ensure_gh_auth(gh)
+        ensure_gh_auth(gh, allow_interactive=not args.non_interactive_auth)
 
         runner = discover_runner(args.runner_home)
         if runner is None:
             runner = (args.runner_home or default_runner_home()).resolve()
             ensure_runner_binaries(runner)
-            registration_performed = register_runner(runner, gh)
+            registration_performed = register_runner(
+                runner,
+                gh,
+                allow_interactive_auth=not args.non_interactive_auth,
+            )
             token_consumed = registration_performed
 
         started_now = start_runner(runner)
