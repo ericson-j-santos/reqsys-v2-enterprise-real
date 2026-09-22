@@ -72,17 +72,22 @@ async function load(){
       if(payload) break;
     }
     if(!payload) throw new Error("nenhum estado válido e vigente");
+    const params=new URLSearchParams(location.search);
+    const requestedTarget=params.get("target")||"/task-console";
+    const target=requestedTarget.startsWith("/") && !requestedTarget.startsWith("//") && requestedTarget.length<=2048
+      ? requestedTarget
+      : "/task-console";
     status.className="ok";
     status.textContent="DEV localizado. Redirecionando…";
     for(const u of payload.urls){
       const a=document.createElement("a");
-      a.href=u+"/task-console";
+      a.href=u+target;
       a.rel="noopener";
       a.textContent=u;
       links.appendChild(a);
     }
-    const noRedirect=new URLSearchParams(location.search).get("no_redirect")==="1";
-    if(!noRedirect) setTimeout(()=>location.replace(payload.selected_url+"/task-console"),900);
+    const noRedirect=params.get("no_redirect")==="1";
+    if(!noRedirect) setTimeout(()=>location.replace(payload.selected_url+target),900);
   }catch(err){
     status.className="error";
     status.textContent="DEV temporariamente sem locator vigente. Os transportes estão em recuperação automática.";
