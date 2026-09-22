@@ -19,14 +19,16 @@
     ".github/workflows/ci-enterprise-fast.yml",
     ".github/workflows/ci-e2e-governado.yml",
     ".github/workflows/pr-evidence-gate.yml",
-    "tests/test_ci_admission_control.py"
+    "tests/test_ci_admission_control.py",
+    "scripts/padrao_ouro_maturity_consolidator.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_ci_admission_control.py",
-      "tests/test_pre_pr_readiness.py"
+      "tests/test_pre_pr_readiness.py",
+      "tests/test_padrao_ouro_maturity_consolidator.py"
     ],
-    "evidence_contract": "Provar manifesto vinculado ao HEAD exato, branch não-atrasada em relação à base corrente, bloqueio para SHA antigo/Pre-PR ausente, CI caro protegido por admission guard e PR Evidence Gate exigindo o artefato do SHA atual."
+    "evidence_contract": "Provar manifesto vinculado ao HEAD exato, branch não-atrasada em relação à base corrente, bloqueio para SHA antigo/Pre-PR ausente, CI caro protegido por admission guard e PR Evidence Gate exigindo o artefato do SHA atual. Quando a consolidação falhar, registrar estados dos artifacts/axes para diagnóstico da causa raiz sem alterar o gate."
   },
   "risk": {
     "production": false,

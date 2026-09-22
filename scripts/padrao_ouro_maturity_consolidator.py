@@ -328,6 +328,20 @@ def assert_gold_standard_targets(runtime_report: dict[str, Any], validation: dic
     if pareto.get("current_score", 0) < 100:
         errors.append(f"pareto_score={pareto.get('current_score')}")
     if errors:
+        diagnostic = {
+            "errors": errors,
+            "ingested_artifacts": runtime_report.get("ingested_artifacts"),
+            "gold_standard_depth": depth,
+            "domains": {
+                name: {"status": value.get("status"), "score": value.get("score")}
+                for name, value in (runtime_report.get("domains") or {}).items()
+                if isinstance(value, dict)
+            },
+        }
+        print(
+            "PADRAO_OURO_DIAGNOSTIC=" + json.dumps(diagnostic, ensure_ascii=False, sort_keys=True),
+            file=sys.stderr,
+        )
         raise RuntimeError("Consolidação não atingiu 100%: " + ", ".join(errors))
 
 

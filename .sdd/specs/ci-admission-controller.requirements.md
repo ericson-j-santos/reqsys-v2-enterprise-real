@@ -43,3 +43,8 @@ A degradação fail-closed da triagem Ollama já está integrada na `main`: falh
 - Os três workflows caros têm dependência transitiva do job `ci-admission`.
 - PR Evidence Gate rejeita ausência do manifesto do mesmo SHA.
 - Nenhum merge/deploy executado por este incremento.
+
+
+## Diagnóstico do gate agregado
+
+Quando a consolidação Padrão Ouro não atingir a meta, o processo deve emitir diagnóstico estruturado dos artifacts ingeridos, eixos e domínios. Esse diagnóstico é somente observabilidade: não reduz limiares, não converte warning em sucesso e não substitui a correção da causa raiz.
