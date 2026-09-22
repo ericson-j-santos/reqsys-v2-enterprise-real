@@ -11,10 +11,12 @@
     "tests": [
       "tests/test_fabric_hml_noteri_discovery_contract.py"
     ],
-    "evidence_contract": "Probe self-hosted fail-closed; PR read-only; identificadores e segredos nao sao expostos; escrita em main limitada a tres Environment Variables nao sensiveis."
+    "evidence_contract": "Probe self-hosted fail-closed; PR read-only por padrao; a branch exata ops/fabric-hml-bootstrap-20260921 pode aplicar somente tres Environment Variables nao sensiveis em homologacao; identificadores e segredos nao sao expostos; workflow_dispatch em main permanece a rota manual governada."
   },
   "traceability": {
-    "workflow": ".github/workflows/fabric-hml-noteri-discovery.yml"
+    "workflow": ".github/workflows/fabric-hml-noteri-discovery.yml",
+    "requirements": ".sdd/specs/fabric-hml-noteri-discovery.requirements.md",
+    "tests": "tests/test_fabric_hml_noteri_discovery_contract.py"
   },
   "risk": {
     "production": false,
@@ -28,7 +30,7 @@
   "phase": "implementation",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted e falha fechado fora do host esperado.",
-    "Em pull request, o fluxo permanece somente leitura e nao altera configuracao externa.",
+    "Em pull request, o fluxo permanece somente leitura por padrao; somente a branch exata ops/fabric-hml-bootstrap-20260921 pode aplicar as tres variaveis nao sensiveis em homologacao.",
     "Tenant, App Registration e workspace precisam ser unicos e corresponder aos alvos esperados.",
     "Access token, client secret, Application ID e Workspace ID nao sao impressos nem persistidos em logs ou artifacts.",
     "O modo manual em main pode gravar somente FABRIC_TENANT_ID, FABRIC_CLIENT_ID e FABRIC_WORKSPACE_ID no Environment homologacao.",
