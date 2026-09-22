@@ -8,6 +8,8 @@ import json
 import os
 import socket
 import subprocess
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -108,6 +110,56 @@ def runtime_port_reachable() -> bool:
         return False
 
 
+def runtime_health_probe() -> dict[str, Any]:
+    url = f"http://{TARGET_HOST}:{RUNTIME_PORT}/api/runtime/health"
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "ReqSys-Noteri-Desktop-Network-Probe/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            if response.status != 200:
+                return {
+                    "reachable": False,
+                    "result": f"http_{response.status}",
+                    "central_executors": [],
+                    "central_worker_enabled": None,
+                    "environment": None,
+                }
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return {
+            "reachable": False,
+            "result": f"http_{exc.code}",
+            "central_executors": [],
+            "central_worker_enabled": None,
+            "environment": None,
+        }
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        return {
+            "reachable": False,
+            "result": type(exc).__name__,
+            "central_executors": [],
+            "central_worker_enabled": None,
+            "environment": None,
+        }
+
+    executors = payload.get("central_executors") if isinstance(payload, dict) else []
+    if not isinstance(executors, list):
+        executors = []
+    safe_executors = sorted(
+        value for value in (str(item) for item in executors)
+        if value in {"github", "ci_repair", "command_gateway", "graph", "sql", "drive", "docs"}
+    )
+    return {
+        "reachable": True,
+        "result": "ok",
+        "central_executors": safe_executors,
+        "central_worker_enabled": bool(payload.get("central_worker_enabled")) if isinstance(payload, dict) else None,
+        "environment": str(payload.get("environment") or "")[:32] if isinstance(payload, dict) else None,
+    }
+
+
 def admin_staging_path_probe() -> dict[str, Any]:
     """Comprova apenas acesso de leitura ao Desktop Público via C$; não grava nada."""
     try:
@@ -134,10 +186,19 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     icmp: bool | None = None
     tcp = False
     staging = {"reachable": False, "result": "not_attempted"}
+    runtime_health = {
+        "reachable": False,
+        "result": "not_attempted",
+        "central_executors": [],
+        "central_worker_enabled": None,
+        "environment": None,
+    }
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
         staging = admin_staging_path_probe()
+        if tcp:
+            runtime_health = runtime_health_probe()
 
     if not resolution["resolved"]:
         state = "name_resolution_failed"
@@ -165,6 +226,12 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
+        "runtime_health_reachable": bool(runtime_health["reachable"]),
+        "runtime_health_result": runtime_health["result"],
+        "central_executors": runtime_health["central_executors"],
+        "central_worker_enabled": runtime_health["central_worker_enabled"],
+        "runtime_environment": runtime_health["environment"],
+        "command_gateway_configured": "command_gateway" in runtime_health["central_executors"],
         "desktop_reachable": desktop_reachable,
         "network_state": state,
         "correlation_id": correlation_id,
