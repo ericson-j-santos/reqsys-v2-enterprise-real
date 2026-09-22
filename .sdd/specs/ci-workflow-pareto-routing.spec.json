@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Reduz fan-out e contenção de runners por roteamento de scanners, workflows advisory, PR CI Watch, gates específicos de domínio e autoauditorias de CI, preservando checks protegidos e comportamento fail-closed.",
+  "description": "Reduz fan-out e contenção de runners por roteamento de scanners, workflows advisory, PR CI Watch, gates específicos de domínio, autoauditorias de CI e lifecycle sem rerun por SHA, preservando checks protegidos e comportamento fail-closed.",
   "scope": "governance-ci-routing",
   "files": [
     ".github/workflows/security-specialized-scanners.yml",
@@ -30,7 +30,8 @@
     ".github/workflows/disposable-probe-base-guard.yml",
     ".github/workflows/minimum-controlled-version-gate.yml",
     ".github/workflows/pr-governed-ci-validation.yml",
-    ".github/workflows/test-quality-gate.yml"
+    ".github/workflows/test-quality-gate.yml",
+    ".github/workflows/requirement-lifecycle-evidence.yml"
   ],
   "sdd_gate": {
     "tests": [

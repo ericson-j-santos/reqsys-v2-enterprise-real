@@ -73,3 +73,10 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 
 - Alteração em workflow não relacionado a testes não materializa `Test Quality Gate — Padrão Ouro`.
 - PR sem alteração em `ci.yml`, `ci-security.yml`, `ci-e2e-governado.yml`, `ci-observability.yml`, seletor backend ou estratégia de aceleração não materializa `PR Governed CI Validation`.
+
+22. `Requirement Lifecycle Evidence` não deve rerodar em `synchronize`, pois a evidência de PR usa referência estável por número/título/body/head-ref; o commit de merge permanece coberto por `closed`.
+
+### Critério de aceite — lifecycle
+
+- Novo SHA em PR existente não materializa `Requirement Lifecycle Evidence`.
+- `opened`, `reopened`, `closed`, `workflow_dispatch` e `workflow_call` permanecem disponíveis.

@@ -171,6 +171,12 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         ):
             self.assertIn(expected, trigger)
 
+    def test_requirement_lifecycle_does_not_rerun_on_synchronize(self):
+        text = (WORKFLOWS / "requirement-lifecycle-evidence.yml").read_text(encoding="utf-8")
+        trigger = text.split("permissions:", 1)[0]
+        self.assertIn("opened, reopened, closed", trigger)
+        self.assertNotIn("synchronize", trigger)
+
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         optimized = {
