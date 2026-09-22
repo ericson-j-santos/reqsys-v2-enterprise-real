@@ -1,0 +1,62 @@
+name: Noteri → Desktop Admin Broker Kick
+
+on:
+  push:
+    branches:
+      - "fix/noteri-desktop-admin-broker-kick-1930"
+    paths:
+      - ".github/workflows/noteri-desktop-admin-broker-kick.yml"
+      - ".github/self-hosted-runner-policy.json"
+      - "scripts/noteri_desktop_admin_broker_kick.py"
+      - "tests/test_noteri_desktop_admin_broker_kick.py"
+      - ".sdd/specs/noteri-desktop-admin-broker-kick.requirements.md"
+      - ".sdd/specs/noteri-desktop-admin-broker-kick.spec.json"
+  pull_request:
+    paths:
+      - ".github/workflows/noteri-desktop-admin-broker-kick.yml"
+      - ".github/self-hosted-runner-policy.json"
+      - "scripts/noteri_desktop_admin_broker_kick.py"
+      - "tests/test_noteri_desktop_admin_broker_kick.py"
+      - ".sdd/specs/noteri-desktop-admin-broker-kick.requirements.md"
+      - ".sdd/specs/noteri-desktop-admin-broker-kick.spec.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-desktop-admin-broker-kick
+  cancel-in-progress: true
+
+jobs:
+  kick:
+    name: Start existing Desktop Admin Broker through Windows RPC
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/noteri-desktop-admin-broker-kick/evidence.json
+      EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVALUATED_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run exact existing Desktop Admin Broker task
+        shell: powershell
+        run: |
+          python scripts/noteri_desktop_admin_broker_kick.py --confirm KICK-EXISTING-DESKTOP-ADMIN-BROKER --evidence-file "$env:EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noteri-desktop-admin-broker-kick-${{ github.run_id }}
+          path: artifacts/noteri-desktop-admin-broker-kick/
+          if-no-files-found: error
+          retention-days: 30

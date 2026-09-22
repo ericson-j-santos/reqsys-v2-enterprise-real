@@ -54,6 +54,22 @@ def test_build_report_includes_mesh_central():
     assert report["summary"]["total_workflows"] >= 140
 
 
+def test_build_report_exposes_complete_execution_surface_inventory():
+    report = build_report(WORKFLOWS_DIR, REGISTRY_PATH)
+    surface = report["summary"]["execution_surface"]
+    assert report["summary"]["total_workflows"] >= 500
+    assert surface["pull_request_count"] > 0
+    assert surface["workflow_run_count"] > 0
+    assert surface["scheduled_count"] > 0
+    assert surface["dispatch_only_count"] > 0
+
+    watch = next(item for item in report["workflows"] if item["name"] == "PR CI Watch")
+    assert set(watch["workflow_run_parents"]) == {
+        "CI Enterprise Fast",
+        "CI — ReqSys v2 Enterprise",
+    }
+    assert watch["cascade_risk"] != "high"
+
 def test_operational_runtime_mesh_hub_suppresses_info_alerts():
     payload = build_payload("Post Merge Operational Summary", "success")
     assert payload["alert_intelligence"]["notification_suppressed"] is True

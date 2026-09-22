@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -174,7 +175,7 @@ def gh_active_login(gh: Path) -> str:
     return cp.stdout.strip() if cp.returncode == 0 else ""
 
 
-def ensure_gh_auth(gh: Path) -> None:
+def ensure_gh_auth(gh: Path, *, allow_interactive: bool = True) -> None:
     status = subprocess.run(
         [str(gh), "auth", "status", "--hostname", "github.com"],
         stdout=subprocess.DEVNULL,
@@ -200,6 +201,11 @@ def ensure_gh_auth(gh: Path) -> None:
         )
         if switch.returncode == 0 and gh_active_login(gh).casefold() == EXPECTED_GITHUB_LOGIN.casefold():
             return
+    if not allow_interactive:
+        raise ActivationError(
+            "github_auth_required",
+            "autenticação GitHub local requerida; login interativo desabilitado neste modo",
+        )
     login = subprocess.run(
         [
             str(gh), "auth", "login", "--hostname", "github.com",
@@ -243,10 +249,55 @@ def request_registration_token(gh: Path) -> str:
     return token if cp.returncode == 0 and len(token) >= 20 else ""
 
 
-def registration_token(gh: Path) -> str:
+def request_remove_token(gh: Path) -> str:
+    cp = subprocess.run(
+        [
+            str(gh), "api", "--method", "POST",
+            f"repos/{REPOSITORY}/actions/runners/remove-token",
+            "--jq", ".token",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+        env=gh_env(),
+    )
+    token = cp.stdout.strip()
+    return token if cp.returncode == 0 and len(token) >= 20 else ""
+
+
+def remove_token(gh: Path, *, allow_interactive: bool = True) -> str:
+    token = request_remove_token(gh)
+    if token:
+        return token
+    if not allow_interactive:
+        raise ActivationError(
+            "github_runner_admin_permission_required",
+            "a autenticação local não autorizou o endpoint de remoção do runner; refresh interativo desabilitado",
+        )
+    refresh_repo_scope(gh)
+    if gh_active_login(gh).casefold() != EXPECTED_GITHUB_LOGIN.casefold():
+        raise ActivationError("github_account_mismatch", "conta GitHub ativa divergente")
+    token = request_remove_token(gh)
+    if token:
+        return token
+    raise ActivationError(
+        "github_runner_admin_permission_required",
+        "a autenticação local não autorizou o endpoint de remoção do runner",
+    )
+
+
+def registration_token(gh: Path, *, allow_interactive: bool = True) -> str:
     token = request_registration_token(gh)
     if token:
         return token
+    if not allow_interactive:
+        raise ActivationError(
+            "github_runner_admin_permission_required",
+            "a autenticação local não autorizou o endpoint de registro do runner; refresh interativo desabilitado",
+        )
     refresh_repo_scope(gh)
     if gh_active_login(gh).casefold() != EXPECTED_GITHUB_LOGIN.casefold():
         raise ActivationError("github_account_mismatch", "conta GitHub ativa divergente")
@@ -381,16 +432,26 @@ def ensure_runner_binaries(root: Path) -> None:
         raise ActivationError("runner_install_incomplete", "binários oficiais do runner incompletos")
 
 
-def register_runner(root: Path, gh: Path) -> bool:
-    if runner_contract(root):
-        return False
-    token = registration_token(gh)
-    try:
-        cmd = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "cmd.exe"
-        if not cmd.is_file():
-            raise ActivationError("cmd_required", "cmd.exe não encontrado")
-        args = [
-            str(root / "config.cmd"),
+def _run_runner_config(root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    cmd = Path(os.environ.get("SystemRoot") or r"C:\\Windows") / "System32" / "cmd.exe"
+    if not cmd.is_file():
+        raise ActivationError("cmd_required", "cmd.exe não encontrado")
+    return subprocess.run(
+        [str(cmd), "/d", "/s", "/c", subprocess.list2cmdline([str(root / "config.cmd"), *args])],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+
+
+def _register_runner_with_token(root: Path, token: str) -> None:
+    cp = _run_runner_config(
+        root,
+        [
             "--unattended",
             "--url", REPOSITORY_URL,
             "--token", token,
@@ -398,75 +459,119 @@ def register_runner(root: Path, gh: Path) -> bool:
             "--labels", RUNNER_LABELS,
             "--work", "_work",
             "--replace",
-        ]
-        cp = subprocess.run(
-            [str(cmd), "/d", "/s", "/c", subprocess.list2cmdline(args)],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=120,
-            check=False,
+        ],
+    )
+    if cp.returncode != 0:
+        raise ActivationError(
+            "runner_registration_failed",
+            f"registro do runner falhou (exit={cp.returncode})",
         )
-        if cp.returncode != 0:
-            raise ActivationError(
-                "runner_registration_failed",
-                f"registro do runner falhou (exit={cp.returncode})",
-            )
-    finally:
-        token = ""
     if not runner_contract(root):
         raise ActivationError("runner_registration_failed", "contrato local do runner não foi criado")
+
+
+def _remove_runner_with_token(root: Path, token: str) -> None:
+    cp = _run_runner_config(root, ["remove", "--token", token])
+    if cp.returncode != 0:
+        raise ActivationError(
+            "runner_local_remove_failed",
+            f"remoção da configuração local do runner falhou (exit={cp.returncode})",
+        )
+    if (root / ".runner").exists():
+        raise ActivationError(
+            "runner_local_remove_failed",
+            "configuração local do runner permaneceu após remoção governada",
+        )
+
+
+def register_runner(root: Path, gh: Path, *, allow_interactive_auth: bool = True) -> bool:
+    if runner_contract(root):
+        return False
+    token = registration_token(gh, allow_interactive=allow_interactive_auth)
+    try:
+        _register_runner_with_token(root, token)
+    finally:
+        token = ""
     return True
 
 
-def runner_running() -> bool:
-    tasklist = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "tasklist.exe"
-    cp = subprocess.run(
-        [str(tasklist), "/FI", "IMAGENAME eq Runner.Listener.exe", "/FO", "CSV", "/NH"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=20,
-        check=False,
-    )
-    return cp.returncode == 0 and "runner.listener.exe" in cp.stdout.casefold()
+def _load_watchdog_runtime():
+    if not WATCHDOG.is_file():
+        raise ActivationError("watchdog_missing", "watchdog governado ausente")
+    spec = importlib.util.spec_from_file_location("reqsys_pc24x7_watchdog_runtime", WATCHDOG)
+    if spec is None or spec.loader is None:
+        raise ActivationError("watchdog_invalid", "watchdog governado não carregável")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _runner_log_path(root: Path) -> Path:
+    log_root = Path(os.environ.get("LOCALAPPDATA") or str(root)) / "ReqSys" / "Pc24x7GitHubRunner" / "logs"
+    return log_root / "runner.log"
+
+
+def runner_running(root: Path) -> bool:
+    watchdog = _load_watchdog_runtime()
+    return bool(watchdog.runner_running(root))
 
 
 def start_runner(root: Path) -> bool:
-    if runner_running():
-        return False
-    log_root = Path(os.environ.get("LOCALAPPDATA") or str(root)) / "ReqSys" / "Pc24x7GitHubRunner" / "logs"
-    log_root.mkdir(parents=True, exist_ok=True)
-    log_handle = (log_root / "runner.log").open("a", encoding="utf-8", buffering=1)
+    watchdog = _load_watchdog_runtime()
+    result = watchdog.start_runner(root, _runner_log_path(root))
+    return bool(result.get("started"))
+
+
+def stop_runner(root: Path) -> dict[str, Any]:
+    watchdog = _load_watchdog_runtime()
+    result = watchdog.stop_runner(root)
+    if not isinstance(result, dict):
+        raise ActivationError("runner_stop_invalid", "resultado de parada do runner inválido")
+    return result
+
+
+def restart_runner(root: Path) -> dict[str, Any]:
+    watchdog = _load_watchdog_runtime()
+    result = watchdog.restart_runner(root, _runner_log_path(root))
+    if not isinstance(result, dict):
+        raise ActivationError("runner_restart_invalid", "resultado de restart do runner inválido")
+    return result
+
+
+def should_restart_offline_runner(registry: dict[str, Any], local_running: bool) -> bool:
+    return bool(
+        local_running
+        and registry.get("present")
+        and registry.get("labels_ok")
+        and str(registry.get("status") or "").casefold() == "offline"
+    )
+
+
+def should_repair_missing_registry(registry: dict[str, Any], local_contract_present: bool) -> bool:
+    return bool(local_contract_present and not registry.get("present"))
+
+
+def repair_missing_registration(
+    root: Path,
+    gh: Path,
+    *,
+    allow_interactive_auth: bool = True,
+) -> dict[str, Any]:
+    remove_value = remove_token(gh, allow_interactive=allow_interactive_auth)
+    registration_value = ""
     try:
-        flags = 0
-        if os.name == "nt":
-            flags = (
-                subprocess.CREATE_NEW_PROCESS_GROUP
-                | subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NO_WINDOW
-            )
-        subprocess.Popen(
-            [str(Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "cmd.exe"),
-             "/d", "/s", "/c", str(root / "run.cmd")],
-            cwd=str(root),
-            stdin=subprocess.DEVNULL,
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            close_fds=True,
-            creationflags=flags,
-        )
+        registration_value = registration_token(gh, allow_interactive=allow_interactive_auth)
+        stopped = stop_runner(root)
+        _remove_runner_with_token(root, remove_value)
+        _register_runner_with_token(root, registration_value)
     finally:
-        log_handle.close()
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
-        if runner_running():
-            return True
-        time.sleep(1)
-    raise ActivationError("runner_start_timeout", "timeout aguardando Runner.Listener.exe")
+        remove_value = ""
+        registration_value = ""
+    return {
+        "repaired": True,
+        "previous_listener_pid": stopped.get("previous_listener_pid"),
+        "termination_scope": stopped.get("termination_scope"),
+    }
 
 
 def install_watchdog(repo_root: Path, source_sha: str, runner: Path) -> dict[str, Any]:
@@ -527,6 +632,7 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--source-sha")
     parser.add_argument("--runner-home", type=Path)
+    parser.add_argument("--non-interactive-auth", action="store_true")
     args = parser.parse_args()
 
     if args.confirm != CONFIRM:
@@ -535,24 +641,55 @@ def main() -> int:
 
     registration_performed = False
     token_consumed = False
+    remove_token_consumed = False
+    repair_evidence: dict[str, Any] | None = None
     try:
         host = validate_host()
         repo_root = args.repo_root.resolve()
         source_sha = resolve_source_sha(repo_root, args.source_sha)
 
         gh = ensure_gh()
-        ensure_gh_auth(gh)
+        ensure_gh_auth(gh, allow_interactive=not args.non_interactive_auth)
 
         runner = discover_runner(args.runner_home)
         if runner is None:
             runner = (args.runner_home or default_runner_home()).resolve()
             ensure_runner_binaries(runner)
-            registration_performed = register_runner(runner, gh)
+            registration_performed = register_runner(
+                runner,
+                gh,
+                allow_interactive_auth=not args.non_interactive_auth,
+            )
             token_consumed = registration_performed
 
+        registry = runner_registry_snapshot(gh)
+        if should_repair_missing_registry(registry, runner_contract(runner)):
+            repair_evidence = repair_missing_registration(
+                runner,
+                gh,
+                allow_interactive_auth=not args.non_interactive_auth,
+            )
+            registration_performed = True
+            token_consumed = True
+            remove_token_consumed = True
+
         started_now = start_runner(runner)
-        registry = wait_runner_registry_online(gh)
-        local_running = runner_running()
+        registry = wait_runner_registry_online(gh, timeout_seconds=8.0)
+        local_running = runner_running(runner)
+        restart_evidence: dict[str, Any] | None = None
+
+        if should_restart_offline_runner(registry, local_running):
+            restart_evidence = restart_runner(runner)
+            started_now = bool(restart_evidence.get("started")) or started_now
+            registry = wait_runner_registry_online(gh)
+            local_running = runner_running(runner)
+        elif not (
+            registry.get("present")
+            and registry.get("labels_ok")
+            and registry.get("status") == "online"
+        ):
+            registry = wait_runner_registry_online(gh)
+            local_running = runner_running(runner)
 
         if not local_running:
             state = "runner_process_not_running"
@@ -578,6 +715,14 @@ def main() -> int:
             "runner_registered_now": registration_performed,
             "runner_started_now": started_now,
             "runner_running": local_running,
+            "runner_restarted_offline": restart_evidence is not None,
+            "runner_registration_repaired": repair_evidence is not None,
+            "runner_repair_previous_listener_pid": (
+                repair_evidence.get("previous_listener_pid") if repair_evidence else None
+            ),
+            "runner_restart_previous_listener_pid": (
+                restart_evidence.get("previous_listener_pid") if restart_evidence else None
+            ),
             "runner_registry_present": bool(registry.get("present")),
             "runner_registry_status": str(registry.get("status") or "unknown"),
             "runner_registry_busy": bool(registry.get("busy")),
@@ -590,8 +735,11 @@ def main() -> int:
             "rdc_required": False,
             "production_touched": False,
             "registration_token_consumed_in_memory": token_consumed,
+            "remove_token_consumed_in_memory": remove_token_consumed,
             "registration_token_persisted": False,
             "registration_token_logged": False,
+            "remove_token_persisted": False,
+            "remove_token_logged": False,
         }
         emit(result)
         return 0 if runtime_ok else 3
@@ -603,8 +751,11 @@ def main() -> int:
             "rdc_required": False,
             "production_touched": False,
             "registration_token_consumed_in_memory": token_consumed,
+            "remove_token_consumed_in_memory": remove_token_consumed,
             "registration_token_persisted": False,
             "registration_token_logged": False,
+            "remove_token_persisted": False,
+            "remove_token_logged": False,
         })
         return 4
     except subprocess.TimeoutExpired as exc:
@@ -616,8 +767,11 @@ def main() -> int:
             "rdc_required": False,
             "production_touched": False,
             "registration_token_consumed_in_memory": token_consumed,
+            "remove_token_consumed_in_memory": remove_token_consumed,
             "registration_token_persisted": False,
             "registration_token_logged": False,
+            "remove_token_persisted": False,
+            "remove_token_logged": False,
         })
         return 4
     except urllib.error.URLError as exc:
@@ -629,8 +783,11 @@ def main() -> int:
             "rdc_required": False,
             "production_touched": False,
             "registration_token_consumed_in_memory": token_consumed,
+            "remove_token_consumed_in_memory": remove_token_consumed,
             "registration_token_persisted": False,
             "registration_token_logged": False,
+            "remove_token_persisted": False,
+            "remove_token_logged": False,
         })
         return 4
     except OSError as exc:
@@ -642,8 +799,11 @@ def main() -> int:
             "rdc_required": False,
             "production_touched": False,
             "registration_token_consumed_in_memory": token_consumed,
+            "remove_token_consumed_in_memory": remove_token_consumed,
             "registration_token_persisted": False,
             "registration_token_logged": False,
+            "remove_token_persisted": False,
+            "remove_token_logged": False,
         })
         return 4
     except Exception as exc:
@@ -655,8 +815,11 @@ def main() -> int:
             "rdc_required": False,
             "production_touched": False,
             "registration_token_consumed_in_memory": token_consumed,
+            "remove_token_consumed_in_memory": remove_token_consumed,
             "registration_token_persisted": False,
             "registration_token_logged": False,
+            "remove_token_persisted": False,
+            "remove_token_logged": False,
         })
         return 2
 

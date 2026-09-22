@@ -2,7 +2,9 @@ name: Requirement Lifecycle Evidence
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, closed]
+    # A evidência de PR usa número/título/body/head-ref; novo SHA não muda a referência.
+    # Merge/commit continua coberto por closed.
+    types: [opened, reopened, closed]
   workflow_dispatch:
     inputs:
       requirement_code:
