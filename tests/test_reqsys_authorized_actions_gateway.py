@@ -9,6 +9,21 @@ def _workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
+def test_gateway_concurrency_is_scoped_per_issue() -> None:
+    content = _workflow()
+    assert "group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}" in content
+    assert "group: reqsys-authorized-actions-gateway\n" not in content
+
+
+def test_gateway_pickup_timeout_is_not_reported_as_runner_unavailable() -> None:
+    content = _workflow()
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" not in content
+    assert "wait_seconds=0" in content
+    assert "for attempt in $(seq 1 36)" in content
+    assert "runner_pickup_wait_seconds" in content
+
+
 def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     content = _workflow()
 
@@ -143,8 +158,8 @@ def test_gateway_desktop_rdc_falha_fechado_sem_runner_e_preserva_evidencia() -> 
     assert 'gh run view "$TARGET_RUN_ID"' in content
     assert "runner_pickup_status" in content
     assert "runner_pickup_error" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
-    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
     assert "pending|queued|requested|waiting" in content
 
 
@@ -169,8 +184,8 @@ def test_gateway_desktop_rdc_considera_pending_como_runner_nao_adquirido() -> No
 
     assert "status='pending'" in content
     assert "pending|queued|requested|waiting" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
-    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
 
 
 def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
@@ -179,7 +194,7 @@ def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
     assert "'/reqsys run noteri-control-plane-probe')" in content
     assert "target='noteri-control-plane-probe.yml'" in content
     assert "steps.route.outputs.target == 'noteri-control-plane-probe.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f host=" not in content
     assert "-f command=" not in content
 
@@ -208,7 +223,7 @@ def test_gateway_noteri_headless_activation_is_exact_inputless_and_fail_closed()
     assert "'/reqsys run noteri-headless-control-plane-activation')" in content
     assert "target='noteri-headless-control-plane-activation.yml'" in content
     assert "steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f host=" not in content
     assert "-f command=" not in content
 
@@ -234,7 +249,7 @@ def test_gateway_noteri_desktop_network_probe_is_exact_inputless_and_fail_closed
     assert "'/reqsys run noteri-desktop-network-probe')" in content
     assert "target='noteri-desktop-network-probe.yml'" in content
     assert "steps.route.outputs.target == 'noteri-desktop-network-probe.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f target=" not in content
 
 
@@ -245,7 +260,7 @@ def test_gateway_noteri_desktop_watchdog_recovery_is_exact_and_fail_closed() -> 
     assert "'/reqsys run noteri-desktop-watchdog-recovery')" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
     assert "steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f host=" not in content
     assert "-f task=" not in content
     assert "-f command=" not in content
@@ -258,7 +273,7 @@ def test_gateway_worker_pool_smoke_dev_is_exact_inputless_and_fail_closed() -> N
     assert "'/reqsys run codex-worker-pool-smoke-dev')" in content
     assert "target='codex-worker-pool-smoke-dev.yml'" in content
     assert "steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f repository=" not in content
     assert "-f issue_number=" not in content
     assert "-f request_id=" not in content
@@ -270,4 +285,4 @@ def test_gateway_noteri_desktop_admin_broker_kick_is_exact_and_fail_closed() -> 
     assert "'/reqsys run noteri-desktop-admin-broker-kick')" in content
     assert "target='noteri-desktop-admin-broker-kick.yml'" in content
     assert "steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
