@@ -2,7 +2,8 @@ name: PR Fast Classifier
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    # Mudança de label não altera arquivos/risco; evita reruns redundantes.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
