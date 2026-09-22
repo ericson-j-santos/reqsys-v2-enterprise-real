@@ -24,6 +24,14 @@ def test_locator_requires_valid_signed_fresh_cloudflare_state():
     assert "PRIVATE" not in raw.upper()
 
 
+def test_locator_preserves_only_relative_target_route():
+    raw = HTML.read_text(encoding="utf-8")
+    assert 'requestedTarget=params.get("target")||"/task-console"' in raw
+    assert 'requestedTarget.startsWith("/")' in raw
+    assert '!requestedTarget.startsWith("//")' in raw
+    assert 'payload.selected_url+target' in raw
+
+
 def test_pages_composite_publishes_stable_dev_path():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert "cp -a docs/public-dev-locator/. site/dev/" in raw

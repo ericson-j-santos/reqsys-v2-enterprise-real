@@ -27,9 +27,15 @@ const { sanitizeStorageState } = sanitizer
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveRemote as resolveDevRuntime } from '../../scripts/resolve_pc24x7_dev_locator.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const baseURL = process.env.E2E_BASE_URL || 'https://reqsys-app-dev.fly.dev'
+const explicitBaseURL = String(process.env.E2E_BASE_URL || '').trim()
+const resolvedDevRuntime = explicitBaseURL ? null : await resolveDevRuntime()
+const baseURL = explicitBaseURL || resolvedDevRuntime.selected_url
+if (baseURL.includes('.fly.dev')) {
+  throw new Error('Runtime legado Fly.io é proibido para captura MSAL DEV.')
+}
 const outputPath = process.env.MSAL_STORAGE_STATE_PATH || path.resolve(__dirname, '..', 'msal-storage-state.json')
 
 function hasMsalCache(entries) {
