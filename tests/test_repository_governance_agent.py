@@ -1,3 +1,5 @@
+import os
+import subprocess
 from pathlib import Path
 
 
@@ -155,3 +157,151 @@ def test_mutation_failures_are_explicit() -> None:
     assert "post_read_base_not_ancestor" in text
     assert "sync_not_confirmed" in text
     assert "core.setFailed" in text
+
+
+def _git(cwd: Path, *args: str, check: bool = True, env: dict[str, str] | None = None):
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    if check and result.returncode != 0:
+        raise AssertionError(
+            f"git {' '.join(args)} failed with {result.returncode}: "
+            f"{result.stdout}\n{result.stderr}"
+        )
+    return result
+
+
+def _commit_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "GIT_AUTHOR_NAME": "reqsys-repository-governance[bot]",
+            "GIT_AUTHOR_EMAIL": "actions@github.com",
+            "GIT_COMMITTER_NAME": "reqsys-repository-governance[bot]",
+            "GIT_COMMITTER_EMAIL": "actions@github.com",
+        }
+    )
+    return env
+
+
+def _build_sync_commit(
+    worker: Path, expected_head_sha: str, base_sha: str, message: str
+) -> str:
+    merge_tree = _git(
+        worker,
+        "merge-tree",
+        "--write-tree",
+        expected_head_sha,
+        base_sha,
+    ).stdout.strip().splitlines()[0]
+    return _git(
+        worker,
+        "commit-tree",
+        merge_tree,
+        "-p",
+        expected_head_sha,
+        "-p",
+        base_sha,
+        "-m",
+        message,
+        env=_commit_env(),
+    ).stdout.strip()
+
+
+def test_git_object_sync_smoke_and_concurrent_push_is_rejected(tmp_path: Path) -> None:
+    remote = tmp_path / "remote.git"
+    remote.mkdir()
+    _git(remote, "init", "--bare")
+
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    _git(seed, "init")
+    _git(seed, "config", "user.name", "test-user")
+    _git(seed, "config", "user.email", "test@example.com")
+    _git(seed, "branch", "-M", "main")
+    (seed / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(seed, "add", "base.txt")
+    _git(seed, "commit", "-m", "base")
+    _git(seed, "remote", "add", "origin", str(remote))
+    _git(seed, "push", "-u", "origin", "main")
+
+    _git(seed, "switch", "-c", "feature")
+    (seed / "feature.txt").write_text("feature\n", encoding="utf-8")
+    _git(seed, "add", "feature.txt")
+    _git(seed, "commit", "-m", "feature")
+    feature_sha = _git(seed, "rev-parse", "HEAD").stdout.strip()
+    _git(seed, "push", "-u", "origin", "feature")
+
+    _git(seed, "switch", "main")
+    (seed / "main.txt").write_text("main advanced\n", encoding="utf-8")
+    _git(seed, "add", "main.txt")
+    _git(seed, "commit", "-m", "main advanced")
+    base_sha = _git(seed, "rev-parse", "HEAD").stdout.strip()
+    _git(seed, "push", "origin", "main")
+
+    worker = tmp_path / "worker.git"
+    worker.mkdir()
+    _git(worker, "init", "--bare")
+    _git(worker, "remote", "add", "origin", str(remote))
+    _git(
+        worker,
+        "fetch",
+        "--no-tags",
+        "origin",
+        "+refs/heads/main:refs/remotes/origin/main",
+        "+refs/heads/feature:refs/remotes/origin/feature",
+    )
+    assert _git(worker, "rev-parse", "refs/remotes/origin/feature").stdout.strip() == feature_sha
+    assert _git(worker, "rev-parse", "refs/remotes/origin/main").stdout.strip() == base_sha
+
+    sync_sha = _build_sync_commit(worker, feature_sha, base_sha, "sync feature with main")
+    _git(worker, "push", "origin", f"{sync_sha}:refs/heads/feature")
+
+    assert _git(remote, "rev-parse", "refs/heads/feature").stdout.strip() == sync_sha
+    assert _git(remote, "merge-base", "--is-ancestor", base_sha, sync_sha).returncode == 0
+    parents = _git(worker, "show", "-s", "--format=%P", sync_sha).stdout.strip().split()
+    assert parents == [feature_sha, base_sha]
+
+    _git(seed, "branch", "feature-race", feature_sha)
+    _git(seed, "push", "origin", "feature-race")
+
+    race_worker = tmp_path / "race-worker.git"
+    race_worker.mkdir()
+    _git(race_worker, "init", "--bare")
+    _git(race_worker, "remote", "add", "origin", str(remote))
+    _git(
+        race_worker,
+        "fetch",
+        "--no-tags",
+        "origin",
+        "+refs/heads/main:refs/remotes/origin/main",
+        "+refs/heads/feature-race:refs/remotes/origin/feature-race",
+    )
+    race_sync_sha = _build_sync_commit(
+        race_worker,
+        feature_sha,
+        base_sha,
+        "sync raced feature with main",
+    )
+
+    _git(seed, "switch", "feature-race")
+    (seed / "concurrent.txt").write_text("concurrent\n", encoding="utf-8")
+    _git(seed, "add", "concurrent.txt")
+    _git(seed, "commit", "-m", "concurrent advance")
+    concurrent_sha = _git(seed, "rev-parse", "HEAD").stdout.strip()
+    _git(seed, "push", "origin", "feature-race")
+
+    rejected = _git(
+        race_worker,
+        "push",
+        "origin",
+        f"{race_sync_sha}:refs/heads/feature-race",
+        check=False,
+    )
+    assert rejected.returncode != 0
+    assert _git(remote, "rev-parse", "refs/heads/feature-race").stdout.strip() == concurrent_sha
