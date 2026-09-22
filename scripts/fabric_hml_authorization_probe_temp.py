@@ -83,6 +83,10 @@ def main() -> int:
         "contributor_or_higher": False,
         "credential_metadata_count": 0,
         "bootstrap_credential_present": False,
+        "tenant_settings_status": None,
+        "service_principal_api_setting_found": False,
+        "service_principal_api_setting_enabled": None,
+        "service_principal_api_setting_scoped_group_count": 0,
         "secret_value_exposed": False,
         "identifiers_exposed": False,
     }
@@ -190,6 +194,31 @@ def main() -> int:
         evidence["contributor_or_higher"] = any(
             role in {"Contributor", "Member", "Admin"} for role in target_roles
         )
+
+        tenant_status, tenant_payload = get_json(
+            "https://api.fabric.microsoft.com/v1/admin/tenantsettings", token
+        )
+        evidence["tenant_settings_status"] = tenant_status
+        if tenant_status == 200:
+            candidates = []
+            for row in tenant_payload.get("value", []):
+                title = str(row.get("title") or "").casefold()
+                setting_name = str(row.get("settingName") or "").casefold()
+                if (
+                    ("service principal" in title and "fabric" in title and "api" in title)
+                    or ("serviceprincipal" in setting_name and "api" in setting_name)
+                ):
+                    candidates.append(row)
+            if len(candidates) == 1:
+                setting = candidates[0]
+                evidence["service_principal_api_setting_found"] = True
+                evidence["service_principal_api_setting_enabled"] = bool(
+                    setting.get("enabled")
+                )
+                evidence["service_principal_api_setting_scoped_group_count"] = len(
+                    setting.get("enabledSecurityGroups") or []
+                )
+
         evidence["status"] = "ok"
         return 0
     except Exception as exc:
@@ -214,6 +243,10 @@ def main() -> int:
             "contributor_or_higher",
             "credential_metadata_count",
             "bootstrap_credential_present",
+            "tenant_settings_status",
+            "service_principal_api_setting_found",
+            "service_principal_api_setting_enabled",
+            "service_principal_api_setting_scoped_group_count",
             "secret_value_exposed",
             "identifiers_exposed",
         ):
