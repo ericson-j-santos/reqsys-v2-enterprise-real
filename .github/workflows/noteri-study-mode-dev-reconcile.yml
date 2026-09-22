@@ -9,6 +9,8 @@ on:
       - fix/noteri-study-runtime-diagnostics-20260922-r2
     paths:
       - '.github/workflows/noteri-study-mode-dev-reconcile.yml'
+      - 'scripts/noteri_study_mode_dev_reconcile.py'
+      - 'docker-compose.noteri-study-mode.yml'
 
 permissions:
   contents: read
