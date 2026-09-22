@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.core.security import require_admin
 from app.main import app
 from app.services import repository_admin
+from app.services.github_client import GitHubError
 
 client = TestClient(app)
 
@@ -145,3 +146,107 @@ def test_api_snapshot_retorna_envelope(_sha):
 def test_api_rejeita_repo_fora_do_registry():
     response = client.get('/v1/admin/repositories/acme/outro/snapshot')
     assert response.status_code == 404
+
+
+def test_api_lista_registry():
+    response = client.get('/v1/admin/repositories')
+    assert response.status_code == 200
+    repositories = response.json()['data']['repositories']
+    assert repositories[0]['name'] == 'ericson-j-santos/reqsys-v2-enterprise-real'
+
+
+@patch(
+    'app.api.repository_admin.repository_admin.list_repositories',
+    side_effect=repository_admin.RepositoryAdminError('detalhe-interno'),
+)
+def test_api_lista_registry_oculta_erro_interno(_list):
+    response = client.get('/v1/admin/repositories')
+    assert response.status_code == 500
+    assert response.json()['detail'] == 'Registry de repositorios indisponivel.'
+    assert 'detalhe-interno' not in response.text
+
+
+@patch(
+    'app.api.repository_admin.repository_admin.build_snapshot',
+    side_effect=repository_admin.RepositoryAdminError('snapshot-interno'),
+)
+def test_api_snapshot_erro_controlado_retorna_422_sem_vazamento(_snapshot):
+    response = client.get(
+        '/v1/admin/repositories/ericson-j-santos/'
+        'reqsys-v2-enterprise-real/snapshot'
+    )
+    assert response.status_code == 422
+    assert response.json()['detail'] == 'Snapshot de repositorio indisponivel.'
+    assert 'snapshot-interno' not in response.text
+
+
+@patch(
+    'app.api.repository_admin.repository_admin.build_snapshot',
+    side_effect=GitHubError('github-interno'),
+)
+def test_api_snapshot_falha_github_retorna_502_sem_vazamento(_snapshot):
+    response = client.get(
+        '/v1/admin/repositories/ericson-j-santos/'
+        'reqsys-v2-enterprise-real/snapshot'
+    )
+    assert response.status_code == 502
+    assert response.json()['detail'] == 'Falha ao consultar o provedor de repositorios.'
+    assert 'github-interno' not in response.text
+
+
+@patch(
+    'app.api.repository_admin.repository_admin.decide_pull_request',
+    return_value={
+        'repository': 'ericson-j-santos/reqsys-v2-enterprise-real',
+        'pull_request': 1951,
+        'head_sha': 'e' * 40,
+        'decision': 'wait_ci',
+    },
+)
+def test_api_decision_retorna_envelope(_decision):
+    response = client.get(
+        '/v1/admin/repositories/ericson-j-santos/'
+        'reqsys-v2-enterprise-real/pull-requests/1951/decision'
+    )
+    assert response.status_code == 200
+    assert response.json()['data']['decision'] == 'wait_ci'
+
+
+@patch(
+    'app.api.repository_admin.repository_admin.decide_pull_request',
+    side_effect=repository_admin.RepositoryNotManagedError('interno'),
+)
+def test_api_decision_repo_nao_administrado_retorna_404(_decision):
+    response = client.get(
+        '/v1/admin/repositories/acme/outro/pull-requests/1/decision'
+    )
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'Repositorio nao administrado.'
+
+
+@patch(
+    'app.api.repository_admin.repository_admin.decide_pull_request',
+    side_effect=repository_admin.RepositoryAdminError('decisao-interna'),
+)
+def test_api_decision_erro_controlado_retorna_422_sem_vazamento(_decision):
+    response = client.get(
+        '/v1/admin/repositories/ericson-j-santos/'
+        'reqsys-v2-enterprise-real/pull-requests/1951/decision'
+    )
+    assert response.status_code == 422
+    assert response.json()['detail'] == 'Decisao de pull request indisponivel.'
+    assert 'decisao-interna' not in response.text
+
+
+@patch(
+    'app.api.repository_admin.repository_admin.decide_pull_request',
+    side_effect=GitHubError('github-interno'),
+)
+def test_api_decision_falha_github_retorna_502_sem_vazamento(_decision):
+    response = client.get(
+        '/v1/admin/repositories/ericson-j-santos/'
+        'reqsys-v2-enterprise-real/pull-requests/1951/decision'
+    )
+    assert response.status_code == 502
+    assert response.json()['detail'] == 'Falha ao consultar o provedor de repositorios.'
+    assert 'github-interno' not in response.text
