@@ -66,21 +66,59 @@ jobs:
         run: |
           mkdir -p artifacts/security-baseline
 
+          diff_range=""
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > artifacts/security-baseline/changed-files.txt
-            echo "scope=changed" >> "$GITHUB_OUTPUT"
-            echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
+            diff_range="origin/${{ github.base_ref }}...HEAD"
           elif [ "$EVENT_NAME" = "merge_group" ]; then
-            git diff --name-only "${{ github.event.merge_group.base_sha }}...${{ github.event.merge_group.head_sha }}" > artifacts/security-baseline/changed-files.txt
-            echo "scope=changed" >> "$GITHUB_OUTPUT"
-            echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
+            diff_range="${{ github.event.merge_group.base_sha }}...${{ github.event.merge_group.head_sha }}"
           elif [ "$WORKFLOW_SCOPE" = "changed" ]; then
-            git diff --name-only "HEAD~1...HEAD" > artifacts/security-baseline/changed-files.txt
+            diff_range="HEAD~1...HEAD"
+          fi
+
+          if [ -n "$diff_range" ]; then
+            git diff --name-only "$diff_range" > artifacts/security-baseline/changed-files.txt
+            python - "$diff_range" <<'PY'
+          import json
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          diff_range = sys.argv[1]
+          output = subprocess.check_output(
+              ["git", "-c", "core.quotePath=false", "diff", "--unified=0", "--no-color", diff_range, "--"],
+              text=True,
+          )
+          hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+          current = None
+          result = {}
+          for line in output.splitlines():
+              if line.startswith("+++ "):
+                  raw = line[4:].strip()
+                  current = None if raw == "/dev/null" else (raw[2:] if raw.startswith("b/") else raw)
+                  if current is not None:
+                      result.setdefault(current, set())
+                  continue
+              match = hunk.match(line)
+              if current is None or not match:
+                  continue
+              start = int(match.group(1))
+              count = int(match.group(2) or "1")
+              if count > 0:
+                  result[current].update(range(start, start + count))
+          serializable = {path: sorted(lines) for path, lines in sorted(result.items())}
+          Path("artifacts/security-baseline/changed-lines.json").write_text(
+              json.dumps(serializable, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
             echo "scope=changed" >> "$GITHUB_OUTPUT"
             echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
+            echo "changed_lines=artifacts/security-baseline/changed-lines.json" >> "$GITHUB_OUTPUT"
           else
             echo "scope=all" >> "$GITHUB_OUTPUT"
             echo "changed_files=" >> "$GITHUB_OUTPUT"
+            echo "changed_lines=" >> "$GITHUB_OUTPUT"
           fi
 
           echo "### Security Baseline - arquivos alterados" >> "$GITHUB_STEP_SUMMARY"
@@ -112,12 +150,13 @@ jobs:
         env:
           SCAN_SCOPE: ${{ steps.scope.outputs.scope }}
           CHANGED_FILES: ${{ steps.scope.outputs.changed_files }}
+          CHANGED_LINES: ${{ steps.scope.outputs.changed_lines }}
         shell: bash
         run: |
           python scripts/vibe_security_gate.py --self-test-negative
           args=("--output-dir" "artifacts/security-baseline/vibe-security" "--scope" "$SCAN_SCOPE")
           if [ "$SCAN_SCOPE" = "changed" ]; then
-            args+=("--changed-files" "$CHANGED_FILES")
+            args+=("--changed-files" "$CHANGED_FILES" "--changed-lines" "$CHANGED_LINES")
           fi
           python scripts/vibe_security_gate.py --strict "${args[@]}"
 
