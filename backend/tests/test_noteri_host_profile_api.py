@@ -135,6 +135,7 @@ def test_missing_mount_fails_closed(monkeypatch, tmp_path: Path):
     try:
         response = client.get("/v1/noteri/profile")
         assert response.status_code == 503
-        assert "não montado" in response.json()["detail"]
+        assert response.json()["detail"] == "Perfil do Noteri indisponível."
+        assert str(tmp_path) not in response.text
     finally:
         app.dependency_overrides.clear()
