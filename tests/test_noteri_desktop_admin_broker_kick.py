@@ -58,3 +58,13 @@ def test_failure_is_sanitized_and_fail_closed(tmp_path, monkeypatch) -> None:
     assert result["result"] == "DESKTOP_ADMIN_BROKER_RUN_BLOCKED"
     assert result["run_returncode"] == 5
     assert "\n" not in result["run_error"]
+
+
+def test_workflow_is_explicitly_allowlisted() -> None:
+    import json
+
+    policy = json.loads(
+        (ROOT / ".github" / "self-hosted-runner-policy.json").read_text(encoding="utf-8")
+    )
+    assert ".github/workflows/noteri-desktop-admin-broker-kick.yml" in policy["approved_workflows"]
+    assert "Desktop Admin Broker" in policy["rationale"]
