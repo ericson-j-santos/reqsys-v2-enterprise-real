@@ -20,7 +20,7 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 8. O fan-out máximo por avanço da `main` deve ser 3 PRs para evitar tempestade de CI.
 9. O agente não pode executar merge, deploy, promoção, force-push, alteração de segredo ou branch protection.
 10. O `Governed Merge Queue` e o `Governed PR Automation` existentes continuam responsáveis pela validação e pelo merge depois que os gates do novo HEAD ficarem verdes.
-11. O workflow deve usar apenas `contents: read` e `pull-requests: write`.
+11. O workflow deve usar `contents: write` e `pull-requests: write`, menor combinação comprovada pelo E2E para a API `update-branch`; não pode receber `actions: write`, `issues: write` ou permissão administrativa.
 12. Execuções concorrentes de sincronização devem compartilhar uma única lane e cancelar execução obsoleta.
 
 ## Controles negativos
@@ -31,12 +31,12 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 - mergeabilidade desconhecida => não atualiza;
 - HEAD mudou entre leitura e mutação => `stale_noop`;
 - orçamento de 3 atualizações esgotado => `deferred`;
-- API aceita a atualização, mas `behind_by` não chega a zero => job falha;
+- token sem permissão de conteúdo para `update-branch` => falha explícita;\n- API aceita a atualização, mas `behind_by` não chega a zero => job falha;
 - nenhum caminho do workflow chama API de merge.
 
 ## Critérios de aceite
 
-- `tests/test_repository_governance_agent.py` verde;
+- `tests/test_repository_governance_agent.py` verde;\n- controle E2E comprova que `contents: read` era insuficiente (HTTP 403) e a permissão corrigida permite a atualização sem ampliar para outras famílias;
 - CI do PR verde no HEAD atual;
 - após merge deste hotfix, o `push` da própria `main` dispara o agente;
 - ao menos uma PR previamente atrasada deve ter HEAD alterado e `behind_by=0`, se existir candidata segura;
