@@ -118,3 +118,29 @@ O gate reduz falhas determinísticas antes da PR, mas não garante ausência abs
 - a PR do incremento só é criada depois dessa evidência;
 - os checks completos da PR são revalidados no mesmo SHA;
 - nenhum merge automático é executado por este incremento.
+
+
+## Enforcement v4 — invariantes preventivos e manifesto consumível
+
+O Pre-PR passa a registrar três invariantes obrigatórios no mesmo HEAD:
+
+- `sdd:contract`: contrato SDD válido, incluindo critérios e testes declarados;
+- `security:changed-diff`: sinais estáticos bloqueantes introduzidos pelo diff são rejeitados antes da PR;
+- `workflow:regression-contracts`: contratos conhecidos de workflows críticos não podem regredir.
+
+O controle de segurança usa o mapa de linhas adicionadas/modificadas do diff. Assim, dívida estática legada que não foi tocada permanece visível para tratamento separado, mas não transforma uma alteração inocente em falso bloqueio. O mesmo sinal introduzido pelo incremento atual bloqueia o `READY_FOR_PR`.
+
+A evidência `pre-pr-readiness-<HEAD_SHA>` inclui o resumo dos invariantes e os relatórios preventivos. A partir dela é produzido `ci-admission-<HEAD_SHA>`.
+
+O CI Admission Controller não confia apenas no nome do artifact. Antes de liberar uma suíte cara de PR, ele baixa o artifact e valida o JSON interno: schema, tipo, `status=admitted`, `head_sha`, `base_sha` e os três invariantes em `passed`. Mudança de HEAD ou avanço da base invalida a admissão.
+
+O download de artifact trata o redirect assinado sem encaminhar o bearer token do GitHub ao host externo de armazenamento.
+
+### Critério de conclusão v4
+
+- os três invariantes aparecem como `passed` no manifesto do HEAD atual;
+- `behind_by=0` contra a `main` corrente;
+- teste negativo rejeita manifesto de outro HEAD/base ou com invariante ausente/falho;
+- teste de controle prova que dívida de segurança legada não tocada não bloqueia e que o mesmo padrão introduzido no diff bloqueia;
+- o próprio `Pre-PR Readiness Gate` fica verde no HEAD final antes da abertura da PR;
+- nenhum merge, deploy ou promoção é realizado por este incremento.
