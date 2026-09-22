@@ -29,7 +29,8 @@ Governed PR Automation
 | Evento | Job | Finalidade |
 |---|---|---|
 | `pull_request` (`opened`, `reopened`, `ready_for_review`, `labeled`) | `increment-gate-on-open` | Bloquear abertura quando `new_front_allowed=false` |
-| `workflow_dispatch` | `governed-pr-check` | Validar merge + executar squash merge opcional |\n| `workflow_run` da `Governed Merge Queue` | `auto-merge-after-governed-queue` | Avaliar merge automático somente com autorização explícita por PR |
+| `workflow_dispatch` | `governed-pr-check` | Validar merge + executar squash merge opcional |
+| `workflow_run` da `Governed Merge Queue` | `auto-merge-after-governed-queue` | Avaliar merge automático somente com autorização explícita por PR |
 
 ## Entradas (`workflow_dispatch`)
 
@@ -77,7 +78,9 @@ O PR será bloqueado no merge se:
 - estiver fechado;
 - estiver em draft;
 - não estiver mergeable;
-- não possuir a label obrigatória `governed-merge-approved`;\n- no caminho CI-driven, não possuir simultaneamente `merge-queue:eligible` e `governed-merge-approved`;\n- a autorização explícita for removida antes da mutação;
+- não possuir a label obrigatória `governed-merge-approved`;
+- no caminho CI-driven, não possuir simultaneamente `merge-queue:eligible` e `governed-merge-approved`;
+- a autorização explícita for removida antes da mutação;
 - algum workflow obrigatório estiver ausente;
 - algum workflow obrigatório ainda estiver em execução;
 - algum workflow obrigatório não estiver com `success`.
@@ -114,7 +117,8 @@ required_label=governed-merge-approved
 
 ## Segurança
 
-- Não executa merge sem `governed-merge-approved`, inclusive no caminho CI-driven.\n- Revalida `governed-merge-approved`, `merge-queue:eligible` e o HEAD imediatamente antes da mutação.
+- Não executa merge sem `governed-merge-approved`, inclusive no caminho CI-driven.
+- Revalida `governed-merge-approved`, `merge-queue:eligible` e o HEAD imediatamente antes da mutação.
 - Não executa merge em PR draft.
 - Não executa merge com CI pendente.
 - Não executa merge com CI vermelho.
