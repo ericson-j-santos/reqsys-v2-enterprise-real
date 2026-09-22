@@ -86,3 +86,59 @@ def test_bootstrap_delegates_process_identity_and_restart_to_watchdog() -> None:
     assert "watchdog.restart_runner(root, _runner_log_path(root))" in text
     assert "runner_restarted_offline" in text
     assert "runner_restart_previous_listener_pid" in text
+
+
+def test_remove_token_is_ephemeral_and_repository_pinned() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "actions/runners/remove-token" in text
+    assert '"remove_token_persisted": False' in text
+    assert '"remove_token_logged": False' in text
+    assert 'remove_value = ""' in text
+
+
+def test_missing_registry_repair_policy_is_narrow() -> None:
+    assert m.should_repair_missing_registry({"present": False}, True) is True
+    assert m.should_repair_missing_registry({"present": True}, True) is False
+    assert m.should_repair_missing_registry({"present": False}, False) is False
+
+
+def test_repair_missing_registration_acquires_tokens_before_mutation(monkeypatch, tmp_path: Path) -> None:
+    runner = tmp_path / "runner"
+    runner.mkdir()
+    events = []
+    monkeypatch.setattr(m, "remove_token", lambda *a, **k: events.append("remove_token") or "R" * 24)
+    monkeypatch.setattr(m, "registration_token", lambda *a, **k: events.append("registration_token") or "G" * 24)
+    monkeypatch.setattr(
+        m,
+        "stop_runner",
+        lambda root: events.append("stop") or {
+            "previous_listener_pid": 123,
+            "termination_scope": "exact_runner_home",
+        },
+    )
+    monkeypatch.setattr(m, "_remove_runner_with_token", lambda root, token: events.append("remove_local"))
+    monkeypatch.setattr(m, "_register_runner_with_token", lambda root, token: events.append("register"))
+    result = m.repair_missing_registration(runner, Path("gh"), allow_interactive_auth=False)
+    assert events == ["remove_token", "registration_token", "stop", "remove_local", "register"]
+    assert result["repaired"] is True
+    assert result["termination_scope"] == "exact_runner_home"
+
+
+def test_registration_token_failure_does_not_mutate_runner(monkeypatch, tmp_path: Path) -> None:
+    runner = tmp_path / "runner"
+    runner.mkdir()
+    events = []
+    monkeypatch.setattr(m, "remove_token", lambda *a, **k: events.append("remove_token") or "R" * 24)
+
+    def registration_failure(*args, **kwargs):
+        events.append("registration_token")
+        raise m.ActivationError("github_runner_admin_permission_required", "blocked")
+
+    monkeypatch.setattr(m, "registration_token", registration_failure)
+    monkeypatch.setattr(m, "stop_runner", lambda root: events.append("stop"))
+    try:
+        m.repair_missing_registration(runner, Path("gh"), allow_interactive_auth=False)
+        assert False, "repair should fail closed"
+    except m.ActivationError as exc:
+        assert exc.state == "github_runner_admin_permission_required"
+    assert events == ["remove_token", "registration_token"]

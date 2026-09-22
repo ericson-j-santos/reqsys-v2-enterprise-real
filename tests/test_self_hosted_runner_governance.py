@@ -101,5 +101,17 @@ class SelfHostedRunnerGovernanceTests(unittest.TestCase):
         self.assertIn("Required ADR not found", result["violations"][0])
 
 
+    def test_repo_policy_allowlists_noteri_desktop_admin_broker_kick(self):
+        root = Path(__file__).resolve().parents[1]
+        policy = json.loads(
+            (root / ".github" / "self-hosted-runner-policy.json").read_text(encoding="utf-8")
+        )
+        self.assertIn(
+            ".github/workflows/noteri-desktop-admin-broker-kick.yml",
+            policy["approved_workflows"],
+        )
+
+
+
 if __name__ == "__main__":
     unittest.main()
