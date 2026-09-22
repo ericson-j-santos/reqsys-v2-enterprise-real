@@ -92,6 +92,44 @@ def test_model_without_known_technical_signal_does_not_auto_escalate() -> None:
     assert decision == {"eligible": False, "reason": "deterministic_signal_missing"}
 
 
+def test_invalid_ollama_output_degrades_fail_closed() -> None:
+    report = {
+        "matches": [
+            {
+                "pattern_id": "pytest_failure",
+                "category": "test_failure",
+                "severity": "high",
+                "confidence": 0.99,
+                "recommended_action": "corrigir teste",
+            }
+        ]
+    }
+    degraded = triage.degraded_triage("ollama_structured_output_invalid", report)
+    assert degraded["category"] == "unknown"
+    assert degraded["confidence"] == 0.0
+    assert "ollama_degraded:ollama_structured_output_invalid" in degraded["evidence"]
+    decision = triage.escalation_policy(degraded, run(), pr(), report)
+    assert decision == {"eligible": False, "reason": "category_unknown_not_auto_fixable"}
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "ollama_structured_output_invalid",
+        "ollama_invalid_json",
+        "ollama_model_unavailable",
+        "ollama_unreachable",
+        "ollama_http_500",
+    ],
+)
+def test_runtime_ollama_failures_are_degradable(reason: str) -> None:
+    assert triage.is_degradable_ollama_error(triage.TriageError(reason)) is True
+
+
+def test_ollama_url_policy_error_is_not_degradable() -> None:
+    assert triage.is_degradable_ollama_error(triage.TriageError("ollama_url_not_loopback")) is False
+
+
 @pytest.mark.parametrize("branch", ["main", "master", "develop", "../escape", "bad//branch", "refs heads"])
 def test_target_branch_guard(branch: str) -> None:
     with pytest.raises(triage.TriageError):
