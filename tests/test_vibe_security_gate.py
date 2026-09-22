@@ -132,3 +132,14 @@ def test_load_changed_line_map_normalizes_and_rejects_noise(tmp_path):
         "backend/app/api.py": {1, 2},
         "docs/x.md": set(),
     }
+
+
+def test_security_baseline_passes_changed_line_map_to_vibe_gate() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "security-baseline-gate.yml"
+    ).read_text(encoding="utf-8")
+    assert "changed-lines.json" in workflow
+    assert 'args+=("--changed-files" "$CHANGED_FILES" "--changed-lines" "$CHANGED_LINES")' in workflow
