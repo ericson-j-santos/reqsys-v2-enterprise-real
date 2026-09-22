@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from app.core.envelope import ok
 from app.core.security import require_admin
-from app.services import github_client, repository_admin
+from app.services import repository_admin
 from app.services.github_client import GitHubError
 
 router = APIRouter(
