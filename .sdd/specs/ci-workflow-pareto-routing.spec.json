@@ -1,0 +1,40 @@
+{
+  "feature_name": "ci-workflow-pareto-routing",
+  "project": "ReqSys v2 Enterprise — CI/CD Governance",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Reduz fan-out e contenção de runners por roteamento de scanners e workflows advisory/report-only, preservando checks protegidos e comportamento fail-closed.",
+  "scope": "governance-ci-routing",
+  "files": [
+    ".github/workflows/security-specialized-scanners.yml",
+    ".github/workflows/pr-scope-labeler.yml",
+    ".github/workflows/pr-fast-classifier.yml",
+    ".github/workflows/preview-environment-contract.yml",
+    ".github/workflows/runtime-risk-scoring.yml",
+    ".github/workflows/pr-quality-review.yml",
+    ".github/workflows/predictive-regression-guard.yml",
+    "scripts/validate_path_based_workflow_router.py",
+    "tests/test_codeql_atomic_publish_workflow.py",
+    "tests/test_report_only_workflow_pareto.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_codeql_atomic_publish_workflow.py",
+      "tests/test_report_only_workflow_pareto.py"
+    ],
+    "evidence_contract": "Checks protegidos permanecem materializáveis; Gitleaks permanece global; scans e advisory workflows ficam condicionados a superfícies aplicáveis; roteadores falham fechado; referências legadas não retornam."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  }
+}
