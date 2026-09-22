@@ -156,12 +156,10 @@ def main() -> int:
 
     try:
         result = repair(token)
-    except (RegistryRepairError, urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError) as exc:
+    except (RegistryRepairError, urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError):
         result = {
             "ok": False,
             "state": "runner_registry_probe_failed",
-            "error_type": type(exc).__name__,
-            "error": str(exc)[:500],
             "mutated": False,
         }
     write_evidence(args.evidence_file, result)
