@@ -191,6 +191,14 @@ def test_change_cannot_close_before_runtime_evidence_and_closes_after_exact_sha(
     assert closed.status_code == 200
     assert closed.json()["data"]["case"]["state"] == "CLOSED"
 
+    replay_after_close = client.post(
+        f"/v1/service-cases/{case['case_id']}/change-evidence",
+        json=payload,
+        headers={"X-Correlation-ID": "rsm-change-evidence"},
+    )
+    assert replay_after_close.status_code == 200
+    assert replay_after_close.json()["data"]["duplicate"] is True
+
     db = TestingSession()
     try:
         assert (
@@ -272,3 +280,40 @@ def test_change_evidence_is_rejected_for_non_change_case(service_id):
         json=payload,
     )
     assert evidence.status_code == 409
+
+
+def test_rollback_evidence_unblocks_change_after_failed_validation(service_id):
+    case = _resolved_change(service_id)
+    head_sha = "f" * 40
+
+    failed_payload = _evidence_payload(head_sha, status="FAILED")
+    failed_payload["observed_at"] = "2026-09-22T12:00:00+00:00"
+    failed = client.post(
+        f"/v1/service-cases/{case['case_id']}/change-evidence",
+        json=failed_payload,
+    )
+    assert failed.status_code == 200
+
+    blocked = _transition(case, "CLOSED")
+    assert blocked.status_code == 409
+
+    rollback_payload = _evidence_payload(head_sha, status="ROLLED_BACK")
+    rollback_payload.update(
+        {
+            "observed_at": "2026-09-22T12:05:00+00:00",
+            "rollback_ref": "revert:known-good",
+            "rollback_runtime_sha": "1" * 40,
+            "rollback_evidence_uri": "urn:reqsys:rsm-07:rollback",
+            "rollback_evidence_sha256": _sha256("rollback-evidence"),
+        }
+    )
+    rollback = client.post(
+        f"/v1/service-cases/{case['case_id']}/change-evidence",
+        json=rollback_payload,
+    )
+    assert rollback.status_code == 200
+    assert rollback.json()["data"]["change_evidence"]["status"] == "ROLLED_BACK"
+
+    closed = _transition(case, "CLOSED")
+    assert closed.status_code == 200
+    assert closed.json()["data"]["case"]["state"] == "CLOSED"
