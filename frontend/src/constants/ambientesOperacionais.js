@@ -1,4 +1,4 @@
-/** Catálogo canônico de ambientes ReqSys publicados (Fly.io + local). */
+/** Catálogo canônico de ambientes ReqSys. DEV usa locator assinado -> PC24x7; sem fallback Fly.io. */
 export const AMBIENTES_OPERACIONAIS = [
   {
     id: 'local',
@@ -16,9 +16,9 @@ export const AMBIENTES_OPERACIONAIS = [
     shortId: 'dev',
     label: 'Dev',
     color: 'info',
-    frontend: 'https://reqsys-app-dev.fly.dev',
-    backend: 'https://reqsys-api-dev.fly.dev',
-    duckdns: 'https://tieridev.duckdns.org',
+    frontend: 'https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/',
+    backend: 'same-origin:/api',
+    duckdns: '',
     uso: 'Evolução e testes técnicos.',
   },
   {
@@ -78,7 +78,7 @@ export function detectarAmbientePorHostname(hostname = '') {
   const host = String(hostname).toLowerCase()
   if (!host || host === 'localhost' || host === '127.0.0.1') return 'local'
   if (host.includes('reqsys-app-stg') || host.includes('tierin.duckdns')) return 'homologacao'
-  if (host.includes('reqsys-app-dev') || host.includes('tieridev.duckdns')) return 'desenvolvimento'
+  if (host.endsWith('.trycloudflare.com') || host === 'ericson-j-santos.github.io') return 'desenvolvimento'
   if (host.includes('reqsys-app.fly.dev') || host.includes('tieriprod.duckdns')) return 'producao'
   return null
 }
@@ -106,8 +106,14 @@ export function montarUrlAmbiente(ambiente, { path = '/', preserveRoute = true }
     rota = `${window.location.pathname}${window.location.search}${window.location.hash}`
   }
 
-  const base = alvo.frontend.replace(/\/$/, '')
   const suffix = rota.startsWith('/') ? rota : `/${rota}`
+  if (alvo.id === 'desenvolvimento') {
+    const locator = new URL(alvo.frontend)
+    locator.searchParams.set('target', suffix)
+    return locator.toString()
+  }
+
+  const base = alvo.frontend.replace(/\/$/, '')
   return `${base}${suffix}`
 }
 
