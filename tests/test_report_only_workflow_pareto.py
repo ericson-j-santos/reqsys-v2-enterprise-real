@@ -39,9 +39,29 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         ):
             self.assertIn(expected, trigger)
 
+    def test_advisory_risk_quality_and_predictive_skip_non_executable_prs(self):
+        for workflow in (
+            "runtime-risk-scoring.yml",
+            "pr-quality-review.yml",
+            "predictive-regression-guard.yml",
+        ):
+            text = (WORKFLOWS / workflow).read_text(encoding="utf-8")
+            trigger = text.split("permissions:", 1)[0]
+            self.assertIn('"backend/**"', trigger)
+            self.assertIn('"frontend/**"', trigger)
+            self.assertIn('"runtime/**"', trigger)
+            self.assertIn('"services/**"', trigger)
+            self.assertNotIn('".github/workflows/**"', trigger)
+            self.assertNotIn('"docs/ci/**"', trigger)
+            self.assertNotIn('"docs/adr/**"', trigger)
+            self.assertNotIn('"tests/**"', trigger)
+
     def test_optimized_workflows_are_report_only_not_protected(self):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         optimized = {
+            "Runtime Risk Scoring",
+            "PR Quality Review",
+            "Predictive Regression Guard",
             "Preview Environment Contract",
             "PR Scope Labeler",
             "PR Fast Classifier",
