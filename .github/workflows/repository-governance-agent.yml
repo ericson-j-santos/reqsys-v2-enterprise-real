@@ -1,0 +1,208 @@
+name: Repository Governance Agent
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: repository-governance-agent-main-sync
+  cancel-in-progress: true
+
+jobs:
+  sync-open-prs:
+    name: Sincronizar PRs atrasadas após avanço da main
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Atualizar branches com proteção por HEAD
+        uses: actions/github-script@v7
+        env:
+          MAX_BRANCH_SYNCS: "3"
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const repository = owner + '/' + repo;
+            const maxSyncs = Number(process.env.MAX_BRANCH_SYNCS || '3');
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+              sort: 'updated',
+              direction: 'asc',
+            });
+
+            const results = [];
+            let updatesStarted = 0;
+
+            for (const summary of pulls) {
+              const prNumber = Number(summary.number);
+              const { data: observed } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+
+              const expectedHeadSha = observed.head.sha;
+              const headRepository = observed.head.repo?.full_name || '';
+
+              if (observed.state !== 'open' || observed.base.ref !== 'main') {
+                results.push({ pr: prNumber, result: 'skipped', reason: 'not_open_or_not_main' });
+                continue;
+              }
+              if (observed.draft) {
+                results.push({ pr: prNumber, result: 'skipped', reason: 'draft' });
+                continue;
+              }
+              if (headRepository !== repository) {
+                results.push({ pr: prNumber, result: 'skipped', reason: 'external_fork' });
+                continue;
+              }
+              if (observed.mergeable === false || observed.mergeable_state === 'dirty') {
+                results.push({ pr: prNumber, result: 'blocked', reason: 'conflict' });
+                continue;
+              }
+              if (observed.mergeable === null) {
+                results.push({ pr: prNumber, result: 'hold', reason: 'mergeability_unknown' });
+                continue;
+              }
+
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                owner,
+                repo,
+                basehead: 'main...' + expectedHeadSha,
+              });
+              if (Number(comparison.behind_by || 0) <= 0) {
+                results.push({ pr: prNumber, result: 'noop', reason: 'already_up_to_date' });
+                continue;
+              }
+
+              if (updatesStarted >= maxSyncs) {
+                results.push({
+                  pr: prNumber,
+                  result: 'deferred',
+                  reason: 'branch_sync_budget_exhausted',
+                  behind_by: comparison.behind_by,
+                });
+                continue;
+              }
+
+              const { data: current } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+              if (
+                current.state !== 'open' ||
+                current.draft ||
+                current.base.ref !== 'main' ||
+                current.head.sha !== expectedHeadSha ||
+                current.head.repo?.full_name !== repository ||
+                current.mergeable === false ||
+                current.mergeable_state === 'dirty'
+              ) {
+                results.push({
+                  pr: prNumber,
+                  result: 'stale_noop',
+                  reason: 'state_changed_before_update',
+                });
+                continue;
+              }
+
+              const { data: currentComparison } =
+                await github.rest.repos.compareCommitsWithBasehead({
+                  owner,
+                  repo,
+                  basehead: 'main...' + expectedHeadSha,
+                });
+              if (Number(currentComparison.behind_by || 0) <= 0) {
+                results.push({ pr: prNumber, result: 'noop', reason: 'race_already_updated' });
+                continue;
+              }
+
+              updatesStarted += 1;
+              try {
+                await github.rest.pulls.updateBranch({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  expected_head_sha: expectedHeadSha,
+                });
+              } catch (error) {
+                results.push({
+                  pr: prNumber,
+                  result: 'blocked',
+                  reason: 'update_branch_api_' + (error.status || 'error'),
+                });
+                continue;
+              }
+
+              let confirmed = null;
+              for (let attempt = 1; attempt <= 8; attempt += 1) {
+                await sleep(Math.min(attempt * 1000, 5000));
+                const { data: after } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                });
+                if (after.head.sha === expectedHeadSha) {
+                  continue;
+                }
+                const { data: afterComparison } =
+                  await github.rest.repos.compareCommitsWithBasehead({
+                    owner,
+                    repo,
+                    basehead: 'main...' + after.head.sha,
+                  });
+                if (Number(afterComparison.behind_by || 0) === 0) {
+                  confirmed = {
+                    pr: prNumber,
+                    result: 'updated',
+                    previous_head_sha: expectedHeadSha,
+                    current_head_sha: after.head.sha,
+                    behind_by: 0,
+                  };
+                  break;
+                }
+              }
+
+              if (!confirmed) {
+                results.push({
+                  pr: prNumber,
+                  result: 'blocked',
+                  reason: 'update_not_confirmed',
+                  expected_head_sha: expectedHeadSha,
+                });
+                continue;
+              }
+              results.push(confirmed);
+            }
+
+            const failures = results.filter((item) => item.result === 'blocked');
+            const updated = results.filter((item) => item.result === 'updated');
+            const deferred = results.filter((item) => item.result === 'deferred');
+
+            await core.summary
+              .addHeading('Repository Governance Agent — branch sync')
+              .addRaw([
+                'Main SHA: ' + context.sha,
+                'PRs atualizadas: ' + updated.length,
+                'PRs adiadas pelo orçamento: ' + deferred.length,
+                'Bloqueios: ' + failures.length,
+                '',
+                'A sincronização não executa merge nem deploy.',
+                JSON.stringify(results, null, 2),
+              ].join('\n'))
+              .write();
+
+            if (failures.some((item) => item.reason === 'update_not_confirmed')) {
+              core.setFailed('Uma ou mais atualizações não foram confirmadas por leitura independente.');
+            }
