@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -25,6 +26,8 @@ from scripts.pending_development_local_codex import (  # noqa: E402
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 ELIGIBLE_STATUSES = {"dispatched", "already_dispatched"}
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+WORKER_POOL_COMPOSE_SERVICE = "codex-worker-pool"
+WORKER_POOL_TOKEN_DESTINATION = "/run/secrets/codex_worker_pool_api_token"
 
 
 class BridgeError(RuntimeError):
@@ -105,6 +108,73 @@ def validate_pool_url(value: str) -> str:
     if parsed.path not in {"", "/"}:
         raise BridgeError("worker_pool_url_invalid")
     return raw
+
+
+def _docker_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            args,
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise BridgeError("worker_pool_token_docker_probe_failed") from exc
+
+
+def discover_worker_pool_token_file_from_docker() -> Path:
+    containers = _docker_run(
+        [
+            "docker",
+            "ps",
+            "--filter",
+            f"label=com.docker.compose.service={WORKER_POOL_COMPOSE_SERVICE}",
+            "--format",
+            "{{.ID}}",
+        ]
+    )
+    container_ids = [line.strip() for line in containers.stdout.splitlines() if line.strip()]
+    if len(container_ids) != 1:
+        raise BridgeError("worker_pool_container_not_unique")
+
+    inspected = _docker_run(["docker", "inspect", container_ids[0]])
+    try:
+        payload = json.loads(inspected.stdout)
+    except json.JSONDecodeError as exc:
+        raise BridgeError("worker_pool_container_inspect_invalid") from exc
+    if not isinstance(payload, list) or len(payload) != 1 or not isinstance(payload[0], dict):
+        raise BridgeError("worker_pool_container_inspect_invalid")
+
+    container = payload[0]
+    labels = (container.get("Config") or {}).get("Labels") or {}
+    if labels.get("com.docker.compose.service") != WORKER_POOL_COMPOSE_SERVICE:
+        raise BridgeError("worker_pool_container_identity_invalid")
+
+    mounts = [
+        mount
+        for mount in container.get("Mounts") or []
+        if isinstance(mount, dict)
+        and mount.get("Type") == "bind"
+        and mount.get("Destination") == WORKER_POOL_TOKEN_DESTINATION
+        and str(mount.get("Source") or "").strip()
+    ]
+    if len(mounts) != 1:
+        raise BridgeError("worker_pool_token_mount_not_unique")
+    return Path(str(mounts[0]["Source"]))
+
+
+def resolve_token_file(explicit: Path | None) -> Path:
+    if explicit is not None:
+        return explicit
+    configured = (
+        os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
+        or os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "").strip()
+    )
+    if configured:
+        return Path(configured)
+    return discover_worker_pool_token_file_from_docker()
 
 
 def read_token(path: Path | None) -> str:
@@ -294,13 +364,7 @@ def main() -> int:
             print("true" if local_codex_decisions(report) else "false")
             return 0
 
-        token_path = args.token_file
-        if token_path is None:
-            configured = (
-                os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
-                or os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "").strip()
-            )
-            token_path = Path(configured) if configured else None
+        token_path = resolve_token_file(args.token_file)
         token = read_token(token_path)
         result = enqueue_local_work(
             report,

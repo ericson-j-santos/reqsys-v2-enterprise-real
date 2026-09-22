@@ -21,6 +21,7 @@ from scripts.pending_development_worker_pool_bridge import (  # noqa: E402
     enqueue_local_work,
     http_request,
     read_token,
+    resolve_token_file,
     validate_pool_url,
     write_evidence,
 )
@@ -39,14 +40,6 @@ def current_sha() -> str:
         capture_output=True,
     )
     return completed.stdout.strip().lower()
-
-
-def token_file_from_env() -> Path | None:
-    configured = (
-        os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
-        or os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", "").strip()
-    )
-    return Path(configured) if configured else None
 
 
 def run_smoke(
@@ -166,8 +159,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    token_file = args.token_file or token_file_from_env()
     try:
+        token_file = resolve_token_file(args.token_file)
         result = run_smoke(
             expected_sha=args.expected_sha,
             correlation_id=args.correlation_id,
