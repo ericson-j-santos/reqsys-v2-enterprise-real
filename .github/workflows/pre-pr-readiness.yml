@@ -196,6 +196,7 @@ jobs:
           required = {
               "sdd:contract",
               "security:changed-diff",
+              "workflow:surface-budget",
               "workflow:regression-contracts",
           }
           invariants = {
