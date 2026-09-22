@@ -12,15 +12,15 @@ on:
           - "true"
           - "false"
 
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
   push:
     branches:
       - main
-
-  workflow_run:
-    workflows:
-      - Governed PR Automation
-    types:
-      - completed
 
   schedule:
     - cron: "17 10 * * *"
@@ -36,15 +36,27 @@ jobs:
   validar-acessos:
     name: Validar URLs públicas e gerar analítico
     if: >-
-      github.event_name != 'workflow_run' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'workflow_run'
-      )
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout do SHA pós-merge exato
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Validar vínculo com o SHA pós-merge
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          observed_sha="$(git rev-parse HEAD)"
+          test "$observed_sha" = "$EXPECTED_SHA" || {
+            echo "::error::SHA validado diverge do SHA pós-merge: observed=$observed_sha expected=$EXPECTED_SHA"
+            exit 2
+          }
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
