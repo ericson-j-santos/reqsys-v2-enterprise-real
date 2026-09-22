@@ -8,7 +8,7 @@ O script é propositalmente restrito:
 - sem HML/PROD;
 - sem leitura de segredos;
 - sem shell;
-- restaura NORMAL ao fim do E2E.
+- preserva ESTUDO como estado final após o E2E.
 """
 from __future__ import annotations
 
@@ -466,63 +466,99 @@ def api_e2e(profile_path: Path) -> dict[str, Any]:
 
 def browser_e2e(profile_path: Path) -> dict[str, Any]:
     try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise ReconcileError("playwright_not_installed") from exc
 
     token, usuario = login_admin()
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(channel="msedge", headless=True)
-        page = browser.new_page()
-        page.goto(GATEWAY + "/login", wait_until="domcontentloaded", timeout=30000)
-        page.evaluate(
-            """([token, user]) => {
-              localStorage.setItem('reqsys_token', token)
-              localStorage.setItem('reqsys_usuario', JSON.stringify(user))
-            }""",
-            [token, usuario],
-        )
-        page.goto(GATEWAY + "/task-console", wait_until="domcontentloaded", timeout=30000)
-        card = page.locator('[data-testid="noteri-study-mode-card"]')
-        card.wait_for(state="visible", timeout=30000)
-        study = page.get_by_role("button", name="Quero estudar agora")
-        study.wait_for(state="visible", timeout=30000)
-        deadline = time.monotonic() + 30
-        while study.is_disabled() and time.monotonic() < deadline:
-            page.wait_for_timeout(500)
-        if study.is_disabled():
-            raise ReconcileError("study_button_disabled")
-        study.click()
-        page.wait_for_function(
-            """() => {
-              const card = document.querySelector('[data-testid="noteri-study-mode-card"]')
-              return card && card.textContent.includes('ESTUDO')
-            }""",
-            timeout=30000,
-        )
-        read_profile_file(profile_path, "ESTUDO")
+    stage = "browser_launch"
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(channel="msedge", headless=True)
+            page = browser.new_page()
 
-        back = page.get_by_role("button", name="Voltar ao desenvolvimento")
-        back.click()
-        page.wait_for_function(
-            """() => {
-              const card = document.querySelector('[data-testid="noteri-study-mode-card"]')
-              return card && card.textContent.includes('NORMAL')
-            }""",
-            timeout=30000,
-        )
-        read_profile_file(profile_path, "NORMAL")
+            stage = "login_origin"
+            page.goto(GATEWAY + "/login", wait_until="domcontentloaded", timeout=15000)
+            page.evaluate(
+                """([token, user]) => {
+                  localStorage.setItem('reqsys_token', token)
+                  localStorage.setItem('reqsys_usuario', JSON.stringify(user))
+                }""",
+                [token, usuario],
+            )
 
-        study.click()
-        page.wait_for_function(
-            """() => {
-              const card = document.querySelector('[data-testid="noteri-study-mode-card"]')
-              return card && card.textContent.includes('ESTUDO')
-            }""",
-            timeout=30000,
-        )
-        read_profile_file(profile_path, "ESTUDO")
-        browser.close()
+            stage = "task_console_navigation"
+            page.goto(GATEWAY + "/task-console", wait_until="domcontentloaded", timeout=15000)
+            if "/login" in page.url:
+                raise ReconcileError("browser_auth_redirected")
+
+            stage = "task_console_route"
+            page.locator('[data-testid="route-task-console"]').wait_for(state="visible", timeout=15000)
+
+            stage = "study_card"
+            card = page.locator('[data-testid="noteri-study-mode-card"]')
+            card.wait_for(state="visible", timeout=15000)
+
+            stage = "study_button_visible"
+            study = page.get_by_role("button", name="Quero estudar agora")
+            study.wait_for(state="visible", timeout=15000)
+
+            stage = "study_button_ready"
+            deadline = time.monotonic() + 15
+            while study.is_disabled() and time.monotonic() < deadline:
+                page.wait_for_timeout(250)
+            if study.is_disabled():
+                raise ReconcileError("study_button_disabled")
+
+            stage = "study_click"
+            study.click()
+            stage = "study_ui_readback"
+            page.wait_for_function(
+                """() => {
+                  const card = document.querySelector('[data-testid="noteri-study-mode-card"]')
+                  return card && card.textContent.includes('ESTUDO')
+                }""",
+                timeout=15000,
+            )
+            read_profile_file(profile_path, "ESTUDO")
+
+            stage = "normal_button_visible"
+            back = page.get_by_role("button", name="Voltar ao desenvolvimento")
+            back.wait_for(state="visible", timeout=15000)
+            stage = "normal_click"
+            back.click()
+            stage = "normal_ui_readback"
+            page.wait_for_function(
+                """() => {
+                  const card = document.querySelector('[data-testid="noteri-study-mode-card"]')
+                  return card && card.textContent.includes('NORMAL')
+                }""",
+                timeout=15000,
+            )
+            read_profile_file(profile_path, "NORMAL")
+
+            stage = "study_reapply_ready"
+            deadline = time.monotonic() + 15
+            while study.is_disabled() and time.monotonic() < deadline:
+                page.wait_for_timeout(250)
+            if study.is_disabled():
+                raise ReconcileError("study_reapply_button_disabled")
+
+            stage = "study_reapply_click"
+            study.click()
+            stage = "study_reapply_readback"
+            page.wait_for_function(
+                """() => {
+                  const card = document.querySelector('[data-testid="noteri-study-mode-card"]')
+                  return card && card.textContent.includes('ESTUDO')
+                }""",
+                timeout=15000,
+            )
+            read_profile_file(profile_path, "ESTUDO")
+            browser.close()
+    except PlaywrightTimeoutError as exc:
+        raise ReconcileError(f"browser_timeout_{stage}") from exc
 
     return {
         "task_console_loaded": True,
@@ -532,6 +568,22 @@ def browser_e2e(profile_path: Path) -> dict[str, Any]:
         "estudo_reapplied_in_ui": True,
         "final_profile": "ESTUDO",
     }
+
+
+def ensure_estudo(profile_path: Path) -> None:
+    token, _ = login_admin()
+    correlation = f"study-dev-safety-{int(time.time())}"
+    _, payload = http_json(
+        "POST",
+        "/api/v1/noteri/profile",
+        token=token,
+        correlation_id=correlation,
+        body={"profile": "ESTUDO", "correlation_id": correlation},
+    )
+    data = profile_data(payload)
+    if data.get("profile") != "ESTUDO" or data.get("accepts_new_development") is not False:
+        raise ReconcileError("estudo_safety_restore_failed")
+    read_profile_file(profile_path, "ESTUDO")
 
 
 def execute(args: argparse.Namespace) -> dict[str, Any]:
@@ -611,6 +663,10 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         api_result = api_e2e(profile)
         browser_result = browser_e2e(profile)
     except Exception:
+        try:
+            ensure_estudo(profile)
+        except Exception:
+            pass
         rollback_files(changes)
         try:
             original_files = [path for path in compose_files if "StudyModeDeploy" not in str(path)]
