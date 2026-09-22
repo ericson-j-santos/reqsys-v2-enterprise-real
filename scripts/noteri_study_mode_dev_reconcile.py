@@ -614,7 +614,10 @@ def main() -> int:
     except Exception as exc:
         failure = {
             "ok": False,
-            "error": str(exc),
+            "error": "noteri_study_mode_reconcile_failed",
+            "error_type": type(exc).__name__,
+            "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
+            "expected_sha": args.expected_sha,
             "environment": "dev",
             "host": socket.gethostname(),
             "production_touched": False,
