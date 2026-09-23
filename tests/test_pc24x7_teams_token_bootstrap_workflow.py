@@ -22,7 +22,7 @@ def test_bootstrap_permanece_dev_only_e_resolve_locator_assinado() -> None:
     assert 'reqsys-app.fly.dev' not in text
     assert 'resolve_pc24x7_dev_locator.mjs --self-test' in text
     assert '--output artifacts/pc24x7-teams-token/signed-locator.json' in text
-    assert 'steps.locator.outputs.base_url' in text
+    assert 'steps.locator.outputs.api_base_url' in text
     assert "printf 'REQSYS_API_BASE_URL=%s\\n' \"$RESOLVED_API_BASE\" >> \"$GITHUB_ENV\"" in text
     assert 'reqsys-pc24x7-teams-service-token' in text
     assert 'signed-locator.json' in text
