@@ -144,3 +144,25 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - `push/main` e `workflow_dispatch` continuam selecionando Python, JavaScript/TypeScript, auditorias de dependência e SBOM.
 - A publicação CodeQL valida exatamente as categorias selecionadas e rejeita categoria ausente, inesperada ou duplicada.
 - `tests/test_codeql_atomic_publish_workflow.py` permanece verde.
+
+
+## Incremento Pareto — divisão por domínios e primeira extração BACEN
+
+40. O monorepo deve manter um mapa machine-readable de domínio → paths → workflows → repositório alvo em `config/repository-domain-routing.json`.
+41. A quantidade de workflows ativos deve ser tratada como orçamento versionado: no baseline deste incremento são 575; qualquer crescimento ou redução exige atualização explícita do inventário e revisão.
+42. O domínio BACEN deve possuir manifesto exato dos workflows `bacen-*.yml`; drift entre o manifesto e `.github/workflows` deve falhar fechado.
+43. A extração deve usar strangler/shadow copy: o source permanece autoritativo até o target comprovar equivalência de inventário, contratos de evidência e CI.
+44. O seed de `reqsys-ci-platform` deve permanecer fora de `.github/workflows` enquanto estiver no monorepo, evitando criar mais um workflow ativo durante a migração.
+45. A validação da topologia deve ser incorporada ao `Path-Based Workflow Router Validation` existente, sem criar novo workflow de pull request.
+46. Nenhum workflow BACEN pode ser removido da origem nesta etapa; remoção/delegação exige PR posterior, target protegido, equivalência verde e rollback documentado.
+47. O target canônico da primeira extração é `ericson-j-santos/reqsys-governance-bacen`; o target do CI compartilhado é `ericson-j-santos/reqsys-ci-platform`.
+
+### Critérios de aceite — divisão por domínios
+
+- `python -m unittest tests/test_repository_domain_routing.py -v` verde.
+- `python scripts/validate_repository_domain_routing.py --json` retorna `status=passed`.
+- A contagem de workflows ativos permanece 575.
+- O inventário BACEN contém exatamente 65 workflows.
+- O diff não adiciona workflow ativo em `.github/workflows`.
+- O source BACEN permanece autoritativo até evidência equivalente no target.
+- O incremento não toca produção, secrets, deploy, branch protection ou permissões administrativas.

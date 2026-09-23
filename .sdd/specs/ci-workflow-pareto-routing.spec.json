@@ -44,7 +44,15 @@
     ".github/workflows/ci-advisory-router.yml",
     ".github/workflows/deep-governance-review.yml",
     ".github/workflows/governed-pr-automation.yml",
-    "tests/test_governed_pr_automation_dispatch_contract.py"
+    "tests/test_governed_pr_automation_dispatch_contract.py",
+    ".github/workflows/path-based-workflow-router-validation.yml",
+    "config/repository-domain-routing.json",
+    "docs/ci/repository-domain-extraction.md",
+    "platform/reqsys-ci-platform/README.md",
+    "platform/reqsys-ci-platform/workflows/python-quality.yml",
+    "platform/reqsys-governance-bacen/README.md",
+    "scripts/validate_repository_domain_routing.py",
+    "tests/test_repository_domain_routing.py"
   ],
   "sdd_gate": {
     "tests": [
@@ -52,9 +60,10 @@
       "tests/test_report_only_workflow_pareto.py",
       "tests/test_workflow_governance_consolidator.py",
       "tests/test_ci_budget_guard.py",
-      "tests/test_governed_pr_automation_dispatch_contract.py"
+      "tests/test_governed_pr_automation_dispatch_contract.py",
+      "tests/test_repository_domain_routing.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge. Security Specialized Scanners deve distinguir código-fonte de manifestos de dependência: Gitleaks permanece global; pip-audit/npm audit/SBOM executam apenas para suas superfícies; CodeQL analisa somente linguagens alteradas no PR e publica atomicamente o conjunto selecionado; push/main mantém scan completo."
+    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge. Security Specialized Scanners deve distinguir código-fonte de manifestos de dependência: Gitleaks permanece global; pip-audit/npm audit/SBOM executam apenas para suas superfícies; CodeQL analisa somente linguagens alteradas no PR e publica atomicamente o conjunto selecionado; push/main mantém scan completo. O inventário de topologia deve fixar a contagem de workflows ativos e listar exatamente os workflows BACEN do baseline; qualquer drift deve falhar fechado. A primeira extração usa strangler/shadow copy, mantém o monorepo autoritativo até equivalência do target e não adiciona novo workflow ativo: a validação é incorporada ao Path-Based Workflow Router Validation existente."
   },
   "risk": {
     "production": false,
@@ -81,6 +90,12 @@
     "Security Specialized Scanners mantém Gitleaks em todo PR e separa código-fonte de manifestos de dependência.",
     "CodeQL seleciona somente as linguagens alteradas no PR e preserva publicação SARIF atômica do conjunto selecionado.",
     "pip-audit/npm audit/SBOM não executam por mera alteração de código sem mudança de dependência/empacotamento.",
-    "push/main e workflow_dispatch preservam o scan completo de segurança."
+    "push/main e workflow_dispatch preservam o scan completo de segurança.",
+    "O mapa config/repository-domain-routing.json registra source, target e estado de migração para Core, CI Platform, BACEN, M365, Runtime Platform e Product Intelligence.",
+    "A contagem global de workflows ativos permanece 575 neste incremento; qualquer adição/remoção exige atualização explícita do inventário.",
+    "O manifesto BACEN lista exatamente os 65 workflows bacen-*.yml do baseline e falha em caso de drift.",
+    "A preparação de reqsys-ci-platform permanece fora de .github/workflows no monorepo, portanto não aumenta fan-out.",
+    "Nenhum workflow BACEN é removido antes de equivalência comprovada no repositório alvo.",
+    "python -m unittest tests/test_repository_domain_routing.py -v e scripts/validate_repository_domain_routing.py ficam verdes no HEAD exato."
   ]
 }
