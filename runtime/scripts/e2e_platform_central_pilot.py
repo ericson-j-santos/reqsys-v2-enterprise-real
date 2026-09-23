@@ -112,7 +112,7 @@ def wait_for_health(base_url: str, timeout_seconds: float = 30.0) -> None:
 
 def run_pilot(output_path: Path) -> dict[str, object]:
     repository = os.environ.get("GITHUB_REPOSITORY", "")
-    sha = os.environ.get("GITHUB_SHA", "")
+    sha = os.environ.get("E2E_EXPECTED_SHA") or os.environ.get("GITHUB_SHA", "")
     environment = os.environ.get("E2E_ENVIRONMENT", "ci")
     correlation_id = os.environ.get("E2E_CORRELATION_ID") or f"reqsys-central-{uuid.uuid4().hex[:16]}"
     validate_identity(repository, sha)
