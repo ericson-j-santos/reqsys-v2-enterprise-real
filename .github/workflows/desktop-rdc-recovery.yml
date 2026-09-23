@@ -50,7 +50,7 @@ jobs:
         run: New-Item -ItemType Directory -Force -Path "$env:RUNTIME_EVIDENCE_DIR" | Out-Null
 
       - name: Checkout immutable Desktop runtime SHA
-        id: runtime-checkout
+        id: runtime_checkout
         if: inputs.mode == 'runtime-bootstrap'
         uses: actions/checkout@v4
         with:
@@ -106,8 +106,8 @@ jobs:
           }
 
       - name: Stage isolated runtime admin broker
-        id: admin-broker
-        if: always() && inputs.mode == 'runtime-bootstrap' && steps.runtime-checkout.outcome == 'success'
+        id: admin_broker
+        if: always() && inputs.mode == 'runtime-bootstrap' && steps.runtime_checkout.outcome == 'success'
         continue-on-error: true
         shell: powershell
         run: |
@@ -121,7 +121,7 @@ jobs:
           }
 
       - name: Prove pickup on dedicated Desktop runtime runner
-        id: pickup-e2e
+        id: pickup_e2e
         if: always() && inputs.mode == 'runtime-bootstrap' && steps.bootstrap.outcome == 'success'
         continue-on-error: true
         shell: powershell
@@ -137,11 +137,11 @@ jobs:
         if: always() && inputs.mode == 'runtime-bootstrap'
         shell: powershell
         env:
-          CHECKOUT_OUTCOME: ${{ steps.runtime-checkout.outcome }}
+          CHECKOUT_OUTCOME: ${{ steps.runtime_checkout.outcome }}
           BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
           WATCHDOG_OUTCOME: ${{ steps.watchdog.outcome }}
-          ADMIN_BROKER_OUTCOME: ${{ steps.admin-broker.outcome }}
-          PICKUP_E2E_OUTCOME: ${{ steps.pickup-e2e.outcome }}
+          ADMIN_BROKER_OUTCOME: ${{ steps.admin_broker.outcome }}
+          PICKUP_E2E_OUTCOME: ${{ steps.pickup_e2e.outcome }}
         run: |
           $failed = @()
           if ($env:CHECKOUT_OUTCOME -ne "success") { $failed += "runtime-checkout" }
