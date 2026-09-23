@@ -1,0 +1,20 @@
+{
+  "feature_name": "ocr-external-package-consumer-contract",
+  "project": "ReqSys v2 Enterprise — OCR",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-23",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Valida que o ReqSys pode consumir o OCR Evidence Engine privado por SHA imutável usando token temporário da GitHub App com somente contents: read, preservando a cópia local até o E2E externo ficar verde.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ocr_external_package_workflow.py",
+      "backend/ocr_tests/test_worker.py"
+    ],
+    "evidence_contract": "O mesmo HEAD deve provar controle negativo sem a cópia local, emissão de token temporário com escopo mínimo, checkout do fornecedor no SHA fixo, import a partir do pacote instalado e execução dos contratos OCR do ReqSys. Falta de acesso da GitHub App ao fornecedor deve falhar fechado."
+  }
+}

@@ -20,6 +20,8 @@ permissions:
 concurrency:
   group: ocr-benchmark-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+env:
+  OCR_ENGINE_SHA: '15209941c4ddbf52da62cedc866510592b3172ee'
 jobs:
   contract:
     runs-on: ubuntu-latest
@@ -51,6 +53,112 @@ jobs:
           test "$midv" -eq 3
           test "$xfund" -eq 3
           test "$funsd" -eq 3
+  external-package-contract:
+    name: OCR External Package Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout ReqSys
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências mínimas do consumidor
+        run: |
+          python -m pip install --disable-pip-version-check \
+            pytest==9.0.3 \
+            sqlalchemy==2.0.41 \
+            cryptography==50.0.0 \
+            pydantic==2.13.4 \
+            pydantic-settings==2.7.1
+
+      - name: Isolar a cópia local e provar ausência do pacote
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d backend/ocr_evidencia
+          mv backend/ocr_evidencia "$RUNNER_TEMP/ocr_evidencia_local_copy"
+          set +e
+          PYTHONPATH=backend python -c 'import ocr_evidencia' >/tmp/ocr-local-negative.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          echo "OCR_EXTERNAL_NEGATIVE_CONTROL_OK"
+
+      - name: Identificar instalação governada do ReqSys
+        id: reqsys-app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: read
+
+      - name: Registrar identificadores não sensíveis da instalação
+        shell: bash
+        run: |
+          echo "REQSYS_GITHUB_APP_SLUG=${{ steps.reqsys-app-token.outputs.app-slug }}"
+          echo "REQSYS_GITHUB_APP_INSTALLATION_ID=${{ steps.reqsys-app-token.outputs.installation-id }}"
+
+      - name: Emitir token temporário somente leitura
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            reqsys-v2-enterprise-real
+            ocr-evidence-engine
+          permission-contents: read
+
+      - name: Checkout do OCR privado no SHA pinado
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/ocr-evidence-engine
+          ref: ${{ env.OCR_ENGINE_SHA }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: .external/ocr-evidence-engine
+          persist-credentials: false
+
+      - name: Validar SHA e instalar o pacote externo
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C .external/ocr-evidence-engine rev-parse HEAD)"
+          test "$actual" = "$OCR_ENGINE_SHA"
+          python -m pip install --disable-pip-version-check --no-deps .external/ocr-evidence-engine
+
+      - name: Provar origem externa e executar contratos do ReqSys
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=backend python - <<'PY'
+          from pathlib import Path
+          import ocr_evidencia
+
+          origin = Path(ocr_evidencia.__file__).resolve()
+          repository = Path.cwd().resolve()
+          local_copy = repository / "backend" / "ocr_evidencia"
+          external_checkout = repository / ".external" / "ocr-evidence-engine"
+
+          if str(origin).startswith(str(local_copy)):
+              raise SystemExit(f"ocr_origin_is_local_copy:{origin}")
+          if str(origin).startswith(str(external_checkout)):
+              raise SystemExit(f"ocr_origin_is_checkout_not_installed_package:{origin}")
+          if "site-packages" not in origin.parts:
+              raise SystemExit(f"ocr_origin_is_not_site_packages:{origin}")
+          if ocr_evidencia.__version__ != "1.2.0":
+              raise SystemExit(f"ocr_version_mismatch:{ocr_evidencia.__version__}")
+
+          print(f"OCR_EXTERNAL_IMPORT_OK origin={origin.name} version={ocr_evidencia.__version__}")
+          PY
+          PYTHONPATH=backend python -m pytest -q backend/ocr_tests
+
   synthetic-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 12
