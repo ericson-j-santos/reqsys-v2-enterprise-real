@@ -1,0 +1,57 @@
+name: GitHub Copilot Ollama MCP Ingress DEV
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-copilot-ollama-mcp-ingress-dev
+  cancel-in-progress: false
+
+jobs:
+  ingress:
+    name: Reconcile Ollama MCP HTTPS ingress on PC24x7
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      EVIDENCE_FILE: artifacts/github-copilot-ollama-mcp-ingress/evidence.json
+      CORRELATION_ID: ollama-mcp-ingress-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout immutable dispatched SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Reconcile stable HTTPS route without reading secrets
+        shell: powershell
+        run: >
+          python scripts/pc24x7_ollama_mcp_funnel.py
+          --apply
+          --source-sha "${{ github.sha }}"
+          --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Upload sanitized ingress evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: github-copilot-ollama-mcp-ingress-${{ github.run_id }}
+          path: artifacts/github-copilot-ollama-mcp-ingress/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        shell: powershell
+        run: |
+          "## GitHub Copilot Ollama MCP Ingress DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Rota: HTTPS /mcp -> 127.0.0.1:8010" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Ollama :11434 público: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Gateway :8008 público: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
