@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 DEFAULT_ROOT = Path(os.getenv("PC24X7_TEAMS_QUEUE_ROOT", "/var/lib/reqsys-24x7/teams"))
@@ -205,6 +206,19 @@ def process_one(root: Path, base_url: str, token_file: Path) -> dict | None:
     return evidence
 
 
+def validate_worker_base_url(value: str) -> str:
+    base_url = str(value or "").strip().rstrip("/")
+    if not base_url:
+        raise ValueError("REQSYS_API_BASE_URL_missing")
+    parsed = urlparse(base_url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host or parsed.username or parsed.password:
+        raise ValueError("REQSYS_API_BASE_URL_invalid")
+    if host.endswith(".fly.dev"):
+        raise ValueError("legacy_fly_dev_runtime_forbidden")
+    return base_url
+
+
 def run_worker(root: Path, base_url: str, token_file: Path, once: bool, interval: int) -> int:
     while True:
         result = process_one(root, base_url, token_file)
@@ -226,7 +240,7 @@ def parse_args() -> argparse.Namespace:
     add.add_argument("--titulo", default="ReqSys 24x7 Teams DEV")
     add.add_argument("--correlation-id")
     worker = sub.add_parser("worker")
-    worker.add_argument("--base-url", default=os.getenv("REQSYS_API_BASE_URL", "https://reqsys-api-dev.fly.dev"))
+    worker.add_argument("--base-url", default=os.getenv("REQSYS_API_BASE_URL", ""))
     worker.add_argument("--token-file", default=os.getenv("REQSYS_API_SERVICE_TOKEN_FILE", "/run/secrets/reqsys_api_service_token"))
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--interval", type=int, default=10)
@@ -249,7 +263,11 @@ def main() -> int:
         )
         print(json.dumps({"queued": True, "path": str(path), "secret_value_exposed": False}))
         return 0
-    return run_worker(root, args.base_url, Path(args.token_file), args.once, args.interval)
+    try:
+        base_url = validate_worker_base_url(args.base_url)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from None
+    return run_worker(root, base_url, Path(args.token_file), args.once, args.interval)
 
 
 if __name__ == "__main__":
