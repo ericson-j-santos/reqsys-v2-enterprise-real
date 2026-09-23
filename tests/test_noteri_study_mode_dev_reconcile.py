@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +33,61 @@ def test_reconciler_is_fixed_to_pc24x7_dev_gateway():
 def test_windows_path_normalizes_docker_desktop_mounts():
     assert str(module.windows_path("/run/desktop/mnt/host/c/dev/reqsys")).replace("\\", "/") == "C:/dev/reqsys"
     assert str(module.windows_path("/host_mnt/c/dev/reqsys")).replace("\\", "/") == "C:/dev/reqsys"
+
+
+def test_compose_environment_file_from_runtime_label_is_replayed_without_reading_value(tmp_path):
+    env_file = tmp_path / "stack.env"
+    env_file.write_text("TOKEN=must-not-be-read\n", encoding="utf-8")
+    item = {
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project.environment_file": str(env_file),
+            }
+        }
+    }
+
+    environment_files = module.compose_environment_files(item, tmp_path)
+
+    assert environment_files == [env_file.resolve()]
+    command = module.compose_base(
+        "reqsys-live",
+        [tmp_path / "docker-compose.yml"],
+        tmp_path,
+        environment_files,
+    )
+    assert command.count("--env-file") == 1
+    assert str(env_file.resolve()) in command
+    assert "must-not-be-read" not in " ".join(command)
+
+
+def test_compose_environment_file_label_supports_multiple_files_and_fails_closed(tmp_path):
+    first = tmp_path / "base.env"
+    second = tmp_path / "dev.env"
+    first.write_text("A=1\n", encoding="utf-8")
+    second.write_text("B=2\n", encoding="utf-8")
+    item = {
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project.environment_file": f"{first},{second}",
+            }
+        }
+    }
+    assert module.compose_environment_files(item, tmp_path) == [
+        first.resolve(),
+        second.resolve(),
+    ]
+
+    missing = {
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project.environment_file": str(tmp_path / "missing.env"),
+            }
+        }
+    }
+    with pytest.raises(module.ReconcileError) as exc:
+        module.compose_environment_files(missing, tmp_path)
+    assert exc.value.code == "compose_environment_file_missing"
+    assert exc.value.stage == "compose_context"
 
 
 def test_overlay_routes_profile_through_allowlisted_control_plane():
@@ -193,6 +250,8 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "com.docker.compose.service" in raw
     assert "non_dev_compose_project_blocked" in raw
     assert '"runtime_discovery": "api_port_8210_compose_labels"' in raw
+    assert '"compose_environment_files_preserved": bool(compose_environment_files)' in raw
+    assert "com.docker.compose.project.environment_file" in raw
     assert "dev_api_8210_not_unique" in raw
     assert "dev_gateway_8083_not_unique" not in raw
     assert "reqsys-live-api-1" not in raw
