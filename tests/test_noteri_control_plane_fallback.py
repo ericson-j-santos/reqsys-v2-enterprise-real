@@ -495,3 +495,16 @@ def test_probe_runner_registry_reports_access_denied_without_secret_leak(monkeyp
         "state": "runner_registry_access_denied",
         "http_hint": "forbidden_or_missing_permission",
     }
+
+
+def test_runtime_migration_e2e_is_branch_scoped_exact_sha_and_sanitized() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "ops/noteri-runtime-migration-e2e-20260923" in workflow
+    assert "ericson-j-santos/noteri-runtime" in workflow
+    assert "336e99a7fb7feb598d9be9aa2b143c3f9f87164e" in workflow
+    assert "noteri_runtime_isolated_e2e.py" in workflow
+    assert "Validate independent evidence contract" in workflow
+    assert "idempotency_missing" in workflow
+    assert "negative_control_missing" in workflow
+    assert "rdc_dependency_detected" in workflow
+    assert "secrets." not in workflow
