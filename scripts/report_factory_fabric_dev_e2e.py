@@ -15,6 +15,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -376,6 +377,118 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _serialize_rdl_root(root: ET.Element) -> str:
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8") + "\n"
+
+
+def _remove_report_item_type(root: ET.Element, local_name: str) -> None:
+    report_sections = root.find(report_factory._q("ReportSections"))
+    if report_sections is None:
+        raise E2EError("progressive_report_sections_missing")
+    report_items = report_sections.find(f".//{report_factory._q('ReportItems')}")
+    if report_items is None:
+        raise E2EError("progressive_report_items_missing")
+    target_tag = report_factory._q(local_name)
+    for item in list(report_items):
+        if item.tag == target_tag:
+            report_items.remove(item)
+
+
+def _remove_root_child(root: ET.Element, local_name: str) -> None:
+    node = root.find(report_factory._q(local_name))
+    if node is not None:
+        root.remove(node)
+
+
+def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
+    """Reduz o RDL em camadas para localizar rejeições do Fabric sem criar itens extras."""
+    try:
+        ET.fromstring(rdl)
+    except ET.ParseError as exc:
+        raise E2EError("progressive_source_rdl_invalid") from exc
+
+    def parsed() -> ET.Element:
+        return ET.fromstring(rdl)
+
+    minimal = parsed()
+    for tag in ("DataSources", "DataSets", "ReportParameters", "ReportParametersLayout"):
+        _remove_root_child(minimal, tag)
+    _remove_report_item_type(minimal, "Tablix")
+
+    datasource = parsed()
+    for tag in ("DataSets", "ReportParameters", "ReportParametersLayout"):
+        _remove_root_child(datasource, tag)
+    _remove_report_item_type(datasource, "Tablix")
+
+    dataset = parsed()
+    _remove_report_item_type(dataset, "Tablix")
+
+    return [
+        ("minimal", _serialize_rdl_root(minimal)),
+        ("datasource", _serialize_rdl_root(datasource)),
+        ("dataset", _serialize_rdl_root(dataset)),
+        ("full", rdl),
+    ]
+
+
+def _create_progressively(
+    *,
+    reports_url: str,
+    workspace_id: str,
+    report_name: str,
+    description: str,
+    rdl: str,
+    token: str,
+    evidence: dict[str, Any],
+) -> None:
+    """Cria o mesmo item uma vez e promove sua definição em camadas fail-closed."""
+    variants = _progressive_rdl_variants(rdl)
+    minimal_name, minimal_rdl = variants[0]
+    if minimal_name != "minimal":
+        raise E2EError("progressive_minimal_variant_missing")
+
+    create_body: dict[str, Any] = {
+        "displayName": report_name,
+        "definition": report_factory.build_fabric_definition(report_name, minimal_rdl),
+    }
+    if description:
+        create_body["description"] = description[:256]
+
+    evidence["progressive_bootstrap_used"] = True
+    evidence["progressive_last_passed_phase"] = None
+    evidence["progressive_failed_phase"] = None
+
+    try:
+        _invoke("POST", reports_url, token, create_body, success={200, 201})
+    except E2EError as exc:
+        evidence["progressive_failed_phase"] = "minimal_create"
+        raise E2EError(f"progressive_minimal_create:{exc}") from None
+
+    evidence["progressive_last_passed_phase"] = "minimal"
+    matches = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
+    if len(matches) != 1:
+        evidence["progressive_failed_phase"] = "minimal_identity"
+        raise E2EError(f"progressive_minimal_exact_count:{len(matches)}")
+    report_id = str(matches[0].get("id") or "").strip()
+    if not report_id:
+        evidence["progressive_failed_phase"] = "minimal_identity"
+        raise E2EError("progressive_minimal_report_id_missing")
+
+    for phase, phase_rdl in variants[1:]:
+        try:
+            _update_definition(
+                workspace_id,
+                report_id,
+                report_factory.build_fabric_definition(report_name, phase_rdl),
+                token,
+            )
+        except E2EError as exc:
+            evidence["progressive_failed_phase"] = phase
+            raise E2EError(f"progressive_{phase}:{exc}") from None
+        evidence["progressive_last_passed_phase"] = phase
+
+
 def _get_definition(workspace_id: str, report_id: str, token: str) -> dict[str, Any]:
     return _invoke(
         "POST",
@@ -422,6 +535,9 @@ def execute(spec_path: Path, output: Path) -> int:
         "observed_rdl_sha256": None,
         "secret_value_exposed": False,
         "production_touched": False,
+        "progressive_bootstrap_used": False,
+        "progressive_last_passed_phase": None,
+        "progressive_failed_phase": None,
     }
 
     try:
@@ -455,14 +571,17 @@ def execute(spec_path: Path, output: Path) -> int:
         evidence["initial_report_exact_count"] = len(existing)
 
         if not existing:
-            _invoke(
-                "POST",
-                reports_url,
-                token,
-                report_factory.build_create_request(spec, rdl),
-                success={200, 201},
+            description = str(spec["report"].get("description") or "").strip()
+            _create_progressively(
+                reports_url=reports_url,
+                workspace_id=workspace_id,
+                report_name=report_name,
+                description=description,
+                rdl=rdl,
+                token=token,
+                evidence=evidence,
             )
-            evidence["first_action"] = "created"
+            evidence["first_action"] = "created_progressive"
         else:
             report_id = str(existing[0].get("id") or "").strip()
             if not report_id:
@@ -516,7 +635,9 @@ def execute(spec_path: Path, output: Path) -> int:
             "workspace_exact_count", "report_name", "initial_report_exact_count",
             "first_action", "final_report_exact_count", "definition_verified",
             "idempotency_verified", "expected_rdl_sha256", "observed_rdl_sha256",
-            "secret_value_exposed", "production_touched", "reason",
+            "secret_value_exposed", "production_touched",
+            "progressive_bootstrap_used", "progressive_last_passed_phase",
+            "progressive_failed_phase", "reason",
         ):
             if key in evidence:
                 print(f"{key}={evidence.get(key)}")
