@@ -292,6 +292,28 @@ def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     assert 'nginx_active_contract = refresh_nginx(nginx_container, repo_root)' in raw
 
 
+def test_gateway_probe_http_status_parser_is_sanitized_and_deterministic():
+    rendered = """
+Connecting to api:8000 (172.18.0.4:8000)
+  HTTP/1.1 502 Bad Gateway
+"""
+    assert module._http_status_from_probe_output(rendered) == 502
+    assert module._http_status_from_probe_output("connection refused") is None
+
+
+def test_gateway_failure_evidence_captures_four_independent_probes():
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert '"gateway_tcp_8083": probe_gateway_tcp()' in raw
+    assert '"gateway_http_api_health": probe_gateway_http("/api/health")' in raw
+    assert '"nginx_to_api_health": probe_nginx_upstream_api(container, repo_root)' in raw
+    assert '"nginx_active_contract": probe_active_nginx_contract(container, repo_root)' in raw
+    assert '"gateway_diagnostics"' in raw
+    assert '"direct_api_contract_ready"' in raw
+    assert '"nginx_contract_ready"' in raw
+    assert "shell=False" in raw
+    assert "str(exc)" not in raw
+
+
 def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     raw = SCRIPT.read_text(encoding="utf-8")
     nginx = NGINX_DEV.read_text(encoding="utf-8")
