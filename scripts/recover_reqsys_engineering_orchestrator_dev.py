@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -17,8 +18,14 @@ from typing import Any, Callable
 EXPECTED_HOST = "DESKTOP-PDQK954"
 CONTROL_PLANE = "http://127.0.0.1:8787"
 TASK_NAME = r"\Automation\ReqSysOrchestrator24x7"
+ORCHESTRATOR_INSTALL_ROOT = Path(
+    r"C:\dev\chatgpt-workers\reqsys-orchestrator-24x7-runtime"
+)
 CONFIRM = "RECOVER-REQSYS-ENGINEERING-ORCHESTRATOR-DEV"
 DEFAULT_TIMEOUT_SECONDS = 60.0
+TASK_GRACE_ATTEMPTS = 6
+POLL_SECONDS = 2.0
+RUNNER_TRACKING_ENV = "RUNNER_TRACKING_ID"
 
 
 class RecoveryError(RuntimeError):
@@ -129,6 +136,100 @@ def run_existing_task() -> int:
     return int(completed.returncode)
 
 
+def validate_runtime_layout(runtime_root: Path) -> dict[str, Any]:
+    root = runtime_root.resolve()
+    service_config = root / "service-config.json"
+    worker_config = root / "worker-config.json"
+    supervisor = root / "scripts" / "service_supervisor.py"
+    package = root / "orchestrator" / "__init__.py"
+    for required in (service_config, worker_config, supervisor, package):
+        if not required.is_file():
+            raise RecoveryError("orchestrator_runtime_incomplete")
+
+    try:
+        service = json.loads(service_config.read_text(encoding="utf-8"))
+        worker = json.loads(worker_config.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RecoveryError("orchestrator_runtime_config_invalid") from exc
+
+    expected_ready = CONTROL_PLANE + "/readyz"
+    checks = (
+        service.get("mode") == "control-plane-worker",
+        Path(str(service.get("install_root") or "")).resolve() == root,
+        int(service.get("port") or 0) == 8787,
+        str(service.get("ready_url") or "").rstrip("/") == expected_ready,
+        Path(str(service.get("worker_config") or "")).resolve() == worker_config.resolve(),
+        str(worker.get("endpoint") or "").rstrip("/") == CONTROL_PLANE,
+        str(worker.get("worker_id") or "").casefold() == "desktop-pdqk954",
+    )
+    if not all(checks):
+        raise RecoveryError("orchestrator_runtime_contract_invalid")
+
+    return {
+        "root": root,
+        "service_config": service_config.resolve(),
+    }
+
+
+def start_validated_supervisor(
+    runtime_root: Path = ORCHESTRATOR_INSTALL_ROOT,
+) -> dict[str, Any]:
+    layout = validate_runtime_layout(runtime_root)
+    root = Path(layout["root"])
+    service_config = Path(layout["service_config"])
+    log_path = root / "logs" / "study-mode-supervisor-recovery.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    tracking_removed = env.pop(RUNNER_TRACKING_ENV, None) is not None
+    log_handle = log_path.open("ab", buffering=0)
+    kwargs: dict[str, Any] = {
+        "cwd": str(root),
+        "stdin": subprocess.DEVNULL,
+        "stdout": log_handle,
+        "stderr": subprocess.STDOUT,
+        "env": env,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+    else:
+        kwargs["start_new_session"] = True
+
+    try:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "scripts.service_supervisor",
+                "--config",
+                str(service_config),
+            ],
+            **kwargs,
+        )
+    except OSError as exc:
+        log_handle.close()
+        raise RecoveryError("orchestrator_supervisor_start_failed") from exc
+
+    return {
+        "started": process.pid > 0,
+        "pid_present": process.pid > 0,
+        "tracking_marker_removed": tracking_removed,
+        "runtime_contract_validated": True,
+    }
+
+
+def _observe(
+    *,
+    ready_probe: Callable[[], bool],
+    worker_probe: Callable[[], dict[str, Any]],
+) -> tuple[bool, dict[str, Any]]:
+    ready = bool(ready_probe())
+    worker = worker_probe()
+    return ready, worker
+
+
 def recover(
     *,
     confirm: str,
@@ -139,6 +240,7 @@ def recover(
     ready_probe: Callable[[], bool] = probe_ready,
     worker_probe: Callable[[], dict[str, Any]] = probe_noteri_worker,
     task_runner: Callable[[], int] = run_existing_task,
+    supervisor_starter: Callable[[], dict[str, Any]] = start_validated_supervisor,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     if confirm != CONFIRM:
@@ -148,28 +250,56 @@ def recover(
         raise RecoveryError("timeout_invalid")
 
     recovery_attempted = False
-    ready_before = bool(ready_probe())
-    worker_before = worker_probe()
+    supervisor_fallback_used = False
+    supervisor_start: dict[str, Any] | None = None
+    ready_before, worker_before = _observe(
+        ready_probe=ready_probe,
+        worker_probe=worker_probe,
+    )
+    ready_after = ready_before
+    worker_after = worker_before
 
     if not ready_before:
         recovery_attempted = True
         if task_runner() != 0:
             raise RecoveryError("orchestrator_task_start_failed")
 
+        for _ in range(TASK_GRACE_ATTEMPTS):
+            ready_after, worker_after = _observe(
+                ready_probe=ready_probe,
+                worker_probe=worker_probe,
+            )
+            if ready_after:
+                break
+            sleep_fn(POLL_SECONDS)
+
+        if not ready_after:
+            supervisor_fallback_used = True
+            supervisor_start = supervisor_starter()
+            if supervisor_start.get("started") is not True:
+                raise RecoveryError("orchestrator_supervisor_start_failed")
+
     deadline = time.monotonic() + timeout_seconds
-    ready_after = ready_before
-    worker_after = worker_before
     while time.monotonic() < deadline:
-        ready_after = bool(ready_probe())
-        worker_after = worker_probe()
+        ready_after, worker_after = _observe(
+            ready_probe=ready_probe,
+            worker_probe=worker_probe,
+        )
         if ready_after and worker_after.get("operational") is True:
             break
-        sleep_fn(2.0)
+        sleep_fn(POLL_SECONDS)
 
     if not ready_after:
         raise RecoveryError("orchestrator_readiness_timeout")
     if worker_after.get("operational") is not True:
         raise RecoveryError("noteri_worker_not_operational")
+
+    if not recovery_attempted:
+        recovery_method = "not_required"
+    elif supervisor_fallback_used:
+        recovery_method = "scheduled_task_then_validated_supervisor"
+    else:
+        recovery_method = "existing_scheduled_task"
 
     payload = {
         "ok": True,
@@ -178,8 +308,10 @@ def recover(
         "control_plane_ready": True,
         "noteri_worker": worker_after,
         "recovery_attempted": recovery_attempted,
-        "recovery_method": "existing_scheduled_task" if recovery_attempted else "not_required",
+        "recovery_method": recovery_method,
         "scheduled_task": TASK_NAME,
+        "supervisor_fallback_used": supervisor_fallback_used,
+        "supervisor_start": supervisor_start,
         "task_created_or_modified": False,
         "production_touched": False,
         "secrets_read": False,
