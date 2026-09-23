@@ -11,9 +11,16 @@ on:
       - 'frontend/src/router/index.js'
       - 'frontend/src/constants/navCatalog.js'
       - 'scripts/ocr_*.py'
+      - 'scripts/prepare_ocr_runtime_package.py'
+      - 'config/ocr-engine-lock.json'
       - 'benchmark/ocr/**'
+      - '.github/actions/prepare-ocr-runtime/**'
       - '.github/workflows/ocr-benchmark.yml'
+      - '.github/workflows/fly-dev-fast-deploy.yml'
+      - '.github/workflows/fly-enterprise-sync.yml'
       - 'backend/Dockerfile'
+      - 'backend/Dockerfile.fly'
+      - 'backend/vendor/ocr-evidence-engine/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -158,6 +165,75 @@ jobs:
           print(f"OCR_EXTERNAL_IMPORT_OK origin={origin.name} version={ocr_evidencia.__version__}")
           PY
           PYTHONPATH=backend python -m pytest -q backend/ocr_tests
+
+  external-runtime-image-contract:
+    name: OCR External Runtime Image Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout ReqSys
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Controle negativo: build externo sem wheel deve falhar
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          docker build \
+            --file backend/Dockerfile.fly \
+            --tag reqsys-ocr-negative:${{ github.sha }} \
+            --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \
+            --build-arg "OCR_ENGINE_SHA=$OCR_ENGINE_SHA" \
+            --build-arg "OCR_ENGINE_VERSION=1.2.0" \
+            backend > /tmp/ocr-negative-build.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          echo "OCR_EXTERNAL_RUNTIME_NEGATIVE_CONTROL_OK"
+
+      - name: Preparar pacote OCR externo
+        id: ocr-runtime
+        uses: ./.github/actions/prepare-ocr-runtime
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+
+      - name: Build da imagem com OCR externo obrigatório
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.ocr-runtime.outputs.ocr-sha }}" = "$OCR_ENGINE_SHA"
+          docker build \
+            --file backend/Dockerfile.fly \
+            --tag reqsys-ocr-external:${{ github.sha }} \
+            --build-arg "GITHUB_SHA=${{ github.sha }}" \
+            --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \
+            --build-arg "OCR_ENGINE_SHA=${{ steps.ocr-runtime.outputs.ocr-sha }}" \
+            --build-arg "OCR_ENGINE_VERSION=${{ steps.ocr-runtime.outputs.ocr-version }}" \
+            backend
+
+      - name: Provar import externo dentro da imagem
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint python reqsys-ocr-external:${{ github.sha }} -c '
+          from pathlib import Path
+          import ocr_evidencia
+
+          origin = Path(ocr_evidencia.__file__).resolve()
+          if Path("/app/ocr_evidencia").exists():
+              raise SystemExit("local_ocr_copy_present")
+          if "site-packages" not in origin.parts:
+              raise SystemExit(f"ocr_origin_not_site_packages:{origin}")
+          if ocr_evidencia.__version__ != "1.2.0":
+              raise SystemExit(f"ocr_version_mismatch:{ocr_evidencia.__version__}")
+          print(f"OCR_EXTERNAL_RUNTIME_OK origin={origin.name} version={ocr_evidencia.__version__}")
+          '
 
   synthetic-smoke:
     runs-on: ubuntu-latest
