@@ -39,6 +39,8 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 25. A dependência Windows usada para Task Scheduler COM deve ser fixada em `pywin32==312`; ausência da credencial, divergência de SHA/host/contrato ou falha de registro deve falhar fechado.
 26. A criação `AtStartup + S4U + highest` do broker continua sujeita ao Windows/UAC. Se não puder ser concluída pelo contexto do runner, o resultado deve permanecer `activation_pending`; nenhuma tentativa de bypass de UAC é permitida.
 27. O Authorized Actions Gateway deve aceitar o comando exato `/reqsys run desktop-runtime-bootstrap`, mapear estaticamente para `desktop-rdc-recovery.yml` com `mode=runtime-bootstrap` e preservar a validação de pickup/cancelamento do runner self-hosted.
+28. Após o registro do runner dedicado, a ponte deve disparar `desktop-pc24x7-runtime/.github/workflows/desktop-rdc-recovery.yml` na `main` somente se ela ainda estiver exatamente no SHA alvo, identificar uma execução nova por diferença de `run_id`, aguardar estado terminal e exigir `conclusion=success`.
+29. O workflow de ponte deve executar as etapas independentes disponíveis e concluir com falha agregada quando bootstrap, watchdog, broker ou pickup E2E não satisfizerem seus critérios; sucesso parcial não pode ser reportado como conclusão.
 
 ## Critérios de aceite
 
@@ -50,6 +52,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 - modo `runtime-bootstrap` fixa repositório/SHA/runner/labels e rejeita parâmetros arbitrários;
 - evidência do bootstrap não contém `GH_PAT_ACTIONS` nem token efêmero de registro;
 - runner dedicado só é considerado pronto após leitura independente do registro GitHub indicar `online` e labels esperadas;
+- pickup E2E deve usar execução nova do workflow do repositório dedicado, no SHA alvo, e exigir conclusão `success`;
 - gateway mantém a allowlist estática;
 - gateway comprova \`run_id\`, URL, SHA e evento do run exato disparado e recusa evidência de execução histórica;
 - recuperação permanece bloqueada quando o run exato não sai de \`pending/queued/requested/waiting\`;
