@@ -1,0 +1,40 @@
+{
+  "feature_name": "github-copilot-ollama-mcp-ingress",
+  "project": "ReqSys v2 Enterprise — Codex Local / Ollama",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-23",
+  "phase": "implementation_pending_physical_e2e",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Adiciona ingresso HTTPS estável e governado para o bridge MCP Ollama no Desktop PC24x7 via Tailscale Funnel, sem publicar Ollama ou gateway diretamente.",
+  "acceptance_criteria": [
+    "O alvo público é exclusivamente http://127.0.0.1:8010 sob /mcp e HTTPS 443.",
+    "Ollama :11434, gateway :8008 e gateway DEV :8083 não são alvos do Funnel deste incremento.",
+    "O reconciliador falha fechado sem bridge local, Tailscale Running, MagicDNS ou rota observável.",
+    "Consentimento de Funnel ausente é classificado sem interação automática.",
+    "Workflow e Authorized Actions Gateway são inputless, DEV-only e fail-closed para runner sem pickup.",
+    "Evidência não contém segredo e é vinculada ao SHA exato.",
+    "Conclusão funcional exige E2E físico externo no Desktop PC24x7."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_ollama_mcp_funnel.py",
+      "tests/test_github_copilot_ollama_mcp_ingress_workflow.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato. O E2E físico posterior deve provar bridge 8010 local, Funnel /mcp e reachability externa no mesmo SHA; ausência do runner ou consentimento Tailscale falha fechado."
+  },
+  "runtime_validation": {
+    "environment": "DEV",
+    "host": "DESKTOP-PDQK954",
+    "local_target": "http://127.0.0.1:8010",
+    "public_mount": "/mcp",
+    "provider": "tailscale_funnel",
+    "production_touched": false,
+    "secrets_read": false
+  }
+}
