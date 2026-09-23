@@ -2,6 +2,7 @@ import base64
 import io
 import importlib.util
 import urllib.error
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
@@ -196,4 +197,155 @@ def test_request_json_http_error_exposes_nested_codes_not_messages() -> None:
     assert "should-not-leak" not in reason
     assert "secret detail" not in reason
     assert "ephemeral-token" not in reason
+
+def _generated_example_rdl() -> str:
+    spec_path = ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    source = module.report_factory.load_spec(spec_path)
+    return module.report_factory.generate_rdl(source)
+
+
+def test_staged_rdl_variants_isolate_layers_without_auxiliary_reports() -> None:
+    rdl = _generated_example_rdl()
+    variants = dict(module._staged_rdl_variants(rdl))
+
+    assert list(variants) == [
+        "layout",
+        "datasource",
+        "dataset_parameters",
+        "full",
+    ]
+    assert variants["full"] == rdl
+
+    layout = ET.fromstring(variants["layout"])
+    assert layout.find(module.report_factory._q("DataSources")) is None
+    assert layout.find(module.report_factory._q("DataSets")) is None
+    assert layout.find(module.report_factory._q("ReportParameters")) is None
+    assert layout.find(module.report_factory._q("ReportParametersLayout")) is None
+    assert not layout.findall(f".//{module.report_factory._q('Tablix')}")
+
+    datasource = ET.fromstring(variants["datasource"])
+    assert datasource.find(module.report_factory._q("DataSources")) is not None
+    assert datasource.find(module.report_factory._q("DataSets")) is None
+    assert datasource.find(module.report_factory._q("ReportParameters")) is None
+    assert not datasource.findall(f".//{module.report_factory._q('Tablix')}")
+
+    dataset = ET.fromstring(variants["dataset_parameters"])
+    assert dataset.find(module.report_factory._q("DataSources")) is not None
+    assert dataset.find(module.report_factory._q("DataSets")) is not None
+    assert dataset.find(module.report_factory._q("ReportParameters")) is not None
+    assert dataset.find(module.report_factory._q("ReportParametersLayout")) is not None
+    assert not dataset.findall(f".//{module.report_factory._q('Tablix')}")
+
+
+def test_staged_rdl_variants_fail_closed_for_invalid_xml() -> None:
+    with pytest.raises(module.E2EError, match="definition_probe_rdl_invalid"):
+        module._staged_rdl_variants("<Report>")
+
+
+def test_invalid_definition_classifier_is_specific() -> None:
+    assert module._is_invalid_definition_format(
+        module.E2EError("fabric_http_400:InvalidDefinitionFormat")
+    )
+    assert not module._is_invalid_definition_format(
+        module.E2EError("fabric_http_403:Forbidden")
+    )
+
+
+def test_definition_probe_confirms_each_stage_by_independent_readback() -> None:
+    rdl = _generated_example_rdl()
+    current: dict[str, object] = {"definition": None}
+    updates: list[dict] = []
+
+    def fake_update(
+        workspace_id: str,
+        report_id: str,
+        definition: dict,
+        token: str,
+    ) -> None:
+        assert workspace_id == "workspace-1"
+        assert report_id == "report-1"
+        assert token == "token"
+        current["definition"] = definition
+        updates.append(definition)
+
+    def fake_get_definition(
+        workspace_id: str,
+        report_id: str,
+        token: str,
+    ) -> dict:
+        assert workspace_id == "workspace-1"
+        assert report_id == "report-1"
+        assert token == "token"
+        definition = current["definition"]
+        assert isinstance(definition, dict)
+        return {"definition": definition}
+
+    with (
+        patch.object(module, "_update_definition", side_effect=fake_update),
+        patch.object(module, "_get_definition", side_effect=fake_get_definition),
+    ):
+        result = module._run_definition_probe(
+            reports_url=module.FABRIC_BASE + "/workspaces/workspace-1/paginatedReports",
+            workspace_id="workspace-1",
+            report_name="DemandasPorStatus",
+            rdl=rdl,
+            token="token",
+            existing_report_id="report-1",
+        )
+
+    assert result["failed_stage"] is None
+    assert result["stages_passed"] == [
+        "layout",
+        "datasource",
+        "dataset_parameters",
+        "full",
+    ]
+    assert result["created"] is False
+    assert result["report_id"] == "report-1"
+    assert len(updates) == 4
+
+
+def test_definition_probe_stops_at_first_invalid_layer() -> None:
+    rdl = _generated_example_rdl()
+    current: dict[str, object] = {"definition": None}
+    calls = 0
+
+    def fake_update(
+        workspace_id: str,
+        report_id: str,
+        definition: dict,
+        token: str,
+    ) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise module.E2EError("fabric_http_400:InvalidDefinitionFormat")
+        current["definition"] = definition
+
+    def fake_get_definition(
+        workspace_id: str,
+        report_id: str,
+        token: str,
+    ) -> dict:
+        definition = current["definition"]
+        assert isinstance(definition, dict)
+        return {"definition": definition}
+
+    with (
+        patch.object(module, "_update_definition", side_effect=fake_update),
+        patch.object(module, "_get_definition", side_effect=fake_get_definition),
+    ):
+        result = module._run_definition_probe(
+            reports_url=module.FABRIC_BASE + "/workspaces/workspace-1/paginatedReports",
+            workspace_id="workspace-1",
+            report_name="DemandasPorStatus",
+            rdl=rdl,
+            token="token",
+            existing_report_id="report-1",
+        )
+
+    assert result["stages_passed"] == ["layout"]
+    assert result["failed_stage"] == "datasource"
+    assert result["reason"] == "fabric_http_400:InvalidDefinitionFormat"
+    assert calls == 2
 
