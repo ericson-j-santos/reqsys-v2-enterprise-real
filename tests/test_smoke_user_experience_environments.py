@@ -1,10 +1,24 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.smoke_user_experience_environments import REQUIRED_PATHS, collect
+from scripts.smoke_user_experience_environments import REQUIRED_PATHS, collect, default_environments
 
 
 class UserExperienceEnvironmentSmokeTests(unittest.TestCase):
+    @patch.dict("os.environ", {}, clear=True)
+    def test_default_dev_runtime_fails_closed_without_locator(self):
+        with self.assertRaisesRegex(ValueError, "REQSYS_DEV_BASE_URL_missing"):
+            default_environments()
+
+    @patch.dict("os.environ", {"REQSYS_DEV_BASE_URL": "https://reqsys-app-dev.fly.dev"}, clear=True)
+    def test_default_dev_runtime_rejects_fly(self):
+        with self.assertRaisesRegex(ValueError, "legacy_fly_dev_runtime_forbidden"):
+            default_environments()
+
+    @patch.dict("os.environ", {"REQSYS_DEV_BASE_URL": "https://pc24x7.trycloudflare.com"}, clear=True)
+    def test_default_dev_runtime_accepts_pc24x7(self):
+        self.assertEqual("https://pc24x7.trycloudflare.com", default_environments()["DEV"])
+
     @patch("scripts.smoke_user_experience_environments.probe")
     def test_complete_consistent_environments_are_ok(self, mocked_probe):
         mocked_probe.return_value = {"status": 200, "ok": True, "latency_ms": 10.0, "body_sha256": "a" * 64}
