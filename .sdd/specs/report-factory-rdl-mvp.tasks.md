@@ -22,13 +22,15 @@
 - [x] Implementar modo governado `publish-e2e` no workflow existente, sem aumentar a superfície de workflows.
 - [x] Adicionar comando exato do Authorized Actions Gateway e testes contratuais.
 - [x] Executar E2E real no run `35845191652`: preflight aprovado, publicação bloqueada por `fabric_http_400`; causa raiz identificada como RDL 2016 parametrizado sem `ReportParametersLayout` obrigatório.
-- [ ] Corrigir o gerador/validador RDL para materializar e exigir o layout de parâmetros antes de nova publicação.
+- [x] Corrigir o gerador/validador RDL para materializar e exigir o layout de parâmetros antes de nova publicação (PR #1988).
 - [x] Reexecutar E2E após PR #1988 no run `35846231809`: preflight aprovado e publicação ainda bloqueada por `fabric_http_400`, comprovando uma segunda causa ainda não distinguível pela evidência sanitizada atual.
 - [x] Preservar na evidência somente códigos estruturados seguros retornados pelo Fabric, inclusive causas aninhadas, sem mensagens/IDs/tokens, para eliminar diagnóstico por tentativa.
-- [ ] Reexecutar E2E real de publicação e `getDefinition` no Fabric DEV após merge do diagnóstico seguro.
+- [x] Reexecutar E2E real após o diagnóstico seguro: run `35866066425`; preflight aprovado, workspace único e Fabric ainda retornou somente `fabric_http_400:InvalidDefinitionFormat`, sem código estruturado aninhado.
+- [x] Implementar matriz fail-closed de decomposição RDL com probes temporários `minimal`, `datasource`, `parameters`, `data_model` e `full`, leitura independente e DELETE comprovado.
+- [ ] Reexecutar E2E DEV com a matriz e corrigir o primeiro componente RDL efetivamente isolado.
 - [ ] Repetir a mesma definição e comprovar idempotência/ausência de duplicidade na evidência do mesmo run.
 - [ ] Adicionar exportação PDF/XLSX em incremento posterior.
 - [ ] Adicionar chart/matrix em incremento posterior.
 
 - [x] Reexecutar o E2E real após a correção de layout: run `35855595593` no SHA `e6a3821ce559d173524ac4dfc953f93fc715dff7`; preflight/OIDC/workspace aprovados e criação bloqueada por `fabric_http_400:InvalidDefinitionFormat`.
-- [ ] Alinhar o cabeçalho RDL 2016 ao contrato público oficial do Fabric e reexecutar o E2E no SHA integrado.
+- [x] Alinhar o cabeçalho RDL 2016 ao contrato público oficial do Fabric (PR #1991); a reexecução confirmou que a rejeição remanescente está além do cabeçalho.
