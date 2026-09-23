@@ -248,6 +248,18 @@ def test_workflow_is_inputless_pc24x7_only_and_no_production():
     assert "secrets." not in raw
 
 
+def test_workflow_reexecutes_when_gateway_or_runtime_contract_changes():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    for path in (
+        "backend/app/api/monitoramento_operacional.py",
+        "backend/app/api/noteri_host_profile.py",
+        "backend/app/main.py",
+        "docker-compose.dev.yml",
+        "infra/nginx/default.dev.conf",
+    ):
+        assert f"- '{path}'" in raw
+
+
 def test_policy_and_gateway_allow_only_fixed_reconcile_command():
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-study-mode-dev-reconcile.yml" in policy["approved_workflows"]
