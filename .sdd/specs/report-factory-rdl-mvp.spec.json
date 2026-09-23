@@ -3,7 +3,7 @@
   "project": "ReqSys v2 Enterprise — Report Factory",
   "created_at": "2026-09-21",
   "updated_at": "2026-09-23",
-  "phase": "fabric-dev-e2e-definition-layer-bisection",
+  "phase": "fabric-dev-e2e-progressive-bootstrap",
   "issue": 1933,
   "increment_type": "gap_fix",
   "approvals": {
@@ -11,7 +11,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Consolida a capacidade RDL/SSRS e fecha o E2E Fabric DEV com diagnóstico progressivo da definição no mesmo item, isolando layout, datasource, dataset/parâmetros e definição completa com leitura independente entre estágios.",
+  "description": "Fecha o E2E Fabric DEV com bootstrap progressivo do mesmo relatório alvo, isolando em qual camada da definição o Fabric rejeita o RDL sem criar artefatos diagnósticos extras nem excluir itens.",
   "scope": "report-spec-to-rdl-and-fabric",
   "files": [
     "tools/geradores/report_factory.py",
@@ -44,7 +44,7 @@
       "tests/test_report_factory_fabric_dev_e2e.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Provar spec->RDL->payload; OIDC Fabric e workspace DEV; publicação somente por workflow_dispatch explícito na main via Authorized Actions Gateway; diante exclusivamente de InvalidDefinitionFormat, executar layout->datasource->dataset_parameters->full no mesmo item e confirmar cada estágio aceito por getDefinition+SHA-256; não criar item auxiliar nem excluir artefato; replay final idempotente; ausência de segredo e de toque em STG/PROD."
+    "evidence_contract": "Provar spec->RDL->payload; OIDC Fabric e workspace DEV; quando o alvo estiver ausente, criar exatamente um item por definição mínima e promover no mesmo item pelas fases datasource, dataset/parâmetros e full; registrar fase aceita/rejeitada sem mensagem bruta; não criar item diagnóstico adicional nem executar delete; sucesso somente com getDefinition independente, SHA-256 igual e replay idempotente; ausência de segredo e de toque em STG/PROD."
   },
   "risk": {
     "production": false,

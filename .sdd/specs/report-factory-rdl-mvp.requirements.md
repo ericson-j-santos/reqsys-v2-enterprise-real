@@ -68,13 +68,5 @@ Increment type: `gap_fix`
 28. O RDL 2016 destinado ao Fabric DEV deve emitir o cabeçalho compatível com a definição pública oficial do Fabric: `MustUnderstand=df`, `rd:ReportUnitType=Inch`, `rd:ReportID` UUID determinístico, `df:DefaultFontFamily=Segoe UI` e `AutoRefresh=0`; quando houver parâmetros, `ReportParametersLayout` deve permanecer após `ReportSections` no XML gerado.
 29. Quando o Fabric retornar `InvalidDefinitionFormat` sem código aninhado acionável, o E2E deve extrair somente contexto de esquema seguro: nomes de elementos RDL em allowlist e coordenadas `line`/`column`/`position`; mensagens, URLs, tokens, IDs e valores arbitrários devem permanecer descartados.
 30. Para datasource SQL com autenticação integrada, o RDL destinado ao Fabric DEV deve emitir `rd:SecurityType=Integrated` e `rd:DataSourceID` UUID determinístico, alinhando a definição ao formato produzido pelo Report Builder sem introduzir segredo estático.
-31. Quando a publicação completa falhar especificamente com `InvalidDefinitionFormat`, o E2E DEV deve executar diagnóstico progressivo no mesmo item e no mesmo run, nas camadas `layout -> datasource -> dataset_parameters -> full`, confirmando cada camada aceita por `getDefinition` e SHA-256 antes de avançar; não pode criar relatórios auxiliares nem excluir artefatos.
-
-## Critérios adicionais do diagnóstico progressivo
-
-- o diagnóstico progressivo deve registrar as camadas aprovadas, a primeira camada rejeitada e a contagem exata do item alvo;
-- cada camada aprovada deve ser comprovada por leitura independente da própria definição publicada;
-- falha de uma camada deve interromper as seguintes e preservar o último estado aceito do mesmo item DEV;
-- o diagnóstico só pode ser ativado para `HTTP 400 InvalidDefinitionFormat`; outros erros permanecem fail-closed sem mutação adicional;
-- `secret_value_exposed=false` e `production_touched=false` continuam obrigatórios.
+31. Quando o relatório alvo ainda não existir no Fabric DEV, o E2E deve criá-lo uma única vez por bootstrap progressivo no mesmo item: definição mínima -> datasource -> dataset/parâmetros -> definição completa. Cada fase deve falhar fechado, registrar apenas o nome da fase aceita/rejeitada, não criar item diagnóstico adicional e não executar exclusão. O sucesso final continua exigindo `getDefinition`, igualdade SHA-256 e replay idempotente da definição completa.
 
