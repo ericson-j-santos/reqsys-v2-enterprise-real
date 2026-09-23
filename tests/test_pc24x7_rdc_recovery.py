@@ -195,6 +195,10 @@ def test_workflow_contract_is_fixed_to_pc24x7_desktop():
     assert "--confirm BOOTSTRAP-DESKTOP-PC24X7-RUNTIME" in workflow
     assert "--confirm INSTALL-DESKTOP-PC24X7-RUNTIME-WATCHDOG" in workflow
     assert "--confirm INSTALL-DESKTOP-ADMIN-BROKER" in workflow
+    assert "--confirm VERIFY-DESKTOP-RUNTIME-RUNNER-PICKUP" in workflow
+    assert "verify_desktop_runtime_runner_pickup.py" in workflow
+    assert "DESKTOP_RUNTIME_BOOTSTRAP_PARTIAL" in workflow
+    assert "continue-on-error: true" in workflow
     assert "secrets.GH_PAT_ACTIONS" in workflow
     assert "-f host=" not in workflow
     assert "-f repository=" not in workflow
