@@ -92,6 +92,15 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     diferenciar autenticação, leitura de perfil, mudança para ESTUDO, replay e
     restauração NORMAL.
 
+18. Quando a leitura autenticada inicial de perfil falhar com HTTP 503, o
+    reconciliador deve anexar diagnóstico direto e sanitizado do registro do
+    Engineering Orchestrator em 127.0.0.1:8787: alcançabilidade, status HTTP,
+    validade estrutural, quantidade de workers Noteri e, somente quando houver
+    exatamente um, os campos booleanos `fresh`, `controller_online`,
+    `auth_valid`, `eligible` e o perfil NORMAL/ESTUDO. IDs, corpo bruto,
+    capabilities, tokens, caminhos ou campos arbitrários não podem ser
+    persistidos.
+
 ## Critérios de aceite
 
 1. O frontend não acessa loopback do dispositivo do navegador.
