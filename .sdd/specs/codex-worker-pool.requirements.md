@@ -32,7 +32,7 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 24. Deve existir smoke DEV inputless no PC24x7 que use somente loopback e token por arquivo já provisionado.
 25. O smoke DEV deve configurar uma lane sintética `enabled=false`, enfileirar/repetir a mesma identidade lógica, fazer leitura independente e provar que a task permanece `queued` e sem lease.
 26. O Authorized Actions Gateway deve expor somente o comando exato `/reqsys run codex-worker-pool-smoke-dev`, sem aceitar repositório, issue, request id, branch ou workflow como input do comentário.
-27. O pool deve rastrear `last_material_progress_at` separado de heartbeat/lease; heartbeat, polling e renovação de lease não podem atualizar esse marcador. Após o limite configurado sem progresso, deve liberar a capacidade: rerotear quando existir worker alternativo elegível, bloquear quando não existir alternativa e enviar para quarentena ao esgotar tentativas.
+27. O pool deve rastrear `last_material_progress_at` separado de heartbeat/lease; heartbeat, polling e renovação de lease não podem atualizar esse marcador. Após o limite configurado sem progresso, deve liberar a capacidade: rerotear quando existir worker alternativo elegível, bloquear quando não existir alternativa e enviar para quarentena ao esgotar tentativas.\n28. A recuperação do arquivo de autenticação DEV deve ser inputless e restrita ao PC24x7 allowlisted; exige bootstrap de sessão no SHA vigente e Owner Risk3 Gateway. Deve reutilizar arquivo válido existente e só gerar novo valor local quando o arquivo estiver ausente ou vazio, sem publicar caminho ou conteúdo do segredo.
 
 ## Requisitos de qualidade
 
@@ -41,7 +41,7 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 - erros explícitos;
 - configuração por ambiente;
 - persistência em volume;
-- bind PC24x7 somente em loopback por padrão;
+- bind PC24x7 somente em loopback por padrão;\n- recuperação de autenticação DEV fail-closed, idempotente e sem segredo em workflow, log ou artifact;
 - testes positivos, negativos, concorrência, replay, recuperação e leitura independente;
 - probe dual-host limitado a listener efêmero e uma conexão, com `correlation_id` único e timeout finito.
 
@@ -62,4 +62,4 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 - dois repositórios com backlog e capacidade disponível devem alternar claims de forma determinística, respeitando `max_in_flight`;
 - worker com afinidade explícita não pode adquirir task fora dos repositórios autorizados; worker sem afinidade mantém compatibilidade com o pool compartilhado.
 - smoke DEV no PC24x7 deve retornar `WORKER_POOL_SMOKE_PASSED`, com lane sintética desabilitada, replay sem duplicidade, leitura independente e task não adquirida por worker.
-- watchdog deve provar que heartbeat/lease recentes não mascaram `last_material_progress_at` antigo; com alternativa a task volta para fila/validação sem lease, sem alternativa fica `blocked`, e nenhum desses casos pode permanecer indefinidamente como `running`.
+- watchdog deve provar que heartbeat/lease recentes não mascaram `last_material_progress_at` antigo; com alternativa a task volta para fila/validação sem lease, sem alternativa fica `blocked`, e nenhum desses casos pode permanecer indefinidamente como `running`.\n- após recuperação do arquivo de autenticação DEV, `/health` deve retornar HTTP 200 e uma leitura autenticada independente do snapshot deve retornar HTTP 200 antes de o smoke ser considerado elegível.
