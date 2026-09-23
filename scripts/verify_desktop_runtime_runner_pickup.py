@@ -1,79 +1,103 @@
 #!/usr/bin/env python3
-"""E2E governado do runner dedicado desktop-pc24x7-runtime."""
+"""E2E governado do runner dedicado usando somente a autenticação local do GitHub CLI."""
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
 TARGET_REPOSITORY = "ericson-j-santos/desktop-pc24x7-runtime"
 TARGET_SHA = "4f71186f3c7636ad80f8bd14c74e3fded28101ec"
 TARGET_WORKFLOW = "desktop-rdc-recovery.yml"
+EXPECTED_GITHUB_LOGIN = "ericson-j-santos"
 CONFIRM = "VERIFY-DESKTOP-RUNTIME-RUNNER-PICKUP"
-API_ROOT = "https://api.github.com"
-JsonRequester = Callable[[urllib.request.Request], dict[str, Any]]
-StatusSender = Callable[[urllib.request.Request], int]
+Runner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
 
 class PickupError(RuntimeError):
     pass
 
 
-def api_request(
-    token: str,
-    path: str,
-    *,
-    method: str = "GET",
-    body: dict[str, Any] | None = None,
-) -> urllib.request.Request:
-    data = None if body is None else json.dumps(body).encode("utf-8")
-    return urllib.request.Request(
-        API_ROOT + path,
-        data=data,
-        method=method,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "User-Agent": "ReqSys-Desktop-Runtime-Pickup-E2E/1.0",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Content-Type": "application/json",
-        },
+def gh_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    return env
+
+
+def find_gh() -> Path:
+    located = shutil.which("gh")
+    candidates = [
+        Path(located) if located else None,
+        Path(os.environ.get("ProgramFiles") or r"C:\Program Files") / "GitHub CLI" / "gh.exe",
+        Path(os.environ.get("LOCALAPPDATA") or "") / "Programs" / "GitHub CLI" / "gh.exe",
+    ]
+    for item in candidates:
+        if item is not None and item.is_file():
+            return item
+    raise PickupError("github_cli_required")
+
+
+def run_gh(gh: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(gh), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+        env=gh_env(),
     )
 
 
-def request_json(request: urllib.request.Request) -> dict[str, Any]:
-    with urllib.request.urlopen(request, timeout=30) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+def ensure_local_auth(gh: Path, runner: Runner | None = None) -> None:
+    invoke = runner or (lambda args: run_gh(gh, args))
+    status = invoke(["auth", "status", "--hostname", "github.com"])
+    if status.returncode != 0:
+        raise PickupError("github_auth_required")
+    who = invoke(["api", "user", "--jq", ".login"])
+    login = who.stdout.strip() if who.returncode == 0 else ""
+    if login.casefold() != EXPECTED_GITHUB_LOGIN.casefold():
+        raise PickupError("github_account_mismatch")
+
+
+def gh_json(gh: Path, args: list[str], runner: Runner | None = None) -> dict[str, Any]:
+    invoke = runner or (lambda argv: run_gh(gh, argv))
+    cp = invoke(args)
+    if cp.returncode != 0:
+        raise PickupError("github_api_failed")
+    try:
+        payload = json.loads(cp.stdout)
+    except json.JSONDecodeError as exc:
+        raise PickupError("github_response_invalid") from exc
     if not isinstance(payload, dict):
         raise PickupError("github_response_invalid")
     return payload
 
 
-def send_status(request: urllib.request.Request) -> int:
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return int(response.status)
-
-
-def current_main_sha(token: str, requester: JsonRequester = request_json) -> str:
-    payload = requester(api_request(token, f"/repos/{TARGET_REPOSITORY}/commits/main"))
+def current_main_sha(gh: Path, runner: Runner | None = None) -> str:
+    payload = gh_json(gh, ["api", f"repos/{TARGET_REPOSITORY}/commits/main"], runner)
     sha = str(payload.get("sha") or "").lower()
     if len(sha) != 40:
         raise PickupError("target_main_sha_invalid")
     return sha
 
 
-def workflow_runs(token: str, requester: JsonRequester = request_json) -> list[dict[str, Any]]:
-    payload = requester(
-        api_request(
-            token,
-            f"/repos/{TARGET_REPOSITORY}/actions/workflows/{TARGET_WORKFLOW}/runs"
+def workflow_runs(gh: Path, runner: Runner | None = None) -> list[dict[str, Any]]:
+    payload = gh_json(
+        gh,
+        [
+            "api",
+            f"repos/{TARGET_REPOSITORY}/actions/workflows/{TARGET_WORKFLOW}/runs"
             "?event=workflow_dispatch&per_page=30",
-        )
+        ],
+        runner,
     )
     runs = payload.get("workflow_runs")
     if not isinstance(runs, list):
@@ -81,24 +105,23 @@ def workflow_runs(token: str, requester: JsonRequester = request_json) -> list[d
     return [item for item in runs if isinstance(item, dict)]
 
 
-def dispatch(token: str, sender: StatusSender = send_status) -> None:
-    status = sender(
-        api_request(
-            token,
-            f"/repos/{TARGET_REPOSITORY}/actions/workflows/{TARGET_WORKFLOW}/dispatches",
-            method="POST",
-            body={"ref": "main"},
-        )
+def dispatch(gh: Path, runner: Runner | None = None) -> None:
+    invoke = runner or (lambda args: run_gh(gh, args))
+    cp = invoke(
+        [
+            "api",
+            "--method",
+            "POST",
+            f"repos/{TARGET_REPOSITORY}/actions/workflows/{TARGET_WORKFLOW}/dispatches",
+            "-f",
+            "ref=main",
+        ]
     )
-    if status not in {200, 201, 202, 204}:
-        raise PickupError(f"workflow_dispatch_failed:{status}")
+    if cp.returncode != 0:
+        raise PickupError("workflow_dispatch_failed")
 
 
-def find_new_run(
-    runs: list[dict[str, Any]],
-    *,
-    before_ids: set[int],
-) -> dict[str, Any] | None:
+def find_new_run(runs: list[dict[str, Any]], *, before_ids: set[int]) -> dict[str, Any] | None:
     candidates = []
     for item in runs:
         try:
@@ -118,30 +141,26 @@ def find_new_run(
 
 
 def verify_pickup(
-    token: str,
+    gh: Path,
     *,
-    requester: JsonRequester = request_json,
-    sender: StatusSender = send_status,
+    runner: Runner | None = None,
     timeout_seconds: float = 240.0,
     poll_seconds: float = 3.0,
 ) -> dict[str, Any]:
-    observed_main = current_main_sha(token, requester)
+    ensure_local_auth(gh, runner)
+    observed_main = current_main_sha(gh, runner)
     if observed_main != TARGET_SHA:
         raise PickupError("target_main_sha_mismatch")
 
-    before = workflow_runs(token, requester)
-    before_ids = {
-        int(item["id"])
-        for item in before
-        if isinstance(item.get("id"), int)
-    }
-    dispatch(token, sender)
+    before = workflow_runs(gh, runner)
+    before_ids = {int(item["id"]) for item in before if isinstance(item.get("id"), int)}
+    dispatch(gh, runner)
 
     deadline = time.monotonic() + timeout_seconds
     selected: dict[str, Any] | None = None
     last_status = "not_found"
     while time.monotonic() < deadline:
-        runs = workflow_runs(token, requester)
+        runs = workflow_runs(gh, runner)
         if selected is None:
             selected = find_new_run(runs, before_ids=before_ids)
         else:
@@ -169,6 +188,7 @@ def verify_pickup(
                 "run_url": str(selected.get("html_url") or ""),
                 "status": last_status,
                 "conclusion": conclusion,
+                "auth_source": "local_gh",
                 "production_touched": False,
                 "reboot_performed": False,
                 "secret_logged": False,
@@ -180,10 +200,7 @@ def verify_pickup(
 
 def write_evidence(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -197,14 +214,10 @@ def main() -> int:
         write_evidence(args.evidence_file, {"ok": False, "state": "confirmation_invalid"})
         return 2
 
-    token = os.environ.get("GH_TOKEN") or ""
-    if not token:
-        write_evidence(args.evidence_file, {"ok": False, "state": "github_admin_token_missing"})
-        return 2
-
     try:
-        result = verify_pickup(token, timeout_seconds=args.timeout_seconds)
-    except (PickupError, urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError) as exc:
+        gh = find_gh()
+        result = verify_pickup(gh, timeout_seconds=args.timeout_seconds)
+    except (PickupError, OSError, subprocess.SubprocessError) as exc:
         result = {
             "ok": False,
             "state": str(exc)[:200] if isinstance(exc, PickupError) else "pickup_e2e_failed",
@@ -212,6 +225,7 @@ def main() -> int:
             "target_repository": TARGET_REPOSITORY,
             "target_sha": TARGET_SHA,
             "workflow": TARGET_WORKFLOW,
+            "auth_source": "local_gh",
             "production_touched": False,
             "reboot_performed": False,
             "secret_logged": False,
