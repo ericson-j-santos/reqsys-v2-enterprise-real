@@ -45,12 +45,31 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Setup Node
+        if: ${{ (github.event.inputs.environment || 'dev') == 'dev' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolver locator PC24x7 DEV
+        if: ${{ (github.event.inputs.environment || 'dev') == 'dev' }}
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p "$ARTIFACT_DIR"
+          node scripts/resolve_pc24x7_dev_locator.mjs --output "$ARTIFACT_DIR/dev-signed-locator.json" >/dev/null
+
       - name: Resolver base URL do ambiente
         id: resolver
         run: |
           set -euo pipefail
           case "${{ github.event.inputs.environment || 'dev' }}" in
-            dev) echo "base_url=https://reqsys-api-dev.fly.dev" >> "$GITHUB_OUTPUT" ;;
+            dev)
+              test -n "${{ steps.locator.outputs.api_base_url }}"
+              echo "base_url=${{ steps.locator.outputs.api_base_url }}" >> "$GITHUB_OUTPUT"
+              ;;
             stg) echo "base_url=https://reqsys-api-stg.fly.dev" >> "$GITHUB_OUTPUT" ;;
             *) echo "Ambiente desconhecido" >&2; exit 1 ;;
           esac
