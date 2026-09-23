@@ -583,57 +583,86 @@ def restart_container(
     )
 
 
-def active_nginx_contract(
+def wait_nginx_bind_visibility(
     container: str,
-    repo_root: Path,
-) -> dict[str, bool]:
-    completed = run(
-        ["docker", "exec", container, "nginx", "-T"],
-        cwd=repo_root,
-        timeout=60,
-        stage="nginx_active_contract",
-    )
-    rendered = completed.stdout + "\n" + completed.stderr
-    contract = {
-        "runtime_route": "location ~ ^/api/(runtime|" in rendered,
-        "api_prefix_route": "location /api/" in rendered,
-    }
-    if not all(contract.values()):
-        markers = tuple(
-            f"{name}_missing"
-            for name, present in contract.items()
-            if not present
-        )
-        raise ReconcileError(
-            "nginx_active_contract_missing",
-            stage="nginx_active_contract",
-            diagnostic_markers=markers,
-        )
-    return contract
-
-
-def refresh_nginx(
-    container: str,
+    nginx_bind: Path,
     repo_root: Path,
     *,
-    stage_prefix: str = "nginx_restart",
-    verify_contract: bool = True,
+    timeout_seconds: int = 60,
+    require_contract: bool = True,
 ) -> dict[str, bool]:
+    expected = nginx_bind.read_text(encoding="utf-8").replace("\r\n", "\n")
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        completed = run(
+            [
+                "docker",
+                "exec",
+                container,
+                "cat",
+                "/etc/nginx/conf.d/default.conf",
+            ],
+            cwd=repo_root,
+            timeout=30,
+            stage="nginx_bind_visibility",
+        )
+        observed = completed.stdout.replace("\r\n", "\n")
+        if observed == expected:
+            contract = {
+                "bind_visible": True,
+                "runtime_route": "location ~ ^/api/(runtime|" in observed,
+                "api_prefix_route": "location /api/" in observed,
+            }
+            if require_contract and not all(
+                contract[name]
+                for name in ("runtime_route", "api_prefix_route")
+            ):
+                markers = tuple(
+                    f"{name}_missing"
+                    for name in ("runtime_route", "api_prefix_route")
+                    if not contract[name]
+                )
+                raise ReconcileError(
+                    "nginx_rendered_contract_missing",
+                    stage="nginx_bind_visibility",
+                    diagnostic_markers=markers,
+                )
+            return contract
+        time.sleep(1)
+    raise ReconcileError(
+        "nginx_bind_visibility_timeout",
+        stage="nginx_bind_visibility",
+        diagnostic_markers=("nginx_bind_not_visible",),
+    )
+
+
+def reload_nginx(
+    container: str,
+    nginx_bind: Path,
+    repo_root: Path,
+    *,
+    stage_prefix: str = "nginx_reload",
+    require_contract: bool = True,
+) -> dict[str, bool]:
+    contract = wait_nginx_bind_visibility(
+        container,
+        nginx_bind,
+        repo_root,
+        require_contract=require_contract,
+    )
     run(
         ["docker", "exec", container, "nginx", "-t"],
         cwd=repo_root,
         timeout=60,
         stage=f"{stage_prefix}_config_test",
     )
-    restart_container(
-        container,
-        repo_root,
+    run(
+        ["docker", "exec", container, "nginx", "-s", "reload"],
+        cwd=repo_root,
+        timeout=60,
         stage=stage_prefix,
     )
-    wait_container_healthy(container, repo_root, 120)
-    if verify_contract:
-        return active_nginx_contract(container, repo_root)
-    return {}
+    return contract
 
 
 def emit_checkpoint(name: str, expected_sha: str) -> None:
@@ -1164,6 +1193,13 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             stage="frontend_source_bind",
         )
 
+    if container_host_port(nginx_before, "80/tcp") != DEV_GATEWAY_PORT:
+        raise ReconcileError(
+            "dev_gateway_port_mismatch",
+            stage="nginx_gateway_identity",
+            diagnostic_markers=("gateway_8083_not_bound",),
+        )
+
     nginx_bind = required_nginx_bind_source(nginx_before, project)
 
     backup_root, changes = backup_and_copy(
@@ -1182,7 +1218,11 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         wait_container_healthy(api_container, repo_root, args.health_timeout)
         direct_api_contract = wait_direct_api_contract()
         emit_checkpoint("direct_api_contract_ready", args.expected_sha)
-        nginx_active_contract = refresh_nginx(nginx_container, repo_root)
+        nginx_rendered_contract = reload_nginx(
+            nginx_container,
+            nginx_bind,
+            repo_root,
+        )
         emit_checkpoint("nginx_contract_ready", args.expected_sha)
 
         wait_gateway_status("/api/health", {200})
@@ -1225,11 +1265,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                 stage="rollback_api_restart",
             )
             wait_container_healthy(api_container, repo_root, args.health_timeout)
-            refresh_nginx(
+            reload_nginx(
                 nginx_container,
+                nginx_bind,
                 repo_root,
-                stage_prefix="rollback_nginx_restart",
-                verify_contract=False,
+                stage_prefix="rollback_nginx_reload",
+                require_contract=False,
             )
         except Exception:
             pass
@@ -1246,7 +1287,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "gateway_container": nginx_container,
         "runtime_discovery": "api_port_8210_compose_labels",
         "compose_invoked": False,
-        "runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_restart",
+        "runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload",
         "api_container_restarted": True,
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": True,
@@ -1259,7 +1300,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "browser_loopback_dependency_removed": True,
         "backup_created": backup_root.is_dir(),
         "nginx_runtime_contract_refreshed": True,
-        "nginx_active_contract": nginx_active_contract,
+        "nginx_gateway_port_confirmed": True,
+        "nginx_bind_visibility_confirmed": nginx_rendered_contract.get("bind_visible") is True,
+        "nginx_rendered_contract": nginx_rendered_contract,
         "direct_api_contract": direct_api_contract,
         "gateway_contract": gateway_contract,
         "api_e2e": api_result,
