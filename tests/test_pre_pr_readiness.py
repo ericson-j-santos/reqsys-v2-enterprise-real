@@ -297,3 +297,30 @@ def test_sdd_pre_pr_tests_override_runtime_test_list(tmp_path: Path) -> None:
         [".sdd/specs/sample.spec.json"],
         tmp_path,
     ) == ["tests/test_fast.py"]
+
+
+def test_noop_is_not_applicable_only_for_exact_base_without_diff() -> None:
+    assert MODULE.is_not_applicable_noop(
+        head_sha="a" * 40,
+        base_sha="a" * 40,
+        behind_by=0,
+        files=[],
+    )
+    assert not MODULE.is_not_applicable_noop(
+        head_sha="a" * 40,
+        base_sha="b" * 40,
+        behind_by=0,
+        files=[],
+    )
+    assert not MODULE.is_not_applicable_noop(
+        head_sha="a" * 40,
+        base_sha="a" * 40,
+        behind_by=0,
+        files=["scripts/change.py"],
+    )
+    assert not MODULE.is_not_applicable_noop(
+        head_sha="a" * 40,
+        base_sha="a" * 40,
+        behind_by=1,
+        files=[],
+    )

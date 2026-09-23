@@ -141,3 +141,12 @@ Os testes novos cobrem: estabilidade da âncora temporal, maturação, filtro do
 ## Próximo critério de avanço
 
 Depois de acumular pelo menos 3 janelas horárias elegíveis na `main`, o Command Center poderá sair de `insufficient_data`. Apenas após série temporal maior deve ser avaliado um critério estatístico formal, como mediana móvel, P95 móvel e limites de controle. Nenhuma promoção automática a gate faz parte deste incremento.
+
+
+## Engineering Control Plane — Baseline v2
+
+A janela fixa global continua sendo a fonte das métricas históricas. A seção `pr_efficiency` possui uma política separada para evitar amostra vazia em períodos de baixa atividade: usa 60 minutos por padrão e amplia progressivamente para 120, 240 e no máximo 360 minutos até observar pelo menos 3 PRs. O artifact registra `sample_window.mode`, janela efetiva, meta e `baseline_sample_valid`; se a meta não for atingida, a amostra permanece explicitamente insuficiente.
+
+A taxa de rerun é publicada como `rerun_rate_percent = workflow_runs_de_PR_com_run_attempt_maior_que_1 / workflow_runs_de_PR_observados * 100`. Trata-se de taxa observacional de rerun, não de causalidade do commit.
+
+O `Pre-PR Readiness Gate` trata exclusivamente `HEAD == origin/main`, `behind_by=0` e diff vazio como `not_applicable`. Esse caminho evita dependências e testes pesados e termina verde com evidência própria. SHA diferente da base, branch atrás, HEAD divergente ou diff real continuam bloqueando normalmente.

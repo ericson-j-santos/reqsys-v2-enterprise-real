@@ -14,6 +14,7 @@ from enrich_ci_pr_efficiency import (  # noqa: E402
     build_pr_efficiency,
     enrich_files,
     load_blocking_workflows,
+    select_pr_sample_window,
 )
 
 
@@ -103,6 +104,8 @@ class CiPrEfficiencyTests(unittest.TestCase):
         self.assertEqual(result["p90_observed_ci_run_minutes_per_pr"], 4.9)
         self.assertEqual(result["p50_latest_head_time_to_green_seconds"], 180.0)
         self.assertEqual(result["p90_latest_head_time_to_green_seconds"], 228.0)
+        self.assertEqual(result["rerun_rate_percent"], 0.0)
+        self.assertTrue(result["baseline_sample_valid"])
         self.assertEqual(result["workflows_to_80_percent"]["count"], 2)
         self.assertEqual(
             result["workflows_to_80_percent"]["names"],
@@ -201,6 +204,36 @@ class CiPrEfficiencyTests(unittest.TestCase):
         )
         self.assertFalse(result["available"])
         self.assertEqual(result["sample_prs"], 0)
+
+
+    def test_adaptive_sample_expands_only_until_low_activity_target_is_met(self):
+        raw = [
+            run(40, pr=40, name="Required A", sha="sha-40", created="2026-09-22T15:10:00Z", updated="2026-09-22T15:11:00Z"),
+            run(41, pr=41, name="Required A", sha="sha-41", created="2026-09-22T14:30:00Z", updated="2026-09-22T14:31:00Z"),
+            run(42, pr=42, name="Required A", sha="sha-42", created="2026-09-22T13:30:00Z", updated="2026-09-22T13:31:00Z"),
+        ]
+        selected = select_pr_sample_window(
+            raw,
+            fixed_start_at=START,
+            end_at=END,
+            min_sample_prs=3,
+            max_lookback_minutes=360,
+        )
+        self.assertEqual(selected["mode"], "extended_low_activity")
+        self.assertEqual(selected["effective_duration_minutes"], 240)
+        self.assertEqual(selected["observed_prs"], 3)
+        self.assertTrue(selected["target_met"])
+
+    def test_rerun_rate_is_explicit_and_per_pr(self):
+        raw = [
+            run(50, pr=50, name="Required A", sha="sha-50", created="2026-09-22T15:10:00Z", updated="2026-09-22T15:11:00Z", attempt=2),
+            run(51, pr=50, name="Required B", sha="sha-50", created="2026-09-22T15:10:00Z", updated="2026-09-22T15:11:00Z"),
+        ]
+        result = build_pr_efficiency(raw, blocking_workflows=BLOCKING, start_at=START, end_at=END)
+        self.assertEqual(result["observed_pr_workflow_runs"], 2)
+        self.assertEqual(result["rerun_workflow_runs"], 1)
+        self.assertEqual(result["rerun_rate_percent"], 50.0)
+        self.assertEqual(result["prs"][0]["rerun_rate_percent"], 50.0)
 
     def test_enrichment_is_idempotent_and_registry_is_validated(self):
         with tempfile.TemporaryDirectory() as temp:

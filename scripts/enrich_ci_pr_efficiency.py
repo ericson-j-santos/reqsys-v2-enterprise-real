@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +52,77 @@ def _pr_number(run: dict[str, Any]) -> int | None:
         return None
 
 
+def _distinct_prs_in_window(
+    raw_runs: list[dict[str, Any]],
+    *,
+    start_at: datetime,
+    end_at: datetime,
+) -> int:
+    prs: set[int] = set()
+    for run in raw_runs:
+        created_at = parse_dt(run.get("created_at"))
+        if (
+            run.get("event") != "pull_request"
+            or run.get("status") != "completed"
+            or created_at is None
+            or not (start_at <= created_at < end_at)
+        ):
+            continue
+        pr_number = _pr_number(run)
+        if pr_number is not None:
+            prs.add(pr_number)
+    return len(prs)
+
+
+def select_pr_sample_window(
+    raw_runs: list[dict[str, Any]],
+    *,
+    fixed_start_at: datetime,
+    end_at: datetime,
+    min_sample_prs: int = 3,
+    max_lookback_minutes: int = 360,
+) -> dict[str, Any]:
+    if end_at <= fixed_start_at:
+        raise ValueError("janela fixa de PR inválida")
+    if min_sample_prs < 1:
+        raise ValueError("min_sample_prs deve ser >= 1")
+
+    fixed_minutes = max(1, int((end_at - fixed_start_at).total_seconds() / 60))
+    max_minutes = max(fixed_minutes, int(max_lookback_minutes))
+    candidates: list[int] = []
+    duration = fixed_minutes
+    while True:
+        if duration not in candidates:
+            candidates.append(duration)
+        if duration >= max_minutes:
+            break
+        duration = min(max_minutes, duration * 2)
+
+    selected_start = fixed_start_at
+    selected_count = 0
+    target_met = False
+    for minutes in candidates:
+        candidate_start = end_at - timedelta(minutes=minutes)
+        count = _distinct_prs_in_window(raw_runs, start_at=candidate_start, end_at=end_at)
+        selected_start = candidate_start
+        selected_count = count
+        if count >= min_sample_prs:
+            target_met = True
+            break
+
+    return {
+        "mode": "fixed" if selected_start == fixed_start_at else "extended_low_activity",
+        "fixed_start_at": fixed_start_at.isoformat(),
+        "effective_start_at": selected_start.isoformat(),
+        "end_at": end_at.isoformat(),
+        "effective_duration_minutes": int((end_at - selected_start).total_seconds() / 60),
+        "target_min_prs": min_sample_prs,
+        "observed_prs": selected_count,
+        "target_met": target_met,
+        "max_lookback_minutes": max_minutes,
+    }
+
+
 def _latest_by_workflow(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     for run in runs:
@@ -75,6 +146,7 @@ def build_pr_efficiency(
     blocking_workflows: list[str],
     start_at: datetime,
     end_at: datetime,
+    sample_window: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     blocking = list(dict.fromkeys(blocking_workflows))
     if not blocking:
@@ -82,6 +154,8 @@ def build_pr_efficiency(
 
     grouped: dict[int, list[dict[str, Any]]] = {}
     workflow_seconds: dict[str, float] = {}
+    observed_pr_workflow_runs = 0
+    rerun_workflow_runs = 0
 
     for run in raw_runs:
         created_at = parse_dt(run.get("created_at"))
@@ -96,6 +170,8 @@ def build_pr_efficiency(
         if pr_number is None:
             continue
         grouped.setdefault(pr_number, []).append(run)
+        observed_pr_workflow_runs += 1
+        rerun_workflow_runs += int(int(run.get("run_attempt") or 1) > 1)
         workflow_name = str(run.get("name") or "")
         if workflow_name:
             workflow_seconds[workflow_name] = (
@@ -155,6 +231,7 @@ def build_pr_efficiency(
         observed_seconds = sum(_run_seconds(run) for run in runs)
         observed_minutes = round(observed_seconds / 60.0, 2)
         ci_minutes_per_pr.append(observed_minutes)
+        pr_rerun_runs = sum(int(int(run.get("run_attempt") or 1) > 1) for run in runs)
 
         earlier_failure = False
         for sha, sha_runs in by_sha.items():
@@ -177,6 +254,8 @@ def build_pr_efficiency(
                 "distinct_heads": len(by_sha),
                 "latest_head_sha": latest_sha,
                 "observed_ci_run_minutes": observed_minutes,
+                "rerun_workflow_runs": pr_rerun_runs,
+                "rerun_rate_percent": round(pr_rerun_runs / len(runs) * 100.0, 2) if runs else 0.0,
                 "latest_head_blockers_complete": blockers_complete,
                 "latest_head_green": latest_head_green,
                 "latest_head_time_to_green_seconds": (
@@ -212,8 +291,21 @@ def build_pr_efficiency(
 
     sample_prs = len(pr_rows)
     green_prs = sum(1 for row in pr_rows if row["latest_head_green"])
+    effective_sample_window = sample_window or {
+        "mode": "explicit",
+        "fixed_start_at": start_at.isoformat(),
+        "effective_start_at": start_at.isoformat(),
+        "end_at": end_at.isoformat(),
+        "effective_duration_minutes": int((end_at - start_at).total_seconds() / 60),
+        "target_min_prs": 1,
+        "observed_prs": sample_prs,
+        "target_met": sample_prs > 0,
+        "max_lookback_minutes": int((end_at - start_at).total_seconds() / 60),
+    }
     return {
         "available": sample_prs > 0,
+        "baseline_sample_valid": bool(effective_sample_window.get("target_met")) and sample_prs > 0,
+        "sample_window": effective_sample_window,
         "mode": "report-only",
         "creates_gate": False,
         "sample_prs": sample_prs,
@@ -239,6 +331,13 @@ def build_pr_efficiency(
         "p90_latest_head_time_to_green_seconds": (
             round(percentile(green_times, 0.90), 2) if green_times else 0.0
         ),
+        "observed_pr_workflow_runs": observed_pr_workflow_runs,
+        "rerun_workflow_runs": rerun_workflow_runs,
+        "rerun_rate_percent": (
+            round(rerun_workflow_runs / observed_pr_workflow_runs * 100.0, 2)
+            if observed_pr_workflow_runs
+            else 0.0
+        ),
         "ci_fix_commit_proxy_prs": repair_count,
         "ci_fix_commit_proxy_percent": (
             round(repair_count / sample_prs * 100.0, 2) if sample_prs else 0.0
@@ -262,6 +361,13 @@ def build_pr_efficiency(
                 "HEAD anterior com workflow bloqueante falho seguido por HEAD mais "
                 "recente integralmente verde; não prova causalidade do commit"
             ),
+            "rerun_rate": (
+                "percentual de workflow runs de pull_request observados cujo run_attempt é maior que 1"
+            ),
+            "sample_window": (
+                "usa a janela fixa quando suficiente e amplia progressivamente, até o limite configurado, "
+                "somente para a amostra por PR em baixa atividade"
+            ),
         },
         "prs": pr_rows,
     }
@@ -273,6 +379,8 @@ def render_markdown(metrics: dict[str, Any]) -> str:
         "",
         f"- Modo: `{metrics['mode']}`",
         f"- PRs observadas: `{metrics['sample_prs']}`",
+        f"- Amostra baseline válida: `{'sim' if metrics['baseline_sample_valid'] else 'não'}`",
+        f"- Janela efetiva da amostra PR: `{metrics['sample_window']['effective_duration_minutes']} min` (`{metrics['sample_window']['mode']}`)",
         f"- PRs com HEAD mais recente verde: `{metrics['green_sample_prs']}`",
         (
             "- Minutos de CI observados: "
@@ -297,6 +405,11 @@ def render_markdown(metrics: dict[str, Any]) -> str:
         (
             "- P90 do HEAD mais recente até verde: "
             f"`{metrics['p90_latest_head_time_to_green_seconds']}s`"
+        ),
+        (
+            "- Taxa explícita de rerun: "
+            f"`{metrics['rerun_rate_percent']}%` "
+            f"({metrics['rerun_workflow_runs']}/{metrics['observed_pr_workflow_runs']})"
         ),
         (
             "- PRs com proxy de commit corretivo de CI: "
@@ -338,7 +451,7 @@ def enrich_files(
 ) -> None:
     analytics = json.loads(analytics_path.read_text(encoding="utf-8"))
     analytics["pr_efficiency"] = metrics
-    analytics["schema_version"] = "1.0.4"
+    analytics["schema_version"] = "1.0.5"
     analytics_path.write_text(
         json.dumps(analytics, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -367,21 +480,39 @@ def main() -> int:
         raise ValueError("collection_window inválida no artifact de analytics")
 
     owner, name = repository.split("/", 1)
+    fixed_minutes = max(1, int((end_at - start_at).total_seconds() / 60))
+    min_sample_prs = max(1, int(os.environ.get("PR_SAMPLE_MIN_PRS", "3")))
+    max_lookback_minutes = max(
+        fixed_minutes,
+        int(os.environ.get("PR_SAMPLE_MAX_LOOKBACK_MINUTES", "360")),
+    )
+    fetch_start_at = end_at - timedelta(minutes=max_lookback_minutes)
     raw_runs, meta = fetch_runs_for_window(
         owner,
         name,
         token,
-        start_at=start_at,
+        start_at=fetch_start_at,
         max_pages=max(1, int(os.environ.get("MAX_FETCH_PAGES", "20"))),
     )
     if not meta.get("collection_complete"):
         raise RuntimeError("coleta de workflow runs incompleta para a janela fixa")
 
+    sample_window = select_pr_sample_window(
+        raw_runs,
+        fixed_start_at=start_at,
+        end_at=end_at,
+        min_sample_prs=min_sample_prs,
+        max_lookback_minutes=max_lookback_minutes,
+    )
+    effective_start_at = parse_dt(sample_window["effective_start_at"])
+    if effective_start_at is None:
+        raise ValueError("effective_start_at inválido")
     metrics = build_pr_efficiency(
         raw_runs,
         blocking_workflows=load_blocking_workflows(registry_path),
-        start_at=start_at,
+        start_at=effective_start_at,
         end_at=end_at,
+        sample_window=sample_window,
     )
     enrich_files(analytics_path, markdown_path, metrics)
     print(json.dumps(metrics, indent=2, ensure_ascii=False))

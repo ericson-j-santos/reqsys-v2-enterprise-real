@@ -199,3 +199,29 @@ def test_guard_extracts_exact_manifest_file_from_artifact_zip() -> None:
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(f"{head}.json", json.dumps(payload))
     assert guard.manifest_from_zip(buffer.getvalue(), head)["head_sha"] == head
+
+
+def test_manifest_marks_exact_base_empty_diff_as_not_applicable() -> None:
+    payload = readiness(status="not_applicable", profiles=[])
+    payload["base_sha"] = "a" * 40
+    payload["head_sha"] = "a" * 40
+    payload["changed_files"] = []
+    payload["preventive_invariants"] = []
+    result = manifest.build_manifest(payload, "a" * 40)
+    assert result["status"] == "not_applicable"
+    assert result["required_workflows"] == []
+    assert result["blocker_reason"] == []
+
+
+def test_manifest_rejects_not_applicable_when_a_real_diff_exists() -> None:
+    payload = readiness(status="not_applicable", profiles=[])
+    payload["base_sha"] = "a" * 40
+    payload["head_sha"] = "a" * 40
+    payload["changed_files"] = ["scripts/change.py"]
+    payload["preventive_invariants"] = []
+    try:
+        manifest.build_manifest(payload, "a" * 40)
+    except manifest.AdmissionError as exc:
+        assert "not_applicable_state_invalid" in str(exc)
+    else:
+        raise AssertionError("not_applicable com diff real deveria ser rejeitado")

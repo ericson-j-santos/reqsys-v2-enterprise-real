@@ -41,12 +41,29 @@ jobs:
           ref: ${{ env.EVALUATED_SHA }}
           fetch-depth: 0
 
+      - name: Classificar escopo contra a base
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_REF" --prune
+          head="$(git rev-parse HEAD)"
+          base="$(git rev-parse "origin/$BASE_REF")"
+          changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          if [[ "$head" == "$base" && -z "$changed" ]]; then
+            echo "not_applicable=true" >> "$GITHUB_OUTPUT"
+            echo "Pre-PR não aplicável: HEAD idêntico à base e sem diff."
+          else
+            echo "not_applicable=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Node 20 para validação condicional de frontend
+        if: steps.scope.outputs.not_applicable != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -54,6 +71,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Dependências do gate por perfil
+        if: steps.scope.outputs.not_applicable != 'true'
         run: |
           set -euo pipefail
           git fetch origin "$BASE_REF" --prune
@@ -83,6 +101,7 @@ jobs:
 
       - name: Testes do contrato do gate
         id: contract
+        if: steps.scope.outputs.not_applicable != 'true'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -174,6 +193,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "${{ steps.scope.outputs.not_applicable }}" == "true" ]]; then
+            python - "$EVALUATED_SHA" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          sha = sys.argv[1]
+          payload = json.loads((Path("artifacts/admission") / f"{sha}.json").read_text(encoding="utf-8"))
+          if payload.get("status") != "not_applicable" or payload.get("head_sha") != sha:
+              raise SystemExit("CI_ADMISSION_NOT_APPLICABLE_INVALID")
+          if payload.get("classification", {}).get("changed_files_count") != 0:
+              raise SystemExit("CI_ADMISSION_NOT_APPLICABLE_WITH_DIFF")
+          print(f"CI_ADMISSION_NOT_APPLICABLE head={sha}")
+          PY
+            exit 0
+          fi
           test "${{ steps.contract.outcome }}" = "success" || {
             echo "Contrato do Pre-PR Readiness falhou."
             exit 1

@@ -586,7 +586,12 @@
         "p90_latest_head_time_to_green_seconds",
         "ci_fix_commit_proxy_percent",
         "workflow_minutes_pareto",
-        "workflows_to_80_percent"
+        "workflows_to_80_percent",
+        "baseline_sample_valid",
+        "sample_window",
+        "observed_pr_workflow_runs",
+        "rerun_workflow_runs",
+        "rerun_rate_percent"
       ],
       "properties": {
         "available": {
@@ -712,6 +717,78 @@
           "items": {
             "type": "object",
             "additionalProperties": true
+          }
+        },
+        "baseline_sample_valid": {
+          "type": "boolean"
+        },
+        "observed_pr_workflow_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rerun_workflow_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rerun_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "sample_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "fixed_start_at",
+            "effective_start_at",
+            "end_at",
+            "effective_duration_minutes",
+            "target_min_prs",
+            "observed_prs",
+            "target_met",
+            "max_lookback_minutes"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "extended_low_activity",
+                "explicit"
+              ]
+            },
+            "fixed_start_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "effective_start_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "end_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "effective_duration_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "target_min_prs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "observed_prs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "target_met": {
+              "type": "boolean"
+            },
+            "max_lookback_minutes": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         }
       }
