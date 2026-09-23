@@ -278,7 +278,7 @@ def _health_ready(timeout_seconds: int = 90) -> bool:
             with urllib.request.urlopen(url, timeout=3) as response:
                 if response.status == 200:
                     payload = json.loads(response.read().decode("utf-8"))
-                    if payload.get("status") == "ok":
+                    if payload.get("status") == "healthy":
                         return True
         except Exception:
             pass

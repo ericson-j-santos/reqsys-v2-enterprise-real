@@ -259,3 +259,21 @@ def test_local_dev_token_bootstrap_is_idempotent(tmp_path, monkeypatch) -> None:
     assert first_created is True
     assert second_created is False
     assert second.read_bytes() == before
+
+
+def test_health_ready_accepts_canonical_healthy_status(monkeypatch) -> None:
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"status":"healthy"}'
+
+    monkeypatch.setattr(reconcile.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+
+    assert reconcile._health_ready(timeout_seconds=1) is True

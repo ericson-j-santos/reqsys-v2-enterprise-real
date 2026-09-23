@@ -25,7 +25,7 @@
       "tests/test_pc24x7_worker_pool_reconcile.py",
       "tests/test_codex_worker_pool_smoke_dev.py"
     ],
-    "evidence_contract": "No DESKTOP-PDQK954 DEV, o workflow canônico Codex Worker Pool Smoke DEV deve reconciliar exclusivamente o service codex-worker-pool usando token já provisionado sem ler seu conteúdo ou, somente quando ausente, bootstrap idempotente de token interno local/DEV sem exposição/rotação, obter o rules SHA canônico, exigir health 200/ok e exatamente um binding 127.0.0.1:8097, publicar evidência sanitizada e então exigir WORKER_POOL_SMOKE_PASSED no mesmo SHA com replay idempotente, leitura independente, lane sintética disabled e task sem lease. Nenhum workflow adicional pode ser criado."
+    "evidence_contract": "No DESKTOP-PDQK954 DEV, o workflow canônico Codex Worker Pool Smoke DEV deve reconciliar exclusivamente o service codex-worker-pool usando token já provisionado sem ler seu conteúdo ou, somente quando ausente, bootstrap idempotente de token interno local/DEV sem exposição/rotação, obter o rules SHA canônico, exigir health 200/healthy e exatamente um binding 127.0.0.1:8097, publicar evidência sanitizada e então exigir WORKER_POOL_SMOKE_PASSED no mesmo SHA com replay idempotente, leitura independente, lane sintética disabled e task sem lease. Nenhum workflow adicional pode ser criado."
   },
   "risk": {
     "production": false,

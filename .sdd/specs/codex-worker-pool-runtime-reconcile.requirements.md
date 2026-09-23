@@ -14,7 +14,7 @@ O runner `DESKTOP-PDQK954` voltou a adquirir jobs, porém o smoke real no SHA `e
 6. Falhar fechado quando não houver candidato válido ou quando o candidato mais recente permanecer ambíguo.
 7. Obter o SHA canônico atual de `ericson-j-santos/chatgpt-operational-rules@main` e passá-lo ao runtime.
 8. Executar `docker compose up -d --build --remove-orphans` apenas para o service fixo.
-9. Validar `/health` em `127.0.0.1:8097`.
+9. Validar `/health` em `127.0.0.1:8097` exigindo HTTP 200 e `status=healthy`.
 10. Exigir exatamente um container ativo com binding `127.0.0.1:8097 -> 8097/tcp`.
 11. Publicar evidência sanitizada sem token, valor de segredo ou caminho do arquivo de token.
 12. Não tocar produção, HML/STG, permissões ou segredos.
