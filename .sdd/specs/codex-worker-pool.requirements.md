@@ -31,9 +31,9 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 23. Snapshot e API devem expor lanes, capacidade, contadores de claim e afinidades sem revelar `lease_token` ou segredos.
 24. Deve existir smoke DEV inputless no PC24x7 que use somente loopback e token por arquivo já provisionado.
 25. O smoke DEV deve configurar uma lane sintética `enabled=false`, enfileirar/repetir a mesma identidade lógica, fazer leitura independente e provar que a task permanece `queued` e sem lease.
-26. O Authorized Actions Gateway deve expor somente o comando exato `/reqsys run codex-worker-pool-smoke-dev`, sem aceitar repositório, issue, request id, branch ou workflow como input do comentário.
+26. O Authorized Actions Gateway deve expor os comandos exatos `/reqsys run codex-worker-pool-smoke-dev` e `/reqsys run codex-worker-pool-token-restore-dev`, ambos mapeados ao workflow canônico `codex-worker-pool-smoke-dev.yml`; o smoke usa o modo padrão sem input e a restauração usa somente o modo fixo `restore`, sem aceitar repositório, issue, request id, branch, workflow ou modo arbitrário do comentário.
 27. O pool deve rastrear `last_material_progress_at` separado de heartbeat/lease; heartbeat, polling e renovação de lease não podem atualizar esse marcador. Após o limite configurado sem progresso, deve liberar a capacidade: rerotear quando existir worker alternativo elegível, bloquear quando não existir alternativa e enviar para quarentena ao esgotar tentativas.
-28. A recuperação do arquivo de autenticação DEV deve ser inputless e restrita ao PC24x7 allowlisted; exige bootstrap de sessão no SHA vigente e Owner Risk3 Gateway. Deve reutilizar arquivo válido existente e só gerar novo valor local quando o arquivo estiver ausente ou vazio, sem publicar caminho ou conteúdo do segredo.
+28. A recuperação do arquivo de autenticação DEV deve ser acionada por comando inputless e modo interno fixo `restore` no workflow já existente, sem criar workflow adicional, e ser restrita ao PC24x7 allowlisted; exige bootstrap de sessão no SHA vigente e Owner Risk3 Gateway. Deve reutilizar arquivo válido existente e só gerar novo valor local quando o arquivo estiver ausente ou vazio, sem publicar caminho ou conteúdo do segredo.
 
 ## Requisitos de qualidade
 
