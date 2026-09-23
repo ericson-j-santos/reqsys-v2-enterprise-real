@@ -24,10 +24,12 @@ Quando `RESOLVED` estiver entre as transições permitidas, a interface deve exi
 evidência e SHA-256 válido antes de enviar a transição.
 
 ## Requisito 5 — E2E e leitura independente
-O incremento deve executar o maior E2E de interface disponível. Testes de componente com
-API simulada comprovam contrato visual, mas não substituem um E2E real de browser -> API ->
-persistência -> leitura independente. Se o runtime de browser/persistência não estiver
-disponível no SHA atual, a issue permanece parcialmente validada.
+O workflow RSM deve executar Playwright contra Vite real, API FastAPI real e PostgreSQL real
+no mesmo SHA. O caso positivo percorre NEW -> TRIAGE pela interface e a leitura SQL
+independente confirma estado, versão e eventos persistidos. O controle negativo prepara
+PENDING_APPROVAL sem aprovação, tenta IN_PROGRESS pela interface e deve receber rejeição sem
+persistir evento ou alterar estado. Testes de componente com API simulada continuam como
+regressão rápida, mas não substituem esse E2E físico.
 
 ## Critérios de aceite
 1. `GET /v1/service-cases/{case_id}` expõe `allowed_transitions` derivado do domínio.
@@ -37,4 +39,5 @@ disponível no SHA atual, a issue permanece parcialmente validada.
 5. Transição aceita só produz sucesso após releitura da API confirmar o novo estado.
 6. Resolução exige URI e SHA-256 antes do POST.
 7. Testes backend e frontend cobrem caso positivo e controle negativo.
-8. Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato antes da abertura da PR.
+8. Playwright real + PostgreSQL independente comprovam positivo, negativo e guarda contra falso sucesso.
+9. Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato antes da abertura da PR.
