@@ -278,7 +278,10 @@ def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     assert 'expected_nginx_bind = (working_dir / NGINX_CONFIG).resolve()' not in raw
     assert 'frontend_source,\n        nginx_bind,\n        args.expected_sha' in raw
     assert '"compose_invoked": False' in raw
-    assert '"runtime_refresh": "bind_mounts_plus_nginx_reload"' in raw
+    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_reload"' in raw
+    assert 'restart_container(api_container, repo_root, stage="api_restart")' in raw
+    assert 'stage="rollback_api_restart"' in raw
+    assert '["docker", "restart", container]' in raw
     assert 'reload_nginx(nginx_container, repo_root)' in raw
 
 
@@ -305,7 +308,7 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "non_dev_compose_project_blocked" in raw
     assert '"runtime_discovery": "api_port_8210_compose_labels"' in raw
     assert '"compose_invoked": False' in raw
-    assert '"runtime_refresh": "bind_mounts_plus_nginx_reload"' in raw
+    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_reload"' in raw
     assert "dev_api_8210_not_unique" in raw
     assert "dev_gateway_8083_not_unique" not in raw
     assert "reqsys-live-api-1" not in raw
