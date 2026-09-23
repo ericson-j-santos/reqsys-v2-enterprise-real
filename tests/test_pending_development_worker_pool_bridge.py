@@ -61,6 +61,50 @@ def test_token_resolution_prefers_explicit_then_environment(monkeypatch, tmp_pat
     assert bridge.resolve_token_file(None) == tmp_path / "host-token"
 
 
+def test_read_token_classifies_missing_file_without_path_leak(tmp_path: Path) -> None:
+    token_path = tmp_path / "missing-token"
+
+    with pytest.raises(bridge.BridgeError) as exc_info:
+        bridge.read_token(token_path)
+
+    assert str(exc_info.value) == "worker_pool_token_file_missing"
+    assert str(token_path) not in str(exc_info.value)
+
+
+def test_read_token_classifies_permission_denied_without_path_leak(
+    monkeypatch, tmp_path: Path
+) -> None:
+    token_path = tmp_path / "protected-token"
+
+    def denied_read_text(_self: Path, *args, **kwargs) -> str:
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "read_text", denied_read_text)
+
+    with pytest.raises(bridge.BridgeError) as exc_info:
+        bridge.read_token(token_path)
+
+    assert str(exc_info.value) == "worker_pool_token_permission_denied"
+    assert str(token_path) not in str(exc_info.value)
+
+
+def test_read_token_keeps_generic_os_error_sanitized(
+    monkeypatch, tmp_path: Path
+) -> None:
+    token_path = tmp_path / "io-error-token"
+
+    def failed_read_text(_self: Path, *args, **kwargs) -> str:
+        raise OSError("device error")
+
+    monkeypatch.setattr(Path, "read_text", failed_read_text)
+
+    with pytest.raises(bridge.BridgeError) as exc_info:
+        bridge.read_token(token_path)
+
+    assert str(exc_info.value) == "worker_pool_token_unavailable"
+    assert str(token_path) not in str(exc_info.value)
+
+
 def test_token_resolution_discovers_single_docker_bind(monkeypatch) -> None:
     source = r"C:\secure\codex-worker-pool.token"
     calls: list[list[str]] = []
