@@ -50,3 +50,8 @@
 - [x] Executar E2E Fabric DEV no run `35883428772`: preflight/OIDC/workspace aprovados; `progressive_failed_phase=minimal_create`; `progressive_passed_phases=[]`; `InvalidDefinitionFormat`; sem segredo exposto e sem toque em produção.
 - [x] Reduzir a hipótese ao baseline estrutural anterior a datasource/dataset/Tablix e preservar `ReportParametersLayout` vazio nas variantes reduzidas, sem promover `AuthoringMetadata` opcional a requisito.
 - [ ] Revalidar Pre-PR no HEAD exato, integrar por merge governado e repetir o E2E Fabric DEV para confirmar se `minimal` passa e localizar a próxima camada real, se houver.
+- [x] Integrar a PR #2013 pela Governed Merge Queue em `main@98181ee7c594846660803adf40fd2c43dc6fc200`.
+- [x] Reexecutar E2E no run `35885337589`: preflight/OIDC/workspace aprovados, mas `minimal_create` permaneceu em `InvalidDefinitionFormat`; logo o layout vazio isoladamente não era a causa.
+- [x] Confirmar na documentação oficial que o envelope `PaginatedReportDefinition` atual está correto e que `AuthoringMetadata` é opcional/puramente metadata.
+- [x] Substituir a fase `minimal` por controle positivo independente baseado na forma pública do Fabric e reconstruir datasource/dataset como incrementos sobre esse baseline.
+- [ ] Revalidar Pre-PR no HEAD exato, integrar por merge governado e repetir o E2E Fabric DEV; se o controle mínimo ainda falhar, investigar serviço/envelope fora do XML gerado pelo ReqSys.
