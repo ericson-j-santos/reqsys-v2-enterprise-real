@@ -24,11 +24,19 @@ Antes de qualquer chamada ao runtime DEV, ambos os workflows devem:
 
 O resolver existente já valida Ed25519, ambiente `dev`, TTL máximo, `issued_at`, `selected_url` e domínio HTTPS `*.trycloudflare.com`.
 
-## Requisito 3 — E2E same-SHA
+## Requisito 2A — prefixo público do gateway PC24x7
 
-O E2E da Central IA/Teams só pode executar contra runtime cujo `GET /api/runtime/build-info` reporte `build_sha` exatamente igual a `github.sha` do `workflow_dispatch`.
+O `selected_url` do locator representa a origem pública do nginx PC24x7. Rotas FastAPI registradas como `/v1/...` devem ser chamadas externamente como `/api/v1/...`, porque o gateway nginx remove apenas o prefixo `/api/` antes de encaminhar ao backend.
 
-Divergência deve falhar antes de emitir token efêmero ou criar conversa.
+Os executores devem centralizar essa composição de URL, adicionar `/api` exatamente uma vez e falhar fechado para paths que não pertençam ao contrato `/v1/`. O run `35909950763`, SHA `843efd943e985b881ea97ac4ea6cf5a3129897f3`, evidenciou `service_token_mint_failed:http_404` após locator, OIDC e Key Vault terem passado. A correção do prefixo foi integrada pela PR #2038, mas o run pós-merge `35911403390`, SHA `e6b7acbf89fdc7edfa93b3087720574cd3610263`, permaneceu em HTTP 404. Portanto o prefixo era uma inconsistência real, porém não a causa única do incidente.
+
+## Requisito 3 — bootstrap e E2E same-SHA
+
+Bootstrap S2S e E2E da Central IA/Teams só podem executar contra runtime cujo `GET /api/runtime/build-info` reporte `build_sha` exatamente igual a `github.sha` do `workflow_dispatch`.
+
+O run `35911937199`, no SHA `e6b7acbf89fdc7edfa93b3087720574cd3610263`, falhou exatamente na etapa `Validar runtime PC24x7 no mesmo SHA`, antes de token/conversa. Isso comprova que o runtime físico publicado estava defasado em relação à `main`.
+
+Divergência deve falhar antes de OIDC, Key Vault, emissão/reuso de token, conversa ou qualquer outra mutação.
 
 ## Requisito 4 — disparo runtime governado
 
@@ -52,7 +60,10 @@ Em PR, apenas o contrato/testes podem rodar; nenhuma chamada real ao runtime Tea
 2. Ambos os workflows resolvem `resolve_pc24x7_dev_locator.mjs` e usam `steps.locator.outputs.base_url`.
 3. O bootstrap falha com `REQSYS_API_BASE_URL_missing` quando executado sem runtime resolvido.
 4. O E2E falha com `REQSYS_API_BASE_URL_missing` quando executado sem runtime resolvido.
-5. O E2E valida `/api/runtime/build-info` e bloqueia em `pc24x7_runtime_sha_mismatch`.
+5. Bootstrap e E2E validam `/api/runtime/build-info` e bloqueiam em `pc24x7_runtime_sha_mismatch` antes de qualquer mutação.
 6. O E2E não contém mais `workflow_run: Fly DEV Fast Deploy`.
 7. Testes direcionados e operacionais ficam verdes no HEAD exato.
-8. Após eventual merge autorizado, reexecutar bootstrap via gateway; somente se `READY`, executar E2E no mesmo SHA do runtime.
+8. Bootstrap e E2E compõem rotas públicas FastAPI como `/api/v1/...`, sem `/v1/...` direto na origem do Quick Tunnel e sem duplicar `/api`.
+9. Testes de regressão validam a composição do prefixo público no bootstrap e no E2E.
+10. O bootstrap registra evidência sanitizada distinta para `pc24x7_runtime_probe_failed` e `pc24x7_runtime_sha_mismatch`.
+11. Após eventual merge autorizado e publicação DEV autorizada no PC24x7, reexecutar bootstrap via gateway; somente se `READY`, executar E2E no mesmo SHA do runtime.

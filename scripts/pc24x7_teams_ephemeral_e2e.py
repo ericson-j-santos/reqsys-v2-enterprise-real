@@ -50,6 +50,15 @@ def request_json(
         raise EphemeralE2EError(f'network_error:{type(exc.reason).__name__}') from None
 
 
+def runtime_api_url(api_base: str, path: str) -> str:
+    root = api_base.rstrip('/')
+    if not path.startswith('/v1/'):
+        raise EphemeralE2EError('runtime_api_path_invalid')
+    if root.endswith('/api'):
+        return root + path
+    return root + '/api' + path
+
+
 def _data(payload: dict) -> dict:
     data = payload.get('data') if isinstance(payload, dict) else None
     return data if isinstance(data, dict) else payload if isinstance(payload, dict) else {}
@@ -65,7 +74,7 @@ def validate_admin_jwt(api_base: str, admin_jwt: str, correlation_id: str) -> bo
         return False
     status, payload = request_json(
         'GET',
-        api_base.rstrip('/') + '/v1/auth/session',
+        runtime_api_url(api_base, '/v1/auth/session'),
         headers={
             'Authorization': f'Bearer {admin_jwt}',
             'X-Correlation-Id': correlation_id + '-admin-check',
@@ -77,7 +86,7 @@ def validate_admin_jwt(api_base: str, admin_jwt: str, correlation_id: str) -> bo
 def mint_dev_admin_jwt(api_base: str, correlation_id: str, admin_email: str) -> str:
     config_status, config_payload = request_json(
         'GET',
-        api_base.rstrip('/') + '/v1/auth/config',
+        runtime_api_url(api_base, '/v1/auth/config'),
         headers={'X-Correlation-Id': correlation_id + '-auth-config'},
     )
     if config_status != 200:
@@ -92,7 +101,7 @@ def mint_dev_admin_jwt(api_base: str, correlation_id: str, admin_email: str) -> 
 
     login_status, login_payload = request_json(
         'POST',
-        api_base.rstrip('/') + '/v1/auth/login',
+        runtime_api_url(api_base, '/v1/auth/login'),
         headers={'X-Correlation-Id': correlation_id + '-dev-login'},
         body={'email': admin_email},
     )
@@ -124,7 +133,7 @@ def resolve_admin_jwt(
 def mint_ephemeral_token(api_base: str, admin_jwt: str, correlation_id: str) -> tuple[int, str]:
     status, payload = request_json(
         'POST',
-        api_base.rstrip('/') + '/v1/admin/service-tokens',
+        runtime_api_url(api_base, '/v1/admin/service-tokens'),
         headers={
             'Authorization': f'Bearer {admin_jwt}',
             'X-Correlation-Id': correlation_id + '-mint',
@@ -151,7 +160,7 @@ def mint_ephemeral_token(api_base: str, admin_jwt: str, correlation_id: str) -> 
 def revoke_ephemeral_token(api_base: str, admin_jwt: str, token_id: int, correlation_id: str) -> bool:
     status, payload = request_json(
         'DELETE',
-        api_base.rstrip('/') + f'/v1/admin/service-tokens/{token_id}',
+        runtime_api_url(api_base, f'/v1/admin/service-tokens/{token_id}'),
         headers={
             'Authorization': f'Bearer {admin_jwt}',
             'X-Correlation-Id': correlation_id + '-revoke',
@@ -163,7 +172,7 @@ def revoke_ephemeral_token(api_base: str, admin_jwt: str, token_id: int, correla
 def check_readiness(api_base: str, token: str, correlation_id: str) -> tuple[int, dict]:
     status, payload = request_json(
         'GET',
-        api_base.rstrip('/') + '/v1/teams-gateway/ai-conversations/readiness',
+        runtime_api_url(api_base, '/v1/teams-gateway/ai-conversations/readiness'),
         headers={
             'X-Service-Token': token,
             'X-Correlation-Id': correlation_id + '-readiness',
@@ -229,7 +238,7 @@ def create_conversation_without_teams(
     mensagem = f'ReqSys PC24x7 DEV E2E bootstrap {correlation_id}'
     status, payload = request_json(
         'POST',
-        api_base.rstrip('/') + '/v1/teams-gateway/ai-conversations',
+        runtime_api_url(api_base, '/v1/teams-gateway/ai-conversations'),
         headers=_service_headers(token, correlation_id + '-create'),
         body={
             'provider': provider,
@@ -284,7 +293,7 @@ def reply_same_conversation(
     mensagem = f'ReqSys PC24x7 DEV E2E entrega {correlation_id}'
     status, payload = request_json(
         'POST',
-        api_base.rstrip('/') + f'/v1/teams-gateway/ai-conversations/{conversation_id}/reply',
+        runtime_api_url(api_base, f'/v1/teams-gateway/ai-conversations/{conversation_id}/reply'),
         headers=_service_headers(token, correlation_id + '-reply', scoped=True),
         body={
             'mensagem': mensagem,

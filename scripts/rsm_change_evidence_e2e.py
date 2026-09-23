@@ -25,6 +25,10 @@ def _assert(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
+def _different_sha(value: str) -> str:
+    return ("0" if value[0] != "0" else "1") + value[1:]
+
+
 def _data(response: requests.Response) -> dict:
     response.raise_for_status()
     return response.json()["data"]
@@ -67,8 +71,15 @@ def _readback(database_url: str, case_id: str) -> dict:
             case = cur.fetchone()
             _assert(case is not None, "CHANGE ausente na leitura independente")
             cur.execute(
-                "SELECT COUNT(*), MAX(status), MAX(head_sha), MAX(runtime_sha) "
-                "FROM rsm_change_execution_evidence WHERE case_id = %s",
+                "SELECT COUNT(*) FROM rsm_change_execution_evidence WHERE case_id = %s",
+                (case_id,),
+            )
+            evidence_count = int(cur.fetchone()[0])
+            cur.execute(
+                "SELECT status, head_sha, runtime_sha, rollback_ref, "
+                "rollback_runtime_sha, rollback_evidence_uri, rollback_evidence_sha256 "
+                "FROM rsm_change_execution_evidence WHERE case_id = %s "
+                "ORDER BY observed_at DESC, created_at DESC, event_id DESC LIMIT 1",
                 (case_id,),
             )
             evidence = cur.fetchone()
@@ -81,10 +92,14 @@ def _readback(database_url: str, case_id: str) -> dict:
             return {
                 "state": case[0],
                 "version": int(case[1]),
-                "evidence_count": int(evidence[0]),
-                "status": evidence[1],
-                "head_sha": evidence[2],
-                "runtime_sha": evidence[3],
+                "evidence_count": evidence_count,
+                "status": evidence[0] if evidence else None,
+                "head_sha": evidence[1] if evidence else None,
+                "runtime_sha": evidence[2] if evidence else None,
+                "rollback_ref": evidence[3] if evidence else None,
+                "rollback_runtime_sha": evidence[4] if evidence else None,
+                "rollback_evidence_uri": evidence[5] if evidence else None,
+                "rollback_evidence_sha256": evidence[6] if evidence else None,
                 "evidence_event_count": event_count,
             }
 
@@ -210,7 +225,7 @@ def run(base_url: str, database_url: str, expected_sha: str) -> dict:
         "ci_conclusion": "success",
         "deployment_ref": f"github-actions:{expected_sha}",
         "environment": "ci-e2e",
-        "runtime_sha": ("0" if expected_sha[0] != "0" else "1") + expected_sha[1:],
+        "runtime_sha": _different_sha(expected_sha),
         "post_deploy_evidence_uri": f"urn:reqsys:rsm-07:{correlation_id}:wrong-sha",
         "post_deploy_evidence_sha256": _sha256(correlation_id + ":wrong-sha"),
         "status": "PASSED",
@@ -286,6 +301,210 @@ def run(base_url: str, database_url: str, expected_sha: str) -> dict:
     _assert(terminal["head_sha"] == expected_sha, "head SHA persistido divergiu")
     _assert(terminal["runtime_sha"] == expected_sha, "runtime SHA persistido divergiu")
 
+    rollback_correlation_id = f"rsm07-rollback-{uuid4().hex}"
+    rollback_idempotency_key = _sha256(f"rsm07-rollback-change-{uuid4().hex}")
+    rollback_created = _data(
+        _post(
+            session,
+            base_url.rstrip("/") + "/v1/service-cases",
+            json_body={
+                "case_type": "CHANGE",
+                "service_id": service_id,
+                "requester": "rsm-07-rollback-e2e",
+                "impact": "HIGH",
+                "urgency": "HIGH",
+                "idempotency_key": rollback_idempotency_key,
+                "event_id": str(uuid4()),
+                "source": "reqsys",
+            },
+            correlation_id=rollback_correlation_id,
+        )
+    )
+    rollback_case = rollback_created["case"]
+    _assert(
+        rollback_created["duplicate"] is False,
+        "primeira criação do CHANGE de rollback marcada como duplicada",
+    )
+
+    for target in ("TRIAGE", "IN_PROGRESS"):
+        response = _transition(
+            session,
+            base_url,
+            rollback_case,
+            target,
+            correlation_id=rollback_correlation_id,
+        )
+        rollback_case = _data(response)["case"]
+
+    rollback_resolved = _transition(
+        session,
+        base_url,
+        rollback_case,
+        "RESOLVED",
+        correlation_id=rollback_correlation_id,
+        evidence=True,
+    )
+    rollback_case = _data(rollback_resolved)["case"]
+    _assert(
+        rollback_case["state"] == "RESOLVED",
+        "CHANGE do cenário de rollback não chegou a RESOLVED",
+    )
+
+    failed_event_id = str(uuid4())
+    failed_payload = {
+        "event_id": failed_event_id,
+        "requirement_ref": "REQ-1789",
+        "sdd_ref": "rsm-07-change-traceability",
+        "pull_request_ref": "PR-RSM-07-ROLLBACK-E2E",
+        "head_sha": expected_sha,
+        "ci_run_id": "rsm-07-rollback-e2e-ci",
+        "ci_conclusion": "success",
+        "deployment_ref": f"github-actions:{expected_sha}:failed",
+        "environment": "ci-e2e",
+        "runtime_sha": runtime_build_sha,
+        "post_deploy_evidence_uri": (
+            f"urn:reqsys:rsm-07:{rollback_correlation_id}:post-deploy-failed"
+        ),
+        "post_deploy_evidence_sha256": _sha256(
+            rollback_correlation_id + ":post-deploy-failed"
+        ),
+        "status": "FAILED",
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    failed_response = _data(
+        _post(
+            session,
+            base_url.rstrip("/")
+            + f"/v1/service-cases/{rollback_case['case_id']}/change-evidence",
+            json_body=failed_payload,
+            correlation_id=rollback_correlation_id,
+        )
+    )
+    _assert(
+        failed_response["duplicate"] is False,
+        "primeira evidência FAILED marcada como replay",
+    )
+
+    blocked_after_failure = _transition(
+        session,
+        base_url,
+        rollback_case,
+        "CLOSED",
+        correlation_id=rollback_correlation_id,
+    )
+    _assert(
+        blocked_after_failure.status_code == 409,
+        "CLOSED após evidência FAILED não falhou fechado",
+    )
+    failed_readback = _readback(database_url, rollback_case["case_id"])
+    _assert(
+        failed_readback["state"] == "RESOLVED",
+        "evidência FAILED alterou o estado terminal indevidamente",
+    )
+    _assert(
+        failed_readback["evidence_count"] == 1
+        and failed_readback["status"] == "FAILED",
+        "evidência FAILED não foi persistida exatamente uma vez",
+    )
+
+    rollback_event_id = str(uuid4())
+    rollback_runtime_sha = _different_sha(expected_sha)
+    rollback_payload = {
+        **failed_payload,
+        "event_id": rollback_event_id,
+        "deployment_ref": f"github-actions:{expected_sha}:rollback",
+        "post_deploy_evidence_uri": (
+            f"urn:reqsys:rsm-07:{rollback_correlation_id}:rollback-observed"
+        ),
+        "post_deploy_evidence_sha256": _sha256(
+            rollback_correlation_id + ":rollback-observed"
+        ),
+        "status": "ROLLED_BACK",
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "rollback_ref": f"revert:{expected_sha}",
+        "rollback_runtime_sha": rollback_runtime_sha,
+        "rollback_evidence_uri": (
+            f"urn:reqsys:rsm-07:{rollback_correlation_id}:rollback-evidence"
+        ),
+        "rollback_evidence_sha256": _sha256(
+            rollback_correlation_id + ":rollback-evidence"
+        ),
+    }
+    rollback_recorded = _data(
+        _post(
+            session,
+            base_url.rstrip("/")
+            + f"/v1/service-cases/{rollback_case['case_id']}/change-evidence",
+            json_body=rollback_payload,
+            correlation_id=rollback_correlation_id,
+        )
+    )
+    _assert(
+        rollback_recorded["duplicate"] is False,
+        "primeira evidência ROLLED_BACK marcada como replay",
+    )
+    rollback_replay = _data(
+        _post(
+            session,
+            base_url.rstrip("/")
+            + f"/v1/service-cases/{rollback_case['case_id']}/change-evidence",
+            json_body=rollback_payload,
+            correlation_id=rollback_correlation_id,
+        )
+    )
+    _assert(
+        rollback_replay["duplicate"] is True,
+        "replay da evidência ROLLED_BACK não convergiu",
+    )
+
+    rollback_closed = _transition(
+        session,
+        base_url,
+        rollback_case,
+        "CLOSED",
+        correlation_id=rollback_correlation_id,
+    )
+    rollback_case = _data(rollback_closed)["case"]
+    _assert(
+        rollback_case["state"] == "CLOSED",
+        "CHANGE não fechou após rollback comprovado",
+    )
+
+    rollback_terminal = _readback(database_url, rollback_case["case_id"])
+    _assert(
+        rollback_terminal["state"] == "CLOSED",
+        "leitura independente não confirmou CLOSED após rollback",
+    )
+    _assert(
+        rollback_terminal["evidence_count"] == 2,
+        "cenário FAILED -> ROLLED_BACK não preservou exatamente duas evidências",
+    )
+    _assert(
+        rollback_terminal["evidence_event_count"] == 2,
+        "replay de rollback duplicou evento de evidência",
+    )
+    _assert(
+        rollback_terminal["status"] == "ROLLED_BACK",
+        "última evidência persistida não é ROLLED_BACK",
+    )
+    _assert(
+        rollback_terminal["head_sha"] == expected_sha
+        and rollback_terminal["runtime_sha"] == expected_sha,
+        "vínculo de SHA foi perdido no cenário de rollback",
+    )
+    _assert(
+        rollback_terminal["rollback_ref"] == f"revert:{expected_sha}"
+        and rollback_terminal["rollback_runtime_sha"] == rollback_runtime_sha,
+        "referência ou SHA pós-rollback divergiu na leitura independente",
+    )
+    _assert(
+        rollback_terminal["rollback_evidence_uri"]
+        == f"urn:reqsys:rsm-07:{rollback_correlation_id}:rollback-evidence"
+        and rollback_terminal["rollback_evidence_sha256"]
+        == _sha256(rollback_correlation_id + ":rollback-evidence"),
+        "evidência de rollback divergiu na leitura independente",
+    )
+
     return {
         "status": "passed",
         "environment": build_info.get("environment"),
@@ -303,6 +522,17 @@ def run(base_url: str, database_url: str, expected_sha: str) -> dict:
         "negative_missing_evidence": "passed",
         "negative_sha_mismatch": "passed",
         "replay": "passed",
+        "rollback_path": {
+            "status": "passed",
+            "correlation_id": rollback_correlation_id,
+            "idempotency_key": rollback_idempotency_key,
+            "case_id": rollback_case["case_id"],
+            "failed_event_id": failed_event_id,
+            "rollback_event_id": rollback_event_id,
+            "blocked_after_failed_post_deploy": "passed",
+            "rollback_replay": "passed",
+            "observed": rollback_terminal,
+        },
         "independent_readback": "postgresql",
         "production_touched": False,
     }
