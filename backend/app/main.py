@@ -43,6 +43,7 @@ from app.api import (
     recomendacoes_ia,
     redmine_sync,
     relatorios,
+    report_builder_delivery,
     repository_admin,
     requisitos,
     runtime_analytics,
@@ -147,6 +148,7 @@ app.include_router(codex_governado.router)
 app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(redmine_sync.router)
+app.include_router(report_builder_delivery.router)
 app.include_router(movimento_email.router)
 app.include_router(noteri_host_profile.router)
 app.include_router(hub_lowcode.router)
