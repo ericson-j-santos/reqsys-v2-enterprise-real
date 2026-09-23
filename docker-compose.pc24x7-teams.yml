@@ -10,7 +10,7 @@ services:
       - /var/lib/reqsys-24x7/teams
       - worker
       - --base-url
-      - ${REQSYS_API_BASE_URL:-https://reqsys-api-dev.fly.dev}
+      - ${REQSYS_API_BASE_URL:?resolve signed PC24x7 DEV API base before starting worker}
       - --token-file
       - /run/secrets/reqsys_api_service_token
       - --interval
