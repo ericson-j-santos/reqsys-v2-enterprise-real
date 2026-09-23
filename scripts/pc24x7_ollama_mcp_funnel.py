@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,7 @@ MCP_TARGET = "http://127.0.0.1:8010"
 MCP_PORT = 8010
 MCP_PATH = "/mcp"
 HTTPS_PORT = 443
+TAILSCALE_CLI_ENV = "TAILSCALE_CLI_PATH"
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
@@ -48,8 +52,39 @@ def require_host(hostname: str | None = None) -> str:
     return host
 
 
-def tailscale_status() -> dict[str, Any]:
-    completed = run(["tailscale", "status", "--json"])
+def resolve_tailscale_cli(
+    source: Mapping[str, str] | None = None,
+    *,
+    which_fn: Callable[[str], str | None] | None = None,
+) -> str:
+    env = source if source is not None else os.environ
+    configured = str(env.get(TAILSCALE_CLI_ENV, "")).strip()
+    if configured:
+        configured_path = Path(configured)
+        if configured_path.is_file():
+            return str(configured_path)
+        raise IngressError("TAILSCALE_CLI_CONFIGURED_PATH_INVALID")
+
+    resolver = which_fn or shutil.which
+    discovered = resolver("tailscale") or resolver("tailscale.exe")
+    if discovered and Path(discovered).is_file():
+        return str(Path(discovered))
+
+    roots = []
+    for key in ("ProgramFiles", "ProgramW6432", "LOCALAPPDATA"):
+        root = str(env.get(key, "")).strip()
+        if root and root not in roots:
+            roots.append(root)
+    for root in roots:
+        candidate = Path(root) / "Tailscale" / "tailscale.exe"
+        if candidate.is_file():
+            return str(candidate)
+
+    raise IngressError("TAILSCALE_CLI_NOT_FOUND")
+
+
+def tailscale_status(tailscale_cli: str) -> dict[str, Any]:
+    completed = run([tailscale_cli, "status", "--json"])
     if completed.returncode != 0:
         raise IngressError("tailscale_status_unavailable")
     try:
@@ -81,8 +116,8 @@ def local_mcp_ready(timeout: float = 0.5) -> bool:
         return sock.connect_ex(("127.0.0.1", MCP_PORT)) == 0
 
 
-def funnel_status() -> dict[str, Any]:
-    completed = run(["tailscale", "funnel", "status", "--json"])
+def funnel_status(tailscale_cli: str) -> dict[str, Any]:
+    completed = run([tailscale_cli, "funnel", "status", "--json"])
     if completed.returncode != 0:
         return {"configured": False, "returncode": completed.returncode}
     try:
@@ -100,9 +135,9 @@ def route_present(status: dict[str, Any]) -> bool:
     return target_present and MCP_PATH in flattened
 
 
-def build_apply_command() -> list[str]:
+def build_apply_command(tailscale_cli: str) -> list[str]:
     return [
-        "tailscale",
+        tailscale_cli,
         "funnel",
         "--bg",
         "--yes",
@@ -125,8 +160,8 @@ def classify_apply_failure(completed: subprocess.CompletedProcess[str]) -> str:
     return "TAILSCALE_FUNNEL_APPLY_FAILED"
 
 
-def apply_funnel() -> str | None:
-    completed = run(build_apply_command(), timeout=90)
+def apply_funnel(tailscale_cli: str) -> str | None:
+    completed = run(build_apply_command(tailscale_cli), timeout=90)
     if completed.returncode != 0:
         return classify_apply_failure(completed)
     return None
@@ -170,7 +205,7 @@ def main() -> int:
     args = parser.parse_args()
 
     payload: dict[str, Any] = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.0.1",
         "environment": "DEV",
         "provider": "tailscale_funnel",
         "source_sha": args.source_sha,
@@ -181,13 +216,16 @@ def main() -> int:
         "secrets_read": False,
         "ollama_direct_exposed": False,
         "gateway_direct_exposed": False,
+        "tailscale_cli_resolved": False,
     }
 
     try:
         if not _SHA_RE.fullmatch(args.source_sha):
             raise IngressError("source_sha_invalid")
         payload["host"] = require_host()
-        status = tailscale_status()
+        tailscale_cli = resolve_tailscale_cli()
+        payload["tailscale_cli_resolved"] = True
+        status = tailscale_status(tailscale_cli)
         validate_tailscale_ready(status)
         base_url = stable_base_url(status)
         payload["public_url"] = base_url + MCP_PATH
@@ -197,14 +235,14 @@ def main() -> int:
         if not local_ready:
             raise IngressError("MCP_LOCAL_NOT_READY")
 
-        before = funnel_status()
+        before = funnel_status(tailscale_cli)
         payload["route_before"] = route_present(before)
         if args.apply and not payload["route_before"]:
-            failure = apply_funnel()
+            failure = apply_funnel(tailscale_cli)
             if failure:
                 raise IngressError(failure)
 
-        after = funnel_status()
+        after = funnel_status(tailscale_cli)
         payload["route_after"] = route_present(after)
         if not payload["route_after"]:
             raise IngressError("MCP_FUNNEL_ROUTE_NOT_OBSERVED")

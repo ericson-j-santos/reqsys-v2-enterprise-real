@@ -34,7 +34,12 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
 11. No runner self-hosted PC24x7, o workflow deve reutilizar o Python já
     provisionado, validar o executável antes do uso e falhar rapidamente se ele
     estiver indisponível; não deve instalar Python nem alterar o Registro do host.
-12. HML e PROD ficam fora do escopo.
+12. O reconciliador não pode depender do `PATH` interativo para localizar a CLI
+    do Tailscale. Deve aceitar `TAILSCALE_CLI_PATH` somente quando apontar para
+    arquivo existente, tentar descoberta pelo `PATH` do serviço e pelos diretórios
+    de instalação locais conhecidos e falhar fechado com `TAILSCALE_CLI_NOT_FOUND`
+    quando nenhum binário for comprovado.
+13. HML e PROD ficam fora do escopo.
 
 ## Critérios de aceite
 
@@ -53,3 +58,6 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
    `https://<desktop>.ts.net/mcp`; CI isolada não substitui essa evidência.
 8. Testes de workflow impedem reintroduzir `actions/setup-python` no runner
    self-hosted e comprovam o uso do executável Python provisionado.
+9. Testes do reconciliador comprovam resolução explícita da CLI do Tailscale,
+   rejeição de caminho configurado inexistente e erro determinístico quando o
+   binário não estiver disponível no ambiente do serviço.
