@@ -281,6 +281,34 @@ def test_reconciler_has_positive_negative_idempotency_and_restore_controls():
     assert "loopback_agent_exposed" in raw
 
 
+def test_http_e2e_failures_expose_only_safe_stage_and_status():
+    err = module.ReconcileError(
+        "http_unexpected",
+        stage="api_admin_login",
+        diagnostic_code="http_status_403",
+    )
+    assert err.code == "http_unexpected"
+    assert err.stage == "api_admin_login"
+    assert err.diagnostic_code == "http_status_403"
+
+    raw = SCRIPT.read_text(encoding="utf-8")
+    for stage in (
+        "api_auth_config",
+        "api_negative_auth_profile",
+        "api_admin_login",
+        "api_profile_before",
+        "api_set_estudo",
+        "api_estudo_readback",
+        "api_estudo_replay",
+        "api_restore_normal",
+        "browser_admin_login",
+    ):
+        assert f'stage="{stage}"' in raw
+    assert 'diagnostic_code=f"http_status_{status}"' in raw
+    assert '"frontend_same_origin_source_ready"' in raw
+    assert "response.read()" not in raw[raw.index("if status not in allowed:"):raw.index("return status, payload")]
+
+
 def test_reconcile_failure_is_sanitized_and_stage_aware():
     err = module.ReconcileError("command_failed:docker:exit_1", stage="inspect_runtime")
     assert err.code == "command_failed:docker"
