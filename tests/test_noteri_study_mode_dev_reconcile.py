@@ -22,12 +22,46 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
-def test_reconciler_is_fixed_to_pc24x7_dev_gateway():
+def test_reconciler_is_fixed_to_pc24x7_dev_identity():
     assert module.EXPECTED_HOST == "DESKTOP-PDQK954"
-    assert module.DEV_GATEWAY_PORT == "8083"
     assert module.DEV_API_PORT == "8210"
-    assert module.GATEWAY == "http://127.0.0.1:8083"
     assert module.CONFIRM == "RECONCILE-NOTERI-STUDY-MODE-DEV"
+    assert not hasattr(module, "DEV_GATEWAY_PORT")
+    assert not hasattr(module, "GATEWAY")
+
+
+def test_gateway_base_url_uses_unique_nginx_published_port_and_fails_closed():
+    item = {
+        "NetworkSettings": {
+            "Ports": {
+                "80/tcp": [
+                    {"HostIp": "0.0.0.0", "HostPort": "8081"},
+                    {"HostIp": "::", "HostPort": "8081"},
+                ]
+            }
+        }
+    }
+    assert module.required_gateway_host_port(item) == 8081
+    assert module.gateway_base_url(item) == ("http://127.0.0.1:8081", 8081)
+
+    ambiguous = {
+        "NetworkSettings": {
+            "Ports": {
+                "80/tcp": [
+                    {"HostIp": "0.0.0.0", "HostPort": "8081"},
+                    {"HostIp": "::", "HostPort": "8083"},
+                ]
+            }
+        }
+    }
+    with pytest.raises(module.ReconcileError) as exc:
+        module.required_gateway_host_port(ambiguous)
+    assert exc.value.code == "dev_gateway_port_not_unique"
+    assert exc.value.stage == "discover_gateway"
+
+    with pytest.raises(module.ReconcileError) as exc:
+        module.required_gateway_host_port({"NetworkSettings": {"Ports": {}}})
+    assert exc.value.code == "dev_gateway_port_missing"
 
 
 def test_windows_path_normalizes_docker_desktop_mounts():
@@ -289,9 +323,9 @@ def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     assert '["docker", "exec", container, "nginx", "-t"]' in raw
     assert '["docker", "exec", container, "nginx", "-s", "reload"]' in raw
     assert 'stage_prefix="rollback_nginx_reload"' in raw
-    assert 'wait_gateway_status("/api/health", {200})' in raw
-    assert 'wait_gateway_status("/api/runtime/health", {200})' in raw
-    assert 'wait_gateway_status("/api/v1/noteri/profile", {401})' in raw
+    assert 'wait_gateway_status(gateway, "/api/health", {200})' in raw
+    assert 'wait_gateway_status(gateway, "/api/runtime/health", {200})' in raw
+    assert 'wait_gateway_status(gateway, "/api/v1/noteri/profile", {401})' in raw
     assert '"nginx_runtime_contract_refreshed": True' in raw
     assert "location ~ ^/api/(runtime|" in nginx
     assert "proxy_pass http://api:8000;" in nginx
@@ -303,11 +337,18 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "com.docker.compose.project" in raw
     assert "com.docker.compose.service" in raw
     assert "non_dev_compose_project_blocked" in raw
-    assert '"runtime_discovery": "api_port_8210_compose_labels"' in raw
+    assert '"runtime_discovery": "api_port_8210_compose_labels_plus_nginx_port"' in raw
+    assert '"gateway_host_port": gateway_port' in raw
     assert '"compose_invoked": False' in raw
     assert '"runtime_refresh": "bind_mounts_plus_nginx_reload"' in raw
     assert "dev_api_8210_not_unique" in raw
-    assert "dev_gateway_8083_not_unique" not in raw
+    assert "required_gateway_host_port(nginx_before)" in raw
+    assert "http://127.0.0.1:{port}" in raw
+    assert "DEV_GATEWAY_PORT" not in raw
+    assert "GATEWAY =" not in raw
+    assert "gateway_api_health_timeout" in raw
+    assert "gateway_runtime_health_timeout" in raw
+    assert "gateway_profile_auth_timeout" in raw
     assert "reqsys-live-api-1" not in raw
     assert "reqsys-live-frontend-1" not in raw
     assert "reqsys-live-nginx-1" not in raw
