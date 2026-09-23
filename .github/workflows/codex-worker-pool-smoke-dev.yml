@@ -96,7 +96,7 @@ jobs:
     env:
       CORRELATION_ID: worker-pool-token-restore-${{ github.run_id }}-${{ github.run_attempt }}
       TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
-      EVIDENCE_REL: artifacts/codex-worker-pool-token-restore-dev/evidence.json
+      EVIDENCE_REL: artifacts/codex-worker-pool-auth-restore-dev/evidence.json
 
     steps:
       - name: Checkout regras canônicas
@@ -132,7 +132,25 @@ jobs:
           if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
 
-      - name: Restaurar token via Owner Risk3 Gateway
+      - name: Instalar autorização Risk3 exata e temporária
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_worker_pool_auth_restore_risk3.py `
+              --enable `
+              --ttl-minutes 30 `
+              --confirm ENABLE-WORKER-POOL-AUTH-RESTORE-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Restaurar auth via Owner Risk3 Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -144,19 +162,35 @@ jobs:
             "--scope", "repo://reqsys/environment/dev/worker-pool",
             "--cwd", $env:TARGET_PATH,
             "--timeout", "300",
-            "--correlation-id", $env:CORRELATION_ID,
-            "--",
-            "python", "scripts/restore_codex_worker_pool_token_dev.py",
-            "--output", $env:EVIDENCE_REL
+            "--correlation-id", $env:CORRELATION_ID
           )
           & python $gateway @riskArgs
           exit $LASTEXITCODE
+
+      - name: Remover autorização Risk3 temporária
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_worker_pool_auth_restore_risk3.py `
+              --disable `
+              --confirm DISABLE-WORKER-POOL-AUTH-RESTORE-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
 
       - name: Publicar evidência sanitizada
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: codex-worker-pool-token-restore-dev-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\codex-worker-pool-token-restore-dev\evidence.json
+          path: ${{ steps.session.outputs.target_path }}\artifacts\codex-worker-pool-auth-restore-dev\evidence.json
           if-no-files-found: error
           retention-days: 30
