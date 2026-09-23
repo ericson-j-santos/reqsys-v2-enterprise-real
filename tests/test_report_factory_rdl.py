@@ -73,18 +73,18 @@ def test_parameterized_rdl_emits_required_rdl_2016_layout() -> None:
     rdl = report_factory.generate_rdl(source)
     root = ET.fromstring(rdl)
 
-    layout = root.find(report_factory._q("ReportParametersLayout"))
+    layout = root.find(report_factory.q("ReportParametersLayout"))
     assert layout is not None
-    grid = layout.find(report_factory._q("GridLayoutDefinition"))
+    grid = layout.find(report_factory.q("GridLayoutDefinition"))
     assert grid is not None
-    assert grid.findtext(report_factory._q("NumberOfColumns")) == "1"
-    assert grid.findtext(report_factory._q("NumberOfRows")) == str(len(source["parameters"]))
+    assert grid.findtext(report_factory.q("NumberOfColumns")) == "1"
+    assert grid.findtext(report_factory.q("NumberOfRows")) == str(len(source["parameters"]))
 
-    cells = grid.find(report_factory._q("CellDefinitions"))
+    cells = grid.find(report_factory.q("CellDefinitions"))
     assert cells is not None
     mapped = [
-        cell.findtext(report_factory._q("ParameterName"))
-        for cell in cells.findall(report_factory._q("CellDefinition"))
+        cell.findtext(report_factory.q("ParameterName"))
+        for cell in cells.findall(report_factory.q("CellDefinition"))
     ]
     assert mapped == [parameter["name"] for parameter in source["parameters"]]
 
@@ -92,7 +92,7 @@ def test_parameterized_rdl_emits_required_rdl_2016_layout() -> None:
 def test_validate_rdl_rejects_parameter_layout_missing() -> None:
     source = load_example()
     root = ET.fromstring(report_factory.generate_rdl(source))
-    layout = root.find(report_factory._q("ReportParametersLayout"))
+    layout = root.find(report_factory.q("ReportParametersLayout"))
     assert layout is not None
     root.remove(layout)
     invalid_rdl = ET.tostring(root, encoding="unicode")
@@ -110,16 +110,16 @@ def test_fabric_rdl_2016_header_is_emitted_and_deterministic() -> None:
 
     root = ET.fromstring(first)
     assert root.attrib.get("MustUnderstand") == "df"
-    assert root.findtext(report_factory._rd("ReportUnitType")) == "Inch"
-    report_id = root.findtext(report_factory._rd("ReportID"))
+    assert root.findtext(report_factory.rd("ReportUnitType")) == "Inch"
+    report_id = root.findtext(report_factory.rd("ReportID"))
     assert report_id is not None
     assert str(uuid.UUID(report_id)) == report_id
-    assert root.findtext(report_factory._df("DefaultFontFamily")) == "Segoe UI"
-    assert root.findtext(report_factory._q("AutoRefresh")) == "0"
+    assert root.findtext(report_factory.df("DefaultFontFamily")) == "Segoe UI"
+    assert root.findtext(report_factory.q("AutoRefresh")) == "0"
 
     children = list(root)
-    section_index = next(i for i, node in enumerate(children) if node.tag == report_factory._q("ReportSections"))
-    layout_index = next(i for i, node in enumerate(children) if node.tag == report_factory._q("ReportParametersLayout"))
+    section_index = next(i for i, node in enumerate(children) if node.tag == report_factory.q("ReportSections"))
+    layout_index = next(i for i, node in enumerate(children) if node.tag == report_factory.q("ReportParametersLayout"))
     assert layout_index > section_index
 
 
@@ -129,18 +129,18 @@ def test_fabric_datasource_metadata_is_emitted_and_deterministic() -> None:
     second = ET.fromstring(report_factory.generate_rdl(copy.deepcopy(source)))
 
     def datasource_metadata(root: ET.Element) -> tuple[str, str]:
-        data_sources = root.find(report_factory._q("DataSources"))
+        data_sources = root.find(report_factory.q("DataSources"))
         assert data_sources is not None
         matches = [
             node
-            for node in data_sources.findall(report_factory._q("DataSource"))
+            for node in data_sources.findall(report_factory.q("DataSource"))
             if node.attrib.get("Name") == source["datasource"]["name"]
         ]
         assert len(matches) == 1
         datasource = matches[0]
         return (
-            datasource.findtext(report_factory._rd("SecurityType"), default=""),
-            datasource.findtext(report_factory._rd("DataSourceID"), default=""),
+            datasource.findtext(report_factory.rd("SecurityType"), default=""),
+            datasource.findtext(report_factory.rd("DataSourceID"), default=""),
         )
 
     first_security, first_id = datasource_metadata(first)
@@ -155,12 +155,12 @@ def test_fabric_datasource_metadata_is_emitted_and_deterministic() -> None:
 def test_validate_rdl_rejects_missing_fabric_datasource_metadata() -> None:
     source = load_example()
     root = ET.fromstring(report_factory.generate_rdl(source))
-    data_sources = root.find(report_factory._q("DataSources"))
+    data_sources = root.find(report_factory.q("DataSources"))
     assert data_sources is not None
-    datasource = data_sources.find(report_factory._q("DataSource"))
+    datasource = data_sources.find(report_factory.q("DataSource"))
     assert datasource is not None
 
-    security = datasource.find(report_factory._rd("SecurityType"))
+    security = datasource.find(report_factory.rd("SecurityType"))
     assert security is not None
     datasource.remove(security)
     invalid_security = ET.tostring(root, encoding="unicode")
@@ -168,11 +168,11 @@ def test_validate_rdl_rejects_missing_fabric_datasource_metadata() -> None:
         report_factory.validate_rdl(invalid_security, source)
 
     root = ET.fromstring(report_factory.generate_rdl(source))
-    data_sources = root.find(report_factory._q("DataSources"))
+    data_sources = root.find(report_factory.q("DataSources"))
     assert data_sources is not None
-    datasource = data_sources.find(report_factory._q("DataSource"))
+    datasource = data_sources.find(report_factory.q("DataSource"))
     assert datasource is not None
-    datasource_id = datasource.find(report_factory._rd("DataSourceID"))
+    datasource_id = datasource.find(report_factory.rd("DataSourceID"))
     assert datasource_id is not None
     datasource.remove(datasource_id)
     invalid_id = ET.tostring(root, encoding="unicode")
