@@ -5,25 +5,37 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_ENVIRONMENTS = {
-    "DEV": "https://reqsys-app-dev.fly.dev",
-    "STG": "https://reqsys-app-stg.fly.dev",
-    "PROD": "https://reqsys-app.fly.dev",
-}
+LEGACY_DEV_HOSTS = {"reqsys-app-dev.fly.dev", "reqsys-api-dev.fly.dev"}
 REQUIRED_PATHS = (
-    "/health",
+    "/api/health",
     "/api/runtime/health",
     "/api/runtime/readiness",
     "/api/runtime/liveness",
     "/estatisticas/total-requisitos",
 )
+
+
+def default_environments() -> dict[str, str]:
+    dev = os.getenv("REQSYS_DEV_BASE_URL", "").strip().rstrip("/")
+    if not dev:
+        raise ValueError("REQSYS_DEV_BASE_URL_missing")
+    host = urllib.parse.urlparse(dev).hostname or ""
+    if host.lower() in LEGACY_DEV_HOSTS or host.lower().endswith(".fly.dev"):
+        raise ValueError("legacy_fly_dev_runtime_forbidden")
+    return {
+        "DEV": dev,
+        "STG": "https://reqsys-app-stg.fly.dev",
+        "PROD": "https://reqsys-app.fly.dev",
+    }
 
 
 def probe(url: str, timeout: float = 12.0) -> dict[str, Any]:
@@ -89,7 +101,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=12.0)
     parser.add_argument("--environments-json")
     args = parser.parse_args()
-    environments = DEFAULT_ENVIRONMENTS
+    environments = default_environments()
     if args.environments_json:
         environments = json.loads(Path(args.environments_json).read_text(encoding="utf-8"))
     report = collect(environments, args.timeout)
