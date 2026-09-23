@@ -22,11 +22,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Resolve signed PC24x7 DEV locator
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p evidence/ux
+          node scripts/resolve_pc24x7_dev_locator.mjs --output evidence/ux/dev-signed-locator.json >/dev/null
       - name: Validate implementation
         run: |
           python -m py_compile scripts/smoke_user_experience_environment_trend_public.py
           python -m unittest tests/test_smoke_user_experience_environment_trend_public.py
       - name: Execute report-only public smoke
+        env:
+          REQSYS_DEV_BASE_URL: ${{ steps.locator.outputs.base_url }}
         run: |
           mkdir -p evidence/ux
           python scripts/smoke_user_experience_environment_trend_public.py --output evidence/ux/user-experience-environment-trend-public.json
