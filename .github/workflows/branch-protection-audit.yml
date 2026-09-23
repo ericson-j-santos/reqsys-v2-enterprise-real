@@ -4,6 +4,15 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo governado de execução"
+        required: true
+        default: "audit"
+        type: choice
+        options:
+          - audit
+          - apply-observability-platform
   schedule:
     - cron: "30 8 * * *"
 
@@ -119,4 +128,120 @@ jobs:
           name: branch-protection-audit
           path: ci-reports/branch-protection/
           if-no-files-found: error
+          retention-days: 30
+
+  apply-observability-platform:
+    name: Proteger observability-platform/main
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-observability-platform' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_PAT }}
+      TARGET_REPOSITORY: ericson-j-santos/observability-platform
+      TARGET_BRANCH: main
+      EXPECTED_TARGET_SHA: a13450360b85676f40932019119137d89313c58e
+      REQUIRED_CHECK: test
+      EVIDENCE_DIR: ci-reports/branch-protection/observability-platform
+    steps:
+      - name: Validar alvo exato e evidência do check
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN" || { echo "GITHUB_PAT_NOT_AVAILABLE" >&2; exit 2; }
+          mkdir -p "$EVIDENCE_DIR"
+          current_sha="$(gh api "repos/$TARGET_REPOSITORY/commits/$TARGET_BRANCH" --jq '.sha')"
+          test "$current_sha" = "$EXPECTED_TARGET_SHA" || {
+            echo "TARGET_SHA_CHANGED expected=$EXPECTED_TARGET_SHA actual=$current_sha" >&2
+            exit 3
+          }
+          check_state="$(gh api             -H "Accept: application/vnd.github+json"             "repos/$TARGET_REPOSITORY/commits/$EXPECTED_TARGET_SHA/check-runs"             --jq '.check_runs[] | select(.name == env.REQUIRED_CHECK) | [.status, .conclusion] | @tsv' | tail -n 1)"
+          test "$check_state" = $'completed\tsuccess' || {
+            echo "REQUIRED_CHECK_NOT_GREEN check=$REQUIRED_CHECK state=$check_state" >&2
+            exit 4
+          }
+
+      - name: Aplicar proteção mínima governada
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > "$EVIDENCE_DIR/request.json"
+          import json
+          print(json.dumps({
+              "required_status_checks": {
+                  "strict": True,
+                  "contexts": ["test"],
+              },
+              "enforce_admins": True,
+              "required_pull_request_reviews": {
+                  "dismiss_stale_reviews": False,
+                  "require_code_owner_reviews": False,
+                  "required_approving_review_count": 0,
+                  "require_last_push_approval": False,
+              },
+              "restrictions": None,
+              "required_linear_history": False,
+              "allow_force_pushes": False,
+              "allow_deletions": False,
+              "block_creations": False,
+              "required_conversation_resolution": False,
+              "lock_branch": False,
+              "allow_fork_syncing": False,
+          }, separators=(",", ":")))
+          PY
+          gh api             --method PUT             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2026-03-10"             "repos/$TARGET_REPOSITORY/branches/$TARGET_BRANCH/protection"             --input "$EVIDENCE_DIR/request.json"             > "$EVIDENCE_DIR/update-response.json"
+
+      - name: Revalidar proteção por leitura independente
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2026-03-10"             "repos/$TARGET_REPOSITORY/branches/$TARGET_BRANCH/protection"             > "$EVIDENCE_DIR/protection-after.json"
+          protected="$(gh api "repos/$TARGET_REPOSITORY/branches/$TARGET_BRANCH" --jq '.protected')"
+          test "$protected" = "true" || { echo "BRANCH_NOT_PROTECTED" >&2; exit 5; }
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          root = Path(os.environ["EVIDENCE_DIR"])
+          payload = json.loads((root / "protection-after.json").read_text(encoding="utf-8"))
+          contexts = set((payload.get("required_status_checks") or {}).get("contexts") or [])
+          if os.environ["REQUIRED_CHECK"] not in contexts:
+              raise SystemExit("REQUIRED_CHECK_MISSING")
+          if not (payload.get("enforce_admins") or {}).get("enabled"):
+              raise SystemExit("ADMIN_ENFORCEMENT_DISABLED")
+          if payload.get("required_pull_request_reviews") is None:
+              raise SystemExit("PULL_REQUEST_REQUIREMENT_MISSING")
+          if (payload.get("allow_force_pushes") or {}).get("enabled"):
+              raise SystemExit("FORCE_PUSH_STILL_ALLOWED")
+          if (payload.get("allow_deletions") or {}).get("enabled"):
+              raise SystemExit("BRANCH_DELETION_STILL_ALLOWED")
+
+          evidence = {
+              "status": "PROTECTION_APPLIED",
+              "repository": os.environ["TARGET_REPOSITORY"],
+              "branch": os.environ["TARGET_BRANCH"],
+              "expected_sha": os.environ["EXPECTED_TARGET_SHA"],
+              "required_check": os.environ["REQUIRED_CHECK"],
+              "pull_request_required": True,
+              "enforce_admins": True,
+              "force_push_allowed": False,
+              "deletion_allowed": False,
+              "secret_value_exposed": False,
+              "production_touched": False,
+          }
+          (root / "evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-platform-main-protection-${{ github.run_id }}
+          path: |
+            ci-reports/branch-protection/observability-platform/evidence.json
+            ci-reports/branch-protection/observability-platform/protection-after.json
+          if-no-files-found: warn
           retention-days: 30
