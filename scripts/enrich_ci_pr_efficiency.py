@@ -338,6 +338,7 @@ def enrich_files(
 ) -> None:
     analytics = json.loads(analytics_path.read_text(encoding="utf-8"))
     analytics["pr_efficiency"] = metrics
+    analytics["schema_version"] = "1.0.4"
     analytics_path.write_text(
         json.dumps(analytics, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
