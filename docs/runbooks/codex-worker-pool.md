@@ -29,10 +29,11 @@ issue/request
 5. Um workspace ativo não pode ser compartilhado.
 6. Worker `ESTUDO`, stale, sem Gateway, sem `state_validated` ou com `rules_sha` diferente do SHA canônico esperado não adquire trabalho.
 7. Lease expirado é recuperado; ao atingir `max_attempts`, a task vai para `failed` + quarentena.
-8. Builder entrega exatamente um `produced_sha`; Validator diferente valida o SHA.
-9. Task `blocked` não mantém lease e não ocupa worker.
-10. Token da API é lido de arquivo e não aparece em snapshot/log.
-11. Toda task é vinculada a `base_sha` explícito; request sem SHA base falha antes de entrar na fila.
+8. Heartbeat, renovação de lease e polling sem mudança provam liveness, não progresso; `last_material_progress_at` só avança em transição material. Após 900s sem avanço, o watchdog reroteia para worker alternativo elegível ou bloqueia/libera capacidade.
+9. Builder entrega exatamente um `produced_sha`; Validator diferente valida o SHA.
+10. Task `blocked` não mantém lease e não ocupa worker.
+11. Token da API é lido de arquivo e não aparece em snapshot/log.
+12. Toda task é vinculada a `base_sha` explícito; request sem SHA base falha antes de entrar na fila.
 
 ## Mapeamento de issues
 
@@ -80,6 +81,14 @@ Quando uma dependência como DSN, segredo, permissão administrativa ou identida
 - recuperar a task;
 - atingir o limite de tentativas;
 - confirmar registro na quarentena.
+
+### Estagnação
+- iniciar uma task e registrar `last_material_progress_at`;
+- renovar heartbeat e lease sem produzir SHA ou nova transição;
+- ultrapassar `CODEX_WORKER_POOL_PROGRESS_STALL_SECONDS`;
+- com worker alternativo elegível, exigir reroteamento e liberação do lease;
+- sem worker alternativo, exigir `blocked_reason=material_progress_timeout_no_alternative`;
+- confirmar que heartbeat/lease recentes não alteraram `last_material_progress_at`.
 
 ## Limite de evidência atual
 

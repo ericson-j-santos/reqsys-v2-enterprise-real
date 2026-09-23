@@ -38,6 +38,7 @@ def store(tmp_path: Path, clock: MutableClock) -> WorkerPoolStore:
         heartbeat_ttl_seconds=60,
         default_lease_seconds=10,
         default_max_attempts=2,
+        progress_stall_seconds=30,
         expected_rules_sha="a" * 40,
     )
 
@@ -78,6 +79,10 @@ def enqueue(
 
 
 def test_init_closes_connection(tmp_path: Path, monkeypatch) -> None:
+    class InitCursor:
+        def fetchall(self):
+            return [{"name": "last_material_progress_at"}]
+
     class InitConnection:
         def __init__(self) -> None:
             self.closed = False
@@ -85,6 +90,9 @@ def test_init_closes_connection(tmp_path: Path, monkeypatch) -> None:
 
         def executescript(self, _script: str) -> None:
             self.script_executed = True
+
+        def execute(self, _statement: str, _params=()):
+            return InitCursor()
 
         def close(self) -> None:
             self.closed = True
@@ -174,6 +182,91 @@ def test_expired_lease_is_recovered_by_another_builder(
     assert claimed_again and lease_again
     assert claimed_again["task_id"] == task["task_id"]
     assert claimed_again["attempt_count"] == 2
+
+
+def test_watchdog_reroutes_stalled_task_even_with_recent_heartbeat_and_lease(
+    store: WorkerPoolStore, clock: MutableClock
+) -> None:
+    register_ready(store, "builder-a", "builder")
+    register_ready(store, "builder-b", "builder")
+    task, _ = enqueue(store, max_attempts=3)
+
+    claimed, lease = store.claim_task(
+        worker_id="builder-a", role="builder", correlation_id="claim-a"
+    )
+    assert claimed and lease
+    running = store.start_task(
+        task_id=task["task_id"],
+        worker_id="builder-a",
+        lease_token=lease.lease_token,
+        correlation_id="start-a",
+    )
+    material_progress_at = running["last_material_progress_at"]
+
+    clock.advance(20)
+    store.heartbeat_worker("builder-a", correlation_id="hb-a")
+    store.heartbeat_worker("builder-b", correlation_id="hb-b")
+    renewed = store.renew_lease(
+        task_id=task["task_id"],
+        worker_id="builder-a",
+        lease_token=lease.lease_token,
+        correlation_id="renew-a",
+        lease_seconds=60,
+    )
+    assert renewed["last_material_progress_at"] == material_progress_at
+
+    clock.advance(11)
+    store.heartbeat_worker("builder-b", correlation_id="hb-b-2")
+    recovered = store.recover_stalled_tasks()
+
+    assert recovered == {"rerouted": 1, "blocked": 0, "failed": 0}
+    observed = store.get_task(task["task_id"])
+    assert observed["state"] == "queued"
+    assert observed["leased_by"] is None
+    assert observed["last_error"] == "material_progress_timeout_rerouted"
+    assert observed["last_material_progress_at"] == material_progress_at
+
+    claimed_again, lease_again = store.claim_task(
+        worker_id="builder-b", role="builder", correlation_id="claim-b"
+    )
+    assert claimed_again and lease_again
+    assert claimed_again["task_id"] == task["task_id"]
+    assert claimed_again["last_material_progress_at"] != material_progress_at
+
+
+def test_watchdog_blocks_stalled_task_without_alternative_worker(
+    store: WorkerPoolStore, clock: MutableClock
+) -> None:
+    register_ready(store, "builder-a", "builder")
+    task, _ = enqueue(store, max_attempts=3)
+    claimed, lease = store.claim_task(
+        worker_id="builder-a", role="builder", correlation_id="claim-a"
+    )
+    assert claimed and lease
+    store.start_task(
+        task_id=task["task_id"],
+        worker_id="builder-a",
+        lease_token=lease.lease_token,
+        correlation_id="start-a",
+    )
+
+    clock.advance(20)
+    store.heartbeat_worker("builder-a", correlation_id="hb-a")
+    store.renew_lease(
+        task_id=task["task_id"],
+        worker_id="builder-a",
+        lease_token=lease.lease_token,
+        correlation_id="renew-a",
+        lease_seconds=60,
+    )
+    clock.advance(11)
+
+    recovered = store.recover_stalled_tasks()
+    assert recovered == {"rerouted": 0, "blocked": 1, "failed": 0}
+    observed = store.get_task(task["task_id"])
+    assert observed["state"] == "blocked"
+    assert observed["leased_by"] is None
+    assert observed["blocked_reason"] == "material_progress_timeout_no_alternative"
 
 
 def test_permanent_failure_goes_to_quarantine(store: WorkerPoolStore) -> None:

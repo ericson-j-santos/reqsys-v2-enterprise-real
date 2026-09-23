@@ -20,6 +20,7 @@ TOKEN_FILE = os.getenv("CODEX_WORKER_POOL_API_TOKEN_FILE", "").strip()
 HEARTBEAT_TTL_SECONDS = int(os.getenv("CODEX_WORKER_POOL_HEARTBEAT_TTL_SECONDS", "90"))
 LEASE_SECONDS = int(os.getenv("CODEX_WORKER_POOL_LEASE_SECONDS", "120"))
 MAX_ATTEMPTS = int(os.getenv("CODEX_WORKER_POOL_MAX_ATTEMPTS", "3"))
+PROGRESS_STALL_SECONDS = int(os.getenv("CODEX_WORKER_POOL_PROGRESS_STALL_SECONDS", "900"))
 EXPECTED_RULES_SHA = os.getenv("CODEX_WORKER_POOL_EXPECTED_RULES_SHA", "").strip().lower() or None
 
 store = WorkerPoolStore(
@@ -27,6 +28,7 @@ store = WorkerPoolStore(
     heartbeat_ttl_seconds=HEARTBEAT_TTL_SECONDS,
     default_lease_seconds=LEASE_SECONDS,
     default_max_attempts=MAX_ATTEMPTS,
+    progress_stall_seconds=PROGRESS_STALL_SECONDS,
     expected_rules_sha=EXPECTED_RULES_SHA,
 )
 
@@ -35,7 +37,7 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(mess
 
 app = FastAPI(
     title="ReqSys Codex Worker Pool",
-    version="1.1.0",
+    version="1.2.0",
     description="Fila governada para workers Codex distribuídos com lease, idempotência e validação independente.",
 )
 
@@ -191,6 +193,7 @@ def health(response: Response) -> dict[str, Any]:
         "auth_configured": auth_configured,
         "expected_rules_sha_configured": rules_sha_configured,
         "db_path_configured": bool(str(DB_PATH)),
+        "progress_stall_seconds": PROGRESS_STALL_SECONDS,
     }
 
 
@@ -373,6 +376,14 @@ def recover_leases(x_correlation_id: str | None = Header(default=None)) -> dict[
     recovered = store.recover_expired_leases()
     _audit("lease.recovery_cycle", correlation_id, recovered=recovered)
     return {"recovered": recovered, "correlation_id": correlation_id}
+
+
+@app.post("/v1/watchdog/recover", dependencies=[Depends(require_auth)])
+def recover_stalled(x_correlation_id: str | None = Header(default=None)) -> dict[str, Any]:
+    correlation_id = correlation(x_correlation_id)
+    result = store.recover_stalled_tasks()
+    _audit("progress_watchdog.recovery_cycle", correlation_id, **result)
+    return {**result, "correlation_id": correlation_id}
 
 
 @app.get("/v1/snapshot", dependencies=[Depends(require_auth)])
