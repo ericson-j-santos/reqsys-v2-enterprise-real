@@ -151,6 +151,32 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     componentes específicos do Modo Estudo, garantindo nova evidência física
     quando o contrato público ou a porta 8083 puderem mudar.
 
+
+17. Antes de iniciar o E2E de perfil, o workflow DEV deve validar o Engineering
+    Orchestrator em `127.0.0.1:8787`. Se readiness estiver indisponível, deve
+    primeiro solicitar a execução da tarefa agendada existente e fixa
+    `\\Automation\\ReqSysOrchestrator24x7`, sem criar/alterar tarefa, sem shell
+    arbitrário e sem ler segredos. Se a tarefa retornar sucesso de acionamento
+    mas `/readyz` continuar indisponível, o recovery pode iniciar diretamente
+    somente o supervisor versionado da instalação canônica fixa
+    `C:\\dev\\chatgpt-workers\\reqsys-orchestrator-24x7-runtime`, após validar
+    `service-config.json`, `worker-config.json`, porta 8787, endpoint loopback,
+    worker desktop-pdqk954 e arquivos esperados. O processo deve ser destacado
+    do lifecycle do runner removendo apenas `RUNNER_TRACKING_ID`. A execução
+    prossegue somente após `/readyz` saudável e exatamente um worker Noteri
+    `fresh`, `controller_online` e `auth_valid`; caso contrário falha fechado
+    antes da mudança de perfil. Se a instalação canônica existir mas seus
+    arquivos `service-config.json` ou `worker-config.json` divergirem do
+    contrato, o recovery pode normalizar exclusivamente esses dois arquivos
+    para o contrato canônico (modo `control-plane-worker`, porta 8787,
+    endpoint loopback, worker `desktop-pdqk954` e parâmetros operacionais
+    versionados), preservando a primeira versão local em backup idempotente
+    antes da escrita e revalidando o contrato após a alteração. O código do
+    runtime, banco e demais arquivos não podem ser substituídos por essa rota.
+    A evidência deve indicar o método de recovery e se houve normalização, sem
+    persistir caminhos arbitrários, mantendo `production_touched=false`,
+    `secrets_read=false` e `task_created_or_modified=false`.
+
 ## Topologia
 
 ```text
