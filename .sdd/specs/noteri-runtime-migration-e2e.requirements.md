@@ -33,6 +33,8 @@ o runtime canônico do ReqSys e não deve ser integrado à `main`.
     executar no branch operacional fixo.
 12. Este harness NÃO DEVE ser mergeado na `main`; a evidência produzida deve ser
     vinculada à issue de migração e ao PR do novo repositório.
+13. O cutover persistente DEVE executar somente após o E2E físico verde, atualizar a tarefa S4U existente para o release do SHA alvo e confirmar por leitura independente do XML da tarefa que a ação referencia o mesmo SHA.
+14. O cutover DEVE falhar fechado se exigir nova ativação/UAC, se a persistência headless regredir ou se o SHA observado divergir.
 
 ## Critérios de aceite
 
