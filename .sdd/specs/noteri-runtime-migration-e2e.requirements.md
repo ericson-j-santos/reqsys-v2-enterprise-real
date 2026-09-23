@@ -15,7 +15,7 @@ o runtime canônico do ReqSys e não deve ser integrado à `main`.
 1. A execução física DEVE ocorrer somente em runner com labels
    `[self-hosted, Windows, X64, noteri, reqsys-dev]`.
 2. O alvo DEVE permanecer fixo em
-   `ericson-j-santos/noteri-runtime@07e6108974e87c0f5f71587e4ad4ab0cdf05188c`.
+   `ericson-j-santos/noteri-runtime@cc06e6530ca57058db22651ac75d623f6ec921c1`.
 3. O checkout DEVE comprovar o SHA observado antes do teste.
 4. O E2E DEVE usar agente isolado, loopback-only e estado temporário, sem reutilizar
    o agente operacional previamente instalado.
