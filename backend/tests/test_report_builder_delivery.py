@@ -5,10 +5,13 @@ from email.message import EmailMessage
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api import report_builder_delivery as api_module
 from app.api.report_builder_delivery import require_report_builder_send_auth
 from app.main import app
 from app.schemas.report_builder_delivery import ReportBuilderEmailRequest
 from app.services import report_builder_delivery as service
+from app.services.movimento_email.sender_factory import ConfiguracaoEnvioError
+from app.services.movimento_email.smtp_sender import EnvioEmailError
 
 
 def _payload(*, dry_run: bool = True, recipients: list[str] | None = None) -> ReportBuilderEmailRequest:
@@ -135,3 +138,35 @@ def test_endpoint_rejeita_sql_destrutivo(auth_override):
     response = client.post('/v1/report-builder/reports/generate-and-email', json=payload)
 
     assert response.status_code == 422
+
+
+def test_endpoint_mascara_detalhe_de_configuracao(monkeypatch, auth_override):
+    def _falhar(_payload):
+        raise ConfiguracaoEnvioError('AZURE_CLIENT_SECRET=nao-expor')
+
+    monkeypatch.setattr(api_module, 'gerar_e_enviar_relatorio', _falhar)
+    client = TestClient(app)
+    response = client.post(
+        '/v1/report-builder/reports/generate-and-email',
+        json=_payload(dry_run=False).model_dump(mode='json'),
+    )
+
+    assert response.status_code == 409
+    assert response.json()['detail'] == 'Configuração de envio de e-mail indisponível.'
+    assert 'nao-expor' not in response.text
+
+
+def test_endpoint_mascara_detalhe_de_falha_do_provedor(monkeypatch, auth_override):
+    def _falhar(_payload):
+        raise EnvioEmailError('password=nao-expor')
+
+    monkeypatch.setattr(api_module, 'gerar_e_enviar_relatorio', _falhar)
+    client = TestClient(app)
+    response = client.post(
+        '/v1/report-builder/reports/generate-and-email',
+        json=_payload(dry_run=False).model_dump(mode='json'),
+    )
+
+    assert response.status_code == 502
+    assert response.json()['detail'] == 'Falha ao enviar relatório por e-mail.'
+    assert 'nao-expor' not in response.text
