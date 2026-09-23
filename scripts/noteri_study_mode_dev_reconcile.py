@@ -581,24 +581,57 @@ def restart_container(
     )
 
 
-def reload_nginx(
+def active_nginx_contract(
+    container: str,
+    repo_root: Path,
+) -> dict[str, bool]:
+    completed = run(
+        ["docker", "exec", container, "nginx", "-T"],
+        cwd=repo_root,
+        timeout=60,
+        stage="nginx_active_contract",
+    )
+    rendered = completed.stdout + "\n" + completed.stderr
+    contract = {
+        "runtime_route": "location ~ ^/api/(runtime|" in rendered,
+        "api_prefix_route": "location /api/" in rendered,
+    }
+    if not all(contract.values()):
+        markers = tuple(
+            f"{name}_missing"
+            for name, present in contract.items()
+            if not present
+        )
+        raise ReconcileError(
+            "nginx_active_contract_missing",
+            stage="nginx_active_contract",
+            diagnostic_markers=markers,
+        )
+    return contract
+
+
+def refresh_nginx(
     container: str,
     repo_root: Path,
     *,
-    stage_prefix: str = "nginx_reload",
-) -> None:
+    stage_prefix: str = "nginx_restart",
+    verify_contract: bool = True,
+) -> dict[str, bool]:
     run(
         ["docker", "exec", container, "nginx", "-t"],
         cwd=repo_root,
         timeout=60,
         stage=f"{stage_prefix}_config_test",
     )
-    run(
-        ["docker", "exec", container, "nginx", "-s", "reload"],
-        cwd=repo_root,
-        timeout=60,
+    restart_container(
+        container,
+        repo_root,
         stage=stage_prefix,
     )
+    wait_container_healthy(container, repo_root, 120)
+    if verify_contract:
+        return active_nginx_contract(container, repo_root)
+    return {}
 
 
 def wait_gateway_status(
@@ -624,9 +657,15 @@ def wait_gateway_status(
         if last_status in expected:
             return
         time.sleep(2)
+    marker = {
+        "/api/health": "api_health_not_observed",
+        "/api/runtime/health": "runtime_health_not_observed",
+        "/api/v1/noteri/profile": "noteri_profile_not_observed",
+    }.get(path, "gateway_status_not_observed")
     raise ReconcileError(
-        f"gateway_status_timeout:{path}:{last_status}",
+        "gateway_status_timeout",
         stage="live_bind_refresh",
+        diagnostic_markers=(marker,),
     )
 
 
@@ -947,7 +986,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         restart_container(api_container, repo_root, stage="api_restart")
         wait_container_healthy(api_container, repo_root, args.health_timeout)
         direct_api_contract = wait_direct_api_contract()
-        reload_nginx(nginx_container, repo_root)
+        nginx_active_contract = refresh_nginx(nginx_container, repo_root)
 
         wait_gateway_status("/api/health", {200})
         wait_gateway_status("/api/runtime/health", {200})
@@ -981,10 +1020,11 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                 stage="rollback_api_restart",
             )
             wait_container_healthy(api_container, repo_root, args.health_timeout)
-            reload_nginx(
+            refresh_nginx(
                 nginx_container,
                 repo_root,
-                stage_prefix="rollback_nginx_reload",
+                stage_prefix="rollback_nginx_restart",
+                verify_contract=False,
             )
         except Exception:
             pass
@@ -1001,7 +1041,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "gateway_container": nginx_container,
         "runtime_discovery": "api_port_8210_compose_labels",
         "compose_invoked": False,
-        "runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_reload",
+        "runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_restart",
         "api_container_restarted": True,
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": True,
@@ -1014,6 +1054,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "browser_loopback_dependency_removed": True,
         "backup_created": backup_root.is_dir(),
         "nginx_runtime_contract_refreshed": True,
+        "nginx_active_contract": nginx_active_contract,
         "direct_api_contract": direct_api_contract,
         "gateway_contract": gateway_contract,
         "api_e2e": api_result,
