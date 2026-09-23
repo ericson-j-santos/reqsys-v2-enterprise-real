@@ -36,3 +36,8 @@
 - [x] Reexecutar E2E após a PR #1996: run `35866066425` na main, com OIDC/workspace aprovados e criação ainda bloqueada por `fabric_http_400:InvalidDefinitionFormat`, sem código aninhado adicional.
 - [x] Implementar diagnóstico fail-closed que preserva somente nomes de elementos RDL allowlisted e coordenadas de esquema, descartando mensagens/URLs/IDs/tokens/valores arbitrários.
 - [ ] Validar o diagnóstico no CI/Pre-PR do HEAD exato e reexecutar o E2E Fabric DEV após merge governado.
+- [x] Reexecutar E2E pós-PR #2002 no run `35877440535`, `main@a81e7d81f91f98328d2a3e844b8a9c21856833ac`: preflight/OIDC/workspace aprovados, criação ainda bloqueada por `fabric_http_400:InvalidDefinitionFormat`, sem detalhe adicional retornado pelo Fabric.
+- [x] Comparar a definição gerada com RDLs 2016 produzidos pelo Report Builder e identificar a ausência de `rd:SecurityType` e `rd:DataSourceID` no datasource SQL integrado.
+- [x] Emitir e validar metadata determinística do datasource sem segredo estático.
+- [ ] Reexecutar Pre-PR no HEAD exato, integrar por merge governado e repetir o E2E Fabric DEV.
+

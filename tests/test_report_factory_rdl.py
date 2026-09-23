@@ -123,6 +123,63 @@ def test_fabric_rdl_2016_header_is_emitted_and_deterministic() -> None:
     assert layout_index > section_index
 
 
+def test_fabric_datasource_metadata_is_emitted_and_deterministic() -> None:
+    source = load_example()
+    first = ET.fromstring(report_factory.generate_rdl(source))
+    second = ET.fromstring(report_factory.generate_rdl(copy.deepcopy(source)))
+
+    def datasource_metadata(root: ET.Element) -> tuple[str, str]:
+        data_sources = root.find(report_factory._q("DataSources"))
+        assert data_sources is not None
+        matches = [
+            node
+            for node in data_sources.findall(report_factory._q("DataSource"))
+            if node.attrib.get("Name") == source["datasource"]["name"]
+        ]
+        assert len(matches) == 1
+        datasource = matches[0]
+        return (
+            datasource.findtext(report_factory._rd("SecurityType"), default=""),
+            datasource.findtext(report_factory._rd("DataSourceID"), default=""),
+        )
+
+    first_security, first_id = datasource_metadata(first)
+    second_security, second_id = datasource_metadata(second)
+
+    assert first_security == "Integrated"
+    assert second_security == "Integrated"
+    assert str(uuid.UUID(first_id)) == first_id
+    assert first_id == second_id
+
+
+def test_validate_rdl_rejects_missing_fabric_datasource_metadata() -> None:
+    source = load_example()
+    root = ET.fromstring(report_factory.generate_rdl(source))
+    data_sources = root.find(report_factory._q("DataSources"))
+    assert data_sources is not None
+    datasource = data_sources.find(report_factory._q("DataSource"))
+    assert datasource is not None
+
+    security = datasource.find(report_factory._rd("SecurityType"))
+    assert security is not None
+    datasource.remove(security)
+    invalid_security = ET.tostring(root, encoding="unicode")
+    with pytest.raises(report_factory.ReportSpecError, match="SecurityType"):
+        report_factory.validate_rdl(invalid_security, source)
+
+    root = ET.fromstring(report_factory.generate_rdl(source))
+    data_sources = root.find(report_factory._q("DataSources"))
+    assert data_sources is not None
+    datasource = data_sources.find(report_factory._q("DataSource"))
+    assert datasource is not None
+    datasource_id = datasource.find(report_factory._rd("DataSourceID"))
+    assert datasource_id is not None
+    datasource.remove(datasource_id)
+    invalid_id = ET.tostring(root, encoding="unicode")
+    with pytest.raises(report_factory.ReportSpecError, match="DataSourceID"):
+        report_factory.validate_rdl(invalid_id, source)
+
+
 def test_validate_rdl_rejects_missing_fabric_header() -> None:
     source = load_example()
     root = ET.fromstring(report_factory.generate_rdl(source))

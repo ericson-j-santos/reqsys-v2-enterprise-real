@@ -285,10 +285,18 @@ def generate_rdl(spec: dict[str, Any]) -> str:
 
     data_sources = _add(root, "DataSources")
     source = _add(data_sources, "DataSource", Name=datasource["name"])
+    security_type = ET.SubElement(source, _rd("SecurityType"))
+    security_type.text = "Integrated"
     connection = _add(source, "ConnectionProperties")
     _add(connection, "DataProvider", datasource["provider"])
     _add(connection, "ConnectString", datasource["connect_string"])
     _add(connection, "IntegratedSecurity", "true")
+    datasource_id = uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"reqsys:report-factory:{report_cfg['name']}:datasource:{datasource['name']}",
+    )
+    datasource_id_node = ET.SubElement(source, _rd("DataSourceID"))
+    datasource_id_node.text = str(datasource_id)
 
     data_sets = _add(root, "DataSets")
     for dataset in spec["datasets"]:
@@ -392,6 +400,27 @@ def validate_rdl(rdl: str, spec: dict[str, Any]) -> None:
         raise ReportSpecError("RDL Fabric exige df:DefaultFontFamily=Segoe UI")
     if root.findtext(_q("AutoRefresh"), default="") != "0":
         raise ReportSpecError("RDL Fabric exige AutoRefresh=0")
+
+    datasource = spec["datasource"]
+    data_sources = root.find(_q("DataSources"))
+    if data_sources is None:
+        raise ReportSpecError("RDL Fabric exige DataSources")
+    source_matches = [
+        node
+        for node in data_sources.findall(_q("DataSource"))
+        if node.attrib.get("Name") == datasource["name"]
+    ]
+    if len(source_matches) != 1:
+        raise ReportSpecError("RDL Fabric exige datasource exato da especificação")
+    source = source_matches[0]
+    if source.findtext(_rd("SecurityType"), default="") != "Integrated":
+        raise ReportSpecError("RDL Fabric exige rd:SecurityType=Integrated")
+    datasource_id = source.findtext(_rd("DataSourceID"), default="")
+    try:
+        uuid.UUID(datasource_id)
+    except (ValueError, AttributeError) as exc:
+        raise ReportSpecError("RDL Fabric exige rd:DataSourceID UUID válido") from exc
+
     lower = rdl.lower()
     for pattern in SECRET_PATTERNS:
         if pattern.search(lower):
