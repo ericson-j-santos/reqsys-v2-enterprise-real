@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Codex Worker Pool DEV token restore",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "scope": "dev-only-pc24x7",
+  "authorization": {
+    "source": "explicit_owner_authorization_in_current_chat",
+    "environment": "dev",
+    "mutation": "worker_pool_local_auth_file",
+    "rotation_policy": "only_when_missing_or_empty"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_codex_worker_pool_token_restore_dev.py",
+      "tests/test_codex_worker_pool_smoke_dev.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Restore must be exact-command-bound, session-bootstrapped and Owner Risk3-gated; existing valid auth is reused, rotation occurs only when the bound local file is missing/empty, no secret value appears in logs/artifacts, authenticated readback must succeed, then the ordinary smoke must pass on the same current main SHA."
+  },
+  "traceability": {
+    "issue": 1965,
+    "requirements": ".sdd/specs/codex-worker-pool-token-restore-dev.requirements.md",
+    "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
+    "restore_script": "scripts/restore_codex_worker_pool_token_dev.py",
+    "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "runner_policy": ".github/self-hosted-runner-policy.json"
+  }
+}
