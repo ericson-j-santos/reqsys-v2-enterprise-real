@@ -22,9 +22,19 @@ FABRIC_BASE_URL = _core.FABRIC_BASE_URL
 ReportSpecError = _core.ReportSpecError
 FabricApiError = _core.FabricApiError
 
-_q = _core._q
-_rd = _core._rd
-_df = _core._df
+def q(tag: str) -> str:
+    """Qualifica uma tag no namespace RDL 2016 para consumidores ReqSys."""
+    return f"{{{RDL_NS}}}{tag}"
+
+
+def rd(tag: str) -> str:
+    """Qualifica uma tag no namespace Report Designer."""
+    return f"{{{RD_NS}}}{tag}"
+
+
+def df(tag: str) -> str:
+    """Qualifica uma tag no namespace DefaultFontFamily."""
+    return f"{{{DF_NS}}}{tag}"
 
 load_spec = _core.load_spec
 validate_spec = _core.validate_spec
