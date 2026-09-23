@@ -1155,6 +1155,10 @@ def wait_gateway_status(
         "gateway_status_timeout",
         stage="live_bind_refresh",
         diagnostic_markers=(marker,),
+        diagnostics={
+            "gateway_path": path,
+            "gateway_last_http_status": last_status,
+        },
     )
 
 
@@ -1561,10 +1565,13 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         browser_result = browser_e2e()
     except Exception as exc:
         if isinstance(exc, ReconcileError) and exc.stage == "live_bind_refresh":
-            exc.diagnostics = capture_gateway_diagnostics(
-                nginx_container,
-                repo_root,
-            )
+            exc.diagnostics = {
+                **dict(exc.diagnostics),
+                **capture_gateway_diagnostics(
+                    nginx_container,
+                    repo_root,
+                ),
+            }
         rollback_files(changes)
         try:
             restart_container(
