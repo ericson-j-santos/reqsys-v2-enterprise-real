@@ -14,11 +14,12 @@
   },
   "sdd_gate": {
     "tests": [
+      "tests/test_configure_worker_pool_auth_restore_risk3.py",
       "tests/test_codex_worker_pool_token_restore_dev.py",
       "tests/test_codex_worker_pool_smoke_dev.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Restore must be exact-command-bound, session-bootstrapped and Owner Risk3-gated; existing valid auth is reused, rotation occurs only when the bound local file is missing/empty, no secret value appears in logs/artifacts, authenticated readback must succeed, then the ordinary smoke must pass on the same current main SHA."
+    "evidence_contract": "Restore must be exact-command-bound, session-bootstrapped and executed through an exact temporary Owner Risk3 action that expires quickly and is removed after the attempt; the expired global DEV mode must not be required. Existing valid auth is reused, rotation occurs only when the bound local file is missing/empty, no secret value appears in logs/artifacts, authenticated readback must succeed, then the ordinary smoke must pass on the same current main SHA."
   },
   "traceability": {
     "issue": 1965,
@@ -26,6 +27,8 @@
     "workflow": ".github/workflows/codex-worker-pool-smoke-dev.yml",
     "restore_script": "scripts/restore_codex_worker_pool_token_dev.py",
     "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "runner_policy": ".github/self-hosted-runner-policy.json"
+    "runner_policy": ".github/self-hosted-runner-policy.json",
+    "risk3_authorizer": "scripts/configure_worker_pool_auth_restore_risk3.py",
+    "risk3_entrypoint": "scripts/run_worker_pool_auth_restore_dev.py"
   }
 }
