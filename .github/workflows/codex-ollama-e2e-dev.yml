@@ -2,6 +2,15 @@ name: Codex Ollama E2E DEV
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo DEV governado"
+        required: true
+        default: "codex-e2e"
+        type: choice
+        options:
+          - codex-e2e
+          - mcp-ingress
 
 permissions:
   contents: read
@@ -13,6 +22,7 @@ concurrency:
 jobs:
   e2e:
     name: ReqSys → Ollama Gateway → cloud/fallback on PC24x7 DEV
+    if: inputs.mode == 'codex-e2e'
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 25
     env:
@@ -73,4 +83,61 @@ jobs:
           "- Fallback: gemma4:26b-q8-code" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Deploy executado: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  mcp-ingress:
+    name: GitHub Copilot → Ollama MCP HTTPS ingress on PC24x7 DEV
+    if: inputs.mode == 'mcp-ingress'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      EVIDENCE_FILE: artifacts/github-copilot-ollama-mcp-ingress/evidence.json
+      CORRELATION_ID: ollama-mcp-ingress-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify exact DEV host
+        shell: powershell
+        run: |
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
+            throw "UNEXPECTED_HOST"
+          }
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Reconcile stable HTTPS MCP route
+        shell: powershell
+        run: >
+          python scripts/pc24x7_ollama_mcp_funnel.py
+          --apply
+          --source-sha "${{ github.sha }}"
+          --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Upload sanitized MCP ingress evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: github-copilot-ollama-mcp-ingress-${{ github.run_id }}
+          path: artifacts/github-copilot-ollama-mcp-ingress/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: MCP ingress summary
+        if: always()
+        shell: powershell
+        run: |
+          "## GitHub Copilot Ollama MCP Ingress DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Rota: HTTPS /mcp -> 127.0.0.1:8010" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Ollama :11434 público: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Gateway :8008 público: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
