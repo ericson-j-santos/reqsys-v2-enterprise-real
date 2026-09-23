@@ -4,6 +4,7 @@ import base64
 import copy
 import importlib.util
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -65,3 +66,36 @@ def test_rejects_unsupported_component_fail_closed() -> None:
     source["components"][0]["type"] = "chart"
     with pytest.raises(report_factory.ReportSpecError, match="apenas component.type=table"):
         report_factory.validate_spec(source)
+
+def test_parameterized_rdl_emits_required_rdl_2016_layout() -> None:
+    source = load_example()
+    rdl = report_factory.generate_rdl(source)
+    root = ET.fromstring(rdl)
+
+    layout = root.find(report_factory._q("ReportParametersLayout"))
+    assert layout is not None
+    grid = layout.find(report_factory._q("GridLayoutDefinition"))
+    assert grid is not None
+    assert grid.findtext(report_factory._q("NumberOfColumns")) == "1"
+    assert grid.findtext(report_factory._q("NumberOfRows")) == str(len(source["parameters"]))
+
+    cells = grid.find(report_factory._q("CellDefinitions"))
+    assert cells is not None
+    mapped = [
+        cell.findtext(report_factory._q("ParameterName"))
+        for cell in cells.findall(report_factory._q("CellDefinition"))
+    ]
+    assert mapped == [parameter["name"] for parameter in source["parameters"]]
+
+
+def test_validate_rdl_rejects_parameter_layout_missing() -> None:
+    source = load_example()
+    root = ET.fromstring(report_factory.generate_rdl(source))
+    layout = root.find(report_factory._q("ReportParametersLayout"))
+    assert layout is not None
+    root.remove(layout)
+    invalid_rdl = ET.tostring(root, encoding="unicode")
+
+    with pytest.raises(report_factory.ReportSpecError, match="ReportParametersLayout"):
+        report_factory.validate_rdl(invalid_rdl, source)
+

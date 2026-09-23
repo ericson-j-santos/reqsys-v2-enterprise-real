@@ -293,9 +293,10 @@ def generate_rdl(spec: dict[str, Any]) -> str:
             type_node = ET.SubElement(fnode, _rd("TypeName"))
             type_node.text = field.get("type", "System.String")
 
-    if spec.get("parameters"):
+    parameters = spec.get("parameters") or []
+    if parameters:
         report_parameters = _add(root, "ReportParameters")
-        for parameter in spec["parameters"]:
+        for parameter in parameters:
             node = _add(report_parameters, "ReportParameter", Name=parameter["name"])
             _add(node, "DataType", parameter.get("data_type", "String"))
             _add(node, "Prompt", parameter.get("prompt", parameter["name"]))
@@ -303,6 +304,17 @@ def generate_rdl(spec: dict[str, Any]) -> str:
                 default = _add(node, "DefaultValue")
                 values = _add(default, "Values")
                 _add(values, "Value", str(parameter["default"]))
+
+        parameter_layout = _add(root, "ReportParametersLayout")
+        grid = _add(parameter_layout, "GridLayoutDefinition")
+        _add(grid, "NumberOfColumns", "1")
+        _add(grid, "NumberOfRows", str(len(parameters)))
+        cells = _add(grid, "CellDefinitions")
+        for row_index, parameter in enumerate(parameters):
+            cell = _add(cells, "CellDefinition")
+            _add(cell, "ColumnIndex", "0")
+            _add(cell, "RowIndex", str(row_index))
+            _add(cell, "ParameterName", parameter["name"])
 
     sections = _add(root, "ReportSections")
     section = _add(sections, "ReportSection")
@@ -363,6 +375,66 @@ def validate_rdl(rdl: str, spec: dict[str, Any]) -> None:
     expected_tables = {item["name"] for item in spec["components"]}
     if tables != expected_tables:
         raise ReportSpecError("componentes gerados divergem da especificação")
+
+    expected_parameters = [item["name"] for item in spec.get("parameters", [])]
+    report_parameters = root.find(_q("ReportParameters"))
+    parameter_layout = root.find(_q("ReportParametersLayout"))
+
+    if expected_parameters:
+        if report_parameters is None:
+            raise ReportSpecError("RDL parametrizado exige ReportParameters")
+        if parameter_layout is None:
+            raise ReportSpecError("RDL 2016 parametrizado exige ReportParametersLayout")
+
+        generated_parameters = [
+            str(node.attrib.get("Name") or "")
+            for node in report_parameters.findall(_q("ReportParameter"))
+        ]
+        if generated_parameters != expected_parameters:
+            raise ReportSpecError("ReportParameters divergem da especificação")
+
+        grid = parameter_layout.find(_q("GridLayoutDefinition"))
+        if grid is None:
+            raise ReportSpecError("ReportParametersLayout exige GridLayoutDefinition")
+
+        try:
+            column_count = int(grid.findtext(_q("NumberOfColumns"), default="0"))
+            row_count = int(grid.findtext(_q("NumberOfRows"), default="0"))
+        except ValueError as exc:
+            raise ReportSpecError("grid de parâmetros possui dimensão inválida") from exc
+        if column_count < 1 or row_count < 1:
+            raise ReportSpecError("grid de parâmetros deve possuir dimensões positivas")
+
+        cell_definitions = grid.find(_q("CellDefinitions"))
+        if cell_definitions is None:
+            raise ReportSpecError("grid de parâmetros exige CellDefinitions")
+        cells = cell_definitions.findall(_q("CellDefinition"))
+        if len(cells) != len(expected_parameters):
+            raise ReportSpecError("CellDefinitions deve mapear todos os parâmetros")
+
+        coordinates: set[tuple[int, int]] = set()
+        mapped_parameters: list[str] = []
+        for cell in cells:
+            try:
+                column_index = int(cell.findtext(_q("ColumnIndex"), default="-1"))
+                row_index = int(cell.findtext(_q("RowIndex"), default="-1"))
+            except ValueError as exc:
+                raise ReportSpecError("CellDefinition possui índice inválido") from exc
+            parameter_name = cell.findtext(_q("ParameterName"), default="")
+            coordinate = (column_index, row_index)
+            if not (0 <= column_index < column_count and 0 <= row_index < row_count):
+                raise ReportSpecError("CellDefinition fora dos limites do grid")
+            if coordinate in coordinates:
+                raise ReportSpecError("CellDefinition possui coordenada duplicada")
+            coordinates.add(coordinate)
+            mapped_parameters.append(parameter_name)
+
+        if len(set(mapped_parameters)) != len(mapped_parameters):
+            raise ReportSpecError("CellDefinition referencia parâmetro duplicado")
+        if set(mapped_parameters) != set(expected_parameters):
+            raise ReportSpecError("CellDefinitions divergem dos parâmetros da especificação")
+    elif report_parameters is not None or parameter_layout is not None:
+        raise ReportSpecError("RDL sem parâmetros não deve declarar layout de parâmetros")
 
 
 def build_fabric_definition(display_name: str, rdl: str) -> dict[str, Any]:

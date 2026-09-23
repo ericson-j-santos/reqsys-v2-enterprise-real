@@ -21,7 +21,9 @@
 - [ ] Concluir a FIC de `ReqSys ALM Pipeline` como migração/hardening separado; não bloquear o E2E atual já autenticado pela identidade OIDC governada.
 - [x] Implementar modo governado `publish-e2e` no workflow existente, sem aumentar a superfície de workflows.
 - [x] Adicionar comando exato do Authorized Actions Gateway e testes contratuais.
-- [ ] Executar E2E real de publicação e `getDefinition` no Fabric DEV após merge do incremento.
+- [x] Executar E2E real no run `35845191652`: preflight aprovado, publicação bloqueada por `fabric_http_400`; causa raiz identificada como RDL 2016 parametrizado sem `ReportParametersLayout` obrigatório.
+- [ ] Corrigir o gerador/validador RDL para materializar e exigir o layout de parâmetros antes de nova publicação.
+- [ ] Reexecutar E2E real de publicação e `getDefinition` no Fabric DEV após merge da correção.
 - [ ] Repetir a mesma definição e comprovar idempotência/ausência de duplicidade na evidência do mesmo run.
 - [ ] Adicionar exportação PDF/XLSX em incremento posterior.
 - [ ] Adicionar chart/matrix em incremento posterior.
