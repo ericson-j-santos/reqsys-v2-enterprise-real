@@ -110,7 +110,7 @@ jobs:
       - name: Exportar runtime PC24x7 DEV
         shell: bash
         env:
-          RESOLVED_API_BASE: ${{ steps.locator.outputs.base_url }}
+          RESOLVED_API_BASE: ${{ steps.locator.outputs.api_base_url }}
         run: |
           set -euo pipefail
           test -n "$RESOLVED_API_BASE"
