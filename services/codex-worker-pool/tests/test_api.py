@@ -18,6 +18,7 @@ def load_app(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CODEX_WORKER_POOL_HEARTBEAT_TTL_SECONDS", "60")
     monkeypatch.setenv("CODEX_WORKER_POOL_LEASE_SECONDS", "30")
     monkeypatch.setenv("CODEX_WORKER_POOL_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("CODEX_WORKER_POOL_PROGRESS_STALL_SECONDS", "30")
     monkeypatch.setenv("CODEX_WORKER_POOL_EXPECTED_RULES_SHA", "a" * 40)
     sys.modules.pop("app.main", None)
     module = importlib.import_module("app.main")
@@ -31,12 +32,26 @@ def test_health_and_auth_fail_closed(tmp_path: Path, monkeypatch) -> None:
     assert health.status_code == 200
     assert health.json()["auth_configured"] is True
     assert health.json()["expected_rules_sha_configured"] is True
+    assert health.json()["progress_stall_seconds"] == 30
 
     denied = client.get("/v1/snapshot")
     assert denied.status_code == 401
 
     allowed = client.get("/v1/snapshot", headers=headers)
     assert allowed.status_code == 200
+    assert allowed.json()["progress_stall_seconds"] == 30
+
+    watchdog = client.post(
+        "/v1/watchdog/recover",
+        headers={**headers, "X-Correlation-Id": "watchdog-empty"},
+    )
+    assert watchdog.status_code == 200
+    assert watchdog.json() == {
+        "rerouted": 0,
+        "blocked": 0,
+        "failed": 0,
+        "correlation_id": "watchdog-empty",
+    }
 
 
 def test_api_e2e_builder_validator_replay(tmp_path: Path, monkeypatch) -> None:
