@@ -61,6 +61,12 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     somente em container de desenvolvimento e somente quando o modo legado por
     arquivo não estiver configurado. HML/PROD e execução fora de container não
     recebem esse fallback.
+16. Quando a validação do gateway DEV não observar o status esperado, a
+    evidência de falha deve capturar, antes do rollback e sem texto bruto:
+    alcance TCP de `127.0.0.1:8083`, status HTTP de `/api/health`, status do
+    upstream `nginx -> api:8000/health` e presença das rotas críticas na
+    configuração ativa do Nginx. A falha original permanece canônica e o
+    diagnóstico adicional não pode mascará-la.
 
 ## Critérios de aceite
 
@@ -97,6 +103,12 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     `/api/runtime/health`, que a API
     carregou a rota same-origin e que o ciclo
     NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL terminou em NORMAL.
+15. Uma falha `gateway_status_timeout` deve publicar diagnóstico sanitizado
+    suficiente para distinguir porta 8083 indisponível, resposta HTTP não
+    esperada, falha do upstream Nginx→API e contrato Nginx ausente. Nenhuma
+    saída bruta de comando, corpo HTTP, caminho local, variável de ambiente ou
+    segredo pode entrar no artefato; checkpoints de estágio devem registrar
+    transições materiais sem reiniciar o relógio por mero polling.
 
 ## Topologia
 

@@ -50,6 +50,7 @@ class ReconcileError(RuntimeError):
         stage: str | None = None,
         diagnostic_code: str | None = None,
         diagnostic_markers: tuple[str, ...] | None = None,
+        diagnostics: dict[str, Any] | None = None,
     ) -> None:
         parts = code.split(":")
         self.code = (
@@ -60,6 +61,7 @@ class ReconcileError(RuntimeError):
         self.stage = stage
         self.diagnostic_code = diagnostic_code
         self.diagnostic_markers = diagnostic_markers or ()
+        self.diagnostics = diagnostics or {}
         super().__init__(code)
 
 
@@ -663,6 +665,199 @@ def reload_nginx(
     return contract
 
 
+def emit_checkpoint(name: str, expected_sha: str) -> None:
+    payload = {
+        "checkpoint": name,
+        "correlation_id": f"study-mode-reconcile-{expected_sha[:12]}",
+        "expected_sha": expected_sha,
+        "environment": "dev",
+        "host": EXPECTED_HOST,
+    }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True), flush=True)
+
+
+def _network_error_code(exc: BaseException) -> str:
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return "timeout"
+    if isinstance(exc, ConnectionRefusedError):
+        return "connection_refused"
+    if isinstance(exc, ConnectionResetError):
+        return "connection_reset"
+    if isinstance(exc, OSError):
+        return "os_error"
+    return "network_error"
+
+
+def probe_gateway_tcp() -> dict[str, Any]:
+    try:
+        with socket.create_connection(
+            ("127.0.0.1", int(DEV_GATEWAY_PORT)),
+            timeout=3,
+        ):
+            return {"reachable": True, "error": None}
+    except OSError as exc:
+        return {"reachable": False, "error": _network_error_code(exc)}
+
+
+def probe_gateway_http(path: str = "/api/health") -> dict[str, Any]:
+    request = urllib.request.Request(
+        GATEWAY + path,
+        headers={"Cache-Control": "no-store"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return {
+                "reachable": True,
+                "status": int(response.status),
+                "error": None,
+            }
+    except urllib.error.HTTPError as exc:
+        return {
+            "reachable": True,
+            "status": int(exc.code),
+            "error": None,
+        }
+    except urllib.error.URLError as exc:
+        reason = exc.reason
+        return {
+            "reachable": False,
+            "status": None,
+            "error": _network_error_code(
+                reason if isinstance(reason, BaseException) else exc
+            ),
+        }
+    except OSError as exc:
+        return {
+            "reachable": False,
+            "status": None,
+            "error": _network_error_code(exc),
+        }
+
+
+def _http_status_from_probe_output(rendered: str) -> int | None:
+    for line in rendered.splitlines():
+        parts = line.strip().split()
+        if (
+            len(parts) >= 2
+            and parts[0].startswith("HTTP/")
+            and len(parts[1]) == 3
+            and parts[1].isdigit()
+        ):
+            return int(parts[1])
+    return None
+
+
+def probe_nginx_upstream_api(
+    container: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container,
+                "wget",
+                "-S",
+                "-O",
+                "-",
+                "http://api:8000/health",
+            ],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "reachable": False,
+            "status": None,
+            "exit_code": None,
+            "error": "timeout",
+        }
+    except OSError:
+        return {
+            "reachable": False,
+            "status": None,
+            "exit_code": None,
+            "error": "probe_command_failed",
+        }
+
+    status = _http_status_from_probe_output(
+        (completed.stderr or "") + "\n" + (completed.stdout or "")
+    )
+    return {
+        "reachable": status is not None,
+        "status": status,
+        "exit_code": int(completed.returncode),
+        "error": (
+            None
+            if status is not None
+            else (
+                "probe_tool_unavailable"
+                if completed.returncode == 127
+                else "upstream_probe_failed"
+            )
+        ),
+    }
+
+
+def probe_active_nginx_contract(
+    container: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            ["docker", "exec", container, "nginx", "-T"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "config_dump_ok": False,
+            "runtime_route": False,
+            "api_prefix_route": False,
+            "error": "timeout",
+        }
+    except OSError:
+        return {
+            "config_dump_ok": False,
+            "runtime_route": False,
+            "api_prefix_route": False,
+            "error": "probe_command_failed",
+        }
+
+    rendered = (completed.stdout or "") + "\n" + (completed.stderr or "")
+    return {
+        "config_dump_ok": completed.returncode == 0,
+        "runtime_route": "location ~ ^/api/(runtime|" in rendered,
+        "api_prefix_route": "location /api/" in rendered,
+        "error": None if completed.returncode == 0 else "nginx_dump_failed",
+    }
+
+
+def capture_gateway_diagnostics(
+    container: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    return {
+        "gateway_tcp_8083": probe_gateway_tcp(),
+        "gateway_http_api_health": probe_gateway_http("/api/health"),
+        "nginx_to_api_health": probe_nginx_upstream_api(container, repo_root),
+        "nginx_active_contract": probe_active_nginx_contract(container, repo_root),
+    }
+
+
 def wait_gateway_status(
     path: str,
     expected: set[int],
@@ -1022,15 +1217,20 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         restart_container(api_container, repo_root, stage="api_restart")
         wait_container_healthy(api_container, repo_root, args.health_timeout)
         direct_api_contract = wait_direct_api_contract()
+        emit_checkpoint("direct_api_contract_ready", args.expected_sha)
         nginx_rendered_contract = reload_nginx(
             nginx_container,
             nginx_bind,
             repo_root,
         )
+        emit_checkpoint("nginx_contract_ready", args.expected_sha)
 
         wait_gateway_status("/api/health", {200})
+        emit_checkpoint("gateway_api_health_ready", args.expected_sha)
         wait_gateway_status("/api/runtime/health", {200})
+        emit_checkpoint("gateway_runtime_health_ready", args.expected_sha)
         wait_gateway_status("/api/v1/noteri/profile", {401})
+        emit_checkpoint("gateway_noteri_profile_ready", args.expected_sha)
 
         _, public_health = http_json("GET", "/api/health")
         _, runtime_health = http_json("GET", "/api/runtime/health")
@@ -1051,7 +1251,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         wait_frontend_source()
         api_result = api_e2e()
         browser_result = browser_e2e()
-    except Exception:
+    except Exception as exc:
+        if isinstance(exc, ReconcileError) and exc.stage == "live_bind_refresh":
+            exc.diagnostics = capture_gateway_diagnostics(
+                nginx_container,
+                repo_root,
+            )
         rollback_files(changes)
         try:
             restart_container(
@@ -1150,6 +1355,9 @@ def main() -> int:
                 list(exc.diagnostic_markers)
                 if isinstance(exc, ReconcileError)
                 else []
+            ),
+            "gateway_diagnostics": (
+                exc.diagnostics if isinstance(exc, ReconcileError) else {}
             ),
             "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
             "expected_sha": args.expected_sha,
