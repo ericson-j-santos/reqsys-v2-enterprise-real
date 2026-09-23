@@ -7,9 +7,14 @@ on:
       - main
     paths:
       - '.github/workflows/noteri-study-mode-dev-reconcile.yml'
+      - 'backend/app/api/monitoramento_operacional.py'
+      - 'backend/app/api/noteri_host_profile.py'
+      - 'backend/app/main.py'
       - 'backend/app/services/noteri_host_profile.py'
       - 'backend/tests/test_noteri_host_profile_api.py'
+      - 'docker-compose.dev.yml'
       - 'docker-compose.noteri-study-mode.yml'
+      - 'infra/nginx/default.dev.conf'
       - 'frontend/src/services/hostProfileLocalAgent.js'
       - 'frontend/src/views/TaskConsoleView.vue'
       - 'scripts/noteri_study_mode_dev_reconcile.py'
