@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import hashlib
 import importlib.util
 import json
@@ -382,60 +383,148 @@ def _serialize_rdl_root(root: ET.Element) -> str:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8") + "\n"
 
 
-def _remove_report_item_type(root: ET.Element, local_name: str) -> None:
-    report_sections = root.find(report_factory._q("ReportSections"))
-    if report_sections is None:
-        raise E2EError("progressive_report_sections_missing")
-    report_items = report_sections.find(f".//{report_factory._q('ReportItems')}")
-    if report_items is None:
-        raise E2EError("progressive_report_items_missing")
-    target_tag = report_factory._q(local_name)
-    for item in list(report_items):
-        if item.tag == target_tag:
-            report_items.remove(item)
+def _style_with_no_border(parent: ET.Element) -> None:
+    style = ET.SubElement(parent, report_factory._q("Style"))
+    border = ET.SubElement(style, report_factory._q("Border"))
+    value = ET.SubElement(border, report_factory._q("Style"))
+    value.text = "None"
 
 
-def _remove_root_child(root: ET.Element, local_name: str) -> None:
-    node = root.find(report_factory._q(local_name))
-    if node is not None:
-        root.remove(node)
+def _fabric_public_minimal_control(source_rdl: str) -> ET.Element:
+    """Controle positivo RDL baseado na forma pública documentada pelo Fabric."""
+    source = ET.fromstring(source_rdl)
+    report_id = source.findtext(report_factory._rd("ReportID"), default="")
+    if not report_id:
+        raise E2EError("progressive_report_id_missing")
 
+    root = ET.Element(report_factory._q("Report"), {"MustUnderstand": "df"})
+    unit = ET.SubElement(root, report_factory._rd("ReportUnitType"))
+    unit.text = "Inch"
+    rid = ET.SubElement(root, report_factory._rd("ReportID"))
+    rid.text = report_id
+    font = ET.SubElement(root, report_factory._df("DefaultFontFamily"))
+    font.text = "Segoe UI"
+    refresh = ET.SubElement(root, report_factory._q("AutoRefresh"))
+    refresh.text = "0"
 
-def _add_empty_parameter_layout(root: ET.Element) -> None:
-    """Adiciona o layout vazio usado pelo exemplo público atual do Fabric."""
-    _remove_root_child(root, "ReportParametersLayout")
+    sections = ET.SubElement(root, report_factory._q("ReportSections"))
+    section = ET.SubElement(sections, report_factory._q("ReportSection"))
+    body = ET.SubElement(section, report_factory._q("Body"))
+    items = ET.SubElement(body, report_factory._q("ReportItems"))
+    title = ET.SubElement(items, report_factory._q("Textbox"), {"Name": "ReportTitle"})
+    watermark = ET.SubElement(title, report_factory._rd("WatermarkTextbox"))
+    watermark.text = "Title"
+    default_name = ET.SubElement(title, report_factory._rd("DefaultName"))
+    default_name.text = "ReportTitle"
+    can_grow = ET.SubElement(title, report_factory._q("CanGrow"))
+    can_grow.text = "true"
+    keep = ET.SubElement(title, report_factory._q("KeepTogether"))
+    keep.text = "true"
+    paragraphs = ET.SubElement(title, report_factory._q("Paragraphs"))
+    paragraph = ET.SubElement(paragraphs, report_factory._q("Paragraph"))
+    runs = ET.SubElement(paragraph, report_factory._q("TextRuns"))
+    run = ET.SubElement(runs, report_factory._q("TextRun"))
+    value = ET.SubElement(run, report_factory._q("Value"))
+    value.text = "ReqSys Fabric minimal control"
+    run_style = ET.SubElement(run, report_factory._q("Style"))
+    family = ET.SubElement(run_style, report_factory._q("FontFamily"))
+    family.text = "Segoe UI Light"
+    size = ET.SubElement(run_style, report_factory._q("FontSize"))
+    size.text = "28pt"
+    ET.SubElement(paragraph, report_factory._q("Style"))
+    height = ET.SubElement(title, report_factory._q("Height"))
+    height.text = "0.5in"
+    width = ET.SubElement(title, report_factory._q("Width"))
+    width.text = "5.5in"
+    title_style = ET.SubElement(title, report_factory._q("Style"))
+    border = ET.SubElement(title_style, report_factory._q("Border"))
+    border_style = ET.SubElement(border, report_factory._q("Style"))
+    border_style.text = "None"
+    for tag in ("PaddingLeft", "PaddingRight", "PaddingTop", "PaddingBottom"):
+        padding = ET.SubElement(title_style, report_factory._q(tag))
+        padding.text = "2pt"
+
+    body_height = ET.SubElement(body, report_factory._q("Height"))
+    body_height.text = "2.25in"
+    _style_with_no_border(body)
+
+    section_width = ET.SubElement(section, report_factory._q("Width"))
+    section_width.text = "6in"
+    page = ET.SubElement(section, report_factory._q("Page"))
+    footer = ET.SubElement(page, report_factory._q("PageFooter"))
+    footer_height = ET.SubElement(footer, report_factory._q("Height"))
+    footer_height.text = "0.45in"
+    first = ET.SubElement(footer, report_factory._q("PrintOnFirstPage"))
+    first.text = "true"
+    last = ET.SubElement(footer, report_factory._q("PrintOnLastPage"))
+    last.text = "true"
+    footer_items = ET.SubElement(footer, report_factory._q("ReportItems"))
+    execution = ET.SubElement(footer_items, report_factory._q("Textbox"), {"Name": "ExecutionTime"})
+    execution_default = ET.SubElement(execution, report_factory._rd("DefaultName"))
+    execution_default.text = "ExecutionTime"
+    execution_grow = ET.SubElement(execution, report_factory._q("CanGrow"))
+    execution_grow.text = "true"
+    execution_keep = ET.SubElement(execution, report_factory._q("KeepTogether"))
+    execution_keep.text = "true"
+    execution_paragraphs = ET.SubElement(execution, report_factory._q("Paragraphs"))
+    execution_paragraph = ET.SubElement(execution_paragraphs, report_factory._q("Paragraph"))
+    execution_runs = ET.SubElement(execution_paragraph, report_factory._q("TextRuns"))
+    execution_run = ET.SubElement(execution_runs, report_factory._q("TextRun"))
+    execution_value = ET.SubElement(execution_run, report_factory._q("Value"))
+    execution_value.text = "=Globals!ExecutionTime"
+    ET.SubElement(execution_run, report_factory._q("Style"))
+    execution_paragraph_style = ET.SubElement(execution_paragraph, report_factory._q("Style"))
+    align = ET.SubElement(execution_paragraph_style, report_factory._q("TextAlign"))
+    align.text = "Right"
+    for tag, text in (("Top", "0.2in"), ("Left", "4in"), ("Height", "0.25in"), ("Width", "2in")):
+        node = ET.SubElement(execution, report_factory._q(tag))
+        node.text = text
+    _style_with_no_border(execution)
+    _style_with_no_border(footer)
+    for tag in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin"):
+        margin = ET.SubElement(page, report_factory._q(tag))
+        margin.text = "1in"
+    ET.SubElement(page, report_factory._q("Style"))
+
     layout = ET.SubElement(root, report_factory._q("ReportParametersLayout"))
     grid = ET.SubElement(layout, report_factory._q("GridLayoutDefinition"))
     columns = ET.SubElement(grid, report_factory._q("NumberOfColumns"))
-    columns.text = "1"
+    columns.text = "4"
     rows = ET.SubElement(grid, report_factory._q("NumberOfRows"))
-    rows.text = "1"
+    rows.text = "2"
+    return root
+
+
+def _insert_before_report_sections(root: ET.Element, node: ET.Element | None) -> None:
+    if node is None:
+        return
+    sections = root.find(report_factory._q("ReportSections"))
+    if sections is None:
+        raise E2EError("progressive_report_sections_missing")
+    root.insert(list(root).index(sections), copy.deepcopy(node))
 
 
 def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
-    """Reduz o RDL em camadas para localizar rejeições do Fabric sem criar itens extras."""
+    """Monta fases sobre um controle mínimo independente para isolar a primeira rejeição."""
     try:
-        ET.fromstring(rdl)
+        source = ET.fromstring(rdl)
     except ET.ParseError as exc:
         raise E2EError("progressive_source_rdl_invalid") from exc
 
-    def parsed() -> ET.Element:
-        return ET.fromstring(rdl)
+    minimal = _fabric_public_minimal_control(rdl)
 
-    minimal = parsed()
-    for tag in ("DataSources", "DataSets", "ReportParameters"):
-        _remove_root_child(minimal, tag)
-    _remove_report_item_type(minimal, "Tablix")
-    _add_empty_parameter_layout(minimal)
+    datasource = copy.deepcopy(minimal)
+    _insert_before_report_sections(datasource, source.find(report_factory._q("DataSources")))
 
-    datasource = parsed()
-    for tag in ("DataSets", "ReportParameters"):
-        _remove_root_child(datasource, tag)
-    _remove_report_item_type(datasource, "Tablix")
-    _add_empty_parameter_layout(datasource)
-
-    dataset = parsed()
-    _remove_report_item_type(dataset, "Tablix")
+    dataset = copy.deepcopy(datasource)
+    _insert_before_report_sections(dataset, source.find(report_factory._q("DataSets")))
+    _insert_before_report_sections(dataset, source.find(report_factory._q("ReportParameters")))
+    source_layout = source.find(report_factory._q("ReportParametersLayout"))
+    if source_layout is not None:
+        current_layout = dataset.find(report_factory._q("ReportParametersLayout"))
+        if current_layout is not None:
+            dataset.remove(current_layout)
+        dataset.append(copy.deepcopy(source_layout))
 
     return [
         ("minimal", _serialize_rdl_root(minimal)),
