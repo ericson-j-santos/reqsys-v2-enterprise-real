@@ -20,13 +20,13 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
       EVIDENCE_FILE: artifacts/desktop-runtime-runner-bootstrap/evidence.json
-      TARGET_SHA: 7c80d250431641b735ab6b5c5a3eb5f45a5672f0
+      TARGET_SHA: fd661a223ac5f51a91b0a8659c939dfe07c1dbec
     steps:
       - name: Checkout immutable runtime bootstrap
         uses: actions/checkout@v4
         with:
           repository: ericson-j-santos/desktop-pc24x7-runtime
-          ref: 7c80d250431641b735ab6b5c5a3eb5f45a5672f0
+          ref: fd661a223ac5f51a91b0a8659c939dfe07c1dbec
           fetch-depth: 1
           persist-credentials: false
           path: runtime-bootstrap
