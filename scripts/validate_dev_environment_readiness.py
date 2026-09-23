@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -29,13 +30,23 @@ class DevTarget:
     notes: str
 
 
-DEV_TARGET = DevTarget(
-    name="desenvolvimento",
-    frontend="https://reqsys-app-dev.fly.dev",
-    api_docs="https://reqsys-api-dev.fly.dev/docs",
-    api_health="https://reqsys-api-dev.fly.dev/health",
-    notes="Fly dev dedicado; validação pública read-only sem secrets",
-)
+def build_dev_target(base_url: str) -> DevTarget:
+    base = str(base_url or "").strip().rstrip("/")
+    if not base:
+        raise ValueError("REQSYS_DEV_BASE_URL_missing")
+    parsed = urlparse(base)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host:
+        raise ValueError("REQSYS_DEV_BASE_URL_invalid")
+    if host.endswith(".fly.dev"):
+        raise ValueError("legacy_fly_dev_runtime_forbidden")
+    return DevTarget(
+        name="desenvolvimento",
+        frontend=base,
+        api_docs=base + "/api/docs",
+        api_health=base + "/api/health",
+        notes="PC24x7 DEV via locator assinado; validação pública read-only sem secrets",
+    )
 
 
 def is_public_https_url(url: str) -> bool:
@@ -111,11 +122,12 @@ def classify_dev_environment(checks: dict[str, dict[str, Any]]) -> dict[str, Any
     }
 
 
-def validate_dev_environment(timeout_seconds: float = 5.0) -> dict[str, Any]:
+def validate_dev_environment(timeout_seconds: float = 5.0, base_url: str | None = None) -> dict[str, Any]:
+    target = build_dev_target(base_url or os.getenv("REQSYS_DEV_BASE_URL", ""))
     urls = {
-        "frontend": DEV_TARGET.frontend,
-        "api_docs": DEV_TARGET.api_docs,
-        "api_health": DEV_TARGET.api_health,
+        "frontend": target.frontend,
+        "api_docs": target.api_docs,
+        "api_health": target.api_health,
     }
     invalid_urls = [name for name, url in urls.items() if not is_public_https_url(url)]
     if invalid_urls:
@@ -129,11 +141,11 @@ def validate_dev_environment(timeout_seconds: float = 5.0) -> dict[str, Any]:
         "contract": "dev-environment-readiness-validation",
         "generated_at_epoch": int(time.time()),
         "environment": {
-            "name": DEV_TARGET.name,
-            "frontend": DEV_TARGET.frontend,
-            "api_docs": DEV_TARGET.api_docs,
-            "api_health": DEV_TARGET.api_health,
-            "notes": DEV_TARGET.notes,
+            "name": target.name,
+            "frontend": target.frontend,
+            "api_docs": target.api_docs,
+            "api_health": target.api_health,
+            "notes": target.notes,
             **classification,
             "checks": checks,
         },
@@ -158,9 +170,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate ReqSys development environment")
     parser.add_argument("--output", default="docs/ops-dashboard/data/dev-environments-validation.json")
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
+    parser.add_argument("--dev-base-url", default=os.getenv("REQSYS_DEV_BASE_URL", ""))
     args = parser.parse_args()
 
-    payload = validate_dev_environment(timeout_seconds=args.timeout_seconds)
+    payload = validate_dev_environment(timeout_seconds=args.timeout_seconds, base_url=args.dev_base_url)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
