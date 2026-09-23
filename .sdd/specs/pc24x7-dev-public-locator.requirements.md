@@ -48,6 +48,7 @@ PC24x7 --Ed25519--> ntfy.sh
 20. Smokes públicos de DEV devem resolver o mesmo locator Ed25519 vigente; um resultado funcional diferente de `passed` deve produzir workflow vermelho, mesmo quando o artefato de análise continuar `report-only` para decisão executiva.
 21. A navegação para DEV deve usar a entrada estável GitHub Pages e encaminhar somente uma rota relativa validada ao Quick Tunnel selecionado; URL absoluta ou `//host` não pode ser aceita como destino.
 22. Alterações do Modo ESTUDO integradas em `main` devem disparar reconciliação DEV no runner `pc24x7` e validar NORMAL→ESTUDO→replay idempotente→NORMAL sem tocar HML/PROD.
+23. Smokes executivos acionados por `deployment_status` devem exigir `environment_url` pública não vazia antes de resolver o locator DEV; eventos genéricos do GitHub Environment sem URL pública devem ser ignorados, enquanto `workflow_dispatch` explícito permanece disponível. Esse filtro não pode converter falha funcional de um alvo público real em sucesso.
 
 ## Critérios de aceite
 
@@ -68,4 +69,5 @@ PC24x7 --Ed25519--> ntfy.sh
 - gate preventivo bloqueia referências Fly.io DEV nos caminhos críticos do cutover;
 - navegação DEV usa `/dev/?target=<rota-relativa>` e o locator rejeita alvo absoluto/protocol-relative;
 - smoke DEV com falha funcional não pode terminar verde;
+- `deployment_status` sem `environment_url` pública não dispara smoke executivo; com URL pública, o smoke continua fail-closed;
 - merge em `main` de arquivos do Modo ESTUDO dispara reconciliação física no PC24x7.
