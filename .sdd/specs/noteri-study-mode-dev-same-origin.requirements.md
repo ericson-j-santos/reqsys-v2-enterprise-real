@@ -40,19 +40,27 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     O bind de `infra/nginx/default.dev.conf` deve coincidir exatamente com o
     `com.docker.compose.project.working_dir` observado no próprio serviço
     `nginx`; não se pode presumir que esse diretório seja o mesmo da API.
-    A atualização ocorre nos arquivos montados, sem recriar containers nem
-    reprocessar `.env`.
+    Na rota normal, a atualização ocorre nos arquivos montados sem recriar
+    containers nem reprocessar `.env`. A única exceção é drift comprovado da
+    publicação do Nginx DEV: se o serviço validado não publicar 8083, o
+    reconciliador pode gerar uma definição Compose mínima contendo somente o
+    Nginx observado, sua imagem allowlisted, bind validado, política de restart
+    e rede externa já existente; deve recriar somente esse serviço com 8083,
+    sem `environment`, build, dependências ou leitura de `.env`/segredos, e
+    restaurar a publicação anterior se a validação imediata do reparo falhar.
 14. Após sincronizar os binds, reiniciar somente o container API DEV já
     existente para carregar deterministicamente o código atualizado. Antes de
     tocar o Nginx, o OpenAPI direto em `127.0.0.1:8210/openapi.json` deve
     comprovar simultaneamente `/v1/noteri/profile` e `/api/runtime/health`.
     O reconciliador deve registrar de forma sanitizada qual contrato direto
-    ficou ausente. O serviço Nginx selecionado deve comprovar que publica
-    exatamente a porta host 8083. Após copiar a configuração, o reconciliador
-    deve esperar até o bind observado dentro do container ser byte-equivalente
-    ao arquivo host normalizado; somente então executar `nginx -t` e
-    `nginx -s reload`, sem reiniciar o container Nginx. Não executar
-    `docker compose`, não recriar a stack e não reler `.env`/segredos.
+    ficou ausente. O serviço Nginx selecionado deve publicar exatamente a porta
+    host 8083. Se houver drift nessa publicação, o reparo restrito descrito no
+    item 13 deve ocorrer antes da sincronização e o runtime deve ser descoberto
+    novamente. Fora dessa exceção, não executar `docker compose` nem recriar
+    containers. Após copiar a configuração, o reconciliador deve esperar até o
+    bind observado dentro do container ser byte-equivalente ao arquivo host
+    normalizado; somente então executar `nginx -t` e `nginx -s reload`, sem
+    reiniciar novamente o Nginx e sem reler `.env`/segredos.
     Somente então comprovar HTTP 200 em `/api/health` e
     `/api/runtime/health` e HTTP 401 na rota protegida
     `/api/v1/noteri/profile`.
@@ -85,14 +93,15 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     fechado; a reconciliação só conclui após restaurar o contrato público e
     confirmar as duas rotas de saúde por leitura HTTP independente.
 12. O caminho normal do reconciliador não executa `docker compose config`
-    nem `docker compose up`. Após sincronizar os binds, pode reiniciar somente
-    o container API DEV já existente via `docker restart`. O Nginx DEV não
-    deve ser reiniciado: o reconciliador aguarda a propagação do bind, valida
-    `nginx -t` e aplica `nginx -s reload`, preservando o listener 8083 e sem
-    reler `.env`/segredos ou recriar a stack.
+    nem `docker compose up`. A exceção controlada é reparar drift da porta
+    8083 recriando somente o Nginx DEV com uma definição gerada, sem `.env`,
+    segredos ou outros serviços e com rollback da publicação anterior se a
+    validação do reparo falhar. Após sincronizar os binds, pode reiniciar
+    somente a API DEV já existente via `docker restart`; o Nginx já correto
+    recebe apenas `nginx -t` e `nginx -s reload`.
 13. Bind ausente, módulo de monitoramento operacional ausente no backend
     montado, bind do Nginx divergente do working directory declarado pelo
-    próprio serviço `nginx`, porta host diferente de 8083, fonte do bind
+    próprio serviço `nginx`, falha em reparar/validar a porta host 8083, fonte
     inexistente, bind ainda não visível dentro do container, contrato OpenAPI
     direto sem `/v1/noteri/profile` ou `/api/runtime/health`, `nginx -t`
     inválido ou qualquer rota de saúde/controle não observada deve falhar

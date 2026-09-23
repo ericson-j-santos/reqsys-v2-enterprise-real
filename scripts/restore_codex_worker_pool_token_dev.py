@@ -118,10 +118,18 @@ def _read_existing_token(path: Path) -> str | None:
     return token
 
 
+def _ensure_token_parent(parent: Path) -> None:
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RestoreError("worker_pool_token_parent_create_failed") from exc
+    if not parent.is_dir():
+        raise RestoreError("worker_pool_token_parent_unusable")
+
+
 def _write_new_token(path: Path) -> str:
     parent = path.parent
-    if not parent.is_dir():
-        raise RestoreError("worker_pool_token_parent_missing")
+    _ensure_token_parent(parent)
     token = secrets.token_urlsafe(48)
     if len(token) < MIN_TOKEN_LENGTH:
         raise RestoreError("worker_pool_generated_token_invalid")
@@ -163,31 +171,60 @@ def _request(url: str, token: str | None = None) -> tuple[int, dict[str, Any]]:
             raw = response.read().decode("utf-8")
             return response.status, json.loads(raw) if raw else {}
     except HTTPError as exc:
-        return exc.code, {}
+        try:
+            raw = exc.read().decode("utf-8")
+            payload = json.loads(raw) if raw else {}
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            payload = {}
+        return exc.code, payload if isinstance(payload, dict) else {}
     except (URLError, TimeoutError, json.JSONDecodeError, OSError):
         return 0, {}
 
 
-def _validate_runtime(token: str) -> tuple[int, bool]:
+def _runtime_failure_reason(
+    health_status: int,
+    health: dict[str, Any],
+    snapshot_status: int,
+) -> str:
+    if health_status == 0:
+        return "worker_pool_health_unreachable"
+    if health_status in {200, 503}:
+        if health.get("auth_configured") is False:
+            return "worker_pool_auth_file_not_visible_in_container"
+        if health.get("expected_rules_sha_configured") is False:
+            return "worker_pool_expected_rules_sha_not_configured"
+    if snapshot_status == 401:
+        return "worker_pool_token_mismatch_after_restore"
+    if snapshot_status == 503:
+        return "worker_pool_auth_file_not_visible_in_container"
+    if snapshot_status == 0:
+        return "worker_pool_authenticated_endpoint_unreachable"
+    return "worker_pool_runtime_not_ready_after_restore"
+
+
+def _validate_runtime(token: str) -> tuple[int, bool, str]:
     health_status, health = _request(HEALTH_URL)
     snapshot_status, _snapshot = _request(SNAPSHOT_URL, token)
     healthy = (
         health_status == 200
         and health.get("status") == "healthy"
         and health.get("auth_configured") is True
+        and health.get("expected_rules_sha_configured") is True
         and snapshot_status == 200
     )
-    return health_status, healthy
+    reason = "" if healthy else _runtime_failure_reason(health_status, health, snapshot_status)
+    return health_status, healthy, reason
 
 
 def _wait_runtime(token: str, attempts: int = 12) -> int:
     last_status = 0
+    last_reason = "worker_pool_runtime_not_ready_after_restore"
     for _ in range(attempts):
-        last_status, healthy = _validate_runtime(token)
+        last_status, healthy, last_reason = _validate_runtime(token)
         if healthy:
             return last_status
         time.sleep(2)
-    raise RestoreError("worker_pool_runtime_not_ready_after_restore")
+    raise RestoreError(last_reason)
 
 
 def restore() -> dict[str, Any]:
@@ -198,15 +235,15 @@ def restore() -> dict[str, Any]:
         token = _write_new_token(token_path)
 
     restarted = False
-    health_status, healthy = _validate_runtime(token)
+    health_status, healthy, _reason = _validate_runtime(token)
     if rotated or not healthy:
         _docker(["restart", container_id])
         restarted = True
         health_status = _wait_runtime(token)
 
-    _, healthy = _validate_runtime(token)
+    _, healthy, final_reason = _validate_runtime(token)
     if not healthy:
-        raise RestoreError("worker_pool_authenticated_readback_failed")
+        raise RestoreError(final_reason or "worker_pool_authenticated_readback_failed")
 
     return {
         "schema_version": "1.0.0",
