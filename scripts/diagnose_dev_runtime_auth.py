@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Diagnóstico read-only da disponibilidade e autenticação do ReqSys DEV.
 
-Executa probes públicos repetidos, compara o runtime com a configuração Fly
-versionada e produz somente evidência sanitizada. Nenhum secret, tenant id,
+Executa probes públicos repetidos contra o runtime PC24x7 resolvido e produz
+somente evidência sanitizada. Nenhum secret, tenant id,
 client id, token, UPN ou corpo arbitrário de resposta é persistido.
 """
 
@@ -12,23 +12,34 @@ import argparse
 import json
 import math
 import time
-import tomllib
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 
-TARGETS = {
-    "frontend": "https://reqsys-app-dev.fly.dev/",
-    "health": "https://reqsys-api-dev.fly.dev/health",
-    "runtime_health": "https://reqsys-api-dev.fly.dev/api/runtime/health",
-    "readiness": "https://reqsys-api-dev.fly.dev/api/runtime/readiness",
-    "liveness": "https://reqsys-api-dev.fly.dev/api/runtime/liveness",
-    "auth_config": "https://reqsys-api-dev.fly.dev/v1/auth/config",
-}
+def build_targets(base_url: str) -> dict[str, str]:
+    base = str(base_url or "").strip().rstrip("/")
+    if not base:
+        raise ValueError("REQSYS_DEV_BASE_URL_missing")
+    parsed = urlparse(base)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host or parsed.username or parsed.password:
+        raise ValueError("REQSYS_DEV_BASE_URL_invalid")
+    if host.endswith(".fly.dev"):
+        raise ValueError("legacy_fly_dev_runtime_forbidden")
+    return {
+        "frontend": base + "/",
+        "health": base + "/api/health",
+        "runtime_health": base + "/api/runtime/health",
+        "readiness": base + "/api/runtime/readiness",
+        "liveness": base + "/api/runtime/liveness",
+        "auth_config": base + "/api/v1/auth/config",
+    }
+
 
 SAFE_AUTH_FIELDS = (
     "azure_enabled",
@@ -59,34 +70,17 @@ def sanitize_auth_payload(payload: Any) -> dict[str, Any]:
     return {key: data.get(key) for key in SAFE_AUTH_FIELDS if key in data}
 
 
-def load_static_fly_state(repo_root: Path) -> dict[str, Any]:
-    backend_path = repo_root / "backend" / "fly.dev.toml"
-    frontend_path = repo_root / "frontend" / "fly.dev.toml"
-
-    with backend_path.open("rb") as handle:
-        backend = tomllib.load(handle)
-    with frontend_path.open("rb") as handle:
-        frontend = tomllib.load(handle)
-
-    backend_http = backend.get("http_service", {})
-    frontend_http = frontend.get("http_service", {})
-    backend_env = backend.get("env", {})
-
+def runtime_contract_state() -> dict[str, Any]:
     return {
+        "provider": "pc24x7",
+        "locator": "signed_ed25519",
+        "legacy_fly_fallback_allowed": False,
         "backend": {
-            "app": backend.get("app"),
-            "auto_stop_machines": backend_http.get("auto_stop_machines"),
-            "auto_start_machines": backend_http.get("auto_start_machines"),
-            "min_machines_running": backend_http.get("min_machines_running"),
-            "allow_demo_login_declared": str(backend_env.get("ALLOW_DEMO_LOGIN", "")).lower() == "true",
-            "public_environment_declared": backend_env.get("PUBLIC_ENVIRONMENT"),
+            "min_machines_running": 1,
+            "allow_demo_login_declared": False,
+            "public_environment_declared": "development",
         },
-        "frontend": {
-            "app": frontend.get("app"),
-            "auto_stop_machines": frontend_http.get("auto_stop_machines"),
-            "auto_start_machines": frontend_http.get("auto_start_machines"),
-            "min_machines_running": frontend_http.get("min_machines_running"),
-        },
+        "frontend": {"min_machines_running": 1},
     }
 
 
@@ -218,15 +212,16 @@ def classify(aggregate: dict[str, Any], auth: dict[str, Any], static_state: dict
     }
 
 
-def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_seconds: float) -> dict[str, Any]:
-    static_state = load_static_fly_state(repo_root)
-    probes: dict[str, list[dict[str, Any]]] = {name: [] for name in TARGETS}
+def diagnose(base_url: str, attempts: int, timeout_seconds: float, interval_seconds: float) -> dict[str, Any]:
+    static_state = runtime_contract_state()
+    targets = build_targets(base_url)
+    probes: dict[str, list[dict[str, Any]]] = {name: [] for name in targets}
 
     for attempt in range(1, attempts + 1):
-        with ThreadPoolExecutor(max_workers=len(TARGETS)) as executor:
+        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
             futures = {
                 executor.submit(probe_url, name, url, timeout_seconds): name
-                for name, url in TARGETS.items()
+                for name, url in targets.items()
             }
             for future in as_completed(futures):
                 probes[futures[future]].append(future.result())
@@ -246,8 +241,8 @@ def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_se
         "environment": "development",
         "attempts_per_target": attempts,
         "timeout_seconds": timeout_seconds,
-        "targets": TARGETS,
-        "static_fly_configuration": static_state,
+        "targets": targets,
+        "runtime_contract": static_state,
         "runtime_auth": auth,
         "probe_summary": aggregate,
         "classification": classification,
@@ -267,13 +262,17 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
     parser.add_argument("--interval-seconds", type=float, default=0.5)
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--base-url", default="")
     args = parser.parse_args()
 
     if args.attempts < 1 or args.attempts > 50:
         parser.error("--attempts deve estar entre 1 e 50")
 
     repo_root = Path(__file__).resolve().parents[1]
-    payload = diagnose(repo_root, args.attempts, args.timeout_seconds, args.interval_seconds)
+    try:
+        payload = diagnose(args.base_url, args.attempts, args.timeout_seconds, args.interval_seconds)
+    except ValueError as exc:
+        parser.error(str(exc))
     output = repo_root / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
