@@ -151,6 +151,17 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     componentes específicos do Modo Estudo, garantindo nova evidência física
     quando o contrato público ou a porta 8083 puderem mudar.
 
+
+17. Antes de iniciar o E2E de perfil, o workflow DEV deve validar o Engineering
+    Orchestrator em `127.0.0.1:8787`. Se readiness estiver indisponível, pode
+    solicitar somente a execução da tarefa agendada existente e fixa
+    `\\Automation\\ReqSysOrchestrator24x7`, sem criar/alterar tarefa, sem shell
+    arbitrário e sem ler segredos. A execução prossegue somente após `/readyz`
+    retornar saudável e exatamente um worker Noteri estar `fresh`,
+    `controller_online` e `auth_valid`; caso contrário falha fechado antes da
+    mudança de perfil. A evidência deve indicar se houve recuperação, mantendo
+    `production_touched=false` e `secrets_read=false`.
+
 ## Topologia
 
 ```text
