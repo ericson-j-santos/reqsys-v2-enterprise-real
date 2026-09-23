@@ -7,9 +7,19 @@ from scripts import validate_dev_environment_readiness as validator
 
 
 def test_dev_target_uses_public_https_urls():
-    assert validator.is_public_https_url(validator.DEV_TARGET.frontend)
-    assert validator.is_public_https_url(validator.DEV_TARGET.api_docs)
-    assert validator.is_public_https_url(validator.DEV_TARGET.api_health)
+    target = validator.build_dev_target("https://pc24x7.trycloudflare.com")
+    assert validator.is_public_https_url(target.frontend)
+    assert validator.is_public_https_url(target.api_docs)
+    assert validator.is_public_https_url(target.api_health)
+
+
+def test_dev_target_rejects_legacy_fly():
+    try:
+        validator.build_dev_target("https://reqsys-app-dev.fly.dev")
+    except ValueError as exc:
+        assert str(exc) == "legacy_fly_dev_runtime_forbidden"
+    else:
+        raise AssertionError("Fly DEV deveria ser rejeitado")
 
 
 def test_classify_dev_environment_ready():
@@ -55,7 +65,7 @@ def test_validate_dev_environment_contract_with_stubbed_probes(monkeypatch):
         }
 
     monkeypatch.setattr(validator, "probe_url", fake_probe)
-    payload = validator.validate_dev_environment(timeout_seconds=0.1)
+    payload = validator.validate_dev_environment(timeout_seconds=0.1, base_url="https://pc24x7.trycloudflare.com")
 
     assert payload["schema_version"] == "1.0.0"
     assert payload["contract"] == "dev-environment-readiness-validation"
@@ -77,6 +87,8 @@ def test_cli_writes_dev_environment_artifact(tmp_path):
             str(output_path),
             "--timeout-seconds",
             "0.01",
+            "--dev-base-url",
+            "https://pc24x7.trycloudflare.com",
         ],
         check=False,
         text=True,
@@ -86,5 +98,5 @@ def test_cli_writes_dev_environment_artifact(tmp_path):
     assert result.returncode == 0, result.stderr
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["contract"] == "dev-environment-readiness-validation"
-    assert payload["environment"]["frontend"] == "https://reqsys-app-dev.fly.dev"
+    assert payload["environment"]["frontend"] == "https://pc24x7.trycloudflare.com"
     assert payload["summary"]["mode"] == "read_only_non_blocking"
