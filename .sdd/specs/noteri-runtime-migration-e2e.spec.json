@@ -7,7 +7,7 @@
   "architecture": {
     "source_repo": "ericson-j-santos/reqsys-v2-enterprise-real",
     "target_repo": "ericson-j-santos/noteri-runtime",
-    "target_sha": "07e6108974e87c0f5f71587e4ad4ab0cdf05188c",
+    "target_sha": "cc06e6530ca57058db22651ac75d623f6ec921c1",
     "workflow": ".github/workflows/noteri-control-plane-probe.yml",
     "execution_branch": "ops/noteri-runtime-migration-e2e-20260923",
     "runner_labels": [
