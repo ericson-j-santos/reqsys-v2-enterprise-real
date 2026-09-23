@@ -118,10 +118,18 @@ def _read_existing_token(path: Path) -> str | None:
     return token
 
 
+def _ensure_token_parent(parent: Path) -> None:
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RestoreError("worker_pool_token_parent_create_failed") from exc
+    if not parent.is_dir():
+        raise RestoreError("worker_pool_token_parent_unusable")
+
+
 def _write_new_token(path: Path) -> str:
     parent = path.parent
-    if not parent.is_dir():
-        raise RestoreError("worker_pool_token_parent_missing")
+    _ensure_token_parent(parent)
     token = secrets.token_urlsafe(48)
     if len(token) < MIN_TOKEN_LENGTH:
         raise RestoreError("worker_pool_generated_token_invalid")
