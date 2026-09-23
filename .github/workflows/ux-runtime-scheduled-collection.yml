@@ -22,7 +22,7 @@ jobs:
       matrix:
         include:
           - environment: dev
-            base_url: https://reqsys-app-dev.fly.dev
+            base_url: ""
           - environment: stg
             base_url: https://reqsys-app-stg.fly.dev
           - environment: prod
@@ -32,6 +32,37 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: ${{ matrix.environment == 'dev' }}
+        with:
+          node-version: "20"
+      - name: Resolve signed PC24x7 DEV locator
+        if: ${{ matrix.environment == 'dev' }}
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p ".tmp/runtime-${{ matrix.environment }}"
+          node scripts/resolve_pc24x7_dev_locator.mjs --output ".tmp/runtime-${{ matrix.environment }}/dev-signed-locator.json" >/dev/null
+
+      - name: Resolve runtime target
+        id: runtime
+        shell: bash
+        env:
+          STATIC_BASE_URL: ${{ matrix.base_url }}
+          DEV_BASE_URL: ${{ steps.locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.environment }}" = "dev" ]; then
+            test -n "$DEV_BASE_URL"
+            echo "base_url=$DEV_BASE_URL" >> "$GITHUB_OUTPUT"
+            echo "health_path=/api/health" >> "$GITHUB_OUTPUT"
+          else
+            test -n "$STATIC_BASE_URL"
+            echo "base_url=$STATIC_BASE_URL" >> "$GITHUB_OUTPUT"
+            echo "health_path=/health" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Validate history contract
         run: |
@@ -50,7 +81,7 @@ jobs:
             --dump-header "$OUT/health-headers.txt" \
             --output "$OUT/health-body.json" \
             --write-out '%{http_code}' \
-            "${{ matrix.base_url }}/health")
+            "${{ steps.runtime.outputs.base_url }}${{ steps.runtime.outputs.health_path }}")
           printf '%s\n' "$HTTP_CODE" > "$OUT/http-status.txt"
           test "$HTTP_CODE" = "200"
           CORRELATION_ID=$(awk 'BEGIN{IGNORECASE=1} /^x-correlation-id:/ {gsub("\r", "", $2); print $2; exit}' "$OUT/health-headers.txt")
