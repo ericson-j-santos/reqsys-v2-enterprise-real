@@ -18,7 +18,9 @@ on:
       - 'frontend/src/services/hostProfileLocalAgent.js'
       - 'frontend/src/views/TaskConsoleView.vue'
       - 'scripts/noteri_study_mode_dev_reconcile.py'
+      - 'scripts/recover_reqsys_engineering_orchestrator_dev.py'
       - 'tests/test_noteri_study_mode_dev_reconcile.py'
+      - 'tests/test_recover_reqsys_engineering_orchestrator_dev.py'
 
 permissions:
   contents: read
@@ -39,6 +41,14 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
+
+      - name: Recover and validate Engineering Orchestrator DEV
+        shell: powershell
+        env:
+          ORCHESTRATOR_EVIDENCE_FILE: artifacts/noteri-study-mode-dev/orchestrator-recovery.json
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/recover_reqsys_engineering_orchestrator_dev.py --confirm RECOVER-REQSYS-ENGINEERING-ORCHESTRATOR-DEV --evidence-path "$env:ORCHESTRATOR_EVIDENCE_FILE" --timeout-seconds 60
 
       - name: Reconcile same-origin Study Mode and execute physical E2E
         shell: powershell
@@ -73,6 +83,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: noteri-study-mode-dev-evidence
-          path: artifacts/noteri-study-mode-dev/evidence.json
+          path: artifacts/noteri-study-mode-dev/
           if-no-files-found: error
           retention-days: 14
