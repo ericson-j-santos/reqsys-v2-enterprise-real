@@ -2,7 +2,7 @@
   "feature_name": "rsm-07-change-traceability",
   "project": "ReqSys Service Management",
   "created_at": "2026-09-19",
-  "updated_at": "2026-09-22",
+  "updated_at": "2026-09-23",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -17,6 +17,6 @@
       "backend/tests/test_change_evidence_api.py",
       "scripts/rsm_change_evidence_e2e.py"
     ],
-    "evidence_contract": "O E2E deve provar build_sha == expected_sha, bloqueio de CLOSED sem evidência, rejeição sem persistência para runtime SHA divergente, replay idempotente, leitura PostgreSQL independente e fechamento somente após evidência PASSED ou rollback comprovado."
+    "evidence_contract": "O E2E deve provar build_sha == expected_sha, bloqueio de CLOSED sem evidência, rejeição sem persistência para runtime SHA divergente, replay idempotente, leitura PostgreSQL independente e fechamento somente após evidência PASSED e um segundo caminho FAILED -> ROLLED_BACK com referência, SHA pós-rollback, evidência, replay idempotente e leitura PostgreSQL independente."
   }
 }
