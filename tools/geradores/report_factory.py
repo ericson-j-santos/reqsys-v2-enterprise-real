@@ -36,6 +36,14 @@ def df(tag: str) -> str:
     """Qualifica uma tag no namespace DefaultFontFamily."""
     return f"{{{DF_NS}}}{tag}"
 
+
+# Compatibilidade com consumidores legados do ReqSys que importavam os helpers
+# privados do gerador local. O adaptador mantém essa superfície enquanto o núcleo
+# compartilhado permanece encapsulado em report-builder-platform.
+_q = q
+_rd = rd
+_df = df
+
 load_spec = _core.load_spec
 validate_spec = _core.validate_spec
 validate_rdl = _core.validate_rdl
