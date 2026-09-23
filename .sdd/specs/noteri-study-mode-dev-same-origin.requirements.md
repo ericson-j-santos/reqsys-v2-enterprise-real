@@ -165,8 +165,16 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     do lifecycle do runner removendo apenas `RUNNER_TRACKING_ID`. A execução
     prossegue somente após `/readyz` saudável e exatamente um worker Noteri
     `fresh`, `controller_online` e `auth_valid`; caso contrário falha fechado
-    antes da mudança de perfil. A evidência deve indicar o método de recovery,
-    sem persistir caminhos arbitrários, mantendo `production_touched=false`,
+    antes da mudança de perfil. Se a instalação canônica existir mas seus
+    arquivos `service-config.json` ou `worker-config.json` divergirem do
+    contrato, o recovery pode normalizar exclusivamente esses dois arquivos
+    para o contrato canônico (modo `control-plane-worker`, porta 8787,
+    endpoint loopback, worker `desktop-pdqk954` e parâmetros operacionais
+    versionados), preservando a primeira versão local em backup idempotente
+    antes da escrita e revalidando o contrato após a alteração. O código do
+    runtime, banco e demais arquivos não podem ser substituídos por essa rota.
+    A evidência deve indicar o método de recovery e se houve normalização, sem
+    persistir caminhos arbitrários, mantendo `production_touched=false`,
     `secrets_read=false` e `task_created_or_modified=false`.
 
 ## Topologia
