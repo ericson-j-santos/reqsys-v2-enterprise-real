@@ -82,6 +82,14 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     ESTUDO após integração na main. A ausência desse gatilho é tratada como
     risco de falso positivo e deve falhar por teste de contrato do workflow.
 
+17. Falhas HTTP posteriores à validação do gateway devem registrar somente o
+    estágio lógico da operação e o status HTTP observado (por exemplo,
+    `api_admin_login` + `http_status_403`), sem persistir corpo de resposta,
+    token, cabeçalho Authorization, e-mail ou dado arbitrário. O E2E deve
+    verificar explicitamente se o login demo está habilitado antes de usá-lo e
+    diferenciar autenticação, leitura de perfil, mudança para ESTUDO, replay e
+    restauração NORMAL.
+
 ## Critérios de aceite
 
 1. O frontend não acessa loopback do dispositivo do navegador.
