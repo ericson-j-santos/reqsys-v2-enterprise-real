@@ -42,21 +42,29 @@ jobs:
             throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
           }
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
       - name: Install isolated E2E dependencies
         shell: powershell
         run: |
-          python -m pip install --disable-pip-version-check -r backend/requirements.txt
-          python -m pip install --disable-pip-version-check -e "docs/ollama-local-gateway/bootstrap-files"
+          & "$env:REQSYS_PYTHON" -m pip install --disable-pip-version-check -r backend/requirements.txt
+          & "$env:REQSYS_PYTHON" -m pip install --disable-pip-version-check -e "docs/ollama-local-gateway/bootstrap-files"
 
       - name: Execute governed ReqSys Ollama E2E
         shell: powershell
         run: |
-          python scripts/validate_codex_cloud_reqsys_e2e.py `
+          & "$env:REQSYS_PYTHON" scripts/validate_codex_cloud_reqsys_e2e.py `
             --expected-model "gemma4:31b-cloud" `
             --expected-fallback-model "gemma4:26b-q8-code" `
             --expected-sha "${{ github.sha }}" `
@@ -107,18 +115,26 @@ jobs:
             throw "UNEXPECTED_HOST"
           }
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
       - name: Reconcile stable HTTPS MCP route
         shell: powershell
-        run: >
-          python scripts/pc24x7_ollama_mcp_funnel.py
-          --apply
-          --source-sha "${{ github.sha }}"
-          --evidence-file "$env:EVIDENCE_FILE"
+        run: |
+          & "$env:REQSYS_PYTHON" scripts/pc24x7_ollama_mcp_funnel.py `
+            --apply `
+            --source-sha "${{ github.sha }}" `
+            --evidence-file "$env:EVIDENCE_FILE"
 
       - name: Upload sanitized MCP ingress evidence
         if: always()
