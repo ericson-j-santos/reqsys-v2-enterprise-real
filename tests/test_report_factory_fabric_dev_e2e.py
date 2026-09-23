@@ -88,10 +88,11 @@ def test_progressive_rdl_variants_isolate_definition_layers() -> None:
         ROOT / "examples" / "report-factory" / "demandas_por_status.json"
     )
     rdl = module.report_factory.generate_rdl(source)
-    variants = module._progressive_rdl_variants(rdl)
+    variants = module._progressive_rdl_variants("DemandasPorStatus", rdl)
 
     assert [name for name, _ in variants] == [
-        "minimal",
+        "fabric_documented_minimal",
+        "generated_minimal",
         "datasource",
         "dataset",
         "full",
@@ -100,11 +101,27 @@ def test_progressive_rdl_variants_isolate_definition_layers() -> None:
     roots = {name: ET.fromstring(value) for name, value in variants}
     q = module.report_factory._q
 
-    assert roots["minimal"].find(q("DataSources")) is None
-    assert roots["minimal"].find(q("DataSets")) is None
-    assert roots["minimal"].find(q("ReportParameters")) is None
-    assert roots["minimal"].find(q("ReportParametersLayout")) is None
-    assert roots["minimal"].find(f".//{q('Tablix')}") is None
+    canonical = roots["fabric_documented_minimal"]
+    assert canonical.attrib.get("MustUnderstand") == "df"
+    assert canonical.findtext(module.report_factory._rd("ReportUnitType")) == "Inch"
+    assert canonical.findtext(module.report_factory._df("DefaultFontFamily")) == "Segoe UI"
+    assert canonical.find(q("DataSources")) is None
+    assert canonical.find(q("DataSets")) is None
+    assert canonical.find(q("ReportParameters")) is None
+    assert canonical.find(q("ReportParametersLayout")) is not None
+    canonical_section = canonical.find(f".//{q('ReportSection')}")
+    assert canonical_section is not None
+    assert canonical_section.find(q("Body")) is not None
+    assert canonical_section.find(q("Width")) is not None
+    assert canonical_section.find(q("Page")) is not None
+    assert canonical.find(f".//{q('Tablix')}") is None
+
+    generated = roots["generated_minimal"]
+    assert generated.find(q("DataSources")) is None
+    assert generated.find(q("DataSets")) is None
+    assert generated.find(q("ReportParameters")) is None
+    assert generated.find(q("ReportParametersLayout")) is None
+    assert generated.find(f".//{q('Tablix')}") is None
 
     assert roots["datasource"].find(q("DataSources")) is not None
     assert roots["datasource"].find(q("DataSets")) is None
@@ -121,21 +138,43 @@ def test_progressive_rdl_variants_isolate_definition_layers() -> None:
     assert roots["full"].find(f".//{q('Tablix')}") is not None
 
 
-def test_create_progressively_promotes_one_item_without_extra_create() -> None:
+def test_create_progressively_promotes_one_item_with_independent_readback() -> None:
     source = module.report_factory.load_spec(
         ROOT / "examples" / "report-factory" / "demandas_por_status.json"
     )
     rdl = module.report_factory.generate_rdl(source)
     evidence: dict[str, object] = {}
+    current: dict[str, object] = {"definition": None}
+    update_count = 0
+    read_count = 0
+
+    def fake_invoke(method, url, token, payload=None, **kwargs):
+        assert method == "POST"
+        assert isinstance(payload, dict)
+        current["definition"] = payload["definition"]
+        return {}
+
+    def fake_update(workspace_id, report_id, definition, token):
+        nonlocal update_count
+        update_count += 1
+        current["definition"] = definition
+
+    def fake_get(workspace_id, report_id, token):
+        nonlocal read_count
+        read_count += 1
+        definition = current["definition"]
+        assert isinstance(definition, dict)
+        return {"definition": definition}
 
     with (
-        patch.object(module, "_invoke") as invoke,
+        patch.object(module, "_invoke", side_effect=fake_invoke) as invoke,
         patch.object(
             module,
             "_paged_values",
             return_value=[{"displayName": "DemandasPorStatus", "id": "report-id"}],
         ),
-        patch.object(module, "_update_definition") as update_definition,
+        patch.object(module, "_update_definition", side_effect=fake_update),
+        patch.object(module, "_get_definition", side_effect=fake_get),
     ):
         module._create_progressively(
             reports_url=module.FABRIC_BASE + "/workspaces/ws/paginatedReports",
@@ -148,31 +187,48 @@ def test_create_progressively_promotes_one_item_without_extra_create() -> None:
         )
 
     assert invoke.call_count == 1
-    assert update_definition.call_count == 3
+    assert update_count == 4
+    assert read_count == 5
     assert evidence["progressive_bootstrap_used"] is True
     assert evidence["progressive_last_passed_phase"] == "full"
     assert evidence["progressive_failed_phase"] is None
 
 
-def test_create_progressively_records_exact_failed_phase() -> None:
+def test_create_progressively_records_exact_failed_phase_after_readback() -> None:
     source = module.report_factory.load_spec(
         ROOT / "examples" / "report-factory" / "demandas_por_status.json"
     )
     rdl = module.report_factory.generate_rdl(source)
     evidence: dict[str, object] = {}
+    current: dict[str, object] = {"definition": None}
+    update_calls = 0
+
+    def fake_invoke(method, url, token, payload=None, **kwargs):
+        assert isinstance(payload, dict)
+        current["definition"] = payload["definition"]
+        return {}
+
+    def fake_update(workspace_id, report_id, definition, token):
+        nonlocal update_calls
+        update_calls += 1
+        if update_calls == 3:
+            raise module.E2EError("fabric_http_400:InvalidDefinitionFormat")
+        current["definition"] = definition
+
+    def fake_get(workspace_id, report_id, token):
+        definition = current["definition"]
+        assert isinstance(definition, dict)
+        return {"definition": definition}
 
     with (
-        patch.object(module, "_invoke"),
+        patch.object(module, "_invoke", side_effect=fake_invoke),
         patch.object(
             module,
             "_paged_values",
             return_value=[{"displayName": "DemandasPorStatus", "id": "report-id"}],
         ),
-        patch.object(
-            module,
-            "_update_definition",
-            side_effect=[None, module.E2EError("fabric_http_400:InvalidDefinitionFormat")],
-        ),
+        patch.object(module, "_update_definition", side_effect=fake_update),
+        patch.object(module, "_get_definition", side_effect=fake_get),
     ):
         with pytest.raises(module.E2EError, match="progressive_dataset"):
             module._create_progressively(
@@ -187,6 +243,27 @@ def test_create_progressively_records_exact_failed_phase() -> None:
 
     assert evidence["progressive_last_passed_phase"] == "datasource"
     assert evidence["progressive_failed_phase"] == "dataset"
+
+
+def test_documented_minimal_readback_contract_rejects_generated_shape() -> None:
+    source = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    rdl = module.report_factory.generate_rdl(source)
+    variants = dict(module._progressive_rdl_variants("DemandasPorStatus", rdl))
+
+    module._verify_progressive_readback(
+        "fabric_documented_minimal",
+        variants["fabric_documented_minimal"],
+    )
+    with pytest.raises(
+        module.E2EError,
+        match="progressive_readback_contract_mismatch:fabric_documented_minimal",
+    ):
+        module._verify_progressive_readback(
+            "fabric_documented_minimal",
+            variants["generated_minimal"],
+        )
 
 
 def test_safe_fabric_error_code_extracts_only_structured_code() -> None:
