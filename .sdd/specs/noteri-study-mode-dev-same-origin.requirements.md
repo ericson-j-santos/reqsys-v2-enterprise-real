@@ -98,4 +98,4 @@ Browser
 
 O reconciliador não pode depender de nomes históricos de projeto/container Docker. O runtime DEV deve ser descoberto pela única API em execução que publica a porta host 8210, conforme o contrato de `docker-compose.dev.yml` e a evidência operacional do piloto; o projeto e os serviços `api`, `frontend` e `nginx` são validados pelos labels oficiais do Docker Compose. Projetos com identidade HML/STG/PROD são rejeitados antes de qualquer alteração.
 
-Critério adicional: ausência ou ambiguidade da API DEV 8210, serviço Compose duplicado/ausente ou identidade não-DEV deve falhar fechado sem tocar HML/PROD. A porta 8083 permanece o gateway funcional validado por HTTP, mas não é usada como identidade Docker.
+Critério adicional: ausência ou ambiguidade da API DEV 8210, serviço Compose duplicado/ausente ou identidade não-DEV deve falhar fechado sem tocar HML/PROD. O gateway HTTP deve ser derivado da única porta host publicada por `80/tcp` no serviço `nginx` desse mesmo projeto Compose DEV e acessado somente via `127.0.0.1`; porta ausente, inválida ou ambígua deve falhar fechado. Nenhuma porta de gateway pode permanecer hardcoded no reconciliador.
