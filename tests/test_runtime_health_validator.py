@@ -79,7 +79,7 @@ def test_health_matrix_and_quarantine_on_security_failure() -> None:
     report = build_report("owner/repo", "main", runs, plan, [], "report_only")
 
     matrix_ids = {row["id"] for row in report["health_matrix"]}
-    assert matrix_ids == {"ci_github", "fly_dev", "fly_homolog", "fly_prod", "evidence_gate", "security_gates"}
+    assert matrix_ids == {"ci_github", "pc24x7_dev", "fly_homolog", "fly_prod", "evidence_gate", "security_gates"}
 
     security_row = next(row for row in report["health_matrix"] if row["id"] == "security_gates")
     assert security_row["status"] == "red"
@@ -234,3 +234,4 @@ def test_write_report_publishes_navigable_summary_and_json(tmp_path: Path) -> No
     assert "## Automatic backlog" in summary
     assert "## Environment sync" in summary
     assert "https://reqsys-api.fly.dev/health" in summary
+    assert "PC24x7 DEV" in summary
