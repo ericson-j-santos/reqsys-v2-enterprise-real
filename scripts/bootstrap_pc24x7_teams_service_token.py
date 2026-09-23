@@ -45,13 +45,22 @@ def request_json(method: str, url: str, *, headers: dict[str, str], body: dict |
         raise BootstrapError(f'network_error:{type(exc.reason).__name__}') from None
 
 
+def runtime_api_url(api_base: str, path: str) -> str:
+    root = api_base.rstrip('/')
+    if not path.startswith('/v1/'):
+        raise BootstrapError('runtime_api_path_invalid')
+    if root.endswith('/api'):
+        return root + path
+    return root + '/api' + path
+
+
 def validate_service_token(api_base: str, token: str) -> int:
-    status, _ = request_json('GET', api_base.rstrip('/') + '/v1/teams-gateway/ai-conversations/readiness', headers={'X-Service-Token': token, 'X-Correlation-Id': 'pc24x7-token-bootstrap-readiness'})
+    status, _ = request_json('GET', runtime_api_url(api_base, '/v1/teams-gateway/ai-conversations/readiness'), headers={'X-Service-Token': token, 'X-Correlation-Id': 'pc24x7-token-bootstrap-readiness'})
     return status
 
 
 def read_admin_jwt(cofre_base: str, vault_token: str, *, environment: str = 'dev') -> str:
-    status, payload = request_json('GET', cofre_base.rstrip('/') + f'/v1/cofre/segredos/human_admin_jwt:{environment}', headers={'X-Vault-Token': vault_token})
+    status, payload = request_json('GET', runtime_api_url(cofre_base, f'/v1/cofre/segredos/human_admin_jwt:{environment}'), headers={'X-Vault-Token': vault_token})
     if status != 200:
         raise BootstrapError(f'admin_jwt_unavailable:http_{status}')
     try:
@@ -66,7 +75,7 @@ def read_admin_jwt(cofre_base: str, vault_token: str, *, environment: str = 'dev
 
 
 def mint_service_token(api_base: str, admin_jwt: str, *, expires_in_days: int = 90) -> str:
-    status, payload = request_json('POST', api_base.rstrip('/') + '/v1/admin/service-tokens', headers={'Authorization': f'Bearer {admin_jwt}', 'X-Correlation-Id': 'pc24x7-token-bootstrap-mint'}, body={'label': LABEL, 'scopes': [SCOPE], 'expires_in_days': expires_in_days})
+    status, payload = request_json('POST', runtime_api_url(api_base, '/v1/admin/service-tokens'), headers={'Authorization': f'Bearer {admin_jwt}', 'X-Correlation-Id': 'pc24x7-token-bootstrap-mint'}, body={'label': LABEL, 'scopes': [SCOPE], 'expires_in_days': expires_in_days})
     if status not in (200, 201):
         raise BootstrapError(f'service_token_mint_failed:http_{status}')
     try:
