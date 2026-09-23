@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
 """Smoke público report-only do indicador de tendência ambiental de UX."""
 from __future__ import annotations
-import argparse, hashlib, json, urllib.request
+import argparse, hashlib, json, os, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-ENVIRONMENTS = {
-    "dev": "https://reqsys-app-dev.fly.dev",
-    "stg": "https://reqsys-app-stg.fly.dev",
-    "prod": "https://reqsys-app.fly.dev",
-}
-PATHS = ("/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
+PATHS = ("/api/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
+
+
+def default_environments() -> dict[str, str]:
+    dev = os.getenv("REQSYS_DEV_BASE_URL", "").strip().rstrip("/")
+    if not dev:
+        raise ValueError("REQSYS_DEV_BASE_URL_missing")
+    host = (urllib.parse.urlparse(dev).hostname or "").lower()
+    if host.endswith(".fly.dev"):
+        raise ValueError("legacy_fly_dev_runtime_forbidden")
+    return {
+        "dev": dev,
+        "stg": "https://reqsys-app-stg.fly.dev",
+        "prod": "https://reqsys-app.fly.dev",
+    }
 
 
 def fetch(url: str, timeout: int = 15) -> dict:
@@ -31,7 +40,7 @@ def canonical_fingerprint(payload: dict) -> str:
 
 
 def build_report(environments: dict[str, str] | None = None) -> dict:
-    environments = environments or ENVIRONMENTS
+    environments = environments or default_environments()
     results = {}
     for name, base in environments.items():
         checks = {path: fetch(base + path) for path in PATHS}
