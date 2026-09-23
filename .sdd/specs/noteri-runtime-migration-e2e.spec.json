@@ -35,7 +35,10 @@
     "idempotency": true,
     "independent_readback": true,
     "final_profile": "NORMAL",
-    "run_id_source": "github.run_id"
+    "run_id_source": "github.run_id",
+    "persistent_cutover": true,
+    "task_action_exact_sha_readback": true,
+    "cutover_after_e2e": true
   },
   "sdd_gate": {
     "tests": [
