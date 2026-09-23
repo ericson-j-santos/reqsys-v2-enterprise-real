@@ -1,0 +1,68 @@
+name: Study Mode Control Plane Recovery
+
+on:
+  push:
+    branches:
+      - ops/study-mode-control-plane-recovery-20260923
+    paths:
+      - '.github/workflows/study-mode-control-plane-recovery.yml'
+      - 'scripts/pc24x7_engineering_orchestrator_recover.py'
+      - 'tests/test_pc24x7_engineering_orchestrator_recover.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    name: Recover Engineering Orchestrator on PC24x7
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/study-mode-control-plane-recovery/evidence.json
+    steps:
+      - name: Checkout exact recovery SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate recovery guardrails
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pytest -q tests/test_pc24x7_engineering_orchestrator_recover.py
+          if ($LASTEXITCODE -ne 0) { throw "recovery_guardrail_tests_failed:$LASTEXITCODE" }
+
+      - name: Recover and validate control plane
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/pc24x7_engineering_orchestrator_recover.py --evidence-path "$env:EVIDENCE_FILE" --timeout-seconds 60
+          if ($LASTEXITCODE -ne 0) { throw "control_plane_recovery_failed:$LASTEXITCODE" }
+
+      - name: Validate sanitized evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $e = Get-Content -Raw -Encoding UTF8 $env:EVIDENCE_FILE | ConvertFrom-Json
+          if (-not $e.ok) { throw 'evidence_not_ok' }
+          if ($e.production_touched) { throw 'production_touched' }
+          if ($e.secrets_read) { throw 'secrets_read' }
+          if ($e.rdc_required) { throw 'rdc_dependency_detected' }
+          if (-not $e.after.ready) { throw 'control_plane_not_ready' }
+          if ($e.registry.noteri_match_count -ne 1) { throw 'noteri_worker_cardinality_invalid' }
+          if (-not $e.registry.noteri.fresh) { throw 'noteri_worker_not_fresh' }
+          if (-not $e.registry.noteri.controller_online) { throw 'noteri_controller_not_online' }
+          if (-not $e.registry.noteri.auth_valid) { throw 'noteri_auth_not_valid' }
+          if (-not $e.registry.noteri.eligible) { throw 'noteri_worker_not_eligible' }
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: study-mode-control-plane-recovery-${{ github.run_id }}
+          path: artifacts/study-mode-control-plane-recovery/evidence.json
+          if-no-files-found: error
+          retention-days: 14
