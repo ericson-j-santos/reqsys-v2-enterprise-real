@@ -10,6 +10,7 @@ on:
       - 'runtime/scripts/e2e_platform_central_pilot.py'
       - 'runtime/tests/test_e2e_platform_central_pilot.py'
       - '.sdd/specs/e2e-platform-central-pilot.spec.json'
+      - '.sdd/specs/e2e-platform-central-pilot.requirements.md'
       - '.github/workflows/runtime-operational-contract.yml'
   workflow_dispatch:
 
@@ -30,7 +31,7 @@ jobs:
         run: python3 scripts/validate_runtime_operational_contract.py
 
       - name: Validate E2E platform adapter contract
-        run: python3 -m pytest runtime/tests/test_e2e_platform_central_pilot.py -q
+        run: python3 -m unittest discover -s runtime/tests -p 'test_e2e_platform_central_pilot.py' -v
 
   central-e2e:
     name: Central Global E2E real
