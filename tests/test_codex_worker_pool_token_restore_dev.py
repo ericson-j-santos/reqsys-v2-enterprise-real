@@ -69,7 +69,10 @@ def test_workflow_uses_session_launcher_and_owner_risk3_gateway() -> None:
     assert "owner_risk3_gateway.py" in raw
     assert "reqsys.worker-pool-auth-file-restore.dev" in raw
     assert "repo://reqsys/environment/dev/worker-pool" in raw
-    assert "scripts/restore_codex_worker_pool_token_dev.py" in raw
+    assert "scripts/configure_worker_pool_auth_restore_risk3.py" in raw
+    assert "ENABLE-WORKER-POOL-AUTH-RESTORE-ONCE" in raw
+    assert "DISABLE-WORKER-POOL-AUTH-RESTORE-ONCE" in raw
+    assert "Remover autorização Risk3 temporária" in raw
     assert "secrets." not in raw
 
 
