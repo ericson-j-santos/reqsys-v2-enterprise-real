@@ -34,7 +34,7 @@ o runtime canônico do ReqSys e não deve ser integrado à `main`.
 12. Este harness NÃO DEVE ser mergeado na `main`; a evidência produzida deve ser
     vinculada à issue de migração e ao PR do novo repositório.
 
-## Critério de aceite
+## Critérios de aceite
 
 - checkout do SHA alvo: aprovado;
 - E2E físico: aprovado;
