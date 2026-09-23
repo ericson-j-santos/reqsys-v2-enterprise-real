@@ -40,4 +40,7 @@
 - [x] Comparar a definição gerada com RDLs 2016 produzidos pelo Report Builder e identificar a ausência de `rd:SecurityType` e `rd:DataSourceID` no datasource SQL integrado.
 - [x] Emitir e validar metadata determinística do datasource sem segredo estático.
 - [ ] Reexecutar Pre-PR no HEAD exato, integrar por merge governado e repetir o E2E Fabric DEV.
+- [x] Reexecutar E2E após a PR #2005: run `35879286946` em `main@8661fee0842077513a36d140db6d9d93bedb4622`; preflight aprovado, RDL com metadata do datasource aplicado, mas criação completa ainda rejeitada por `InvalidDefinitionFormat`.
+- [x] Substituir novas tentativas monolíticas por bootstrap progressivo no mesmo item DEV, sem artefato extra e sem delete, isolando as fases `minimal`, `datasource`, `dataset` e `full`.
+- [ ] Validar Pre-PR no HEAD exato, integrar pela fila governada e repetir o E2E para obter a primeira fase rejeitada ou concluir create/getDefinition/replay.
 
