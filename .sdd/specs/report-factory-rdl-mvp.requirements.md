@@ -35,7 +35,7 @@ Increment type: `gap_fix`
 24. O E2E deve repetir a mesma definição no mesmo item e comprovar ausência de duplicidade e igualdade do SHA-256 após o replay.
 25. O fluxo não pode persistir token, criar segredo, aceitar STG/PROD nem declarar sucesso sem leitura independente da definição.
 26. Quando houver `ReportParameters`, o RDL 2016 deve incluir `ReportParametersLayout` com `GridLayoutDefinition` e uma `CellDefinition` única para cada parâmetro, evitando payload estruturalmente inválido no Fabric.
-27. Falhas HTTP do Fabric devem registrar somente o status HTTP e o código estruturado sanitizado (`errorCode`/`code`), nunca corpo bruto, mensagem, token ou identificadores sensíveis.
+27. Falhas HTTP do Fabric devem registrar somente o status HTTP e os códigos estruturados sanitizados (`errorCode`/`code`), inclusive causas aninhadas em objetos/listas, com limite de quantidade/tamanho; nunca corpo bruto, mensagem, token ou identificadores sensíveis.
 
 ## Critérios de aceite
 
@@ -54,7 +54,7 @@ Increment type: `gap_fix`
 - execução governada `publish-e2e` deve comprovar `workspace_exact_count=1`, `final_report_exact_count=1`, `definition_verified=true` e `idempotency_verified=true`;
 - o SHA-256 observado via `getDefinition` deve ser igual ao SHA-256 do RDL gerado na mesma execução.
 - RDL parametrizado deve ser rejeitado localmente quando `ReportParametersLayout` estiver ausente ou não mapear exatamente os parâmetros declarados.
-- erro HTTP do Fabric deve produzir evidência acionável como `fabric_http_400:<codigo>` sem incluir a mensagem bruta do serviço.
+- erro HTTP do Fabric deve produzir evidência acionável como `fabric_http_400:<codigo>:<causa_aninhada>` quando houver códigos estruturados adicionais, sem incluir mensagens brutas, identificadores ou token.
 
 ## Fora do escopo deste MVP
 

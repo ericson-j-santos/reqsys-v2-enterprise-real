@@ -42,32 +42,38 @@ class E2EError(RuntimeError):
     """Erro sanitizado e seguro para evidência/log."""
 
 
-def _safe_fabric_error_code(raw: str) -> str:
-    """Extrai somente o código estruturado do Fabric sem persistir mensagem/IDs."""
+def _safe_fabric_error_codes(raw: str) -> list[str]:
+    """Extrai somente códigos estruturados do Fabric, inclusive aninhados."""
     try:
         payload = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
-        return "unknown"
+        return ["unknown"]
 
-    if not isinstance(payload, dict):
-        return "unknown"
+    codes: list[str] = []
 
-    candidates: list[Any] = [
-        payload.get("errorCode"),
-        payload.get("code"),
-    ]
-    nested = payload.get("error")
-    if isinstance(nested, dict):
-        candidates.extend([nested.get("errorCode"), nested.get("code")])
+    def visit(value: Any) -> None:
+        if len(codes) >= 6:
+            return
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in {"errorCode", "code"} and isinstance(item, str):
+                    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", item.strip())
+                    normalized = normalized.strip("_.-")[:80]
+                    if normalized and normalized not in codes:
+                        codes.append(normalized)
+                elif isinstance(item, (dict, list)):
+                    visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
 
-    for candidate in candidates:
-        if not isinstance(candidate, str):
-            continue
-        normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", candidate.strip())
-        normalized = normalized.strip("_.-")[:80]
-        if normalized:
-            return normalized
-    return "unknown"
+    visit(payload)
+    return codes or ["unknown"]
+
+
+def _safe_fabric_error_code(raw: str) -> str:
+    """Compatibilidade: retorna o primeiro código estruturado sanitizado."""
+    return _safe_fabric_error_codes(raw)[0]
 
 
 def _run(args: list[str], timeout: int = 60) -> str:
@@ -130,8 +136,9 @@ def _request_json(
             return response.status, dict(response.headers.items()), body if isinstance(body, dict) else {}
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
-        safe_code = _safe_fabric_error_code(raw)
-        raise E2EError(f"fabric_http_{exc.code}:{safe_code}") from None
+        safe_codes = _safe_fabric_error_codes(raw)
+        safe_suffix = ":".join(safe_codes)
+        raise E2EError(f"fabric_http_{exc.code}:{safe_suffix}") from None
 
 
 def _paged_values(url: str, token: str) -> list[dict[str, Any]]:
