@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "restore_codex_worker_pool_token_dev.py"
-WORKFLOW = ROOT / ".github" / "workflows" / "codex-worker-pool-token-restore-dev.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "codex-worker-pool-smoke-dev.yml"
 GATEWAY = ROOT / ".github" / "workflows" / "reqsys-authorized-actions-gateway.yml"
 POLICY = ROOT / ".github" / "self-hosted-runner-policy.json"
 
@@ -79,4 +79,6 @@ def test_gateway_and_runner_policy_allow_only_fixed_restore_workflow() -> None:
     assert "github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev'" in gateway
     assert "target='codex-worker-pool-token-restore-dev.yml'" in gateway
     assert "steps.route.outputs.target == 'codex-worker-pool-token-restore-dev.yml'" in gateway
-    assert ".github/workflows/codex-worker-pool-token-restore-dev.yml" in policy["approved_workflows"]
+    assert ".github/workflows/codex-worker-pool-smoke-dev.yml" in policy["approved_workflows"]
+    assert ".github/workflows/codex-worker-pool-token-restore-dev.yml" not in policy["approved_workflows"]
+    assert not (ROOT / ".github" / "workflows" / "codex-worker-pool-token-restore-dev.yml").exists()
