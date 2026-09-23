@@ -76,6 +76,115 @@ def _safe_fabric_error_code(raw: str) -> str:
     return _safe_fabric_error_codes(raw)[0]
 
 
+_SAFE_RDL_DIAGNOSTIC_TERMS = frozenset({
+    "AutoRefresh",
+    "Body",
+    "CellDefinition",
+    "CellDefinitions",
+    "CommandText",
+    "ConnectionProperties",
+    "DataField",
+    "DataSet",
+    "DataSetName",
+    "DataSets",
+    "DataSource",
+    "DataSourceName",
+    "DataSources",
+    "DefaultFontFamily",
+    "Field",
+    "Fields",
+    "GridLayoutDefinition",
+    "Group",
+    "IntegratedSecurity",
+    "Page",
+    "Paragraph",
+    "Paragraphs",
+    "Query",
+    "QueryParameter",
+    "QueryParameters",
+    "Report",
+    "ReportItems",
+    "ReportParameter",
+    "ReportParameters",
+    "ReportParametersLayout",
+    "ReportSection",
+    "ReportSections",
+    "ReportUnitType",
+    "Style",
+    "Tablix",
+    "TablixBody",
+    "TablixCell",
+    "TablixCells",
+    "TablixColumn",
+    "TablixColumnHierarchy",
+    "TablixColumns",
+    "TablixMember",
+    "TablixMembers",
+    "TablixRow",
+    "TablixRowHierarchy",
+    "TablixRows",
+    "TextRun",
+    "TextRuns",
+    "Textbox",
+    "Value",
+    "Width",
+})
+_SAFE_RDL_LOCATION_RE = re.compile(
+    r"(?i)\b(line|column|position)\s*(?:number\s*)?[:=#]?\s*(\d{1,6})\b"
+)
+
+
+def _safe_fabric_rdl_diagnostics(raw: str) -> list[str]:
+    """Extrai somente tokens RDL allowlisted e coordenadas de mensagens estruturadas."""
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+    diagnostic_texts: list[str] = []
+
+    def visit(value: Any) -> None:
+        if len(diagnostic_texts) >= 12:
+            return
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "message" and isinstance(item, str):
+                    diagnostic_texts.append(item[:1200])
+                elif key == "parameters" and isinstance(item, list):
+                    for parameter in item[:8]:
+                        if not isinstance(parameter, dict):
+                            continue
+                        name = str(parameter.get("name") or "")[:120]
+                        raw_value = str(parameter.get("value") or "")[:240]
+                        diagnostic_texts.append(f"{name} {raw_value}")
+                elif isinstance(item, (dict, list)):
+                    visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    visit(payload)
+
+    findings: list[str] = []
+    for diagnostic_text in diagnostic_texts:
+        for term in sorted(_SAFE_RDL_DIAGNOSTIC_TERMS, key=lambda item: (-len(item), item)):
+            if re.search(
+                rf"(?<![A-Za-z0-9_]){re.escape(term)}(?![A-Za-z0-9_])",
+                diagnostic_text,
+            ):
+                finding = f"rdl_{term}"
+                if finding not in findings:
+                    findings.append(finding)
+        for label, number in _SAFE_RDL_LOCATION_RE.findall(diagnostic_text):
+            finding = f"{label.casefold()}_{number}"
+            if finding not in findings:
+                findings.append(finding)
+        if len(findings) >= 6:
+            break
+
+    return findings[:6]
+
+
 def _run(args: list[str], timeout: int = 60) -> str:
     proc = subprocess.run(
         args,
@@ -137,7 +246,8 @@ def _request_json(
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
         safe_codes = _safe_fabric_error_codes(raw)
-        safe_suffix = ":".join(safe_codes)
+        safe_diagnostics = _safe_fabric_rdl_diagnostics(raw)
+        safe_suffix = ":".join((safe_codes + safe_diagnostics)[:8])
         raise E2EError(f"fabric_http_{exc.code}:{safe_suffix}") from None
 
 

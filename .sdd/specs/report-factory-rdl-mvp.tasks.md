@@ -32,3 +32,7 @@
 
 - [x] Reexecutar o E2E real após a correção de layout: run `35855595593` no SHA `e6a3821ce559d173524ac4dfc953f93fc715dff7`; preflight/OIDC/workspace aprovados e criação bloqueada por `fabric_http_400:InvalidDefinitionFormat`.
 - [ ] Alinhar o cabeçalho RDL 2016 ao contrato público oficial do Fabric e reexecutar o E2E no SHA integrado.
+
+- [x] Reexecutar E2E após a PR #1996: run `35866066425` na main, com OIDC/workspace aprovados e criação ainda bloqueada por `fabric_http_400:InvalidDefinitionFormat`, sem código aninhado adicional.
+- [x] Implementar diagnóstico fail-closed que preserva somente nomes de elementos RDL allowlisted e coordenadas de esquema, descartando mensagens/URLs/IDs/tokens/valores arbitrários.
+- [ ] Validar o diagnóstico no CI/Pre-PR do HEAD exato e reexecutar o E2E Fabric DEV após merge governado.
