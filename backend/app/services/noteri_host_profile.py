@@ -22,6 +22,8 @@ PROFILE_TASK_TYPE = "host.profile.set.v1"
 TERMINAL_STATUSES = {"CONCLUÍDO", "BLOQUEADO", "CANCELADO"}
 ALLOWED_CONTROL_PLANE_HOSTS = {"host.docker.internal", "127.0.0.1", "localhost"}
 CONTROL_PLANE_PORT = 8787
+DEFAULT_DEV_CONTROL_PLANE_URL = "http://host.docker.internal:8787"
+DEV_ENVIRONMENTS = {"development", "dev", "desenvolvimento"}
 
 
 class NoteriProfileUnavailable(RuntimeError):
@@ -39,8 +41,27 @@ def expected_host() -> str:
     return value
 
 
+def _is_containerized() -> bool:
+    return Path("/.dockerenv").exists()
+
+
+def _implicit_dev_control_plane_url() -> str | None:
+    if (os.getenv(PROFILE_PATH_ENV) or "").strip():
+        return None
+    environment = (
+        os.getenv("APP_ENV")
+        or os.getenv("ENVIRONMENT")
+        or "development"
+    ).strip().lower().replace("-", "_")
+    if environment not in DEV_ENVIRONMENTS or not _is_containerized():
+        return None
+    return DEFAULT_DEV_CONTROL_PLANE_URL
+
+
 def control_plane_url() -> str | None:
     raw = (os.getenv(CONTROL_PLANE_URL_ENV) or "").strip()
+    if not raw:
+        raw = _implicit_dev_control_plane_url() or ""
     if not raw:
         return None
     parsed = urlparse(raw)

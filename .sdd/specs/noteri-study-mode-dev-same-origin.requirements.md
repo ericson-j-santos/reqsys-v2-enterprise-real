@@ -36,13 +36,18 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     segredo faz parte deste fluxo.
 12. O E2E deve provar NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL, autenticação,
     leitura independente e bloqueio de trabalho normal durante ESTUDO.
-13. A reconciliação deve sincronizar `infra/nginx/default.dev.conf` para a
-    árvore efetiva do runtime, recriar o Nginx e comprovar HTTP 200 em
-    `/api/health` e `/api/runtime/health` antes do E2E funcional.
-14. Ao reconstruir o comando Docker Compose, a reconciliação deve preservar
-    cada arquivo declarado em `com.docker.compose.project.environment_file`
-    usando `--env-file`, sem ler ou publicar seu conteúdo. Se um arquivo
-    declarado não existir, deve falhar fechado antes de recriar containers.
+13. A reconciliação deve exigir os bind mounts efetivos do backend e frontend,
+    além do bind exato de `infra/nginx/default.dev.conf`; a atualização ocorre
+    nos arquivos montados, sem recriar containers nem reprocessar `.env`.
+14. Após sincronizar o Nginx, executar `nginx -t` e apenas o reload do processo
+    Nginx existente; somente então comprovar HTTP 200 em `/api/health` e
+    `/api/runtime/health` e HTTP 401 na rota protegida
+    `/api/v1/noteri/profile`.
+15. Quando `NOTERI_CONTROL_PLANE_URL` não estiver explicitamente configurada,
+    o endpoint fixo `http://host.docker.internal:8787` pode ser inferido
+    somente em container de desenvolvimento e somente quando o modo legado por
+    arquivo não estiver configurado. HML/PROD e execução fora de container não
+    recebem esse fallback.
 
 ## Critérios de aceite
 
@@ -60,15 +65,15 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 11. Drift de proxy que faça `/api/runtime/health` retornar 404 deve falhar
     fechado; a reconciliação só conclui após restaurar o contrato público e
     confirmar as duas rotas de saúde por leitura HTTP independente.
-12. Falhas de `docker compose config` devem produzir somente um
-    `diagnostic_code` allowlisted e sem `stderr` bruto, valores de ambiente,
-    tokens, segredos ou caminhos sensíveis na evidência publicada.
-13. Se a classe ainda for desconhecida, a evidência pode publicar somente
-    `diagnostic_markers` pertencentes a uma allowlist fixa; nunca texto bruto,
-    caminhos ou valores arbitrários.
-14. O E2E deve comprovar que o contexto Compose preservou os env-files
-    declarados pelo runtime sem expor seus valores e que o Nginx recriado
-    restaurou `/api/runtime/health` antes da mudança de perfil.
+12. O caminho normal do reconciliador não executa `docker compose config`,
+    `docker compose up` nem recria API/frontend/Nginx; isso evita reler ou
+    alterar segredos do runtime para corrigir o Modo ESTUDO.
+13. Bind ausente, bind do Nginx divergente, `nginx -t` inválido ou qualquer
+    rota de saúde/controle não observada deve falhar fechado antes da mudança de
+    perfil.
+14. O E2E deve comprovar que o reload do Nginx restaurou
+    `/api/runtime/health`, que a API carregou a rota same-origin e que o ciclo
+    NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL terminou em NORMAL.
 
 ## Topologia
 

@@ -21,6 +21,7 @@ def mounted_profile(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("NOTERI_HOST_PROFILE_AUDIT_PATH", str(audit))
     monkeypatch.setenv("NOTERI_HOST_PROFILE_EXPECTED_HOST", "Noteri")
     monkeypatch.delenv("NOTERI_CONTROL_PLANE_URL", raising=False)
+    monkeypatch.setattr(profile_service, "_is_containerized", lambda: False)
     app.dependency_overrides.clear()
     yield profile, audit
     app.dependency_overrides.clear()
@@ -141,6 +142,28 @@ def test_missing_mount_fails_closed(monkeypatch, tmp_path: Path):
         assert str(tmp_path) not in response.text
     finally:
         app.dependency_overrides.clear()
+
+def test_implicit_control_plane_is_enabled_only_for_containerized_dev_without_file_mode(monkeypatch):
+    monkeypatch.delenv("NOTERI_CONTROL_PLANE_URL", raising=False)
+    monkeypatch.delenv("NOTERI_HOST_PROFILE_PATH", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setattr(profile_service, "_is_containerized", lambda: True)
+
+    assert profile_service.control_plane_url() == "http://host.docker.internal:8787"
+
+
+def test_implicit_control_plane_does_not_override_file_mode_or_non_dev(monkeypatch, tmp_path):
+    monkeypatch.delenv("NOTERI_CONTROL_PLANE_URL", raising=False)
+    monkeypatch.setattr(profile_service, "_is_containerized", lambda: True)
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("NOTERI_HOST_PROFILE_PATH", str(tmp_path / "host-profile.json"))
+    assert profile_service.control_plane_url() is None
+
+    monkeypatch.delenv("NOTERI_HOST_PROFILE_PATH", raising=False)
+    monkeypatch.setenv("APP_ENV", "production")
+    assert profile_service.control_plane_url() is None
+
 
 def test_control_plane_get_returns_fresh_noteri_profile(monkeypatch):
     monkeypatch.setenv(

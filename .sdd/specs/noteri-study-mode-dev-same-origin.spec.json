@@ -22,11 +22,11 @@
     "Replay do mesmo perfil retorna changed=false sem novo enqueue.",
     "O E2E prova NORMAL->ESTUDO->ESTUDO->NORMAL e leitura imediata pelo control plane.",
     "HML/PROD, segredos, GUI, RDC e comando arbitrário permanecem fora do escopo.",
-    "A reconciliação sincroniza o Nginx DEV efetivo, recria o proxy e exige HTTP 200 em /api/health e /api/runtime/health antes do E2E.",
     "O reconciliador descobre o runtime DEV pela API única na porta 8210 e deriva projeto/serviços pelos labels Docker Compose; o gateway 8083 permanece validado funcionalmente por HTTP.",
-    "Falhas de docker compose config publicam somente diagnostic_code allowlisted, sem stderr bruto, valores de ambiente, tokens, segredos ou caminhos sensíveis.",
     "Quando diagnostic_code for insuficiente, a evidência publica somente diagnostic_markers de allowlist fixa, sem texto bruto, caminhos ou valores arbitrários.",
-    "A reconciliação preserva os env-files usados pelo Compose original a partir de com.docker.compose.project.environment_file, sem ler nem publicar seus valores."
+    "A reconciliação exige bind mounts do backend, frontend e configuração Nginx do DEV; atualiza arquivos sem recriar containers nem reprocessar .env/secrets.",
+    "Após sincronizar o Nginx DEV, o reconciliador executa nginx -t e reload no container existente e exige HTTP 200 em /api/health e /api/runtime/health antes do E2E.",
+    "Sem NOTERI_CONTROL_PLANE_URL explícita, o backend usa o endpoint fixo host.docker.internal:8787 somente dentro de container DEV e somente quando o modo legado por arquivo não está configurado; HML/PROD e execução fora de container não recebem esse fallback."
   ],
   "controls": {
     "hml_enabled": false,
@@ -46,6 +46,6 @@
       "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
       "tests/test_noteri_study_mode_dev_reconcile.py"
     ],
-    "evidence_contract": "O Task Console DEV deve alternar NORMAL/ESTUDO pela API same-origin; a API deve observar um único worker Noteri fresco/online/autenticado no Engineering Orchestrator; somente host.profile.set.v1 pode alterar o perfil; a tarefa deve comprovar leitura local independente e heartbeat imediato; ESTUDO não pode liberar trabalho normal; replay não cria nova tarefa. A reconciliação também deve reparar drift do Nginx DEV, recriar o proxy e comprovar /api/health e /api/runtime/health HTTP 200 antes de declarar o runtime apto. A identidade Docker do runtime deve ser descoberta pela API DEV 8210 e labels Compose; o gateway 8083 deve ser validado funcionalmente por HTTP; ambiguidades ou projetos não-DEV falham fechado. Falhas de docker compose config devem ser classificadas por diagnostic_code allowlisted sem publicar stderr bruto ou dados sensíveis. Diagnóstico residual usa somente diagnostic_markers de allowlist fixa e nunca publica texto bruto. O contexto de Compose deve reutilizar os env-files declarados nos labels do runtime; arquivo declarado e ausente falha fechado antes de qualquer recreate, sem leitura ou publicação do conteúdo."
+    "evidence_contract": "O Task Console DEV deve alternar NORMAL/ESTUDO pela API same-origin; a API deve observar um único worker Noteri fresco/online/autenticado no Engineering Orchestrator; somente host.profile.set.v1 pode alterar o perfil; a tarefa deve comprovar leitura local independente e heartbeat imediato; ESTUDO não pode liberar trabalho normal; replay não cria nova tarefa. A reconciliação deve descobrir a API DEV pela porta 8210 e labels Compose, exigir bind mounts do backend/frontend e o bind exato da configuração Nginx, sincronizar arquivos pelo host, validar `nginx -t`, executar somente reload do Nginx e comprovar `/api/health`, `/api/runtime/health` e a rota `/api/v1/noteri/profile` antes do E2E. O caminho normal não pode executar `docker compose config/up`, recriar containers nem reler `.env`/segredos. O fallback implícito do control plane é restrito a container DEV sem modo legado por arquivo; produção/homologação e endpoints não allowlisted permanecem fail-closed."
   }
 }
