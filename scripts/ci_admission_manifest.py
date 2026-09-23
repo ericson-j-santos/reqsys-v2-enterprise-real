@@ -111,6 +111,45 @@ def build_manifest(readiness: dict[str, Any], expected_head_sha: str = "") -> di
     except (TypeError, ValueError) as exc:
         raise AdmissionError("behind_by_invalid") from exc
 
+    if readiness_status == "not_applicable":
+        if blockers or behind_by != 0 or changed or head_sha != base_sha:
+            raise AdmissionError("not_applicable_state_invalid")
+        return {
+            "schema_version": "1.1.0",
+            "manifest_type": "reqsys_ci_admission",
+            "generated_at_utc": utc_now(),
+            "status": "not_applicable",
+            "correlation_id": str(readiness.get("correlation_id") or ""),
+            "head_sha": head_sha,
+            "base_ref": str(readiness.get("base_ref") or "main"),
+            "base_sha": base_sha,
+            "classification": {
+                "profiles": [],
+                "changed_files_count": 0,
+                "changed_files": [],
+            },
+            "required_workflows": [],
+            "preventive_invariants": [],
+            "dependencies": [
+                {
+                    "name": "pre_pr_readiness",
+                    "required": True,
+                    "status": "not_applicable",
+                    "evidence_path": "artifacts/pre-pr-readiness/pre-pr-readiness.json",
+                }
+            ],
+            "evidence": [
+                {
+                    "type": "pre_pr_readiness",
+                    "head_sha": head_sha,
+                    "base_sha": base_sha,
+                    "status": "not_applicable",
+                    "correlation_id": str(readiness.get("correlation_id") or ""),
+                }
+            ],
+            "blocker_reason": [],
+        }
+
     preventive_invariants, invariant_errors = normalize_preventive_invariants(readiness)
     manifest_blockers = list(blockers)
     manifest_blockers.extend(invariant_errors)

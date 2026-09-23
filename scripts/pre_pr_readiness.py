@@ -419,6 +419,16 @@ def self_test_negative() -> bool:
         return len(results) == 1 and results[0].status == "failed"
 
 
+def is_not_applicable_noop(
+    *,
+    head_sha: str,
+    base_sha: str,
+    behind_by: int,
+    files: list[str],
+) -> bool:
+    return behind_by == 0 and head_sha == base_sha and not files
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Valida READY_FOR_PR antes de abrir a Pull Request.")
     parser.add_argument("--base-ref", default="main")
@@ -456,6 +466,33 @@ def main() -> int:
         blockers.append(f"HEAD divergente da execução: esperado {args.expected_head_sha}, obtido {head_sha}")
     if behind_by > 0:
         blockers.append(f"branch está {behind_by} commit(s) atrás de {args.base_ref}; atualizar antes da PR")
+
+    if is_not_applicable_noop(
+        head_sha=head_sha,
+        base_sha=base_sha,
+        behind_by=behind_by,
+        files=files,
+    ) and not blockers:
+        evidence = ReadinessEvidence(
+            schema_version="1.3.0",
+            status="not_applicable",
+            correlation_id=args.correlation_id,
+            base_ref=args.base_ref,
+            base_sha=base_sha,
+            head_sha=head_sha,
+            behind_by=behind_by,
+            changed_files=[],
+            profiles=[],
+            checks=[],
+            preventive_invariants=[],
+            blockers=[],
+            warnings=["HEAD idêntico à base e sem diff: READY_FOR_PR não aplicável"],
+        )
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(asdict(evidence), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(asdict(evidence), ensure_ascii=False, indent=2))
+        return 0
+
     if not files:
         blockers.append("nenhuma alteração detectada em relação à base")
 

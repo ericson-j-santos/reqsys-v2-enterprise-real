@@ -166,3 +166,22 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - O diff não adiciona workflow ativo em `.github/workflows`.
 - O source BACEN permanece autoritativo até evidência equivalente no target.
 - O incremento não toca produção, secrets, deploy, branch protection ou permissões administrativas.
+
+
+## Incremento Pareto — Engineering Control Plane CI Baseline v2
+
+48. A métrica por PR deve usar a janela fixa quando ela contiver pelo menos 3 PRs e ampliar progressivamente somente a amostra por PR, até no máximo 360 minutos, quando houver baixa atividade.
+49. A ampliação da amostra por PR não pode alterar a janela fixa global usada pelas métricas históricas nem transformar amostra insuficiente em evidência válida silenciosamente; o artifact deve expor `baseline_sample_valid` e metadados da janela efetiva.
+50. O artifact deve expor `rerun_rate_percent` explicitamente como proporção de workflow runs de pull request observados com `run_attempt > 1`, além dos contadores absoluto/total.
+51. `Pre-PR Readiness` com `HEAD == origin/main`, `behind_by=0` e diff vazio deve retornar `not_applicable`, publicar evidência e terminar verde sem instalar dependências/testes pesados desnecessários.
+52. Diff vazio não deve ser relaxado quando o SHA for diferente da base, houver branch atrasada, divergência do HEAD esperado ou qualquer alteração real; nesses casos o comportamento continua fail-closed.
+
+### Critérios de aceite — Baseline v2
+
+- Amostra fixa com 3+ PRs não é ampliada.
+- Baixa atividade amplia progressivamente 60 → 120 → 240 → 360 minutos e para assim que atingir a meta.
+- Amostra que não atingir a meta permanece marcada como inválida para baseline.
+- `rerun_rate_percent` possui teste determinístico e contagem por PR.
+- No-op exato da base retorna `not_applicable` e workflow verde.
+- Controle negativo com diff real ou SHA diferente não pode receber `not_applicable`.
+- Schema final do artifact: `1.0.5`.
