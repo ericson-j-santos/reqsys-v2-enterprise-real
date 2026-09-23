@@ -321,6 +321,26 @@ def required_bind_source(
     return source
 
 
+def required_nginx_bind_source(
+    item: dict[str, Any],
+    expected_project: str,
+) -> Path:
+    source = bind_source(item, "/etc/nginx/conf.d/default.conf")
+    working_dir = runtime_working_dir(item, expected_project)
+    expected = (working_dir / NGINX_CONFIG).resolve()
+    if source is None or source.resolve() != expected:
+        raise ReconcileError(
+            "nginx_config_bind_mismatch",
+            stage="nginx_source_bind",
+        )
+    if not source.is_file():
+        raise ReconcileError(
+            "nginx_config_bind_source_missing",
+            stage="nginx_source_bind",
+        )
+    return source
+
+
 def windows_path(raw: str) -> Path:
     value = raw.strip()
     lowered = value.lower()
@@ -449,7 +469,7 @@ def backup_and_copy(
     repo_root: Path,
     api_source: Path,
     frontend_source: Path,
-    working_dir: Path,
+    nginx_target: Path,
     expected_sha: str,
 ) -> tuple[Path, list[tuple[Path, Path | None]]]:
     stable_root = Path(os.environ.get("LOCALAPPDATA", "")) / "ReqSys" / "StudyModeDeploy"
@@ -472,7 +492,6 @@ def backup_and_copy(
         changes.append((target, backup))
 
     nginx_source = repo_root / NGINX_CONFIG
-    nginx_target = working_dir / NGINX_CONFIG
     if not nginx_source.is_file():
         raise ReconcileError("nginx_config_source_missing")
     nginx_target.parent.mkdir(parents=True, exist_ok=True)
@@ -823,7 +842,6 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "/app",
         stage="api_source_bind",
     )
-    working_dir = runtime_working_dir(api_before, project)
 
     frontend_source = required_bind_source(
         frontend_before,
@@ -836,19 +854,13 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             stage="frontend_source_bind",
         )
 
-    nginx_bind = bind_source(nginx_before, "/etc/nginx/conf.d/default.conf")
-    expected_nginx_bind = (working_dir / NGINX_CONFIG).resolve()
-    if nginx_bind is None or nginx_bind.resolve() != expected_nginx_bind:
-        raise ReconcileError(
-            "nginx_config_bind_mismatch",
-            stage="nginx_source_bind",
-        )
+    nginx_bind = required_nginx_bind_source(nginx_before, project)
 
     backup_root, changes = backup_and_copy(
         repo_root,
         api_source,
         frontend_source,
-        working_dir,
+        nginx_bind,
         args.expected_sha,
     )
 
