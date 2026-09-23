@@ -20,8 +20,14 @@ def report_builder_generate_and_email(payload: ReportBuilderEmailRequest):
     """Gera o RDL na aplicação e envia o artefato via provedor de e-mail configurado."""
     try:
         resultado = gerar_e_enviar_relatorio(payload)
-    except ConfiguracaoEnvioError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from None
-    except EnvioEmailError as exc:
-        raise HTTPException(status_code=502, detail=f'Falha ao enviar relatório por e-mail: {exc}') from None
+    except ConfiguracaoEnvioError:
+        raise HTTPException(
+            status_code=409,
+            detail='Configuração de envio de e-mail indisponível.',
+        ) from None
+    except EnvioEmailError:
+        raise HTTPException(
+            status_code=502,
+            detail='Falha ao enviar relatório por e-mail.',
+        ) from None
     return ok(resultado, resultado['correlation_id'])
