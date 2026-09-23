@@ -413,7 +413,9 @@ def _probe_definition_stage(
 
 
 def _infer_probe_component(results: dict[str, str]) -> str:
-    passed = lambda stage: results.get(stage) == "passed"
+    def passed(stage: str) -> bool:
+        return results.get(stage) == "passed"
+
     if not passed("minimal"):
         return "base_rdl"
     datasource_failed = not passed("datasource")
