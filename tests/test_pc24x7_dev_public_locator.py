@@ -109,6 +109,12 @@ def test_ci_locator_resolver_proves_fail_closed_negative_cases():
     assert '"self_test":true' in result.stdout.replace(" ", "")
 
 
+def test_ci_locator_exposes_distinct_api_base_output():
+    raw = RESOLVER.read_text(encoding="utf-8")
+    assert "api_base_url=" in raw
+    assert "${result.selected_url}/api" in raw
+
+
 def test_ci_locator_uses_same_public_identity_as_pages():
     html = HTML.read_text(encoding="utf-8")
     resolver = RESOLVER.read_text(encoding="utf-8")
