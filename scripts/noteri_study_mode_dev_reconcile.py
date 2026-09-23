@@ -34,6 +34,7 @@ DEV_API_PORT = "8210"
 CONFIRM = "RECONCILE-NOTERI-STUDY-MODE-DEV"
 GATEWAY = "http://127.0.0.1:8083"
 DIRECT_API = "http://127.0.0.1:8210"
+CONTROL_PLANE = "http://127.0.0.1:8787"
 ADMIN_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
 RUNTIME_FILES = {
     "backend/app/services/noteri_host_profile.py": "app/services/noteri_host_profile.py",
@@ -999,6 +1000,95 @@ def probe_gateway_http(path: str = "/api/health") -> dict[str, Any]:
         }
 
 
+def probe_control_plane_worker_registry() -> dict[str, Any]:
+    """Lê somente sinais allowlisted do registro do worker Noteri."""
+    request = urllib.request.Request(
+        CONTROL_PLANE + "/v1/workers",
+        headers={"Cache-Control": "no-store", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            status = int(response.status)
+            raw = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        return {
+            "reachable": True,
+            "http_status": int(exc.code),
+            "payload_valid": False,
+            "noteri_match_count": None,
+        }
+    except urllib.error.URLError as exc:
+        reason = exc.reason
+        return {
+            "reachable": False,
+            "http_status": None,
+            "payload_valid": False,
+            "noteri_match_count": None,
+            "error": _network_error_code(
+                reason if isinstance(reason, BaseException) else exc
+            ),
+        }
+    except OSError as exc:
+        return {
+            "reachable": False,
+            "http_status": None,
+            "payload_valid": False,
+            "noteri_match_count": None,
+            "error": _network_error_code(exc),
+        }
+
+    if status != 200:
+        return {
+            "reachable": True,
+            "http_status": status,
+            "payload_valid": False,
+            "noteri_match_count": None,
+        }
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "reachable": True,
+            "http_status": 200,
+            "payload_valid": False,
+            "noteri_match_count": None,
+            "error": "invalid_json",
+        }
+    workers = payload.get("workers") if isinstance(payload, dict) else None
+    if not isinstance(workers, list):
+        return {
+            "reachable": True,
+            "http_status": 200,
+            "payload_valid": False,
+            "noteri_match_count": None,
+            "error": "invalid_worker_registry",
+        }
+
+    matches = [
+        worker
+        for worker in workers
+        if isinstance(worker, dict)
+        and str(worker.get("device_name") or "").casefold() == "noteri"
+    ]
+    result: dict[str, Any] = {
+        "reachable": True,
+        "http_status": 200,
+        "payload_valid": True,
+        "noteri_match_count": len(matches),
+    }
+    if len(matches) == 1:
+        worker = matches[0]
+        profile = str(worker.get("profile") or "").strip().upper()
+        result["noteri"] = {
+            "fresh": worker.get("fresh") is True,
+            "controller_online": worker.get("controller_online") is True,
+            "auth_valid": worker.get("auth_valid") is True,
+            "eligible": worker.get("eligible") is True,
+            "profile": profile if profile in {"NORMAL", "ESTUDO"} else "UNKNOWN",
+        }
+    return result
+
+
 def _http_status_from_probe_output(rendered: str) -> int | None:
     for line in rendered.splitlines():
         parts = line.strip().split()
@@ -1564,6 +1654,15 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         api_result = api_e2e()
         browser_result = browser_e2e()
     except Exception as exc:
+        if (
+            isinstance(exc, ReconcileError)
+            and exc.stage == "api_profile_before"
+            and exc.diagnostic_code == "http_status_503"
+        ):
+            exc.diagnostics = {
+                **dict(exc.diagnostics),
+                "control_plane_worker_registry": probe_control_plane_worker_registry(),
+            }
         if isinstance(exc, ReconcileError) and exc.stage == "live_bind_refresh":
             exc.diagnostics = {
                 **dict(exc.diagnostics),
