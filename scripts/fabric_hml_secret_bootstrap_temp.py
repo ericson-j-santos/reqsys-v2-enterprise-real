@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -203,7 +204,7 @@ def delete_credential(az: str, app_id: str, key_id: str) -> None:
 
 def validate_client_credentials(
     *, client_id: str, secret: str, workspace_id: str
-) -> tuple[bool, int | None, bool]:
+) -> tuple[bool, int | None, bool, int | None]:
     body = urllib.parse.urlencode({
         "client_id": client_id,
         "client_secret": secret,
@@ -218,11 +219,12 @@ def validate_client_credentials(
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as resp:
+            token_status = resp.status
             access_token = json.loads(resp.read().decode("utf-8")).get("access_token", "")
     except urllib.error.HTTPError as exc:
-        return False, exc.code, False
+        return False, None, False, exc.code
     if not access_token:
-        return False, None, False
+        return False, None, False, token_status
 
     status, payload = get_json(
         "https://api.fabric.microsoft.com/v1/workspaces", str(access_token)
@@ -230,7 +232,30 @@ def validate_client_credentials(
     visible = status == 200 and any(
         str(row.get("id") or "") == workspace_id for row in payload.get("value", [])
     )
-    return True, status, visible
+    return True, status, visible, token_status
+
+
+def validate_client_credentials_with_retry(
+    *,
+    client_id: str,
+    secret: str,
+    workspace_id: str,
+    attempts: int = 6,
+    delay_seconds: int = 5,
+) -> tuple[bool, int | None, bool, int | None, int]:
+    last = (False, None, False, None)
+    for attempt in range(1, attempts + 1):
+        last = validate_client_credentials(
+            client_id=client_id,
+            secret=secret,
+            workspace_id=workspace_id,
+        )
+        token_ok, fabric_status, workspace_visible, _ = last
+        if token_ok and fabric_status == 200 and workspace_visible:
+            return (*last, attempt)
+        if attempt < attempts:
+            time.sleep(delay_seconds)
+    return (*last, attempts)
 
 
 def main() -> int:
@@ -253,8 +278,11 @@ def main() -> int:
         "target_secret_present_after": False,
         "credential_created": False,
         "credential_rollback": False,
+        "secret_replaced": False,
         "client_credentials_token_obtained": False,
+        "token_endpoint_status": None,
         "fabric_api_status": None,
+        "validation_attempts": 0,
         "target_workspace_visible_to_app": False,
         "e2e_enabled": False,
         "secret_value_exposed": False,
@@ -304,13 +332,11 @@ def main() -> int:
         evidence["target_secret_present_before"] = TARGET_SECRET in secrets_before
 
         if evidence["target_secret_present_before"]:
+            # O valor de um Actions secret não pode ser relido. Portanto, a mera
+            # presença do nome nunca autoriza o E2E. Mantém o gate fechado até
+            # uma nova credencial ser validada ponta a ponta.
             evidence["target_secret_present_after"] = True
-            set_variable(gh, "FABRIC_HML_E2E_ENABLED", "true")
-            evidence["e2e_enabled"] = (
-                "FABRIC_HML_E2E_ENABLED" in gh_names(gh, "variable")
-            )
-            evidence["status"] = "secret_present_e2e_enabled"
-            return 0
+            set_variable(gh, "FABRIC_HML_E2E_ENABLED", "false")
 
         credential_name = (
             "painel-powerbi-hml-"
@@ -319,7 +345,34 @@ def main() -> int:
         new_secret, new_key_id = create_credential(az, app_id, credential_name)
         evidence["credential_created"] = True
 
-        # O segredo segue somente por stdin; nunca entra em argv, arquivo ou stdout.
+        # Valida antes de substituir o secret existente. Isso evita transformar
+        # presença de configuração em falso positivo e absorve propagação curta
+        # do Entra por retentativa limitada.
+        (
+            token_ok,
+            fabric_status,
+            workspace_visible,
+            token_status,
+            validation_attempts,
+        ) = validate_client_credentials_with_retry(
+            client_id=app_id,
+            secret=new_secret,
+            workspace_id=workspace_id,
+        )
+        evidence["client_credentials_token_obtained"] = token_ok
+        evidence["token_endpoint_status"] = token_status
+        evidence["fabric_api_status"] = fabric_status
+        evidence["target_workspace_visible_to_app"] = workspace_visible
+        evidence["validation_attempts"] = validation_attempts
+
+        if not (token_ok and fabric_status == 200 and workspace_visible):
+            delete_credential(az, app_id, new_key_id)
+            evidence["credential_rollback"] = True
+            evidence["status"] = "new_credential_validation_failed"
+            raise BootstrapError("new_credential_validation_failed_rolled_back")
+
+        # O segredo validado segue somente por stdin; nunca entra em argv,
+        # arquivo ou stdout.
         try:
             run_stdin([
                 gh,
@@ -343,26 +396,10 @@ def main() -> int:
             evidence["credential_rollback"] = True
             raise BootstrapError("github_secret_not_observed_rolled_back")
 
-        token_ok, fabric_status, workspace_visible = validate_client_credentials(
-            client_id=app_id,
-            secret=new_secret,
-            workspace_id=workspace_id,
-        )
-        evidence["client_credentials_token_obtained"] = token_ok
-        evidence["fabric_api_status"] = fabric_status
-        evidence["target_workspace_visible_to_app"] = workspace_visible
-
-        if token_ok and fabric_status == 200 and workspace_visible:
-            set_variable(gh, "FABRIC_HML_E2E_ENABLED", "true")
-            evidence["e2e_enabled"] = (
-                "FABRIC_HML_E2E_ENABLED" in gh_names(gh, "variable")
-            )
-
-        evidence["status"] = (
-            "ready_for_e2e"
-            if evidence["e2e_enabled"]
-            else "secret_provisioned_access_pending"
-        )
+        evidence["secret_replaced"] = evidence["target_secret_present_before"]
+        set_variable(gh, "FABRIC_HML_E2E_ENABLED", "true")
+        evidence["e2e_enabled"] = True
+        evidence["status"] = "ready_for_e2e"
         return 0
     except Exception as exc:
         evidence["reason"] = str(exc).splitlines()[0][:160]
@@ -385,8 +422,11 @@ def main() -> int:
             "target_secret_present_after",
             "credential_created",
             "credential_rollback",
+            "secret_replaced",
             "client_credentials_token_obtained",
+            "token_endpoint_status",
             "fabric_api_status",
+            "validation_attempts",
             "target_workspace_visible_to_app",
             "e2e_enabled",
             "secret_value_exposed",
