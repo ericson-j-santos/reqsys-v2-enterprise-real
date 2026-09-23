@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from io import BytesIO
+from urllib.error import HTTPError
 from pathlib import Path
 
 import pytest
@@ -23,7 +25,7 @@ def test_restore_reuses_existing_token_without_rotation(tmp_path: Path, monkeypa
     token_file = tmp_path / "token"
     token_file.write_text("x" * 48, encoding="utf-8")
     monkeypatch.setattr(module, "_canonical_container_and_token_path", lambda: ("container-1", token_file))
-    monkeypatch.setattr(module, "_validate_runtime", lambda _token: (200, True))
+    monkeypatch.setattr(module, "_validate_runtime", lambda _token: (200, True, ""))
     seen: list[list[str]] = []
     monkeypatch.setattr(module, "_docker", lambda args: seen.append(args) or "")
 
@@ -40,7 +42,7 @@ def test_restore_generates_token_locally_and_restarts(tmp_path: Path, monkeypatc
     token_file = tmp_path / "token"
     monkeypatch.setattr(module, "_canonical_container_and_token_path", lambda: ("container-1", token_file))
     monkeypatch.setattr(module.secrets, "token_urlsafe", lambda _size: "y" * 64)
-    monkeypatch.setattr(module, "_validate_runtime", lambda _token: (200, True))
+    monkeypatch.setattr(module, "_validate_runtime", lambda _token: (200, True, ""))
     monkeypatch.setattr(module, "_wait_runtime", lambda _token: 200)
     seen: list[list[str]] = []
     monkeypatch.setattr(module, "_docker", lambda args: seen.append(args) or "")
@@ -82,6 +84,75 @@ def test_write_new_token_fails_closed_when_parent_is_unusable(
 
     with pytest.raises(module.RestoreError, match="worker_pool_token_parent_create_failed"):
         module._write_new_token(token_file)
+
+
+def test_request_preserves_health_payload_on_http_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = BytesIO(
+        b'{"status":"not_ready","auth_configured":false,"expected_rules_sha_configured":true}'
+    )
+
+    def fail(_request, timeout: int):
+        assert timeout == 3
+        raise HTTPError(module.HEALTH_URL, 503, "not ready", {}, body)
+
+    monkeypatch.setattr(module, "urlopen", fail)
+
+    status, payload = module._request(module.HEALTH_URL)
+
+    assert status == 503
+    assert payload["auth_configured"] is False
+    assert payload["expected_rules_sha_configured"] is True
+
+
+@pytest.mark.parametrize(
+    ("health_status", "health", "snapshot_status", "expected"),
+    [
+        (0, {}, 0, "worker_pool_health_unreachable"),
+        (
+            503,
+            {"auth_configured": False, "expected_rules_sha_configured": True},
+            503,
+            "worker_pool_auth_file_not_visible_in_container",
+        ),
+        (
+            503,
+            {"auth_configured": True, "expected_rules_sha_configured": False},
+            200,
+            "worker_pool_expected_rules_sha_not_configured",
+        ),
+        (
+            200,
+            {"auth_configured": True, "expected_rules_sha_configured": True},
+            401,
+            "worker_pool_token_mismatch_after_restore",
+        ),
+        (
+            200,
+            {"auth_configured": True, "expected_rules_sha_configured": True},
+            0,
+            "worker_pool_authenticated_endpoint_unreachable",
+        ),
+    ],
+)
+def test_runtime_failure_reason_is_specific_and_sanitized(
+    health_status: int,
+    health: dict[str, object],
+    snapshot_status: int,
+    expected: str,
+) -> None:
+    assert module._runtime_failure_reason(health_status, health, snapshot_status) == expected
+
+
+def test_wait_runtime_propagates_last_specific_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        module,
+        "_validate_runtime",
+        lambda _token: (503, False, "worker_pool_expected_rules_sha_not_configured"),
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+
+    with pytest.raises(module.RestoreError, match="worker_pool_expected_rules_sha_not_configured"):
+        module._wait_runtime("x" * 48, attempts=2)
 
 
 def test_workflow_uses_session_launcher_and_owner_risk3_gateway() -> None:
