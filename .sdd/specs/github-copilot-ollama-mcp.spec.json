@@ -29,5 +29,14 @@
     "expected_fallback_model": "gemma4:26b-q8-code",
     "production_touched": false,
     "deploy_performed": false
-  }
+  },
+  "acceptance_criteria": [
+    "O custom agent Ollama é user-invocable no GitHub Copilot e referencia somente a ferramenta MCP ollama_analyze para acesso ao Ollama.",
+    "URL e bearer token do MCP são resolvidos somente por COPILOT_MCP_OLLAMA_URL e COPILOT_MCP_OLLAMA_TOKEN, sem segredo literal versionado.",
+    "O bridge MCP permanece em 127.0.0.1:8010 e chama exclusivamente o gateway Ollama loopback em 127.0.0.1:8008, sem exposição direta de 11434.",
+    "Somente gemma4:31b-cloud e gemma4:26b-q8-code são aceitos no baseline; modelo fora da allowlist falha antes de qualquer rede.",
+    "Bearer inválido, correlation_id inválido e endpoint remoto falham fechado; a ferramenta é declarada read-only e não destrutiva.",
+    "Os testes de contrato e bridge passam no HEAD exato e o Pre-PR Readiness retorna READY_FOR_PR=passed com behind_by=0.",
+    "Conclusão funcional exige E2E real GitHub.com -> HTTPS MCP -> PC24x7 -> gateway -> Ollama com correlation_id preservado e controle negativo de autenticação."
+  ]
 }
