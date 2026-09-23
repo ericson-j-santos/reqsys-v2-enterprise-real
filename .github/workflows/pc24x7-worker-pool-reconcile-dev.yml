@@ -1,0 +1,78 @@
+name: PC24x7 Worker Pool Reconcile DEV
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "fix/worker-pool-runtime-reconcile-*"
+    paths:
+      - "scripts/pc24x7_worker_pool_reconcile.py"
+      - "tests/test_pc24x7_worker_pool_reconcile.py"
+      - ".github/workflows/pc24x7-worker-pool-reconcile-dev.yml"
+      - ".sdd/specs/codex-worker-pool-runtime-reconcile.*"
+      - "docker-compose.pc24x7-codex-worker-pool.yml"
+      - "services/codex-worker-pool/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc24x7-worker-pool-reconcile-dev
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile Worker Pool runtime on PC24x7 DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 15
+    env:
+      EVIDENCE_FILE: artifacts/pc24x7-worker-pool-reconcile/evidence.json
+
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Reconcile exact Worker Pool service
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          python scripts/pc24x7_worker_pool_reconcile.py `
+            --confirm RECONCILE-CODEX-WORKER-POOL-DEV `
+            --repo-root "$env:GITHUB_WORKSPACE" `
+            --evidence-file "$env:EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate sanitized runtime evidence
+        shell: powershell
+        run: |
+          $evidence = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
+          if ($evidence.result -ne "WORKER_POOL_RUNTIME_RECONCILED") { throw "Runtime não reconciliado." }
+          if ($evidence.endpoint_container_unique -ne $true) { throw "Endpoint canônico não é único." }
+          if ($evidence.token_content_read -ne $false) { throw "Contrato de segredo violado." }
+          if ($evidence.production_touched -ne $false) { throw "Produção não pode ser tocada." }
+          if ($evidence.runtime_reconciled -ne $true) { throw "Reconciliação sem evidência funcional." }
+          if (($evidence.rules_sha -as [string]).Length -ne 40) { throw "Rules SHA inválido." }
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pc24x7-worker-pool-reconcile-${{ github.run_id }}
+          path: artifacts/pc24x7-worker-pool-reconcile/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        shell: powershell
+        run: |
+          "## PC24x7 Worker Pool Reconcile DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Serviço: codex-worker-pool" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Endpoint: 127.0.0.1:8097" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Segredo lido: não" | Add-Content $env:GITHUB_STEP_SUMMARY

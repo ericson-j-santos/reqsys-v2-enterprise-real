@@ -212,3 +212,17 @@ def test_falls_back_to_latest_existing_service_mount_when_historical_metadata_is
 
     assert resolved == newest
     assert method == "latest_ranked_canonical_docker_mount_history"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("/run/desktop/mnt/host/c/secure/worker.token", r"C:\\secure\\worker.token"),
+        ("/host_mnt/d/reqsys/token", r"D:\\reqsys\\token"),
+        ("/mnt/e/runtime/token", r"E:\\runtime\\token"),
+    ],
+)
+def test_translates_docker_desktop_host_paths(source: str, expected: str) -> None:
+    candidates = [str(path) for path in reconcile._host_path_candidates(source)]
+
+    assert expected in candidates

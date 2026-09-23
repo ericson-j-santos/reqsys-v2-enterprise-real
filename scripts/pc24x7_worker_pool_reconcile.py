@@ -132,6 +132,38 @@ def _created_at(container: dict[str, Any]) -> datetime:
     return value
 
 
+
+def _host_path_candidates(source: str) -> list[Path]:
+    raw = source.strip()
+    if not raw:
+        return []
+    candidates = [Path(raw)]
+    normalized = raw.replace("\\", "/")
+    for prefix in ("/run/desktop/mnt/host/", "/host_mnt/", "/mnt/"):
+        if not normalized.casefold().startswith(prefix.casefold()):
+            continue
+        remainder = normalized[len(prefix):]
+        drive, separator, tail = remainder.partition("/")
+        if len(drive) != 1 or not drive.isalpha():
+            continue
+        windows = f"{drive.upper()}:\\\\{tail.replace('/', '\\\\')}" if separator else f"{drive.upper()}:\\\\"
+        candidates.append(Path(windows))
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path).casefold()
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+
+def _existing_host_path(source: str) -> Path | None:
+    for candidate in _host_path_candidates(source):
+        if candidate.is_file():
+            return candidate
+    return None
+
 def discover_token_source() -> tuple[Path, str]:
     configured = os.environ.get("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST")
     if configured:
@@ -148,11 +180,12 @@ def discover_token_source() -> tuple[Path, str]:
         source = _canonical_token_mount(container)
         if source is None:
             continue
-        if not Path(source).is_file():
+        host_path = _existing_host_path(source)
+        if host_path is None:
             continue
         identity_score = int(_canonical_compose_identity(container)) * 2
         identity_score += int(_canonical_host_binding(container))
-        candidates.append((identity_score, _created_at(container), source))
+        candidates.append((identity_score, _created_at(container), str(host_path)))
 
     if not candidates:
         raise ReconcileError("worker_pool_token_source_missing")
