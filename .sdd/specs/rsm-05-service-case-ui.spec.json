@@ -1,0 +1,22 @@
+{
+  "feature_name": "rsm-05-service-case-ui",
+  "project": "ReqSys Service Management",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-23",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Tela única do ServiceCase que consome allowed_transitions calculado pelo backend, relê o estado persistido após toda mutação e evita duplicar a máquina de estados no frontend.",
+  "runtime_target": "github-actions-frontend-and-backend",
+  "environment": "CI/DEV",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_service_cases_api.py",
+      "frontend/src/views/__tests__/ServiceCaseView.spec.js"
+    ],
+    "evidence_contract": "Provar backend autoritativo -> allowed_transitions -> UI única -> mutação -> releitura independente da API -> sucesso somente após estado persistido confirmado; no controle negativo, rejeição do backend mantém o estado relido e não produz falso sucesso. Browser/API/persistência real continua obrigatório para concluir integralmente a issue #1787."
+  }
+}
