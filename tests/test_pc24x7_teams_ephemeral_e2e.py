@@ -44,6 +44,17 @@ def test_main_falha_fechado_sem_runtime_pc24x7_resolvido(monkeypatch, tmp_path, 
     assert 'REQSYS_API_BASE_URL_missing' in capsys.readouterr().out
 
 
+def test_runtime_api_url_uses_public_gateway_prefix_exactly_once():
+    assert (
+        module.runtime_api_url('https://pc24x7-dev.invalid', '/v1/teams-gateway/ai-conversations')
+        == 'https://pc24x7-dev.invalid/api/v1/teams-gateway/ai-conversations'
+    )
+    assert (
+        module.runtime_api_url('https://pc24x7-dev.invalid/api', '/v1/teams-gateway/ai-conversations')
+        == 'https://pc24x7-dev.invalid/api/v1/teams-gateway/ai-conversations'
+    )
+
+
 def ready_payload():
     return {
         'data': {
@@ -103,7 +114,7 @@ def test_resolve_admin_jwt_reuses_valid_environment_secret(monkeypatch):
     assert token == 'existing-jwt'
     assert source == 'environment_secret_valid'
     assert recovered is False
-    assert calls == [('GET', 'https://reqsys-api-dev.invalid/v1/auth/session')]
+    assert calls == [('GET', 'https://reqsys-api-dev.invalid/api/v1/auth/session')]
 
 
 def test_resolve_admin_jwt_recovers_expired_secret_with_dev_demo_login(monkeypatch):
@@ -209,6 +220,7 @@ def test_success_separates_creation_delivery_proves_idempotency_and_revokes(monk
     assert evidence['turn_idempotency_proven'] is True
     assert evidence['secret_value_exposed'] is False
     assert secret not in json.dumps(evidence)
+    assert all('/api/v1/' in call[1] for call in calls)
 
     creates = [call for call in calls if call[0] == 'POST' and call[1].endswith('/ai-conversations')]
     replies = [call for call in calls if call[0] == 'POST' and '/reply' in call[1]]

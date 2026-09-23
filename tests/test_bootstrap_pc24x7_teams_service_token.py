@@ -151,3 +151,30 @@ def test_http_200_without_readiness_does_not_finish(monkeypatch):
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert 'readiness_failed' in str(exc)
+
+def test_runtime_api_url_uses_public_gateway_prefix_exactly_once():
+    assert (
+        module.runtime_api_url('https://pc24x7-dev.invalid', '/v1/admin/service-tokens')
+        == 'https://pc24x7-dev.invalid/api/v1/admin/service-tokens'
+    )
+    assert (
+        module.runtime_api_url('https://pc24x7-dev.invalid/api', '/v1/admin/service-tokens')
+        == 'https://pc24x7-dev.invalid/api/v1/admin/service-tokens'
+    )
+
+
+def test_mint_service_token_uses_public_api_prefix(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, *, headers, body=None):
+        calls.append((method, url, body))
+        return 201, {'data': {'token': 'service-token'}}
+
+    monkeypatch.setattr(module, 'request_json', fake_request)
+    token = module.mint_service_token('https://pc24x7-dev.invalid', 'admin-jwt')
+
+    assert token == 'service-token'
+    assert calls[0][0] == 'POST'
+    assert calls[0][1] == 'https://pc24x7-dev.invalid/api/v1/admin/service-tokens'
+    assert calls[0][2]['scopes'] == [module.SCOPE]
+
