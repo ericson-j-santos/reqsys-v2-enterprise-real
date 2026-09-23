@@ -46,11 +46,25 @@ jobs:
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
-      TARGET_ENDPOINT: https://reqsys-api-dev.fly.dev/v1/teams-gateway/ai-conversations/bot/messages
       EVIDENCE_FILE: audit/teams-bot-dev-activation-probe.json
       AZURE_CORE_OUTPUT: none
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolver endpoint PC24x7 DEV
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p audit
+          node scripts/resolve_pc24x7_dev_locator.mjs --output audit/teams-bot-dev-signed-locator.json >/dev/null
+          test -n "${{ steps.locator.outputs.api_base_url }}"
+          echo "TARGET_ENDPOINT=${{ steps.locator.outputs.api_base_url }}/v1/teams-gateway/ai-conversations/bot/messages" >> "$GITHUB_ENV"
 
       - name: Validar configuração OIDC
         shell: bash
