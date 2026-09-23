@@ -17,7 +17,7 @@ import urllib.request
 import uuid
 
 BASE = os.environ.get("CENTRAL_E2E_BASE_URL", "http://127.0.0.1:8099").rstrip("/")
-CID = f"e2e-{uuid.uuid4().hex[:12]}"
+CID = os.environ.get("CENTRAL_E2E_CORRELATION_ID") or f"e2e-{uuid.uuid4().hex[:12]}"
 SHA_A = "a1b2c3d4" * 5
 SHA_B = "f1e2d3c4" * 5
 falhas = []

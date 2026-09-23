@@ -12,6 +12,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "noteri-study-mode-dev-reconcile.yml
 GATEWAY = ROOT / ".github" / "workflows" / "reqsys-authorized-actions-gateway.yml"
 POLICY = ROOT / ".github" / "self-hosted-runner-policy.json"
 OVERLAY = ROOT / "docker-compose.noteri-study-mode.yml"
+COMPOSE_DEV = ROOT / "docker-compose.dev.yml"
 FRONTEND = ROOT / "frontend" / "src" / "services" / "hostProfileLocalAgent.js"
 BACKEND_API = ROOT / "backend" / "app" / "api" / "noteri_host_profile.py"
 NGINX_DEV = ROOT / "infra" / "nginx" / "default.dev.conf"
@@ -29,6 +30,73 @@ def test_reconciler_is_fixed_to_pc24x7_dev_gateway():
     assert module.GATEWAY == "http://127.0.0.1:8083"
     assert module.DIRECT_API == "http://127.0.0.1:8210"
     assert module.CONFIRM == "RECONCILE-NOTERI-STUDY-MODE-DEV"
+
+
+def test_dev_compose_defaults_gateway_to_canonical_8083():
+    raw = COMPOSE_DEV.read_text(encoding="utf-8")
+    assert "${GATEWAY_PORT:-8083}:80" in raw
+    assert "${GATEWAY_PORT:-8081}:80" not in raw
+
+
+def test_gateway_port_repair_compose_is_nginx_only_and_secret_free(tmp_path, monkeypatch):
+    working_dir = tmp_path / "runtime"
+    nginx_bind = working_dir / "infra" / "nginx" / "default.dev.conf"
+    nginx_bind.parent.mkdir(parents=True)
+    nginx_bind.write_text("server {}\n", encoding="utf-8")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setenv("GITHUB_TOKEN", "must-not-leak")
+    monkeypatch.setenv("PATH", "C:\\Windows\\System32")
+    item = {
+        "Config": {
+            "Image": "nginx:alpine",
+            "Labels": {
+                "com.docker.compose.project": "reqsys-live",
+                "com.docker.compose.project.working_dir": str(working_dir),
+            },
+        },
+        "HostConfig": {"RestartPolicy": {"Name": "unless-stopped"}},
+        "NetworkSettings": {"Networks": {"reqsys-live_reqsys-net": {}}},
+    }
+
+    observed_working_dir, compose_path = module.write_nginx_gateway_repair_compose(
+        item,
+        "reqsys-live",
+        nginx_bind,
+        "8083",
+    )
+    payload = json.loads(compose_path.read_text(encoding="utf-8"))
+
+    assert observed_working_dir == working_dir
+    assert list(payload["services"]) == ["nginx"]
+    service = payload["services"]["nginx"]
+    assert service["image"] == "nginx:alpine"
+    assert service["restart"] == "unless-stopped"
+    assert service["ports"] == ["8083:80"]
+    assert "environment" not in service
+    assert "build" not in service
+    assert "depends_on" not in service
+    assert service["volumes"][0]["target"] == "/etc/nginx/conf.d/default.conf"
+    assert service["volumes"][0]["read_only"] is True
+    assert payload["networks"]["runtime"] == {
+        "external": True,
+        "name": "reqsys-live_reqsys-net",
+    }
+    assert "GITHUB_TOKEN" not in module.minimal_process_env()
+    assert "must-not-leak" not in compose_path.read_text(encoding="utf-8")
+
+
+def test_gateway_port_repair_is_targeted_and_rollback_capable():
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert '"--no-deps"' in raw
+    assert '"--force-recreate"' in raw
+    assert '"--pull"' in raw
+    assert '"never"' in raw
+    assert 'env["COMPOSE_DISABLE_ENV_FILE"] = "true"' in raw
+    assert 'stage="nginx_gateway_port_repair"' in raw
+    assert 'stage="nginx_gateway_port_rollback"' in raw
+    assert "docker-compose.gateway-repair-" in raw
+    assert '"gateway_port_repair_applied": gateway_port_repaired' in raw
+    assert '"nginx_only_generated_no_env"' in raw
 
 
 def test_windows_path_normalizes_docker_desktop_mounts():
@@ -180,6 +248,18 @@ def test_workflow_is_inputless_pc24x7_only_and_no_production():
     assert "secrets." not in raw
 
 
+def test_workflow_reexecutes_when_gateway_or_runtime_contract_changes():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    for path in (
+        "backend/app/api/monitoramento_operacional.py",
+        "backend/app/api/noteri_host_profile.py",
+        "backend/app/main.py",
+        "docker-compose.dev.yml",
+        "infra/nginx/default.dev.conf",
+    ):
+        assert f"- '{path}'" in raw
+
+
 def test_policy_and_gateway_allow_only_fixed_reconcile_command():
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-study-mode-dev-reconcile.yml" in policy["approved_workflows"]
@@ -202,35 +282,16 @@ def test_reconciler_has_positive_negative_idempotency_and_restore_controls():
 
 
 def test_reconcile_failure_is_sanitized_and_stage_aware():
-    err = module.ReconcileError(
-        "command_failed:docker:exit_1",
-        stage="inspect_runtime",
-        diagnostic_details={"gateway_last_http_status": 502},
-    )
+    err = module.ReconcileError("command_failed:docker:exit_1", stage="inspect_runtime")
     assert err.code == "command_failed:docker"
     assert err.stage == "inspect_runtime"
-    assert err.diagnostic_details == {"gateway_last_http_status": 502}
 
     raw = SCRIPT.read_text(encoding="utf-8")
     assert '"error_code"' in raw
     assert '"failure_stage"' in raw
     assert '"diagnostic_code"' in raw
     assert '"diagnostic_markers"' in raw
-    assert '"diagnostic_details"' in raw
     assert 'str(exc)' not in raw
-
-
-def test_gateway_timeout_keeps_sanitized_last_status():
-    with pytest.raises(module.ReconcileError) as exc:
-        module.wait_gateway_status("/api/health", {200}, timeout_seconds=0)
-
-    assert exc.value.code == "gateway_status_timeout"
-    assert exc.value.stage == "live_bind_refresh"
-    assert exc.value.diagnostic_markers == ("api_health_not_observed",)
-    assert exc.value.diagnostic_details == {
-        "gateway_path": "/api/health",
-        "gateway_last_http_status": None,
-    }
 
 
 def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
@@ -290,15 +351,15 @@ def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
     ) == ()
 
 
-def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
+def test_reconciler_requires_live_binds_and_limits_compose_to_nginx_port_repair():
     raw = SCRIPT.read_text(encoding="utf-8")
     assert 'frontend_source = required_bind_source(' in raw
     assert 'stage="frontend_source_bind"' in raw
     assert 'nginx_bind = required_nginx_bind_source(nginx_before, project)' in raw
     assert 'expected_nginx_bind = (working_dir / NGINX_CONFIG).resolve()' not in raw
     assert 'frontend_source,\n        nginx_bind,\n        args.expected_sha' in raw
-    assert '"compose_invoked": False' in raw
-    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload"' in raw
+    assert '"compose_invoked": gateway_port_repaired' in raw
+    assert '"bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload"' in raw
     assert 'restart_container(api_container, repo_root, stage="api_restart")' in raw
     assert 'stage="rollback_api_restart"' in raw
     assert '["docker", "restart", container]' in raw
@@ -311,6 +372,28 @@ def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     assert 'nginx_rendered_contract = reload_nginx(' in raw
     assert 'container_host_port(nginx_before, "80/tcp") != DEV_GATEWAY_PORT' in raw
     assert '"gateway_8083_not_bound"' in raw
+
+
+def test_gateway_probe_http_status_parser_is_sanitized_and_deterministic():
+    rendered = """
+Connecting to api:8000 (172.18.0.4:8000)
+  HTTP/1.1 502 Bad Gateway
+"""
+    assert module._http_status_from_probe_output(rendered) == 502
+    assert module._http_status_from_probe_output("connection refused") is None
+
+
+def test_gateway_failure_evidence_captures_four_independent_probes():
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert '"gateway_tcp_8083": probe_gateway_tcp()' in raw
+    assert '"gateway_http_api_health": probe_gateway_http("/api/health")' in raw
+    assert '"nginx_to_api_health": probe_nginx_upstream_api(container, repo_root)' in raw
+    assert '"nginx_active_contract": probe_active_nginx_contract(container, repo_root)' in raw
+    assert '"gateway_diagnostics"' in raw
+    assert '"direct_api_contract_ready"' in raw
+    assert '"nginx_contract_ready"' in raw
+    assert "shell=False" in raw
+    assert "str(exc)" not in raw
 
 
 def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
@@ -341,10 +424,6 @@ def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     assert "proxy_pass http://api:8000;" in nginx
     assert '"runtime_health_not_observed"' in raw
     assert '"noteri_profile_not_observed"' in raw
-    assert '"gateway_tcp_8083_open"' in raw
-    assert '"nginx_upstream_api_health_ok"' in raw
-    assert '"nginx_rendered_contract"' in raw
-    assert '"direct_api_contract"' in raw
 
 
 def test_reconciler_discovers_compose_runtime_from_dev_api_port():
@@ -354,8 +433,8 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "com.docker.compose.service" in raw
     assert "non_dev_compose_project_blocked" in raw
     assert '"runtime_discovery": "api_port_8210_compose_labels"' in raw
-    assert '"compose_invoked": False' in raw
-    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload"' in raw
+    assert '"compose_invoked": gateway_port_repaired' in raw
+    assert '"bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload"' in raw
     assert "dev_api_8210_not_unique" in raw
     assert "dev_gateway_8083_not_unique" not in raw
     assert "reqsys-live-api-1" not in raw

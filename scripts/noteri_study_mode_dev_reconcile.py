@@ -3,7 +3,8 @@
 
 O script é propositalmente restrito:
 - runtime fixo DESKTOP-PDQK954;
-- ambiente DEV descoberto pelo gateway local exclusivo na porta 8083;
+- ambiente DEV descoberto pela API local exclusiva na porta 8210;
+- gateway funcional DEV canônico na porta 8083, com autorreparo Nginx restrito;
 - projeto/containers derivados dos labels Docker Compose do gateway observado;
 - transporte de perfil pelo Engineering Orchestrator;
 - destino lógico fixo Noteri;
@@ -50,7 +51,7 @@ class ReconcileError(RuntimeError):
         stage: str | None = None,
         diagnostic_code: str | None = None,
         diagnostic_markers: tuple[str, ...] | None = None,
-        diagnostic_details: dict[str, Any] | None = None,
+        diagnostics: dict[str, Any] | None = None,
     ) -> None:
         parts = code.split(":")
         self.code = (
@@ -61,7 +62,7 @@ class ReconcileError(RuntimeError):
         self.stage = stage
         self.diagnostic_code = diagnostic_code
         self.diagnostic_markers = diagnostic_markers or ()
-        self.diagnostic_details = dict(diagnostic_details or {})
+        self.diagnostics = diagnostics or {}
         super().__init__(code)
 
 
@@ -468,6 +469,270 @@ def compose_base(
     return args
 
 
+_PROCESS_ENV_ALLOWLIST = (
+    "PATH",
+    "PATHEXT",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "DOCKER_HOST",
+    "DOCKER_CONTEXT",
+)
+
+
+def minimal_process_env() -> dict[str, str]:
+    """Retorna somente variáveis operacionais necessárias ao Docker CLI."""
+    result: dict[str, str] = {}
+    for key in _PROCESS_ENV_ALLOWLIST:
+        value = os.environ.get(key)
+        if value:
+            result[key] = value
+    return result
+
+
+def nginx_runtime_network(item: dict[str, Any]) -> str:
+    networks = (item.get("NetworkSettings") or {}).get("Networks") or {}
+    if len(networks) != 1:
+        raise ReconcileError(
+            "nginx_network_not_unique",
+            stage="nginx_gateway_identity",
+        )
+    name = str(next(iter(networks))).strip()
+    if not name or any(
+        token in name.casefold()
+        for token in ("prod", "production", "hml", "stg", "staging")
+    ):
+        raise ReconcileError(
+            "nginx_network_not_dev",
+            stage="nginx_gateway_identity",
+        )
+    return name
+
+
+def validated_nginx_image(item: dict[str, Any]) -> str:
+    image = str((item.get("Config") or {}).get("Image") or "").strip()
+    if not (image.startswith("nginx:") or image.startswith("nginx@sha256:")):
+        raise ReconcileError(
+            "nginx_image_not_allowlisted",
+            stage="nginx_gateway_identity",
+        )
+    return image
+
+
+def validated_restart_policy(item: dict[str, Any]) -> str | None:
+    name = str(
+        ((item.get("HostConfig") or {}).get("RestartPolicy") or {}).get("Name")
+        or ""
+    ).strip()
+    if name not in {"", "no", "always", "unless-stopped", "on-failure"}:
+        raise ReconcileError(
+            "nginx_restart_policy_not_allowlisted",
+            stage="nginx_gateway_identity",
+        )
+    return name or None
+
+
+def write_nginx_gateway_repair_compose(
+    item: dict[str, Any],
+    expected_project: str,
+    nginx_bind: Path,
+    host_port: str | None,
+) -> tuple[Path, Path]:
+    working_dir = runtime_working_dir(item, expected_project)
+    image = validated_nginx_image(item)
+    restart = validated_restart_policy(item)
+    network_name = nginx_runtime_network(item)
+
+    service: dict[str, Any] = {
+        "image": image,
+        "volumes": [
+            {
+                "type": "bind",
+                "source": str(nginx_bind.resolve()),
+                "target": "/etc/nginx/conf.d/default.conf",
+                "read_only": True,
+            }
+        ],
+        "networks": ["runtime"],
+    }
+    if restart:
+        service["restart"] = restart
+    if host_port is not None:
+        service["ports"] = [f"{host_port}:80"]
+
+    payload = {
+        "services": {"nginx": service},
+        "networks": {
+            "runtime": {
+                "external": True,
+                "name": network_name,
+            }
+        },
+    }
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        raise ReconcileError("localappdata_missing", stage="nginx_gateway_identity")
+    repair_root = (
+        Path(local_app_data) / "ReqSys" / "StudyModeDeploy" / "gateway-repair"
+    )
+    repair_root.mkdir(parents=True, exist_ok=True)
+    suffix = host_port or "none"
+    compose_path = repair_root / f"docker-compose.gateway-repair-{suffix}.json"
+    compose_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return working_dir, compose_path
+
+
+def recreate_nginx_gateway(
+    project: str,
+    item: dict[str, Any],
+    nginx_bind: Path,
+    host_port: str | None,
+    *,
+    stage: str,
+) -> None:
+    working_dir, compose_path = write_nginx_gateway_repair_compose(
+        item,
+        project,
+        nginx_bind,
+        host_port,
+    )
+    env = minimal_process_env()
+    env["COMPOSE_ANSI"] = "never"
+    env["COMPOSE_IGNORE_ORPHANS"] = "true"
+    env["COMPOSE_DISABLE_ENV_FILE"] = "true"
+    run(
+        [
+            "docker",
+            "compose",
+            "--project-directory",
+            str(working_dir),
+            "-p",
+            project,
+            "-f",
+            str(compose_path),
+            "up",
+            "-d",
+            "--no-deps",
+            "--force-recreate",
+            "--pull",
+            "never",
+            "nginx",
+        ],
+        cwd=working_dir,
+        timeout=180,
+        env=env,
+        stage=stage,
+    )
+
+
+def repair_nginx_gateway_port(
+    project: str,
+    nginx_before: dict[str, Any],
+    nginx_bind: Path,
+    repo_root: Path,
+) -> bool:
+    old_port = container_host_port(nginx_before, "80/tcp")
+    if old_port == DEV_GATEWAY_PORT:
+        return False
+    if old_port is not None and (
+        not old_port.isdigit() or not 1 <= int(old_port) <= 65535
+    ):
+        raise ReconcileError(
+            "dev_gateway_previous_port_invalid",
+            stage="nginx_gateway_identity",
+            diagnostic_markers=("gateway_8083_not_bound",),
+        )
+
+    try:
+        recreate_nginx_gateway(
+            project,
+            nginx_before,
+            nginx_bind,
+            DEV_GATEWAY_PORT,
+            stage="nginx_gateway_port_repair",
+        )
+        observed_project, _, _, nginx_after = discover_runtime(repo_root)
+        if observed_project != project:
+            raise ReconcileError(
+                "dev_gateway_project_changed",
+                stage="nginx_gateway_identity",
+            )
+        if container_host_port(nginx_after, "80/tcp") != DEV_GATEWAY_PORT:
+            raise ReconcileError(
+                "dev_gateway_port_repair_not_observed",
+                stage="nginx_gateway_identity",
+                diagnostic_markers=("gateway_8083_not_bound",),
+            )
+        observed_bind = required_nginx_bind_source(nginx_after, project).resolve()
+        if observed_bind != nginx_bind.resolve():
+            raise ReconcileError(
+                "dev_gateway_bind_changed_during_repair",
+                stage="nginx_gateway_identity",
+            )
+        run(
+            ["docker", "exec", container_name(nginx_after), "nginx", "-t"],
+            cwd=repo_root,
+            timeout=60,
+            stage="nginx_gateway_port_verify",
+        )
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if probe_gateway_tcp().get("reachable") is True:
+                return True
+            time.sleep(1)
+        raise ReconcileError(
+            "dev_gateway_listener_repair_timeout",
+            stage="nginx_gateway_identity",
+            diagnostic_markers=("gateway_8083_not_bound",),
+        )
+    except Exception as exc:
+        try:
+            recreate_nginx_gateway(
+                project,
+                nginx_before,
+                nginx_bind,
+                old_port,
+                stage="nginx_gateway_port_rollback",
+            )
+            rollback_project, _, _, rollback_nginx = discover_runtime(repo_root)
+            if rollback_project != project:
+                raise ReconcileError(
+                    "dev_gateway_rollback_project_mismatch",
+                    stage="nginx_gateway_identity",
+                )
+            if container_host_port(rollback_nginx, "80/tcp") != old_port:
+                raise ReconcileError(
+                    "dev_gateway_rollback_port_mismatch",
+                    stage="nginx_gateway_identity",
+                )
+        except Exception as rollback_exc:
+            raise ReconcileError(
+                "dev_gateway_port_repair_rollback_failed",
+                stage="nginx_gateway_identity",
+                diagnostic_markers=(
+                    "gateway_8083_repair_failed",
+                    "gateway_port_rollback_failed",
+                ),
+            ) from rollback_exc
+        if isinstance(exc, ReconcileError):
+            raise
+        raise ReconcileError(
+            "dev_gateway_port_repair_failed",
+            stage="nginx_gateway_identity",
+            diagnostic_markers=("gateway_8083_repair_failed",),
+        ) from exc
+
+
 def backup_and_copy(
     repo_root: Path,
     api_source: Path,
@@ -665,6 +930,199 @@ def reload_nginx(
     return contract
 
 
+def emit_checkpoint(name: str, expected_sha: str) -> None:
+    payload = {
+        "checkpoint": name,
+        "correlation_id": f"study-mode-reconcile-{expected_sha[:12]}",
+        "expected_sha": expected_sha,
+        "environment": "dev",
+        "host": EXPECTED_HOST,
+    }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True), flush=True)
+
+
+def _network_error_code(exc: BaseException) -> str:
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return "timeout"
+    if isinstance(exc, ConnectionRefusedError):
+        return "connection_refused"
+    if isinstance(exc, ConnectionResetError):
+        return "connection_reset"
+    if isinstance(exc, OSError):
+        return "os_error"
+    return "network_error"
+
+
+def probe_gateway_tcp() -> dict[str, Any]:
+    try:
+        with socket.create_connection(
+            ("127.0.0.1", int(DEV_GATEWAY_PORT)),
+            timeout=3,
+        ):
+            return {"reachable": True, "error": None}
+    except OSError as exc:
+        return {"reachable": False, "error": _network_error_code(exc)}
+
+
+def probe_gateway_http(path: str = "/api/health") -> dict[str, Any]:
+    request = urllib.request.Request(
+        GATEWAY + path,
+        headers={"Cache-Control": "no-store"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return {
+                "reachable": True,
+                "status": int(response.status),
+                "error": None,
+            }
+    except urllib.error.HTTPError as exc:
+        return {
+            "reachable": True,
+            "status": int(exc.code),
+            "error": None,
+        }
+    except urllib.error.URLError as exc:
+        reason = exc.reason
+        return {
+            "reachable": False,
+            "status": None,
+            "error": _network_error_code(
+                reason if isinstance(reason, BaseException) else exc
+            ),
+        }
+    except OSError as exc:
+        return {
+            "reachable": False,
+            "status": None,
+            "error": _network_error_code(exc),
+        }
+
+
+def _http_status_from_probe_output(rendered: str) -> int | None:
+    for line in rendered.splitlines():
+        parts = line.strip().split()
+        if (
+            len(parts) >= 2
+            and parts[0].startswith("HTTP/")
+            and len(parts[1]) == 3
+            and parts[1].isdigit()
+        ):
+            return int(parts[1])
+    return None
+
+
+def probe_nginx_upstream_api(
+    container: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container,
+                "wget",
+                "-S",
+                "-O",
+                "-",
+                "http://api:8000/health",
+            ],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "reachable": False,
+            "status": None,
+            "exit_code": None,
+            "error": "timeout",
+        }
+    except OSError:
+        return {
+            "reachable": False,
+            "status": None,
+            "exit_code": None,
+            "error": "probe_command_failed",
+        }
+
+    status = _http_status_from_probe_output(
+        (completed.stderr or "") + "\n" + (completed.stdout or "")
+    )
+    return {
+        "reachable": status is not None,
+        "status": status,
+        "exit_code": int(completed.returncode),
+        "error": (
+            None
+            if status is not None
+            else (
+                "probe_tool_unavailable"
+                if completed.returncode == 127
+                else "upstream_probe_failed"
+            )
+        ),
+    }
+
+
+def probe_active_nginx_contract(
+    container: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            ["docker", "exec", container, "nginx", "-T"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "config_dump_ok": False,
+            "runtime_route": False,
+            "api_prefix_route": False,
+            "error": "timeout",
+        }
+    except OSError:
+        return {
+            "config_dump_ok": False,
+            "runtime_route": False,
+            "api_prefix_route": False,
+            "error": "probe_command_failed",
+        }
+
+    rendered = (completed.stdout or "") + "\n" + (completed.stderr or "")
+    return {
+        "config_dump_ok": completed.returncode == 0,
+        "runtime_route": "location ~ ^/api/(runtime|" in rendered,
+        "api_prefix_route": "location /api/" in rendered,
+        "error": None if completed.returncode == 0 else "nginx_dump_failed",
+    }
+
+
+def capture_gateway_diagnostics(
+    container: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    return {
+        "gateway_tcp_8083": probe_gateway_tcp(),
+        "gateway_http_api_health": probe_gateway_http("/api/health"),
+        "nginx_to_api_health": probe_nginx_upstream_api(container, repo_root),
+        "nginx_active_contract": probe_active_nginx_contract(container, repo_root),
+    }
+
+
 def wait_gateway_status(
     path: str,
     expected: set[int],
@@ -697,43 +1155,7 @@ def wait_gateway_status(
         "gateway_status_timeout",
         stage="live_bind_refresh",
         diagnostic_markers=(marker,),
-        diagnostic_details={
-            "gateway_path": path,
-            "gateway_last_http_status": last_status,
-        },
     )
-
-
-def tcp_port_open(host: str, port: int, *, timeout_seconds: float = 2.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout_seconds):
-            return True
-    except OSError:
-        return False
-
-
-def nginx_upstream_api_health_ok(container: str, repo_root: Path) -> bool:
-    completed = subprocess.run(
-        [
-            "docker",
-            "exec",
-            container,
-            "wget",
-            "-qO-",
-            "-T",
-            "5",
-            "http://api:8000/health",
-        ],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=15,
-        check=False,
-        shell=False,
-    )
-    return completed.returncode == 0
 
 
 def wait_container_healthy(
@@ -1013,6 +1435,25 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         if item_labels.get("com.docker.compose.service") != service:
             raise ReconcileError(f"runtime_service_mismatch:{service}")
 
+    initial_nginx_bind = required_nginx_bind_source(nginx_before, project)
+    gateway_port_repaired = False
+    if container_host_port(nginx_before, "80/tcp") != DEV_GATEWAY_PORT:
+        gateway_port_repaired = repair_nginx_gateway_port(
+            project,
+            nginx_before,
+            initial_nginx_bind,
+            repo_root,
+        )
+        repaired_project, api_before, frontend_before, nginx_before = discover_runtime(
+            repo_root
+        )
+        if repaired_project != project:
+            raise ReconcileError(
+                "runtime_project_changed_after_gateway_repair",
+                stage="nginx_gateway_identity",
+            )
+        project = repaired_project
+
     api_container = container_name(api_before)
     frontend_container = container_name(frontend_before)
     nginx_container = container_name(nginx_before)
@@ -1036,13 +1477,6 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             stage="frontend_source_bind",
         )
 
-    if container_host_port(nginx_before, "80/tcp") != DEV_GATEWAY_PORT:
-        raise ReconcileError(
-            "dev_gateway_port_mismatch",
-            stage="nginx_gateway_identity",
-            diagnostic_markers=("gateway_8083_not_bound",),
-        )
-
     nginx_bind = required_nginx_bind_source(nginx_before, project)
 
     backup_root, changes = backup_and_copy(
@@ -1054,39 +1488,26 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     try:
-        # O runtime DEV atual usa bind mounts, mas não dependemos de hot-reload
-        # implícito: reiniciamos somente a API existente para carregar o código
-        # sincronizado. Não executamos Compose nem reprocessamos .env/secrets.
+        # O runtime DEV usa bind mounts; fora do autorreparo restrito da porta
+        # do Nginx acima, não recriamos a stack nem reprocessamos .env/segredos.
+        # A API existente é reiniciada para carregar deterministicamente o código.
         restart_container(api_container, repo_root, stage="api_restart")
         wait_container_healthy(api_container, repo_root, args.health_timeout)
         direct_api_contract = wait_direct_api_contract()
+        emit_checkpoint("direct_api_contract_ready", args.expected_sha)
         nginx_rendered_contract = reload_nginx(
             nginx_container,
             nginx_bind,
             repo_root,
         )
+        emit_checkpoint("nginx_contract_ready", args.expected_sha)
 
-        try:
-            wait_gateway_status("/api/health", {200})
-            wait_gateway_status("/api/runtime/health", {200})
-            wait_gateway_status("/api/v1/noteri/profile", {401})
-        except ReconcileError as exc:
-            if exc.code == "gateway_status_timeout":
-                exc.diagnostic_details.update(
-                    {
-                        "gateway_tcp_8083_open": tcp_port_open(
-                            "127.0.0.1",
-                            int(DEV_GATEWAY_PORT),
-                        ),
-                        "nginx_upstream_api_health_ok": nginx_upstream_api_health_ok(
-                            nginx_container,
-                            repo_root,
-                        ),
-                        "nginx_rendered_contract": dict(nginx_rendered_contract),
-                        "direct_api_contract": dict(direct_api_contract),
-                    }
-                )
-            raise
+        wait_gateway_status("/api/health", {200})
+        emit_checkpoint("gateway_api_health_ready", args.expected_sha)
+        wait_gateway_status("/api/runtime/health", {200})
+        emit_checkpoint("gateway_runtime_health_ready", args.expected_sha)
+        wait_gateway_status("/api/v1/noteri/profile", {401})
+        emit_checkpoint("gateway_noteri_profile_ready", args.expected_sha)
 
         _, public_health = http_json("GET", "/api/health")
         _, runtime_health = http_json("GET", "/api/runtime/health")
@@ -1107,7 +1528,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         wait_frontend_source()
         api_result = api_e2e()
         browser_result = browser_e2e()
-    except Exception:
+    except Exception as exc:
+        if isinstance(exc, ReconcileError) and exc.stage == "live_bind_refresh":
+            exc.diagnostics = capture_gateway_diagnostics(
+                nginx_container,
+                repo_root,
+            )
         rollback_files(changes)
         try:
             restart_container(
@@ -1137,8 +1563,16 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "frontend_container": frontend_container,
         "gateway_container": nginx_container,
         "runtime_discovery": "api_port_8210_compose_labels",
-        "compose_invoked": False,
-        "runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload",
+        "compose_invoked": gateway_port_repaired,
+        "compose_scope": (
+            "nginx_only_generated_no_env" if gateway_port_repaired else "none"
+        ),
+        "gateway_port_repair_applied": gateway_port_repaired,
+        "runtime_refresh": (
+            "nginx_gateway_port_repair_then_bind_mounts_plus_api_restart_plus_nginx_reload"
+            if gateway_port_repaired
+            else "bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload"
+        ),
         "api_container_restarted": True,
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": True,
@@ -1207,10 +1641,8 @@ def main() -> int:
                 if isinstance(exc, ReconcileError)
                 else []
             ),
-            "diagnostic_details": (
-                dict(exc.diagnostic_details)
-                if isinstance(exc, ReconcileError)
-                else {}
+            "gateway_diagnostics": (
+                exc.diagnostics if isinstance(exc, ReconcileError) else {}
             ),
             "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
             "expected_sha": args.expected_sha,

@@ -180,6 +180,7 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          if [ -f requirements-report-builder.txt ]; then pip install -r requirements-report-builder.txt; fi
           pip install pytest pytest-cov ruff bandit pip-audit
 
       - name: Testes regressivos backend

@@ -103,12 +103,37 @@ def test_progressive_rdl_variants_isolate_definition_layers() -> None:
     assert roots["minimal"].find(q("DataSources")) is None
     assert roots["minimal"].find(q("DataSets")) is None
     assert roots["minimal"].find(q("ReportParameters")) is None
-    assert roots["minimal"].find(q("ReportParametersLayout")) is None
+    minimal_layout = roots["minimal"].find(q("ReportParametersLayout"))
+    assert minimal_layout is not None
+    minimal_grid = minimal_layout.find(q("GridLayoutDefinition"))
+    assert minimal_grid is not None
+    assert minimal_grid.findtext(q("NumberOfColumns")) == "4"
+    assert minimal_grid.findtext(q("NumberOfRows")) == "2"
+    assert minimal_grid.find(q("CellDefinitions")) is None
     assert roots["minimal"].find(f".//{q('Tablix')}") is None
+
+    minimal_title = roots["minimal"].find(f".//{q('Textbox')}[@Name='ReportTitle']")
+    assert minimal_title is not None
+    assert minimal_title.findtext(module.report_factory.rd("WatermarkTextbox")) == "Title"
+    assert minimal_title.findtext(module.report_factory.rd("DefaultName")) == "ReportTitle"
+    assert minimal_title.findtext(q("KeepTogether")) == "true"
+    assert roots["minimal"].find(f".//{q('PageFooter')}") is not None
+
+    minimal_children = list(roots["minimal"])
+    minimal_sections_index = next(i for i, node in enumerate(minimal_children) if node.tag == q("ReportSections"))
+    minimal_layout_index = next(i for i, node in enumerate(minimal_children) if node.tag == q("ReportParametersLayout"))
+    assert minimal_layout_index > minimal_sections_index
 
     assert roots["datasource"].find(q("DataSources")) is not None
     assert roots["datasource"].find(q("DataSets")) is None
     assert roots["datasource"].find(q("ReportParameters")) is None
+    datasource_layout = roots["datasource"].find(q("ReportParametersLayout"))
+    assert datasource_layout is not None
+    datasource_grid = datasource_layout.find(q("GridLayoutDefinition"))
+    assert datasource_grid is not None
+    assert datasource_grid.findtext(q("NumberOfColumns")) == "4"
+    assert datasource_grid.findtext(q("NumberOfRows")) == "2"
+    assert datasource_grid.find(q("CellDefinitions")) is None
     assert roots["datasource"].find(f".//{q('Tablix')}") is None
 
     assert roots["dataset"].find(q("DataSources")) is not None
