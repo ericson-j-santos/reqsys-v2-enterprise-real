@@ -43,12 +43,27 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolver runtime PC24x7 DEV
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p artifacts/runtime-health-validator
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/runtime-health-validator/dev-signed-locator.json >/dev/null
+
       - name: Executar Runtime Health Validator
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MODE: ${{ github.event.inputs.mode || 'report_only' }}
           TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+          REQSYS_DEV_BASE_URL: ${{ steps.locator.outputs.base_url }}
         run: |
           set -euo pipefail
           python scripts/runtime_health_validator.py \
@@ -56,6 +71,7 @@ jobs:
             --branch "${TARGET_BRANCH}" \
             --limit "50" \
             --mode "${MODE}" \
+            --probe-env \
             --output-dir "artifacts/runtime-health-validator"
 
       - name: Publicar artifact de auditoria
