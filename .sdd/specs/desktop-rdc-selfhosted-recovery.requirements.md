@@ -31,6 +31,14 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 17. O Authorized Actions Gateway deve vincular a evidência ao \`run_id\` retornado pelo próprio \`gh workflow run\`; é proibido selecionar um run apenas por \`head_sha\`, pois múltiplas execuções podem compartilhar o mesmo SHA.
 18. Para recuperação Desktop, estados \`pending\`, \`queued\`, \`requested\` ou \`waiting\` após a janela de pickup devem produzir \`SELF_HOSTED_RUNNER_UNAVAILABLE\` e falhar fechado.
 19. Antes da falha terminal por ausência de pickup, o gateway deve solicitar o cancelamento do run self-hosted abandonado, aguardar confirmação `completed/cancelled` por janela limitada e registrar `target_cleanup_status`/`target_cleanup_error` na evidência. Falha na limpeza não autoriza redispatch nem retry automático.
+20. Durante a migração para `ericson-j-santos/desktop-pc24x7-runtime`, o mesmo workflow pode receber somente o modo fixo `runtime-bootstrap`, além do padrão `recover-rdc`.
+21. O modo `runtime-bootstrap` deve executar no mesmo runner legado `DESKTOP-PDQK954`, usar exclusivamente o SHA `4f71186f3c7636ad80f8bd14c74e3fded28101ec` do repositório dedicado e não aceitar host, repositório, SHA, caminho ou comando vindos do comentário.
+22. O bootstrap deve usar a credencial governada `GH_PAT_ACTIONS` apenas em memória para registrar `DESKTOP-PDQK954-runtime`; token de registro é efêmero e não pode ser persistido, logado ou enviado a artifact.
+23. O runner dedicado deve usar somente as labels `pc24x7,desktop-runtime` e o diretório `%LOCALAPPDATA%\\DesktopPC24x7\\GitHubRunner`; o runner legado do ReqSys deve permanecer intacto.
+24. Após o runner dedicado ficar online, o workflow deve instalar/tentar ativar o watchdog isolado em `%LOCALAPPDATA%\\DesktopPC24x7\\ControlPlaneWatchdog` e preparar o broker isolado em `%LOCALAPPDATA%\\DesktopPC24x7\\AdminBroker`.
+25. A dependência Windows usada para Task Scheduler COM deve ser fixada em `pywin32==312`; ausência da credencial, divergência de SHA/host/contrato ou falha de registro deve falhar fechado.
+26. A criação `AtStartup + S4U + highest` do broker continua sujeita ao Windows/UAC. Se não puder ser concluída pelo contexto do runner, o resultado deve permanecer `activation_pending`; nenhuma tentativa de bypass de UAC é permitida.
+27. O Authorized Actions Gateway deve aceitar o comando exato `/reqsys run desktop-runtime-bootstrap`, mapear estaticamente para `desktop-rdc-recovery.yml` com `mode=runtime-bootstrap` e preservar a validação de pickup/cancelamento do runner self-hosted.
 
 ## Critérios de aceite
 
@@ -39,6 +47,9 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 - testes negativos recusam host ou task não allowlisted, claim stale e claim inválido;
 - marcadores não allowlisted permanecem recusados antes da execução de qualquer tarefa;
 - workflow usa exclusivamente o runner PC24x7;
+- modo `runtime-bootstrap` fixa repositório/SHA/runner/labels e rejeita parâmetros arbitrários;
+- evidência do bootstrap não contém `GH_PAT_ACTIONS` nem token efêmero de registro;
+- runner dedicado só é considerado pronto após leitura independente do registro GitHub indicar `online` e labels esperadas;
 - gateway mantém a allowlist estática;
 - gateway comprova \`run_id\`, URL, SHA e evento do run exato disparado e recusa evidência de execução histórica;
 - recuperação permanece bloqueada quando o run exato não sai de \`pending/queued/requested/waiting\`;
