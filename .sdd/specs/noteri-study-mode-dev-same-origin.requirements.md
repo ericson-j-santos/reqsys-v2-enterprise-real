@@ -76,6 +76,12 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     configuração ativa do Nginx. A falha original permanece canônica e o
     diagnóstico adicional não pode mascará-la.
 
+17. Alterações no contrato de runtime que podem invalidar o fluxo — API de perfil,
+    API de monitoramento/runtime health, registro de routers, Compose DEV e
+    configuração Nginx DEV — devem disparar novamente o E2E físico do Modo
+    ESTUDO após integração na main. A ausência desse gatilho é tratada como
+    risco de falso positivo e deve falhar por teste de contrato do workflow.
+
 ## Critérios de aceite
 
 1. O frontend não acessa loopback do dispositivo do navegador.
@@ -118,6 +124,13 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     saída bruta de comando, corpo HTTP, caminho local, variável de ambiente ou
     segredo pode entrar no artefato; checkpoints de estágio devem registrar
     transições materiais sem reiniciar o relógio por mero polling.
+
+16. O workflow de reconciliação deve ser acionado por mudanças em
+    `backend/app/api/noteri_host_profile.py`,
+    `backend/app/api/monitoramento_operacional.py`, `backend/app/main.py`,
+    `docker-compose.dev.yml` e `infra/nginx/default.dev.conf`, além dos
+    componentes específicos do Modo Estudo, garantindo nova evidência física
+    quando o contrato público ou a porta 8083 puderem mudar.
 
 ## Topologia
 
