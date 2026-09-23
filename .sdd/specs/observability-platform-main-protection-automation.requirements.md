@@ -17,3 +17,15 @@ Aplicar proteção real na branch `main` de `ericson-j-santos/observability-plat
 9. Depois do PUT, a automação deve reler a proteção via API e falhar se qualquer invariante obrigatória não estiver ativa.
 10. A evidência deve registrar repositório, branch, SHA esperado, check obrigatório e flags de segurança, sem material secreto.
 11. A automação não deve tocar deploy, produção, banco, RBAC externo ou ambientes STG/PROD.
+
+
+## Critérios de aceite
+
+- O modo padrão `audit` permanece somente leitura.
+- O modo `apply-observability-platform` só é acionável pelo comando allowlisted do Authorized Actions Gateway.
+- O alvo permanece fixo em `ericson-j-santos/observability-platform/main`.
+- O SHA alvo e o check `test` verde são comprovados antes da mutação.
+- A proteção final exige Pull Request e o check `test`, aplica a administradores e bloqueia force-push e exclusão.
+- A leitura independente pós-escrita comprova a proteção efetiva.
+- Nenhum valor de segredo é publicado em log, artifact ou commit.
+- A solução tem custo adicional zero e não cria novo workflow.
