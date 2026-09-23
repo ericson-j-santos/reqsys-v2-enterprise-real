@@ -8,6 +8,10 @@ on:
       - "scripts/validate_fly_enterprise_sync.py"
       - "scripts/validate_public_runtime.py"
       - "scripts/validate_publication_sync.py"
+      - "scripts/prepare_ocr_runtime_package.py"
+      - "config/ocr-engine-lock.json"
+      - "backend/Dockerfile.fly"
+      - ".github/actions/prepare-ocr-runtime/**"
       - ".github/workflows/fly-enterprise-sync.yml"
   # Sem filtro de paths no push: todo merge em main passa pelo gate rápido.
   push:
@@ -188,6 +192,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Preparar pacote OCR externo
+        id: ocr-runtime
+        uses: ./.github/actions/prepare-ocr-runtime
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Resolver configuração canônica
         id: env
@@ -275,7 +285,14 @@ jobs:
           for attempt in $(seq 1 "$max_attempts"); do
             echo "::group::API deploy attempt ${attempt}/${max_attempts}"
             set +e
-            flyctl deploy --remote-only --config "$config" --app "$FLY_APP" --build-arg "GITHUB_SHA=${{ github.sha }}" 2>&1 | tee "$deploy_log"
+            flyctl deploy --remote-only \
+              --config "$config" \
+              --app "$FLY_APP" \
+              --build-arg "GITHUB_SHA=${{ github.sha }}" \
+              --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \
+              --build-arg "OCR_ENGINE_SHA=${{ steps.ocr-runtime.outputs.ocr-sha }}" \
+              --build-arg "OCR_ENGINE_VERSION=${{ steps.ocr-runtime.outputs.ocr-version }}" \
+              2>&1 | tee "$deploy_log"
             status="${PIPESTATUS[0]}"
             set -e
             echo "::endgroup::"

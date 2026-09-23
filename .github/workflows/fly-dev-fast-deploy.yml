@@ -7,7 +7,10 @@ on:
       - "backend/**"
       - "frontend/**"
       - "infra/fly-environments.json"
+      - "config/ocr-engine-lock.json"
+      - "scripts/prepare_ocr_runtime_package.py"
       - ".github/actions/resolve-managed-credential/**"
+      - ".github/actions/prepare-ocr-runtime/**"
       - ".github/workflows/fly-dev-fast-deploy.yml"
   workflow_dispatch:
     inputs:
@@ -101,6 +104,15 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Preparar pacote OCR externo
+        id: ocr-runtime
+        uses: ./.github/actions/prepare-ocr-runtime
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Resolver credencial Fly da API
         uses: ./.github/actions/resolve-managed-credential
@@ -132,6 +144,9 @@ jobs:
             --config "$config" \
             --app "$FLY_APP" \
             --build-arg "GITHUB_SHA=${{ github.sha }}" \
+            --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \
+            --build-arg "OCR_ENGINE_SHA=${{ steps.ocr-runtime.outputs.ocr-sha }}" \
+            --build-arg "OCR_ENGINE_VERSION=${{ steps.ocr-runtime.outputs.ocr-version }}" \
             --strategy immediate \
             --deploy-retries 2 \
             --wait-timeout 2m \
