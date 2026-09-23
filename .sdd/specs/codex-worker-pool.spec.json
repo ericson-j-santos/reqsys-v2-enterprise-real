@@ -2,14 +2,14 @@
   "feature_name": "codex-worker-pool",
   "project": "ReqSys v2 Enterprise — Codex distribuído",
   "created_at": "2026-09-18",
-  "updated_at": "2026-09-22",
+  "updated_at": "2026-09-23",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Consolida o pool governado de workers Codex distribuídos com heartbeat, fila idempotente, lease, watchdog de progresso material, recuperação, quarentena, isolamento por workspace, separação Builder/Validator, scheduler justo por lanes lógicas de repositório e smoke DEV inputless em lane sintética desabilitada.",
+  "description": "Consolida o pool governado de workers Codex distribuídos com heartbeat, fila idempotente, lease, watchdog de progresso material, recuperação, quarentena, isolamento por workspace, separação Builder/Validator, scheduler justo por lanes lógicas de repositório, workflow DEV consolidado para smoke inputless e recuperação governada do arquivo local de autenticação quando ausente.",
   "issues": [
     1767,
     1768,
@@ -37,7 +37,9 @@
     "tests/test_codex_worker_pool_smoke_dev.py",
     "scripts/pending_development_worker_pool_bridge.py",
     "tests/test_pending_development_worker_pool_bridge.py",
-    "services/codex-worker-pool/README.md"
+    "services/codex-worker-pool/README.md",
+    "scripts/restore_codex_worker_pool_token_dev.py",
+    "tests/test_codex_worker_pool_token_restore_dev.py"
   ],
   "sdd_gate": {
     "tests": [
@@ -47,14 +49,15 @@
       "tests/test_codex_worker_pool_dualhost_e2e.py",
       "tests/test_codex_worker_pool_smoke_dev.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
-      "tests/test_pending_development_worker_pool_bridge.py"
+      "tests/test_pending_development_worker_pool_bridge.py",
+      "tests/test_codex_worker_pool_token_restore_dev.py"
     ],
-    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado/correlation_id divergente fail-closed, replay idempotente, recuperação de lease e quarentena. O snapshot de observabilidade deve omitir lease_token e sanitizar marcadores sensíveis brutos; o teste negativo de vazamento precisa falhar se qualquer valor bruto aparecer. A prova física multi-host exige dual_host_preflight nos dois hosts no mesmo SHA canônico das regras e no mesmo SHA do ReqSys, seguida de handshake de rede governado e E2E Desktop Builder -> Noteri Validator com leitura final independente. O scheduler por repositório deve provar rotação determinística entre lanes elegíveis, respeito a max_in_flight, afinidade restritiva quando configurada e compatibilidade do pool compartilhado quando não houver afinidade. O smoke DEV deve executar somente no PC24x7 allowlisted, configurar uma lane sintética enabled=false, provar enqueue/replay/readback no SHA exato e confirmar por snapshot que a task permanece queued e sem lease. Quando o smoke nao receber token-file explicito nem variavel de ambiente, deve listar os containers ativos do service Compose codex-worker-pool, inspecionar todos e selecionar exatamente um cujo NetworkSettings.Ports prove o binding canonico 127.0.0.1:8097 -> 8097/tcp; somente desse container pode obter o bind mount /run/secrets/codex_worker_pool_api_token, falhando fechado em ausencia ou ambiguidade e sem registrar o conteudo do segredo. O watchdog deve provar separação entre liveness e progresso: heartbeat/renovação de lease não alteram last_material_progress_at; após o limite, uma task com worker alternativo elegível é reroteada e uma task sem alternativa é bloqueada, sempre liberando leased_by. Falhas de leitura do token no host devem distinguir arquivo ausente, acesso negado e erro de I/O genérico por reason code sanitizado, sem registrar caminho, conteúdo do segredo ou texto bruto da exceção."
+    "evidence_contract": "Provar positivo Builder->produced_sha->Validator->completed com leitura independente, negativo ESTUDO/lease inválido/claim duplicado/correlation_id divergente fail-closed, replay idempotente, recuperação de lease e quarentena. O snapshot de observabilidade deve omitir lease_token e sanitizar marcadores sensíveis brutos; o teste negativo de vazamento precisa falhar se qualquer valor bruto aparecer. A prova física multi-host exige dual_host_preflight nos dois hosts no mesmo SHA canônico das regras e no mesmo SHA do ReqSys, seguida de handshake de rede governado e E2E Desktop Builder -> Noteri Validator com leitura final independente. O scheduler por repositório deve provar rotação determinística entre lanes elegíveis, respeito a max_in_flight, afinidade restritiva quando configurada e compatibilidade do pool compartilhado quando não houver afinidade. O smoke DEV deve executar somente no PC24x7 allowlisted, configurar uma lane sintética enabled=false, provar enqueue/replay/readback no SHA exato e confirmar por snapshot que a task permanece queued e sem lease. Quando o smoke nao receber token-file explicito nem variavel de ambiente, deve listar os containers ativos do service Compose codex-worker-pool, inspecionar todos e selecionar exatamente um cujo NetworkSettings.Ports prove o binding canonico 127.0.0.1:8097 -> 8097/tcp; somente desse container pode obter o bind mount /run/secrets/codex_worker_pool_api_token, falhando fechado em ausencia ou ambiguidade e sem registrar o conteudo do segredo. O watchdog deve provar separação entre liveness e progresso: heartbeat/renovação de lease não alteram last_material_progress_at; após o limite, uma task com worker alternativo elegível é reroteada e uma task sem alternativa é bloqueada, sempre liberando leased_by. Falhas de leitura do token no host devem distinguir arquivo ausente, acesso negado e erro de I/O genérico por reason code sanitizado, sem registrar caminho, conteúdo do segredo ou texto bruto da exceção. A recuperação do arquivo de autenticação DEV deve reutilizar o workflow canônico codex-worker-pool-smoke-dev.yml em modo fixo restore, sem criar nova superfície de workflow; deve executar somente no PC24x7 allowlisted, após SESSION_LAUNCH_OK no SHA vigente, via Owner Risk3 Gateway e script Python versionado. Deve reutilizar arquivo válido quando existente, gerar token local somente quando ausente/vazio, nunca expor o valor, reiniciar apenas o container canônico quando necessário e provar /health 200 mais leitura autenticada independente antes do smoke."
   },
   "risk": {
     "production": false,
     "merge": false,
-    "secrets_mutation": false,
+    "secrets_mutation": true,
     "admin_permissions": false
   }
 }

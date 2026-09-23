@@ -34,6 +34,7 @@ jobs:
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e' ||
         github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
         github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
         github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery' ||
         github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick' ||
@@ -52,6 +53,7 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
+          mode='default'
           case "$COMMENT_BODY" in
             '/reqsys run bootstrap-wsjf-m365-dev')
               target='bootstrap-wsjf-m365-dev.yml'
@@ -97,6 +99,11 @@ jobs:
               ;;
             '/reqsys run codex-worker-pool-smoke-dev')
               target='codex-worker-pool-smoke-dev.yml'
+              mode='smoke'
+              ;;
+            '/reqsys run codex-worker-pool-token-restore-dev')
+              target='codex-worker-pool-smoke-dev.yml'
+              mode='restore'
               ;;
             '/reqsys run noteri-desktop-network-probe')
               target='noteri-desktop-network-probe.yml'
@@ -125,6 +132,7 @@ jobs:
               ;;
           esac
           printf 'target=%s\n' "$target" >> "$GITHUB_OUTPUT"
+          printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
 
       - name: Capture current main SHA
         id: main
@@ -143,6 +151,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          TARGET_MODE: ${{ steps.route.outputs.mode }}
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
@@ -160,6 +169,11 @@ jobs:
               --ref main \
               -f environment=dev \
               -f timeout_seconds=20)"
+          elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "restore" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=restore)"
           elif [ "$TARGET_WORKFLOW" = "report-factory-fabric-dev-preflight.yml" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
@@ -288,6 +302,7 @@ jobs:
         env:
           COMMAND: ${{ github.event.comment.body }}
           TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          TARGET_MODE: ${{ steps.route.outputs.mode }}
           EXPECTED_SHA: ${{ steps.main.outputs.sha }}
           TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
           TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
@@ -308,6 +323,7 @@ jobs:
               'actor': os.environ['GITHUB_ACTOR'],
               'command': os.environ['COMMAND'],
               'target_workflow': os.environ['TARGET_WORKFLOW'],
+              'target_mode': os.environ.get('TARGET_MODE') or 'default',
               'target_ref': 'main',
               'target_sha': os.environ['EXPECTED_SHA'],
               'target_run_id': int(os.environ['TARGET_RUN_ID']),
