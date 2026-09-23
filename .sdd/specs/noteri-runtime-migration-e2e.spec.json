@@ -7,7 +7,7 @@
   "architecture": {
     "source_repo": "ericson-j-santos/reqsys-v2-enterprise-real",
     "target_repo": "ericson-j-santos/noteri-runtime",
-    "target_sha": "336e99a7fb7feb598d9be9aa2b143c3f9f87164e",
+    "target_sha": "527f438fad4e8f73b8092b647b4d9dfff76ef294",
     "workflow": ".github/workflows/noteri-control-plane-probe.yml",
     "execution_branch": "ops/noteri-runtime-migration-e2e-20260923",
     "runner_labels": [
@@ -28,14 +28,14 @@
     "secrets_read": false
   },
   "evidence_contract": {
-    "run_id": 35889647525,
     "correlation_id_required": true,
     "exact_sha_required": true,
     "positive_case": true,
     "negative_control": true,
     "idempotency": true,
     "independent_readback": true,
-    "final_profile": "NORMAL"
+    "final_profile": "NORMAL",
+    "run_id_source": "github.run_id"
   },
   "sdd_gate": {
     "tests": [
