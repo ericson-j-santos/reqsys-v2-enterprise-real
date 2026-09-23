@@ -15,6 +15,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -288,6 +289,175 @@ def _update_definition(
     )
 
 
+PROBE_STAGES = ("minimal", "datasource", "parameters", "data_model", "full")
+
+
+def _build_probe_rdl(rdl: str, stage: str) -> str:
+    """Gera variantes cumulativamente úteis sem alterar o RDL funcional original."""
+    if stage not in PROBE_STAGES:
+        raise E2EError(f"probe_stage_invalid:{stage}")
+    if stage == "full":
+        return rdl
+
+    root = ET.fromstring(rdl)
+    keep_top_level = {
+        "minimal": set(),
+        "datasource": {"DataSources"},
+        "parameters": {"ReportParameters", "ReportParametersLayout"},
+        "data_model": {
+            "DataSources",
+            "DataSets",
+            "ReportParameters",
+            "ReportParametersLayout",
+        },
+    }[stage]
+    for name in ("DataSources", "DataSets", "ReportParameters", "ReportParametersLayout"):
+        if name in keep_top_level:
+            continue
+        node = root.find(report_factory._q(name))
+        if node is not None:
+            root.remove(node)
+
+    report_items = root.find(f".//{report_factory._q('ReportItems')}")
+    if report_items is None:
+        raise E2EError("probe_report_items_missing")
+    for child in list(report_items):
+        if child.tag == report_factory._q("Tablix"):
+            report_items.remove(child)
+
+    ET.indent(root, space="  ")
+    return '<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(root, encoding="unicode")
+
+
+def _probe_name(stage: str) -> str:
+    run_id = re.sub(r"[^A-Za-z0-9]", "", os.getenv("GITHUB_RUN_ID", "local"))[-12:]
+    source_sha = re.sub(r"[^A-Fa-f0-9]", "", os.getenv("GITHUB_SHA", "local"))[:8]
+    suffix = re.sub(r"[^A-Za-z0-9]", "", stage.title())
+    return f"ReqSysRdlProbe{run_id}{source_sha}{suffix}"[:120]
+
+
+def _delete_probe(workspace_id: str, report_id: str, token: str) -> None:
+    _invoke(
+        "DELETE",
+        f"{FABRIC_BASE}/workspaces/{workspace_id}/paginatedReports/{report_id}",
+        token,
+        success={200},
+    )
+
+
+def _probe_definition_stage(
+    workspace_id: str,
+    reports_url: str,
+    token: str,
+    stage: str,
+    rdl: str,
+) -> str:
+    probe_name = _probe_name(stage)
+    before = _exact_by_display_name(_paged_values(reports_url, token), probe_name, "probe")
+    if before:
+        return "probe_name_collision"
+
+    created = False
+    report_id = ""
+    result = "passed"
+    try:
+        definition = report_factory.build_fabric_definition(probe_name, rdl)
+        _invoke(
+            "POST",
+            reports_url,
+            token,
+            {
+                "displayName": probe_name,
+                "description": "ReqSys RDL DEV diagnostic probe",
+                "definition": definition,
+            },
+            success={200, 201},
+        )
+        created = True
+        matches = _exact_by_display_name(
+            _paged_values(reports_url, token), probe_name, "probe"
+        )
+        if len(matches) != 1:
+            raise E2EError(f"probe_exact_count:{len(matches)}")
+        report_id = str(matches[0].get("id") or "").strip()
+        if not report_id:
+            raise E2EError("probe_report_id_missing")
+        observed = _extract_rdl(_get_definition(workspace_id, report_id, token), probe_name)
+        if _sha256(observed) != _sha256(rdl):
+            raise E2EError("probe_definition_hash_mismatch")
+    except E2EError as exc:
+        result = str(exc)[:120]
+    finally:
+        if created and not report_id:
+            try:
+                residual = _exact_by_display_name(
+                    _paged_values(reports_url, token), probe_name, "probe_cleanup"
+                )
+                if len(residual) == 1:
+                    report_id = str(residual[0].get("id") or "").strip()
+            except E2EError:
+                result = "probe_cleanup_discovery_failed"
+        if report_id:
+            try:
+                _delete_probe(workspace_id, report_id, token)
+                residual = _exact_by_display_name(
+                    _paged_values(reports_url, token), probe_name, "probe_cleanup"
+                )
+                if residual:
+                    result = "probe_cleanup_residual_item"
+            except E2EError:
+                result = "probe_cleanup_failed"
+        elif created:
+            result = "probe_cleanup_unproven"
+    return result
+
+
+def _infer_probe_component(results: dict[str, str]) -> str:
+    passed = lambda stage: results.get(stage) == "passed"
+    if not passed("minimal"):
+        return "base_rdl"
+    datasource_failed = not passed("datasource")
+    parameters_failed = not passed("parameters")
+    if datasource_failed and parameters_failed:
+        return "multiple_components"
+    if datasource_failed:
+        return "datasource"
+    if parameters_failed:
+        return "parameters"
+    if not passed("data_model"):
+        return "dataset_or_cross_component"
+    if not passed("full"):
+        return "tablix"
+    return "main_request_context"
+
+
+def _run_definition_probe_matrix(
+    workspace_id: str,
+    reports_url: str,
+    token: str,
+    rdl: str,
+) -> dict[str, Any]:
+    results: dict[str, str] = {}
+    try:
+        for stage in PROBE_STAGES:
+            variant = _build_probe_rdl(rdl, stage)
+            results[stage] = _probe_definition_stage(
+                workspace_id, reports_url, token, stage, variant
+            )
+    except Exception as exc:
+        return {
+            "rdl_probe_status": "failed",
+            "rdl_probe_failed_component": f"probe_internal_{type(exc).__name__}",
+            "rdl_probe_results": results,
+        }
+    cleanup_ok = not any("cleanup" in value for value in results.values())
+    return {
+        "rdl_probe_status": "completed" if cleanup_ok else "failed",
+        "rdl_probe_failed_component": _infer_probe_component(results),
+        "rdl_probe_results": results,
+    }
+
+
 def execute(spec_path: Path, output: Path) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     correlation_id = (
@@ -310,6 +480,9 @@ def execute(spec_path: Path, output: Path) -> int:
         "idempotency_verified": False,
         "expected_rdl_sha256": None,
         "observed_rdl_sha256": None,
+        "rdl_probe_status": "not_run",
+        "rdl_probe_failed_component": None,
+        "rdl_probe_results": {},
         "secret_value_exposed": False,
         "production_touched": False,
     }
@@ -344,21 +517,30 @@ def execute(spec_path: Path, output: Path) -> int:
         existing = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
         evidence["initial_report_exact_count"] = len(existing)
 
-        if not existing:
-            _invoke(
-                "POST",
-                reports_url,
-                token,
-                report_factory.build_create_request(spec, rdl),
-                success={200, 201},
-            )
-            evidence["first_action"] = "created"
-        else:
-            report_id = str(existing[0].get("id") or "").strip()
-            if not report_id:
-                raise E2EError("existing_report_id_missing")
-            _update_definition(workspace_id, report_id, definition, token)
-            evidence["first_action"] = "updated"
+        try:
+            if not existing:
+                _invoke(
+                    "POST",
+                    reports_url,
+                    token,
+                    report_factory.build_create_request(spec, rdl),
+                    success={200, 201},
+                )
+                evidence["first_action"] = "created"
+            else:
+                report_id = str(existing[0].get("id") or "").strip()
+                if not report_id:
+                    raise E2EError("existing_report_id_missing")
+                _update_definition(workspace_id, report_id, definition, token)
+                evidence["first_action"] = "updated"
+        except E2EError as publish_error:
+            if str(publish_error).startswith("fabric_http_400:InvalidDefinitionFormat"):
+                evidence.update(
+                    _run_definition_probe_matrix(
+                        workspace_id, reports_url, token, rdl
+                    )
+                )
+            raise
 
         final_matches = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
         evidence["final_report_exact_count"] = len(final_matches)
@@ -406,6 +588,7 @@ def execute(spec_path: Path, output: Path) -> int:
             "workspace_exact_count", "report_name", "initial_report_exact_count",
             "first_action", "final_report_exact_count", "definition_verified",
             "idempotency_verified", "expected_rdl_sha256", "observed_rdl_sha256",
+            "rdl_probe_status", "rdl_probe_failed_component",
             "secret_value_exposed", "production_touched", "reason",
         ):
             if key in evidence:
