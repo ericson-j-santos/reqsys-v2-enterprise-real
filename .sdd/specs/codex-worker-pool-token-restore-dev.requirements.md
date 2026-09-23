@@ -18,13 +18,13 @@ Restaurar a autenticação local do Codex Worker Pool no PC24x7 quando o arquivo
 10. Caminho ambíguo, falha ao criar/validar o diretório pai canônico, acesso negado, arquivo inválido ou container não único devem falhar fechado.
 11. O valor do token não pode aparecer em stdout, stderr, artifact, GitHub output, resumo ou evidência.
 12. Após rotação, o container deve ser reiniciado e a validação deve exigir `/health=200`, `auth_configured=true` e leitura autenticada independente de `/v1/snapshot=200`.
-13. A evidência pode informar somente se houve rotação/reuso, restart, HTTP status e readback; deve registrar `secret_value_exposed=false`.
+13. A evidência pode informar somente rotação/reuso, restart, HTTP status, readback e `reason` sanitizado de readiness. Respostas HTTP 503 podem ser lidas apenas para classificar, sem registrar token, caminho sensível ou valor de variável. Devem existir reason codes distintos para endpoint indisponível, arquivo de auth não visível no container, `EXPECTED_RULES_SHA` ausente e mismatch de token; `secret_value_exposed=false` é obrigatório.
 14. Produção, deploy, permissões administrativas, firewall, outros serviços e outros segredos não podem ser alterados.
 15. Após a restauração aprovada, deve ser executado o smoke normal no mesmo SHA vigente e exigido `WORKER_POOL_SMOKE_PASSED`.
 
 ## Critérios de aceite
 
-- testes unitários positivos e negativos do restaurador, incluindo criação segura do diretório pai canônico, e da allowlist Risk3 temporária verdes;
+- testes unitários positivos e negativos do restaurador, incluindo criação segura do diretório pai canônico, preservação sanitizada do payload 503 e reason codes específicos de readiness, e da allowlist Risk3 temporária verdes;
 - teste de contrato prova que restore e smoke possuem rotas distintas;
 - runner policy continua allowlistando apenas o workflow já existente;
 - restore real retorna `WORKER_POOL_TOKEN_RESTORE_PASSED`;
