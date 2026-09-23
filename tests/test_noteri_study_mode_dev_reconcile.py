@@ -279,7 +279,7 @@ def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     assert 'expected_nginx_bind = (working_dir / NGINX_CONFIG).resolve()' not in raw
     assert 'frontend_source,\n        nginx_bind,\n        args.expected_sha' in raw
     assert '"compose_invoked": False' in raw
-    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_reload"' in raw
+    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_restart"' in raw
     assert 'restart_container(api_container, repo_root, stage="api_restart")' in raw
     assert 'stage="rollback_api_restart"' in raw
     assert '["docker", "restart", container]' in raw
@@ -289,7 +289,7 @@ def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     assert '"direct_api_contract": direct_api_contract' in raw
     assert 'runtime_monitoring_module_missing' in raw
     assert 'app.include_router(monitoramento_operacional.router)' in raw
-    assert 'reload_nginx(nginx_container, repo_root)' in raw
+    assert 'nginx_active_contract = refresh_nginx(nginx_container, repo_root)' in raw
 
 
 def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
@@ -297,16 +297,24 @@ def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     nginx = NGINX_DEV.read_text(encoding="utf-8")
     assert 'NGINX_CONFIG = Path("infra/nginx/default.dev.conf")' in raw
     assert '["docker", "exec", container, "nginx", "-t"]' in raw
-    assert '["docker", "exec", container, "nginx", "-s", "reload"]' in raw
-    assert 'stage_prefix="rollback_nginx_reload"' in raw
+    assert '["docker", "exec", container, "nginx", "-T"]' in raw
+    assert 'stage="nginx_active_contract"' in raw
+    assert 'restart_container(' in raw
+    assert 'stage_prefix="rollback_nginx_restart"' in raw
+    assert 'verify_contract=False' in raw
     assert 'wait_direct_api_contract()' in raw
     assert 'stage="api_direct_contract"' in raw
     assert 'wait_gateway_status("/api/health", {200})' in raw
     assert 'wait_gateway_status("/api/runtime/health", {200})' in raw
     assert 'wait_gateway_status("/api/v1/noteri/profile", {401})' in raw
     assert '"nginx_runtime_contract_refreshed": True' in raw
+    assert '"nginx_active_contract": nginx_active_contract' in raw
+    assert '"runtime_route": "location ~ ^/api/(runtime|" in rendered' in raw
+    assert '"api_prefix_route": "location /api/" in rendered' in raw
     assert "location ~ ^/api/(runtime|" in nginx
     assert "proxy_pass http://api:8000;" in nginx
+    assert '"runtime_health_not_observed"' in raw
+    assert '"noteri_profile_not_observed"' in raw
 
 
 def test_reconciler_discovers_compose_runtime_from_dev_api_port():
@@ -317,7 +325,7 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "non_dev_compose_project_blocked" in raw
     assert '"runtime_discovery": "api_port_8210_compose_labels"' in raw
     assert '"compose_invoked": False' in raw
-    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_reload"' in raw
+    assert '"runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_restart"' in raw
     assert "dev_api_8210_not_unique" in raw
     assert "dev_gateway_8083_not_unique" not in raw
     assert "reqsys-live-api-1" not in raw
