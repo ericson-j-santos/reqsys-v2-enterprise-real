@@ -164,21 +164,25 @@ def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
     ) == ()
 
 
-def test_reconciler_rebuilds_frontend_when_runtime_bind_is_absent():
+def test_reconciler_preserves_runtime_configuration_without_compose_recreate():
     raw = SCRIPT.read_text(encoding="utf-8")
     assert 'frontend_bind_source = rw_bind_source(frontend_before, "/app")' in raw
     assert 'frontend_source = frontend_bind_source or (working_dir / "frontend")' in raw
-    assert 'stage="frontend_rebuild"' in raw
-    assert '"--build"' in raw
-    assert 'stage="rollback_frontend_rebuild"' in raw
+    assert "sync_frontend_runtime_source(" in raw
+    assert '["docker", "restart", api_container]' in raw
+    assert '["docker", "restart", frontend_container]' in raw
+    assert '["docker", "restart", nginx_container]' in raw
+    assert '[*base, "config"]' not in raw
+    assert '"runtime_control_plane_env_bootstrap_required"' in raw
+    assert '"compose_recreation_used": False' in raw
 
 
 def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     raw = SCRIPT.read_text(encoding="utf-8")
     nginx = NGINX_DEV.read_text(encoding="utf-8")
     assert 'NGINX_CONFIG = Path("infra/nginx/default.dev.conf")' in raw
-    assert 'stage="nginx_recreate"' in raw
-    assert 'stage="rollback_nginx_recreate"' in raw
+    assert 'stage="nginx_restart"' in raw
+    assert 'stage="rollback_nginx_restart"' in raw
     assert 'http_json("GET", "/api/health")' in raw
     assert 'http_json("GET", "/api/runtime/health")' in raw
     assert '"nginx_runtime_contract_refreshed": True' in raw
