@@ -16,7 +16,12 @@
 - [ ] Revalidar contrato/Pre-PR do bootstrap no HEAD exato.
 - [ ] Executar o bootstrap em modo `apply` somente após autorização explícita para a mutação Entra.
 - [ ] Revalidar por GET independente: `fic_exact_count=1` e `fic_ready=true`.
-- [ ] Autenticar GitHub Actions como `ReqSys ALM Pipeline` via OIDC e comprovar visibilidade do workspace DEV.
-- [ ] Executar E2E real de publicação e `getDefinition` no Fabric DEV.
+- [x] Conceder `Contributor` à identidade OIDC governada atual no workspace DEV: run `35735255608`, `write_status=201`, pós-condição `after_roles=['Contributor']`.
+- [x] Revalidar pela própria identidade OIDC: run `35735423579`, Fabric HTTP 200 e `fabric_workspace_count=1` para `ReqSys - Observabilidade`.
+- [ ] Concluir a FIC de `ReqSys ALM Pipeline` como migração/hardening separado; não bloquear o E2E atual já autenticado pela identidade OIDC governada.
+- [x] Implementar modo governado `publish-e2e` no workflow existente, sem aumentar a superfície de workflows.
+- [x] Adicionar comando exato do Authorized Actions Gateway e testes contratuais.
+- [ ] Executar E2E real de publicação e `getDefinition` no Fabric DEV após merge do incremento.
+- [ ] Repetir a mesma definição e comprovar idempotência/ausência de duplicidade na evidência do mesmo run.
 - [ ] Adicionar exportação PDF/XLSX em incremento posterior.
 - [ ] Adicionar chart/matrix em incremento posterior.

@@ -5,7 +5,7 @@
 O ReqSys já contém artefatos `.rdl/.rds` reais de DEV no domínio `movimento_email`. Este incremento **consolida** essa capacidade em um gerador reutilizável e não substitui nem altera relatórios produtivos existentes.
 
 Issue: #1933  
-Increment type: `consolidate`
+Increment type: `gap_fix`
 
 ## Requisitos funcionais
 
@@ -27,6 +27,13 @@ Increment type: `consolidate`
 16. Antes de criar qualquer Federated Identity Credential, executar preflight somente leitura no Noteri e comprovar se já existe exatamente uma FIC `reqsys-report-factory-development` para o subject `repo:ericson-j-santos/reqsys-v2-enterprise-real:environment:development`.
 17. O preflight FIC não pode criar credencial, alterar RBAC, persistir token ou expor Application ID/Workspace ID.
 18. Se a FIC já existir, reutilizá-la. Se estiver ausente, qualquer criação posterior deve ser idempotente, limitada à App Registration já autorizada e tratada como mutação Entra separada.
+19. O `workflow_dispatch` do preflight deve permanecer somente leitura por padrão; publicação exige `mode=publish-e2e` explícito.
+20. A publicação E2E DEV deve ser acionada pelo comando exato `/reqsys run report-factory-fabric-dev-e2e`, sem workspace, ambiente ou workflow arbitrários.
+21. O E2E deve localizar exatamente um workspace `ReqSys - Observabilidade` e falhar fechado diante de ausência ou ambiguidade.
+22. O E2E deve criar o relatório quando ausente ou atualizar sua definição quando existir, mantendo exatamente um item com o nome da `ReportSpec`.
+23. Após a escrita, o E2E deve executar `getDefinition`, decodificar a parte `.rdl` e comparar SHA-256 com o RDL gerado no mesmo SHA.
+24. O E2E deve repetir a mesma definição no mesmo item e comprovar ausência de duplicidade e igualdade do SHA-256 após o replay.
+25. O fluxo não pode persistir token, criar segredo, aceitar STG/PROD nem declarar sucesso sem leitura independente da definição.
 
 ## Critérios de aceite
 
@@ -41,7 +48,9 @@ Increment type: `consolidate`
 - evidência OIDC atual registra `tenant_match=true`, token Fabric obtido e HTTP 200;
 - evidência independente comprova exatamente um `ReqSys - Observabilidade` e `Contributor` para `ReqSys ALM Pipeline`;
 - preflight FIC atual publica `fic_ready=true/false` sem mutação e sem identificadores;
-- publicação real no Fabric DEV somente pode ser declarada validada após execução real e leitura independente da definição/artefato no mesmo SHA.
+- publicação real no Fabric DEV somente pode ser declarada validada após execução real e leitura independente da definição/artefato no mesmo SHA;
+- execução governada `publish-e2e` deve comprovar `workspace_exact_count=1`, `final_report_exact_count=1`, `definition_verified=true` e `idempotency_verified=true`;
+- o SHA-256 observado via `getDefinition` deve ser igual ao SHA-256 do RDL gerado na mesma execução.
 
 ## Fora do escopo deste MVP
 
