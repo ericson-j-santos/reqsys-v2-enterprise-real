@@ -256,8 +256,22 @@ def test_workflow_reexecutes_when_gateway_or_runtime_contract_changes():
         "backend/app/main.py",
         "docker-compose.dev.yml",
         "infra/nginx/default.dev.conf",
+        "scripts/recover_reqsys_engineering_orchestrator_dev.py",
+        "tests/test_recover_reqsys_engineering_orchestrator_dev.py",
     ):
         assert f"- '{path}'" in raw
+
+
+def test_workflow_recovers_orchestrator_before_study_mode_e2e():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    recover = raw.index("Recover and validate Engineering Orchestrator DEV")
+    reconcile = raw.index("Reconcile same-origin Study Mode and execute physical E2E")
+    assert recover < reconcile
+    assert "recover_reqsys_engineering_orchestrator_dev.py" in raw
+    assert "--confirm RECOVER-REQSYS-ENGINEERING-ORCHESTRATOR-DEV" in raw
+    assert "orchestrator-recovery.json" in raw
+    assert "path: artifacts/noteri-study-mode-dev/" in raw
+    assert "secrets." not in raw
 
 
 def test_policy_and_gateway_allow_only_fixed_reconcile_command():
