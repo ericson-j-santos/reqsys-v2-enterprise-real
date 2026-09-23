@@ -1,0 +1,33 @@
+{
+  "feature_name": "github-copilot-ollama-mcp",
+  "project": "ReqSys v2 Enterprise — Codex Local / Ollama",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-23",
+  "phase": "implementation_pending_runtime_e2e",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Adiciona custom agent Ollama no GitHub Copilot e um bridge MCP somente leitura para o gateway Ollama governado do PC24x7, sem exposição direta da porta 11434.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ollama_mcp_bridge.py",
+      "tests/test_github_copilot_ollama_agent_contract.py"
+    ],
+    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato. O perfil do agente referencia somente Agents variable/secret COPILOT_MCP_*, o bridge permanece loopback, exige Bearer, limita modelos e chama apenas o gateway :8008. E2E real GitHub.com -> HTTPS MCP -> PC24x7 -> Ollama permanece obrigatório antes de declarar conclusão funcional."
+  },
+  "runtime_validation": {
+    "environment": "DEV",
+    "host": "DESKTOP-PDQK954",
+    "mcp_local_endpoint": "http://127.0.0.1:8010/mcp",
+    "ollama_gateway_endpoint": "http://127.0.0.1:8008",
+    "public_endpoint_source": "COPILOT_MCP_OLLAMA_URL",
+    "auth_source": "COPILOT_MCP_OLLAMA_TOKEN",
+    "expected_primary_model": "gemma4:31b-cloud",
+    "expected_fallback_model": "gemma4:26b-q8-code",
+    "production_touched": false,
+    "deploy_performed": false
+  }
+}
