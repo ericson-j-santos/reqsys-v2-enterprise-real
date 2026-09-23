@@ -29,3 +29,6 @@
 - [ ] Repetir a mesma definição e comprovar idempotência/ausência de duplicidade na evidência do mesmo run.
 - [ ] Adicionar exportação PDF/XLSX em incremento posterior.
 - [ ] Adicionar chart/matrix em incremento posterior.
+
+- [x] Reexecutar o E2E real após a correção de layout: run `35855595593` no SHA `e6a3821ce559d173524ac4dfc953f93fc715dff7`; preflight/OIDC/workspace aprovados e criação bloqueada por `fabric_http_400:InvalidDefinitionFormat`.
+- [ ] Alinhar o cabeçalho RDL 2016 ao contrato público oficial do Fabric e reexecutar o E2E no SHA integrado.

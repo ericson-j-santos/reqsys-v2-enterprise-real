@@ -16,8 +16,10 @@ from typing import Any
 
 RDL_NS = "http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition"
 RD_NS = "http://schemas.microsoft.com/SQLServer/reporting/reportdesigner"
+DF_NS = "http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition/defaultfontfamily"
 ET.register_namespace("", RDL_NS)
 ET.register_namespace("rd", RD_NS)
+ET.register_namespace("df", DF_NS)
 
 FABRIC_BASE_URL = "https://api.fabric.microsoft.com/v1"
 SECRET_PATTERNS = (
@@ -42,6 +44,10 @@ def _q(tag: str) -> str:
 
 def _rd(tag: str) -> str:
     return f"{{{RD_NS}}}{tag}"
+
+
+def _df(tag: str) -> str:
+    return f"{{{DF_NS}}}{tag}"
 
 
 def _add(parent: ET.Element, tag: str, text: str | None = None, **attrs: str) -> ET.Element:
@@ -266,7 +272,16 @@ def generate_rdl(spec: dict[str, Any]) -> str:
     report_cfg = spec["report"]
     datasource = spec["datasource"]
 
-    root = ET.Element(_q("Report"))
+    report_id = uuid.uuid5(uuid.NAMESPACE_URL, f"reqsys:report-factory:{report_cfg['name']}")
+    root = ET.Element(_q("Report"), {"MustUnderstand": "df"})
+
+    report_unit_type = ET.SubElement(root, _rd("ReportUnitType"))
+    report_unit_type.text = "Inch"
+    report_id_node = ET.SubElement(root, _rd("ReportID"))
+    report_id_node.text = str(report_id)
+    default_font = ET.SubElement(root, _df("DefaultFontFamily"))
+    default_font.text = "Segoe UI"
+    _add(root, "AutoRefresh", "0")
 
     data_sources = _add(root, "DataSources")
     source = _add(data_sources, "DataSource", Name=datasource["name"])
@@ -305,17 +320,6 @@ def generate_rdl(spec: dict[str, Any]) -> str:
                 values = _add(default, "Values")
                 _add(values, "Value", str(parameter["default"]))
 
-        parameter_layout = _add(root, "ReportParametersLayout")
-        grid = _add(parameter_layout, "GridLayoutDefinition")
-        _add(grid, "NumberOfColumns", "1")
-        _add(grid, "NumberOfRows", str(len(parameters)))
-        cells = _add(grid, "CellDefinitions")
-        for row_index, parameter in enumerate(parameters):
-            cell = _add(cells, "CellDefinition")
-            _add(cell, "ColumnIndex", "0")
-            _add(cell, "RowIndex", str(row_index))
-            _add(cell, "ParameterName", parameter["name"])
-
     sections = _add(root, "ReportSections")
     section = _add(sections, "ReportSection")
     body = _add(section, "Body")
@@ -350,6 +354,18 @@ def generate_rdl(spec: dict[str, Any]) -> str:
     _add(page, "Style")
     _add(section, "Width", "10in" if landscape else "7.5in")
 
+    if parameters:
+        parameter_layout = _add(root, "ReportParametersLayout")
+        grid = _add(parameter_layout, "GridLayoutDefinition")
+        _add(grid, "NumberOfColumns", "1")
+        _add(grid, "NumberOfRows", str(len(parameters)))
+        cells = _add(grid, "CellDefinitions")
+        for row_index, parameter in enumerate(parameters):
+            cell = _add(cells, "CellDefinition")
+            _add(cell, "ColumnIndex", "0")
+            _add(cell, "RowIndex", str(row_index))
+            _add(cell, "ParameterName", parameter["name"])
+
     ET.indent(root, space="  ")
     xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
     return xml_bytes.decode("utf-8") + "\n"
@@ -363,6 +379,19 @@ def validate_rdl(rdl: str, spec: dict[str, Any]) -> None:
         raise ReportSpecError(f"RDL inválido: {exc}") from exc
     if root.tag != _q("Report"):
         raise ReportSpecError("RDL deve usar namespace Report Definition 2016")
+    if root.attrib.get("MustUnderstand") != "df":
+        raise ReportSpecError("RDL Fabric exige MustUnderstand=df")
+    if root.findtext(_rd("ReportUnitType"), default="") != "Inch":
+        raise ReportSpecError("RDL Fabric exige rd:ReportUnitType=Inch")
+    report_id = root.findtext(_rd("ReportID"), default="")
+    try:
+        uuid.UUID(report_id)
+    except (ValueError, AttributeError) as exc:
+        raise ReportSpecError("RDL Fabric exige rd:ReportID UUID válido") from exc
+    if root.findtext(_df("DefaultFontFamily"), default="") != "Segoe UI":
+        raise ReportSpecError("RDL Fabric exige df:DefaultFontFamily=Segoe UI")
+    if root.findtext(_q("AutoRefresh"), default="") != "0":
+        raise ReportSpecError("RDL Fabric exige AutoRefresh=0")
     lower = rdl.lower()
     for pattern in SECRET_PATTERNS:
         if pattern.search(lower):
