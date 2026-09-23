@@ -83,3 +83,18 @@ Browser
 O reconciliador não pode depender de nomes históricos de projeto/container Docker. O runtime DEV deve ser descoberto pela única API em execução que publica a porta host 8210, conforme o contrato de `docker-compose.dev.yml` e a evidência operacional do piloto; o projeto e os serviços `api`, `frontend` e `nginx` são validados pelos labels oficiais do Docker Compose. Projetos com identidade HML/STG/PROD são rejeitados antes de qualquer alteração.
 
 Critério adicional: ausência ou ambiguidade da API DEV 8210, serviço Compose duplicado/ausente ou identidade não-DEV deve falhar fechado sem tocar HML/PROD. A porta 8083 permanece o gateway funcional validado por HTTP, mas não é usada como identidade Docker.
+
+## Refresh do runtime sem Compose — 22/09/2026
+
+O reconciliador não deve recriar os containers DEV via `docker compose` para
+aplicar o Modo ESTUDO quando o runtime já existe. O refresh deve preservar a
+configuração e o ambiente dos containers atuais, exigir previamente o bridge
+`NOTERI_CONTROL_PLANE_URL=http://host.docker.internal:8787`, sincronizar os
+arquivos versionados, reiniciar somente `api`, `frontend` e `nginx` já
+descobertos e executar rollback equivalente em caso de falha.
+
+Quando o frontend não possuir bind de `/app`, somente o arquivo versionado do
+serviço de perfil pode ser copiado para o container antes do restart; a cópia
+também deve ser revertida no rollback. O fluxo não publica valores de segredos
+e falha fechado se o bridge ou o bind do Nginx não corresponderem ao runtime
+DEV observado.
