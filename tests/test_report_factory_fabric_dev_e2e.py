@@ -136,6 +136,7 @@ def test_create_progressively_promotes_one_item_without_extra_create() -> None:
             return_value=[{"displayName": "DemandasPorStatus", "id": "report-id"}],
         ),
         patch.object(module, "_update_definition") as update_definition,
+        patch.object(module, "_verify_progressive_phase") as verify_phase,
     ):
         module._create_progressively(
             reports_url=module.FABRIC_BASE + "/workspaces/ws/paginatedReports",
@@ -149,7 +150,9 @@ def test_create_progressively_promotes_one_item_without_extra_create() -> None:
 
     assert invoke.call_count == 1
     assert update_definition.call_count == 3
+    assert verify_phase.call_count == 4
     assert evidence["progressive_bootstrap_used"] is True
+    assert evidence["progressive_passed_phases"] == ["minimal", "datasource", "dataset", "full"]
     assert evidence["progressive_last_passed_phase"] == "full"
     assert evidence["progressive_failed_phase"] is None
 
@@ -173,6 +176,7 @@ def test_create_progressively_records_exact_failed_phase() -> None:
             "_update_definition",
             side_effect=[None, module.E2EError("fabric_http_400:InvalidDefinitionFormat")],
         ),
+        patch.object(module, "_verify_progressive_phase"),
     ):
         with pytest.raises(module.E2EError, match="progressive_dataset"):
             module._create_progressively(
@@ -185,8 +189,41 @@ def test_create_progressively_records_exact_failed_phase() -> None:
                 evidence=evidence,
             )
 
+    assert evidence["progressive_passed_phases"] == ["minimal", "datasource"]
     assert evidence["progressive_last_passed_phase"] == "datasource"
     assert evidence["progressive_failed_phase"] == "dataset"
+
+
+def test_verify_progressive_phase_uses_independent_definition_hash() -> None:
+    source = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    rdl = module.report_factory.generate_rdl(source)
+    definition = module.report_factory.build_fabric_definition("DemandasPorStatus", rdl)
+
+    with patch.object(module, "_get_definition", return_value={"definition": definition}) as get_definition:
+        module._verify_progressive_phase(
+            workspace_id="workspace-1",
+            report_id="report-1",
+            report_name="DemandasPorStatus",
+            phase="full",
+            expected_rdl=rdl,
+            token="ephemeral-token",
+        )
+
+    get_definition.assert_called_once_with("workspace-1", "report-1", "ephemeral-token")
+
+    tampered = rdl.replace("Demandas por Status", "Demandas alteradas", 1)
+    with patch.object(module, "_get_definition", return_value={"definition": definition}):
+        with pytest.raises(module.E2EError, match="progressive_readback_hash_mismatch:full"):
+            module._verify_progressive_phase(
+                workspace_id="workspace-1",
+                report_id="report-1",
+                report_name="DemandasPorStatus",
+                phase="full",
+                expected_rdl=tampered,
+                token="ephemeral-token",
+            )
 
 
 def test_safe_fabric_error_code_extracts_only_structured_code() -> None:
