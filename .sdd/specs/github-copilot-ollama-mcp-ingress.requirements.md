@@ -31,7 +31,10 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
 10. O workflow canônico deve preservar o modo `codex-e2e` existente e admitir
     somente os modos enumerados `codex-e2e` e `mcp-ingress`; não criar novo
     workflow para o ingresso MCP.
-11. HML e PROD ficam fora do escopo.
+11. No runner self-hosted PC24x7, o workflow deve reutilizar o Python já
+    provisionado, validar o executável antes do uso e falhar rapidamente se ele
+    estiver indisponível; não deve instalar Python nem alterar o Registro do host.
+12. HML e PROD ficam fora do escopo.
 
 ## Critérios de aceite
 
@@ -48,3 +51,5 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
 6. `READY_FOR_PR=passed` no HEAD exato antes da PR.
 7. E2E físico exige bridge local ativo, rota Funnel observada e probe externo de
    `https://<desktop>.ts.net/mcp`; CI isolada não substitui essa evidência.
+8. Testes de workflow impedem reintroduzir `actions/setup-python` no runner
+   self-hosted e comprovam o uso do executável Python provisionado.

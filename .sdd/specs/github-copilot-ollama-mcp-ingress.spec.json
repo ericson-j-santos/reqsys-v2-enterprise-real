@@ -17,6 +17,8 @@
     "O reconciliador falha fechado sem bridge local, Tailscale Running, MagicDNS ou rota observável.",
     "Consentimento de Funnel ausente é classificado sem interação automática.",
     "O workflow canônico codex-ollama-e2e-dev.yml preserva codex-e2e e aceita apenas codex-e2e ou mcp-ingress, sem criar novo workflow.",
+    "No runner self-hosted PC24x7, o workflow reutiliza o Python provisionado, valida o executável antes do uso e não usa actions/setup-python para instalar ou alterar o runtime do host.",
+    "Os testes de workflow impedem a reintrodução de actions/setup-python e comprovam o uso de REQSYS_PYTHON nos caminhos codex-e2e e mcp-ingress.",
     "O Authorized Actions Gateway mapeia o comando exato de MCP ingress para o modo mcp-ingress e mantém pickup/cancelamento fail-closed.",
     "A allowlist self-hosted vigente é preservada, inclusive branch-protection-audit.yml.",
     "Evidência não contém segredo e é vinculada ao SHA exato.",
@@ -26,6 +28,7 @@
     "tests": [
       "tests/test_pc24x7_ollama_mcp_funnel.py",
       "tests/test_github_copilot_ollama_mcp_ingress_workflow.py",
+      "tests/test_codex_ollama_e2e_selfhosted.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
     "evidence_contract": "READY_FOR_PR deve passar no HEAD exato, com workflow:surface-budget verde e crescimento líquido zero. O E2E físico posterior deve provar bridge 8010 local, Funnel /mcp e reachability externa no mesmo SHA; ausência do runner ou consentimento Tailscale falha fechado."

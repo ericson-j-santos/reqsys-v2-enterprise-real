@@ -17,6 +17,10 @@ def test_workflow_is_fixed_to_pc24x7_dev_and_sha_bound() -> None:
     assert "schedule:" not in raw
     assert "pull_request:" not in raw
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "actions/setup-python@" not in raw
+    assert "Get-Command python -CommandType Application -ErrorAction Stop" in raw
+    assert '& "$env:REQSYS_PYTHON" -m pip install' in raw
+    assert '& "$env:REQSYS_PYTHON" scripts/validate_codex_cloud_reqsys_e2e.py' in raw
     assert 'DESKTOP-PDQK954' in raw
     assert '--expected-sha "${{ github.sha }}"' in raw
     assert '--correlation-id "$env:CORRELATION_ID"' in raw
