@@ -62,3 +62,26 @@ Para evidência Fabric DEV, registrar:
 - `x-ms-operation-id` quando houver LRO;
 - leitura independente da definição publicada;
 - posteriormente, exportação real PDF/XLSX.
+
+## Publicação E2E governada em DEV
+
+O preflight manual continua somente leitura por padrão. A mutação DEV usa o mesmo workflow, sem criar uma nova superfície de Actions, e só é habilitada pelo modo explícito `publish-e2e`.
+
+No canal governado do ReqSys (issue operacional #1705), o comando exato é:
+
+```text
+/reqsys run report-factory-fabric-dev-e2e
+```
+
+O gateway fixa `main`, o workflow fixa o environment `development` e o script fixa o workspace `ReqSys - Observabilidade`. Não há input de workspace, ambiente produtivo, token ou workflow arbitrário.
+
+A evidência só é aceita quando o mesmo run comprova:
+
+- exatamente um workspace DEV alvo;
+- exatamente um relatório com o nome da `ReportSpec`;
+- criação ou atualização concluída;
+- `getDefinition` independente;
+- SHA-256 do RDL lido igual ao RDL gerado;
+- replay da mesma definição sem duplicidade;
+- `secret_value_exposed=false`;
+- `production_touched=false`.
