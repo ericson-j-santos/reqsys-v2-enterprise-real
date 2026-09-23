@@ -8,12 +8,12 @@ Formalizar o contrato do artifact `ci-lead-time-analytics.json` para consumo por
 
 - Nome lógico: `ci-lead-time-analytics.json`
 - Schema: `docs/contracts/ci-lead-time-analytics.schema.json`
-- Schema version gerada: `1.0.3`
+- Schema version gerada: `1.0.4`
 - Modo: `report-only`
 - Fonte: GitHub Actions API + baseline congelado versionado
 - Permissões: `actions: read` e `contents: read`
 
-A versão `1.0.3` é aditiva: preserva os campos de `1.0.2` e acrescenta `baseline_comparison` depois da coleta, antes do upload do artifact.
+A versão `1.0.3` é aditiva: preserva os campos de `1.0.2` e acrescenta `baseline_comparison`. A versão `1.0.4` acrescenta `pr_efficiency` depois da comparação histórica, mantendo o mecanismo `report-only` e sem criar novo workflow.
 
 ## KPIs
 
@@ -37,6 +37,12 @@ A versão `1.0.3` é aditiva: preserva os campos de `1.0.2` e acrescenta `baseli
 | `baseline_comparison` | objeto | Janela atual contra baseline congelado |
 | `failure_pareto` | lista | Concentração de falhas |
 | `bottlenecks` | lista | Top workflows por P95 |
+| `pr_efficiency.total_observed_ci_run_minutes` | minutos | Soma do wall-clock observado dos workflow runs de PR na janela |
+| `pr_efficiency.avg_observed_ci_run_minutes_per_pr` | minutos/PR | Custo temporal médio observado por PR |
+| `pr_efficiency.p50_latest_head_time_to_green_seconds` | segundos | Mediana do HEAD mais recente até todos os workflows bloqueantes ficarem verdes |
+| `pr_efficiency.p90_latest_head_time_to_green_seconds` | segundos | Cauda P90 do HEAD mais recente até verde |
+| `pr_efficiency.ci_fix_commit_proxy_percent` | percentual | PRs com falha bloqueante em HEAD anterior e HEAD mais recente verde |
+| `pr_efficiency.workflows_to_80_percent.count` | quantidade | Menor quantidade de workflows que acumula pelo menos 80% dos minutos observados |
 
 ## Semântica
 
@@ -82,6 +88,16 @@ Regras fixas de governança:
 - deltas são evidência descritiva e não prova causal;
 - baseline ausente ou ilegível resulta em `available=false`, sem impedir publicação da evidência;
 - baseline marcado como mutável (`frozen != true`) é rejeitado pelo comparador e coberto por teste.
+
+### Eficiência por Pull Request
+
+`pr_efficiency` é calculado somente com runs de evento `pull_request` dentro da mesma janela fixa do artifact.
+
+- **Minutos de CI por PR:** soma o wall-clock de cada workflow run observado. É proxy operacional de consumo temporal e **não** equivale a minutos faturados pelo GitHub.
+- **Tempo até verde:** usa somente o HEAD mais recente de cada PR e exige todos os workflows de `config/workflow-governance-registry.json -> canonical_pr_path.blocking` presentes e com `conclusion=success`. Workflow ausente mantém a amostra como incompleta/não verde.
+- **Proxy de commit corretivo de CI:** exige um HEAD anterior com falha em workflow bloqueante e HEAD mais recente integralmente verde. É evidência observacional; não afirma que o novo commit foi causalmente motivado pela falha.
+- **Pareto de minutos:** agrega os workflow runs de PR por nome, calcula participação e participação acumulada e registra o menor conjunto que alcança 80%.
+- Todos os campos permanecem `report-only` e `creates_gate=false`.
 
 ### Pareto
 

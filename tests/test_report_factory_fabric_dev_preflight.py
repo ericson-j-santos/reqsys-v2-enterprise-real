@@ -30,3 +30,21 @@ def test_preflight_is_read_only_and_reuses_canonical_probe() -> None:
     forbidden = ("az ad app create", "roleAssignments", "--method post", "--method patch", "--method delete")
     for marker in forbidden:
         assert marker not in text
+
+
+def test_manual_e2e_requires_explicit_publish_mode_and_main() -> None:
+    text = _text()
+    assert "default: preflight" in text
+    assert "- publish-e2e" in text
+    assert "inputs.mode == 'publish-e2e'" in text
+    assert "github.ref == 'refs/heads/main'" in text
+    assert "needs: fabric-dev-preflight" in text
+    assert "scripts/report_factory_fabric_dev_e2e.py" in text
+    assert "REPORT_FACTORY_FABRIC_DEV_E2E_OK" in text
+
+
+def test_manual_default_remains_read_only() -> None:
+    text = _text()
+    assert "default: preflight" in text
+    assert "fabric-dev-e2e:" in text
+    assert "github.event_name == 'workflow_dispatch'" in text

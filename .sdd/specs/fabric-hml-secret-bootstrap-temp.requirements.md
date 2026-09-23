@@ -10,7 +10,7 @@ Provisionar de forma efêmera e governada o segredo `FABRIC_CLIENT_SECRET` no re
 
 ## Requisitos
 
-1. Executar o bootstrap somente em pull request cuja branch seja exatamente `ops/fabric-hml-secret-recovery-20260922`.
+1. Executar o bootstrap somente em pull request cuja branch seja exatamente `ops/fabric-hml-secret-bootstrap-20260921`.
 2. Executar somente no runner allowlisted `[self-hosted, Windows, X64, noteri, reqsys-dev]`.
 3. Preservar o job canônico de descoberta: em PR ele continua somente leitura; escrita das variáveis não sensíveis continua limitada ao `workflow_dispatch` na `main` com confirmação explícita.
 4. Validar o tenant esperado e localizar exatamente uma App Registration `ReqSys ALM Pipeline`.

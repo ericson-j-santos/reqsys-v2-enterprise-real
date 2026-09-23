@@ -1,9 +1,8 @@
 import json
 import os
 import tempfile
-import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 import scripts.fabric_hml_secret_bootstrap_temp as m
 
@@ -24,15 +23,15 @@ class FabricHmlSecretBootstrapTests(unittest.TestCase):
             }
 
         return [
-            mock.patch.object(m.platform, "node", return_value=m.EXPECTED_HOST),
-            mock.patch.object(m, "find_az", return_value="az"),
-            mock.patch.object(m.shutil, "which", return_value="gh"),
-            mock.patch.object(m, "run", return_value="{}"),
-            mock.patch.object(m, "exact_app", return_value=("app-id", "object-id")),
-            mock.patch.object(m, "user_fabric_token", return_value="user-token"),
-            mock.patch.object(m, "exact_workspace_id", return_value="workspace-id"),
-            mock.patch.object(m, "set_variable", side_effect=fake_set_variable),
-            mock.patch.object(m, "gh_names", side_effect=fake_gh_names),
+            unittest.mock.patch.object(m.platform, "node", return_value=m.EXPECTED_HOST),
+            unittest.mock.patch.object(m, "find_az", return_value="az"),
+            unittest.mock.patch.object(m.shutil, "which", return_value="gh"),
+            unittest.mock.patch.object(m, "run", return_value="{}"),
+            unittest.mock.patch.object(m, "exact_app", return_value=("app-id", "object-id")),
+            unittest.mock.patch.object(m, "user_fabric_token", return_value="user-token"),
+            unittest.mock.patch.object(m, "exact_workspace_id", return_value="workspace-id"),
+            unittest.mock.patch.object(m, "set_variable", side_effect=fake_set_variable),
+            unittest.mock.patch.object(m, "gh_names", side_effect=fake_gh_names),
         ]
 
     def test_existing_secret_is_rotated_only_after_new_credential_is_validated(self):
@@ -54,11 +53,11 @@ class FabricHmlSecretBootstrapTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             evidence = Path(tmp) / "evidence.json"
-            with mock.patch.dict(os.environ, {"EVIDENCE_FILE": str(evidence), "GITHUB_RUN_ID": "123"}), \
-                mock.patch.object(m, "create_credential", side_effect=fake_create), \
-                mock.patch.object(m, "validate_client_credentials_with_retry", side_effect=fake_validate), \
-                mock.patch.object(m, "run_stdin", side_effect=fake_stdin), \
-                mock.patch.object(m, "delete_credential") as delete_mock:
+            with unittest.mock.patch.dict(os.environ, {"EVIDENCE_FILE": str(evidence), "GITHUB_RUN_ID": "123"}), \
+                unittest.mock.patch.object(m, "create_credential", side_effect=fake_create), \
+                unittest.mock.patch.object(m, "validate_client_credentials_with_retry", side_effect=fake_validate), \
+                unittest.mock.patch.object(m, "run_stdin", side_effect=fake_stdin), \
+                unittest.mock.patch.object(m, "delete_credential") as delete_mock:
                 for patcher in patches:
                     patcher.start()
                 try:
@@ -84,15 +83,15 @@ class FabricHmlSecretBootstrapTests(unittest.TestCase):
         patches = self._base_patches(events)
         with tempfile.TemporaryDirectory() as tmp:
             evidence = Path(tmp) / "evidence.json"
-            with mock.patch.dict(os.environ, {"EVIDENCE_FILE": str(evidence), "GITHUB_RUN_ID": "124"}), \
-                mock.patch.object(m, "create_credential", return_value=("bad-secret", "new-key-id")), \
-                mock.patch.object(
+            with unittest.mock.patch.dict(os.environ, {"EVIDENCE_FILE": str(evidence), "GITHUB_RUN_ID": "124"}), \
+                unittest.mock.patch.object(m, "create_credential", return_value=("bad-secret", "new-key-id")), \
+                unittest.mock.patch.object(
                     m,
                     "validate_client_credentials_with_retry",
                     return_value=(False, None, False, 401, 6),
                 ), \
-                mock.patch.object(m, "run_stdin") as stdin_mock, \
-                mock.patch.object(m, "delete_credential") as delete_mock:
+                unittest.mock.patch.object(m, "run_stdin") as stdin_mock, \
+                unittest.mock.patch.object(m, "delete_credential") as delete_mock:
                 for patcher in patches:
                     patcher.start()
                 try:
@@ -109,9 +108,9 @@ class FabricHmlSecretBootstrapTests(unittest.TestCase):
             self.assertEqual(data["status"], "new_credential_validation_failed")
             self.assertIn(("variable", "FABRIC_HML_E2E_ENABLED", "false"), events)
 
-    @mock.patch.object(m.time, "sleep")
+    @unittest.mock.patch.object(m.time, "sleep")
     def test_retry_stops_after_first_full_success(self, sleep_mock):
-        with mock.patch.object(
+        with unittest.mock.patch.object(
             m,
             "validate_client_credentials",
             side_effect=[
