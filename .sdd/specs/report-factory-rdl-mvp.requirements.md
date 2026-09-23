@@ -36,6 +36,7 @@ Increment type: `gap_fix`
 25. O fluxo não pode persistir token, criar segredo, aceitar STG/PROD nem declarar sucesso sem leitura independente da definição.
 26. Quando houver `ReportParameters`, o RDL 2016 deve incluir `ReportParametersLayout` com `GridLayoutDefinition` e uma `CellDefinition` única para cada parâmetro, evitando payload estruturalmente inválido no Fabric.
 27. Falhas HTTP do Fabric devem registrar somente o status HTTP e os códigos estruturados sanitizados (`errorCode`/`code`), inclusive causas aninhadas em objetos/listas, com limite de quantidade/tamanho; nunca corpo bruto, mensagem, token ou identificadores sensíveis.
+29. Quando o Fabric responder `InvalidDefinitionFormat` sem causa estruturada adicional, o E2E DEV deve executar uma matriz temporária de decomposição RDL (`minimal`, `datasource`, `parameters`, `data_model`, `full`), verificando cada item por `getDefinition` e removendo-o ao final. Cada probe deve exigir zero item homônimo antes, exatamente um após criação e zero após DELETE; falha de limpeza deve bloquear o diagnóstico.
 
 ## Critérios de aceite
 
@@ -55,6 +56,7 @@ Increment type: `gap_fix`
 - o SHA-256 observado via `getDefinition` deve ser igual ao SHA-256 do RDL gerado na mesma execução.
 - RDL parametrizado deve ser rejeitado localmente quando `ReportParametersLayout` estiver ausente ou não mapear exatamente os parâmetros declarados.
 - erro HTTP do Fabric deve produzir evidência acionável como `fabric_http_400:<codigo>:<causa_aninhada>` quando houver códigos estruturados adicionais, sem incluir mensagens brutas, identificadores ou token.
+- `InvalidDefinitionFormat` sem detalhe estruturado deve produzir `rdl_probe_results` por estágio e `rdl_probe_failed_component`, comprovando também a remoção dos itens temporários do diagnóstico.
 
 ## Fora do escopo deste MVP
 
