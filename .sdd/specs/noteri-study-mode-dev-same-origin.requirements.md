@@ -47,10 +47,12 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     tocar o Nginx, o OpenAPI direto em `127.0.0.1:8210/openapi.json` deve
     comprovar simultaneamente `/v1/noteri/profile` e `/api/runtime/health`.
     O reconciliador deve registrar de forma sanitizada qual contrato direto
-    ficou ausente. Somente depois executar `nginx -t`, reiniciar apenas o
-    container Nginx DEV já existente e comprovar com `nginx -T` que as rotas
-    críticas estão na configuração ativa. Não executar `docker compose`, não
-    recriar a stack e não reler `.env`/segredos.
+    ficou ausente. O serviço Nginx selecionado deve comprovar que publica
+    exatamente a porta host 8083. Após copiar a configuração, o reconciliador
+    deve esperar até o bind observado dentro do container ser byte-equivalente
+    ao arquivo host normalizado; somente então executar `nginx -t` e
+    `nginx -s reload`, sem reiniciar o container Nginx. Não executar
+    `docker compose`, não recriar a stack e não reler `.env`/segredos.
     Somente então comprovar HTTP 200 em `/api/health` e
     `/api/runtime/health` e HTTP 401 na rota protegida
     `/api/v1/noteri/profile`.
@@ -78,19 +80,21 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     confirmar as duas rotas de saúde por leitura HTTP independente.
 12. O caminho normal do reconciliador não executa `docker compose config`
     nem `docker compose up`. Após sincronizar os binds, pode reiniciar somente
-    os containers API e Nginx DEV já existentes via `docker restart`,
-    preservando a configuração efetiva e sem reler `.env`/segredos ou
-    recriar a stack.
+    o container API DEV já existente via `docker restart`. O Nginx DEV não
+    deve ser reiniciado: o reconciliador aguarda a propagação do bind, valida
+    `nginx -t` e aplica `nginx -s reload`, preservando o listener 8083 e sem
+    reler `.env`/segredos ou recriar a stack.
 13. Bind ausente, módulo de monitoramento operacional ausente no backend
     montado, bind do Nginx divergente do working directory declarado pelo
-    próprio serviço `nginx`, fonte do bind inexistente, contrato OpenAPI
+    próprio serviço `nginx`, porta host diferente de 8083, fonte do bind
+    inexistente, bind ainda não visível dentro do container, contrato OpenAPI
     direto sem `/v1/noteri/profile` ou `/api/runtime/health`, `nginx -t`
-    inválido, configuração ativa via `nginx -T` sem as rotas esperadas ou
-    qualquer rota de saúde/controle não observada deve falhar
+    inválido ou qualquer rota de saúde/controle não observada deve falhar
     fechado antes da mudança de perfil.
 14. O E2E deve comprovar primeiro no backend direto da porta 8210 que os dois
-    paths críticos estão registrados; depois comprovar que os reinícios
-    controlados da API e do Nginx restauraram `/api/runtime/health`, que a API
+    paths críticos estão registrados; depois comprovar que o restart controlado
+    da API e o reload do Nginx, sem queda do listener 8083, restauraram
+    `/api/runtime/health`, que a API
     carregou a rota same-origin e que o ciclo
     NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL terminou em NORMAL.
 
