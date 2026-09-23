@@ -81,6 +81,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "figma-github-e2e-dev.yml|"
         "fabric-oidc-readonly-probe.yml|"
         "report-factory-fabric-dev-access-bootstrap.yml|"
+        "report-factory-fabric-dev-preflight.yml|"
         "codex-ollama-e2e-dev.yml|"
         "codex-worker-pool-smoke-dev.yml|"
         "noteri-desktop-network-probe.yml|"
