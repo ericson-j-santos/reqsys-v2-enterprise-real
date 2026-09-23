@@ -16,8 +16,14 @@
     "runtime/scripts/e2e_platform_central_pilot.py",
     "runtime/tests/test_e2e_platform_central_pilot.py",
     ".github/workflows/runtime-operational-contract.yml",
-    ".sdd/specs/e2e-platform-central-pilot.spec.json"
+    ".sdd/specs/e2e-platform-central-pilot.spec.json",
+    ".sdd/specs/e2e-platform-central-pilot.requirements.md"
   ],
+  "traceability": {
+    "requirements": ".sdd/specs/e2e-platform-central-pilot.requirements.md",
+    "workflow": ".github/workflows/runtime-operational-contract.yml",
+    "tests": "runtime/tests/test_e2e_platform_central_pilot.py"
+  },
   "sdd_gate": {
     "tests": [
       "runtime/tests/test_e2e_platform_central_pilot.py"
@@ -33,7 +39,7 @@
   },
   "acceptance_criteria": [
     "O E2E existente da Central permanece a fonte de verdade e aceita correlation_id externo sem alterar o comportamento padrão local.",
-    "O adaptador sobe a API real em memória, executa runtime/scripts/e2e_central.py e só gera evidence.json quando o processo retorna zero e todos os marcadores obrigatórios são observados.",
+    "O adaptador só gera evidence.json quando o E2E real retorna zero e todos os marcadores obrigatórios são observados.",
     "A evidência usa o GITHUB_SHA completo do HEAD e o mesmo correlation_id enviado ao E2E real.",
     "O workflow Runtime Operational Contract publica central-e2e-evidence e chama e2e-platform por SHA completo imutável.",
     "O e2e-platform rejeita ausência ou falha de controle obrigatório.",

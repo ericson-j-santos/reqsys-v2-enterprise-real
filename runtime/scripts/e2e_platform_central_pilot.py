@@ -79,7 +79,7 @@ def build_evidence(
         },
         "independent_read": {
             "passed": True,
-            "source": "GET /api/central/evidence/{request_id}",
+            "source": "Central evidence ledger independent readback",
             "evidence": "leitura_independente_ledger",
         },
         "idempotency": {
@@ -201,8 +201,16 @@ def main() -> int:
     args = parser.parse_args()
     try:
         evidence = run_pilot(args.output)
-    except Exception as exc:
-        print(json.dumps({"result": "REQSYS_E2E_PLATFORM_PILOT_FAILED", "error": str(exc)}))
+    except Exception:
+        print(
+            json.dumps(
+                {
+                    "result": "REQSYS_E2E_PLATFORM_PILOT_FAILED",
+                    "correlation_id": os.environ.get("E2E_CORRELATION_ID", "unavailable"),
+                },
+                sort_keys=True,
+            )
+        )
         return 1
     print(
         json.dumps(
