@@ -5,7 +5,6 @@
     ".github/workflows/codex-ollama-e2e-dev.yml",
     ".github/workflows/codex-worker-pool-handoff.yml",
     ".github/workflows/codex-worker-pool-smoke-dev.yml",
-    ".github/workflows/codex-worker-pool-token-restore-dev.yml",
     ".github/workflows/desktop-rdc-recovery.yml",
     ".github/workflows/fabric-hml-authorization-probe.yml",
     ".github/workflows/fabric-hml-noteri-discovery.yml",
