@@ -151,3 +151,105 @@ def test_request_json_http_error_exposes_nested_codes_not_messages() -> None:
     assert "secret detail" not in reason
     assert "ephemeral-token" not in reason
 
+
+
+def _generated_rdl() -> str:
+    spec = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    module.report_factory.validate_spec(spec)
+    return module.report_factory.generate_rdl(spec)
+
+
+def _contains(rdl: str, name: str) -> bool:
+    root = module.ET.fromstring(rdl)
+    return root.find(f".//{module.report_factory._q(name)}") is not None
+
+
+@pytest.mark.parametrize(
+    ("stage", "expected", "absent"),
+    [
+        ("minimal", (), ("DataSources", "DataSets", "ReportParameters", "Tablix")),
+        ("datasource", ("DataSources",), ("DataSets", "ReportParameters", "Tablix")),
+        ("parameters", ("ReportParameters", "ReportParametersLayout"), ("DataSources", "DataSets", "Tablix")),
+        ("data_model", ("DataSources", "DataSets", "ReportParameters", "ReportParametersLayout"), ("Tablix",)),
+    ],
+)
+def test_probe_rdl_decomposes_definition_without_touching_full(
+    stage: str, expected: tuple[str, ...], absent: tuple[str, ...]
+) -> None:
+    full = _generated_rdl()
+    variant = module._build_probe_rdl(full, stage)
+    for name in expected:
+        assert _contains(variant, name)
+    for name in absent:
+        assert not _contains(variant, name)
+    assert module._build_probe_rdl(full, "full") == full
+
+
+@pytest.mark.parametrize(
+    ("results", "component"),
+    [
+        ({"minimal": "fabric_http_400:InvalidDefinitionFormat"}, "base_rdl"),
+        (
+            {
+                "minimal": "passed",
+                "datasource": "fabric_http_400:InvalidDefinitionFormat",
+                "parameters": "passed",
+                "data_model": "fabric_http_400:InvalidDefinitionFormat",
+                "full": "fabric_http_400:InvalidDefinitionFormat",
+            },
+            "datasource",
+        ),
+        (
+            {
+                "minimal": "passed",
+                "datasource": "passed",
+                "parameters": "fabric_http_400:InvalidDefinitionFormat",
+                "data_model": "fabric_http_400:InvalidDefinitionFormat",
+                "full": "fabric_http_400:InvalidDefinitionFormat",
+            },
+            "parameters",
+        ),
+        (
+            {
+                "minimal": "passed",
+                "datasource": "passed",
+                "parameters": "passed",
+                "data_model": "fabric_http_400:InvalidDefinitionFormat",
+                "full": "fabric_http_400:InvalidDefinitionFormat",
+            },
+            "dataset_or_cross_component",
+        ),
+        (
+            {
+                "minimal": "passed",
+                "datasource": "passed",
+                "parameters": "passed",
+                "data_model": "passed",
+                "full": "fabric_http_400:InvalidDefinitionFormat",
+            },
+            "tablix",
+        ),
+        (
+            {
+                "minimal": "passed",
+                "datasource": "passed",
+                "parameters": "passed",
+                "data_model": "passed",
+                "full": "passed",
+            },
+            "main_request_context",
+        ),
+    ],
+)
+def test_infer_probe_component(results: dict[str, str], component: str) -> None:
+    assert module._infer_probe_component(results) == component
+
+
+def test_probe_name_contains_only_safe_characters() -> None:
+    with patch.dict(module.os.environ, {"GITHUB_RUN_ID": "35866066425", "GITHUB_SHA": "abc12345def"}):
+        name = module._probe_name("data_model")
+    assert name.startswith("ReqSysRdlProbe")
+    assert name.isalnum()
+    assert len(name) <= 120
