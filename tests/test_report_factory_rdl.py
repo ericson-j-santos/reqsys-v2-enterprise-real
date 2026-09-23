@@ -219,6 +219,8 @@ def test_shared_platform_adapter_preserves_reqsys_identity_namespace() -> None:
 
 def test_shared_platform_dependency_is_pinned_to_adapter_commit() -> None:
     dependency = (ROOT / "requirements-report-builder.txt").read_text(encoding="utf-8")
+    assert "# release: v0.1.0" in dependency
+    assert f"source_sha: {report_factory.PLATFORM_COMMIT}" in dependency
     assert report_factory.PLATFORM_COMMIT in dependency
     assert "@main" not in dependency
     assert "@master" not in dependency
