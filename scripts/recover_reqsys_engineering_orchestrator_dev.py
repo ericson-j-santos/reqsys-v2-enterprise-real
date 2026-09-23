@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import subprocess
+import shutil
 import sys
 import time
 import urllib.error
@@ -171,10 +172,99 @@ def validate_runtime_layout(runtime_root: Path) -> dict[str, Any]:
     }
 
 
+def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temp.replace(path)
+
+
+def normalize_runtime_config(runtime_root: Path) -> dict[str, Any]:
+    root = runtime_root.resolve()
+    supervisor = root / "scripts" / "service_supervisor.py"
+    package = root / "orchestrator" / "__init__.py"
+    if not supervisor.is_file() or not package.is_file():
+        raise RecoveryError("orchestrator_runtime_incomplete")
+
+    service_path = root / "service-config.json"
+    worker_path = root / "worker-config.json"
+    existing_service: dict[str, Any] = {}
+    if service_path.is_file():
+        try:
+            parsed = json.loads(service_path.read_text(encoding="utf-8"))
+            if isinstance(parsed, dict):
+                existing_service = parsed
+        except (OSError, json.JSONDecodeError):
+            existing_service = {}
+
+    backup_dir = root / "data" / "study-mode-recovery"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    service_backup = backup_dir / "service-config.before-study-recovery.json"
+    worker_backup = backup_dir / "worker-config.before-study-recovery.json"
+    service_backup_created = False
+    worker_backup_created = False
+    if service_path.is_file() and not service_backup.exists():
+        shutil.copy2(service_path, service_backup)
+        service_backup_created = True
+    if worker_path.is_file() and not worker_backup.exists():
+        shutil.copy2(worker_path, worker_backup)
+        worker_backup_created = True
+
+    source_root_raw = str(existing_service.get("source_root") or "").strip()
+    source_root = source_root_raw or str(root)
+    worker = {
+        "endpoint": CONTROL_PLANE,
+        "worker_id": "desktop-pdqk954",
+        "roles": ["builder", "ci-remediator", "e2e-validator"],
+        "controller_version": "0.2.51",
+        "dispatch_priority": 10,
+        "heartbeat_ttl_seconds": 120,
+        "heartbeat_interval_seconds": 20,
+        "poll_interval_seconds": 2,
+        "lease_seconds": 180,
+        "runtime_root": str(root),
+    }
+    service = {
+        "mode": "control-plane-worker",
+        "install_root": str(root),
+        "worker_config": str(worker_path.resolve()),
+        "restart_delay_seconds": 5,
+        "source_root": source_root,
+        "host": "0.0.0.0",
+        "port": 8787,
+        "db_path": str(root / "data" / "orchestrator.db"),
+        "backup_path": str(root / "data" / "orchestrator.backup.db"),
+        "backup_interval_seconds": 60,
+        "ready_url": CONTROL_PLANE + "/readyz",
+    }
+    _atomic_json(worker_path, worker)
+    _atomic_json(service_path, service)
+    validate_runtime_layout(root)
+    return {
+        "normalized": True,
+        "service_backup_created": service_backup_created,
+        "worker_backup_created": worker_backup_created,
+        "runtime_contract_validated": True,
+    }
+
+
 def start_validated_supervisor(
     runtime_root: Path = ORCHESTRATOR_INSTALL_ROOT,
 ) -> dict[str, Any]:
-    layout = validate_runtime_layout(runtime_root)
+    normalized: dict[str, Any] | None = None
+    try:
+        layout = validate_runtime_layout(runtime_root)
+    except RecoveryError as exc:
+        if str(exc) not in {
+            "orchestrator_runtime_contract_invalid",
+            "orchestrator_runtime_config_invalid",
+        }:
+            raise
+        normalized = normalize_runtime_config(runtime_root)
+        layout = validate_runtime_layout(runtime_root)
     root = Path(layout["root"])
     service_config = Path(layout["service_config"])
     log_path = root / "logs" / "study-mode-supervisor-recovery.log"
@@ -217,6 +307,8 @@ def start_validated_supervisor(
         "pid_present": process.pid > 0,
         "tracking_marker_removed": tracking_removed,
         "runtime_contract_validated": True,
+        "runtime_normalized": normalized is not None,
+        "normalization": normalized,
     }
 
 
@@ -296,6 +388,8 @@ def recover(
 
     if not recovery_attempted:
         recovery_method = "not_required"
+    elif supervisor_fallback_used and supervisor_start and supervisor_start.get("runtime_normalized") is True:
+        recovery_method = "scheduled_task_then_normalized_supervisor"
     elif supervisor_fallback_used:
         recovery_method = "scheduled_task_then_validated_supervisor"
     else:

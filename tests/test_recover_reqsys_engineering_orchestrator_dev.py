@@ -260,3 +260,129 @@ def test_worker_probe_exposes_only_allowlisted_state(monkeypatch):
     assert result["noteri"]["profile"] == "ESTUDO"
     assert "secret-id" not in rendered
     assert "must-not-leak" not in rendered
+
+
+def _make_runtime(root: Path, *, port: int = 9999) -> None:
+    (root / "scripts").mkdir(parents=True)
+    (root / "orchestrator").mkdir()
+    (root / "data").mkdir()
+    (root / "scripts" / "service_supervisor.py").write_text("# ok\n", encoding="utf-8")
+    (root / "orchestrator" / "__init__.py").write_text("", encoding="utf-8")
+    worker_path = root / "worker-config.json"
+    worker_path.write_text(
+        json.dumps(
+            {
+                "endpoint": "http://127.0.0.1:9999",
+                "worker_id": "wrong-worker",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "service-config.json").write_text(
+        json.dumps(
+            {
+                "mode": "worker",
+                "install_root": str(root),
+                "port": port,
+                "ready_url": "http://127.0.0.1:9999/readyz",
+                "worker_config": str(worker_path),
+                "source_root": str(root),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_normalize_runtime_config_repairs_drift_and_preserves_first_backup(tmp_path):
+    root = tmp_path / "runtime"
+    _make_runtime(root)
+    original_service = (root / "service-config.json").read_text(encoding="utf-8")
+    original_worker = (root / "worker-config.json").read_text(encoding="utf-8")
+
+    first = module.normalize_runtime_config(root)
+    layout = module.validate_runtime_layout(root)
+
+    assert first["normalized"] is True
+    assert first["service_backup_created"] is True
+    assert first["worker_backup_created"] is True
+    assert layout["root"] == root.resolve()
+
+    service = json.loads((root / "service-config.json").read_text(encoding="utf-8"))
+    worker = json.loads((root / "worker-config.json").read_text(encoding="utf-8"))
+    assert service["mode"] == "control-plane-worker"
+    assert service["port"] == 8787
+    assert service["ready_url"] == module.CONTROL_PLANE + "/readyz"
+    assert worker["endpoint"] == module.CONTROL_PLANE
+    assert worker["worker_id"] == "desktop-pdqk954"
+
+    backup_dir = root / "data" / "study-mode-recovery"
+    service_backup = backup_dir / "service-config.before-study-recovery.json"
+    worker_backup = backup_dir / "worker-config.before-study-recovery.json"
+    assert service_backup.read_text(encoding="utf-8") == original_service
+    assert worker_backup.read_text(encoding="utf-8") == original_worker
+
+    second = module.normalize_runtime_config(root)
+    assert second["service_backup_created"] is False
+    assert second["worker_backup_created"] is False
+    assert service_backup.read_text(encoding="utf-8") == original_service
+    assert worker_backup.read_text(encoding="utf-8") == original_worker
+
+
+def test_start_validated_supervisor_normalizes_invalid_runtime(tmp_path, monkeypatch):
+    root = tmp_path / "runtime"
+    _make_runtime(root)
+
+    class Process:
+        pid = 4321
+
+    observed = {}
+
+    def fake_popen(argv, **kwargs):
+        observed["argv"] = argv
+        observed["kwargs"] = kwargs
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    result = module.start_validated_supervisor(root)
+
+    assert result["started"] is True
+    assert result["runtime_contract_validated"] is True
+    assert result["runtime_normalized"] is True
+    assert result["normalization"]["normalized"] is True
+    assert observed["kwargs"]["cwd"] == str(root.resolve())
+    assert "scripts.service_supervisor" in observed["argv"]
+
+
+def test_recovery_method_reports_normalized_supervisor(tmp_path):
+    state = {"supervisor_started": False}
+
+    def ready_probe():
+        return state["supervisor_started"]
+
+    def supervisor_starter():
+        state["supervisor_started"] = True
+        return {
+            "started": True,
+            "pid_present": True,
+            "tracking_marker_removed": True,
+            "runtime_contract_validated": True,
+            "runtime_normalized": True,
+            "normalization": {"normalized": True},
+        }
+
+    result = module.recover(
+        confirm=module.CONFIRM,
+        evidence_path=tmp_path / "evidence.json",
+        host=module.EXPECTED_HOST,
+        platform="nt",
+        timeout_seconds=1,
+        ready_probe=ready_probe,
+        worker_probe=operational_worker,
+        task_runner=lambda: 0,
+        supervisor_starter=supervisor_starter,
+        sleep_fn=lambda _: None,
+    )
+
+    assert result["ok"] is True
+    assert result["recovery_method"] == "scheduled_task_then_normalized_supervisor"
+    assert result["supervisor_fallback_used"] is True
