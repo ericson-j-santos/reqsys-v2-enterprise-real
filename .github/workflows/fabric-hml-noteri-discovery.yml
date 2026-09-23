@@ -74,7 +74,7 @@ jobs:
 
   bootstrap-secret:
     name: fabric-hml-secret-bootstrap
-    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'ops/fabric-hml-secret-bootstrap-20260921' }}
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'ops/fabric-hml-secret-recovery-20260922' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:
