@@ -44,7 +44,7 @@ def run(args: list[str], timeout: int = 45) -> subprocess.CompletedProcess[str]:
 def require_host(hostname: str | None = None) -> str:
     host = hostname or socket.gethostname()
     if host.casefold() != EXPECTED_HOST.casefold():
-        raise IngressError(f"host_not_authorized:{host}")
+        raise IngressError("host_not_authorized")
     return host
 
 
@@ -220,7 +220,11 @@ def main() -> int:
         return 0
     except (IngressError, OSError, subprocess.SubprocessError, ValueError) as exc:
         payload["ready"] = False
-        payload["error"] = str(exc)[:200]
+        payload["error"] = (
+            exc.args[0]
+            if isinstance(exc, IngressError) and exc.args and isinstance(exc.args[0], str)
+            else "ingress_runtime_error"
+        )
         payload["error_type"] = type(exc).__name__
         write_evidence(args.evidence_file, payload)
         print(json.dumps(payload, ensure_ascii=True, sort_keys=True), file=sys.stderr)
