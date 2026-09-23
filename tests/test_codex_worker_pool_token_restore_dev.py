@@ -77,8 +77,9 @@ def test_gateway_and_runner_policy_allow_only_fixed_restore_workflow() -> None:
     gateway = GATEWAY.read_text(encoding="utf-8")
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert "github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev'" in gateway
-    assert "target='codex-worker-pool-token-restore-dev.yml'" in gateway
-    assert "steps.route.outputs.target == 'codex-worker-pool-token-restore-dev.yml'" in gateway
+    assert "target='codex-worker-pool-smoke-dev.yml'" in gateway
+    assert "mode='restore'" in gateway
+    assert "-f mode=restore" in gateway
     assert ".github/workflows/codex-worker-pool-smoke-dev.yml" in policy["approved_workflows"]
     assert ".github/workflows/codex-worker-pool-token-restore-dev.yml" not in policy["approved_workflows"]
     assert not (ROOT / ".github" / "workflows" / "codex-worker-pool-token-restore-dev.yml").exists()
