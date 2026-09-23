@@ -1,10 +1,20 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.smoke_user_experience_environment_trend_public import build_report
+from scripts.smoke_user_experience_environment_trend_public import build_report, default_environments
 
 
 class PublicUxTrendSmokeTests(unittest.TestCase):
+    @patch.dict("os.environ", {}, clear=True)
+    def test_default_dev_runtime_requires_locator(self):
+        with self.assertRaisesRegex(ValueError, "REQSYS_DEV_BASE_URL_missing"):
+            default_environments()
+
+    @patch.dict("os.environ", {"REQSYS_DEV_BASE_URL": "https://reqsys-api-dev.fly.dev"}, clear=True)
+    def test_default_dev_runtime_rejects_fly(self):
+        with self.assertRaisesRegex(ValueError, "legacy_fly_dev_runtime_forbidden"):
+            default_environments()
+
     @patch("scripts.smoke_user_experience_environment_trend_public.fetch")
     def test_healthy_environments_are_ok(self, fetch):
         fetch.return_value = {"ok": True, "status": 200, "body": {"status": "ok"}}
