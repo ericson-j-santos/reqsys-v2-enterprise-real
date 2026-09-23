@@ -55,7 +55,12 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     `docker compose`, não recriar a stack e não reler `.env`/segredos.
     Somente então comprovar HTTP 200 em `/api/health` e
     `/api/runtime/health` e HTTP 401 na rota protegida
-    `/api/v1/noteri/profile`.
+    `/api/v1/noteri/profile`. Se qualquer observação do gateway expirar, a
+    evidência de falha deve registrar somente sinais sanitizados e estruturais:
+    path allowlisted, último status HTTP (inteiro ou nulo), conectividade TCP
+    loopback na porta 8083, alcance Nginx→`api:8000/health` e os contratos
+    booleanos já observados do Nginx/API. Corpo HTTP, stderr bruto, ambiente,
+    caminhos locais e segredos não podem ser persistidos.
 15. Quando `NOTERI_CONTROL_PLANE_URL` não estiver explicitamente configurada,
     o endpoint fixo `http://host.docker.internal:8787` pode ser inferido
     somente em container de desenvolvimento e somente quando o modo legado por
@@ -90,7 +95,10 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     inexistente, bind ainda não visível dentro do container, contrato OpenAPI
     direto sem `/v1/noteri/profile` ou `/api/runtime/health`, `nginx -t`
     inválido ou qualquer rota de saúde/controle não observada deve falhar
-    fechado antes da mudança de perfil.
+    fechado antes da mudança de perfil. Em timeout do gateway, o artefato deve
+    permitir distinguir listener 8083 indisponível, upstream Nginx→API
+    indisponível e resposta HTTP inesperada sem registrar payload, stderr ou
+    valores arbitrários.
 14. O E2E deve comprovar primeiro no backend direto da porta 8210 que os dois
     paths críticos estão registrados; depois comprovar que o restart controlado
     da API e o reload do Nginx, sem queda do listener 8083, restauraram
