@@ -31,15 +31,19 @@ MATURITY_LEVELS = {
     "red": "reactive",
 }
 
-ENVIRONMENT_ENDPOINTS = {
-    "dev": "https://reqsys-api-dev.fly.dev/health",
-    "homolog": "https://reqsys-api-stg.fly.dev/health",
-    "prod": "https://reqsys-api.fly.dev/health",
-}
+def environment_endpoints() -> dict[str, str]:
+    dev_base = os.getenv("REQSYS_DEV_BASE_URL", "").strip().rstrip("/")
+    if dev_base and ".fly.dev" in dev_base.lower():
+        raise ValueError("legacy_fly_dev_runtime_forbidden")
+    return {
+        "dev": f"{dev_base}/api/health" if dev_base else "",
+        "homolog": "https://reqsys-api-stg.fly.dev/health",
+        "prod": "https://reqsys-api.fly.dev/health",
+    }
 
 HEALTH_MATRIX_WEIGHTS = {
     "ci_github": 0.30,
-    "fly_dev": 0.10,
+    "pc24x7_dev": 0.10,
     "fly_homolog": 0.10,
     "fly_prod": 0.15,
     "evidence_gate": 0.20,
@@ -328,15 +332,17 @@ def build_health_matrix(
         "detail": f"{sum(1 for run in runs if run.health == 'green')} verde(s) de {len(runs)} runs",
     })
 
-    for env, endpoint in ENVIRONMENT_ENDPOINTS.items():
-        row_id = f"fly_{env}"
-        if probe_env:
+    for env, endpoint in environment_endpoints().items():
+        row_id = "pc24x7_dev" if env == "dev" else f"fly_{env}"
+        if probe_env and endpoint:
             status, source = probe_health_endpoint(endpoint)
+        elif probe_env:
+            status, source = "red", "missing"
         else:
             status, source = "declared", "declared"
         matrix.append({
             "id": row_id,
-            "label": f"Fly.io {env.upper()}",
+            "label": "PC24x7 DEV" if env == "dev" else f"Fly.io {env.upper()}",
             "status": status,
             "score": STATUS_SCORE.get(status, 40),
             "source": source,
@@ -553,7 +559,7 @@ def build_environment_sync() -> dict[str, Any]:
     return {
         "strategy": "dev_to_homolog_to_prod",
         "production_execution": "blocked_without_explicit_governed_promotion",
-        "flyio_health_endpoints": ENVIRONMENT_ENDPOINTS,
+        "health_endpoints": environment_endpoints(),
         "required_evidence": ["health_check", "ci_green", "rollback_metadata", "change_ticket_for_prod"],
     }
 
@@ -799,7 +805,7 @@ def write_report(report: dict[str, Any], output_dir: Path) -> None:
     else:
         lines.append("- None")
     lines.extend(["", "## Environment sync", ""])
-    for env, endpoint in report["environment_sync"]["flyio_health_endpoints"].items():
+    for env, endpoint in report["environment_sync"]["health_endpoints"].items():
         lines.append(f"- `{env}`: `{endpoint}`")
     (output_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -811,7 +817,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--mode", choices=["report_only", "dry_run", "execute"], default="report_only")
     parser.add_argument("--output-dir", default="artifacts/runtime-health-validator")
-    parser.add_argument("--probe-env", action="store_true", help="Probe Fly.io health endpoints (default: declared only).")
+    parser.add_argument("--probe-env", action="store_true", help="Probe runtime health endpoints (PC24x7 DEV; Fly HML/PROD).")
     parser.add_argument("--artifact-root", default=".", help="Root for local artifact fallback lookups.")
     return parser.parse_args()
 
