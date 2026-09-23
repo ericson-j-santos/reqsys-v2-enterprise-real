@@ -24,7 +24,7 @@
 - [x] Executar E2E real no run `35845191652`: preflight aprovado, publicação bloqueada por `fabric_http_400`; causa raiz identificada como RDL 2016 parametrizado sem `ReportParametersLayout` obrigatório.
 - [ ] Corrigir o gerador/validador RDL para materializar e exigir o layout de parâmetros antes de nova publicação.
 - [x] Reexecutar E2E após PR #1988 no run `35846231809`: preflight aprovado e publicação ainda bloqueada por `fabric_http_400`, comprovando uma segunda causa ainda não distinguível pela evidência sanitizada atual.
-- [ ] Preservar na evidência apenas o código estruturado seguro retornado pelo Fabric para eliminar diagnóstico por tentativa.
+- [x] Preservar na evidência somente códigos estruturados seguros retornados pelo Fabric, inclusive causas aninhadas, sem mensagens/IDs/tokens, para eliminar diagnóstico por tentativa.
 - [ ] Reexecutar E2E real de publicação e `getDefinition` no Fabric DEV após merge do diagnóstico seguro.
 - [ ] Repetir a mesma definição e comprovar idempotência/ausência de duplicidade na evidência do mesmo run.
 - [ ] Adicionar exportação PDF/XLSX em incremento posterior.
