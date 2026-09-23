@@ -229,3 +229,20 @@ def test_shared_platform_rejects_destructive_sql() -> None:
     source["datasets"][0]["query"] = "DELETE FROM dbo.tbDemandas"
     with pytest.raises(report_factory.ReportSpecError, match="SELECT|WITH|não permitido"):
         report_factory.validate_spec(source)
+
+@pytest.mark.parametrize(
+    ("legacy_name", "public_name"),
+    [
+        ("_q", "q"),
+        ("_rd", "rd"),
+        ("_df", "df"),
+    ],
+)
+def test_legacy_private_namespace_helpers_remain_available(
+    legacy_name: str, public_name: str
+) -> None:
+    legacy = getattr(report_factory, legacy_name)
+    public = getattr(report_factory, public_name)
+
+    assert legacy is public
+    assert legacy("Report") == public("Report")
