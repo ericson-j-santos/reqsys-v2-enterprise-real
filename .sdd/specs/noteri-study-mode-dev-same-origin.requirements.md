@@ -36,9 +36,12 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     segredo faz parte deste fluxo.
 12. O E2E deve provar NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL, autenticação,
     leitura independente e bloqueio de trabalho normal durante ESTUDO.
-13. A reconciliação deve exigir os bind mounts efetivos do backend e frontend,
-    além do bind exato de `infra/nginx/default.dev.conf`; a atualização ocorre
-    nos arquivos montados, sem recriar containers nem reprocessar `.env`.
+13. A reconciliação deve exigir os bind mounts efetivos do backend e frontend.
+    O bind de `infra/nginx/default.dev.conf` deve coincidir exatamente com o
+    `com.docker.compose.project.working_dir` observado no próprio serviço
+    `nginx`; não se pode presumir que esse diretório seja o mesmo da API.
+    A atualização ocorre nos arquivos montados, sem recriar containers nem
+    reprocessar `.env`.
 14. Após sincronizar o Nginx, executar `nginx -t` e apenas o reload do processo
     Nginx existente; somente então comprovar HTTP 200 em `/api/health` e
     `/api/runtime/health` e HTTP 401 na rota protegida
@@ -68,9 +71,10 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 12. O caminho normal do reconciliador não executa `docker compose config`,
     `docker compose up` nem recria API/frontend/Nginx; isso evita reler ou
     alterar segredos do runtime para corrigir o Modo ESTUDO.
-13. Bind ausente, bind do Nginx divergente, `nginx -t` inválido ou qualquer
-    rota de saúde/controle não observada deve falhar fechado antes da mudança de
-    perfil.
+13. Bind ausente, bind do Nginx divergente do working directory declarado
+    pelo próprio serviço `nginx`, fonte do bind inexistente, `nginx -t`
+    inválido ou qualquer rota de saúde/controle não observada deve falhar
+    fechado antes da mudança de perfil.
 14. O E2E deve comprovar que o reload do Nginx restaurou
     `/api/runtime/health`, que a API carregou a rota same-origin e que o ciclo
     NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL terminou em NORMAL.
