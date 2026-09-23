@@ -140,29 +140,36 @@ def discover_token_source() -> tuple[Path, str]:
             return path, "environment"
         raise ReconcileError("configured_token_file_missing")
 
-    candidates: list[tuple[datetime, str]] = []
+    candidates: list[tuple[int, datetime, str]] = []
     for container in _inspect(_service_container_ids(all_containers=True)):
-        if not _canonical_compose_identity(container):
-            continue
-        if not _canonical_host_binding(container):
+        labels = (container.get("Config") or {}).get("Labels") or {}
+        if labels.get("com.docker.compose.service") != SERVICE:
             continue
         source = _canonical_token_mount(container)
         if source is None:
             continue
-        candidates.append((_created_at(container), source))
+        if not Path(source).is_file():
+            continue
+        identity_score = int(_canonical_compose_identity(container)) * 2
+        identity_score += int(_canonical_host_binding(container))
+        candidates.append((identity_score, _created_at(container), source))
 
     if not candidates:
         raise ReconcileError("worker_pool_token_source_missing")
 
-    newest = max(created for created, _source in candidates)
-    newest_sources = {source for created, source in candidates if created == newest}
+    best_score = max(score for score, _created, _source in candidates)
+    ranked = [
+        (created, source)
+        for score, created, source in candidates
+        if score == best_score
+    ]
+    newest = max(created for created, _source in ranked)
+    newest_sources = {source for created, source in ranked if created == newest}
     if len(newest_sources) != 1:
         raise ReconcileError("worker_pool_latest_token_source_ambiguous")
 
     path = Path(next(iter(newest_sources)))
-    if not path.is_file():
-        raise ReconcileError("worker_pool_token_source_missing")
-    return path, "latest_canonical_docker_mount_history"
+    return path, "latest_ranked_canonical_docker_mount_history"
 
 
 def resolve_rules_sha() -> str:

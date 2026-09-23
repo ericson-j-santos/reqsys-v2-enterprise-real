@@ -62,7 +62,7 @@ def test_discovers_latest_canonical_token_source_from_container_history(
     resolved, method = reconcile.discover_token_source()
 
     assert resolved == latest
-    assert method == "latest_canonical_docker_mount_history"
+    assert method == "latest_ranked_canonical_docker_mount_history"
 
 
 def test_ignores_noncanonical_compose_and_binding_history(tmp_path, monkeypatch) -> None:
@@ -164,7 +164,7 @@ def test_evidence_does_not_require_secret_or_token_path(tmp_path) -> None:
     evidence = tmp_path / "evidence.json"
     payload = {
         "result": "WORKER_POOL_RUNTIME_RECONCILED",
-        "token_source_method": "latest_canonical_docker_mount_history",
+        "token_source_method": "latest_ranked_canonical_docker_mount_history",
         "token_content_read": False,
     }
 
@@ -173,3 +173,42 @@ def test_evidence_does_not_require_secret_or_token_path(tmp_path) -> None:
 
     assert written["token_content_read"] is False
     assert "token_source" not in written
+
+
+def test_falls_back_to_latest_existing_service_mount_when_historical_metadata_is_absent(
+    tmp_path, monkeypatch
+) -> None:
+    old = tmp_path / "old.token"
+    newest = tmp_path / "newest.token"
+    old.write_text("old", encoding="utf-8")
+    newest.write_text("newest", encoding="utf-8")
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
+    monkeypatch.setattr(
+        reconcile,
+        "_service_container_ids",
+        lambda *, all_containers: ["old", "new"],
+    )
+
+    def plain(source: str, created: str) -> dict:
+        container = _container(
+            source,
+            created=created,
+            canonical_binding=False,
+            compose_file="legacy-compose.yml",
+        )
+        container["Config"]["Labels"].pop("com.docker.compose.project.config_files")
+        return container
+
+    monkeypatch.setattr(
+        reconcile,
+        "_inspect",
+        lambda _ids: [
+            plain(str(old), "2026-09-20T10:00:00Z"),
+            plain(str(newest), "2026-09-22T10:00:00Z"),
+        ],
+    )
+
+    resolved, method = reconcile.discover_token_source()
+
+    assert resolved == newest
+    assert method == "latest_ranked_canonical_docker_mount_history"
