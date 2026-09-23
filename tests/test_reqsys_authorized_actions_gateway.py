@@ -81,6 +81,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "figma-github-e2e-dev.yml|"
         "fabric-oidc-readonly-probe.yml|"
         "report-factory-fabric-dev-access-bootstrap.yml|"
+        "report-factory-fabric-dev-preflight.yml|"
         "codex-ollama-e2e-dev.yml|"
         "codex-worker-pool-smoke-dev.yml|"
         "noteri-desktop-network-probe.yml|"
@@ -314,3 +315,15 @@ def test_gateway_pc24x7_runner_registry_repair_is_exact_and_github_hosted() -> N
     assert "steps.route.outputs.target == 'pc24x7-runner-registry-repair.yml'" not in content
     assert "-f runner=" not in content
     assert "-f labels=" not in content
+
+
+def test_gateway_report_factory_fabric_dev_e2e_is_exact_main_dev_only() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e'" in content
+    assert "'/reqsys run report-factory-fabric-dev-e2e')" in content
+    assert "target='report-factory-fabric-dev-preflight.yml'" in content
+    assert "report-factory-fabric-dev-preflight.yml" in content
+    assert "-f mode=publish-e2e" in content
+    assert "--ref main" in content
+    assert "-f mode=prod" not in content
+    assert "-f workspace=" not in content

@@ -9,10 +9,21 @@ on:
       - "tools/geradores/report_factory.py"
       - "scripts/fabric_oidc_readonly_probe.py"
       - "tests/test_report_factory_fabric_dev_preflight.py"
+      - "scripts/report_factory_fabric_dev_e2e.py"
+      - "tests/test_report_factory_fabric_dev_e2e.py"
       - ".sdd/specs/report-factory-rdl-mvp.spec.json"
       - ".sdd/specs/report-factory-rdl-mvp.requirements.md"
       - ".sdd/specs/report-factory-rdl-mvp.tasks.md"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo governado: preflight somente leitura ou publicação E2E DEV"
+        required: false
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - publish-e2e
 
 permissions:
   contents: read
@@ -123,4 +134,87 @@ jobs:
           assert data.get("mutations_performed") is False, data
           assert data.get("candidate_workspaces"), data
           print("REPORT_FACTORY_FABRIC_DEV_PREFLIGHT_OK")
+          PY
+
+  fabric-dev-e2e:
+    name: fabric-dev-e2e
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'publish-e2e'
+    needs: fabric-dev-preflight
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 15
+    env:
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      EVIDENCE_FILE: artifacts/report-factory/fabric-dev-e2e.json
+
+    steps:
+      - name: Checkout do SHA exato
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Validar fronteira DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.ref }}" = "refs/heads/main"
+          test "${{ inputs.mode }}" = "publish-e2e"
+          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name não configurado no environment development."
+              exit 2
+            fi
+          done
+
+      - name: Login Azure OIDC governado
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Publicar e validar definição no Fabric DEV
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: none
+        run: |
+          set -euo pipefail
+          python scripts/report_factory_fabric_dev_e2e.py \
+            --spec examples/report-factory/demandas_por_status.json \
+            --output "$EVIDENCE_FILE"
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: report-factory-fabric-dev-e2e-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Gate E2E contra falso verde
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          data = json.loads(Path(os.environ["EVIDENCE_FILE"]).read_text(encoding="utf-8"))
+          assert data.get("status") == "passed", data
+          assert data.get("environment") == "development", data
+          assert data.get("workspace_name") == "ReqSys - Observabilidade", data
+          assert data.get("workspace_exact_count") == 1, data
+          assert data.get("final_report_exact_count") == 1, data
+          assert data.get("definition_verified") is True, data
+          assert data.get("idempotency_verified") is True, data
+          assert data.get("expected_rdl_sha256") == data.get("observed_rdl_sha256"), data
+          assert data.get("secret_value_exposed") is False, data
+          assert data.get("production_touched") is False, data
+          assert data.get("source_sha") == os.environ["GITHUB_SHA"], data
+          print("REPORT_FACTORY_FABRIC_DEV_E2E_OK")
           PY
