@@ -4,6 +4,19 @@
 
 Gerar relatórios paginados de forma declarativa e versionável, reduzindo edição manual de XML e evitando dependência do Power BI Report Builder para tarefas repetitivas.
 
+## Núcleo compartilhado
+
+O gerador/validador genérico é consumido do repositório `ericson-j-santos/report-builder-platform`
+por uma dependência Git fixada em SHA imutável. O arquivo
+`tools/geradores/report_factory.py` é apenas um adaptador de compatibilidade que preserva o
+namespace determinístico histórico `reqsys:report-factory`.
+
+Antes de executar localmente:
+
+```bash
+python -m pip install -r requirements-report-builder.txt
+```
+
 ## Gerar e validar
 
 ```bash
