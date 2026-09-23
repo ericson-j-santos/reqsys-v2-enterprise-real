@@ -40,4 +40,8 @@
 - [x] Comparar a definição gerada com RDLs 2016 produzidos pelo Report Builder e identificar a ausência de `rd:SecurityType` e `rd:DataSourceID` no datasource SQL integrado.
 - [x] Emitir e validar metadata determinística do datasource sem segredo estático.
 - [ ] Reexecutar Pre-PR no HEAD exato, integrar por merge governado e repetir o E2E Fabric DEV.
+- [x] Reexecutar E2E após PR #2005 no run `35879633641`, `main@089caee83a4487dce373452447c456c03cdf5724`: metadata do datasource alterou o SHA do RDL, mas o create permaneceu bloqueado pelo mesmo `fabric_http_400:InvalidDefinitionFormat` antes da criação do item.
+- [x] Concluir que metadata do datasource não é causa suficiente e evitar novas tentativas cegas da definição completa.
+- [x] Implementar diagnóstico progressivo no mesmo item: `layout -> datasource -> dataset_parameters -> full`, com leitura independente e SHA-256 após cada estágio aceito.
+- [ ] Validar Pre-PR no HEAD exato, integrar por merge governado e executar o diagnóstico progressivo no Fabric DEV.
 
