@@ -6,11 +6,11 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -18,10 +18,19 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from tools.geradores import report_factory
+
+def _load_report_factory() -> Any:
+    module_path = ROOT / "tools" / "geradores" / "report_factory.py"
+    spec = importlib.util.spec_from_file_location("reqsys_report_factory", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("report_factory_module_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+report_factory = _load_report_factory()
 
 FABRIC_BASE = "https://api.fabric.microsoft.com/v1"
 WORKSPACE_NAME = "ReqSys - Observabilidade"
