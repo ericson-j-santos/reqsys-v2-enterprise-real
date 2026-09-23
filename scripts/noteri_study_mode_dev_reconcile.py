@@ -1222,6 +1222,7 @@ def http_json(
     correlation_id: str | None = None,
     body: dict[str, Any] | None = None,
     expected: set[int] | None = None,
+    stage: str,
 ) -> tuple[int, dict[str, Any]]:
     data = None if body is None else json.dumps(body).encode("utf-8")
     headers = {"Content-Type": "application/json", "Cache-Control": "no-store"}
@@ -1244,15 +1245,20 @@ def http_json(
         payload = json.loads(exc.read().decode("utf-8") or "{}")
     allowed = expected or {200}
     if status not in allowed:
-        raise ReconcileError(f"http_unexpected:{method}:{path}:{status}")
+        raise ReconcileError(
+            "http_unexpected",
+            stage=stage,
+            diagnostic_code=f"http_status_{status}",
+        )
     return status, payload
 
 
-def login_admin() -> tuple[str, dict[str, Any]]:
+def login_admin(*, stage: str) -> tuple[str, dict[str, Any]]:
     _, payload = http_json(
         "POST",
         "/api/v1/auth/login",
         body={"email": ADMIN_EMAIL},
+        stage=stage,
     )
     data = payload.get("data") or {}
     token = str(data.get("access_token") or "")
@@ -1286,19 +1292,30 @@ def wait_frontend_source() -> None:
 
 
 def api_e2e() -> dict[str, Any]:
+    _, auth_payload = http_json(
+        "GET",
+        "/api/v1/auth/config",
+        stage="api_auth_config",
+    )
+    auth_data = auth_payload.get("data") or {}
+    if auth_data.get("demo_login_enabled") is not True:
+        raise ReconcileError("demo_login_unavailable", stage="api_auth_config")
+
     no_auth, _ = http_json(
         "GET",
         "/api/v1/noteri/profile",
         expected={401},
+        stage="api_negative_auth_profile",
     )
     if no_auth != 401:
         raise ReconcileError("negative_auth_control_failed")
 
-    token, usuario = login_admin()
+    token, usuario = login_admin(stage="api_admin_login")
     _, before_payload = http_json(
         "GET",
         "/api/v1/noteri/profile",
         token=token,
+        stage="api_profile_before",
     )
     before = profile_data(before_payload)
 
@@ -1309,6 +1326,7 @@ def api_e2e() -> dict[str, Any]:
         token=token,
         correlation_id=corr1,
         body={"profile": "ESTUDO", "correlation_id": corr1},
+        stage="api_set_estudo",
     )
     changed = profile_data(changed_payload)
     if changed.get("profile") != "ESTUDO" or changed.get("changed") is not True:
@@ -1318,6 +1336,7 @@ def api_e2e() -> dict[str, Any]:
         "GET",
         "/api/v1/noteri/profile",
         token=token,
+        stage="api_estudo_readback",
     )
     readback = profile_data(readback_payload)
     if readback.get("profile") != "ESTUDO" or readback.get("accepts_new_development") is not False:
@@ -1330,6 +1349,7 @@ def api_e2e() -> dict[str, Any]:
         token=token,
         correlation_id=corr2,
         body={"profile": "ESTUDO", "correlation_id": corr2},
+        stage="api_estudo_replay",
     )
     replay = profile_data(replay_payload)
     if replay.get("changed") is not False:
@@ -1342,12 +1362,14 @@ def api_e2e() -> dict[str, Any]:
         token=token,
         correlation_id=corr3,
         body={"profile": "NORMAL", "correlation_id": corr3},
+        stage="api_restore_normal",
     )
     restored = profile_data(restored_payload)
     if restored.get("profile") != "NORMAL" or restored.get("accepts_new_development") is not True:
         raise ReconcileError("normal_restore_failed")
 
     return {
+        "auth_demo_enabled": auth_data.get("demo_login_enabled") is True,
         "negative_unauthenticated_status": 401,
         "initial_profile": before.get("profile"),
         "estudo_changed": True,
@@ -1364,7 +1386,7 @@ def browser_e2e() -> dict[str, Any]:
     except ImportError as exc:
         raise ReconcileError("playwright_not_installed") from exc
 
-    token, usuario = login_admin()
+    token, usuario = login_admin(stage="browser_admin_login")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page()
@@ -1509,8 +1531,16 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         wait_gateway_status("/api/v1/noteri/profile", {401})
         emit_checkpoint("gateway_noteri_profile_ready", args.expected_sha)
 
-        _, public_health = http_json("GET", "/api/health")
-        _, runtime_health = http_json("GET", "/api/runtime/health")
+        _, public_health = http_json(
+            "GET",
+            "/api/health",
+            stage="gateway_api_health_payload",
+        )
+        _, runtime_health = http_json(
+            "GET",
+            "/api/runtime/health",
+            stage="gateway_runtime_health_payload",
+        )
         gateway_contract = {
             "api_health": public_health.get("status") is not None,
             "runtime_health": runtime_health.get("status") is not None,
@@ -1526,6 +1556,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             raise ReconcileError("legacy_noteri_profile_mount_present")
 
         wait_frontend_source()
+        emit_checkpoint("frontend_same_origin_source_ready", args.expected_sha)
         api_result = api_e2e()
         browser_result = browser_e2e()
     except Exception as exc:
