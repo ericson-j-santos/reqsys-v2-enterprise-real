@@ -3,7 +3,7 @@
   "project": "ReqSys v2 Enterprise — Report Factory",
   "created_at": "2026-09-21",
   "updated_at": "2026-09-23",
-  "phase": "fabric-dev-e2e-official-minimal-control",
+  "phase": "shared-platform-consumer-official-minimal-control",
   "issue": 1933,
   "increment_type": "gap_fix",
   "approvals": {
@@ -11,7 +11,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Substitui o RDL reduzido do ReqSys por um controle mínimo independente alinhado à forma pública do Fabric, para separar falha de envelope/serviço de falha em camadas do relatório.",
+  "description": "Preserva o controle mínimo oficial do Fabric DEV e migra o núcleo genérico de Report Factory para o report-builder-platform compartilhado, mantendo identidades determinísticas legadas do ReqSys por adaptador e dependência fixada em SHA imutável.",
   "scope": "report-spec-to-rdl-and-fabric",
   "files": [
     "tools/geradores/report_factory.py",
@@ -32,7 +32,10 @@
     "scripts/report_factory_fabric_dev_e2e.py",
     "tests/test_report_factory_fabric_dev_e2e.py",
     ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "tests/test_reqsys_authorized_actions_gateway.py"
+    "tests/test_reqsys_authorized_actions_gateway.py",
+    "requirements-report-builder.txt",
+    ".github/workflows/pre-pr-readiness.yml",
+    ".github/workflows/ci-enterprise-regression.yml"
   ],
   "sdd_gate": {
     "tests": [
@@ -44,7 +47,7 @@
       "tests/test_report_factory_fabric_dev_e2e.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Provar spec->RDL->payload; OIDC Fabric e workspace DEV; criar o item ausente primeiro com um controle RDL mínimo independente alinhado à forma pública do Fabric; somente após getDefinition + SHA-256 do controle adicionar DataSources, depois DataSets/ReportParameters, depois full; parar na primeira fase rejeitada; sem item diagnóstico adicional, delete, segredo ou toque em STG/PROD."
+    "evidence_contract": "Provar spec->RDL->payload; OIDC Fabric e workspace DEV; criar o item ausente primeiro com um controle RDL mínimo independente alinhado à forma pública do Fabric; somente após getDefinition + SHA-256 do controle adicionar DataSources, depois DataSets/ReportParameters, depois full; parar na primeira fase rejeitada; sem item diagnóstico adicional, delete, segredo ou toque em STG/PROD. A migração também deve provar que o adaptador ReqSys usa a plataforma compartilhada fixada por SHA, preserva ReportID/DataSourceID do namespace legado e rejeita SQL destrutivo sem duplicar o núcleo local."
   },
   "risk": {
     "production": false,

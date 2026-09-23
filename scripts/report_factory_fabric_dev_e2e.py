@@ -384,113 +384,113 @@ def _serialize_rdl_root(root: ET.Element) -> str:
 
 
 def _style_with_no_border(parent: ET.Element) -> None:
-    style = ET.SubElement(parent, report_factory._q("Style"))
-    border = ET.SubElement(style, report_factory._q("Border"))
-    value = ET.SubElement(border, report_factory._q("Style"))
+    style = ET.SubElement(parent, report_factory.q("Style"))
+    border = ET.SubElement(style, report_factory.q("Border"))
+    value = ET.SubElement(border, report_factory.q("Style"))
     value.text = "None"
 
 
 def _fabric_public_minimal_control(source_rdl: str) -> ET.Element:
     """Controle positivo RDL baseado na forma pública documentada pelo Fabric."""
     source = ET.fromstring(source_rdl)
-    report_id = source.findtext(report_factory._rd("ReportID"), default="")
+    report_id = source.findtext(report_factory.rd("ReportID"), default="")
     if not report_id:
         raise E2EError("progressive_report_id_missing")
 
-    root = ET.Element(report_factory._q("Report"), {"MustUnderstand": "df"})
-    unit = ET.SubElement(root, report_factory._rd("ReportUnitType"))
+    root = ET.Element(report_factory.q("Report"), {"MustUnderstand": "df"})
+    unit = ET.SubElement(root, report_factory.rd("ReportUnitType"))
     unit.text = "Inch"
-    rid = ET.SubElement(root, report_factory._rd("ReportID"))
+    rid = ET.SubElement(root, report_factory.rd("ReportID"))
     rid.text = report_id
-    font = ET.SubElement(root, report_factory._df("DefaultFontFamily"))
+    font = ET.SubElement(root, report_factory.df("DefaultFontFamily"))
     font.text = "Segoe UI"
-    refresh = ET.SubElement(root, report_factory._q("AutoRefresh"))
+    refresh = ET.SubElement(root, report_factory.q("AutoRefresh"))
     refresh.text = "0"
 
-    sections = ET.SubElement(root, report_factory._q("ReportSections"))
-    section = ET.SubElement(sections, report_factory._q("ReportSection"))
-    body = ET.SubElement(section, report_factory._q("Body"))
-    items = ET.SubElement(body, report_factory._q("ReportItems"))
-    title = ET.SubElement(items, report_factory._q("Textbox"), {"Name": "ReportTitle"})
-    watermark = ET.SubElement(title, report_factory._rd("WatermarkTextbox"))
+    sections = ET.SubElement(root, report_factory.q("ReportSections"))
+    section = ET.SubElement(sections, report_factory.q("ReportSection"))
+    body = ET.SubElement(section, report_factory.q("Body"))
+    items = ET.SubElement(body, report_factory.q("ReportItems"))
+    title = ET.SubElement(items, report_factory.q("Textbox"), {"Name": "ReportTitle"})
+    watermark = ET.SubElement(title, report_factory.rd("WatermarkTextbox"))
     watermark.text = "Title"
-    default_name = ET.SubElement(title, report_factory._rd("DefaultName"))
+    default_name = ET.SubElement(title, report_factory.rd("DefaultName"))
     default_name.text = "ReportTitle"
-    can_grow = ET.SubElement(title, report_factory._q("CanGrow"))
+    can_grow = ET.SubElement(title, report_factory.q("CanGrow"))
     can_grow.text = "true"
-    keep = ET.SubElement(title, report_factory._q("KeepTogether"))
+    keep = ET.SubElement(title, report_factory.q("KeepTogether"))
     keep.text = "true"
-    paragraphs = ET.SubElement(title, report_factory._q("Paragraphs"))
-    paragraph = ET.SubElement(paragraphs, report_factory._q("Paragraph"))
-    runs = ET.SubElement(paragraph, report_factory._q("TextRuns"))
-    run = ET.SubElement(runs, report_factory._q("TextRun"))
-    value = ET.SubElement(run, report_factory._q("Value"))
+    paragraphs = ET.SubElement(title, report_factory.q("Paragraphs"))
+    paragraph = ET.SubElement(paragraphs, report_factory.q("Paragraph"))
+    runs = ET.SubElement(paragraph, report_factory.q("TextRuns"))
+    run = ET.SubElement(runs, report_factory.q("TextRun"))
+    value = ET.SubElement(run, report_factory.q("Value"))
     value.text = "ReqSys Fabric minimal control"
-    run_style = ET.SubElement(run, report_factory._q("Style"))
-    family = ET.SubElement(run_style, report_factory._q("FontFamily"))
+    run_style = ET.SubElement(run, report_factory.q("Style"))
+    family = ET.SubElement(run_style, report_factory.q("FontFamily"))
     family.text = "Segoe UI Light"
-    size = ET.SubElement(run_style, report_factory._q("FontSize"))
+    size = ET.SubElement(run_style, report_factory.q("FontSize"))
     size.text = "28pt"
-    ET.SubElement(paragraph, report_factory._q("Style"))
-    height = ET.SubElement(title, report_factory._q("Height"))
+    ET.SubElement(paragraph, report_factory.q("Style"))
+    height = ET.SubElement(title, report_factory.q("Height"))
     height.text = "0.5in"
-    width = ET.SubElement(title, report_factory._q("Width"))
+    width = ET.SubElement(title, report_factory.q("Width"))
     width.text = "5.5in"
-    title_style = ET.SubElement(title, report_factory._q("Style"))
-    border = ET.SubElement(title_style, report_factory._q("Border"))
-    border_style = ET.SubElement(border, report_factory._q("Style"))
+    title_style = ET.SubElement(title, report_factory.q("Style"))
+    border = ET.SubElement(title_style, report_factory.q("Border"))
+    border_style = ET.SubElement(border, report_factory.q("Style"))
     border_style.text = "None"
     for tag in ("PaddingLeft", "PaddingRight", "PaddingTop", "PaddingBottom"):
-        padding = ET.SubElement(title_style, report_factory._q(tag))
+        padding = ET.SubElement(title_style, report_factory.q(tag))
         padding.text = "2pt"
 
-    body_height = ET.SubElement(body, report_factory._q("Height"))
+    body_height = ET.SubElement(body, report_factory.q("Height"))
     body_height.text = "2.25in"
     _style_with_no_border(body)
 
-    section_width = ET.SubElement(section, report_factory._q("Width"))
+    section_width = ET.SubElement(section, report_factory.q("Width"))
     section_width.text = "6in"
-    page = ET.SubElement(section, report_factory._q("Page"))
-    footer = ET.SubElement(page, report_factory._q("PageFooter"))
-    footer_height = ET.SubElement(footer, report_factory._q("Height"))
+    page = ET.SubElement(section, report_factory.q("Page"))
+    footer = ET.SubElement(page, report_factory.q("PageFooter"))
+    footer_height = ET.SubElement(footer, report_factory.q("Height"))
     footer_height.text = "0.45in"
-    first = ET.SubElement(footer, report_factory._q("PrintOnFirstPage"))
+    first = ET.SubElement(footer, report_factory.q("PrintOnFirstPage"))
     first.text = "true"
-    last = ET.SubElement(footer, report_factory._q("PrintOnLastPage"))
+    last = ET.SubElement(footer, report_factory.q("PrintOnLastPage"))
     last.text = "true"
-    footer_items = ET.SubElement(footer, report_factory._q("ReportItems"))
-    execution = ET.SubElement(footer_items, report_factory._q("Textbox"), {"Name": "ExecutionTime"})
-    execution_default = ET.SubElement(execution, report_factory._rd("DefaultName"))
+    footer_items = ET.SubElement(footer, report_factory.q("ReportItems"))
+    execution = ET.SubElement(footer_items, report_factory.q("Textbox"), {"Name": "ExecutionTime"})
+    execution_default = ET.SubElement(execution, report_factory.rd("DefaultName"))
     execution_default.text = "ExecutionTime"
-    execution_grow = ET.SubElement(execution, report_factory._q("CanGrow"))
+    execution_grow = ET.SubElement(execution, report_factory.q("CanGrow"))
     execution_grow.text = "true"
-    execution_keep = ET.SubElement(execution, report_factory._q("KeepTogether"))
+    execution_keep = ET.SubElement(execution, report_factory.q("KeepTogether"))
     execution_keep.text = "true"
-    execution_paragraphs = ET.SubElement(execution, report_factory._q("Paragraphs"))
-    execution_paragraph = ET.SubElement(execution_paragraphs, report_factory._q("Paragraph"))
-    execution_runs = ET.SubElement(execution_paragraph, report_factory._q("TextRuns"))
-    execution_run = ET.SubElement(execution_runs, report_factory._q("TextRun"))
-    execution_value = ET.SubElement(execution_run, report_factory._q("Value"))
+    execution_paragraphs = ET.SubElement(execution, report_factory.q("Paragraphs"))
+    execution_paragraph = ET.SubElement(execution_paragraphs, report_factory.q("Paragraph"))
+    execution_runs = ET.SubElement(execution_paragraph, report_factory.q("TextRuns"))
+    execution_run = ET.SubElement(execution_runs, report_factory.q("TextRun"))
+    execution_value = ET.SubElement(execution_run, report_factory.q("Value"))
     execution_value.text = "=Globals!ExecutionTime"
-    ET.SubElement(execution_run, report_factory._q("Style"))
-    execution_paragraph_style = ET.SubElement(execution_paragraph, report_factory._q("Style"))
-    align = ET.SubElement(execution_paragraph_style, report_factory._q("TextAlign"))
+    ET.SubElement(execution_run, report_factory.q("Style"))
+    execution_paragraph_style = ET.SubElement(execution_paragraph, report_factory.q("Style"))
+    align = ET.SubElement(execution_paragraph_style, report_factory.q("TextAlign"))
     align.text = "Right"
     for tag, text in (("Top", "0.2in"), ("Left", "4in"), ("Height", "0.25in"), ("Width", "2in")):
-        node = ET.SubElement(execution, report_factory._q(tag))
+        node = ET.SubElement(execution, report_factory.q(tag))
         node.text = text
     _style_with_no_border(execution)
     _style_with_no_border(footer)
     for tag in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin"):
-        margin = ET.SubElement(page, report_factory._q(tag))
+        margin = ET.SubElement(page, report_factory.q(tag))
         margin.text = "1in"
-    ET.SubElement(page, report_factory._q("Style"))
+    ET.SubElement(page, report_factory.q("Style"))
 
-    layout = ET.SubElement(root, report_factory._q("ReportParametersLayout"))
-    grid = ET.SubElement(layout, report_factory._q("GridLayoutDefinition"))
-    columns = ET.SubElement(grid, report_factory._q("NumberOfColumns"))
+    layout = ET.SubElement(root, report_factory.q("ReportParametersLayout"))
+    grid = ET.SubElement(layout, report_factory.q("GridLayoutDefinition"))
+    columns = ET.SubElement(grid, report_factory.q("NumberOfColumns"))
     columns.text = "4"
-    rows = ET.SubElement(grid, report_factory._q("NumberOfRows"))
+    rows = ET.SubElement(grid, report_factory.q("NumberOfRows"))
     rows.text = "2"
     return root
 
@@ -498,7 +498,7 @@ def _fabric_public_minimal_control(source_rdl: str) -> ET.Element:
 def _insert_before_report_sections(root: ET.Element, node: ET.Element | None) -> None:
     if node is None:
         return
-    sections = root.find(report_factory._q("ReportSections"))
+    sections = root.find(report_factory.q("ReportSections"))
     if sections is None:
         raise E2EError("progressive_report_sections_missing")
     root.insert(list(root).index(sections), copy.deepcopy(node))
@@ -514,14 +514,14 @@ def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
     minimal = _fabric_public_minimal_control(rdl)
 
     datasource = copy.deepcopy(minimal)
-    _insert_before_report_sections(datasource, source.find(report_factory._q("DataSources")))
+    _insert_before_report_sections(datasource, source.find(report_factory.q("DataSources")))
 
     dataset = copy.deepcopy(datasource)
-    _insert_before_report_sections(dataset, source.find(report_factory._q("DataSets")))
-    _insert_before_report_sections(dataset, source.find(report_factory._q("ReportParameters")))
-    source_layout = source.find(report_factory._q("ReportParametersLayout"))
+    _insert_before_report_sections(dataset, source.find(report_factory.q("DataSets")))
+    _insert_before_report_sections(dataset, source.find(report_factory.q("ReportParameters")))
+    source_layout = source.find(report_factory.q("ReportParametersLayout"))
     if source_layout is not None:
-        current_layout = dataset.find(report_factory._q("ReportParametersLayout"))
+        current_layout = dataset.find(report_factory.q("ReportParametersLayout"))
         if current_layout is not None:
             dataset.remove(current_layout)
         dataset.append(copy.deepcopy(source_layout))
