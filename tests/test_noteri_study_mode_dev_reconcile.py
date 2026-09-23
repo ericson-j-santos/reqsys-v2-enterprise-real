@@ -309,6 +309,60 @@ def test_http_e2e_failures_expose_only_safe_stage_and_status():
     assert "response.read()" not in raw[raw.index("if status not in allowed:"):raw.index("return status, payload")]
 
 
+def test_control_plane_worker_probe_exposes_only_allowlisted_noteri_state(monkeypatch):
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "workers": [
+                        {
+                            "worker_id": "secret-worker-id",
+                            "device_name": "Noteri",
+                            "fresh": False,
+                            "controller_online": True,
+                            "auth_valid": False,
+                            "eligible": False,
+                            "profile": "NORMAL",
+                            "token": "must-not-leak",
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda *args, **kwargs: Response())
+    result = module.probe_control_plane_worker_registry()
+
+    assert result == {
+        "reachable": True,
+        "http_status": 200,
+        "payload_valid": True,
+        "noteri_match_count": 1,
+        "noteri": {
+            "fresh": False,
+            "controller_online": True,
+            "auth_valid": False,
+            "eligible": False,
+            "profile": "NORMAL",
+        },
+    }
+    rendered = json.dumps(result, sort_keys=True)
+    assert "secret-worker-id" not in rendered
+    assert "must-not-leak" not in rendered
+
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert '"control_plane_worker_registry": probe_control_plane_worker_registry()' in raw
+    assert 'exc.stage == "api_profile_before"' in raw
+    assert 'exc.diagnostic_code == "http_status_503"' in raw
+
+
 def test_reconcile_failure_is_sanitized_and_stage_aware():
     err = module.ReconcileError("command_failed:docker:exit_1", stage="inspect_runtime")
     assert err.code == "command_failed:docker"
