@@ -624,6 +624,8 @@ def recreate_nginx_gateway(
             "-d",
             "--no-deps",
             "--force-recreate",
+            "--pull",
+            "never",
             "nginx",
         ],
         cwd=working_dir,
