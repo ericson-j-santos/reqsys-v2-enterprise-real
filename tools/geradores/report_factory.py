@@ -22,6 +22,7 @@ FABRIC_BASE_URL = _core.FABRIC_BASE_URL
 ReportSpecError = _core.ReportSpecError
 FabricApiError = _core.FabricApiError
 
+
 def q(tag: str) -> str:
     """Qualifica uma tag no namespace RDL 2016 para consumidores ReqSys."""
     return f"{{{RDL_NS}}}{tag}"
@@ -37,12 +38,16 @@ def df(tag: str) -> str:
     return f"{{{DF_NS}}}{tag}"
 
 
-# Compatibilidade com consumidores legados do ReqSys que importavam os helpers
-# privados do gerador local. O adaptador mantém essa superfície enquanto o núcleo
-# compartilhado permanece encapsulado em report-builder-platform.
-_q = q
-_rd = rd
-_df = df
+def __getattr__(name: str) -> Any:
+    """Resolve aliases privados legados sem manter globais não utilizados."""
+    if name == "_q":
+        return q
+    if name == "_rd":
+        return rd
+    if name == "_df":
+        return df
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 load_spec = _core.load_spec
 validate_spec = _core.validate_spec
