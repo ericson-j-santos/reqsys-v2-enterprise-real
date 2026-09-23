@@ -76,7 +76,7 @@ class FabricHmlSecretBootstrapTests(unittest.TestCase):
             self.assertTrue(data["secret_replaced"])
             self.assertTrue(data["e2e_enabled"])
             self.assertEqual(data["validation_attempts"], 2)
-            delete_unittest.mock.assert_not_called()
+            delete_mock.assert_not_called()
 
     def test_failed_new_credential_validation_rolls_back_without_overwriting_secret(self):
         events = []
@@ -101,8 +101,8 @@ class FabricHmlSecretBootstrapTests(unittest.TestCase):
                         patcher.stop()
 
             data = json.loads(evidence.read_text(encoding="utf-8"))
-            stdin_unittest.mock.assert_not_called()
-            delete_unittest.mock.assert_called_once_with("az", "app-id", "new-key-id")
+            stdin_mock.assert_not_called()
+            delete_mock.assert_called_once_with("az", "app-id", "new-key-id")
             self.assertTrue(data["credential_rollback"])
             self.assertFalse(data["e2e_enabled"])
             self.assertEqual(data["status"], "new_credential_validation_failed")
@@ -128,7 +128,7 @@ class FabricHmlSecretBootstrapTests(unittest.TestCase):
             )
 
         self.assertEqual(result, (True, 200, True, 200, 3))
-        self.assertEqual(sleep_unittest.mock.call_count, 2)
+        self.assertEqual(sleep_mock.call_count, 2)
 
 
 if __name__ == "__main__":
