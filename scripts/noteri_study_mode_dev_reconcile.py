@@ -543,6 +543,20 @@ def rollback_files(changes: list[tuple[Path, Path | None]]) -> None:
             pass
 
 
+def restart_container(
+    container: str,
+    repo_root: Path,
+    *,
+    stage: str,
+) -> None:
+    run(
+        ["docker", "restart", container],
+        cwd=repo_root,
+        timeout=120,
+        stage=stage,
+    )
+
+
 def reload_nginx(
     container: str,
     repo_root: Path,
@@ -865,9 +879,10 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     try:
-        # O runtime DEV atual usa bind mounts. Copiar os arquivos é suficiente para
-        # uvicorn --reload e Vite; somente o Nginx precisa reload explícito.
-        # Não recriamos containers nem reprocessamos .env/secrets via Compose.
+        # O runtime DEV atual usa bind mounts, mas não dependemos de hot-reload
+        # implícito: reiniciamos somente a API existente para carregar o código
+        # sincronizado. Não executamos Compose nem reprocessamos .env/secrets.
+        restart_container(api_container, repo_root, stage="api_restart")
         wait_container_healthy(api_container, repo_root, args.health_timeout)
         reload_nginx(nginx_container, repo_root)
 
@@ -897,6 +912,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     except Exception:
         rollback_files(changes)
         try:
+            restart_container(
+                api_container,
+                repo_root,
+                stage="rollback_api_restart",
+            )
+            wait_container_healthy(api_container, repo_root, args.health_timeout)
             reload_nginx(
                 nginx_container,
                 repo_root,
@@ -917,7 +938,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "gateway_container": nginx_container,
         "runtime_discovery": "api_port_8210_compose_labels",
         "compose_invoked": False,
-        "runtime_refresh": "bind_mounts_plus_nginx_reload",
+        "runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_reload",
+        "api_container_restarted": True,
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": True,
         "nginx_config_bind_observed": True,
