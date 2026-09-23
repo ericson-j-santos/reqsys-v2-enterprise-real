@@ -401,8 +401,126 @@ def _remove_root_child(root: ET.Element, local_name: str) -> None:
         root.remove(node)
 
 
-def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
-    """Reduz o RDL em camadas para localizar rejeições do Fabric sem criar itens extras."""
+def _fabric_documented_minimal_rdl(report_name: str, source_rdl: str) -> str:
+    """Monta um RDL mínimo alinhado ao exemplo oficial de definição do Fabric."""
+    try:
+        source = ET.fromstring(source_rdl)
+    except ET.ParseError:
+        raise E2EError("canonical_source_rdl_invalid") from None
+
+    report_id = source.findtext(report_factory._rd("ReportID"), default="").strip()
+    if not report_id:
+        raise E2EError("canonical_report_id_missing")
+
+    root = ET.Element(report_factory._q("Report"), {"MustUnderstand": "df"})
+    ET.SubElement(root, report_factory._rd("ReportUnitType")).text = "Inch"
+    ET.SubElement(root, report_factory._rd("ReportID")).text = report_id
+    ET.SubElement(root, report_factory._df("DefaultFontFamily")).text = "Segoe UI"
+    report_factory._add(root, "AutoRefresh", "0")
+
+    sections = report_factory._add(root, "ReportSections")
+    section = report_factory._add(sections, "ReportSection")
+    body = report_factory._add(section, "Body")
+    items = report_factory._add(body, "ReportItems")
+
+    title = report_factory._add(items, "Textbox", Name="ReportTitle")
+    ET.SubElement(title, report_factory._rd("DefaultName")).text = "ReportTitle"
+    report_factory._add(title, "CanGrow", "true")
+    report_factory._add(title, "KeepTogether", "true")
+    paragraphs = report_factory._add(title, "Paragraphs")
+    paragraph = report_factory._add(paragraphs, "Paragraph")
+    runs = report_factory._add(paragraph, "TextRuns")
+    run = report_factory._add(runs, "TextRun")
+    report_factory._add(run, "Value", report_name)
+    run_style = report_factory._add(run, "Style")
+    report_factory._add(run_style, "FontFamily", "Segoe UI")
+    report_factory._add(run_style, "FontSize", "18pt")
+    report_factory._add(paragraph, "Style")
+    report_factory._add(title, "Height", "0.5in")
+    report_factory._add(title, "Width", "5.5in")
+    title_style = report_factory._add(title, "Style")
+    border = report_factory._add(title_style, "Border")
+    report_factory._add(border, "Style", "None")
+
+    report_factory._add(body, "Height", "2.25in")
+    body_style = report_factory._add(body, "Style")
+    body_border = report_factory._add(body_style, "Border")
+    report_factory._add(body_border, "Style", "None")
+
+    report_factory._add(section, "Width", "6in")
+    page = report_factory._add(section, "Page")
+    for margin in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin"):
+        report_factory._add(page, margin, "1in")
+    report_factory._add(page, "Style")
+
+    layout = report_factory._add(root, "ReportParametersLayout")
+    grid = report_factory._add(layout, "GridLayoutDefinition")
+    report_factory._add(grid, "NumberOfColumns", "4")
+    report_factory._add(grid, "NumberOfRows", "2")
+
+    return _serialize_rdl_root(root)
+
+
+def _verify_progressive_readback(phase: str, observed_rdl: str) -> None:
+    """Confirma por leitura independente que a fase esperada foi realmente aplicada."""
+    try:
+        root = ET.fromstring(observed_rdl)
+    except ET.ParseError:
+        raise E2EError(f"progressive_readback_invalid_xml:{phase}") from None
+
+    q = report_factory._q
+    actual = {
+        "datasource": root.find(q("DataSources")) is not None,
+        "dataset": root.find(q("DataSets")) is not None,
+        "parameters": root.find(q("ReportParameters")) is not None,
+        "parameter_layout": root.find(q("ReportParametersLayout")) is not None,
+        "tablix": root.find(f".//{q('Tablix')}") is not None,
+    }
+    expected = {
+        "fabric_documented_minimal": {
+            "datasource": False,
+            "dataset": False,
+            "parameters": False,
+            "parameter_layout": True,
+            "tablix": False,
+        },
+        "generated_minimal": {
+            "datasource": False,
+            "dataset": False,
+            "parameters": False,
+            "parameter_layout": False,
+            "tablix": False,
+        },
+        "datasource": {
+            "datasource": True,
+            "dataset": False,
+            "parameters": False,
+            "parameter_layout": False,
+            "tablix": False,
+        },
+        "dataset": {
+            "datasource": True,
+            "dataset": True,
+            "parameters": True,
+            "parameter_layout": True,
+            "tablix": False,
+        },
+        "full": {
+            "datasource": True,
+            "dataset": True,
+            "parameters": True,
+            "parameter_layout": True,
+            "tablix": True,
+        },
+    }.get(phase)
+    if expected is None:
+        raise E2EError(f"progressive_readback_unknown_phase:{phase}")
+    if actual != expected:
+        raise E2EError(f"progressive_readback_contract_mismatch:{phase}")
+
+
+def _progressive_rdl_variants(report_name: str, rdl: str) -> list[tuple[str, str]]:
+    """Isola primeiro o mínimo documentado pelo Fabric e depois as camadas ReqSys."""
     try:
         ET.fromstring(rdl)
     except ET.ParseError as exc:
@@ -411,10 +529,10 @@ def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
     def parsed() -> ET.Element:
         return ET.fromstring(rdl)
 
-    minimal = parsed()
+    generated_minimal = parsed()
     for tag in ("DataSources", "DataSets", "ReportParameters", "ReportParametersLayout"):
-        _remove_root_child(minimal, tag)
-    _remove_report_item_type(minimal, "Tablix")
+        _remove_root_child(generated_minimal, tag)
+    _remove_report_item_type(generated_minimal, "Tablix")
 
     datasource = parsed()
     for tag in ("DataSets", "ReportParameters", "ReportParametersLayout"):
@@ -425,7 +543,8 @@ def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
     _remove_report_item_type(dataset, "Tablix")
 
     return [
-        ("minimal", _serialize_rdl_root(minimal)),
+        ("fabric_documented_minimal", _fabric_documented_minimal_rdl(report_name, rdl)),
+        ("generated_minimal", _serialize_rdl_root(generated_minimal)),
         ("datasource", _serialize_rdl_root(datasource)),
         ("dataset", _serialize_rdl_root(dataset)),
         ("full", rdl),
@@ -443,14 +562,14 @@ def _create_progressively(
     evidence: dict[str, Any],
 ) -> None:
     """Cria o mesmo item uma vez e promove sua definição em camadas fail-closed."""
-    variants = _progressive_rdl_variants(rdl)
-    minimal_name, minimal_rdl = variants[0]
-    if minimal_name != "minimal":
-        raise E2EError("progressive_minimal_variant_missing")
+    variants = _progressive_rdl_variants(report_name, rdl)
+    canonical_name, canonical_rdl = variants[0]
+    if canonical_name != "fabric_documented_minimal":
+        raise E2EError("progressive_canonical_variant_missing")
 
     create_body: dict[str, Any] = {
         "displayName": report_name,
-        "definition": report_factory.build_fabric_definition(report_name, minimal_rdl),
+        "definition": report_factory.build_fabric_definition(report_name, canonical_rdl),
     }
     if description:
         create_body["description"] = description[:256]
@@ -462,18 +581,28 @@ def _create_progressively(
     try:
         _invoke("POST", reports_url, token, create_body, success={200, 201})
     except E2EError as exc:
-        evidence["progressive_failed_phase"] = "minimal_create"
-        raise E2EError(f"progressive_minimal_create:{exc}") from None
+        evidence["progressive_failed_phase"] = "fabric_documented_minimal_create"
+        raise E2EError(f"progressive_fabric_documented_minimal_create:{exc}") from None
 
-    evidence["progressive_last_passed_phase"] = "minimal"
     matches = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
     if len(matches) != 1:
-        evidence["progressive_failed_phase"] = "minimal_identity"
-        raise E2EError(f"progressive_minimal_exact_count:{len(matches)}")
+        evidence["progressive_failed_phase"] = "fabric_documented_minimal_identity"
+        raise E2EError(f"progressive_canonical_exact_count:{len(matches)}")
     report_id = str(matches[0].get("id") or "").strip()
     if not report_id:
-        evidence["progressive_failed_phase"] = "minimal_identity"
-        raise E2EError("progressive_minimal_report_id_missing")
+        evidence["progressive_failed_phase"] = "fabric_documented_minimal_identity"
+        raise E2EError("progressive_canonical_report_id_missing")
+
+    try:
+        canonical_observed = _extract_rdl(
+            _get_definition(workspace_id, report_id, token),
+            report_name,
+        )
+        _verify_progressive_readback("fabric_documented_minimal", canonical_observed)
+    except E2EError as exc:
+        evidence["progressive_failed_phase"] = "fabric_documented_minimal_readback"
+        raise E2EError(f"progressive_canonical_readback:{exc}") from None
+    evidence["progressive_last_passed_phase"] = "fabric_documented_minimal"
 
     for phase, phase_rdl in variants[1:]:
         try:
@@ -483,6 +612,11 @@ def _create_progressively(
                 report_factory.build_fabric_definition(report_name, phase_rdl),
                 token,
             )
+            observed = _extract_rdl(
+                _get_definition(workspace_id, report_id, token),
+                report_name,
+            )
+            _verify_progressive_readback(phase, observed)
         except E2EError as exc:
             evidence["progressive_failed_phase"] = phase
             raise E2EError(f"progressive_{phase}:{exc}") from None
