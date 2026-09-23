@@ -507,4 +507,8 @@ def test_runtime_migration_e2e_is_branch_scoped_exact_sha_and_sanitized() -> Non
     assert "idempotency_missing" in workflow
     assert "negative_control_missing" in workflow
     assert "rdc_dependency_detected" in workflow
+    assert "noteri-runtime-cutover" in workflow
+    assert "needs: noteri-runtime-migration-e2e" in workflow
+    assert "task_action_sha_mismatch" in workflow
+    assert "activation_pending_after_cutover" in workflow
     assert "secrets." not in workflow
