@@ -36,10 +36,15 @@ def load_blocking_workflows(path: Path = DEFAULT_REGISTRY_PATH) -> list[str]:
 
 def _run_seconds(run: dict[str, Any]) -> float:
     created_at = parse_dt(run.get("created_at"))
+    run_started_at = parse_dt(run.get("run_started_at"))
     updated_at = parse_dt(run.get("updated_at"))
     if created_at is None or updated_at is None:
         return 0.0
-    return max(0.0, (updated_at - created_at).total_seconds())
+    attempt = int(run.get("run_attempt") or 1)
+    # GitHub preserva created_at do disparo original em reruns. Para attempt > 1,
+    # usar created_at inflaria artificialmente o custo com o tempo entre tentativas.
+    start_at = run_started_at if attempt > 1 and run_started_at is not None else created_at
+    return max(0.0, (updated_at - start_at).total_seconds())
 
 
 def _pr_number(run: dict[str, Any]) -> int | None:
@@ -465,8 +470,8 @@ def build_pr_efficiency(
         "blocking_workflows": blocking,
         "semantics": {
             "ci_minutes": (
-                "soma do wall-clock dos workflow runs observados; "
-                "não representa minutos faturados pelo GitHub"
+                "soma do wall-clock ativo dos workflow runs observados; em reruns usa run_started_at "
+                "porque GitHub preserva created_at da tentativa original; não representa minutos faturados"
             ),
             "time_to_green": (
                 "intervalo do primeiro início ao último término dos workflows "

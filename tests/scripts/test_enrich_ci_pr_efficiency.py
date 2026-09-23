@@ -279,6 +279,38 @@ class CiPrEfficiencyTests(unittest.TestCase):
         self.assertEqual(result["rerun_rate_percent"], 50.0)
         self.assertEqual(result["prs"][0]["rerun_rate_percent"], 50.0)
 
+
+    def test_rerun_duration_uses_current_attempt_start_not_original_created_at(self):
+        raw = [
+            run(
+                60,
+                pr=60,
+                name="Required A",
+                sha="sha-60",
+                created="2026-09-22T15:00:00Z",
+                updated="2026-09-22T15:31:00Z",
+                attempt=2,
+            ),
+            run(
+                61,
+                pr=60,
+                name="Required B",
+                sha="sha-60",
+                created="2026-09-22T15:00:00Z",
+                updated="2026-09-22T15:02:00Z",
+            ),
+        ]
+        raw[0]["run_started_at"] = "2026-09-22T15:30:00Z"
+        result = build_pr_efficiency(
+            raw,
+            blocking_workflows=BLOCKING,
+            start_at=START,
+            end_at=END,
+        )
+        self.assertEqual(result["total_observed_ci_run_minutes"], 3.0)
+        self.assertEqual(result["prs"][0]["observed_ci_run_minutes"], 3.0)
+        self.assertEqual(result["rerun_rate_percent"], 50.0)
+
     def test_enrichment_is_idempotent_and_registry_is_validated(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

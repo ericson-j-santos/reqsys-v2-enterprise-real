@@ -150,3 +150,8 @@ A janela fixa global continua sendo a fonte das métricas históricas. A seção
 A taxa de rerun é publicada como `rerun_rate_percent = workflow_runs_de_PR_com_run_attempt_maior_que_1 / workflow_runs_de_PR_observados * 100`. Trata-se de taxa observacional de rerun, não de causalidade do commit.
 
 O `Pre-PR Readiness Gate` trata exclusivamente `HEAD == origin/main`, `behind_by=0` e diff vazio como `not_applicable`. Esse caminho evita dependências e testes pesados e termina verde com evidência própria. SHA diferente da base, branch atrás, HEAD divergente ou diff real continuam bloqueando normalmente.
+
+
+### Semântica de duração em reruns
+
+Para `run_attempt=1`, minutos observados usam `created_at → updated_at`. Em `run_attempt>1`, usam `run_started_at → updated_at`. O GitHub mantém `created_at` do disparo original quando um workflow é reexecutado; usar esse timestamp em reruns contabilizaria indevidamente o intervalo parado entre tentativas como tempo ativo de CI. A taxa de rerun continua sendo derivada de `run_attempt>1`.

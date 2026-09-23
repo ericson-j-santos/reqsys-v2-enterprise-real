@@ -195,3 +195,10 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - O modo `recent_prs_fallback` é explicitamente registrado no artifact.
 - `selected_pr_numbers` identifica a amostra usada.
 - O teste determinístico prova coleta de três PRs sem varrer histórico global.
+
+56. A duração observada de workflow rerun deve ser calculada a partir de `run_started_at` quando `run_attempt > 1`, porque o GitHub preserva `created_at` do disparo original.
+57. O tempo entre a criação original e o início de uma tentativa posterior não pode ser contabilizado como minutos ativos de CI nem contaminar o Pareto de workflows.
+
+### Critério adicional — duração de rerun
+
+- Um rerun com `created_at=15:00`, `run_started_at=15:30` e `updated_at=15:31` contribui exatamente 1 minuto à métrica observada.
