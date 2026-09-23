@@ -78,3 +78,25 @@ def test_policy_keeps_protected_and_report_only_disjoint():
         (ROOT / "config" / "ci-workflow-pareto-policy.json").read_text(encoding="utf-8")
     )
     assert set(policy["protected_workflows"]).isdisjoint(policy["report_only_workflows"])
+
+
+def test_governed_merge_queue_delegates_frontend_validation_to_required_ci():
+    workflow = (
+        ROOT / ".github" / "workflows" / "governed-merge-queue.yml"
+    ).read_text(encoding="utf-8")
+    policy = json.loads(
+        (
+            ROOT / "governance" / "merge" / "current-sha-required-workflows.json"
+        ).read_text(encoding="utf-8")
+    )
+    required = set(policy["required_workflows"])
+
+    assert {"CI — ReqSys v2 Enterprise", "CI Enterprise Fast"} <= required
+    assert "actions/setup-node@" not in workflow
+    assert "npm ci" not in workflow
+    assert "npm run lint" not in workflow
+    assert "npm run typecheck" not in workflow
+    assert (
+        "needs: [resolve-context, sdd-contract, isolated-validation, "
+        "temporary-integration, current-sha-stability]"
+    ) in workflow

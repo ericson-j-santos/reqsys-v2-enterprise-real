@@ -127,50 +127,8 @@ jobs:
             python -m py_compile scripts/runtime_merge_queue_gate.py
           fi
 
-      - name: Detectar frontend
-        id: frontend
-        shell: bash
-        run: |
-          if [ -f frontend/package.json ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "workdir=frontend" >> "$GITHUB_OUTPUT"
-          elif [ -f package.json ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "workdir=." >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "workdir=." >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Node
-        if: steps.frontend.outputs.enabled == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            frontend/package-lock.json
-
-      - name: Instalar dependências frontend
-        if: steps.frontend.outputs.enabled == 'true'
-        working-directory: ${{ steps.frontend.outputs.workdir }}
-        shell: bash
-        run: |
-          if [ -f package-lock.json ]; then
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
-
-      - name: Lint e typecheck frontend
-        if: steps.frontend.outputs.enabled == 'true'
-        working-directory: ${{ steps.frontend.outputs.workdir }}
-        shell: bash
-        run: |
-          npm run lint --if-present
-          npm run typecheck --if-present
+      # Frontend lint/typecheck são delegados aos workflows canônicos obrigatórios
+      # no mesmo HEAD. current-sha-stability falha fechado até esses checks concluírem.
 
   temporary-integration:
     name: Integração temporária contra base real do PR
