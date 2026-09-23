@@ -105,6 +105,40 @@ def test_bind_source_accepts_read_only_nginx_but_rw_bind_remains_strict(tmp_path
     assert module.rw_bind_source(item, "/etc/nginx/conf.d/default.conf") is None
 
 
+def test_required_nginx_bind_source_uses_nginx_own_compose_working_dir(tmp_path):
+    working_dir = tmp_path / "runtime-nginx"
+    config = working_dir / "infra" / "nginx" / "default.dev.conf"
+    config.parent.mkdir(parents=True)
+    config.write_text("server {}\n", encoding="utf-8")
+    item = {
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project": "reqsys-dev",
+                "com.docker.compose.project.working_dir": str(working_dir),
+            }
+        },
+        "Mounts": [
+            {
+                "Destination": "/etc/nginx/conf.d/default.conf",
+                "Type": "bind",
+                "RW": False,
+                "Source": str(config),
+            }
+        ],
+    }
+
+    assert module.required_nginx_bind_source(item, "reqsys-dev") == config
+
+    foreign = tmp_path / "other-runtime" / "infra" / "nginx" / "default.dev.conf"
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text("server {}\n", encoding="utf-8")
+    item["Mounts"][0]["Source"] = str(foreign)
+    with pytest.raises(module.ReconcileError) as exc:
+        module.required_nginx_bind_source(item, "reqsys-dev")
+    assert exc.value.code == "nginx_config_bind_mismatch"
+    assert exc.value.stage == "nginx_source_bind"
+
+
 def test_overlay_routes_profile_through_allowlisted_control_plane():
     raw = OVERLAY.read_text(encoding="utf-8")
     assert "NOTERI_CONTROL_PLANE_URL=http://host.docker.internal:8787" in raw
@@ -240,6 +274,9 @@ def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     raw = SCRIPT.read_text(encoding="utf-8")
     assert 'frontend_source = required_bind_source(' in raw
     assert 'stage="frontend_source_bind"' in raw
+    assert 'nginx_bind = required_nginx_bind_source(nginx_before, project)' in raw
+    assert 'expected_nginx_bind = (working_dir / NGINX_CONFIG).resolve()' not in raw
+    assert 'frontend_source,\n        nginx_bind,\n        args.expected_sha' in raw
     assert '"compose_invoked": False' in raw
     assert '"runtime_refresh": "bind_mounts_plus_nginx_reload"' in raw
     assert 'reload_nginx(nginx_container, repo_root)' in raw
