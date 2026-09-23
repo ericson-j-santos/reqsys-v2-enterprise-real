@@ -755,7 +755,8 @@
               "enum": [
                 "fixed",
                 "extended_low_activity",
-                "explicit"
+                "explicit",
+                "recent_prs_fallback"
               ]
             },
             "fixed_start_at": {
@@ -788,6 +789,21 @@
             "max_lookback_minutes": {
               "type": "integer",
               "minimum": 1
+            },
+            "fallback_after_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_age_days": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "selected_pr_numbers": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
             }
           }
         }
