@@ -52,7 +52,12 @@
     "platform/reqsys-ci-platform/workflows/python-quality.yml",
     "platform/reqsys-governance-bacen/README.md",
     "scripts/validate_repository_domain_routing.py",
-    "tests/test_repository_domain_routing.py"
+    "tests/test_repository_domain_routing.py",
+    ".github/workflows/ci-lead-time-analytics.yml",
+    "scripts/enrich_ci_pr_efficiency.py",
+    "tests/scripts/test_enrich_ci_pr_efficiency.py",
+    "docs/contracts/ci-lead-time-analytics.schema.json",
+    "docs/runbooks/ci-lead-time-kpi-contract.md"
   ],
   "sdd_gate": {
     "tests": [
@@ -61,9 +66,10 @@
       "tests/test_workflow_governance_consolidator.py",
       "tests/test_ci_budget_guard.py",
       "tests/test_governed_pr_automation_dispatch_contract.py",
-      "tests/test_repository_domain_routing.py"
+      "tests/test_repository_domain_routing.py",
+      "tests/scripts/test_enrich_ci_pr_efficiency.py"
     ],
-    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge. Security Specialized Scanners deve distinguir código-fonte de manifestos de dependência: Gitleaks permanece global; pip-audit/npm audit/SBOM executam apenas para suas superfícies; CodeQL analisa somente linguagens alteradas no PR e publica atomicamente o conjunto selecionado; push/main mantém scan completo. O inventário de topologia deve fixar a contagem de workflows ativos e listar exatamente os workflows BACEN do baseline; qualquer drift deve falhar fechado. A primeira extração usa strangler/shadow copy, mantém o monorepo autoritativo até equivalência do target e não adiciona novo workflow ativo: a validação é incorporada ao Path-Based Workflow Router Validation existente."
+    "evidence_contract": "Checks protegidos permanecem materializáveis e disjuntos de report-only; o CI canônico aplica blocking_workflow_budget=10 antes de suites caras; ReqSys 360 e Trilha D deixam globs amplos fora do pull_request mantendo rede de segurança em push/main; Kindle mantém E2E físico fora de PR; Runtime Risk Scoring, PR Quality Review, Predictive Regression Guard, Preview Environment Contract e PR Fast Classifier deixam de materializar diretamente em pull_request; um único CI Advisory Router pós-CI registra as análises aplicáveis sem actions:write e sem bloquear o caminho crítico. Governed PR Automation deve tratar ausência de governed-merge-approved como espera governada sem CI vermelho e sem merge; a inclusão posterior da label deve revalidar HEAD, merge-queue:eligible e workflows obrigatórios antes de qualquer merge. Security Specialized Scanners deve distinguir código-fonte de manifestos de dependência: Gitleaks permanece global; pip-audit/npm audit/SBOM executam apenas para suas superfícies; CodeQL analisa somente linguagens alteradas no PR e publica atomicamente o conjunto selecionado; push/main mantém scan completo. O inventário de topologia deve fixar a contagem de workflows ativos e listar exatamente os workflows BACEN do baseline; qualquer drift deve falhar fechado. A primeira extração usa strangler/shadow copy, mantém o monorepo autoritativo até equivalência do target e não adiciona novo workflow ativo: a validação é incorporada ao Path-Based Workflow Router Validation existente. O baseline do Engineering Control Plane deve reutilizar CI Lead Time Analytics e acrescentar métricas report-only por PR: minutos observados por PR, P50/P90 do HEAD mais recente até todos os workflows bloqueantes ficarem verdes, proxy de commit corretivo após falha bloqueante e Pareto dos workflows responsáveis por 80% dos minutos observados; workflows bloqueantes ausentes devem falhar fechado para a classificação de verde e nenhuma métrica pode ser apresentada como minuto faturado ou causalidade comprovada."
   },
   "risk": {
     "production": false,
@@ -96,6 +102,12 @@
     "O manifesto BACEN lista exatamente os 65 workflows bacen-*.yml do baseline e falha em caso de drift.",
     "A preparação de reqsys-ci-platform permanece fora de .github/workflows no monorepo, portanto não aumenta fan-out.",
     "Nenhum workflow BACEN é removido antes de equivalência comprovada no repositório alvo.",
-    "python -m unittest tests/test_repository_domain_routing.py -v e scripts/validate_repository_domain_routing.py ficam verdes no HEAD exato."
+    "python -m unittest tests/test_repository_domain_routing.py -v e scripts/validate_repository_domain_routing.py ficam verdes no HEAD exato.",
+    "CI Lead Time Analytics permanece um único workflow existente; o incremento não adiciona arquivo novo em .github/workflows.",
+    "pr_efficiency mede somente workflow runs de pull_request da mesma janela fixa e usa canonical_pr_path.blocking como definição versionada de verde.",
+    "Workflow bloqueante ausente impede classificação latest_head_green e não produz falso tempo até verde.",
+    "O proxy de commit corretivo exige falha bloqueante em HEAD anterior e HEAD mais recente integralmente verde, sem alegar causalidade.",
+    "workflow_minutes_pareto identifica o menor conjunto que acumula pelo menos 80% dos minutos wall-clock observados.",
+    "python tests/scripts/test_enrich_ci_pr_efficiency.py permanece verde e o artifact final usa schema_version 1.0.4."
   ]
 }
