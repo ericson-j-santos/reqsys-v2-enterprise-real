@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 
@@ -23,10 +24,95 @@ def test_ingress_is_fixed_to_desktop_loopback_mcp() -> None:
         m.require_host("Noteri")
 
 
+def test_resolve_tailscale_cli_prefers_explicit_valid_path(tmp_path: Path) -> None:
+    cli = tmp_path / "tailscale.exe"
+    cli.write_bytes(b"test")
+    assert (
+        m.resolve_tailscale_cli(
+            {m.TAILSCALE_CLI_ENV: str(cli)},
+            which_fn=lambda _: None,
+        )
+        == str(cli)
+    )
+
+
+def test_resolve_tailscale_cli_rejects_invalid_explicit_path(
+    tmp_path: Path,
+) -> None:
+    missing = tmp_path / "missing-tailscale.exe"
+    with pytest.raises(
+        m.IngressError,
+        match="TAILSCALE_CLI_CONFIGURED_PATH_INVALID",
+    ):
+        m.resolve_tailscale_cli(
+            {m.TAILSCALE_CLI_ENV: str(missing)},
+            which_fn=lambda _: None,
+        )
+
+
+def test_resolve_tailscale_cli_uses_program_files_when_service_path_is_minimal(
+    tmp_path: Path,
+) -> None:
+    cli = tmp_path / "Tailscale" / "tailscale.exe"
+    cli.parent.mkdir()
+    cli.write_bytes(b"test")
+    assert (
+        m.resolve_tailscale_cli(
+            {"ProgramFiles": str(tmp_path)},
+            which_fn=lambda _: None,
+        )
+        == str(cli)
+    )
+
+
+def test_resolve_tailscale_cli_fails_closed_when_binary_is_absent() -> None:
+    with pytest.raises(m.IngressError, match="TAILSCALE_CLI_NOT_FOUND"):
+        m.resolve_tailscale_cli({}, which_fn=lambda _: None)
+
+
+def test_tailscale_status_uses_resolved_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[list[str]] = []
+
+    def fake_run(
+        args: list[str],
+        timeout: int = 45,
+    ) -> subprocess.CompletedProcess[str]:
+        observed.append(args)
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout=json.dumps(
+                {
+                    "BackendState": "Running",
+                    "CurrentTailnet": {"MagicDNSEnabled": True},
+                    "Self": {"DNSName": "desktop.tail123.ts.net."},
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(m, "run", fake_run)
+    status = m.tailscale_status(
+        r"C:\Program Files\Tailscale\tailscale.exe"
+    )
+    assert status["BackendState"] == "Running"
+    assert observed == [
+        [
+            r"C:\Program Files\Tailscale\tailscale.exe",
+            "status",
+            "--json",
+        ]
+    ]
+
+
 def test_apply_command_exposes_only_mcp_bridge() -> None:
-    command = m.build_apply_command()
+    command = m.build_apply_command(
+        r"C:\Program Files\Tailscale\tailscale.exe"
+    )
     assert command == [
-        "tailscale",
+        r"C:\Program Files\Tailscale\tailscale.exe",
         "funnel",
         "--bg",
         "--yes",
