@@ -358,7 +358,6 @@ jobs:
           npx playwright test
           tests/e2e/rsm-service-case-real.spec.js
           --config=playwright.config.js
-          --project=chromium
 
       - name: Confirmar persistência por leitura PostgreSQL independente
         run: |
