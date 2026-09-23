@@ -33,6 +33,7 @@ jobs:
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap' ||
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e' ||
         github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
+        github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
         github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
@@ -97,6 +98,11 @@ jobs:
               ;;
             '/reqsys run codex-ollama-e2e-dev')
               target='codex-ollama-e2e-dev.yml'
+              mode='codex-e2e'
+              ;;
+            '/reqsys run github-copilot-ollama-mcp-ingress-dev')
+              target='codex-ollama-e2e-dev.yml'
+              mode='mcp-ingress'
               ;;
             '/reqsys run codex-worker-pool-smoke-dev')
               target='codex-worker-pool-smoke-dev.yml'
@@ -174,6 +180,15 @@ jobs:
               --ref main \
               -f environment=dev \
               -f timeout_seconds=20)"
+          elif [ "$TARGET_WORKFLOW" = "codex-ollama-e2e-dev.yml" ]; then
+            case "$TARGET_MODE" in
+              codex-e2e|mcp-ingress) ;;
+              *) echo 'codex_ollama_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$TARGET_MODE")"
           elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "restore" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
