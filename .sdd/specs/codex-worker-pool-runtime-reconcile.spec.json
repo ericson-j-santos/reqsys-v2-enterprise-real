@@ -1,0 +1,33 @@
+{
+  "feature_name": "codex-worker-pool-runtime-reconcile",
+  "project": "ReqSys v2 Enterprise — Codex distribuído",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Reconciliação idempotente do runtime DEV do Codex Worker Pool no PC24x7 quando o service Docker não possui container ativo.",
+  "issues": [1965],
+  "scope": "local-dev-pc24x7",
+  "files": [
+    "scripts/pc24x7_worker_pool_reconcile.py",
+    "tests/test_pc24x7_worker_pool_reconcile.py",
+    ".github/workflows/pc24x7-worker-pool-reconcile-dev.yml"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_worker_pool_reconcile.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Executar somente no DESKTOP-PDQK954 DEV; reutilizar token já provisionado sem ler conteúdo; recuperar mount apenas quando houver origem única; obter rules SHA canônico; reconciliar exclusivamente o service codex-worker-pool; exigir health 200/ok e exatamente um binding 127.0.0.1:8097; publicar evidência sanitizada; em seguida executar o smoke DEV no SHA vigente da main e exigir WORKER_POOL_SMOKE_PASSED com replay idempotente, leitura independente, lane sintética disabled e task sem lease."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false
+  }
+}
