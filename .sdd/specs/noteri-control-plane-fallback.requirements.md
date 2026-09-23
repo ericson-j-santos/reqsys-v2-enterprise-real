@@ -32,6 +32,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - release local imutável sob `%LOCALAPPDATA%\ReqSys\NoteriControlPlaneWatchdog\releases\<sha>`;
 - persistir evidência sanitizada;
 - declarar `rdc_required=false`, `production_touched=false` e `secrets_read=false`;
+- o probe pode consultar somente-leitura o registro GitHub de runners usando a autenticação `gh` local do Noteri, removendo `GH_TOKEN` e `GITHUB_TOKEN` do ambiente antes da consulta e publicando apenas login esperado, estado/busy/labels do runner alvo;
 - se Task Scheduler negar `AtStartup + S4U`, retornar `activation_pending=true` e não declarar ativação concluída;
 - a ativação headless administrativa deve ocorrer somente por workflow self-hosted fixo no Noteri, sem inputs arbitrários, via UAC legítimo e validação posterior de tarefa `AtStartup + S4U`;
 - o workflow de ativação headless não pode executar reboot, produção, shell genérico ou ler segredos.

@@ -1,29 +1,15 @@
 name: PR Quality Review
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "scripts/**"
-      - "tests/**"
-      - "config/**"
-      - "infra/**"
-      - "docker/**"
-      - "nginx/**"
-      - ".github/workflows/**"
-      - "docs/ci/**"
-      - "docs/adr/**"
-      - "docs/ops-dashboard/**"
-      - "pyproject.toml"
-      - "package*.json"
-      - "frontend/package*.json"
   workflow_dispatch:
     inputs:
       pr_number:
         description: "Número do PR para revisar"
         required: true
+        type: string
+      head_sha:
+        description: "SHA exato do PR; opcional para diagnóstico manual"
+        required: false
         type: string
       comment:
         description: "Comentar diagnóstico no PR"
@@ -37,7 +23,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-quality-review-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  group: pr-quality-review-${{ inputs.pr_number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -52,6 +38,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head_sha || github.sha }}
 
       - name: Resolver contexto
         id: ctx
@@ -59,18 +47,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-            echo "draft=${{ github.event.pull_request.draft }}" >> "$GITHUB_OUTPUT"
-            echo "comment=false" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
-            echo "draft=false" >> "$GITHUB_OUTPUT"
-            echo "comment=${{ github.event.inputs.comment }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "Evento não suportado: ${{ github.event_name }}" >&2
-            exit 1
-          fi
+          echo "pr_number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          echo "draft=false" >> "$GITHUB_OUTPUT"
+          echo "comment=${{ inputs.comment }}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Python
         uses: actions/setup-python@v5

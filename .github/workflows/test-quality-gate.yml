@@ -10,7 +10,12 @@ on:
       - "tests/**"
       - "scripts/validate_test_quality_gate.py"
       - "config/test-quality-gate.json"
-      - ".github/workflows/**"
+      - ".github/workflows/test-quality-gate.yml"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/ci-enterprise-fast.yml"
+      - ".github/workflows/ci-enterprise-regression.yml"
+      - ".github/workflows/ci-e2e-governado.yml"
+      - ".github/workflows/golden-test-advanced.yml"
   push:
     branches: [main]
     paths:

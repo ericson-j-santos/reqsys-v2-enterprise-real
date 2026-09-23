@@ -49,10 +49,16 @@ jobs:
             "scripts/fabric_hml_noteri_discovery.py",
             "--evidence-file", "$env:EVIDENCE_FILE"
           )
-          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.apply_nonsecret_vars }}" -eq "true") {
-            if ("${{ github.ref }}" -ne "refs/heads/main") {
-              throw "apply_nonsecret_vars_only_on_main"
-            }
+          $authorizedBootstrapPr = (
+            "${{ github.event_name }}" -eq "pull_request" -and
+            "${{ github.head_ref }}" -eq "ops/fabric-hml-bootstrap-20260921"
+          )
+          $authorizedDispatch = (
+            "${{ github.event_name }}" -eq "workflow_dispatch" -and
+            "${{ inputs.apply_nonsecret_vars }}" -eq "true" -and
+            "${{ github.ref }}" -eq "refs/heads/main"
+          )
+          if ($authorizedBootstrapPr -or $authorizedDispatch) {
             $probeArgs += @("--apply-nonsecret-vars", "--confirm", "APPLY-FABRIC-HML-NONSECRET-VARS")
           }
           python @probeArgs

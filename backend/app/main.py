@@ -14,6 +14,7 @@ from app.api import (
     agile_runtime,
     auditoria,
     auth,
+    change_evidence,
     codex_governado,
     cofre,
     cofre_runtime_control,
@@ -30,6 +31,7 @@ from app.api import (
     incidentes,
     monitoramento_operacional,
     movimento_email,
+    noteri_host_profile,
     ocr_review,
     operational_autonomy,
     operational_intelligence,
@@ -41,6 +43,7 @@ from app.api import (
     recomendacoes_ia,
     redmine_sync,
     relatorios,
+    repository_admin,
     requisitos,
     runtime_analytics,
     service_case_operations,
@@ -133,6 +136,7 @@ app.include_router(cofre.router)
 app.include_router(cofre_runtime_control.router)
 app.include_router(service_tokens.router)
 app.include_router(service_cases.router)
+app.include_router(change_evidence.router)
 app.include_router(service_catalog.router)
 app.include_router(service_case_operations.router)
 app.include_router(connectors.router)
@@ -144,6 +148,7 @@ app.include_router(webhooks.router)
 app.include_router(rastreabilidade.router)
 app.include_router(redmine_sync.router)
 app.include_router(movimento_email.router)
+app.include_router(noteri_host_profile.router)
 app.include_router(hub_lowcode.router)
 app.include_router(teams_gateway.router)
 app.include_router(agents.router)
@@ -153,6 +158,7 @@ app.include_router(operational_intelligence.router)
 app.include_router(actions_runtime_center.router)
 app.include_router(govbi.router)
 app.include_router(github_merge_console.router)
+app.include_router(repository_admin.router)
 app.include_router(rag_governado.router)
 app.include_router(operational_autonomy.router)
 app.include_router(ocr_review.router)

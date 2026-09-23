@@ -26,11 +26,16 @@ class ExecutivePromotionAdvisorPublicSmokeWorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("github-pages)", self.workflow)
 
-    def test_governed_environment_fallback_urls_are_defined(self) -> None:
-        self.assertIn("https://reqsys-app-dev.fly.dev", self.workflow)
-        self.assertIn("https://reqsys-app-stg.fly.dev", self.workflow)
-        self.assertIn("https://reqsys-app.fly.dev", self.workflow)
+    def test_dev_resolves_signed_pc24x7_locator_and_rejects_fly_fallback(self) -> None:
+        self.assertIn("resolve_pc24x7_dev_locator.mjs", self.workflow)
+        self.assertIn("Runtime legado Fly.io rejeitado", self.workflow)
+        self.assertNotIn("https://reqsys-app-dev.fly.dev", self.workflow)
+        self.assertNotIn("https://reqsys-api-dev.fly.dev", self.workflow)
         self.assertIn('echo "TARGET_URL=$resolved_url" >> "$GITHUB_ENV"', self.workflow)
+
+    def test_failed_smoke_cannot_finish_green(self) -> None:
+        self.assertIn("Enforce public smoke result", self.workflow)
+        self.assertIn("sucesso verde não pode mascarar divergência funcional", self.workflow)
 
     def test_manual_dispatch_does_not_offer_github_pages(self) -> None:
         self.assertIn("options: [dev, stg, prod]", self.workflow)

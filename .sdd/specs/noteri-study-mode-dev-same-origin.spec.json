@@ -1,0 +1,50 @@
+{
+  "feature_name": "noteri-study-mode-dev-same-origin",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Controla NORMAL/ESTUDO do Noteri pela API same-origin do ReqSys DEV, usando o Engineering Orchestrator como transporte governado entre o PC24x7/Desktop e o worker Noteri.",
+  "environment": "dev",
+  "runtime_target": "PC24x7/Desktop -> Engineering Orchestrator -> Noteri",
+  "acceptance_criteria": [
+    "O navegador usa somente /api/v1/noteri/profile.",
+    "GET exige autenticação e POST exige privilégio administrativo.",
+    "O backend aceita somente o control plane interno allowlisted na porta 8787.",
+    "A mutação usa exclusivamente host.profile.set.v1 com target_host=Noteri e profile NORMAL/ESTUDO.",
+    "O worker Noteri faz escrita atômica, leitura independente e heartbeat imediato antes de concluir.",
+    "ESTUDO permite somente a tarefa de controle do perfil; trabalho normal continua bloqueado.",
+    "Replay do mesmo perfil retorna changed=false sem novo enqueue.",
+    "O E2E prova NORMAL->ESTUDO->ESTUDO->NORMAL e leitura imediata pelo control plane.",
+    "HML/PROD, segredos, GUI, RDC e comando arbitrário permanecem fora do escopo.",
+    "A reconciliação sincroniza o Nginx DEV efetivo, recria o proxy e exige HTTP 200 em /api/health e /api/runtime/health antes do E2E.",
+    "O reconciliador descobre o runtime DEV pela API única na porta 8210 e deriva projeto/serviços pelos labels Docker Compose; o gateway 8083 permanece validado funcionalmente por HTTP.",
+    "Falhas de docker compose config publicam somente diagnostic_code allowlisted, sem stderr bruto, valores de ambiente, tokens, segredos ou caminhos sensíveis.",
+    "Quando diagnostic_code for insuficiente, a evidência publica somente diagnostic_markers de allowlist fixa, sem texto bruto, caminhos ou valores arbitrários."
+  ],
+  "controls": {
+    "hml_enabled": false,
+    "production_enabled": false,
+    "local_agent_publicly_exposed": false,
+    "browser_loopback_dependency": false,
+    "arbitrary_command_enabled": false,
+    "rdc_required": false,
+    "post_requires_admin": true,
+    "independent_readback_required": true,
+    "immediate_control_plane_readback_required": true,
+    "idempotency_required": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_noteri_host_profile_api.py",
+      "frontend/src/services/__tests__/hostProfileLocalAgent.test.js",
+      "tests/test_noteri_study_mode_dev_reconcile.py"
+    ],
+    "evidence_contract": "O Task Console DEV deve alternar NORMAL/ESTUDO pela API same-origin; a API deve observar um único worker Noteri fresco/online/autenticado no Engineering Orchestrator; somente host.profile.set.v1 pode alterar o perfil; a tarefa deve comprovar leitura local independente e heartbeat imediato; ESTUDO não pode liberar trabalho normal; replay não cria nova tarefa. A reconciliação também deve reparar drift do Nginx DEV, recriar o proxy e comprovar /api/health e /api/runtime/health HTTP 200 antes de declarar o runtime apto. A identidade Docker do runtime deve ser descoberta pela API DEV 8210 e labels Compose; o gateway 8083 deve ser validado funcionalmente por HTTP; ambiguidades ou projetos não-DEV falham fechado. Falhas de docker compose config devem ser classificadas por diagnostic_code allowlisted sem publicar stderr bruto ou dados sensíveis. Diagnóstico residual usa somente diagnostic_markers de allowlist fixa e nunca publica texto bruto."
+  }
+}

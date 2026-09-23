@@ -92,5 +92,22 @@
         "unified-operational-signal-consolidator.yml"
       ]
     }
+  },
+  "canonical_pr_path": {
+    "entry": "Pre-PR Readiness Gate",
+    "blocking": [
+      "ReqSys Required Fast Gate",
+      "CI — ReqSys v2 Enterprise",
+      "CI Enterprise Fast",
+      "Security Specialized Scanners",
+      "PR Evidence Gate",
+      "PR Conflict Guard",
+      "Governed Merge Queue"
+    ],
+    "policy": [
+      "A quantidade líquida de arquivos em .github/workflows não pode aumentar.",
+      "Novo workflow com pull_request amplo só pode pertencer ao caminho canônico.",
+      "Workflows informativos devem preferir paths, workflow_run, schedule ou workflow_dispatch."
+    ]
   }
 }

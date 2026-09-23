@@ -46,6 +46,24 @@ SENSITIVE_WORKFLOW_WORDS = ("governance", "governança", "security", "segurança
 CONFIDENCE_THRESHOLD = 0.75
 MAX_LOG_CHARS_PER_JOB = 30000
 MAX_PROMPT_LOG_CHARS = 90000
+DEGRADABLE_OLLAMA_ERRORS = {
+    "ollama_unreachable",
+    "ollama_invalid_json",
+    "ollama_unexpected_payload",
+    "ollama_model_unavailable",
+    "ollama_structured_output_invalid",
+    "ollama_category_invalid",
+    "ollama_confidence_invalid",
+}
+DEGRADABLE_OLLAMA_PREFIXES = ("ollama_http_",)
+DEGRADABLE_TRIAGE_INFRA_ERRORS = {
+    "github_token_missing",
+    "github_unreachable",
+    "github_invalid_json",
+    "github_job_log_download_failed",
+    "github_job_log_unreachable",
+}
+DEGRADABLE_TRIAGE_INFRA_PREFIXES = ("github_http_", "github_job_log_http_")
 
 WorkerRequestFn = Callable[[str, str, str, dict[str, Any] | None], tuple[int, dict[str, Any]]]
 
@@ -345,6 +363,65 @@ def run_ollama_triage(base_url: str, model: str, run: dict[str, Any], jobs: list
     return normalize_triage(parsed)
 
 
+def is_degradable_ollama_error(exc: TriageError) -> bool:
+    reason = one_line(exc, 200)
+    return reason in DEGRADABLE_OLLAMA_ERRORS or reason.startswith(DEGRADABLE_OLLAMA_PREFIXES)
+
+
+def is_degradable_triage_infrastructure_error(exc: TriageError) -> bool:
+    reason = one_line(exc, 200)
+    return reason in DEGRADABLE_TRIAGE_INFRA_ERRORS or reason.startswith(DEGRADABLE_TRIAGE_INFRA_PREFIXES)
+
+
+def degraded_execution_evidence(args: argparse.Namespace, reason: str) -> dict[str, Any]:
+    deterministic = {"summary": {}, "matches": []}
+    return {
+        "schema_version": "1.0.0",
+        "result": "OLLAMA_CI_TRIAGE_DEGRADED",
+        "generated_at_utc": utc_now(),
+        "repository": str(getattr(args, "repository", "") or ""),
+        "run_id": getattr(args, "run_id", None),
+        "run_url": None,
+        "workflow": None,
+        "conclusion": None,
+        "analyzed_sha": None,
+        "pr": {"number": None, "reason": "triage_infrastructure_degraded"},
+        "ollama": {
+            "base_url": str(getattr(args, "ollama_url", "") or ""),
+            "model": None,
+            "status": "not_reached",
+            "reason": reason,
+        },
+        "deterministic": deterministic,
+        "triage": degraded_triage(reason, deterministic),
+        "escalation": {"eligible": False, "reason": "triage_infrastructure_degraded"},
+        "worker_pool": None,
+        "comment_posted": False,
+        "correlation_id": f"ollama-ci-triage-{getattr(args, 'run_id', 'unknown')}-{os.getenv('GITHUB_RUN_ATTEMPT', '1')}"[:128],
+        "execute": bool(getattr(args, "execute", False)),
+        "log_files": [],
+        "degraded_reason": reason,
+    }
+
+
+def degraded_triage(reason: str, deterministic: dict[str, Any]) -> dict[str, Any]:
+    evidence = [f"ollama_degraded:{one_line(reason, 180)}"]
+    for item in (deterministic.get("matches") or [])[:4]:
+        if not isinstance(item, dict):
+            continue
+        pattern_id = one_line(item.get("pattern_id"), 80)
+        category = one_line(item.get("category"), 80)
+        if pattern_id or category:
+            evidence.append(f"deterministic:{pattern_id or 'pattern'}:{category or 'unknown'}")
+    return {
+        "category": "unknown",
+        "confidence": 0.0,
+        "root_cause": "Ollama indisponível ou resposta estruturada inválida; causa automática não determinada.",
+        "recommended_action": "Usar a evidência determinística do CI e revisar a falha original; não autoescalar.",
+        "evidence": evidence[:5],
+    }
+
+
 def run_head_sha(run: dict[str, Any]) -> str:
     prs = run.get("pull_requests")
     if isinstance(prs, list) and prs and isinstance(prs[0], dict):
@@ -530,14 +607,24 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     run, jobs, log_paths = collect_run_evidence(repository, args.run_id, github_token, output.parent)
     deterministic = compact_pattern_report(build_pattern_report(load_catalog(args.catalog), log_paths))
     ollama_url = validate_ollama_url(args.ollama_url)
-    model = select_model(ollama_url, args.model)
-    triage = run_ollama_triage(ollama_url, model, run, jobs, log_paths, deterministic)
+    model = ""
+    ollama_status = "ok"
+    ollama_reason = ""
+    try:
+        model = select_model(ollama_url, args.model)
+        triage = run_ollama_triage(ollama_url, model, run, jobs, log_paths, deterministic)
+    except TriageError as exc:
+        if not is_degradable_ollama_error(exc):
+            raise
+        ollama_status = "degraded"
+        ollama_reason = one_line(exc, 200)
+        triage = degraded_triage(ollama_reason, deterministic)
     pr = resolve_pr_context(repository, run, github_token, args.pr_number)
     escalation = escalation_policy(triage, run, pr, deterministic)
     correlation_id = f"ollama-ci-triage-{args.run_id}-{os.getenv('GITHUB_RUN_ATTEMPT', '1')}"[:128]
     evidence: dict[str, Any] = {
         "schema_version": "1.0.0",
-        "result": "OLLAMA_CI_TRIAGE_OK",
+        "result": "OLLAMA_CI_TRIAGE_DEGRADED" if ollama_status == "degraded" else "OLLAMA_CI_TRIAGE_OK",
         "generated_at_utc": utc_now(),
         "repository": repository,
         "run_id": args.run_id,
@@ -546,7 +633,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "conclusion": run.get("conclusion"),
         "analyzed_sha": run_head_sha(run) or run.get("head_sha"),
         "pr": pr,
-        "ollama": {"base_url": ollama_url, "model": model},
+        "ollama": {
+            "base_url": ollama_url,
+            "model": model or None,
+            "status": ollama_status,
+            "reason": ollama_reason or None,
+        },
         "deterministic": deterministic,
         "triage": triage,
         "escalation": escalation,
@@ -603,11 +695,21 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except Exception as exc:
+        reason = one_line(exc)
+        if isinstance(exc, TriageError) and is_degradable_triage_infrastructure_error(exc):
+            degraded = degraded_execution_evidence(args, reason)
+            try:
+                write_evidence(args.output.resolve(), degraded)
+            except Exception:
+                pass
+            print(json.dumps(degraded, ensure_ascii=False, sort_keys=True))
+            return 0
+
         blocked = {
             "schema_version": "1.0.0",
             "result": "OLLAMA_CI_TRIAGE_BLOCKED",
             "generated_at_utc": utc_now(),
-            "reason": one_line(exc),
+            "reason": reason,
             "run_id": getattr(args, "run_id", None),
             "execute": bool(getattr(args, "execute", False)),
         }

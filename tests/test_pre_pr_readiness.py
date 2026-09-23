@@ -230,3 +230,70 @@ def test_merge_queue_can_require_pre_pr_from_pull_request_event() -> None:
     assert '-f event="pull_request"' in workflow
     policy = json.loads(MERGE_POLICY_PATH.read_text(encoding="utf-8"))
     assert "Pre-PR Readiness Gate" in policy["required_workflows"]
+
+
+def test_added_line_map_tracks_only_head_lines(monkeypatch) -> None:
+    diff = """diff --git a/backend/app/api.py b/backend/app/api.py
+--- a/backend/app/api.py
++++ b/backend/app/api.py
+@@ -10,0 +11,2 @@
++one
++two
+@@ -20,1 +22,1 @@
+-old
++new
+"""
+    monkeypatch.setattr(MODULE, "git_stdout", lambda *args: diff)
+    assert MODULE.added_line_map("main") == {
+        "backend/app/api.py": [11, 12, 22],
+    }
+
+
+def test_preventive_invariant_summary_fails_closed_when_check_missing() -> None:
+    checks = [
+        MODULE.CheckResult("sdd:contract", "passed", "ok", 0.0),
+        MODULE.CheckResult("security:changed-diff", "passed", "ok", 0.0),
+    ]
+    summary = MODULE.preventive_invariant_summary(checks)
+    statuses = {item["name"]: item["status"] for item in summary}
+    assert statuses["sdd:contract"] == "passed"
+    assert statuses["security:changed-diff"] == "passed"
+    assert statuses["workflow:surface-budget"] == "missing"
+    assert statuses["workflow:regression-contracts"] == "missing"
+
+
+def test_pre_pr_executes_core_preventive_invariants() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert '"security:changed-diff"' in source
+    assert '"workflow:surface-budget"' in source
+    assert '"workflow:regression-contracts"' in source
+    assert "scripts/workflow_surface_budget.py" in source
+    assert "scripts/vibe_security_gate.py" in source
+    assert "scripts/validate_workflow_regression_contracts.py" in source
+
+
+def test_sdd_pre_pr_tests_override_runtime_test_list(tmp_path: Path) -> None:
+    pre_pr = tmp_path / "tests" / "test_fast.py"
+    runtime = tmp_path / "tests" / "test_runtime.py"
+    pre_pr.parent.mkdir(parents=True)
+    pre_pr.write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    runtime.write_text("def test_runtime():\n    assert True\n", encoding="utf-8")
+
+    spec = tmp_path / ".sdd" / "specs" / "sample.spec.json"
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        json.dumps(
+            {
+                "sdd_gate": {
+                    "pre_pr_tests": ["tests/test_fast.py"],
+                    "tests": ["tests/test_fast.py", "tests/test_runtime.py"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert MODULE.sdd_declared_pytests(
+        [".sdd/specs/sample.spec.json"],
+        tmp_path,
+    ) == ["tests/test_fast.py"]

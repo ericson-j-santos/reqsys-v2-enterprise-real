@@ -2,20 +2,20 @@
   "feature_name": "governed-pr-ci-driven-automerge",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-09-19",
-  "updated_at": "2026-09-19",
+  "updated_at": "2026-09-22",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Conecta a Governed Merge Queue ao merge automático fail-closed no HEAD exato, sem cron e sem deploy/promoção.",
+  "description": "Conecta a Governed Merge Queue ao merge automático fail-closed no HEAD exato sob autorização operacional permanente do owner, sem exigir aprovação por PR e sem cron/deploy/promoção.",
   "environment": "GitHub CI",
   "production_enabled": false,
   "sdd_gate": {
     "tests": [
       "tests/test_governed_pr_automation_dispatch_contract.py"
     ],
-    "evidence_contract": "workflow_run success da Governed Merge Queue; HEAD idêntico antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção."
+    "evidence_contract": "workflow_run success da Governed Merge Queue; label merge-queue:eligible; autorização operacional permanente do owner; revalidação do HEAD e mergeabilidade imediatamente antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção."
   }
 }

@@ -1,0 +1,25 @@
+{
+  "feature_name": "noteri-desktop-admin-broker-kick",
+  "project": "ReqSys v2 Enterprise — Desktop control plane",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Kick remoto, fixo e sem credenciais da tarefa existente Desktop Admin Broker a partir do runner Noteri.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_desktop_admin_broker_kick.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Somente Noteri pode solicitar /Run da tarefa fixa \\\\Automation\\\\ReqSysDesktopAdminBroker no DESKTOP-PDQK954; a mutação remota só pode ser disparada por workflow_dispatch via Authorized Actions Gateway; pull_request/push validam apenas contratos, sem RPC; nenhuma tarefa é criada/alterada, nenhuma credencial é fornecida e falhas são fail-closed."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/noteri-desktop-admin-broker-kick.requirements.md",
+    "implementation": "scripts/noteri_desktop_admin_broker_kick.py",
+    "workflow": ".github/workflows/noteri-desktop-admin-broker-kick.yml"
+  }
+}

@@ -237,9 +237,9 @@ jobs:
               core.notice(`Merge governado ignorado: workflow_run associado a ${pullRequests.length} PR(s).`);
               return;
             }
-
             const prNumber = Number(pullRequests[0].number);
             const triggerHeadSha = context.payload.workflow_run.head_sha;
+
             const { owner, repo } = context.repo;
             const requiredWorkflows = process.env.REQUIRED_WORKFLOWS
               .split('\n')
@@ -316,11 +316,19 @@ jobs:
               repo,
               pull_number: prNumber,
             });
+            const currentLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const currentLabelNames = currentLabels.map((label) => label.name);
             if (
               current.state !== 'open' ||
               current.draft ||
               current.mergeable !== true ||
-              current.head.sha !== triggerHeadSha
+              current.head.sha !== triggerHeadSha ||
+              !currentLabelNames.includes('merge-queue:eligible')
             ) {
               core.setFailed(
                 `Estado mudou antes do merge; esperado head ${triggerHeadSha}, atual ${current.head.sha}`
@@ -336,7 +344,7 @@ jobs:
               sha: triggerHeadSha,
               commit_title: `chore: governed CI-driven merge PR #${prNumber}`,
               commit_message:
-                'Merge automático autorizado pelo owner após todos os gates obrigatórios verdes no HEAD exato.',
+                'Merge governado executado sob autorizacao operacional permanente do owner apos todos os gates obrigatorios verdes no HEAD exato.',
             });
 
             if (!result.data.merged) {

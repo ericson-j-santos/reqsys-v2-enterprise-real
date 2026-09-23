@@ -38,6 +38,7 @@ O canal não é um bypass de UAC. A criação inicial da tarefa elevada continua
 13. O broker deve executar apenas: status, recuperação do runner, recuperação RDC, ativação do watchdog e recuperação do plano de controle.
 14. A recuperação RDC deve reutilizar `pc24x7_rdc_recovery.py`.
 15. A recuperação do runner deve reutilizar `activate_desktop_free_control_plane.py` da mesma release imutável, com `source_sha` fixo e autenticação não interativa; runner ausente deve ser provisionado, e autenticação/escopo insuficiente deve falhar fechado sem abrir navegador.
+15.1. Presença local de `Runner.Listener.exe` comprova somente processo local e não saúde ou conectividade do runner no GitHub; a conclusão operacional exige registro e labels governados válidos e pickup externo no SHA corrente.
 16. A recuperação do plano de controle deve reutilizar `desktop_control_plane_watchdog.py`; a ativação do watchdog deve reutilizar `desktop_control_plane_watchdog_uac_launcher.py` e, quando chamada pelo broker já elevado, nenhuma nova aprovação UAC deve ser necessária.
 17. O broker deve ser instalado em release imutável vinculada ao SHA fonte completo.
 18. A tarefa do broker deve ser `AtStartup + S4U + highest`, com instância única e restart automático.

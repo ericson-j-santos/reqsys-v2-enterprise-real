@@ -376,3 +376,24 @@ def test_runner_config_is_validated_but_never_read() -> None:
     assert 'RUNNER_REQUIRED = ((".runner",), ("run.cmd",), ("bin", "Runner.Listener.exe"))' in text
     assert 'resolved.joinpath(*parts).is_file()' in text
     assert '.runner").read_' not in text
+
+
+def test_stop_runner_terminates_only_exact_governed_listener(monkeypatch, tmp_path: Path) -> None:
+    runner_home = make_runner_home(tmp_path)
+    snapshots = iter([
+        {"matching_pids": [7777], "unresolved_pids": [], "observed": []},
+        {"matching_pids": [], "unresolved_pids": [], "observed": []},
+        {"matching_pids": [], "unresolved_pids": [], "observed": []},
+    ])
+    monkeypatch.setattr(m, "runner_process_snapshot", lambda runner: next(snapshots))
+    killed = []
+    monkeypatch.setattr(
+        m,
+        "_taskkill_runner",
+        lambda pid: killed.append(pid) or subprocess.CompletedProcess(["taskkill"], 0, "", ""),
+    )
+    result = m.stop_runner(runner_home)
+    assert killed == [7777]
+    assert result["stopped"] is True
+    assert result["previous_listener_pid"] == 7777
+    assert result["termination_scope"] == "exact_runner_home"

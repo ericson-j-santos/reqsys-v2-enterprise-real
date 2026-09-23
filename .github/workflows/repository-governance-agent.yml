@@ -1,0 +1,586 @@
+name: Repository Governance Agent
+
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: repository-governance-agent-${{ github.event_name == 'push' && 'main-sync' || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  sync-current-pr:
+    name: Sincronizar a própria PR quando a main avançar
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar configuração da GitHub App
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::GitHub App governada não configurada."
+            exit 1
+          fi
+
+      - name: Gerar token temporário de branch sync
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: write
+
+      - name: Atualizar PR atual com proteção por HEAD
+        uses: actions/github-script@v7
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const path = require('path');
+            const repository = context.repo.owner + '/' + context.repo.repo;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            async function gitOutput(args, options = {}) {
+              const result = await exec.getExecOutput('git', args, {
+                silent: true,
+                ignoreReturnCode: false,
+                ...options,
+              });
+              return result.stdout.trim();
+            }
+
+            async function syncBranch(prNumber, headBranch, expectedHeadSha, baseSha) {
+              const refCheck = await exec.exec(
+                'git',
+                ['check-ref-format', '--branch', headBranch],
+                { silent: true, ignoreReturnCode: true }
+              );
+              if (refCheck !== 0) {
+                return { result: 'blocked', reason: 'invalid_head_ref' };
+              }
+
+              const workdir = path.join(
+                process.env.RUNNER_TEMP,
+                'repository-governance-agent-' + context.runId + '-' + prNumber
+              );
+              const publicUrl = 'https://github.com/' + repository + '.git';
+
+              await exec.exec('git', ['init', '--bare', '--quiet', workdir]);
+              await exec.exec('git', ['-C', workdir, 'remote', 'add', 'origin', publicUrl]);
+              await exec.exec('git', [
+                '-C', workdir,
+                'fetch', '--no-tags', '--prune', '--filter=blob:none',
+                'origin',
+                '+refs/heads/main:refs/remotes/origin/main',
+                '+refs/heads/' + headBranch + ':refs/remotes/origin/' + headBranch,
+              ]);
+
+              const remoteHead = await gitOutput([
+                '-C', workdir, 'rev-parse', 'refs/remotes/origin/' + headBranch,
+              ]);
+              const remoteBase = await gitOutput([
+                '-C', workdir, 'rev-parse', 'refs/remotes/origin/main',
+              ]);
+
+              if (remoteHead !== expectedHeadSha) {
+                return { result: 'stale_noop', reason: 'head_changed_before_git_sync' };
+              }
+              if (remoteBase !== baseSha) {
+                return { result: 'stale_noop', reason: 'base_changed_before_git_sync' };
+              }
+
+              const mergeTree = await exec.getExecOutput(
+                'git',
+                ['-C', workdir, 'merge-tree', '--write-tree', expectedHeadSha, baseSha],
+                { silent: true, ignoreReturnCode: true }
+              );
+              if (mergeTree.exitCode !== 0) {
+                return { result: 'blocked', reason: 'git_merge_tree_conflict' };
+              }
+              const treeSha = mergeTree.stdout.trim().split(/\r?\n/)[0];
+              if (!/^[0-9a-f]{40,64}$/.test(treeSha)) {
+                return { result: 'blocked', reason: 'invalid_merge_tree_sha' };
+              }
+
+              const authorEnv = {
+                ...process.env,
+                GIT_AUTHOR_NAME: 'reqsys-repository-governance[bot]',
+                GIT_AUTHOR_EMAIL: 'actions@github.com',
+                GIT_COMMITTER_NAME: 'reqsys-repository-governance[bot]',
+                GIT_COMMITTER_EMAIL: 'actions@github.com',
+              };
+              const commit = await exec.getExecOutput(
+                'git',
+                [
+                  '-C', workdir, 'commit-tree', treeSha,
+                  '-p', expectedHeadSha,
+                  '-p', baseSha,
+                  '-m', 'chore: sync PR #' + prNumber + ' with main',
+                ],
+                { silent: true, env: authorEnv }
+              );
+              const newSha = commit.stdout.trim();
+              if (!/^[0-9a-f]{40,64}$/.test(newSha)) {
+                return { result: 'blocked', reason: 'invalid_merge_commit_sha' };
+              }
+
+              const basicAuth = Buffer.from(
+                'x-access-token:' + process.env.APP_TOKEN,
+                'utf8'
+              ).toString('base64');
+              core.setSecret(process.env.APP_TOKEN);
+              core.setSecret(basicAuth);
+              const pushEnv = {
+                ...process.env,
+                GIT_CONFIG_COUNT: '1',
+                GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+                GIT_CONFIG_VALUE_0: 'AUTHORIZATION: basic ' + basicAuth,
+              };
+
+              const pushExit = await exec.exec(
+                'git',
+                [
+                  '-C', workdir, 'push', '--porcelain', 'origin',
+                  newSha + ':refs/heads/' + headBranch,
+                ],
+                { env: pushEnv, ignoreReturnCode: true }
+              );
+              if (pushExit !== 0) {
+                const { data: afterPushFailure } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+                if (afterPushFailure.head.sha !== expectedHeadSha) {
+                  return { result: 'stale_noop', reason: 'head_changed_before_push' };
+                }
+                return { result: 'blocked', reason: 'git_push_failed' };
+              }
+
+              return { result: 'pushed', newSha };
+            }
+
+            async function confirmSync(prNumber, expectedHeadSha, baseSha, pushedSha) {
+              for (let attempt = 1; attempt <= 8; attempt += 1) {
+                await sleep(Math.min(attempt * 1000, 5000));
+                const { data: after } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+                if (after.head.sha === expectedHeadSha) {
+                  continue;
+                }
+                const { data: afterComparison } =
+                  await github.rest.repos.compareCommitsWithBasehead({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    basehead: baseSha + '...' + after.head.sha,
+                  });
+                if (Number(afterComparison.behind_by || 0) === 0) {
+                  return {
+                    result: 'updated',
+                    previous_head_sha: expectedHeadSha,
+                    pushed_sha: pushedSha,
+                    current_head_sha: after.head.sha,
+                    base_sha: baseSha,
+                    behind_by: 0,
+                  };
+                }
+                return { result: 'blocked', reason: 'post_read_base_not_ancestor' };
+              }
+              return { result: 'blocked', reason: 'sync_not_confirmed' };
+            }
+
+            const { owner, repo } = context.repo;
+            const prNumber = Number(context.payload.pull_request.number);
+
+            const { data: observed } = await github.rest.pulls.get({
+              owner, repo, pull_number: prNumber,
+            });
+            const expectedHeadSha = observed.head.sha;
+
+            if (
+              observed.state !== 'open' ||
+              observed.draft ||
+              observed.base.ref !== 'main' ||
+              observed.head.repo?.full_name !== repository
+            ) {
+              core.notice('PR fora do escopo seguro de auto-sincronização.');
+              return;
+            }
+            if (observed.mergeable === false || observed.mergeable_state === 'dirty') {
+              core.notice('PR com conflito; sincronização automática bloqueada.');
+              return;
+            }
+            if (observed.mergeable === null) {
+              core.notice('Mergeabilidade ainda desconhecida; mantendo fail-closed.');
+              return;
+            }
+
+            const { data: current } = await github.rest.pulls.get({
+              owner, repo, pull_number: prNumber,
+            });
+            if (
+              current.state !== 'open' ||
+              current.draft ||
+              current.base.ref !== 'main' ||
+              current.head.sha !== expectedHeadSha ||
+              current.head.repo?.full_name !== repository ||
+              current.mergeable === false ||
+              current.mergeable_state === 'dirty'
+            ) {
+              core.notice('Estado mudou antes da sincronização; nenhuma mutação executada.');
+              return;
+            }
+
+            const baseSha = current.base.sha;
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: baseSha + '...' + expectedHeadSha,
+            });
+            if (Number(comparison.behind_by || 0) <= 0) {
+              core.notice('PR já está atualizada com a main observada.');
+              return;
+            }
+
+            const mutation = await syncBranch(
+              prNumber, current.head.ref, expectedHeadSha, baseSha
+            );
+            if (mutation.result === 'stale_noop') {
+              core.notice('Estado mudou antes da escrita: ' + mutation.reason);
+              return;
+            }
+            if (mutation.result !== 'pushed') {
+              core.setFailed('Sincronização Git bloqueada: ' + mutation.reason);
+              return;
+            }
+
+            const confirmed = await confirmSync(
+              prNumber, expectedHeadSha, baseSha, mutation.newSha
+            );
+            if (confirmed.result !== 'updated') {
+              core.setFailed('Push concluído sem confirmação funcional: ' + confirmed.reason);
+              return;
+            }
+            core.notice(
+              'PR sincronizada pela GitHub App: ' + expectedHeadSha +
+              ' -> ' + confirmed.current_head_sha
+            );
+
+  sync-open-prs:
+    name: Sincronizar PRs atrasadas após avanço da main
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Validar configuração da GitHub App
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::GitHub App governada não configurada."
+            exit 1
+          fi
+
+      - name: Gerar token temporário de branch sync
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: write
+
+      - name: Atualizar branches com proteção por HEAD
+        uses: actions/github-script@v7
+        env:
+          MAX_BRANCH_SYNCS: "3"
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const path = require('path');
+            const repository = context.repo.owner + '/' + context.repo.repo;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            async function gitOutput(args, options = {}) {
+              const result = await exec.getExecOutput('git', args, {
+                silent: true,
+                ignoreReturnCode: false,
+                ...options,
+              });
+              return result.stdout.trim();
+            }
+
+            async function syncBranch(prNumber, headBranch, expectedHeadSha, baseSha) {
+              const refCheck = await exec.exec(
+                'git',
+                ['check-ref-format', '--branch', headBranch],
+                { silent: true, ignoreReturnCode: true }
+              );
+              if (refCheck !== 0) {
+                return { result: 'blocked', reason: 'invalid_head_ref' };
+              }
+
+              const workdir = path.join(
+                process.env.RUNNER_TEMP,
+                'repository-governance-agent-' + context.runId + '-' + prNumber
+              );
+              const publicUrl = 'https://github.com/' + repository + '.git';
+
+              await exec.exec('git', ['init', '--bare', '--quiet', workdir]);
+              await exec.exec('git', ['-C', workdir, 'remote', 'add', 'origin', publicUrl]);
+              await exec.exec('git', [
+                '-C', workdir,
+                'fetch', '--no-tags', '--prune', '--filter=blob:none',
+                'origin',
+                '+refs/heads/main:refs/remotes/origin/main',
+                '+refs/heads/' + headBranch + ':refs/remotes/origin/' + headBranch,
+              ]);
+
+              const remoteHead = await gitOutput([
+                '-C', workdir, 'rev-parse', 'refs/remotes/origin/' + headBranch,
+              ]);
+              const remoteBase = await gitOutput([
+                '-C', workdir, 'rev-parse', 'refs/remotes/origin/main',
+              ]);
+
+              if (remoteHead !== expectedHeadSha) {
+                return { result: 'stale_noop', reason: 'head_changed_before_git_sync' };
+              }
+              if (remoteBase !== baseSha) {
+                return { result: 'stale_noop', reason: 'base_changed_before_git_sync' };
+              }
+
+              const mergeTree = await exec.getExecOutput(
+                'git',
+                ['-C', workdir, 'merge-tree', '--write-tree', expectedHeadSha, baseSha],
+                { silent: true, ignoreReturnCode: true }
+              );
+              if (mergeTree.exitCode !== 0) {
+                return { result: 'blocked', reason: 'git_merge_tree_conflict' };
+              }
+              const treeSha = mergeTree.stdout.trim().split(/\r?\n/)[0];
+              if (!/^[0-9a-f]{40,64}$/.test(treeSha)) {
+                return { result: 'blocked', reason: 'invalid_merge_tree_sha' };
+              }
+
+              const authorEnv = {
+                ...process.env,
+                GIT_AUTHOR_NAME: 'reqsys-repository-governance[bot]',
+                GIT_AUTHOR_EMAIL: 'actions@github.com',
+                GIT_COMMITTER_NAME: 'reqsys-repository-governance[bot]',
+                GIT_COMMITTER_EMAIL: 'actions@github.com',
+              };
+              const commit = await exec.getExecOutput(
+                'git',
+                [
+                  '-C', workdir, 'commit-tree', treeSha,
+                  '-p', expectedHeadSha,
+                  '-p', baseSha,
+                  '-m', 'chore: sync PR #' + prNumber + ' with main',
+                ],
+                { silent: true, env: authorEnv }
+              );
+              const newSha = commit.stdout.trim();
+              if (!/^[0-9a-f]{40,64}$/.test(newSha)) {
+                return { result: 'blocked', reason: 'invalid_merge_commit_sha' };
+              }
+
+              const basicAuth = Buffer.from(
+                'x-access-token:' + process.env.APP_TOKEN,
+                'utf8'
+              ).toString('base64');
+              core.setSecret(process.env.APP_TOKEN);
+              core.setSecret(basicAuth);
+              const pushEnv = {
+                ...process.env,
+                GIT_CONFIG_COUNT: '1',
+                GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+                GIT_CONFIG_VALUE_0: 'AUTHORIZATION: basic ' + basicAuth,
+              };
+
+              const pushExit = await exec.exec(
+                'git',
+                [
+                  '-C', workdir, 'push', '--porcelain', 'origin',
+                  newSha + ':refs/heads/' + headBranch,
+                ],
+                { env: pushEnv, ignoreReturnCode: true }
+              );
+              if (pushExit !== 0) {
+                const { data: afterPushFailure } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+                if (afterPushFailure.head.sha !== expectedHeadSha) {
+                  return { result: 'stale_noop', reason: 'head_changed_before_push' };
+                }
+                return { result: 'blocked', reason: 'git_push_failed' };
+              }
+
+              return { result: 'pushed', newSha };
+            }
+
+            async function confirmSync(prNumber, expectedHeadSha, baseSha, pushedSha) {
+              for (let attempt = 1; attempt <= 8; attempt += 1) {
+                await sleep(Math.min(attempt * 1000, 5000));
+                const { data: after } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+                if (after.head.sha === expectedHeadSha) {
+                  continue;
+                }
+                const { data: afterComparison } =
+                  await github.rest.repos.compareCommitsWithBasehead({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    basehead: baseSha + '...' + after.head.sha,
+                  });
+                if (Number(afterComparison.behind_by || 0) === 0) {
+                  return {
+                    result: 'updated',
+                    previous_head_sha: expectedHeadSha,
+                    pushed_sha: pushedSha,
+                    current_head_sha: after.head.sha,
+                    base_sha: baseSha,
+                    behind_by: 0,
+                  };
+                }
+                return { result: 'blocked', reason: 'post_read_base_not_ancestor' };
+              }
+              return { result: 'blocked', reason: 'sync_not_confirmed' };
+            }
+
+            const { owner, repo } = context.repo;
+            const maxSyncs = Number(process.env.MAX_BRANCH_SYNCS || '3');
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', per_page: 100,
+              sort: 'updated', direction: 'asc',
+            });
+
+            const results = [];
+            let updatesStarted = 0;
+
+            for (const summary of pulls) {
+              const prNumber = Number(summary.number);
+              const { data: observed } = await github.rest.pulls.get({
+                owner, repo, pull_number: prNumber,
+              });
+              const expectedHeadSha = observed.head.sha;
+
+              if (observed.state !== 'open' || observed.base.ref !== 'main') {
+                results.push({ pr: prNumber, result: 'skipped', reason: 'not_open_or_not_main' });
+                continue;
+              }
+              if (observed.draft) {
+                results.push({ pr: prNumber, result: 'skipped', reason: 'draft' });
+                continue;
+              }
+              if (observed.head.repo?.full_name !== repository) {
+                results.push({ pr: prNumber, result: 'skipped', reason: 'external_fork' });
+                continue;
+              }
+              if (observed.mergeable === false || observed.mergeable_state === 'dirty') {
+                results.push({ pr: prNumber, result: 'blocked', reason: 'conflict' });
+                continue;
+              }
+              if (observed.mergeable === null) {
+                results.push({ pr: prNumber, result: 'hold', reason: 'mergeability_unknown' });
+                continue;
+              }
+              if (updatesStarted >= maxSyncs) {
+                results.push({ pr: prNumber, result: 'deferred', reason: 'branch_sync_budget_exhausted' });
+                continue;
+              }
+
+              const { data: current } = await github.rest.pulls.get({
+                owner, repo, pull_number: prNumber,
+              });
+              if (
+                current.state !== 'open' || current.draft || current.base.ref !== 'main' ||
+                current.head.sha !== expectedHeadSha ||
+                current.head.repo?.full_name !== repository ||
+                current.mergeable === false || current.mergeable_state === 'dirty'
+              ) {
+                results.push({ pr: prNumber, result: 'stale_noop', reason: 'state_changed_before_sync' });
+                continue;
+              }
+
+              const baseSha = current.base.sha;
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: baseSha + '...' + expectedHeadSha,
+              });
+              if (Number(comparison.behind_by || 0) <= 0) {
+                results.push({ pr: prNumber, result: 'noop', reason: 'already_up_to_date' });
+                continue;
+              }
+
+              updatesStarted += 1;
+              const mutation = await syncBranch(
+                prNumber, current.head.ref, expectedHeadSha, baseSha
+              );
+              if (mutation.result !== 'pushed') {
+                results.push({ pr: prNumber, ...mutation });
+                continue;
+              }
+
+              const confirmed = await confirmSync(
+                prNumber, expectedHeadSha, baseSha, mutation.newSha
+              );
+              results.push({ pr: prNumber, ...confirmed });
+            }
+
+            const failures = results.filter((item) => item.result === 'blocked');
+            const updated = results.filter((item) => item.result === 'updated');
+            const deferred = results.filter((item) => item.result === 'deferred');
+
+            await core.summary
+              .addHeading('Repository Governance Agent — branch sync')
+              .addRaw([
+                'Main SHA: ' + context.sha,
+                'PRs atualizadas: ' + updated.length,
+                'PRs adiadas pelo orçamento: ' + deferred.length,
+                'Bloqueios: ' + failures.length,
+                '',
+                'A sincronização só atualiza a branch head; não integra PR na main nem executa deploy.',
+                JSON.stringify(results, null, 2),
+              ].join('\n'))
+              .write();
+
+            const mutationFailures = failures.filter((item) =>
+              item.reason === 'git_push_failed' ||
+              item.reason === 'invalid_merge_tree_sha' ||
+              item.reason === 'invalid_merge_commit_sha' ||
+              item.reason === 'post_read_base_not_ancestor' ||
+              item.reason === 'sync_not_confirmed'
+            );
+            if (mutationFailures.length) {
+              core.setFailed(
+                'Uma ou mais mutações falharam ou não foram confirmadas: ' +
+                  JSON.stringify(mutationFailures)
+              );
+            }

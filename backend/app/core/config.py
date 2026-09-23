@@ -395,8 +395,9 @@ class Settings(BaseSettings):
     def ambientes_urls(self) -> dict[str, dict[str, str]]:
         return {
             'desenvolvimento': {
-                'frontend': 'https://reqsys-app-dev.fly.dev', 'api': 'https://reqsys-api-dev.fly.dev/docs',
-                'notas': 'Fly dev; local usa docker-compose.yml + docker-compose.dev.yml',
+                'frontend': 'https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/',
+                'api': 'same-origin:/api',
+                'notas': 'PC24x7 DEV via locator assinado + Cloudflare Quick Tunnel; sem fallback Fly.io',
             },
             'producao': {
                 'frontend': 'https://reqsys-app.fly.dev', 'api': 'https://reqsys-api.fly.dev/docs',

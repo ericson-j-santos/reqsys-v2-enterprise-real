@@ -28,6 +28,7 @@ jobs:
       (
         github.event_name == 'deployment_status' &&
         github.event.deployment_status.state == 'success' &&
+        github.event.deployment_status.environment_url != '' &&
         contains(fromJSON('["dev","development","stg","staging","prod","production"]'), github.event.deployment.environment)
       )
     runs-on: ubuntu-latest
@@ -43,6 +44,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Validate implementation
         run: |
           set -euo pipefail
@@ -55,15 +60,31 @@ jobs:
           test -n "$TARGET_ENVIRONMENT"
           case "$TARGET_ENVIRONMENT" in
             dev|development)
-              resolved_url="${TARGET_URL:-https://reqsys-app-dev.fly.dev}"
+              mkdir -p artifacts/pc24x7-dev
+              node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-dev/signed-locator.json >/dev/null
+              resolved_url="$(python -c 'import json; from pathlib import Path; print(json.loads(Path("artifacts/pc24x7-dev/signed-locator.json").read_text(encoding="utf-8"))["selected_url"])')"
               ;;
             stg|staging)
-              resolved_url="${TARGET_URL:-https://reqsys-app-stg.fly.dev}"
+              test -n "$TARGET_URL" || {
+                echo "::error::Ambiente $TARGET_ENVIRONMENT não possui runtime canônico publicado; fallback Fly.io é proibido."
+                exit 2
+              }
+              resolved_url="$TARGET_URL"
               ;;
             prod|production)
-              resolved_url="${TARGET_URL:-https://reqsys-app.fly.dev}"
+              test -n "$TARGET_URL" || {
+                echo "::error::Ambiente $TARGET_ENVIRONMENT não possui runtime canônico publicado; fallback Fly.io é proibido."
+                exit 2
+              }
+              resolved_url="$TARGET_URL"
               ;;
             *) echo "Ambiente não governado: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
+          case "$resolved_url" in
+            https://*.fly.dev|https://*.fly.dev/*)
+              echo "::error::Runtime legado Fly.io rejeitado: $resolved_url"
+              exit 2
+              ;;
           esac
           test -n "$resolved_url"
           echo "TARGET_URL=$resolved_url" >> "$GITHUB_ENV"
@@ -102,7 +123,16 @@ jobs:
             echo "- URL: ${TARGET_URL}"
             echo "- Resultado técnico: ${SMOKE_RESULT_CODE:-não executado}"
             echo "- Sincronização: Estado Único + contrato + Ops Dashboard"
-            echo "- Modo: report-only"
-            echo "- Bloqueio automático: proibido"
+            echo "- Artefato: report-only para decisão executiva"
+            echo "- Resultado técnico: obrigatório; falha torna o workflow vermelho"
             echo "- Aprovação humana: obrigatória"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce public smoke result
+        if: always()
+        run: |
+          set -euo pipefail
+          test "${SMOKE_RESULT_CODE:-1}" = "0" || {
+            echo "::error::Smoke público falhou; sucesso verde não pode mascarar divergência funcional."
+            exit 1
+          }

@@ -9,6 +9,21 @@ def _workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
+def test_gateway_concurrency_is_scoped_per_issue() -> None:
+    content = _workflow()
+    assert "group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}" in content
+    assert "group: reqsys-authorized-actions-gateway\n" not in content
+
+
+def test_gateway_pickup_timeout_is_not_reported_as_runner_unavailable() -> None:
+    content = _workflow()
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" not in content
+    assert "wait_seconds=0" in content
+    assert "for attempt in $(seq 1 36)" in content
+    assert "runner_pickup_wait_seconds" in content
+
+
 def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     content = _workflow()
 
@@ -24,10 +39,12 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run noteri-control-plane-probe'" in content
     assert "github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation'" in content
     assert "github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe'" in content
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap'" in content
     assert "github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'" in content
     assert "github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev'" in content
     assert "github.event.comment.body == '/reqsys run noteri-desktop-network-probe'" in content
     assert "github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair'" in content
     assert "github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev'" in content
     assert "github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev'" in content
 
@@ -45,10 +62,12 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='noteri-control-plane-probe.yml'" in content
     assert "target='noteri-headless-control-plane-activation.yml'" in content
     assert "target='fabric-oidc-readonly-probe.yml'" in content
+    assert "target='report-factory-fabric-dev-access-bootstrap.yml'" in content
     assert "target='codex-ollama-e2e-dev.yml'" in content
     assert "target='codex-worker-pool-smoke-dev.yml'" in content
     assert "target='noteri-desktop-network-probe.yml'" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "target='pc24x7-runner-registry-repair.yml'" in content
     assert "target='pc24x7-teams-token-bootstrap.yml'" in content
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert (
@@ -61,12 +80,16 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "noteri-headless-control-plane-activation.yml|"
         "figma-github-e2e-dev.yml|"
         "fabric-oidc-readonly-probe.yml|"
+        "report-factory-fabric-dev-access-bootstrap.yml|"
         "codex-ollama-e2e-dev.yml|"
         "codex-worker-pool-smoke-dev.yml|"
         "noteri-desktop-network-probe.yml|"
         "noteri-desktop-watchdog-recovery.yml|"
+        "noteri-desktop-admin-broker-kick.yml|"
+        "pc24x7-runner-registry-repair.yml|"
         "pc24x7-teams-token-bootstrap.yml|"
-        "pc24x7-teams-ephemeral-e2e.yml"
+        "pc24x7-teams-ephemeral-e2e.yml|"
+        "noteri-study-mode-dev-reconcile.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
@@ -119,7 +142,6 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
 
     assert "'/reqsys run desktop-rdc-recovery')" in content
     assert "target='desktop-rdc-recovery.yml'" in content
-    assert "|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml)" in content
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
@@ -142,8 +164,8 @@ def test_gateway_desktop_rdc_falha_fechado_sem_runner_e_preserva_evidencia() -> 
     assert 'gh run view "$TARGET_RUN_ID"' in content
     assert "runner_pickup_status" in content
     assert "runner_pickup_error" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
-    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
     assert "pending|queued|requested|waiting" in content
 
 
@@ -168,8 +190,8 @@ def test_gateway_desktop_rdc_considera_pending_como_runner_nao_adquirido() -> No
 
     assert "status='pending'" in content
     assert "pending|queued|requested|waiting" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
-    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_UNAVAILABLE'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
 
 
 def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
@@ -178,7 +200,7 @@ def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
     assert "'/reqsys run noteri-control-plane-probe')" in content
     assert "target='noteri-control-plane-probe.yml'" in content
     assert "steps.route.outputs.target == 'noteri-control-plane-probe.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f host=" not in content
     assert "-f command=" not in content
 
@@ -207,7 +229,7 @@ def test_gateway_noteri_headless_activation_is_exact_inputless_and_fail_closed()
     assert "'/reqsys run noteri-headless-control-plane-activation')" in content
     assert "target='noteri-headless-control-plane-activation.yml'" in content
     assert "steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f host=" not in content
     assert "-f command=" not in content
 
@@ -233,7 +255,7 @@ def test_gateway_noteri_desktop_network_probe_is_exact_inputless_and_fail_closed
     assert "'/reqsys run noteri-desktop-network-probe')" in content
     assert "target='noteri-desktop-network-probe.yml'" in content
     assert "steps.route.outputs.target == 'noteri-desktop-network-probe.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f target=" not in content
 
 
@@ -244,7 +266,7 @@ def test_gateway_noteri_desktop_watchdog_recovery_is_exact_and_fail_closed() -> 
     assert "'/reqsys run noteri-desktop-watchdog-recovery')" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
     assert "steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f host=" not in content
     assert "-f task=" not in content
     assert "-f command=" not in content
@@ -257,7 +279,38 @@ def test_gateway_worker_pool_smoke_dev_is_exact_inputless_and_fail_closed() -> N
     assert "'/reqsys run codex-worker-pool-smoke-dev')" in content
     assert "target='codex-worker-pool-smoke-dev.yml'" in content
     assert "steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml'" in content
-    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f repository=" not in content
     assert "-f issue_number=" not in content
     assert "-f request_id=" not in content
+
+
+def test_gateway_noteri_desktop_admin_broker_kick_is_exact_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick'" in content
+    assert "'/reqsys run noteri-desktop-admin-broker-kick')" in content
+    assert "target='noteri-desktop-admin-broker-kick.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+
+
+def test_gateway_report_factory_fabric_access_bootstrap_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap'" in content
+    assert "'/reqsys run report-factory-fabric-dev-access-bootstrap')" in content
+    assert "target='report-factory-fabric-dev-access-bootstrap.yml'" in content
+    assert "steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f workspace=" not in content
+    assert "-f role=" not in content
+    assert "-f principal=" not in content
+
+
+def test_gateway_pc24x7_runner_registry_repair_is_exact_and_github_hosted() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair'" in content
+    assert "'/reqsys run pc24x7-runner-registry-repair')" in content
+    assert "target='pc24x7-runner-registry-repair.yml'" in content
+    assert "steps.route.outputs.target == 'pc24x7-runner-registry-repair.yml'" not in content
+    assert "-f runner=" not in content
+    assert "-f labels=" not in content

@@ -28,6 +28,115 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Security scan scope router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.scope.outputs.python }}
+      node: ${{ steps.scope.outputs.node }}
+      python_deps: ${{ steps.scope.outputs.python_deps }}
+      node_deps: ${{ steps.scope.outputs.node_deps }}
+      sbom: ${{ steps.scope.outputs.sbom }}
+      codeql: ${{ steps.scope.outputs.codeql }}
+      codeql_languages: ${{ steps.scope.outputs.codeql_languages }}
+      deep: ${{ steps.scope.outputs.deep }}
+    steps:
+      - name: Classify changed paths
+        id: scope
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.setOutput('python', 'true');
+              core.setOutput('node', 'true');
+              core.setOutput('python_deps', 'true');
+              core.setOutput('node_deps', 'true');
+              core.setOutput('sbom', 'true');
+              core.setOutput('codeql', 'true');
+              core.setOutput('codeql_languages', JSON.stringify(['javascript-typescript', 'python']));
+              core.setOutput('deep', 'true');
+              return;
+            }
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              },
+            );
+            const paths = files.map(file => file.filename);
+
+            const startsWithAny = (path, prefixes) =>
+              prefixes.some(prefix => path.startsWith(prefix));
+            const matchesAny = (path, patterns) =>
+              patterns.some(pattern => pattern.test(path));
+
+            const python = paths.some(path =>
+              (startsWithAny(path, [
+                'backend/',
+                'runtime/',
+                'services/',
+                'scripts/',
+                'tools/',
+              ]) || !path.includes('/')) &&
+              /\.py$/.test(path)
+            );
+
+            const node = paths.some(path =>
+              (startsWithAny(path, ['frontend/', 'scripts/', 'tools/']) || !path.includes('/')) &&
+              /\.(?:js|jsx|mjs|cjs|ts|tsx|vue)$/.test(path)
+            );
+
+            const pythonDeps = paths.some(path =>
+              matchesAny(path, [
+                /(^|\/)requirements[^/]*\.txt$/,
+                /(^|\/)pyproject\.toml$/,
+              ])
+            );
+
+            const nodeDeps = paths.some(path =>
+              matchesAny(path, [
+                /(^|\/)package\.json$/,
+                /(^|\/)package-lock\.json$/,
+                /(^|\/)yarn\.lock$/,
+                /(^|\/)pnpm-lock\.yaml$/,
+              ])
+            );
+
+            const sbom = pythonDeps || nodeDeps || paths.some(path =>
+              startsWithAny(path, [
+                'backend-dotnet/',
+                'infra/',
+              ]) ||
+              matchesAny(path, [
+                /(^|\/)Dockerfile[^/]*$/,
+                /(^|\/)docker-compose[^/]*\.ya?ml$/,
+              ])
+            );
+
+            const codeqlLanguages = [];
+            if (node) codeqlLanguages.push('javascript-typescript');
+            if (python) codeqlLanguages.push('python');
+            const codeql = codeqlLanguages.length > 0;
+            const deep = python || node || pythonDeps || nodeDeps || sbom;
+
+            core.info(
+              `security scan scope: python=${python} node=${node} python_deps=${pythonDeps} ` +
+              `node_deps=${nodeDeps} sbom=${sbom} codeql_languages=${JSON.stringify(codeqlLanguages)}`
+            );
+            core.setOutput('python', String(python));
+            core.setOutput('node', String(node));
+            core.setOutput('python_deps', String(pythonDeps));
+            core.setOutput('node_deps', String(nodeDeps));
+            core.setOutput('sbom', String(sbom));
+            core.setOutput('codeql', String(codeql));
+            core.setOutput('codeql_languages', JSON.stringify(codeqlLanguages));
+            core.setOutput('deep', String(deep));
+
   gitleaks:
     name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
@@ -48,6 +157,8 @@ jobs:
 
   python-dependency-audit:
     name: pip-audit Python Dependencies
+    needs: scope
+    if: needs.scope.outputs.python_deps == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -128,6 +239,8 @@ jobs:
 
   npm-audit:
     name: npm Audit Frontend Dependencies
+    needs: scope
+    if: needs.scope.outputs.node_deps == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -197,6 +310,8 @@ jobs:
 
   sbom:
     name: SBOM CycloneDX
+    needs: scope
+    if: needs.scope.outputs.sbom == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -250,6 +365,8 @@ jobs:
 
   codeql-generate:
     name: CodeQL SAST (${{ matrix.language }})
+    needs: scope
+    if: needs.scope.outputs.codeql == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -259,9 +376,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language:
-          - javascript-typescript
-          - python
+        language: ${{ fromJSON(needs.scope.outputs.codeql_languages) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -332,7 +447,8 @@ jobs:
     name: CodeQL Publish Atomic
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: codeql-generate
+    needs: [scope, codeql-generate]
+    if: needs.scope.outputs.codeql == 'true' && needs.codeql-generate.result == 'success'
     permissions:
       contents: read
       security-events: write
@@ -343,29 +459,39 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Download both CodeQL SARIF artifacts
+      - name: Download selected CodeQL SARIF artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: codeql-sarif-*
           path: artifacts/security-scanners/codeql-upload
 
-      - name: Stage and validate both CodeQL configurations
+      - name: Stage and validate selected CodeQL configurations
         shell: bash
+        env:
+          CODEQL_LANGUAGES_JSON: ${{ needs.scope.outputs.codeql_languages }}
         run: |
           set -euo pipefail
           publish_dir="artifacts/security-scanners/codeql-publish"
           mkdir -p "$publish_dir"
           python - <<'PY'
           import json
+          import os
           import shutil
           from pathlib import Path
 
           root = Path("artifacts/security-scanners/codeql-upload")
           publish = Path("artifacts/security-scanners/codeql-publish")
-          expected = {
-              "/language:javascript-typescript/": "javascript-typescript.sarif",
-              "/language:python/": "python.sarif",
+          names = {
+              "javascript-typescript": "javascript-typescript.sarif",
+              "python": "python.sarif",
           }
+          languages = json.loads(os.environ["CODEQL_LANGUAGES_JSON"])
+          if not languages:
+              raise SystemExit("Nenhuma linguagem CodeQL selecionada")
+          unknown = sorted(set(languages) - set(names))
+          if unknown:
+              raise SystemExit(f"Linguagens CodeQL desconhecidas: {unknown}")
+          expected = {f"/language:{language}/": names[language] for language in languages}
           found = set()
           for sarif in root.glob("codeql-sarif-*/processed/upload.sarif"):
               payload = json.loads(sarif.read_text(encoding="utf-8"))
@@ -388,7 +514,7 @@ jobs:
           print("CodeQL configurations staged:", sorted(found))
           PY
 
-      - name: Publish both CodeQL analyses in one upload
+      - name: Publish selected CodeQL analyses in one upload
         id: upload
         uses: github/codeql-action/upload-sarif@v4
         with:
@@ -398,19 +524,27 @@ jobs:
       - name: Publish atomic CodeQL summary
         if: always()
         shell: bash
+        env:
+          CODEQL_LANGUAGES_JSON: ${{ needs.scope.outputs.codeql_languages }}
         run: |
-          {
-            echo "## CodeQL — publicação atômica"
-            echo
-            echo "As configurações \`javascript-typescript\` e \`python\` são publicadas juntas."
-            echo "Isso impede avaliação intermediária do gate com apenas uma linguagem disponível."
-          } >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          import os
+
+          languages = json.loads(os.environ["CODEQL_LANGUAGES_JSON"])
+          selected = ", ".join(f"`{language}`" for language in languages)
+          print("## CodeQL — publicação atômica")
+          print()
+          print(f"Configurações selecionadas pelo diff: {selected}.")
+          print("Somente as linguagens afetadas são analisadas e publicadas em um lote consistente.")
+          PY
 
   security-executive-summary:
     name: Security Executive Summary
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs:
+      - scope
       - gitleaks
       - python-dependency-audit
       - npm-audit
@@ -418,6 +552,13 @@ jobs:
       - codeql
     if: always()
     steps:
+      - name: Fail closed when security scope routing fails
+        if: needs.scope.result != 'success'
+        shell: bash
+        run: |
+          echo "Security scan scope router failed; refusing to publish a green summary." >&2
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
         with:

@@ -1,0 +1,73 @@
+{
+  "feature_name": "ci-admission-controller",
+  "project": "ReqSys v2 Enterprise — CI/CD",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Gap fix Pareto: manifesto preventivo por SHA, invariantes antecipados no Pre-PR, orçamento bloqueante da superfície de workflows e fail-fast dos CIs caros.",
+  "scope": "github-ci-dev",
+  "files": [
+    "scripts/ci_admission_manifest.py",
+    "scripts/ci_admission_guard.py",
+    ".github/workflows/pre-pr-readiness.yml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/ci-enterprise-fast.yml",
+    ".github/workflows/ci-e2e-governado.yml",
+    ".github/workflows/pr-evidence-gate.yml",
+    "tests/test_ci_admission_control.py",
+    "scripts/padrao_ouro_maturity_consolidator.py",
+    "scripts/runtime_health_center.py",
+    "tests/test_runtime_health_center.py",
+    "scripts/vibe_security_gate.py",
+    "tests/test_vibe_security_gate.py",
+    ".github/workflows/security-baseline-gate.yml",
+    "config/workflow-governance-registry.json",
+    "scripts/workflow_surface_budget.py",
+    "tests/test_workflow_surface_budget.py",
+    "docs/ci/WORKFLOW_SURFACE_BUDGET.md"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ci_admission_control.py",
+      "tests/test_pre_pr_readiness.py",
+      "tests/test_padrao_ouro_maturity_consolidator.py",
+      "tests/test_runtime_health_center.py",
+      "tests/test_vibe_security_gate.py",
+      "tests/test_workflow_surface_budget.py"
+    ],
+    "evidence_contract": "Provar manifesto preventivo vinculado ao HEAD/base exatos, behind_by=0, invariantes sdd:contract/security:changed-diff/workflow:surface-budget/workflow:regression-contracts aprovados, orçamento líquido de workflows <= 0, bloqueio de novo pull_request amplo fora do caminho canônico, rejeição de artifact com conteúdo inválido, segurança incremental limitada a blockers introduzidos no diff e CI caro protegido por admission guard.",
+    "pre_pr_tests": [
+      "tests/test_ci_admission_control.py",
+      "tests/test_pre_pr_readiness.py",
+      "tests/test_vibe_security_gate.py",
+      "tests/test_workflow_surface_budget.py"
+    ]
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "deploy": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "protected_branch_write": false
+  },
+  "increment_type": "gap_fix",
+  "acceptance_criteria": [
+    "Pre-PR Readiness registra os três invariantes preventivos obrigatórios e falha fechado quando qualquer um falha ou está ausente.",
+    "Security gate antecipado bloqueia blocker novo em linha adicionada e não bloqueia dívida legada não tocada.",
+    "Manifesto somente fica admitted para HEAD/base válidos, behind_by=0 e invariantes preventivos passed.",
+    "Admission Controller baixa o artifact do SHA e valida o conteúdo interno, não apenas nome/metadados.",
+    "Artifact com HEAD/base/schema/invariante inválido é rejeitado.",
+    "Download do redirect assinado não encaminha o token GitHub ao host externo.",
+    "tests/test_pre_pr_readiness.py, tests/test_ci_admission_control.py e tests/test_vibe_security_gate.py passam.",
+    "Nenhum merge, deploy ou promoção de ambiente é realizado por este incremento.",
+    "Pre-PR Readiness executa workflow:surface-budget e falha fechado quando a superfície líquida de .github/workflows cresce.",
+    "Novo pull_request amplo fora do caminho canônico é bloqueado; substituição delimitada com saldo líquido zero é aceita.",
+    "tests/test_workflow_surface_budget.py passa junto aos testes de admission/readiness."
+  ]
+}

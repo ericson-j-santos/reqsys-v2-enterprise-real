@@ -1,28 +1,15 @@
 name: Runtime Risk Scoring
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "scripts/**"
-      - "config/**"
-      - "infra/**"
-      - "docker/**"
-      - "nginx/**"
-      - "fly*.toml"
-      - "frontend/fly*.toml"
-      - ".github/workflows/**"
-      - "docs/ops-dashboard/**"
-      - "docs/dashboard/**"
-      - "docs/ci/**"
-      - "docs/adr/**"
   workflow_dispatch:
     inputs:
       pr_number:
         description: 'Número do PR para análise manual de risco'
         required: true
+        type: string
+      head_sha:
+        description: 'SHA exato do PR; opcional para diagnóstico manual'
+        required: false
         type: string
 
 permissions:
@@ -31,7 +18,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: runtime-risk-scoring-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  group: runtime-risk-scoring-${{ inputs.pr_number || github.run_id }}
   cancel-in-progress: true
 
 env:
@@ -45,17 +32,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Resolver PR alvo
         id: target
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
-          fi
+          echo "pr_number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Coletar metadados e diff
         env:

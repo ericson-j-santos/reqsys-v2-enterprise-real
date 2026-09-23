@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -90,6 +91,44 @@ def test_model_cannot_override_deterministic_transient_signal() -> None:
 def test_model_without_known_technical_signal_does_not_auto_escalate() -> None:
     decision = triage.escalation_policy(technical(), run(), pr(), {"matches": []})
     assert decision == {"eligible": False, "reason": "deterministic_signal_missing"}
+
+
+def test_invalid_ollama_output_degrades_fail_closed() -> None:
+    report = {
+        "matches": [
+            {
+                "pattern_id": "pytest_failure",
+                "category": "test_failure",
+                "severity": "high",
+                "confidence": 0.99,
+                "recommended_action": "corrigir teste",
+            }
+        ]
+    }
+    degraded = triage.degraded_triage("ollama_structured_output_invalid", report)
+    assert degraded["category"] == "unknown"
+    assert degraded["confidence"] == 0.0
+    assert "ollama_degraded:ollama_structured_output_invalid" in degraded["evidence"]
+    decision = triage.escalation_policy(degraded, run(), pr(), report)
+    assert decision == {"eligible": False, "reason": "category_unknown_not_auto_fixable"}
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "ollama_structured_output_invalid",
+        "ollama_invalid_json",
+        "ollama_model_unavailable",
+        "ollama_unreachable",
+        "ollama_http_500",
+    ],
+)
+def test_runtime_ollama_failures_are_degradable(reason: str) -> None:
+    assert triage.is_degradable_ollama_error(triage.TriageError(reason)) is True
+
+
+def test_ollama_url_policy_error_is_not_degradable() -> None:
+    assert triage.is_degradable_ollama_error(triage.TriageError("ollama_url_not_loopback")) is False
 
 
 @pytest.mark.parametrize("branch", ["main", "master", "develop", "../escape", "bad//branch", "refs heads"])
@@ -189,3 +228,50 @@ def test_worker_pool_rejects_protected_target_branch(tmp_path: Path) -> None:
             repository="owner/repo", issue_number=1890, request_id="protected",
             correlation_id="corr", base_sha="a" * 40, target_branch="main",
         )
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "github_http_403",
+        "github_http_429",
+        "github_unreachable",
+        "github_invalid_json",
+        "github_job_log_http_403",
+        "github_job_log_download_failed",
+    ],
+)
+def test_optional_triage_infrastructure_failures_are_degradable(reason: str) -> None:
+    assert triage.is_degradable_triage_infrastructure_error(triage.TriageError(reason)) is True
+
+
+def test_main_degrades_github_403_without_second_red_ci(monkeypatch, tmp_path: Path) -> None:
+    output = tmp_path / "evidence.json"
+
+    def fail_execute(args):
+        raise triage.TriageError("github_http_403")
+
+    monkeypatch.setattr(triage, "execute", fail_execute)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "ollama_ci_triage.py",
+            "--repository",
+            "owner/repo",
+            "--run-id",
+            "123",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert triage.main() == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["result"] == "OLLAMA_CI_TRIAGE_DEGRADED"
+    assert payload["degraded_reason"] == "github_http_403"
+    assert payload["escalation"] == {
+        "eligible": False,
+        "reason": "triage_infrastructure_degraded",
+    }
+    assert payload["worker_pool"] is None
