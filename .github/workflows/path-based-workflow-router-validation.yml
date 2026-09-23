@@ -10,6 +10,12 @@ on:
       - ".github/workflows/path-based-workflow-router-validation.yml"
       - "scripts/validate_path_based_workflow_router.py"
       - "docs/ci/path-based-workflow-router.md"
+      - "config/repository-domain-routing.json"
+      - "scripts/validate_repository_domain_routing.py"
+      - "tests/test_repository_domain_routing.py"
+      - "docs/ci/repository-domain-extraction.md"
+      - "platform/reqsys-ci-platform/**"
+      - "platform/reqsys-governance-bacen/**"
   push:
     branches:
       - main
@@ -21,6 +27,12 @@ on:
       - ".github/workflows/path-based-workflow-router-validation.yml"
       - "scripts/validate_path_based_workflow_router.py"
       - "docs/ci/path-based-workflow-router.md"
+      - "config/repository-domain-routing.json"
+      - "scripts/validate_repository_domain_routing.py"
+      - "tests/test_repository_domain_routing.py"
+      - "docs/ci/repository-domain-extraction.md"
+      - "platform/reqsys-ci-platform/**"
+      - "platform/reqsys-governance-bacen/**"
   workflow_dispatch:
 
 permissions:
@@ -55,6 +67,12 @@ jobs:
       - name: Validate router contract
         run: python scripts/validate_path_based_workflow_router.py
 
+      - name: Validate repository domain routing
+        run: |
+          python -m py_compile scripts/validate_repository_domain_routing.py
+          python -m unittest tests/test_repository_domain_routing.py -v
+          python scripts/validate_repository_domain_routing.py --json
+
       - name: Summary
         if: always()
         run: |
@@ -63,4 +81,5 @@ jobs:
             echo ""
             echo "Validação do roteamento por paths concluída."
             echo "Gate obrigatório preservado sem filtro por path: ReqSys Required Fast Gate."
+            echo "Topologia de repositórios: inventário e drift validados."
           } >> "$GITHUB_STEP_SUMMARY"
