@@ -11,7 +11,11 @@ function carregarRotasCanonicas() {
   const source = fs.readFileSync(arquivo, 'utf8')
   const pattern = /\{\s*path:\s*'([^']+)',\s*testId:\s*'([^']+)',\s*titulo:\s*'([^']+)'\s*\}/g
   const rotas = [...source.matchAll(pattern)].map((match) => ({
-    path: match[1] === '/estatisticas/:indicadorId' ? '/estatisticas/total-requisitos' : match[1],
+    path: match[1] === '/estatisticas/:indicadorId'
+      ? '/estatisticas/total-requisitos'
+      : match[1] === '/service-cases/:caseId?'
+        ? '/service-cases'
+        : match[1],
     canonicalPath: match[1],
     testId: match[2],
     titulo: match[3],

@@ -1,0 +1,24 @@
+{
+  "feature_name": "rsm-05-service-case-ui",
+  "project": "ReqSys Service Management",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-23",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Tela única do ServiceCase que consome allowed_transitions calculado pelo backend, relê o estado persistido após toda mutação e evita duplicar a máquina de estados no frontend.",
+  "runtime_target": "github-actions-frontend-and-backend",
+  "environment": "CI/DEV",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_service_cases_api.py",
+      "frontend/src/views/__tests__/ServiceCaseView.spec.js",
+      "frontend/tests/e2e/rsm-service-case-real.spec.js",
+      "scripts/rsm_service_case_ui_e2e_validate.py"
+    ],
+    "evidence_contract": "Provar no HEAD exato: browser Playwright real -> Vite real -> API FastAPI real -> PostgreSQL real. No caso positivo, a UI executa NEW -> TRIAGE e só mostra sucesso após releitura da API; leitura PostgreSQL independente confirma state=TRIAGE, version=2 e histórico NEW/TRIAGE. No controle negativo, um caso PENDING_APPROVAL sem aprovação tenta IN_PROGRESS pela UI, recebe rejeição do backend, permanece PENDING_APPROVAL e a leitura PostgreSQL comprova ausência de evento IN_PROGRESS. Ações visíveis continuam derivadas de allowed_transitions do backend; testes de componente cobrem o contrato visual sem substituir o E2E físico."
+  }
+}

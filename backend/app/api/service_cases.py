@@ -141,6 +141,8 @@ def _serialize(record: ServiceCaseRecord) -> dict:
         'schema_version': record.schema_version,
         'created_at': record.created_at.isoformat() if record.created_at else None,
         'updated_at': record.updated_at.isoformat() if record.updated_at else None,
+        # A UI consome este contrato em vez de duplicar a máquina de estados.
+        'allowed_transitions': sorted(item.value for item in _domain(record).allowed_transitions()),
     }
 
 

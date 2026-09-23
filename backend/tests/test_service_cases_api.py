@@ -267,6 +267,7 @@ def test_get_case_returns_persisted_case_and_events(service_id):
     body = response.json()['data']
     assert body['case_id'] == case_id
     assert body['state'] == 'NEW'
+    assert body['allowed_transitions'] == ['CANCELED', 'TRIAGE']
     assert len(body['events']) == 1
     assert body['events'][0]['event_type'] == 'CASE_CREATED'
     assert body['events'][0]['to_state'] == 'NEW'
@@ -320,3 +321,17 @@ def test_transition_missing_case_returns_404():
     response = client.post(f'/v1/service-cases/{uuid4()}/transitions', json=body)
     assert response.status_code == 404
 
+
+
+def test_transition_response_refreshes_allowed_transitions(service_id):
+    payload = _create_payload(service_id, f'allowed-transitions-{uuid4()}')
+    created = client.post('/v1/service-cases', json=payload)
+    assert created.status_code == 200
+    case = created.json()['data']['case']
+    assert case['allowed_transitions'] == ['CANCELED', 'TRIAGE']
+
+    transitioned = _transition(case['case_id'], 'TRIAGE', case['version'])
+    assert transitioned.status_code == 200
+    updated = transitioned.json()['data']['case']
+    assert updated['state'] == 'TRIAGE'
+    assert updated['allowed_transitions'] == ['CANCELED', 'IN_PROGRESS', 'PENDING_APPROVAL']

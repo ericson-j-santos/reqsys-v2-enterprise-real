@@ -10,6 +10,12 @@ on:
       - "backend/app/domain/change_evidence.py"
       - "backend/app/main.py"
       - "backend/tests/test_service_cases_api.py"
+      - "frontend/src/views/ServiceCaseView.vue"
+      - "frontend/src/views/__tests__/ServiceCaseView.spec.js"
+      - "frontend/src/router/index.js"
+      - "frontend/tests/e2e/rsm-service-case-real.spec.js"
+      - "scripts/rsm_service_case_ui_e2e_validate.py"
+      - ".sdd/specs/rsm-05-service-case-ui.*"
       - "backend/tests/test_change_evidence_*.py"
       - "scripts/rsm_service_case_e2e.py"
       - "scripts/rsm_change_evidence_e2e.py"
@@ -23,6 +29,12 @@ on:
       - "backend/app/domain/change_evidence.py"
       - "backend/app/main.py"
       - "backend/tests/test_service_cases_api.py"
+      - "frontend/src/views/ServiceCaseView.vue"
+      - "frontend/src/views/__tests__/ServiceCaseView.spec.js"
+      - "frontend/src/router/index.js"
+      - "frontend/tests/e2e/rsm-service-case-real.spec.js"
+      - "scripts/rsm_service_case_ui_e2e_validate.py"
+      - ".sdd/specs/rsm-05-service-case-ui.*"
       - "backend/tests/test_change_evidence_*.py"
       - "scripts/rsm_service_case_e2e.py"
       - "scripts/rsm_change_evidence_e2e.py"
@@ -215,5 +227,160 @@ jobs:
         with:
           name: rsm-change-evidence-e2e-${{ env.RSM_EXPECTED_SHA }}
           path: artifacts/rsm/rsm-change-evidence-e2e.json
+          if-no-files-found: warn
+          retention-days: 30
+
+
+  ui-browser:
+    name: RSM-05 Browser -> API -> PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_app
+          POSTGRES_PASSWORD: rsm_ui_e2e_password
+          POSTGRES_DB: reqsys
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_app -d reqsys"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      APP_ENV: development
+      PUBLIC_ENVIRONMENT: development
+      ALLOW_DEMO_LOGIN: "true"
+      REQSYS_ROLE_BINDINGS: '{"rsm-e2e@example.com":"admin"}'
+      DATABASE_URL: postgresql+psycopg2://reqsys_app:rsm_ui_e2e_password@127.0.0.1:5432/reqsys
+      JWT_SECRET: reqsys-rsm-ui-e2e-secret-with-minimum-safe-length
+      JWT_ISSUER: reqsys-api
+      JWT_AUDIENCE: reqsys-frontend
+      RSM_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      E2E_BASE_URL: http://127.0.0.1:5173
+      RSM_UI_EVIDENCE_PATH: ../artifacts/rsm/rsm-service-case-ui-browser.json
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RSM_EXPECTED_SHA }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar backend
+        run: python -m pip install --disable-pip-version-check -r backend/requirements.txt
+
+      - name: Instalar frontend
+        working-directory: frontend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Instalar Chromium Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Iniciar API real
+        working-directory: backend
+        run: |
+          GITHUB_SHA="$RSM_EXPECTED_SHA" python -m uvicorn app.main:app --host 127.0.0.1 --port 8214 > ../rsm-ui-api.log 2>&1 &
+          echo $! > ../rsm-ui-api.pid
+
+      - name: Aguardar API e resolver serviço ativo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import time
+          import urllib.request
+          import psycopg2
+
+          for _ in range(60):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8214/health", timeout=2) as response:
+                      if response.status == 200:
+                          break
+              except Exception:
+                  time.sleep(1)
+          else:
+              raise SystemExit("API RSM UI não ficou saudável dentro do timeout")
+
+          database_url = os.environ["DATABASE_URL"].replace(
+              "postgresql+psycopg2://", "postgresql://", 1
+          )
+          with psycopg2.connect(database_url) as conn:
+              with conn.cursor() as cur:
+                  cur.execute(
+                      "SELECT servico_id FROM gestao_ti_servicos "
+                      "WHERE ativo = true ORDER BY codigo LIMIT 1"
+                  )
+                  row = cur.fetchone()
+          if row is None:
+              raise SystemExit("nenhum ServicoTI ativo para E2E da UI")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"RSM_UI_SERVICE_ID={row[0]}\n")
+          PY
+
+      - name: Iniciar frontend real
+        working-directory: frontend
+        run: |
+          VITE_BACKEND_PROXY_TARGET=http://127.0.0.1:8214 npm run dev -- --host 127.0.0.1 --port 5173 > ../rsm-ui-vite.log 2>&1 &
+          echo $! > ../rsm-ui-vite.pid
+
+      - name: Aguardar frontend
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+          for _ in range(60):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:5173/login", timeout=2) as response:
+                      if response.status == 200:
+                          raise SystemExit(0)
+              except Exception:
+                  time.sleep(1)
+          raise SystemExit("Frontend RSM UI não ficou disponível dentro do timeout")
+          PY
+
+      - name: Executar browser real
+        working-directory: frontend
+        run: >-
+          npx playwright test
+          tests/e2e/rsm-service-case-real.spec.js
+          --config=playwright.config.js
+
+      - name: Confirmar persistência por leitura PostgreSQL independente
+        run: |
+          python scripts/rsm_service_case_ui_e2e_validate.py \
+            --database-url "$DATABASE_URL" \
+            --evidence artifacts/rsm/rsm-service-case-ui-browser.json \
+            --expected-sha "$RSM_EXPECTED_SHA"
+
+      - name: Testes de componente da tela
+        working-directory: frontend
+        run: npx vitest run src/views/__tests__/ServiceCaseView.spec.js
+
+      - name: Logs em caso de falha
+        if: failure()
+        run: |
+          tail -200 rsm-ui-api.log || true
+          tail -200 rsm-ui-vite.log || true
+
+      - name: Publicar evidência browser + PostgreSQL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsm-service-case-ui-e2e-${{ env.RSM_EXPECTED_SHA }}
+          path: artifacts/rsm/rsm-service-case-ui-browser.json
           if-no-files-found: warn
           retention-days: 30

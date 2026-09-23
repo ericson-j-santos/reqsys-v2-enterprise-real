@@ -37,6 +37,7 @@ import TeamsRecipientPoliciesView from '../views/TeamsRecipientPoliciesView.vue'
 import OperationalDeployView from '../views/OperationalDeployView.vue'
 import SessionManagementView from '../views/SessionManagementView.vue'
 import OcrReviewView from '../views/OcrReviewView.vue'
+import ServiceCaseView from '../views/ServiceCaseView.vue'
 import { useAuthStore } from '../stores/auth'
 
 export const routes = [
@@ -54,6 +55,7 @@ export const routes = [
   { path: '/analytics', component: AnalyticsHubView, meta: { recurso: 'dashboard:read' } },
   { path: '/ajuda', component: UserFinalShellView, meta: { recurso: 'dashboard:read', userFinalShell: true } },
   { path: '/requisitos', component: RequisitosView, meta: { recurso: 'requisitos:write' } },
+  { path: '/service-cases/:caseId?', component: ServiceCaseView, meta: { recurso: 'requisitos:write' } },
   { path: '/requisitos/coleta', redirect: '/requisitos?acao=novo' },
   { path: '/rastreabilidade', component: RastreabilidadeView, meta: { recurso: 'rastreabilidade:read' } },
   { path: '/auditoria', component: AuditoriaView, meta: { recurso: 'auditoria:read' } },
