@@ -2,6 +2,7 @@ import base64
 import io
 import importlib.util
 import urllib.error
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
@@ -79,6 +80,114 @@ def test_script_has_fixed_dev_boundary_and_no_prod_target() -> None:
     assert "client-secret" not in text
     assert "environment=prod" not in text
     assert "environment=stg" not in text
+    assert '_invoke("DELETE"' not in text
+
+
+def test_progressive_rdl_variants_isolate_definition_layers() -> None:
+    source = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    rdl = module.report_factory.generate_rdl(source)
+    variants = module._progressive_rdl_variants(rdl)
+
+    assert [name for name, _ in variants] == [
+        "minimal",
+        "datasource",
+        "dataset",
+        "full",
+    ]
+
+    roots = {name: ET.fromstring(value) for name, value in variants}
+    q = module.report_factory._q
+
+    assert roots["minimal"].find(q("DataSources")) is None
+    assert roots["minimal"].find(q("DataSets")) is None
+    assert roots["minimal"].find(q("ReportParameters")) is None
+    assert roots["minimal"].find(q("ReportParametersLayout")) is None
+    assert roots["minimal"].find(f".//{q('Tablix')}") is None
+
+    assert roots["datasource"].find(q("DataSources")) is not None
+    assert roots["datasource"].find(q("DataSets")) is None
+    assert roots["datasource"].find(q("ReportParameters")) is None
+    assert roots["datasource"].find(f".//{q('Tablix')}") is None
+
+    assert roots["dataset"].find(q("DataSources")) is not None
+    assert roots["dataset"].find(q("DataSets")) is not None
+    assert roots["dataset"].find(q("ReportParameters")) is not None
+    assert roots["dataset"].find(q("ReportParametersLayout")) is not None
+    assert roots["dataset"].find(f".//{q('Tablix')}") is None
+
+    assert variants[-1][1] == rdl
+    assert roots["full"].find(f".//{q('Tablix')}") is not None
+
+
+def test_create_progressively_promotes_one_item_without_extra_create() -> None:
+    source = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    rdl = module.report_factory.generate_rdl(source)
+    evidence: dict[str, object] = {}
+
+    with (
+        patch.object(module, "_invoke") as invoke,
+        patch.object(
+            module,
+            "_paged_values",
+            return_value=[{"displayName": "DemandasPorStatus", "id": "report-id"}],
+        ),
+        patch.object(module, "_update_definition") as update_definition,
+    ):
+        module._create_progressively(
+            reports_url=module.FABRIC_BASE + "/workspaces/ws/paginatedReports",
+            workspace_id="ws",
+            report_name="DemandasPorStatus",
+            description="diagnostic",
+            rdl=rdl,
+            token="ephemeral-token",
+            evidence=evidence,
+        )
+
+    assert invoke.call_count == 1
+    assert update_definition.call_count == 3
+    assert evidence["progressive_bootstrap_used"] is True
+    assert evidence["progressive_last_passed_phase"] == "full"
+    assert evidence["progressive_failed_phase"] is None
+
+
+def test_create_progressively_records_exact_failed_phase() -> None:
+    source = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    rdl = module.report_factory.generate_rdl(source)
+    evidence: dict[str, object] = {}
+
+    with (
+        patch.object(module, "_invoke"),
+        patch.object(
+            module,
+            "_paged_values",
+            return_value=[{"displayName": "DemandasPorStatus", "id": "report-id"}],
+        ),
+        patch.object(
+            module,
+            "_update_definition",
+            side_effect=[None, module.E2EError("fabric_http_400:InvalidDefinitionFormat")],
+        ),
+    ):
+        with pytest.raises(module.E2EError, match="progressive_dataset"):
+            module._create_progressively(
+                reports_url=module.FABRIC_BASE + "/workspaces/ws/paginatedReports",
+                workspace_id="ws",
+                report_name="DemandasPorStatus",
+                description="diagnostic",
+                rdl=rdl,
+                token="ephemeral-token",
+                evidence=evidence,
+            )
+
+    assert evidence["progressive_last_passed_phase"] == "datasource"
+    assert evidence["progressive_failed_phase"] == "dataset"
+
 
 def test_safe_fabric_error_code_extracts_only_structured_code() -> None:
     raw = '{"errorCode":"CorruptedPayload","message":"token=should-not-leak"}'
