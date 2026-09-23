@@ -59,6 +59,31 @@ def test_restore_fails_closed_for_non_file_token_path(tmp_path: Path) -> None:
         module._read_existing_token(tmp_path)
 
 
+def test_write_new_token_creates_missing_canonical_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    token_file = tmp_path / "missing" / "nested" / "token"
+    monkeypatch.setattr(module.secrets, "token_urlsafe", lambda _size: "z" * 64)
+
+    token = module._write_new_token(token_file)
+
+    assert token == "z" * 64
+    assert token_file.is_file()
+    assert token_file.read_text(encoding="utf-8").strip() == "z" * 64
+
+
+def test_write_new_token_fails_closed_when_parent_is_unusable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    blocked_parent = tmp_path / "blocked-parent"
+    blocked_parent.write_text("not-a-directory", encoding="utf-8")
+    token_file = blocked_parent / "token"
+    monkeypatch.setattr(module.secrets, "token_urlsafe", lambda _size: "z" * 64)
+
+    with pytest.raises(module.RestoreError, match="worker_pool_token_parent_create_failed"):
+        module._write_new_token(token_file)
+
+
 def test_workflow_uses_session_launcher_and_owner_risk3_gateway() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert "workflow_dispatch:" in raw
