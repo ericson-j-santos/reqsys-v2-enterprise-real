@@ -220,9 +220,10 @@ async function main() {
   }
   const result = await resolveRemote();
   const evidence = {
-    schema_version: "1.0.0",
+    schema_version: "1.1.0",
     contract: "reqsys-pc24x7-dev-signed-locator-resolution",
     ...result,
+    api_base_url: `${result.selected_url}/api`,
     locator_transport: "ntfy_signed_ed25519",
     signature_verified: true,
     rdc_required: false,
@@ -234,6 +235,7 @@ async function main() {
   process.stdout.write(raw);
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, `base_url=${result.selected_url}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `api_base_url=${result.selected_url}/api\n`);
     appendFileSync(process.env.GITHUB_OUTPUT, `frontend_url=${result.selected_url}\n`);
   }
 }
