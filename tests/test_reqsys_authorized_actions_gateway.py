@@ -36,7 +36,6 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'" in content
     assert "github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev'" in content
     assert "github.event.comment.body == '/reqsys run desktop-rdc-recovery'" in content
-    assert "github.event.comment.body == '/reqsys run desktop-runtime-bootstrap'" in content
     assert "github.event.comment.body == '/reqsys run noteri-control-plane-probe'" in content
     assert "github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation'" in content
     assert "github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe'" in content
@@ -147,19 +146,6 @@ def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
     assert "desktop-rdc-recovery-dev" not in content
     assert "-f host=" not in content
     assert "-f task=" not in content
-
-
-def test_gateway_desktop_runtime_bootstrap_is_exact_and_fixed() -> None:
-    content = _workflow()
-
-    assert "github.event.comment.body == '/reqsys run desktop-runtime-bootstrap'" in content
-    assert "'/reqsys run desktop-runtime-bootstrap')" in content
-    assert "target='desktop-rdc-recovery.yml'" in content
-    assert "mode='runtime-bootstrap'" in content
-    assert '-f mode=runtime-bootstrap' in content
-    assert "-f repository=" not in content
-    assert "-f sha=" not in content
-    assert "-f host=" not in content
 
 
 def test_gateway_fly_dev_fast_deploy_fixa_dev_e_input_exato() -> None:

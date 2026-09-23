@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "feature_name": "Desktop RDC self-hosted recovery",
-  "status": "runtime_repo_bootstrap_bridge_pending_runtime_e2e",
+  "status": "secondary_fallback_after_watchdog",
   "approvals": {
     "requirements": true
   },
@@ -52,9 +52,7 @@
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
-      "tests/test_desktop_control_plane_watchdog.py",
-      "tests/test_bootstrap_desktop_runtime_repo.py",
-      "tests/test_verify_desktop_runtime_runner_pickup.py"
+      "tests/test_desktop_control_plane_watchdog.py"
     ],
     "evidence_contract": "External recovery remains fail-closed and exact-run-bound; unpicked self-hosted runs are cancelled and cleanup outcome is evidenced, while the autonomous local watchdog removes the circular dependency on this workflow."
   },
@@ -66,48 +64,6 @@
     "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "runner_pickup_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "exact_dispatch_run_guard": ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "runtime_bootstrap_bridge": "scripts/bootstrap_desktop_runtime_repo.py",
-    "runtime_runner_pickup_e2e": "scripts/verify_desktop_runtime_runner_pickup.py"
-  },
-  "runtime_repo_bootstrap_bridge": {
-    "command": "/reqsys run desktop-runtime-bootstrap",
-    "workflow": ".github/workflows/desktop-rdc-recovery.yml",
-    "mode": "runtime-bootstrap",
-    "target_repository": "ericson-j-santos/desktop-pc24x7-runtime",
-    "target_sha": "4f71186f3c7636ad80f8bd14c74e3fded28101ec",
-    "target_runner": "DESKTOP-PDQK954-runtime",
-    "target_labels": [
-      "self-hosted",
-      "Windows",
-      "X64",
-      "pc24x7",
-      "desktop-runtime"
-    ],
-    "target_runner_home": "%LOCALAPPDATA%\\DesktopPC24x7\\GitHubRunner",
-    "target_watchdog_runtime": "%LOCALAPPDATA%\\DesktopPC24x7\\ControlPlaneWatchdog",
-    "target_admin_broker_runtime": "%LOCALAPPDATA%\\DesktopPC24x7\\AdminBroker",
-    "governed_admin_credential": "GH_PAT_ACTIONS_in_memory_only",
-    "windows_dependency": "pywin32==312",
-    "arbitrary_inputs": false,
-    "reboot_required": false,
-    "production_touched": false
-  },
-  "acceptance": {
-    "code": [
-      "pre_pr_readiness_passed_exact_head",
-      "bootstrap_bridge_positive_and_negative_tests_green",
-      "gateway_exact_command_and_static_route_green",
-      "workflow_fixed_target_sha_and_no_arbitrary_inputs"
-    ],
-    "runtime": [
-      "dedicated_runner_registry_online_with_expected_labels",
-      "dedicated_runner_real_workflow_pickup_on_target_sha",
-      "isolated_watchdog_staged_or_activated_with_explicit_pending_state",
-      "isolated_admin_broker_staged_or_activated_with_explicit_pending_state",
-      "legacy_reqsys_runner_preserved",
-      "no_production_no_reboot_no_secret_logging"
-    ],
-    "runtime_status_until_evidence": "activation_pending"
+    "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml"
   }
 }

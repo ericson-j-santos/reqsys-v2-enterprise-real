@@ -2,15 +2,6 @@ name: Desktop RDC Recovery
 
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "Operação física allowlisted"
-        required: true
-        default: "recover-rdc"
-        type: choice
-        options:
-          - recover-rdc
-          - runtime-bootstrap
 
 permissions:
   contents: read
@@ -21,144 +12,25 @@ concurrency:
 
 jobs:
   recover:
-    name: Desktop PC24x7 governed physical operation
+    name: Recover RDC on PC24x7 Desktop
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
-      MODE: ${{ inputs.mode }}
-      CORRELATION_ID: desktop-physical-${{ github.run_id }}-${{ github.run_attempt }}
+      CORRELATION_ID: rdc-recovery-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_FILE: artifacts/desktop-rdc-recovery/evidence.json
-      RUNTIME_EVIDENCE_DIR: artifacts/desktop-runtime-bootstrap
-      TARGET_RUNTIME_REPOSITORY: ericson-j-santos/desktop-pc24x7-runtime
-      TARGET_RUNTIME_SHA: 4f71186f3c7636ad80f8bd14c74e3fded28101ec
     steps:
-      - name: Checkout immutable ReqSys workflow SHA
+      - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
-          persist-credentials: false
 
       - name: Verify exact host and recover governed RDC
-        if: inputs.mode == 'recover-rdc'
         shell: powershell
         run: python scripts/pc24x7_rdc_recovery.py --confirm RECOVER-GOVERNED-RDC --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
 
-      - name: Prepare runtime bootstrap evidence directory
-        if: inputs.mode == 'runtime-bootstrap'
-        shell: powershell
-        run: New-Item -ItemType Directory -Force -Path "$env:RUNTIME_EVIDENCE_DIR" | Out-Null
-
-      - name: Checkout immutable Desktop runtime SHA
-        id: runtime_checkout
-        if: inputs.mode == 'runtime-bootstrap'
-        uses: actions/checkout@v4
-        with:
-          repository: ericson-j-santos/desktop-pc24x7-runtime
-          ref: 4f71186f3c7636ad80f8bd14c74e3fded28101ec
-          path: _desktop_runtime
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Validate governed runner admin credential
-        if: inputs.mode == 'runtime-bootstrap'
-        shell: powershell
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
-            throw "GH_PAT_ACTIONS_NOT_CONFIGURED"
-          }
-
-      - name: Install pinned Windows task dependency
-        if: inputs.mode == 'runtime-bootstrap'
-        shell: powershell
-        run: python -m pip install --disable-pip-version-check pywin32==312
-
-      - name: Bootstrap dedicated Desktop runtime runner
-        id: bootstrap
-        if: inputs.mode == 'runtime-bootstrap'
-        continue-on-error: true
-        shell: powershell
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          python scripts/bootstrap_desktop_runtime_repo.py `
-            --confirm BOOTSTRAP-DESKTOP-PC24X7-RUNTIME `
-            --runtime-source "_desktop_runtime" `
-            --evidence-file "$env:RUNTIME_EVIDENCE_DIR/runner-bootstrap.json"
-
-      - name: Stage and activate isolated runtime watchdog
-        id: watchdog
-        if: always() && inputs.mode == 'runtime-bootstrap' && steps.bootstrap.outcome == 'success'
-        continue-on-error: true
-        shell: powershell
-        run: |
-          $runnerHome = Join-Path $env:LOCALAPPDATA "DesktopPC24x7\GitHubRunner"
-          $output = & python "_desktop_runtime/scripts/desktop_control_plane_watchdog.py" install `
-            --source-root "_desktop_runtime" `
-            --source-sha "$env:TARGET_RUNTIME_SHA" `
-            --runner-home "$runnerHome" `
-            --confirm INSTALL-DESKTOP-PC24X7-RUNTIME-WATCHDOG 2>&1
-          $output | Set-Content -Encoding utf8 "$env:RUNTIME_EVIDENCE_DIR/watchdog-install.txt"
-          if ($LASTEXITCODE -ne 0) {
-            throw "DESKTOP_RUNTIME_WATCHDOG_INSTALL_FAILED"
-          }
-
-      - name: Stage isolated runtime admin broker
-        id: admin_broker
-        if: always() && inputs.mode == 'runtime-bootstrap' && steps.runtime_checkout.outcome == 'success'
-        continue-on-error: true
-        shell: powershell
-        run: |
-          $output = & python "_desktop_runtime/scripts/desktop_admin_broker.py" install `
-            --source-root "_desktop_runtime" `
-            --source-sha "$env:TARGET_RUNTIME_SHA" `
-            --confirm INSTALL-DESKTOP-ADMIN-BROKER 2>&1
-          $output | Set-Content -Encoding utf8 "$env:RUNTIME_EVIDENCE_DIR/admin-broker-install.txt"
-          if ($LASTEXITCODE -ne 0) {
-            throw "DESKTOP_RUNTIME_ADMIN_BROKER_STAGE_FAILED"
-          }
-
-      - name: Prove pickup on dedicated Desktop runtime runner
-        id: pickup_e2e
-        if: always() && inputs.mode == 'runtime-bootstrap' && steps.bootstrap.outcome == 'success'
-        continue-on-error: true
-        shell: powershell
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
-        run: |
-          python scripts/verify_desktop_runtime_runner_pickup.py `
-            --confirm VERIFY-DESKTOP-RUNTIME-RUNNER-PICKUP `
-            --evidence-file "$env:RUNTIME_EVIDENCE_DIR/runner-pickup-e2e.json" `
-            --timeout-seconds 240
-
-      - name: Enforce runtime bootstrap aggregate result
-        if: always() && inputs.mode == 'runtime-bootstrap'
-        shell: powershell
-        env:
-          CHECKOUT_OUTCOME: ${{ steps.runtime_checkout.outcome }}
-          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
-          WATCHDOG_OUTCOME: ${{ steps.watchdog.outcome }}
-          ADMIN_BROKER_OUTCOME: ${{ steps.admin_broker.outcome }}
-          PICKUP_E2E_OUTCOME: ${{ steps.pickup_e2e.outcome }}
-        run: |
-          $failed = @()
-          if ($env:CHECKOUT_OUTCOME -ne "success") { $failed += "runtime-checkout" }
-          if ($env:BOOTSTRAP_OUTCOME -ne "success") { $failed += "bootstrap" }
-          if ($env:ADMIN_BROKER_OUTCOME -ne "success") { $failed += "admin-broker" }
-          if ($env:BOOTSTRAP_OUTCOME -eq "success" -and $env:WATCHDOG_OUTCOME -ne "success") {
-            $failed += "watchdog"
-          }
-          if ($env:BOOTSTRAP_OUTCOME -eq "success" -and $env:PICKUP_E2E_OUTCOME -ne "success") {
-            $failed += "pickup-e2e"
-          }
-          if ($failed.Count -gt 0) {
-            throw ("DESKTOP_RUNTIME_BOOTSTRAP_PARTIAL:" + ($failed -join ","))
-          }
-
-      - name: Upload sanitized RDC recovery evidence
-        if: always() && inputs.mode == 'recover-rdc'
+      - name: Upload sanitized recovery evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-rdc-recovery-${{ github.run_id }}
@@ -166,23 +38,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload sanitized runtime bootstrap evidence
-        if: always() && inputs.mode == 'runtime-bootstrap'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: desktop-runtime-bootstrap-${{ github.run_id }}
-          path: artifacts/desktop-runtime-bootstrap
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Summary
         if: always()
         shell: powershell
         run: |
-          "## Desktop PC24x7 governed physical operation" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Modo: $env:MODE" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "## Desktop RDC Recovery" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Runtime alvo: $env:TARGET_RUNTIME_REPOSITORY@$env:TARGET_RUNTIME_SHA" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Reboot: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
