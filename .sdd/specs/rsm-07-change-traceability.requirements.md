@@ -34,6 +34,6 @@ O ciclo de evidência não executa merge, deploy, promoção ou rollback. Ele re
 5. Evidência `ROLLED_BACK` só é válida com rollback completo e SHA de runtime pós-rollback diferente do SHA revertido.
 6. Replay do mesmo `event_id` converge sem duplicar evidência nem evento.
 7. `REQUEST`, `INCIDENT` e `PROBLEM` não aceitam o contrato de evidência de CHANGE.
-8. E2E executa API HTTP real + PostgreSQL real, confirma `build_sha == expected_sha`, prova o bloqueio sem evidência, registra evidência válida, fecha o CHANGE e confirma o efeito por leitura SQL independente.
+8. E2E executa API HTTP real + PostgreSQL real, confirma `build_sha == expected_sha`, prova o bloqueio sem evidência, registra evidência `PASSED`, fecha o CHANGE e confirma o efeito por leitura SQL independente; em um segundo CHANGE, persiste `FAILED`, comprova que o fechamento continua bloqueado, registra `ROLLED_BACK` completo, repete o mesmo `event_id` sem duplicação e somente então confirma `CLOSED` por leitura SQL independente.
 9. Controle negativo com runtime SHA divergente falha e não deixa efeito persistido.
 10. Nenhuma ação de produção é executada por este incremento.
