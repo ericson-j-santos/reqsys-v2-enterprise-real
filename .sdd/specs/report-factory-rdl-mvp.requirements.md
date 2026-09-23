@@ -64,3 +64,5 @@ Increment type: `gap_fix`
 - exportação PDF/XLSX como evidência de runtime;
 - criação automática de workspace/capacity;
 - armazenamento de segredos.
+
+28. O RDL 2016 destinado ao Fabric DEV deve emitir o cabeçalho compatível com a definição pública oficial do Fabric: `MustUnderstand=df`, `rd:ReportUnitType=Inch`, `rd:ReportID` UUID determinístico, `df:DefaultFontFamily=Segoe UI` e `AutoRefresh=0`; quando houver parâmetros, `ReportParametersLayout` deve permanecer após `ReportSections` no XML gerado.

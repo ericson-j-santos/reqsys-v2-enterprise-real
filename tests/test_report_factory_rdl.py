@@ -4,6 +4,7 @@ import base64
 import copy
 import importlib.util
 import json
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -99,3 +100,34 @@ def test_validate_rdl_rejects_parameter_layout_missing() -> None:
     with pytest.raises(report_factory.ReportSpecError, match="ReportParametersLayout"):
         report_factory.validate_rdl(invalid_rdl, source)
 
+
+
+def test_fabric_rdl_2016_header_is_emitted_and_deterministic() -> None:
+    source = load_example()
+    first = report_factory.generate_rdl(source)
+    second = report_factory.generate_rdl(source)
+    assert first == second
+
+    root = ET.fromstring(first)
+    assert root.attrib.get("MustUnderstand") == "df"
+    assert root.findtext(report_factory._rd("ReportUnitType")) == "Inch"
+    report_id = root.findtext(report_factory._rd("ReportID"))
+    assert report_id is not None
+    assert str(uuid.UUID(report_id)) == report_id
+    assert root.findtext(report_factory._df("DefaultFontFamily")) == "Segoe UI"
+    assert root.findtext(report_factory._q("AutoRefresh")) == "0"
+
+    children = list(root)
+    section_index = next(i for i, node in enumerate(children) if node.tag == report_factory._q("ReportSections"))
+    layout_index = next(i for i, node in enumerate(children) if node.tag == report_factory._q("ReportParametersLayout"))
+    assert layout_index > section_index
+
+
+def test_validate_rdl_rejects_missing_fabric_header() -> None:
+    source = load_example()
+    root = ET.fromstring(report_factory.generate_rdl(source))
+    root.attrib.pop("MustUnderstand", None)
+    invalid_rdl = ET.tostring(root, encoding="unicode")
+
+    with pytest.raises(report_factory.ReportSpecError, match="MustUnderstand"):
+        report_factory.validate_rdl(invalid_rdl, source)
