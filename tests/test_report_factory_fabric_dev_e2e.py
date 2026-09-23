@@ -1,6 +1,7 @@
 import base64
 import io
 import importlib.util
+import json
 import urllib.error
 from pathlib import Path
 from unittest.mock import patch
@@ -80,11 +81,39 @@ def test_script_has_fixed_dev_boundary_and_no_prod_target() -> None:
     assert "environment=prod" not in text
     assert "environment=stg" not in text
 
-def test_safe_fabric_error_code_extracts_only_structured_code() -> None:
-    raw = '{"errorCode":"CorruptedPayload","message":"token=should-not-leak"}'
-    assert module._safe_fabric_error_code(raw) == "CorruptedPayload"
-    assert module._safe_fabric_error_code('{"error":{"code":"InvalidItem","message":"sensitive"}}') == "InvalidItem"
-    assert module._safe_fabric_error_code('{"message":"no structured code"}') == "unknown"
+def test_safe_fabric_error_signature_extracts_only_structured_codes() -> None:
+    raw = (
+        '{"errorCode":"InvalidDefinitionFormat",'
+        '"message":"token=should-not-leak",'
+        '"requestId":"request-sensitive",'
+        '"moreDetails":['
+        '{"errorCode":"InvalidRdl","message":"secret-message"},'
+        '{"errorCode":"Invalid.Element","parameters":[{"value":"sensitive"}]},'
+        '{"errorCode":"InvalidRdl","relatedResource":{"resourceId":"hidden"}}'
+        ']}'
+    )
+    signature = module._safe_fabric_error_signature(raw)
+    assert signature == "InvalidDefinitionFormat:InvalidRdl,Invalid.Element"
+    for sensitive in ("should-not-leak", "request-sensitive", "secret-message", "sensitive", "hidden"):
+        assert sensitive not in signature
+
+    assert module._safe_fabric_error_signature(
+        '{"error":{"code":"InvalidItem","message":"sensitive"}}'
+    ) == "InvalidItem"
+    assert module._safe_fabric_error_signature('{"message":"no structured code"}') == "unknown"
+
+
+def test_safe_fabric_error_signature_limits_and_sanitizes_detail_codes() -> None:
+    raw = json.dumps({
+        "errorCode": "Root Code!",
+        "moreDetails": [
+            {"errorCode": f"detail {index}!?"}
+            for index in range(8)
+        ],
+    })
+    assert module._safe_fabric_error_signature(raw) == (
+        "Root_Code:detail_0,detail_1,detail_2,detail_3,detail_4"
+    )
 
 
 def test_request_json_http_error_exposes_code_not_body() -> None:

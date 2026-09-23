@@ -36,6 +36,7 @@ Increment type: `gap_fix`
 25. O fluxo não pode persistir token, criar segredo, aceitar STG/PROD nem declarar sucesso sem leitura independente da definição.
 26. Quando houver `ReportParameters`, o RDL 2016 deve incluir `ReportParametersLayout` com `GridLayoutDefinition` e uma `CellDefinition` única para cada parâmetro, evitando payload estruturalmente inválido no Fabric.
 27. Falhas HTTP do Fabric devem registrar somente o status HTTP e o código estruturado sanitizado (`errorCode`/`code`), nunca corpo bruto, mensagem, token ou identificadores sensíveis.
+28. Quando o Fabric retornar `moreDetails`, a evidência pode registrar somente até cinco `moreDetails[].errorCode` distintos e sanitizados; mensagens, parâmetros, `requestId` e recursos relacionados permanecem proibidos na evidência.
 
 ## Critérios de aceite
 
@@ -55,6 +56,7 @@ Increment type: `gap_fix`
 - o SHA-256 observado via `getDefinition` deve ser igual ao SHA-256 do RDL gerado na mesma execução.
 - RDL parametrizado deve ser rejeitado localmente quando `ReportParametersLayout` estiver ausente ou não mapear exatamente os parâmetros declarados.
 - erro HTTP do Fabric deve produzir evidência acionável como `fabric_http_400:<codigo>` sem incluir a mensagem bruta do serviço.
+- quando existirem códigos adicionais seguros, a razão deve preservá-los de forma limitada como `fabric_http_400:<codigo>:<detalhe1>,<detalhe2>` sem persistir campos sensíveis.
 
 ## Fora do escopo deste MVP
 
