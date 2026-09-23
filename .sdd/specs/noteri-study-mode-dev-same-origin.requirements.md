@@ -73,8 +73,10 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
     evidência de falha deve capturar, antes do rollback e sem texto bruto:
     alcance TCP de `127.0.0.1:8083`, status HTTP de `/api/health`, status do
     upstream `nginx -> api:8000/health` e presença das rotas críticas na
-    configuração ativa do Nginx. A falha original permanece canônica e o
-    diagnóstico adicional não pode mascará-la.
+    configuração ativa do Nginx. O diagnóstico deve preservar também o path
+    allowlisted que expirou e o último status HTTP inteiro/nulo observado por
+    essa espera. A falha original permanece canônica e o diagnóstico adicional
+    não pode mascará-la.
 
 17. Alterações no contrato de runtime que podem invalidar o fluxo — API de perfil,
     API de monitoramento/runtime health, registro de routers, Compose DEV e
