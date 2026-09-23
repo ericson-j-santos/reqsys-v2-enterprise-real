@@ -50,6 +50,7 @@ class ReconcileError(RuntimeError):
         stage: str | None = None,
         diagnostic_code: str | None = None,
         diagnostic_markers: tuple[str, ...] | None = None,
+        diagnostic_details: dict[str, Any] | None = None,
     ) -> None:
         parts = code.split(":")
         self.code = (
@@ -60,6 +61,7 @@ class ReconcileError(RuntimeError):
         self.stage = stage
         self.diagnostic_code = diagnostic_code
         self.diagnostic_markers = diagnostic_markers or ()
+        self.diagnostic_details = dict(diagnostic_details or {})
         super().__init__(code)
 
 
@@ -666,7 +668,43 @@ def wait_gateway_status(
         "gateway_status_timeout",
         stage="live_bind_refresh",
         diagnostic_markers=(marker,),
+        diagnostic_details={
+            "gateway_path": path,
+            "gateway_last_http_status": last_status,
+        },
     )
+
+
+def tcp_port_open(host: str, port: int, *, timeout_seconds: float = 2.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds):
+            return True
+    except OSError:
+        return False
+
+
+def nginx_upstream_api_health_ok(container: str, repo_root: Path) -> bool:
+    completed = subprocess.run(
+        [
+            "docker",
+            "exec",
+            container,
+            "wget",
+            "-qO-",
+            "-T",
+            "5",
+            "http://api:8000/health",
+        ],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+        check=False,
+        shell=False,
+    )
+    return completed.returncode == 0
 
 
 def wait_container_healthy(
@@ -988,9 +1026,27 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         direct_api_contract = wait_direct_api_contract()
         nginx_active_contract = refresh_nginx(nginx_container, repo_root)
 
-        wait_gateway_status("/api/health", {200})
-        wait_gateway_status("/api/runtime/health", {200})
-        wait_gateway_status("/api/v1/noteri/profile", {401})
+        try:
+            wait_gateway_status("/api/health", {200})
+            wait_gateway_status("/api/runtime/health", {200})
+            wait_gateway_status("/api/v1/noteri/profile", {401})
+        except ReconcileError as exc:
+            if exc.code == "gateway_status_timeout":
+                exc.diagnostic_details.update(
+                    {
+                        "gateway_tcp_8083_open": tcp_port_open(
+                            "127.0.0.1",
+                            int(DEV_GATEWAY_PORT),
+                        ),
+                        "nginx_upstream_api_health_ok": nginx_upstream_api_health_ok(
+                            nginx_container,
+                            repo_root,
+                        ),
+                        "nginx_active_contract": dict(nginx_active_contract),
+                        "direct_api_contract": dict(direct_api_contract),
+                    }
+                )
+            raise
 
         _, public_health = http_json("GET", "/api/health")
         _, runtime_health = http_json("GET", "/api/runtime/health")
@@ -1107,6 +1163,11 @@ def main() -> int:
                 list(exc.diagnostic_markers)
                 if isinstance(exc, ReconcileError)
                 else []
+            ),
+            "diagnostic_details": (
+                dict(exc.diagnostic_details)
+                if isinstance(exc, ReconcileError)
+                else {}
             ),
             "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
             "expected_sha": args.expected_sha,
