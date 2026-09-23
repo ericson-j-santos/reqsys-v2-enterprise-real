@@ -212,6 +212,10 @@ def read_token(path: Path | None) -> str:
         raise BridgeError("worker_pool_token_file_not_configured")
     try:
         token = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError as exc:
+        raise BridgeError("worker_pool_token_file_missing") from exc
+    except PermissionError as exc:
+        raise BridgeError("worker_pool_token_permission_denied") from exc
     except OSError as exc:
         raise BridgeError("worker_pool_token_unavailable") from exc
     if not token:
