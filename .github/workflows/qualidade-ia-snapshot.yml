@@ -25,13 +25,45 @@ jobs:
           - ambiente: hml
             api_url: https://reqsys-api-stg.fly.dev
           - ambiente: dev
-            api_url: https://reqsys-api-dev.fly.dev
+            api_url: ""
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node para DEV
+        if: ${{ matrix.ambiente == 'dev' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolver locator PC24x7 DEV
+        if: ${{ matrix.ambiente == 'dev' }}
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p artifacts/qualidade-ia-snapshot
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/qualidade-ia-snapshot/dev-signed-locator.json >/dev/null
+
+      - name: Resolver API do ambiente
+        id: runtime
+        shell: bash
+        env:
+          STATIC_API_URL: ${{ matrix.api_url }}
+          DEV_API_URL: ${{ steps.locator.outputs.api_base_url }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.ambiente }}" = "dev" ]; then
+            test -n "$DEV_API_URL"
+            echo "api_url=$DEV_API_URL" >> "$GITHUB_OUTPUT"
+          else
+            test -n "$STATIC_API_URL"
+            echo "api_url=$STATIC_API_URL" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Registrar snapshot em ${{ matrix.ambiente }}
         env:
           AMBIENTE: ${{ matrix.ambiente }}
-          API_URL: ${{ matrix.api_url }}
+          API_URL: ${{ steps.runtime.outputs.api_url }}
         run: python3 scripts/registrar_qualidade_ia_snapshot_ci.py
