@@ -20,6 +20,11 @@ def test_smoke_workflow_is_fixed_to_pc24x7_dev_and_sha_bound() -> None:
     assert 'DESKTOP-PDQK954' in raw
     assert '--expected-sha "${{ github.sha }}"' in raw
     assert '--correlation-id "$env:CORRELATION_ID"' in raw
+    assert "Reconciliar runtime DEV do Worker Pool" in raw
+    assert "scripts/pc24x7_worker_pool_reconcile.py" in raw
+    assert "RECONCILE-CODEX-WORKER-POOL-DEV" in raw
+    assert "WORKER_POOL_RUNTIME_RECONCILED" in raw
+    assert "Runtime DEV: reconciliado antes do smoke" in raw
     assert "Lane sintética: desabilitada" in raw
     assert "Produção tocada: não" in raw
     assert "Deploy executado: não" in raw

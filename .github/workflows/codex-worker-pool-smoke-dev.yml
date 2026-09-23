@@ -19,6 +19,7 @@ jobs:
       CODEX_WORKER_POOL_URL: http://127.0.0.1:8097
       CORRELATION_ID: codex-worker-pool-smoke-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_FILE: artifacts/codex-worker-pool-smoke-dev/evidence.json
+      RUNTIME_EVIDENCE_FILE: artifacts/pc24x7-worker-pool-reconcile/evidence.json
 
     steps:
       - name: Checkout SHA imutável
@@ -33,6 +34,26 @@ jobs:
           if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
             throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
           }
+
+      - name: Reconciliar runtime DEV do Worker Pool
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          python scripts/pc24x7_worker_pool_reconcile.py `
+            --confirm RECONCILE-CODEX-WORKER-POOL-DEV `
+            --repo-root "$env:GITHUB_WORKSPACE" `
+            --evidence-file "$env:RUNTIME_EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validar reconciliação do runtime
+        shell: powershell
+        run: |
+          $runtime = Get-Content -Raw "$env:RUNTIME_EVIDENCE_FILE" | ConvertFrom-Json
+          if ($runtime.result -ne "WORKER_POOL_RUNTIME_RECONCILED") { throw "Runtime não reconciliado." }
+          if ($runtime.endpoint_container_unique -ne $true) { throw "Endpoint canônico não é único." }
+          if ($runtime.token_content_read -ne $false) { throw "Contrato de segredo violado." }
+          if ($runtime.production_touched -ne $false) { throw "Produção não pode ser tocada." }
+          if ($runtime.runtime_reconciled -ne $true) { throw "Reconciliação sem evidência funcional." }
 
       - name: Executar smoke governado do Worker Pool
         shell: powershell
@@ -62,7 +83,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: codex-worker-pool-smoke-dev-${{ github.run_id }}
-          path: artifacts/codex-worker-pool-smoke-dev/evidence.json
+          path: |
+            artifacts/codex-worker-pool-smoke-dev/evidence.json
+            artifacts/pc24x7-worker-pool-reconcile/evidence.json
           if-no-files-found: error
           retention-days: 30
 
@@ -72,6 +95,7 @@ jobs:
         run: |
           "## Codex Worker Pool Smoke DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Runtime DEV: reconciliado antes do smoke" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Lane sintética: desabilitada" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Replay idempotente: obrigatório" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
