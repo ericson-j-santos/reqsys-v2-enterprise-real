@@ -30,6 +30,7 @@ def test_workflow_is_dev_only_and_does_not_execute_e2e_in_pr() -> None:
     assert 'resolve_pc24x7_dev_locator.mjs --self-test' in text
     assert '--output artifacts/pc24x7-teams-ephemeral-e2e/signed-locator.json' in text
     assert 'steps.locator.outputs.base_url' in text
+    assert 'steps.locator.outputs.api_base_url' in text
     assert '/api/runtime/build-info' in text
     assert 'pc24x7_runtime_sha_mismatch' in text
     assert 'EXPECTED_SHA: ${{ github.sha }}' in text
