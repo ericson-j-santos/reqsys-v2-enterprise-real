@@ -26,6 +26,7 @@ jobs:
         github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
         github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
         github.event.comment.body == '/reqsys run desktop-rdc-recovery' ||
+        github.event.comment.body == '/reqsys run desktop-runtime-bootstrap' ||
         github.event.comment.body == '/reqsys run noteri-control-plane-probe' ||
         github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation' ||
         github.event.comment.body == '/reqsys run figma-github-e2e-dev' ||
@@ -75,6 +76,10 @@ jobs:
               ;;
             '/reqsys run desktop-rdc-recovery')
               target='desktop-rdc-recovery.yml'
+              ;;
+            '/reqsys run desktop-runtime-bootstrap')
+              target='desktop-rdc-recovery.yml'
+              mode='runtime-bootstrap'
               ;;
             '/reqsys run noteri-control-plane-probe')
               target='noteri-control-plane-probe.yml'
@@ -169,6 +174,11 @@ jobs:
               --ref main \
               -f environment=dev \
               -f timeout_seconds=20)"
+          elif [ "$TARGET_WORKFLOW" = "desktop-rdc-recovery.yml" ] && [ "$TARGET_MODE" = "runtime-bootstrap" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=runtime-bootstrap)"
           elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "restore" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \

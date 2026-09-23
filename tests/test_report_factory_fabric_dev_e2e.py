@@ -114,8 +114,8 @@ def test_progressive_rdl_variants_isolate_definition_layers() -> None:
 
     minimal_title = roots["minimal"].find(f".//{q('Textbox')}[@Name='ReportTitle']")
     assert minimal_title is not None
-    assert minimal_title.findtext(module.report_factory._rd("WatermarkTextbox")) == "Title"
-    assert minimal_title.findtext(module.report_factory._rd("DefaultName")) == "ReportTitle"
+    assert minimal_title.findtext(module.report_factory.rd("WatermarkTextbox")) == "Title"
+    assert minimal_title.findtext(module.report_factory.rd("DefaultName")) == "ReportTitle"
     assert minimal_title.findtext(q("KeepTogether")) == "true"
     assert roots["minimal"].find(f".//{q('PageFooter')}") is not None
 
