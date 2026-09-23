@@ -202,3 +202,18 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 ### Critério adicional — duração de rerun
 
 - Um rerun com `created_at=15:00`, `run_started_at=15:30` e `updated_at=15:31` contribui exatamente 1 minuto à métrica observada.
+
+
+## Incremento Pareto — deduplicação do Governed Merge Queue
+
+58. Como líder do Pareto observado, o `Governed Merge Queue` não deve reinstalar dependências frontend nem repetir lint/typecheck já executados pelos workflows canônicos obrigatórios no mesmo HEAD.
+59. A delegação de validação frontend só é válida enquanto `CI — ReqSys v2 Enterprise` e `CI Enterprise Fast` permanecerem em `current-sha-required-workflows.json` e `current-sha-stability` continuar dependência obrigatória de `merge-queue-gate`.
+60. A consolidação não pode relaxar contrato SDD, integração temporária, estabilidade do SHA, mergeabilidade, label de elegibilidade nem proteção do HEAD antes do merge.
+
+### Critérios de aceite — deduplicação do Merge Queue
+
+- `Governed Merge Queue` não contém `actions/setup-node`, `npm ci`, `npm run lint` ou `npm run typecheck`.
+- Os dois workflows canônicos de CI frontend permanecem obrigatórios no SHA atual.
+- `merge-queue-gate` continua dependendo de `current-sha-stability` e falha fechado quando um workflow obrigatório estiver ausente, incompleto ou não verde.
+- Nenhum workflow novo é criado; produção, deploy, secrets, branch protection e permissões administrativas permanecem intocados.
+- Após integração, uma nova medição do `CI Lead Time Analytics` deve comparar o tempo do `Governed Merge Queue` e os minutos totais por PR contra o baseline de 158,37 minutos observado no incremento anterior.
