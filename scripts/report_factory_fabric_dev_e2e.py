@@ -401,6 +401,17 @@ def _remove_root_child(root: ET.Element, local_name: str) -> None:
         root.remove(node)
 
 
+def _add_empty_parameter_layout(root: ET.Element) -> None:
+    """Adiciona o layout vazio usado pelo exemplo público atual do Fabric."""
+    _remove_root_child(root, "ReportParametersLayout")
+    layout = ET.SubElement(root, report_factory._q("ReportParametersLayout"))
+    grid = ET.SubElement(layout, report_factory._q("GridLayoutDefinition"))
+    columns = ET.SubElement(grid, report_factory._q("NumberOfColumns"))
+    columns.text = "1"
+    rows = ET.SubElement(grid, report_factory._q("NumberOfRows"))
+    rows.text = "1"
+
+
 def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
     """Reduz o RDL em camadas para localizar rejeições do Fabric sem criar itens extras."""
     try:
@@ -412,14 +423,16 @@ def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
         return ET.fromstring(rdl)
 
     minimal = parsed()
-    for tag in ("DataSources", "DataSets", "ReportParameters", "ReportParametersLayout"):
+    for tag in ("DataSources", "DataSets", "ReportParameters"):
         _remove_root_child(minimal, tag)
     _remove_report_item_type(minimal, "Tablix")
+    _add_empty_parameter_layout(minimal)
 
     datasource = parsed()
-    for tag in ("DataSets", "ReportParameters", "ReportParametersLayout"):
+    for tag in ("DataSets", "ReportParameters"):
         _remove_root_child(datasource, tag)
     _remove_report_item_type(datasource, "Tablix")
+    _add_empty_parameter_layout(datasource)
 
     dataset = parsed()
     _remove_report_item_type(dataset, "Tablix")
