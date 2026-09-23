@@ -48,6 +48,7 @@ class ReconcileError(RuntimeError):
         *,
         stage: str | None = None,
         diagnostic_code: str | None = None,
+        diagnostic_markers: tuple[str, ...] | None = None,
     ) -> None:
         parts = code.split(":")
         self.code = (
@@ -57,7 +58,35 @@ class ReconcileError(RuntimeError):
         )
         self.stage = stage
         self.diagnostic_code = diagnostic_code
+        self.diagnostic_markers = diagnostic_markers or ()
         super().__init__(code)
+
+
+
+def safe_command_failure_markers(stderr: str, *, stage: str) -> tuple[str, ...]:
+    if stage != "compose_config":
+        return ()
+
+    value = (stderr or "").casefold()
+    marker_patterns = (
+        ("windows_file_missing", ("the system cannot find the file specified",)),
+        ("windows_path_missing", ("the system cannot find the path specified",)),
+        ("dotenv_reference", (".env", "env file")),
+        ("dotenv_parse", ("unexpected character", "variable name")),
+        ("project_name", ("project name",)),
+        ("build_context", ("build context", "unable to prepare context")),
+        ("createfile", ("createfile",)),
+        ("schema_mapping", ("must be a mapping", "top-level object must be a mapping")),
+        ("yaml_parse", ("did not find expected", "mapping values are not allowed", "yaml:")),
+        ("mount", ("mount", "volume")),
+        ("duplicate", ("duplicate", "already declared")),
+        ("not_found", ("not found", "does not exist", "cannot find")),
+    )
+    return tuple(
+        name
+        for name, patterns in marker_patterns
+        if any(pattern in value for pattern in patterns)
+    )
 
 
 def classify_command_failure(stderr: str, *, stage: str) -> str | None:
@@ -77,17 +106,49 @@ def classify_command_failure(stderr: str, *, stage: str) -> str | None:
         "not found" in value or "no such file" in value or "cannot find" in value
     ):
         return "compose_env_file_missing"
+    if "unexpected character" in value and "variable name" in value:
+        return "compose_dotenv_parse_invalid"
     if "no configuration file provided" in value:
         return "compose_config_file_missing"
     if "neither an image nor a build context specified" in value:
         return "compose_service_definition_incomplete"
+    if (
+        ("build context" in value or "unable to prepare context" in value)
+        and (
+            "not found" in value
+            or "does not exist" in value
+            or "the system cannot find" in value
+        )
+    ):
+        return "compose_build_context_invalid"
     if "invalid interpolation format" in value:
         return "compose_interpolation_invalid"
     if "is not set" in value and "required" in value:
         return "compose_required_environment_missing"
-    if "additional property" in value and "not allowed" in value:
+    if (
+        ("additional property" in value and "not allowed" in value)
+        or "must be a mapping" in value
+        or "top-level object must be a mapping" in value
+    ):
         return "compose_schema_invalid"
-    if "no such file or directory" in value or "failed to read" in value:
+    if (
+        "did not find expected" in value
+        or "mapping values are not allowed" in value
+        or "yaml:" in value
+    ):
+        return "compose_yaml_invalid"
+    if "project name" in value and (
+        "invalid" in value or "must contain" in value or "must start" in value
+    ):
+        return "compose_project_name_invalid"
+    if "duplicate mount point" in value:
+        return "compose_mount_conflict"
+    if (
+        "the system cannot find the file specified" in value
+        or "the system cannot find the path specified" in value
+        or "no such file or directory" in value
+        or "failed to read" in value
+    ):
         return "compose_file_read_failed"
     return "compose_config_failed_unclassified"
 
@@ -117,6 +178,10 @@ def run(
             f"command_failed:{Path(args[0]).name}:exit_{completed.returncode}",
             stage=stage,
             diagnostic_code=classify_command_failure(
+                completed.stderr or "",
+                stage=stage,
+            ),
+            diagnostic_markers=safe_command_failure_markers(
                 completed.stderr or "",
                 stage=stage,
             ),
@@ -857,6 +922,11 @@ def main() -> int:
                 exc.diagnostic_code
                 if isinstance(exc, ReconcileError) and exc.diagnostic_code
                 else None
+            ),
+            "diagnostic_markers": (
+                list(exc.diagnostic_markers)
+                if isinstance(exc, ReconcileError)
+                else []
             ),
             "correlation_id": f"study-mode-reconcile-{args.expected_sha[:12]}",
             "expected_sha": args.expected_sha,

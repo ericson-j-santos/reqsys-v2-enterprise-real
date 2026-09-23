@@ -103,6 +103,7 @@ def test_reconcile_failure_is_sanitized_and_stage_aware():
     assert '"error_code"' in raw
     assert '"failure_stage"' in raw
     assert '"diagnostic_code"' in raw
+    assert '"diagnostic_markers"' in raw
     assert 'str(exc)' not in raw
 
 
@@ -122,6 +123,45 @@ def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
     for stderr, expected in cases.items():
         assert module.classify_command_failure(stderr, stage="compose_config") == expected
     assert module.classify_command_failure("permission denied", stage="api_recreate") is None
+
+    assert module.classify_command_failure(
+        'unexpected character "x" in variable name',
+        stage="compose_config",
+    ) == "compose_dotenv_parse_invalid"
+    assert module.classify_command_failure(
+        "unable to prepare context: build context does not exist",
+        stage="compose_config",
+    ) == "compose_build_context_invalid"
+    assert module.classify_command_failure(
+        "services must be a mapping",
+        stage="compose_config",
+    ) == "compose_schema_invalid"
+    assert module.classify_command_failure(
+        "yaml: mapping values are not allowed",
+        stage="compose_config",
+    ) == "compose_yaml_invalid"
+    assert module.classify_command_failure(
+        "project name must contain only lowercase letters",
+        stage="compose_config",
+    ) == "compose_project_name_invalid"
+    assert module.classify_command_failure(
+        "duplicate mount point /app",
+        stage="compose_config",
+    ) == "compose_mount_conflict"
+    assert module.classify_command_failure(
+        "CreateFile compose.yml: The system cannot find the file specified",
+        stage="compose_config",
+    ) == "compose_file_read_failed"
+
+    markers = module.safe_command_failure_markers(
+        "CreateFile compose.yml: The system cannot find the file specified",
+        stage="compose_config",
+    )
+    assert markers == ("windows_file_missing", "createfile", "not_found")
+    assert module.safe_command_failure_markers(
+        "permission denied",
+        stage="api_recreate",
+    ) == ()
 
 
 def test_reconciler_rebuilds_frontend_when_runtime_bind_is_absent():
