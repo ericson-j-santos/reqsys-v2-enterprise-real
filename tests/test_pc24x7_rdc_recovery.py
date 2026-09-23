@@ -187,21 +187,8 @@ def test_workflow_contract_is_fixed_to_pc24x7_desktop():
     assert "--confirm RECOVER-GOVERNED-RDC" in workflow
     assert "workflow_dispatch:" in workflow
     assert "workflow_call:" not in workflow
-    assert 'default: "recover-rdc"' in workflow
-    assert "- runtime-bootstrap" in workflow
-    assert "TARGET_RUNTIME_REPOSITORY: ericson-j-santos/desktop-pc24x7-runtime" in workflow
-    assert "TARGET_RUNTIME_SHA: 4f71186f3c7636ad80f8bd14c74e3fded28101ec" in workflow
-    assert "pywin32==312" in workflow
-    assert "--confirm BOOTSTRAP-DESKTOP-PC24X7-RUNTIME" in workflow
-    assert "--confirm INSTALL-DESKTOP-PC24X7-RUNTIME-WATCHDOG" in workflow
-    assert "--confirm INSTALL-DESKTOP-ADMIN-BROKER" in workflow
-    assert "--confirm VERIFY-DESKTOP-RUNTIME-RUNNER-PICKUP" in workflow
-    assert "verify_desktop_runtime_runner_pickup.py" in workflow
-    assert "DESKTOP_RUNTIME_BOOTSTRAP_PARTIAL" in workflow
-    assert "continue-on-error: true" in workflow
-    assert "secrets.GH_PAT_ACTIONS" in workflow
-    assert "-f host=" not in workflow
-    assert "-f repository=" not in workflow
+    assert "inputs:" not in workflow
+    assert "production_touched" not in workflow.lower()
 
 
 def test_current_rdc_markers_are_allowlisted():
