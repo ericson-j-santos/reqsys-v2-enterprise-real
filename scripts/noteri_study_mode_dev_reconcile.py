@@ -331,11 +331,39 @@ def container_host_port(item: dict[str, Any], port: str) -> str | None:
     return value or None
 
 
+def compose_environment_files(
+    api_item: dict[str, Any],
+    working_dir: Path,
+) -> list[Path]:
+    raw = str(
+        labels(api_item).get("com.docker.compose.project.environment_file") or ""
+    ).strip()
+    if not raw:
+        return []
+
+    files: list[Path] = []
+    for value in raw.split(","):
+        value = value.strip()
+        if not value:
+            continue
+        candidate = windows_path(value)
+        if not candidate.is_absolute():
+            candidate = working_dir / candidate
+        candidate = candidate.resolve()
+        if not candidate.is_file():
+            raise ReconcileError(
+                "compose_environment_file_missing",
+                stage="compose_context",
+            )
+        files.append(candidate)
+    return files
+
+
 def compose_context(
     api_item: dict[str, Any],
     repo_root: Path,
     expected_project: str,
-) -> tuple[Path, list[Path]]:
+) -> tuple[Path, list[Path], list[Path]]:
     info = labels(api_item)
     project = info.get("com.docker.compose.project")
     if project != expected_project:
@@ -373,10 +401,16 @@ def compose_context(
 
     normalized = [path.resolve() for path in files if path.resolve() != stable_override.resolve()]
     normalized.append(stable_override.resolve())
-    return working_dir, normalized
+    environment_files = compose_environment_files(api_item, working_dir)
+    return working_dir, normalized, environment_files
 
 
-def compose_base(project: str, files: list[Path], working_dir: Path) -> list[str]:
+def compose_base(
+    project: str,
+    files: list[Path],
+    working_dir: Path,
+    environment_files: list[Path] | None = None,
+) -> list[str]:
     args = [
         "docker",
         "compose",
@@ -385,6 +419,8 @@ def compose_base(project: str, files: list[Path], working_dir: Path) -> list[str
         "-p",
         project,
     ]
+    for path in environment_files or []:
+        args.extend(["--env-file", str(path)])
     for path in files:
         args.extend(["-f", str(path)])
     return args
@@ -719,7 +755,11 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "/app",
         stage="api_source_bind",
     )
-    working_dir, compose_files = compose_context(api_before, repo_root, project)
+    working_dir, compose_files, compose_environment_files = compose_context(
+        api_before,
+        repo_root,
+        project,
+    )
 
     frontend_bind_source = rw_bind_source(frontend_before, "/app")
     frontend_requires_rebuild = frontend_bind_source is None
@@ -746,7 +786,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     if gateway_port:
         compose_env["GATEWAY_PORT"] = gateway_port
 
-    base = compose_base(project, compose_files, working_dir)
+    base = compose_base(
+        project,
+        compose_files,
+        working_dir,
+        compose_environment_files,
+    )
     try:
         run(
             [*base, "config"],
@@ -819,7 +864,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         rollback_files(changes)
         try:
             original_files = [path for path in compose_files if "StudyModeDeploy" not in str(path)]
-            original_base = compose_base(project, original_files, working_dir)
+            original_base = compose_base(
+                project,
+                original_files,
+                working_dir,
+                compose_environment_files,
+            )
             run(
                 [*original_base, "up", "-d", "--no-deps", "--force-recreate", "api"],
                 cwd=working_dir,
@@ -864,6 +914,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "frontend_container": frontend_container,
         "gateway_container": nginx_container,
         "runtime_discovery": "api_port_8210_compose_labels",
+        "compose_environment_files_preserved": bool(compose_environment_files),
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": not frontend_requires_rebuild,
         "frontend_runtime_refresh": (
