@@ -501,7 +501,7 @@ def test_runtime_migration_e2e_is_branch_scoped_exact_sha_and_sanitized() -> Non
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "ops/noteri-runtime-migration-e2e-20260923" in workflow
     assert "ericson-j-santos/noteri-runtime" in workflow
-    assert "07e6108974e87c0f5f71587e4ad4ab0cdf05188c" in workflow
+    assert "cc06e6530ca57058db22651ac75d623f6ec921c1" in workflow
     assert "noteri_runtime_isolated_e2e.py" in workflow
     assert "Validate independent evidence contract" in workflow
     assert "idempotency_missing" in workflow
