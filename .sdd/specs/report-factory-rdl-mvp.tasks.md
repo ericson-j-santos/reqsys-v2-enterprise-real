@@ -43,4 +43,6 @@
 - [x] Reexecutar E2E após a PR #2005: run `35879286946` em `main@8661fee0842077513a36d140db6d9d93bedb4622`; preflight aprovado, RDL com metadata do datasource aplicado, mas criação completa ainda rejeitada por `InvalidDefinitionFormat`.
 - [x] Substituir novas tentativas monolíticas por bootstrap progressivo no mesmo item DEV, sem artefato extra e sem delete, isolando as fases `minimal`, `datasource`, `dataset` e `full`.
 - [ ] Validar Pre-PR no HEAD exato, integrar pela fila governada e repetir o E2E para obter a primeira fase rejeitada ou concluir create/getDefinition/replay.
-
+- [x] Reconciliar a PR #2008 com a main após a integração concorrente da #2007, preservando o bootstrap progressivo e eliminando `behind_by=1` sem force-push.
+- [x] Adicionar `getDefinition` + SHA-256 após cada fase `minimal -> datasource -> dataset -> full` antes de avançar.
+- [ ] Revalidar Pre-PR/checks no novo HEAD e, após merge governado, repetir o E2E Fabric DEV no mesmo SHA integrado.

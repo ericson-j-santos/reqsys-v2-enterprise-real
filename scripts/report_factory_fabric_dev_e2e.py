@@ -456,6 +456,7 @@ def _create_progressively(
         create_body["description"] = description[:256]
 
     evidence["progressive_bootstrap_used"] = True
+    evidence["progressive_passed_phases"] = []
     evidence["progressive_last_passed_phase"] = None
     evidence["progressive_failed_phase"] = None
 
@@ -465,7 +466,6 @@ def _create_progressively(
         evidence["progressive_failed_phase"] = "minimal_create"
         raise E2EError(f"progressive_minimal_create:{exc}") from None
 
-    evidence["progressive_last_passed_phase"] = "minimal"
     matches = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
     if len(matches) != 1:
         evidence["progressive_failed_phase"] = "minimal_identity"
@@ -475,6 +475,21 @@ def _create_progressively(
         evidence["progressive_failed_phase"] = "minimal_identity"
         raise E2EError("progressive_minimal_report_id_missing")
 
+    try:
+        _verify_progressive_phase(
+            workspace_id=workspace_id,
+            report_id=report_id,
+            report_name=report_name,
+            phase="minimal",
+            expected_rdl=minimal_rdl,
+            token=token,
+        )
+    except E2EError as exc:
+        evidence["progressive_failed_phase"] = "minimal"
+        raise E2EError(f"progressive_minimal_readback:{exc}") from None
+    evidence["progressive_passed_phases"].append("minimal")
+    evidence["progressive_last_passed_phase"] = "minimal"
+
     for phase, phase_rdl in variants[1:]:
         try:
             _update_definition(
@@ -483,9 +498,18 @@ def _create_progressively(
                 report_factory.build_fabric_definition(report_name, phase_rdl),
                 token,
             )
+            _verify_progressive_phase(
+                workspace_id=workspace_id,
+                report_id=report_id,
+                report_name=report_name,
+                phase=phase,
+                expected_rdl=phase_rdl,
+                token=token,
+            )
         except E2EError as exc:
             evidence["progressive_failed_phase"] = phase
             raise E2EError(f"progressive_{phase}:{exc}") from None
+        evidence["progressive_passed_phases"].append(phase)
         evidence["progressive_last_passed_phase"] = phase
 
 
@@ -497,6 +521,23 @@ def _get_definition(workspace_id: str, report_id: str, token: str) -> dict[str, 
         success={200},
         require_lro_result=True,
     )
+
+
+def _verify_progressive_phase(
+    *,
+    workspace_id: str,
+    report_id: str,
+    report_name: str,
+    phase: str,
+    expected_rdl: str,
+    token: str,
+) -> None:
+    observed_rdl = _extract_rdl(
+        _get_definition(workspace_id, report_id, token),
+        report_name,
+    )
+    if _sha256(observed_rdl) != _sha256(expected_rdl):
+        raise E2EError(f"progressive_readback_hash_mismatch:{phase}")
 
 
 def _update_definition(
@@ -536,6 +577,7 @@ def execute(spec_path: Path, output: Path) -> int:
         "secret_value_exposed": False,
         "production_touched": False,
         "progressive_bootstrap_used": False,
+        "progressive_passed_phases": [],
         "progressive_last_passed_phase": None,
         "progressive_failed_phase": None,
     }
@@ -636,8 +678,8 @@ def execute(spec_path: Path, output: Path) -> int:
             "first_action", "final_report_exact_count", "definition_verified",
             "idempotency_verified", "expected_rdl_sha256", "observed_rdl_sha256",
             "secret_value_exposed", "production_touched",
-            "progressive_bootstrap_used", "progressive_last_passed_phase",
-            "progressive_failed_phase", "reason",
+            "progressive_bootstrap_used", "progressive_passed_phases",
+            "progressive_last_passed_phase", "progressive_failed_phase", "reason",
         ):
             if key in evidence:
                 print(f"{key}={evidence.get(key)}")
