@@ -26,3 +26,18 @@ def test_bootstrap_permanece_dev_only_e_resolve_locator_assinado() -> None:
     assert "printf 'REQSYS_API_BASE_URL=%s\\n' \"$RESOLVED_API_BASE\" >> \"$GITHUB_ENV\"" in text
     assert 'reqsys-pc24x7-teams-service-token' in text
     assert 'signed-locator.json' in text
+
+def test_bootstrap_bloqueia_runtime_defasado_antes_de_oidc_e_mutacao() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    sha_gate = text.index('Validar runtime PC24x7 no mesmo SHA')
+    oidc = text.index('Login Azure por OIDC da identidade mutadora')
+    mutation = text.index('Validar ou provisionar token S2S DEV')
+    assert sha_gate < oidc < mutation
+    assert "base + '/api/runtime/build-info'" in text
+    assert "EXPECTED_SHA: ${{ github.sha }}" in text
+    assert "pc24x7_runtime_sha_mismatch" in text
+    assert "pc24x7_runtime_probe_failed" in text
+    assert "'token_created': False" in text
+    assert "'secret_value_exposed': False" in text
+    assert "'production_touched': False" in text
+

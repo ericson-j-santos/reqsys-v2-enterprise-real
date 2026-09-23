@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Mantém bootstrap S2S e E2E da Central IA/Teams DEV no locator PC24x7 assinado e corrige o contrato do gateway público: rotas FastAPI /v1 são acessadas externamente por /api/v1, com fail-closed e validação same-SHA.",
+  "description": "Mantém bootstrap S2S e E2E da Central IA/Teams DEV no locator PC24x7 assinado, compõe rotas públicas por /api/v1 e exige same-SHA do runtime físico antes de qualquer mutação.",
   "incident_evidence": {
     "run_id": 35649334799,
     "head_sha": "3c744ba2bc55548baf7f66465a9fa5909191c433",
@@ -25,7 +25,7 @@
       "tests/test_pc24x7_teams_ephemeral_e2e_workflow.py",
       "tests/test_pc24x7_dev_public_locator.py"
     ],
-    "evidence_contract": "Bootstrap e E2E DEV resolvem exclusivamente o locator Ed25519 vigente, nunca usam Fly como fallback, compõem rotas FastAPI públicas por /api/v1 exatamente uma vez e o E2E real só começa quando build-info.build_sha é exatamente github.sha. Falhas permanecem fail-closed e nenhum segredo é publicado."
+    "evidence_contract": "Bootstrap e E2E DEV resolvem exclusivamente o locator Ed25519 vigente, nunca usam Fly como fallback, compõem rotas FastAPI públicas por /api/v1 exatamente uma vez e ambos bloqueiam antes de qualquer mutação quando build-info.build_sha diverge de github.sha. Falhas permanecem fail-closed e nenhum segredo é publicado."
   },
   "runtime": {
     "provider": "pc24x7",
@@ -33,7 +33,8 @@
     "legacy_fly_fallback_allowed": false,
     "same_sha_required_for_e2e": true,
     "public_api_prefix": "/api",
-    "backend_api_prefix": "/v1"
+    "backend_api_prefix": "/v1",
+    "same_sha_required_for_bootstrap": true
   },
   "risk": {
     "production": false,
@@ -43,12 +44,14 @@
     "secret_exposure": false
   },
   "latest_incident_evidence": {
-    "run_id": 35909950763,
-    "head_sha": "843efd943e985b881ea97ac4ea6cf5a3129897f3",
-    "observed_failure": "service_token_mint_failed:http_404",
+    "bootstrap_before_fix_run_id": 35909950763,
+    "bootstrap_after_prefix_fix_run_id": 35911403390,
+    "e2e_same_sha_probe_run_id": 35911937199,
+    "target_head_sha": "e6b7acbf89fdc7edfa93b3087720574cd3610263",
+    "observed_failure": "pc24x7_runtime_sha_mismatch",
+    "previous_symptom": "service_token_mint_failed:http_404",
     "locator_resolved": true,
-    "azure_oidc": "success",
-    "key_vault_client": "success",
-    "root_cause": "public_gateway_api_prefix_missing"
+    "root_cause": "pc24x7_runtime_publication_drift",
+    "mutation_started": false
   }
 }

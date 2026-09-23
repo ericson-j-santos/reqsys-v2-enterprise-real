@@ -98,6 +98,64 @@ jobs:
           mkdir -p artifacts/pc24x7-teams-token
           node scripts/resolve_pc24x7_dev_locator.mjs             --output artifacts/pc24x7-teams-token/signed-locator.json
 
+      - name: Inicializar evidência sanitizada
+        shell: bash
+        run: |
+          cat > pc24x7-teams-token-bootstrap.json <<'JSON'
+          {"status":"blocked","reason":"READINESS_NOT_EXECUTED","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}
+          JSON
+
+      - name: Validar runtime PC24x7 no mesmo SHA
+        shell: bash
+        env:
+          REQSYS_API_BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          evidence_path = Path('pc24x7-teams-token-bootstrap.json')
+          base = os.environ['REQSYS_API_BASE_URL'].rstrip('/')
+          expected = os.environ['EXPECTED_SHA'].strip().lower()
+
+          def fail(reason, *, observed_sha=None, exit_code=4):
+              payload = {
+                  'status': 'blocked',
+                  'reason': reason,
+                  'environment': 'dev',
+                  'mode': 'provision_if_missing',
+                  'token_created': False,
+                  'secret_value_exposed': False,
+                  'production_touched': False,
+              }
+              if observed_sha is not None:
+                  payload['expected_sha'] = expected
+                  payload['observed_sha'] = observed_sha
+              evidence_path.write_text(json.dumps(payload, ensure_ascii=False) + '\n', encoding='utf-8')
+              raise SystemExit(exit_code)
+
+          try:
+              request = Request(
+                  base + '/api/runtime/build-info',
+                  headers={'Accept': 'application/json', 'User-Agent': 'reqsys-teams-token-bootstrap/2.0'},
+              )
+              with urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read(262_144).decode('utf-8'))
+          except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+              fail('pc24x7_runtime_probe_failed', exit_code=3)
+
+          data = payload.get('data', payload) if isinstance(payload, dict) else {}
+          observed = str(data.get('build_sha') or data.get('commit_sha') or '').strip().lower()
+          if observed != expected:
+              fail('pc24x7_runtime_sha_mismatch', observed_sha=observed)
+          print(f'PC24x7 runtime SHA validado: {observed}')
+          PY
+
       - name: Exportar runtime PC24x7 DEV
         shell: bash
         env:
@@ -106,13 +164,6 @@ jobs:
           set -euo pipefail
           test -n "$RESOLVED_API_BASE"
           printf 'REQSYS_API_BASE_URL=%s\n' "$RESOLVED_API_BASE" >> "$GITHUB_ENV"
-
-      - name: Inicializar evidência sanitizada
-        shell: bash
-        run: |
-          cat > pc24x7-teams-token-bootstrap.json <<'JSON'
-          {"status":"blocked","reason":"READINESS_NOT_EXECUTED","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}
-          JSON
 
       - name: Validar configuração governada
         shell: bash
