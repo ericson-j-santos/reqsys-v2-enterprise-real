@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import hashlib
 import importlib.util
 import json
@@ -382,54 +383,138 @@ def _serialize_rdl_root(root: ET.Element) -> str:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8") + "\n"
 
 
-def _remove_report_item_type(root: ET.Element, local_name: str) -> None:
-    report_sections = root.find(report_factory._q("ReportSections"))
-    if report_sections is None:
-        raise E2EError("progressive_report_sections_missing")
-    report_items = report_sections.find(f".//{report_factory._q('ReportItems')}")
-    if report_items is None:
-        raise E2EError("progressive_report_items_missing")
-    target_tag = report_factory._q(local_name)
-    for item in list(report_items):
-        if item.tag == target_tag:
-            report_items.remove(item)
+def _canonical_minimal_rdl(source_rdl: str) -> str:
+    """Monta envelope mínimo equivalente ao exemplo público do Fabric."""
+    try:
+        source_root = ET.fromstring(source_rdl)
+    except ET.ParseError as exc:
+        raise E2EError("canonical_source_rdl_invalid") from exc
+
+    report_id = source_root.findtext(report_factory._rd("ReportID"), default="")
+    if not report_id:
+        raise E2EError("canonical_report_id_missing")
+
+    q = report_factory._q
+    rd = report_factory._rd
+    df = report_factory._df
+    add = report_factory._add
+
+    root = ET.Element(q("Report"), {"MustUnderstand": "df"})
+    ET.SubElement(root, rd("ReportUnitType")).text = "Inch"
+    ET.SubElement(root, rd("ReportID")).text = report_id
+    ET.SubElement(root, df("DefaultFontFamily")).text = "Segoe UI"
+    add(root, "AutoRefresh", "0")
+
+    sections = add(root, "ReportSections")
+    section = add(sections, "ReportSection")
+    body = add(section, "Body")
+    report_items = add(body, "ReportItems")
+
+    title = ET.Element(q("Textbox"), {"Name": "ReportTitle"})
+    ET.SubElement(title, rd("WatermarkTextbox")).text = "Title"
+    ET.SubElement(title, rd("DefaultName")).text = "ReportTitle"
+    add(title, "CanGrow", "true")
+    add(title, "KeepTogether", "true")
+    paragraphs = add(title, "Paragraphs")
+    paragraph = add(paragraphs, "Paragraph")
+    text_runs = add(paragraph, "TextRuns")
+    text_run = add(text_runs, "TextRun")
+    add(text_run, "Value", "ReqSys Fabric Bootstrap")
+    run_style = add(text_run, "Style")
+    add(run_style, "FontFamily", "Segoe UI Light")
+    add(run_style, "FontSize", "28pt")
+    add(paragraph, "Style")
+    add(title, "Height", "0.5in")
+    add(title, "Width", "5.5in")
+    title_style = add(title, "Style")
+    title_border = add(title_style, "Border")
+    add(title_border, "Style", "None")
+    for padding in ("PaddingLeft", "PaddingRight", "PaddingTop", "PaddingBottom"):
+        add(title_style, padding, "2pt")
+    report_items.append(title)
+
+    add(body, "Height", "2.25in")
+    body_style = add(body, "Style")
+    body_border = add(body_style, "Border")
+    add(body_border, "Style", "None")
+
+    add(section, "Width", "6in")
+    page = add(section, "Page")
+    for margin in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin"):
+        add(page, margin, "1in")
+    add(page, "Style")
+
+    layout = add(root, "ReportParametersLayout")
+    grid = add(layout, "GridLayoutDefinition")
+    add(grid, "NumberOfColumns", "4")
+    add(grid, "NumberOfRows", "2")
+
+    return _serialize_rdl_root(root)
 
 
-def _remove_root_child(root: ET.Element, local_name: str) -> None:
-    node = root.find(report_factory._q(local_name))
-    if node is not None:
-        root.remove(node)
+def _insert_before_report_sections(root: ET.Element, node: ET.Element) -> None:
+    sections = root.find(report_factory._q("ReportSections"))
+    if sections is None:
+        raise E2EError("canonical_report_sections_missing")
+    index = list(root).index(sections)
+    root.insert(index, copy.deepcopy(node))
+
+
+def _replace_parameter_layout(
+    root: ET.Element,
+    source_root: ET.Element,
+) -> None:
+    existing = root.find(report_factory._q("ReportParametersLayout"))
+    if existing is not None:
+        root.remove(existing)
+    source_layout = source_root.find(report_factory._q("ReportParametersLayout"))
+    if source_layout is not None:
+        root.append(copy.deepcopy(source_layout))
 
 
 def _progressive_rdl_variants(rdl: str) -> list[tuple[str, str]]:
-    """Reduz o RDL em camadas para localizar rejeições do Fabric sem criar itens extras."""
+    """Promove conteúdo funcional sobre envelope mínimo alinhado ao exemplo Fabric."""
     try:
-        ET.fromstring(rdl)
+        source_root = ET.fromstring(rdl)
     except ET.ParseError as exc:
         raise E2EError("progressive_source_rdl_invalid") from exc
 
-    def parsed() -> ET.Element:
-        return ET.fromstring(rdl)
+    q = report_factory._q
+    canonical = _canonical_minimal_rdl(rdl)
 
-    minimal = parsed()
-    for tag in ("DataSources", "DataSets", "ReportParameters", "ReportParametersLayout"):
-        _remove_root_child(minimal, tag)
-    _remove_report_item_type(minimal, "Tablix")
+    datasource = ET.fromstring(canonical)
+    source_data_sources = source_root.find(q("DataSources"))
+    if source_data_sources is None:
+        raise E2EError("progressive_source_datasources_missing")
+    _insert_before_report_sections(datasource, source_data_sources)
 
-    datasource = parsed()
-    for tag in ("DataSets", "ReportParameters", "ReportParametersLayout"):
-        _remove_root_child(datasource, tag)
-    _remove_report_item_type(datasource, "Tablix")
+    dataset = ET.fromstring(_serialize_rdl_root(datasource))
+    source_data_sets = source_root.find(q("DataSets"))
+    if source_data_sets is None:
+        raise E2EError("progressive_source_datasets_missing")
+    _insert_before_report_sections(dataset, source_data_sets)
+    source_parameters = source_root.find(q("ReportParameters"))
+    if source_parameters is not None:
+        _insert_before_report_sections(dataset, source_parameters)
+    _replace_parameter_layout(dataset, source_root)
 
-    dataset = parsed()
-    _remove_report_item_type(dataset, "Tablix")
+    tablix = ET.fromstring(_serialize_rdl_root(dataset))
+    source_tablixes = source_root.findall(f".//{q('Tablix')}")
+    if len(source_tablixes) != 1:
+        raise E2EError(f"progressive_source_tablix_exact_count:{len(source_tablixes)}")
+    target_items = tablix.find(f".//{q('Body')}/{q('ReportItems')}")
+    if target_items is None:
+        raise E2EError("progressive_target_report_items_missing")
+    target_items.append(copy.deepcopy(source_tablixes[0]))
 
     return [
-        ("minimal", _serialize_rdl_root(minimal)),
+        ("canonical_minimal", canonical),
         ("datasource", _serialize_rdl_root(datasource)),
         ("dataset", _serialize_rdl_root(dataset)),
-        ("full", rdl),
+        ("tablix", _serialize_rdl_root(tablix)),
+        ("generated_full", rdl),
     ]
+
 
 
 def _create_progressively(
@@ -445,7 +530,7 @@ def _create_progressively(
     """Cria o mesmo item uma vez e promove sua definição em camadas fail-closed."""
     variants = _progressive_rdl_variants(rdl)
     minimal_name, minimal_rdl = variants[0]
-    if minimal_name != "minimal":
+    if minimal_name != "canonical_minimal":
         raise E2EError("progressive_minimal_variant_missing")
 
     create_body: dict[str, Any] = {
@@ -462,10 +547,10 @@ def _create_progressively(
     try:
         _invoke("POST", reports_url, token, create_body, success={200, 201})
     except E2EError as exc:
-        evidence["progressive_failed_phase"] = "minimal_create"
-        raise E2EError(f"progressive_minimal_create:{exc}") from None
+        evidence["progressive_failed_phase"] = "canonical_minimal_create"
+        raise E2EError(f"progressive_canonical_minimal_create:{exc}") from None
 
-    evidence["progressive_last_passed_phase"] = "minimal"
+    evidence["progressive_last_passed_phase"] = "canonical_minimal"
     matches = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
     if len(matches) != 1:
         evidence["progressive_failed_phase"] = "minimal_identity"
