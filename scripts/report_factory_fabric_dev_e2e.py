@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -39,6 +40,34 @@ ENVIRONMENT = "development"
 
 class E2EError(RuntimeError):
     """Erro sanitizado e seguro para evidência/log."""
+
+
+def _safe_fabric_error_code(raw: str) -> str:
+    """Extrai somente o código estruturado do Fabric sem persistir mensagem/IDs."""
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return "unknown"
+
+    if not isinstance(payload, dict):
+        return "unknown"
+
+    candidates: list[Any] = [
+        payload.get("errorCode"),
+        payload.get("code"),
+    ]
+    nested = payload.get("error")
+    if isinstance(nested, dict):
+        candidates.extend([nested.get("errorCode"), nested.get("code")])
+
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", candidate.strip())
+        normalized = normalized.strip("_.-")[:80]
+        if normalized:
+            return normalized
+    return "unknown"
 
 
 def _run(args: list[str], timeout: int = 60) -> str:
@@ -100,7 +129,9 @@ def _request_json(
             body = json.loads(raw) if raw else {}
             return response.status, dict(response.headers.items()), body if isinstance(body, dict) else {}
     except urllib.error.HTTPError as exc:
-        raise E2EError(f"fabric_http_{exc.code}") from None
+        raw = exc.read().decode("utf-8", errors="replace")
+        safe_code = _safe_fabric_error_code(raw)
+        raise E2EError(f"fabric_http_{exc.code}:{safe_code}") from None
 
 
 def _paged_values(url: str, token: str) -> list[dict[str, Any]]:

@@ -1,6 +1,9 @@
 import base64
+import io
 import importlib.util
+import urllib.error
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -76,3 +79,34 @@ def test_script_has_fixed_dev_boundary_and_no_prod_target() -> None:
     assert "client-secret" not in text
     assert "environment=prod" not in text
     assert "environment=stg" not in text
+
+def test_safe_fabric_error_code_extracts_only_structured_code() -> None:
+    raw = '{"errorCode":"CorruptedPayload","message":"token=should-not-leak"}'
+    assert module._safe_fabric_error_code(raw) == "CorruptedPayload"
+    assert module._safe_fabric_error_code('{"error":{"code":"InvalidItem","message":"sensitive"}}') == "InvalidItem"
+    assert module._safe_fabric_error_code('{"message":"no structured code"}') == "unknown"
+
+
+def test_request_json_http_error_exposes_code_not_body() -> None:
+    body = b'{"errorCode":"CorruptedPayload","message":"token=should-not-leak"}'
+    error = urllib.error.HTTPError(
+        module.FABRIC_BASE + "/workspaces/example/paginatedReports",
+        400,
+        "Bad Request",
+        hdrs=None,
+        fp=io.BytesIO(body),
+    )
+    with patch.object(module.urllib.request, "urlopen", side_effect=error):
+        with pytest.raises(module.E2EError) as captured:
+            module._request_json(
+                "POST",
+                module.FABRIC_BASE + "/workspaces/example/paginatedReports",
+                "ephemeral-token",
+                {"displayName": "Example"},
+            )
+
+    reason = str(captured.value)
+    assert reason == "fabric_http_400:CorruptedPayload"
+    assert "should-not-leak" not in reason
+    assert "ephemeral-token" not in reason
+
