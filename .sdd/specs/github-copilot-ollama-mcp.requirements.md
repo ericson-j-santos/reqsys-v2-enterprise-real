@@ -29,9 +29,20 @@ usando o Ollama do PC24x7 como ferramenta MCP governada, sem expor a porta
    token não devem ser registrados como evidência.
 10. Testes devem provar caso positivo, bloqueio de endpoint remoto, bloqueio de
     modelo não allowlisted, correlação inválida e contrato do custom agent.
-11. O Pre-PR Readiness deve retornar `READY_FOR_PR=passed` no HEAD exato antes
-    da abertura da PR.
-12. O E2E funcional só é concluído quando o GitHub.com executar o agente Ollama
-    contra URL HTTPS estável do MCP, a chamada chegar ao PC24x7, retornar pelo
-    gateway com o mesmo `correlation_id` e um controle negativo rejeitar token
-    inválido. Até isso ocorrer, o runtime permanece parcial.
+
+## Critérios de aceite
+
+1. O custom agent `Ollama` é reconhecido pelo contrato do GitHub Copilot e usa
+   apenas `ollama-reqsys/ollama_analyze` para inferência Ollama.
+2. Endpoint remoto do gateway, modelo fora da allowlist e `correlation_id`
+   inválido são recusados antes de qualquer chamada de rede.
+3. O bridge exige Bearer token, permanece em loopback e não contém acesso direto
+   ao Ollama `:11434`.
+4. Os testes `tests/test_ollama_mcp_bridge.py` e
+   `tests/test_github_copilot_ollama_agent_contract.py` passam no HEAD exato.
+5. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato e
+   `behind_by=0` antes da abertura da PR.
+6. O E2E funcional só é concluído quando o GitHub.com executar o agente Ollama
+   contra URL HTTPS estável do MCP, a chamada chegar ao PC24x7, retornar pelo
+   gateway com o mesmo `correlation_id` e um controle negativo rejeitar token
+   inválido. Até isso ocorrer, o runtime permanece parcial.
