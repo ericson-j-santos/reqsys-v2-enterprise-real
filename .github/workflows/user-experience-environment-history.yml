@@ -27,12 +27,27 @@ jobs:
         with:
           python-version: '3.12'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve signed PC24x7 DEV locator
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p evidence/ux
+          node scripts/resolve_pc24x7_dev_locator.mjs --output evidence/ux/dev-signed-locator.json >/dev/null
+
       - name: Validate implementation
         run: |
           python -m py_compile scripts/smoke_user_experience_environments.py
           python -m unittest tests/test_smoke_user_experience_environments.py
 
       - name: Execute DEV STG PROD report-only smoke
+        env:
+          REQSYS_DEV_BASE_URL: ${{ steps.locator.outputs.base_url }}
         run: |
           python scripts/smoke_user_experience_environments.py \
             --output evidence/ux/user-experience-environment-history.json \
