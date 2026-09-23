@@ -89,3 +89,7 @@ compose.pc24x7-local.yml
 
 # Saída temporária de scripts do runtime (diagnósticos OpenAPI, estado de E2E)
 runtime/.tmp/
+
+# Pacote OCR privado preparado efemeramente para o contexto Docker
+backend/vendor/ocr-evidence-engine/*
+!backend/vendor/ocr-evidence-engine/.gitkeep
