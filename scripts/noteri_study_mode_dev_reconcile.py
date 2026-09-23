@@ -3,8 +3,9 @@
 
 O script é propositalmente restrito:
 - runtime fixo DESKTOP-PDQK954;
-- ambiente DEV descoberto pelo gateway local exclusivo na porta 8083;
-- projeto/containers derivados dos labels Docker Compose do gateway observado;
+- ambiente DEV identificado pela API local exclusiva na porta 8210;
+- projeto/containers derivados dos labels Docker Compose da API observada;
+- gateway HTTP derivado da porta publicada por nginx:80 no mesmo projeto Compose;
 - transporte de perfil pelo Engineering Orchestrator;
 - destino lógico fixo Noteri;
 - sem HML/PROD;
@@ -28,10 +29,8 @@ from pathlib import Path
 from typing import Any
 
 EXPECTED_HOST = "DESKTOP-PDQK954"
-DEV_GATEWAY_PORT = "8083"
 DEV_API_PORT = "8210"
 CONFIRM = "RECONCILE-NOTERI-STUDY-MODE-DEV"
-GATEWAY = "http://127.0.0.1:8083"
 ADMIN_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
 RUNTIME_FILES = {
     "backend/app/services/noteri_host_profile.py": "app/services/noteri_host_profile.py",
@@ -361,6 +360,39 @@ def container_host_port(item: dict[str, Any], port: str) -> str | None:
     return value or None
 
 
+def required_gateway_host_port(item: dict[str, Any]) -> int:
+    bindings = ((item.get("NetworkSettings") or {}).get("Ports") or {}).get("80/tcp")
+    if not bindings:
+        raise ReconcileError(
+            "dev_gateway_port_missing",
+            stage="discover_gateway",
+        )
+
+    ports = {
+        str((binding or {}).get("HostPort") or "").strip()
+        for binding in bindings
+        if str((binding or {}).get("HostPort") or "").strip()
+    }
+    if len(ports) != 1:
+        raise ReconcileError(
+            "dev_gateway_port_not_unique",
+            stage="discover_gateway",
+        )
+
+    value = next(iter(ports))
+    if not value.isdigit() or not 1 <= int(value) <= 65535:
+        raise ReconcileError(
+            "dev_gateway_port_invalid",
+            stage="discover_gateway",
+        )
+    return int(value)
+
+
+def gateway_base_url(item: dict[str, Any]) -> tuple[str, int]:
+    port = required_gateway_host_port(item)
+    return f"http://127.0.0.1:{port}", port
+
+
 def compose_environment_files(
     api_item: dict[str, Any],
     working_dir: Path,
@@ -564,6 +596,7 @@ def reload_nginx(
 
 
 def wait_gateway_status(
+    gateway: str,
     path: str,
     expected: set[int],
     *,
@@ -573,7 +606,7 @@ def wait_gateway_status(
     last_status: int | None = None
     while time.monotonic() < deadline:
         request = urllib.request.Request(
-            GATEWAY + path,
+            gateway + path,
             headers={"Cache-Control": "no-store"},
         )
         try:
@@ -586,8 +619,13 @@ def wait_gateway_status(
         if last_status in expected:
             return
         time.sleep(2)
+    error_by_path = {
+        "/api/health": "gateway_api_health_timeout",
+        "/api/runtime/health": "gateway_runtime_health_timeout",
+        "/api/v1/noteri/profile": "gateway_profile_auth_timeout",
+    }
     raise ReconcileError(
-        f"gateway_status_timeout:{path}:{last_status}",
+        error_by_path.get(path, "gateway_status_timeout"),
         stage="live_bind_refresh",
     )
 
@@ -611,6 +649,7 @@ def wait_container_healthy(
 
 
 def http_json(
+    gateway: str,
     method: str,
     path: str,
     *,
@@ -626,7 +665,7 @@ def http_json(
     if correlation_id:
         headers["X-Correlation-Id"] = correlation_id
     request = urllib.request.Request(
-        GATEWAY + path,
+        gateway + path,
         data=data,
         method=method,
         headers=headers,
@@ -644,8 +683,9 @@ def http_json(
     return status, payload
 
 
-def login_admin() -> tuple[str, dict[str, Any]]:
+def login_admin(gateway: str) -> tuple[str, dict[str, Any]]:
     _, payload = http_json(
+        gateway,
         "POST",
         "/api/v1/auth/login",
         body={"email": ADMIN_EMAIL},
@@ -665,9 +705,9 @@ def profile_data(payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def wait_frontend_source() -> None:
+def wait_frontend_source(gateway: str) -> None:
     deadline = time.monotonic() + 90
-    url = GATEWAY + "/src/services/hostProfileLocalAgent.js"
+    url = gateway + "/src/services/hostProfileLocalAgent.js"
     last = ""
     while time.monotonic() < deadline:
         try:
@@ -681,8 +721,9 @@ def wait_frontend_source() -> None:
     raise ReconcileError("frontend_same_origin_source_not_observed")
 
 
-def api_e2e() -> dict[str, Any]:
+def api_e2e(gateway: str) -> dict[str, Any]:
     no_auth, _ = http_json(
+        gateway,
         "GET",
         "/api/v1/noteri/profile",
         expected={401},
@@ -690,8 +731,9 @@ def api_e2e() -> dict[str, Any]:
     if no_auth != 401:
         raise ReconcileError("negative_auth_control_failed")
 
-    token, usuario = login_admin()
+    token, usuario = login_admin(gateway)
     _, before_payload = http_json(
+        gateway,
         "GET",
         "/api/v1/noteri/profile",
         token=token,
@@ -700,6 +742,7 @@ def api_e2e() -> dict[str, Any]:
 
     corr1 = f"study-dev-e2e-{int(time.time())}-1"
     _, changed_payload = http_json(
+        gateway,
         "POST",
         "/api/v1/noteri/profile",
         token=token,
@@ -711,6 +754,7 @@ def api_e2e() -> dict[str, Any]:
         raise ReconcileError("estudo_change_failed")
 
     _, readback_payload = http_json(
+        gateway,
         "GET",
         "/api/v1/noteri/profile",
         token=token,
@@ -721,6 +765,7 @@ def api_e2e() -> dict[str, Any]:
 
     corr2 = f"study-dev-e2e-{int(time.time())}-2"
     _, replay_payload = http_json(
+        gateway,
         "POST",
         "/api/v1/noteri/profile",
         token=token,
@@ -733,6 +778,7 @@ def api_e2e() -> dict[str, Any]:
 
     corr3 = f"study-dev-e2e-{int(time.time())}-3"
     _, restored_payload = http_json(
+        gateway,
         "POST",
         "/api/v1/noteri/profile",
         token=token,
@@ -754,17 +800,17 @@ def api_e2e() -> dict[str, Any]:
     }
 
 
-def browser_e2e() -> dict[str, Any]:
+def browser_e2e(gateway: str) -> dict[str, Any]:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise ReconcileError("playwright_not_installed") from exc
 
-    token, usuario = login_admin()
+    token, usuario = login_admin(gateway)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page()
-        page.goto(GATEWAY + "/login", wait_until="domcontentloaded", timeout=30000)
+        page.goto(gateway + "/login", wait_until="domcontentloaded", timeout=30000)
         page.evaluate(
             """([token, user]) => {
               localStorage.setItem('reqsys_token', token)
@@ -772,7 +818,7 @@ def browser_e2e() -> dict[str, Any]:
             }""",
             [token, usuario],
         )
-        page.goto(GATEWAY + "/task-console", wait_until="domcontentloaded", timeout=30000)
+        page.goto(gateway + "/task-console", wait_until="domcontentloaded", timeout=30000)
         card = page.locator('[data-testid="noteri-study-mode-card"]')
         card.wait_for(state="visible", timeout=30000)
         study = page.get_by_role("button", name="Quero estudar agora")
@@ -855,6 +901,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     nginx_bind = required_nginx_bind_source(nginx_before, project)
+    gateway, gateway_port = gateway_base_url(nginx_before)
 
     backup_root, changes = backup_and_copy(
         repo_root,
@@ -871,12 +918,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         wait_container_healthy(api_container, repo_root, args.health_timeout)
         reload_nginx(nginx_container, repo_root)
 
-        wait_gateway_status("/api/health", {200})
-        wait_gateway_status("/api/runtime/health", {200})
-        wait_gateway_status("/api/v1/noteri/profile", {401})
+        wait_gateway_status(gateway, "/api/health", {200})
+        wait_gateway_status(gateway, "/api/runtime/health", {200})
+        wait_gateway_status(gateway, "/api/v1/noteri/profile", {401})
 
-        _, public_health = http_json("GET", "/api/health")
-        _, runtime_health = http_json("GET", "/api/runtime/health")
+        _, public_health = http_json(gateway, "GET", "/api/health")
+        _, runtime_health = http_json(gateway, "GET", "/api/runtime/health")
         gateway_contract = {
             "api_health": public_health.get("status") is not None,
             "runtime_health": runtime_health.get("status") is not None,
@@ -891,9 +938,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         if any(item.get("Destination") == "/noteri-runtime" for item in mounts):
             raise ReconcileError("legacy_noteri_profile_mount_present")
 
-        wait_frontend_source()
-        api_result = api_e2e()
-        browser_result = browser_e2e()
+        wait_frontend_source(gateway)
+        api_result = api_e2e(gateway)
+        browser_result = browser_e2e(gateway)
     except Exception:
         rollback_files(changes)
         try:
@@ -915,7 +962,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "api_container": api_container,
         "frontend_container": frontend_container,
         "gateway_container": nginx_container,
-        "runtime_discovery": "api_port_8210_compose_labels",
+        "gateway_host_port": gateway_port,
+        "runtime_discovery": "api_port_8210_compose_labels_plus_nginx_port",
         "compose_invoked": False,
         "runtime_refresh": "bind_mounts_plus_nginx_reload",
         "api_source_bind_observed": True,
