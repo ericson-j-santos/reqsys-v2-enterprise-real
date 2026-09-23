@@ -89,6 +89,8 @@ def test_gateway_port_repair_is_targeted_and_rollback_capable():
     raw = SCRIPT.read_text(encoding="utf-8")
     assert '"--no-deps"' in raw
     assert '"--force-recreate"' in raw
+    assert '"--pull"' in raw
+    assert '"never"' in raw
     assert 'env["COMPOSE_DISABLE_ENV_FILE"] = "true"' in raw
     assert 'stage="nginx_gateway_port_repair"' in raw
     assert 'stage="nginx_gateway_port_rollback"' in raw
