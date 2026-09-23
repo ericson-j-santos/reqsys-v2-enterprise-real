@@ -135,7 +135,7 @@ onMounted(() => {
       <div>
         <h1 class="text-h4 font-weight-bold">ServiceCase</h1>
         <p class="text-body-2 text-medium-emphasis mb-0">
-          Tela única para REQUEST, INCIDENT, PROBLEM e CHANGE. As ações disponíveis vêm do backend.
+          Tela única para REQUEST, INCIDENT, PROBLEM e CHANGE. As ações disponíveis vêm do serviço.
         </p>
       </div>
       <v-chip v-if="serviceCase" color="primary" variant="tonal">
@@ -208,7 +208,7 @@ onMounted(() => {
 
         <v-divider class="my-4" />
 
-        <h2 class="text-subtitle-1 font-weight-bold mb-2">Ações permitidas pelo backend</h2>
+        <h2 class="text-subtitle-1 font-weight-bold mb-2">Ações permitidas pelo serviço</h2>
         <div
           v-if="transicoesPermitidas.length"
           class="d-flex flex-wrap ga-2"
