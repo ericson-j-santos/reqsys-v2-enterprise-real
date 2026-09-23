@@ -90,6 +90,21 @@ def test_compose_environment_file_label_supports_multiple_files_and_fails_closed
     assert exc.value.stage == "compose_context"
 
 
+def test_bind_source_accepts_read_only_nginx_but_rw_bind_remains_strict(tmp_path):
+    item = {
+        "Mounts": [
+            {
+                "Destination": "/etc/nginx/conf.d/default.conf",
+                "Type": "bind",
+                "RW": False,
+                "Source": str(tmp_path / "default.dev.conf"),
+            }
+        ]
+    }
+    assert module.bind_source(item, "/etc/nginx/conf.d/default.conf") == tmp_path / "default.dev.conf"
+    assert module.rw_bind_source(item, "/etc/nginx/conf.d/default.conf") is None
+
+
 def test_overlay_routes_profile_through_allowlisted_control_plane():
     raw = OVERLAY.read_text(encoding="utf-8")
     assert "NOTERI_CONTROL_PLANE_URL=http://host.docker.internal:8787" in raw
@@ -221,23 +236,25 @@ def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
     ) == ()
 
 
-def test_reconciler_rebuilds_frontend_when_runtime_bind_is_absent():
+def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     raw = SCRIPT.read_text(encoding="utf-8")
-    assert 'frontend_bind_source = rw_bind_source(frontend_before, "/app")' in raw
-    assert 'frontend_source = frontend_bind_source or (working_dir / "frontend")' in raw
-    assert 'stage="frontend_rebuild"' in raw
-    assert '"--build"' in raw
-    assert 'stage="rollback_frontend_rebuild"' in raw
+    assert 'frontend_source = required_bind_source(' in raw
+    assert 'stage="frontend_source_bind"' in raw
+    assert '"compose_invoked": False' in raw
+    assert '"runtime_refresh": "bind_mounts_plus_nginx_reload"' in raw
+    assert 'reload_nginx(nginx_container, repo_root)' in raw
 
 
 def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     raw = SCRIPT.read_text(encoding="utf-8")
     nginx = NGINX_DEV.read_text(encoding="utf-8")
     assert 'NGINX_CONFIG = Path("infra/nginx/default.dev.conf")' in raw
-    assert 'stage="nginx_recreate"' in raw
-    assert 'stage="rollback_nginx_recreate"' in raw
-    assert 'http_json("GET", "/api/health")' in raw
-    assert 'http_json("GET", "/api/runtime/health")' in raw
+    assert '["docker", "exec", container, "nginx", "-t"]' in raw
+    assert '["docker", "exec", container, "nginx", "-s", "reload"]' in raw
+    assert 'stage_prefix="rollback_nginx_reload"' in raw
+    assert 'wait_gateway_status("/api/health", {200})' in raw
+    assert 'wait_gateway_status("/api/runtime/health", {200})' in raw
+    assert 'wait_gateway_status("/api/v1/noteri/profile", {401})' in raw
     assert '"nginx_runtime_contract_refreshed": True' in raw
     assert "location ~ ^/api/(runtime|" in nginx
     assert "proxy_pass http://api:8000;" in nginx
@@ -250,8 +267,8 @@ def test_reconciler_discovers_compose_runtime_from_dev_api_port():
     assert "com.docker.compose.service" in raw
     assert "non_dev_compose_project_blocked" in raw
     assert '"runtime_discovery": "api_port_8210_compose_labels"' in raw
-    assert '"compose_environment_files_preserved": bool(compose_environment_files)' in raw
-    assert "com.docker.compose.project.environment_file" in raw
+    assert '"compose_invoked": False' in raw
+    assert '"runtime_refresh": "bind_mounts_plus_nginx_reload"' in raw
     assert "dev_api_8210_not_unique" in raw
     assert "dev_gateway_8083_not_unique" not in raw
     assert "reqsys-live-api-1" not in raw
