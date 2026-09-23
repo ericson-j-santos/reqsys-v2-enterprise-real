@@ -129,3 +129,23 @@ def test_failure_retries_then_quarantines(tmp_path, monkeypatch):
     second = module.process_one(tmp_path, 'https://dev.invalid', token_file)
     assert second['status'] == 'quarantined'
     assert list((tmp_path / 'quarantine').glob('*.json'))
+
+
+def test_worker_base_url_fails_closed_without_pc24x7_runtime():
+    for value in ("", "https://reqsys-api-dev.fly.dev", "http://pc24x7.invalid"):
+        try:
+            module.validate_worker_base_url(value)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"base URL deveria ser rejeitada: {value}")
+
+
+def test_worker_base_url_accepts_resolved_pc24x7_api_url():
+    assert module.validate_worker_base_url("https://example.trycloudflare.com/api") == "https://example.trycloudflare.com/api"
+
+
+def test_compose_requires_explicit_runtime_and_has_no_fly_fallback():
+    raw = Path("docker-compose.pc24x7-teams.yml").read_text(encoding="utf-8")
+    assert "REQSYS_API_BASE_URL:?" in raw
+    assert "reqsys-api-dev.fly.dev" not in raw
