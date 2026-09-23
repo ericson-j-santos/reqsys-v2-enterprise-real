@@ -88,6 +88,22 @@ jobs:
           test "$rc" -ne 0
           echo "OCR_EXTERNAL_NEGATIVE_CONTROL_OK"
 
+      - name: Identificar instalação governada do ReqSys
+        id: reqsys-app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: read
+
+      - name: Registrar identificadores não sensíveis da instalação
+        shell: bash
+        run: |
+          echo "REQSYS_GITHUB_APP_SLUG=${{ steps.reqsys-app-token.outputs.app-slug }}"
+          echo "REQSYS_GITHUB_APP_INSTALLATION_ID=${{ steps.reqsys-app-token.outputs.installation-id }}"
+
       - name: Emitir token temporário somente leitura
         id: app-token
         uses: actions/create-github-app-token@v2
