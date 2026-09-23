@@ -468,6 +468,258 @@ def compose_base(
     return args
 
 
+_PROCESS_ENV_ALLOWLIST = (
+    "PATH",
+    "PATHEXT",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "DOCKER_HOST",
+    "DOCKER_CONTEXT",
+)
+
+
+def minimal_process_env() -> dict[str, str]:
+    """Retorna somente variáveis operacionais necessárias ao Docker CLI."""
+    result: dict[str, str] = {}
+    for key in _PROCESS_ENV_ALLOWLIST:
+        value = os.environ.get(key)
+        if value:
+            result[key] = value
+    return result
+
+
+def nginx_runtime_network(item: dict[str, Any]) -> str:
+    networks = (item.get("NetworkSettings") or {}).get("Networks") or {}
+    if len(networks) != 1:
+        raise ReconcileError("nginx_network_not_unique", stage="nginx_gateway_identity")
+    name = str(next(iter(networks))).strip()
+    if not name or any(
+        token in name.casefold()
+        for token in ("prod", "production", "hml", "stg", "staging")
+    ):
+        raise ReconcileError("nginx_network_not_dev", stage="nginx_gateway_identity")
+    return name
+
+
+def validated_nginx_image(item: dict[str, Any]) -> str:
+    image = str((item.get("Config") or {}).get("Image") or "").strip()
+    if not (image.startswith("nginx:") or image.startswith("nginx@sha256:")):
+        raise ReconcileError(
+            "nginx_image_not_allowlisted",
+            stage="nginx_gateway_identity",
+        )
+    return image
+
+
+def validated_restart_policy(item: dict[str, Any]) -> str | None:
+    name = str(
+        ((item.get("HostConfig") or {}).get("RestartPolicy") or {}).get("Name")
+        or ""
+    ).strip()
+    if name not in {"", "no", "always", "unless-stopped", "on-failure"}:
+        raise ReconcileError(
+            "nginx_restart_policy_not_allowlisted",
+            stage="nginx_gateway_identity",
+        )
+    return name or None
+
+
+def write_nginx_gateway_repair_compose(
+    item: dict[str, Any],
+    expected_project: str,
+    nginx_bind: Path,
+    host_port: str | None,
+) -> tuple[Path, Path]:
+    working_dir = runtime_working_dir(item, expected_project)
+    image = validated_nginx_image(item)
+    restart = validated_restart_policy(item)
+    network_name = nginx_runtime_network(item)
+
+    service: dict[str, Any] = {
+        "image": image,
+        "volumes": [
+            {
+                "type": "bind",
+                "source": str(nginx_bind.resolve()),
+                "target": "/etc/nginx/conf.d/default.conf",
+                "read_only": True,
+            }
+        ],
+        "networks": ["runtime"],
+    }
+    if restart:
+        service["restart"] = restart
+    if host_port is not None:
+        service["ports"] = [f"{host_port}:80"]
+
+    payload = {
+        "services": {"nginx": service},
+        "networks": {
+            "runtime": {
+                "external": True,
+                "name": network_name,
+            }
+        },
+    }
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        raise ReconcileError("localappdata_missing", stage="nginx_gateway_identity")
+    repair_root = Path(local_app_data) / "ReqSys" / "StudyModeDeploy" / "gateway-repair"
+    repair_root.mkdir(parents=True, exist_ok=True)
+    suffix = host_port or "none"
+    compose_path = repair_root / f"docker-compose.gateway-repair-{suffix}.json"
+    compose_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return working_dir, compose_path
+
+
+def recreate_nginx_gateway(
+    project: str,
+    item: dict[str, Any],
+    nginx_bind: Path,
+    host_port: str | None,
+    *,
+    stage: str,
+) -> None:
+    working_dir, compose_path = write_nginx_gateway_repair_compose(
+        item,
+        project,
+        nginx_bind,
+        host_port,
+    )
+    env = minimal_process_env()
+    env["COMPOSE_ANSI"] = "never"
+    env["COMPOSE_IGNORE_ORPHANS"] = "true"
+    run(
+        [
+            "docker",
+            "compose",
+            "--project-directory",
+            str(working_dir),
+            "-p",
+            project,
+            "-f",
+            str(compose_path),
+            "up",
+            "-d",
+            "--no-deps",
+            "--force-recreate",
+            "nginx",
+        ],
+        cwd=working_dir,
+        timeout=180,
+        env=env,
+        stage=stage,
+    )
+
+
+def repair_nginx_gateway_port(
+    project: str,
+    nginx_before: dict[str, Any],
+    nginx_bind: Path,
+    repo_root: Path,
+) -> bool:
+    old_port = container_host_port(nginx_before, "80/tcp")
+    if old_port == DEV_GATEWAY_PORT:
+        return False
+    if old_port is not None and (
+        not old_port.isdigit() or not 1 <= int(old_port) <= 65535
+    ):
+        raise ReconcileError(
+            "dev_gateway_previous_port_invalid",
+            stage="nginx_gateway_identity",
+            diagnostic_markers=("gateway_8083_not_bound",),
+        )
+
+    try:
+        recreate_nginx_gateway(
+            project,
+            nginx_before,
+            nginx_bind,
+            DEV_GATEWAY_PORT,
+            stage="nginx_gateway_port_repair",
+        )
+        observed_project, _, _, nginx_after = discover_runtime(repo_root)
+        if observed_project != project:
+            raise ReconcileError(
+                "dev_gateway_project_changed",
+                stage="nginx_gateway_identity",
+            )
+        if container_host_port(nginx_after, "80/tcp") != DEV_GATEWAY_PORT:
+            raise ReconcileError(
+                "dev_gateway_port_repair_not_observed",
+                stage="nginx_gateway_identity",
+                diagnostic_markers=("gateway_8083_not_bound",),
+            )
+        if required_nginx_bind_source(nginx_after, project).resolve() != nginx_bind.resolve():
+            raise ReconcileError(
+                "dev_gateway_bind_changed_during_repair",
+                stage="nginx_gateway_identity",
+            )
+        run(
+            ["docker", "exec", container_name(nginx_after), "nginx", "-t"],
+            cwd=repo_root,
+            timeout=60,
+            stage="nginx_gateway_port_verify",
+        )
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if probe_gateway_tcp().get("reachable") is True:
+                return True
+            time.sleep(1)
+        raise ReconcileError(
+            "dev_gateway_listener_repair_timeout",
+            stage="nginx_gateway_identity",
+            diagnostic_markers=("gateway_8083_not_bound",),
+        )
+    except Exception as exc:
+        try:
+            recreate_nginx_gateway(
+                project,
+                nginx_before,
+                nginx_bind,
+                old_port,
+                stage="nginx_gateway_port_rollback",
+            )
+            rollback_project, _, _, rollback_nginx = discover_runtime(repo_root)
+            if rollback_project != project:
+                raise ReconcileError(
+                    "dev_gateway_rollback_project_mismatch",
+                    stage="nginx_gateway_identity",
+                )
+            if container_host_port(rollback_nginx, "80/tcp") != old_port:
+                raise ReconcileError(
+                    "dev_gateway_rollback_port_mismatch",
+                    stage="nginx_gateway_identity",
+                )
+        except Exception as rollback_exc:
+            raise ReconcileError(
+                "dev_gateway_port_repair_rollback_failed",
+                stage="nginx_gateway_identity",
+                diagnostic_markers=(
+                    "gateway_8083_repair_failed",
+                    "gateway_port_rollback_failed",
+                ),
+            ) from rollback_exc
+        if isinstance(exc, ReconcileError):
+            raise
+        raise ReconcileError(
+            "dev_gateway_port_repair_failed",
+            stage="nginx_gateway_identity",
+            diagnostic_markers=("gateway_8083_repair_failed",),
+        ) from exc
+
+
 def backup_and_copy(
     repo_root: Path,
     api_source: Path,
@@ -1170,6 +1422,25 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         if item_labels.get("com.docker.compose.service") != service:
             raise ReconcileError(f"runtime_service_mismatch:{service}")
 
+    initial_nginx_bind = required_nginx_bind_source(nginx_before, project)
+    gateway_port_repaired = False
+    if container_host_port(nginx_before, "80/tcp") != DEV_GATEWAY_PORT:
+        gateway_port_repaired = repair_nginx_gateway_port(
+            project,
+            nginx_before,
+            initial_nginx_bind,
+            repo_root,
+        )
+        repaired_project, api_before, frontend_before, nginx_before = discover_runtime(
+            repo_root
+        )
+        if repaired_project != project:
+            raise ReconcileError(
+                "runtime_project_changed_after_gateway_repair",
+                stage="nginx_gateway_identity",
+            )
+        project = repaired_project
+
     api_container = container_name(api_before)
     frontend_container = container_name(frontend_before)
     nginx_container = container_name(nginx_before)
@@ -1191,13 +1462,6 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         raise ReconcileError(
             "frontend_source_dir_missing",
             stage="frontend_source_bind",
-        )
-
-    if container_host_port(nginx_before, "80/tcp") != DEV_GATEWAY_PORT:
-        raise ReconcileError(
-            "dev_gateway_port_mismatch",
-            stage="nginx_gateway_identity",
-            diagnostic_markers=("gateway_8083_not_bound",),
         )
 
     nginx_bind = required_nginx_bind_source(nginx_before, project)
@@ -1286,8 +1550,16 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "frontend_container": frontend_container,
         "gateway_container": nginx_container,
         "runtime_discovery": "api_port_8210_compose_labels",
-        "compose_invoked": False,
-        "runtime_refresh": "bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload",
+        "compose_invoked": gateway_port_repaired,
+        "compose_scope": (
+            "nginx_only_generated_no_env" if gateway_port_repaired else "none"
+        ),
+        "gateway_port_repair_applied": gateway_port_repaired,
+        "runtime_refresh": (
+            "nginx_gateway_port_repair_then_bind_mounts_plus_api_restart_plus_nginx_reload"
+            if gateway_port_repaired
+            else "bind_mounts_plus_api_restart_plus_nginx_bind_sync_reload"
+        ),
         "api_container_restarted": True,
         "api_source_bind_observed": True,
         "frontend_source_bind_observed": True,
