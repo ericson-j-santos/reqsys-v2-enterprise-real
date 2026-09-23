@@ -27,6 +27,7 @@ def test_reconciler_is_fixed_to_pc24x7_dev_gateway():
     assert module.DEV_GATEWAY_PORT == "8083"
     assert module.DEV_API_PORT == "8210"
     assert module.GATEWAY == "http://127.0.0.1:8083"
+    assert module.DIRECT_API == "http://127.0.0.1:8210"
     assert module.CONFIRM == "RECONCILE-NOTERI-STUDY-MODE-DEV"
 
 
@@ -282,6 +283,12 @@ def test_reconciler_requires_live_binds_and_does_not_recreate_compose_stack():
     assert 'restart_container(api_container, repo_root, stage="api_restart")' in raw
     assert 'stage="rollback_api_restart"' in raw
     assert '["docker", "restart", container]' in raw
+    assert 'direct_api_contract = wait_direct_api_contract()' in raw
+    assert '"noteri_profile": "/v1/noteri/profile" in last_paths' in raw
+    assert '"runtime_health": "/api/runtime/health" in last_paths' in raw
+    assert '"direct_api_contract": direct_api_contract' in raw
+    assert 'runtime_monitoring_module_missing' in raw
+    assert 'app.include_router(monitoramento_operacional.router)' in raw
     assert 'reload_nginx(nginx_container, repo_root)' in raw
 
 
@@ -292,6 +299,8 @@ def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     assert '["docker", "exec", container, "nginx", "-t"]' in raw
     assert '["docker", "exec", container, "nginx", "-s", "reload"]' in raw
     assert 'stage_prefix="rollback_nginx_reload"' in raw
+    assert 'wait_direct_api_contract()' in raw
+    assert 'stage="api_direct_contract"' in raw
     assert 'wait_gateway_status("/api/health", {200})' in raw
     assert 'wait_gateway_status("/api/runtime/health", {200})' in raw
     assert 'wait_gateway_status("/api/v1/noteri/profile", {401})' in raw

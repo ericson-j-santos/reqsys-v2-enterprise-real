@@ -32,6 +32,7 @@ DEV_GATEWAY_PORT = "8083"
 DEV_API_PORT = "8210"
 CONFIRM = "RECONCILE-NOTERI-STUDY-MODE-DEV"
 GATEWAY = "http://127.0.0.1:8083"
+DIRECT_API = "http://127.0.0.1:8210"
 ADMIN_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
 RUNTIME_FILES = {
     "backend/app/services/noteri_host_profile.py": "app/services/noteri_host_profile.py",
@@ -505,26 +506,49 @@ def backup_and_copy(
     main_path = api_source / "app" / "main.py"
     if not main_path.is_file():
         raise ReconcileError("runtime_main_missing")
+    monitoring_module = api_source / "app" / "api" / "monitoramento_operacional.py"
+    if not monitoring_module.is_file():
+        raise ReconcileError(
+            "runtime_monitoring_module_missing",
+            stage="api_source_bind",
+        )
     main_backup = backup_root / "backend__app__main.py"
     shutil.copy2(main_path, main_backup)
     text = main_path.read_text(encoding="utf-8")
+    marker = "import app.models"
+    if marker not in text:
+        raise ReconcileError("runtime_main_import_marker_missing")
     if "from app.api import noteri_host_profile" not in text:
-        marker = "import app.models"
-        if marker not in text:
-            raise ReconcileError("runtime_main_import_marker_missing")
         text = text.replace(
             marker,
             marker + "\nfrom app.api import noteri_host_profile",
             1,
         )
+    if (
+        "from app.api import monitoramento_operacional" not in text
+        and "    monitoramento_operacional," not in text
+    ):
+        text = text.replace(
+            marker,
+            marker + "\nfrom app.api import monitoramento_operacional",
+            1,
+        )
+
+    marker = "@app.middleware"
+    if marker not in text:
+        raise ReconcileError("runtime_main_router_marker_missing")
     if "app.include_router(noteri_host_profile.router)" not in text:
-        marker = "@app.middleware"
         index = text.find(marker)
-        if index < 0:
-            raise ReconcileError("runtime_main_router_marker_missing")
         text = (
             text[:index]
             + "app.include_router(noteri_host_profile.router)\n\n"
+            + text[index:]
+        )
+    if "app.include_router(monitoramento_operacional.router)" not in text:
+        index = text.find(marker)
+        text = (
+            text[:index]
+            + "app.include_router(monitoramento_operacional.router)\n\n"
             + text[index:]
         )
     main_path.write_text(text, encoding="utf-8")
@@ -622,6 +646,44 @@ def wait_container_healthy(
             return
         time.sleep(2)
     raise ReconcileError(f"api_health_timeout:{last}")
+
+
+def wait_direct_api_contract(
+    *,
+    timeout_seconds: int = 90,
+) -> dict[str, bool]:
+    deadline = time.monotonic() + timeout_seconds
+    last_paths: set[str] = set()
+    while time.monotonic() < deadline:
+        request = urllib.request.Request(
+            DIRECT_API + "/openapi.json",
+            headers={"Cache-Control": "no-store"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            paths = payload.get("paths") or {}
+            last_paths = set(paths)
+            contract = {
+                "noteri_profile": "/v1/noteri/profile" in last_paths,
+                "runtime_health": "/api/runtime/health" in last_paths,
+            }
+            if all(contract.values()):
+                return contract
+        except (OSError, ValueError, json.JSONDecodeError):
+            last_paths = set()
+        time.sleep(2)
+
+    markers: list[str] = []
+    if "/v1/noteri/profile" not in last_paths:
+        markers.append("noteri_profile_missing")
+    if "/api/runtime/health" not in last_paths:
+        markers.append("runtime_health_missing")
+    raise ReconcileError(
+        "direct_api_routes_timeout",
+        stage="api_direct_contract",
+        diagnostic_markers=tuple(markers),
+    )
 
 
 def http_json(
@@ -884,6 +946,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         # sincronizado. Não executamos Compose nem reprocessamos .env/secrets.
         restart_container(api_container, repo_root, stage="api_restart")
         wait_container_healthy(api_container, repo_root, args.health_timeout)
+        direct_api_contract = wait_direct_api_contract()
         reload_nginx(nginx_container, repo_root)
 
         wait_gateway_status("/api/health", {200})
@@ -951,6 +1014,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "browser_loopback_dependency_removed": True,
         "backup_created": backup_root.is_dir(),
         "nginx_runtime_contract_refreshed": True,
+        "direct_api_contract": direct_api_contract,
         "gateway_contract": gateway_contract,
         "api_e2e": api_result,
         "browser_e2e": browser_result,
