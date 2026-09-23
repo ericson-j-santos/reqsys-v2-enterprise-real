@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - "fix/noteri-reconcile-preserve-runtime-*"
     paths:
       - '.github/workflows/noteri-study-mode-dev-reconcile.yml'
       - 'backend/app/services/noteri_host_profile.py'
