@@ -1,5 +1,5 @@
 /**
- * Rotas canônicas do incremento padrão ouro de responsividade (38 telas operacionais).
+ * Rotas canônicas do incremento padrão ouro de responsividade (39 telas operacionais).
  * Referência: docs/varreduras/REQSYS_VARREDURA_PADRAO_OURO_2026-06-20.md
  *
  * Os caminhos e identificadores técnicos permanecem estáveis; apenas os títulos apresentados
@@ -13,6 +13,7 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/analytics', testId: 'route-analytics', titulo: 'Indicadores' },
   { path: '/ajuda', testId: 'user-final-shell', titulo: 'Ajuda' },
   { path: '/requisitos', testId: 'route-requisitos', titulo: 'Requisitos' },
+  { path: '/service-cases/:caseId?', testId: 'service-case-view', titulo: 'Caso de serviço' },
   { path: '/rastreabilidade', testId: 'route-rastreabilidade', titulo: 'Rastreabilidade' },
   { path: '/auditoria', testId: 'route-auditoria', titulo: 'Auditoria' },
   { path: '/pipeline', testId: 'route-pipeline', titulo: 'Fluxo' },
