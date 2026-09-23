@@ -1,0 +1,22 @@
+{
+  "feature_name": "ocr-external-runtime-package",
+  "project": "ReqSys v2 Enterprise — OCR",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-23",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Adapta os builds canônicos do ReqSys para preparar o OCR privado com credencial efêmera, transportar somente wheel+proveniência ao contexto Docker e executar a imagem usando o pacote externo no SHA imutável, preservando a cópia fonte local no repositório até a etapa final de remoção.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ocr_external_runtime_package.py",
+      "tests/test_ocr_external_package_workflow.py",
+      "backend/ocr_tests/test_worker.py"
+    ],
+    "evidence_contract": "O mesmo HEAD deve provar controle negativo de build sem wheel, checkout privado por token temporário contents: read, SHA exato, wheel com SHA-256, build Docker com OCR externo obrigatório, remoção da cópia /app/ocr_evidencia e import de site-packages dentro do container. PR não executa deploy nem toca produção."
+  }
+}
