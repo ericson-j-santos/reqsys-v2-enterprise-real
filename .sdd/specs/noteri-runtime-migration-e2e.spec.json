@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Temporary Noteri Runtime migration E2E",
+  "status": "validated_branch_only",
+  "issue": 2014,
+  "increment_type": "gap_fix",
+  "architecture": {
+    "source_repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+    "target_repo": "ericson-j-santos/noteri-runtime",
+    "target_sha": "336e99a7fb7feb598d9be9aa2b143c3f9f87164e",
+    "workflow": ".github/workflows/noteri-control-plane-probe.yml",
+    "execution_branch": "ops/noteri-runtime-migration-e2e-20260923",
+    "runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "noteri",
+      "reqsys-dev"
+    ]
+  },
+  "security": {
+    "arbitrary_target": false,
+    "arbitrary_shell": false,
+    "gui_input": false,
+    "credentials_read": false,
+    "production_touched": false,
+    "rdc_required": false,
+    "secrets_read": false
+  },
+  "evidence_contract": {
+    "run_id": 35889647525,
+    "correlation_id_required": true,
+    "exact_sha_required": true,
+    "positive_case": true,
+    "negative_control": true,
+    "idempotency": true,
+    "independent_readback": true,
+    "final_profile": "NORMAL"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_control_plane_fallback.py"
+    ],
+    "requirements": ".sdd/specs/noteri-runtime-migration-e2e.requirements.md"
+  },
+  "approvals": {
+    "requirements": true
+  },
+  "updated_at": "2026-09-23"
+}
