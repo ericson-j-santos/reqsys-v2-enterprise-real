@@ -188,3 +188,44 @@ def test_validate_rdl_rejects_missing_fabric_header() -> None:
 
     with pytest.raises(report_factory.ReportSpecError, match="MustUnderstand"):
         report_factory.validate_rdl(invalid_rdl, source)
+
+
+def test_shared_platform_adapter_preserves_reqsys_identity_namespace() -> None:
+    source = load_example()
+    rdl = report_factory.generate_rdl(source)
+    root = ET.fromstring(rdl)
+
+    expected_report_id = uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"{report_factory.IDENTITY_NAMESPACE}:{source['report']['name']}",
+    )
+    assert root.findtext(f"{{{report_factory.RD_NS}}}ReportID") == str(expected_report_id)
+
+    datasource = source["datasource"]
+    data_sources = root.find(f"{{{report_factory.RDL_NS}}}DataSources")
+    assert data_sources is not None
+    source_node = next(iter(data_sources))
+    expected_datasource_id = uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        (
+            f"{report_factory.IDENTITY_NAMESPACE}:{source['report']['name']}:"
+            f"datasource:{datasource['name']}"
+        ),
+    )
+    assert source_node.findtext(f"{{{report_factory.RD_NS}}}DataSourceID") == str(
+        expected_datasource_id
+    )
+
+
+def test_shared_platform_dependency_is_pinned_to_adapter_commit() -> None:
+    dependency = (ROOT / "requirements-report-builder.txt").read_text(encoding="utf-8")
+    assert report_factory.PLATFORM_COMMIT in dependency
+    assert "@main" not in dependency
+    assert "@master" not in dependency
+
+
+def test_shared_platform_rejects_destructive_sql() -> None:
+    source = load_example()
+    source["datasets"][0]["query"] = "DELETE FROM dbo.tbDemandas"
+    with pytest.raises(report_factory.ReportSpecError, match="SELECT|WITH|não permitido"):
+        report_factory.validate_spec(source)
