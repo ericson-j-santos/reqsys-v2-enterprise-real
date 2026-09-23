@@ -33,7 +33,8 @@ jobs:
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap' ||
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e' ||
         github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
-        github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||\n        github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
         github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
         github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery' ||
         github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick' ||
@@ -97,6 +98,9 @@ jobs:
               ;;
             '/reqsys run codex-worker-pool-smoke-dev')
               target='codex-worker-pool-smoke-dev.yml'
+              ;;
+            '/reqsys run codex-worker-pool-token-restore-dev')
+              target='codex-worker-pool-token-restore-dev.yml'
               ;;
             '/reqsys run noteri-desktop-network-probe')
               target='noteri-desktop-network-probe.yml'
