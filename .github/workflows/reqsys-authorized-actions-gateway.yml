@@ -33,6 +33,7 @@ jobs:
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap' ||
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e' ||
         github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
+        github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
         github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
@@ -42,7 +43,6 @@ jobs:
         github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
         github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
-        github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
         github.event.comment.body == '/reqsys run protect-observability-platform-main'
       )
     runs-on: ubuntu-latest
@@ -98,6 +98,11 @@ jobs:
               ;;
             '/reqsys run codex-ollama-e2e-dev')
               target='codex-ollama-e2e-dev.yml'
+              mode='codex-e2e'
+              ;;
+            '/reqsys run github-copilot-ollama-mcp-ingress-dev')
+              target='codex-ollama-e2e-dev.yml'
+              mode='mcp-ingress'
               ;;
             '/reqsys run codex-worker-pool-smoke-dev')
               target='codex-worker-pool-smoke-dev.yml'
@@ -127,9 +132,6 @@ jobs:
               ;;
             '/reqsys run noteri-study-mode-dev-reconcile')
               target='noteri-study-mode-dev-reconcile.yml'
-              ;;
-            '/reqsys run github-copilot-ollama-mcp-ingress-dev')
-              target='github-copilot-ollama-mcp-ingress-dev.yml'
               ;;
             '/reqsys run protect-observability-platform-main')
               target='branch-protection-audit.yml'
@@ -164,7 +166,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|noteri-study-mode-dev-reconcile.yml|github-copilot-ollama-mcp-ingress-dev.yml|branch-protection-audit.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|noteri-study-mode-dev-reconcile.yml|branch-protection-audit.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
@@ -178,6 +180,15 @@ jobs:
               --ref main \
               -f environment=dev \
               -f timeout_seconds=20)"
+          elif [ "$TARGET_WORKFLOW" = "codex-ollama-e2e-dev.yml" ]; then
+            case "$TARGET_MODE" in
+              codex-e2e|mcp-ingress) ;;
+              *) echo 'codex_ollama_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$TARGET_MODE")"
           elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "restore" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
@@ -251,7 +262,7 @@ jobs:
 
       - name: Validate self-hosted runner pickup
         id: pickup
-        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml' || steps.route.outputs.target == 'github-copilot-ollama-mcp-ingress-dev.yml'
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -280,7 +291,7 @@ jobs:
 
       - name: Cancel self-hosted run without pickup
         id: cleanup
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml' || steps.route.outputs.target == 'github-copilot-ollama-mcp-ingress-dev.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -366,7 +377,7 @@ jobs:
           retention-days: 30
 
       - name: Fail closed when self-hosted runner pickup times out or is busy
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml' || steps.route.outputs.target == 'github-copilot-ollama-mcp-ingress-dev.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
         shell: bash
         run: |
           echo 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' >&2
