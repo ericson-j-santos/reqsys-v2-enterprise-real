@@ -11,7 +11,7 @@ Restaurar a autenticação local do Codex Worker Pool no PC24x7 quando o arquivo
 3. O Authorized Actions Gateway deve mapear esse comando somente para `codex-worker-pool-smoke-dev.yml` com `mode=restore`.
 4. O smoke normal deve permanecer em `mode=smoke` e não pode restaurar ou rotacionar credencial.
 5. A execução de restauração deve usar `session_launcher.py` e exigir `SESSION_LAUNCH_OK`, `state_validated=true` e SHA igual ao `main` despachado.
-6. A mutação do arquivo de autenticação deve passar por `owner_risk3_gateway.py`, limitada ao escopo `repo://reqsys/environment/dev/worker-pool`.
+6. Antes da mutação deve ser instalada somente a action exata `reqsys.worker-pool-auth-file-restore.dev`, com escopo `repo://reqsys/environment/dev/worker-pool`, validade máxima de 30 minutos e comando fixo sem valor sensível; a action deve ser removida automaticamente após a tentativa. A mutação do arquivo deve passar por `owner_risk3_gateway.py` usando essa allowlist exata, sem depender do modo DEV global.
 7. Se o arquivo existir, for legível, não vazio e tiver comprimento mínimo válido, deve ser reutilizado sem rotação.
 8. Se o arquivo estiver ausente ou vazio, um novo token deve ser gerado localmente por CSPRNG e gravado atomicamente apenas no caminho já comprovado pelo bind mount canônico do container ativo.
 9. O caminho do arquivo deve ser derivado exclusivamente do único container ativo `codex-worker-pool` que prove `127.0.0.1:8097 -> 8097/tcp` e mount para `/run/secrets/codex_worker_pool_api_token`.
@@ -24,7 +24,7 @@ Restaurar a autenticação local do Codex Worker Pool no PC24x7 quando o arquivo
 
 ## Critérios de aceite
 
-- testes unitários positivos e negativos do restaurador verdes;
+- testes unitários positivos e negativos do restaurador e da allowlist Risk3 temporária verdes;
 - teste de contrato prova que restore e smoke possuem rotas distintas;
 - runner policy continua allowlistando apenas o workflow já existente;
 - restore real retorna `WORKER_POOL_TOKEN_RESTORE_PASSED`;
