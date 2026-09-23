@@ -309,7 +309,7 @@ def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     assert 'wait_gateway_status("/api/v1/noteri/profile", {401})' in raw
     assert '"nginx_runtime_contract_refreshed": True' in raw
     assert '"nginx_active_contract": nginx_active_contract' in raw
-    assert '"runtime_route": "location ~ ^/api/(runtime|" in raw
+    assert '"runtime_route": "location ~ ^/api/(runtime|" in rendered' in raw
     assert '"api_prefix_route": "location /api/" in rendered' in raw
     assert "location ~ ^/api/(runtime|" in nginx
     assert "proxy_pass http://api:8000;" in nginx
