@@ -39,6 +39,10 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 13. A reconciliação deve sincronizar `infra/nginx/default.dev.conf` para a
     árvore efetiva do runtime, recriar o Nginx e comprovar HTTP 200 em
     `/api/health` e `/api/runtime/health` antes do E2E funcional.
+14. Ao reconstruir o comando Docker Compose, a reconciliação deve preservar
+    cada arquivo declarado em `com.docker.compose.project.environment_file`
+    usando `--env-file`, sem ler ou publicar seu conteúdo. Se um arquivo
+    declarado não existir, deve falhar fechado antes de recriar containers.
 
 ## Critérios de aceite
 
@@ -62,6 +66,9 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 13. Se a classe ainda for desconhecida, a evidência pode publicar somente
     `diagnostic_markers` pertencentes a uma allowlist fixa; nunca texto bruto,
     caminhos ou valores arbitrários.
+14. O E2E deve comprovar que o contexto Compose preservou os env-files
+    declarados pelo runtime sem expor seus valores e que o Nginx recriado
+    restaurou `/api/runtime/health` antes da mudança de perfil.
 
 ## Topologia
 
