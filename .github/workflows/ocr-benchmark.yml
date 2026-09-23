@@ -179,7 +179,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Controle negativo: build externo sem wheel deve falhar
+      - name: "Controle negativo: build externo sem wheel deve falhar"
         shell: bash
         run: |
           set -euo pipefail
