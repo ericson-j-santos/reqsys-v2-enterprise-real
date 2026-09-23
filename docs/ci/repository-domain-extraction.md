@@ -57,7 +57,7 @@ A ordem de corte é:
 ## Validação
 
 ```bash
-python -m pytest tests/test_repository_domain_routing.py -q
+python -m unittest tests/test_repository_domain_routing.py -v
 python scripts/validate_repository_domain_routing.py --json
 ```
 

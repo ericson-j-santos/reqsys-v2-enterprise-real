@@ -159,7 +159,7 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 
 ### Critérios de aceite — divisão por domínios
 
-- `python -m pytest tests/test_repository_domain_routing.py -q` verde.
+- `python -m unittest tests/test_repository_domain_routing.py -v` verde.
 - `python scripts/validate_repository_domain_routing.py --json` retorna `status=passed`.
 - A contagem de workflows ativos permanece 575.
 - O inventário BACEN contém exatamente 65 workflows.

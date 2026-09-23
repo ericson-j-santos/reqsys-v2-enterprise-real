@@ -96,6 +96,6 @@
     "O manifesto BACEN lista exatamente os 65 workflows bacen-*.yml do baseline e falha em caso de drift.",
     "A preparação de reqsys-ci-platform permanece fora de .github/workflows no monorepo, portanto não aumenta fan-out.",
     "Nenhum workflow BACEN é removido antes de equivalência comprovada no repositório alvo.",
-    "tests/test_repository_domain_routing.py e scripts/validate_repository_domain_routing.py ficam verdes no HEAD exato."
+    "python -m unittest tests/test_repository_domain_routing.py -v e scripts/validate_repository_domain_routing.py ficam verdes no HEAD exato."
   ]
 }

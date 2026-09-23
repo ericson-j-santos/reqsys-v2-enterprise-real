@@ -70,7 +70,7 @@ jobs:
       - name: Validate repository domain routing
         run: |
           python -m py_compile scripts/validate_repository_domain_routing.py
-          python -m pytest tests/test_repository_domain_routing.py -q
+          python -m unittest tests/test_repository_domain_routing.py -v
           python scripts/validate_repository_domain_routing.py --json
 
       - name: Summary
