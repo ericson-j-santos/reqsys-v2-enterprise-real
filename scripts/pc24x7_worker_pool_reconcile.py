@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import shutil
+import secrets
 import socket
 import subprocess
 import time
@@ -164,12 +165,43 @@ def _existing_host_path(source: str) -> Path | None:
             return candidate
     return None
 
-def discover_token_source() -> tuple[Path, str]:
+
+def _local_dev_token_file() -> Path:
+    local = str(os.environ.get("LOCALAPPDATA") or "").strip()
+    if not local:
+        raise ReconcileError("localappdata_missing")
+    return Path(local) / "ReqSys" / "CodexWorkerPool" / "api-token"
+
+
+def _provision_local_dev_token() -> tuple[Path, bool]:
+    path = _local_dev_token_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        if not path.is_file():
+            raise ReconcileError("local_dev_token_path_invalid")
+        if path.stat().st_size < 32:
+            raise ReconcileError("local_dev_token_file_invalid")
+        return path, False
+
+    token = secrets.token_urlsafe(48)
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as handle:
+            handle.write(token)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError:
+        if not path.is_file() or path.stat().st_size < 32:
+            raise ReconcileError("local_dev_token_file_invalid")
+        return path, False
+    return path, True
+
+def discover_token_source() -> tuple[Path, str, bool]:
     configured = os.environ.get("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST")
     if configured:
         path = Path(configured)
         if path.is_file():
-            return path, "environment"
+            return path, "environment", False
         raise ReconcileError("configured_token_file_missing")
 
     candidates: list[tuple[int, datetime, str]] = []
@@ -188,7 +220,8 @@ def discover_token_source() -> tuple[Path, str]:
         candidates.append((identity_score, _created_at(container), str(host_path)))
 
     if not candidates:
-        raise ReconcileError("worker_pool_token_source_missing")
+        path, created = _provision_local_dev_token()
+        return path, "local_dev_generated", created
 
     best_score = max(score for score, _created, _source in candidates)
     ranked = [
@@ -202,7 +235,7 @@ def discover_token_source() -> tuple[Path, str]:
         raise ReconcileError("worker_pool_latest_token_source_ambiguous")
 
     path = Path(next(iter(newest_sources)))
-    return path, "latest_ranked_canonical_docker_mount_history"
+    return path, "latest_ranked_canonical_docker_mount_history", False
 
 
 def resolve_rules_sha() -> str:
@@ -259,7 +292,7 @@ def reconcile(repo_root: Path) -> dict[str, Any]:
     if not compose.is_file():
         raise ReconcileError("compose_file_missing")
 
-    token_source, token_source_method = discover_token_source()
+    token_source, token_source_method, token_created = discover_token_source()
     rules_sha = resolve_rules_sha()
 
     env = os.environ.copy()
@@ -291,6 +324,7 @@ def reconcile(repo_root: Path) -> dict[str, Any]:
         "endpoint_container_unique": True,
         "rules_sha": rules_sha,
         "token_source_method": token_source_method,
+        "token_created": token_created,
         "token_content_read": False,
         "production_touched": False,
         "deploy_executed": False,

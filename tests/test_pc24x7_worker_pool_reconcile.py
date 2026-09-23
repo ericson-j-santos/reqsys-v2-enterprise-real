@@ -59,10 +59,11 @@ def test_discovers_latest_canonical_token_source_from_container_history(
         ],
     )
 
-    resolved, method = reconcile.discover_token_source()
+    resolved, method, created = reconcile.discover_token_source()
 
     assert resolved == latest
     assert method == "latest_ranked_canonical_docker_mount_history"
+    assert created is False
 
 
 def test_ignores_noncanonical_compose_and_binding_history(tmp_path, monkeypatch) -> None:
@@ -94,9 +95,10 @@ def test_ignores_noncanonical_compose_and_binding_history(tmp_path, monkeypatch)
         ],
     )
 
-    resolved, _method = reconcile.discover_token_source()
+    resolved, _method, created = reconcile.discover_token_source()
 
     assert resolved == expected
+    assert created is False
 
 
 def test_latest_timestamp_with_different_sources_fails_closed(
@@ -208,10 +210,11 @@ def test_falls_back_to_latest_existing_service_mount_when_historical_metadata_is
         ],
     )
 
-    resolved, method = reconcile.discover_token_source()
+    resolved, method, created = reconcile.discover_token_source()
 
     assert resolved == newest
     assert method == "latest_ranked_canonical_docker_mount_history"
+    assert created is False
 
 
 @pytest.mark.parametrize(
@@ -226,3 +229,33 @@ def test_translates_docker_desktop_host_paths(source: str, expected: str) -> Non
     candidates = [str(path) for path in reconcile._host_path_candidates(source)]
 
     assert expected in candidates
+
+
+def test_provisions_local_dev_token_when_no_history_exists(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
+    monkeypatch.setattr(reconcile, "_service_container_ids", lambda *, all_containers: [])
+    monkeypatch.setattr(reconcile, "_inspect", lambda _ids: [])
+
+    resolved, method, created = reconcile.discover_token_source()
+
+    assert resolved.is_file()
+    assert method == "local_dev_generated"
+    assert created is True
+    assert resolved.stat().st_size >= 32
+
+
+def test_local_dev_token_bootstrap_is_idempotent(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
+    monkeypatch.setattr(reconcile, "_service_container_ids", lambda *, all_containers: [])
+    monkeypatch.setattr(reconcile, "_inspect", lambda _ids: [])
+
+    first, _method, first_created = reconcile.discover_token_source()
+    before = first.read_bytes()
+    second, _method2, second_created = reconcile.discover_token_source()
+
+    assert second == first
+    assert first_created is True
+    assert second_created is False
+    assert second.read_bytes() == before
