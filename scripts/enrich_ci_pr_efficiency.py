@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from build_ci_fixed_window_analytics import fetch_runs_for_window
-from build_ci_process_improvement_analytics import parse_dt, percentile
+from build_ci_process_improvement_analytics import github_api, parse_dt, percentile
 
 DEFAULT_ANALYTICS_PATH = Path("audit/ci-lead-time-analytics.json")
 DEFAULT_MARKDOWN_PATH = Path("audit/ci-lead-time-analytics.md")
@@ -120,6 +120,121 @@ def select_pr_sample_window(
         "observed_prs": selected_count,
         "target_met": target_met,
         "max_lookback_minutes": max_minutes,
+    }
+
+
+def fetch_recent_pr_sample(
+    owner: str,
+    name: str,
+    token: str,
+    *,
+    fixed_start_at: datetime,
+    end_at: datetime,
+    min_sample_prs: int = 3,
+    max_age_days: int = 7,
+    api_get=github_api,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    cutoff = end_at - timedelta(days=max(1, max_age_days))
+    pulls = api_get(
+        f"/repos/{owner}/{name}/pulls?state=all&sort=updated&direction=desc&per_page=50",
+        token,
+    )
+    if not isinstance(pulls, list):
+        raise RuntimeError("resposta inválida ao listar PRs recentes")
+
+    candidates: list[tuple[datetime, int]] = []
+    for item in pulls:
+        if not isinstance(item, dict):
+            continue
+        created_at = parse_dt(item.get("created_at"))
+        updated_at = parse_dt(item.get("updated_at")) or created_at
+        try:
+            number = int(item.get("number"))
+        except (TypeError, ValueError):
+            continue
+        if created_at is None or updated_at is None:
+            continue
+        if cutoff <= created_at < end_at:
+            candidates.append((updated_at, number))
+    candidates.sort(reverse=True)
+
+    runs_by_id: dict[int, dict[str, Any]] = {}
+    selected_pr_numbers: list[int] = []
+    for _, pr_number in candidates:
+        commits: list[dict[str, Any]] = []
+        commits_complete = False
+        for page in range(1, 4):
+            batch = api_get(
+                f"/repos/{owner}/{name}/pulls/{pr_number}/commits?per_page=100&page={page}",
+                token,
+            )
+            if not isinstance(batch, list):
+                raise RuntimeError(f"resposta inválida ao listar commits da PR #{pr_number}")
+            commits.extend(item for item in batch if isinstance(item, dict))
+            if len(batch) < 100:
+                commits_complete = True
+                break
+        if not commits_complete:
+            raise RuntimeError(f"coleta de commits incompleta para PR #{pr_number}")
+
+        before = len(runs_by_id)
+        for commit in commits:
+            sha = str(commit.get("sha") or "").strip()
+            if not sha:
+                continue
+            payload = api_get(
+                f"/repos/{owner}/{name}/actions/runs?head_sha={sha}&event=pull_request&per_page=100",
+                token,
+            )
+            if not isinstance(payload, dict):
+                raise RuntimeError(f"resposta inválida ao listar runs do commit {sha}")
+            workflow_runs = payload.get("workflow_runs") or []
+            if not isinstance(workflow_runs, list):
+                raise RuntimeError(f"workflow_runs inválido para commit {sha}")
+            for raw in workflow_runs:
+                if not isinstance(raw, dict):
+                    continue
+                created_at = parse_dt(raw.get("created_at"))
+                if (
+                    raw.get("event") != "pull_request"
+                    or raw.get("status") != "completed"
+                    or created_at is None
+                    or created_at >= end_at
+                ):
+                    continue
+                item = dict(raw)
+                item["pull_requests"] = [{"number": pr_number}]
+                try:
+                    run_id = int(item.get("id"))
+                except (TypeError, ValueError):
+                    continue
+                runs_by_id[run_id] = item
+
+        if len(runs_by_id) > before:
+            selected_pr_numbers.append(pr_number)
+        if len(selected_pr_numbers) >= min_sample_prs:
+            break
+
+    runs = list(runs_by_id.values())
+    starts = [parse_dt(item.get("created_at")) for item in runs]
+    valid_starts = [value for value in starts if value is not None]
+    effective_start_at = min(valid_starts) if valid_starts else cutoff
+    target_met = len(selected_pr_numbers) >= min_sample_prs
+    return runs, {
+        "mode": "recent_prs_fallback",
+        "fixed_start_at": fixed_start_at.isoformat(),
+        "effective_start_at": effective_start_at.isoformat(),
+        "end_at": end_at.isoformat(),
+        "effective_duration_minutes": max(
+            1, int((end_at - effective_start_at).total_seconds() / 60)
+        ),
+        "target_min_prs": min_sample_prs,
+        "observed_prs": len(selected_pr_numbers),
+        "target_met": target_met,
+        "max_lookback_minutes": max(1, max_age_days) * 24 * 60,
+        "fallback_after_minutes": int((end_at - fixed_start_at).total_seconds() / 60),
+        "max_age_days": max(1, max_age_days),
+        "selected_pr_numbers": selected_pr_numbers,
     }
 
 
@@ -365,8 +480,8 @@ def build_pr_efficiency(
                 "percentual de workflow runs de pull_request observados cujo run_attempt é maior que 1"
             ),
             "sample_window": (
-                "usa a janela fixa quando suficiente e amplia progressivamente, até o limite configurado, "
-                "somente para a amostra por PR em baixa atividade"
+                "usa a janela fixa quando suficiente, amplia progressivamente e, se necessário, "
+                "amostra diretamente os PRs recentes e seus commits/runs para evitar varredura massiva"
             ),
         },
         "prs": pr_rows,
@@ -504,11 +619,26 @@ def main() -> int:
         min_sample_prs=min_sample_prs,
         max_lookback_minutes=max_lookback_minutes,
     )
+    sample_runs = raw_runs
+    if not sample_window["target_met"]:
+        fallback_runs, fallback_window = fetch_recent_pr_sample(
+            owner,
+            name,
+            token,
+            fixed_start_at=start_at,
+            end_at=end_at,
+            min_sample_prs=min_sample_prs,
+            max_age_days=max(1, int(os.environ.get("PR_SAMPLE_MAX_AGE_DAYS", "7"))),
+        )
+        if fallback_window["observed_prs"] > sample_window["observed_prs"]:
+            sample_runs = fallback_runs
+            sample_window = fallback_window
+
     effective_start_at = parse_dt(sample_window["effective_start_at"])
     if effective_start_at is None:
         raise ValueError("effective_start_at inválido")
     metrics = build_pr_efficiency(
-        raw_runs,
+        sample_runs,
         blocking_workflows=load_blocking_workflows(registry_path),
         start_at=effective_start_at,
         end_at=end_at,

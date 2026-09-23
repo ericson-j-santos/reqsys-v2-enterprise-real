@@ -13,6 +13,7 @@ from enrich_ci_pr_efficiency import (  # noqa: E402
     SECTION_MARKER,
     build_pr_efficiency,
     enrich_files,
+    fetch_recent_pr_sample,
     load_blocking_workflows,
     select_pr_sample_window,
 )
@@ -223,6 +224,49 @@ class CiPrEfficiencyTests(unittest.TestCase):
         self.assertEqual(selected["effective_duration_minutes"], 240)
         self.assertEqual(selected["observed_prs"], 3)
         self.assertTrue(selected["target_met"])
+
+
+    def test_recent_pr_fallback_collects_three_prs_without_scanning_global_history(self):
+        def fake_api(path: str, token: str):
+            self.assertEqual(token, "token")
+            if "/pulls?state=all" in path:
+                return [
+                    {"number": 103, "created_at": "2026-09-22T12:00:00Z", "updated_at": "2026-09-22T15:30:00Z"},
+                    {"number": 102, "created_at": "2026-09-22T11:00:00Z", "updated_at": "2026-09-22T15:20:00Z"},
+                    {"number": 101, "created_at": "2026-09-22T10:00:00Z", "updated_at": "2026-09-22T15:10:00Z"},
+                ]
+            for pr in (101, 102, 103):
+                if f"/pulls/{pr}/commits" in path:
+                    return [{"sha": f"sha-{pr}"}]
+                if f"head_sha=sha-{pr}" in path:
+                    return {
+                        "workflow_runs": [
+                            run(
+                                pr,
+                                pr=None,
+                                name="Required A",
+                                sha=f"sha-{pr}",
+                                created=f"2026-09-22T{12 + (pr - 101):02d}:00:00Z",
+                                updated=f"2026-09-22T{12 + (pr - 101):02d}:01:00Z",
+                            )
+                        ]
+                    }
+            raise AssertionError(path)
+
+        runs, meta = fetch_recent_pr_sample(
+            "owner",
+            "repo",
+            "token",
+            fixed_start_at=START,
+            end_at=END,
+            min_sample_prs=3,
+            max_age_days=7,
+            api_get=fake_api,
+        )
+        self.assertEqual(meta["mode"], "recent_prs_fallback")
+        self.assertTrue(meta["target_met"])
+        self.assertEqual(meta["selected_pr_numbers"], [103, 102, 101])
+        self.assertEqual({item["pull_requests"][0]["number"] for item in runs}, {101, 102, 103})
 
     def test_rerun_rate_is_explicit_and_per_pr(self):
         raw = [

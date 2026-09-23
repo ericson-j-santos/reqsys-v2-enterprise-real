@@ -145,7 +145,7 @@ Depois de acumular pelo menos 3 janelas horárias elegíveis na `main`, o Comman
 
 ## Engineering Control Plane — Baseline v2
 
-A janela fixa global continua sendo a fonte das métricas históricas. A seção `pr_efficiency` possui uma política separada para evitar amostra vazia em períodos de baixa atividade: usa 60 minutos por padrão e amplia progressivamente para 120, 240 e no máximo 360 minutos até observar pelo menos 3 PRs. O artifact registra `sample_window.mode`, janela efetiva, meta e `baseline_sample_valid`; se a meta não for atingida, a amostra permanece explicitamente insuficiente.
+A janela fixa global continua sendo a fonte das métricas históricas. A seção `pr_efficiency` possui uma política separada para baixa atividade: usa 60 minutos, amplia para 120, 240 e 360 minutos e, se ainda não houver 3 PRs, usa `recent_prs_fallback` limitado aos últimos 7 dias. O fallback lista PRs recentes, consulta seus commits e coleta workflow runs por `head_sha`, parando ao atingir 3 PRs; evita varredura global ilimitada. O artifact registra `sample_window.mode`, janela efetiva, meta, `selected_pr_numbers` e `baseline_sample_valid`; se a meta não for atingida, a amostra permanece explicitamente insuficiente.
 
 A taxa de rerun é publicada como `rerun_rate_percent = workflow_runs_de_PR_com_run_attempt_maior_que_1 / workflow_runs_de_PR_observados * 100`. Trata-se de taxa observacional de rerun, não de causalidade do commit.
 
