@@ -37,18 +37,38 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        if: ${{ env.TARGET_ENVIRONMENT == 'dev' }}
+        with:
+          node-version: "20"
+
+      - name: Resolve signed PC24x7 DEV locator
+        if: ${{ env.TARGET_ENVIRONMENT == 'dev' }}
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          mkdir -p .tmp/ux-runtime-evidence
+          node scripts/resolve_pc24x7_dev_locator.mjs --output .tmp/ux-runtime-evidence/dev-signed-locator.json >/dev/null
+
       - name: Resolve integrated environment
         id: environment
         shell: bash
         run: |
           set -euo pipefail
           case "$TARGET_ENVIRONMENT" in
-            dev) BASE_URL="https://reqsys-app-dev.fly.dev" ;;
-            stg) BASE_URL="https://reqsys-app-stg.fly.dev" ;;
-            prod) BASE_URL="https://reqsys-app.fly.dev" ;;
+            dev)
+              BASE_URL="${{ steps.locator.outputs.base_url }}"
+              HEALTH_PATH="/api/health"
+              ;;
+            stg) BASE_URL="https://reqsys-app-stg.fly.dev"; HEALTH_PATH="/health" ;;
+            prod) BASE_URL="https://reqsys-app.fly.dev"; HEALTH_PATH="/health" ;;
             *) echo "Ambiente não permitido: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
           esac
+          test -n "$BASE_URL"
           echo "base_url=$BASE_URL" >> "$GITHUB_OUTPUT"
+          echo "health_path=$HEALTH_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Execute public runtime smoke
         id: smoke
@@ -63,7 +83,7 @@ jobs:
             --dump-header "$HEADERS" \
             --output "$BODY" \
             --write-out '%{http_code}' \
-            "${{ steps.environment.outputs.base_url }}/health")
+            "${{ steps.environment.outputs.base_url }}${{ steps.environment.outputs.health_path }}")
           test "$HTTP_CODE" = "200"
 
           CORRELATION_ID=$(awk 'BEGIN{IGNORECASE=1} /^x-correlation-id:/ {gsub("\r", "", $2); print $2; exit}' "$HEADERS")
