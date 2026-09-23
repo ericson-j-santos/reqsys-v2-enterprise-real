@@ -110,3 +110,75 @@ jobs:
           path: artifacts/noteri-runtime/evidence.json
           if-no-files-found: error
           retention-days: 30
+
+  noteri-runtime-cutover:
+    needs: noteri-runtime-migration-e2e
+    if: github.event_name == 'push' && github.ref_name == 'ops/noteri-runtime-migration-e2e-20260923'
+    name: Cut over persistent Noteri runtime to exact SHA
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_SHA: cc06e6530ca57058db22651ac75d623f6ec921c1
+      INSTALL_RESULT: artifacts/noteri-runtime/cutover-install.json
+      CUTOVER_EVIDENCE: artifacts/noteri-runtime/cutover-evidence.json
+    steps:
+      - name: Checkout exact noteri-runtime SHA for cutover
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/noteri-runtime
+          ref: cc06e6530ca57058db22651ac75d623f6ec921c1
+          path: noteri-runtime
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Update persistent watchdog task to validated SHA
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $metadataPath = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriControlPlaneWatchdog\metadata.json'
+          if (-not (Test-Path -LiteralPath $metadataPath)) { throw 'existing_metadata_missing' }
+          $before = Get-Content -Raw -Encoding UTF8 $metadataPath | ConvertFrom-Json
+          $runnerHome = [string]$before.runner_home
+          if ([string]::IsNullOrWhiteSpace($runnerHome)) { throw 'runner_home_missing' }
+          New-Item -ItemType Directory -Force (Split-Path $env:INSTALL_RESULT) | Out-Null
+          python noteri-runtime/scripts/noteri_control_plane_watchdog.py install --repo-root noteri-runtime --runner-home "$runnerHome" --source-sha "$env:TARGET_SHA" --confirm INSTALL-NOTERI-CONTROL-PLANE-WATCHDOG --result-path "$env:INSTALL_RESULT"
+          if ($LASTEXITCODE -ne 0) { throw "watchdog_install_failed:$LASTEXITCODE" }
+
+      - name: Validate independent persistent cutover evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $e = Get-Content -Raw -Encoding UTF8 $env:INSTALL_RESULT | ConvertFrom-Json
+          if (-not $e.ok) { throw 'cutover_install_not_ok' }
+          if (-not $e.runtime_ok) { throw 'runtime_not_ok_after_cutover' }
+          if ($e.activation_pending) { throw 'activation_pending_after_cutover' }
+          if (-not $e.headless_persistence) { throw 'headless_persistence_missing_after_cutover' }
+          if ([string]$e.metadata.source_sha -ne $env:TARGET_SHA) { throw 'metadata_sha_mismatch' }
+
+          $schtasks = Join-Path ($env:SystemRoot) 'System32\schtasks.exe'
+          $taskXml = & $schtasks /Query /TN '\Automation\ReqSysNoteriControlPlaneWatchdog' /XML
+          if ($LASTEXITCODE -ne 0) { throw 'task_query_failed' }
+          $taskText = ($taskXml -join "`n")
+          if (-not $taskText.Contains($env:TARGET_SHA)) { throw 'task_action_sha_mismatch' }
+
+          @{
+            ok = $true
+            host = 'Noteri'
+            source_sha = $env:TARGET_SHA
+            runtime_ok = [bool]$e.runtime_ok
+            headless_persistence = [bool]$e.headless_persistence
+            activation_pending = [bool]$e.activation_pending
+            task_action_sha_match = $true
+            production_touched = $false
+            secrets_read = $false
+            rdc_required = $false
+          } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:CUTOVER_EVIDENCE -Encoding UTF8
+
+      - name: Upload sanitized cutover evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-runtime-cutover-${{ github.run_id }}
+          path: artifacts/noteri-runtime/cutover-evidence.json
+          if-no-files-found: error
+          retention-days: 30
