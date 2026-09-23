@@ -609,6 +609,7 @@ def recreate_nginx_gateway(
     env = minimal_process_env()
     env["COMPOSE_ANSI"] = "never"
     env["COMPOSE_IGNORE_ORPHANS"] = "true"
+    env["COMPOSE_DISABLE_ENV_FILE"] = "true"
     run(
         [
             "docker",
