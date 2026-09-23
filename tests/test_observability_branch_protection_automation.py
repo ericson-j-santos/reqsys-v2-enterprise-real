@@ -2,33 +2,36 @@ from pathlib import Path
 
 WORKFLOW = Path(".github/workflows/branch-protection-audit.yml")
 GATEWAY = Path(".github/workflows/reqsys-authorized-actions-gateway.yml")
+RUNNER = Path("scripts/run_observability_main_protection_local.py")
 
 
 def test_protection_apply_is_fixed_and_fail_closed() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
+    runner = RUNNER.read_text(encoding="utf-8")
     assert "apply-observability-platform" in raw
-    assert "ericson-j-santos/observability-platform" in raw
-    assert "EXPECTED_TARGET_SHA: a13450360b85676f40932019119137d89313c58e" in raw
-    assert "REQUIRED_CHECK: test" in raw
-    assert "TARGET_SHA_CHANGED" in raw
-    assert "REQUIRED_CHECK_NOT_GREEN" in raw
-    assert '"contexts": ["test"]' in raw
-    assert '"enforce_admins": True' in raw
-    assert '"required_approving_review_count": 0' in raw
-    assert '"allow_force_pushes": False' in raw
-    assert '"allow_deletions": False' in raw
-    assert "BRANCH_NOT_PROTECTED" in raw
-    assert "REQUIRED_CHECK_MISSING" in raw
-    assert "FORCE_PUSH_STILL_ALLOWED" in raw
-    assert "BRANCH_DELETION_STILL_ALLOWED" in raw
+    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    assert "ericson-j-santos/observability-platform" in runner
+    assert 'REQUIRED_CHECK = "test"' in runner
+    assert '"target_sha_changed_before_write"' in runner
+    assert '"target_sha_changed_after_write"' in runner
+    assert '"required_check_not_green"' in runner
+    assert '"branch_not_protected_after_write"' in runner
+    assert '"protection_readback_mismatch"' in runner
+    assert '"required_pull_request_reviews"' in runner
+    assert '"enforce_admins": True' in runner
+    assert '"required_approving_review_count": 0' in runner
+    assert '"allow_force_pushes": False' in runner
+    assert '"allow_deletions": False' in runner
 
 
-def test_admin_token_is_secret_backed_and_not_echoed() -> None:
+def test_admin_auth_is_local_and_not_injected_as_secret() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "GH_TOKEN: ${{ secrets.GITHUB_PAT }}" in raw
-    assert "secret_value_exposed" in raw
-    assert "echo $GH_TOKEN" not in raw
-    assert "print(os.environ[\"GH_TOKEN\"])" not in raw
+    runner = RUNNER.read_text(encoding="utf-8")
+    assert "GITHUB_PAT" not in raw
+    assert 'env.pop("GH_TOKEN", None)' in runner
+    assert 'env.pop("GITHUB_TOKEN", None)' in runner
+    assert '"github_local_auth_unavailable"' in runner
+    assert '"secret_value_exposed": False' in runner
 
 
 def test_authorized_gateway_exposes_only_exact_command() -> None:
