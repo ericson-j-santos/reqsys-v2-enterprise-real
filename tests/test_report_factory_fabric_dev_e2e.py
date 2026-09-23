@@ -87,6 +87,19 @@ def test_safe_fabric_error_code_extracts_only_structured_code() -> None:
     assert module._safe_fabric_error_code('{"message":"no structured code"}') == "unknown"
 
 
+def test_safe_fabric_error_codes_preserves_nested_codes_without_messages() -> None:
+    raw = (
+        '{"errorCode":"InvalidDefinitionFormat","message":"token=should-not-leak",'
+        '"moreDetails":[{"errorCode":"RdlSchemaError","message":"secret detail"},'
+        '{"error":{"code":"InvalidElement","message":"another secret"}}]}'
+    )
+    assert module._safe_fabric_error_codes(raw) == [
+        "InvalidDefinitionFormat",
+        "RdlSchemaError",
+        "InvalidElement",
+    ]
+
+
 def test_request_json_http_error_exposes_code_not_body() -> None:
     body = b'{"errorCode":"CorruptedPayload","message":"token=should-not-leak"}'
     error = urllib.error.HTTPError(
@@ -108,5 +121,33 @@ def test_request_json_http_error_exposes_code_not_body() -> None:
     reason = str(captured.value)
     assert reason == "fabric_http_400:CorruptedPayload"
     assert "should-not-leak" not in reason
+    assert "ephemeral-token" not in reason
+
+
+def test_request_json_http_error_exposes_nested_codes_not_messages() -> None:
+    body = (
+        b'{"errorCode":"InvalidDefinitionFormat","message":"token=should-not-leak",'
+        b'"moreDetails":[{"errorCode":"RdlSchemaError","message":"secret detail"}]}'
+    )
+    error = urllib.error.HTTPError(
+        module.FABRIC_BASE + "/workspaces/example/paginatedReports",
+        400,
+        "Bad Request",
+        hdrs=None,
+        fp=io.BytesIO(body),
+    )
+    with patch.object(module.urllib.request, "urlopen", side_effect=error):
+        with pytest.raises(module.E2EError) as captured:
+            module._request_json(
+                "POST",
+                module.FABRIC_BASE + "/workspaces/example/paginatedReports",
+                "ephemeral-token",
+                {"displayName": "Example"},
+            )
+
+    reason = str(captured.value)
+    assert reason == "fabric_http_400:InvalidDefinitionFormat:RdlSchemaError"
+    assert "should-not-leak" not in reason
+    assert "secret detail" not in reason
     assert "ephemeral-token" not in reason
 
