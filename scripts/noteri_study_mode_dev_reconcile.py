@@ -3,7 +3,8 @@
 
 O script é propositalmente restrito:
 - runtime fixo DESKTOP-PDQK954;
-- ambiente DEV descoberto pelo gateway local exclusivo na porta 8083;
+- ambiente DEV descoberto pela API local exclusiva na porta 8210;
+- gateway funcional DEV canônico na porta 8083, com autorreparo Nginx restrito;
 - projeto/containers derivados dos labels Docker Compose do gateway observado;
 - transporte de perfil pelo Engineering Orchestrator;
 - destino lógico fixo Noteri;
@@ -498,13 +499,19 @@ def minimal_process_env() -> dict[str, str]:
 def nginx_runtime_network(item: dict[str, Any]) -> str:
     networks = (item.get("NetworkSettings") or {}).get("Networks") or {}
     if len(networks) != 1:
-        raise ReconcileError("nginx_network_not_unique", stage="nginx_gateway_identity")
+        raise ReconcileError(
+            "nginx_network_not_unique",
+            stage="nginx_gateway_identity",
+        )
     name = str(next(iter(networks))).strip()
     if not name or any(
         token in name.casefold()
         for token in ("prod", "production", "hml", "stg", "staging")
     ):
-        raise ReconcileError("nginx_network_not_dev", stage="nginx_gateway_identity")
+        raise ReconcileError(
+            "nginx_network_not_dev",
+            stage="nginx_gateway_identity",
+        )
     return name
 
 
@@ -572,7 +579,9 @@ def write_nginx_gateway_repair_compose(
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
         raise ReconcileError("localappdata_missing", stage="nginx_gateway_identity")
-    repair_root = Path(local_app_data) / "ReqSys" / "StudyModeDeploy" / "gateway-repair"
+    repair_root = (
+        Path(local_app_data) / "ReqSys" / "StudyModeDeploy" / "gateway-repair"
+    )
     repair_root.mkdir(parents=True, exist_ok=True)
     suffix = host_port or "none"
     compose_path = repair_root / f"docker-compose.gateway-repair-{suffix}.json"
@@ -661,7 +670,8 @@ def repair_nginx_gateway_port(
                 stage="nginx_gateway_identity",
                 diagnostic_markers=("gateway_8083_not_bound",),
             )
-        if required_nginx_bind_source(nginx_after, project).resolve() != nginx_bind.resolve():
+        observed_bind = required_nginx_bind_source(nginx_after, project).resolve()
+        if observed_bind != nginx_bind.resolve():
             raise ReconcileError(
                 "dev_gateway_bind_changed_during_repair",
                 stage="nginx_gateway_identity",
@@ -1475,9 +1485,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     try:
-        # O runtime DEV atual usa bind mounts, mas não dependemos de hot-reload
-        # implícito: reiniciamos somente a API existente para carregar o código
-        # sincronizado. Não executamos Compose nem reprocessamos .env/secrets.
+        # O runtime DEV usa bind mounts; fora do autorreparo restrito da porta
+        # do Nginx acima, não recriamos a stack nem reprocessamos .env/segredos.
+        # A API existente é reiniciada para carregar deterministicamente o código.
         restart_container(api_container, repo_root, stage="api_restart")
         wait_container_healthy(api_container, repo_root, args.health_timeout)
         direct_api_contract = wait_direct_api_contract()
