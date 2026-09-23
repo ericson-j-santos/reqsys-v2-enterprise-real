@@ -10,6 +10,7 @@ import socket
 import subprocess
 import time
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +84,54 @@ def _inspect(container_ids: list[str]) -> list[dict[str, Any]]:
     return payload
 
 
+def _canonical_host_binding(container: dict[str, Any]) -> bool:
+    host_config = container.get("HostConfig") or {}
+    port_bindings = host_config.get("PortBindings") or {}
+    bindings = port_bindings.get(CONTAINER_PORT) or []
+    return any(
+        isinstance(binding, dict)
+        and str(binding.get("HostIp") or "") == HOST_IP
+        and str(binding.get("HostPort") or "") == HOST_PORT
+        for binding in bindings
+    )
+
+
+def _canonical_compose_identity(container: dict[str, Any]) -> bool:
+    labels = (container.get("Config") or {}).get("Labels") or {}
+    if labels.get("com.docker.compose.service") != SERVICE:
+        return False
+    config_files = str(labels.get("com.docker.compose.project.config_files") or "")
+    normalized = config_files.replace("\\", "/").casefold()
+    return COMPOSE_FILE.casefold() in normalized
+
+
+def _canonical_token_mount(container: dict[str, Any]) -> str | None:
+    matches = [
+        str(mount.get("Source") or "").strip()
+        for mount in container.get("Mounts") or []
+        if isinstance(mount, dict)
+        and mount.get("Type") == "bind"
+        and mount.get("Destination") == TOKEN_DESTINATION
+        and str(mount.get("Source") or "").strip()
+    ]
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
+def _created_at(container: dict[str, Any]) -> datetime:
+    raw = str(container.get("Created") or "").strip()
+    if not raw:
+        raise ReconcileError("worker_pool_container_created_missing")
+    try:
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ReconcileError("worker_pool_container_created_invalid") from exc
+    if value.tzinfo is None:
+        raise ReconcileError("worker_pool_container_created_invalid")
+    return value
+
+
 def discover_token_source() -> tuple[Path, str]:
     configured = os.environ.get("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST")
     if configured:
@@ -91,23 +140,29 @@ def discover_token_source() -> tuple[Path, str]:
             return path, "environment"
         raise ReconcileError("configured_token_file_missing")
 
-    sources: set[str] = set()
+    candidates: list[tuple[datetime, str]] = []
     for container in _inspect(_service_container_ids(all_containers=True)):
-        for mount in container.get("Mounts") or []:
-            if not isinstance(mount, dict):
-                continue
-            if mount.get("Type") != "bind" or mount.get("Destination") != TOKEN_DESTINATION:
-                continue
-            source = str(mount.get("Source") or "").strip()
-            if source:
-                sources.add(source)
+        if not _canonical_compose_identity(container):
+            continue
+        if not _canonical_host_binding(container):
+            continue
+        source = _canonical_token_mount(container)
+        if source is None:
+            continue
+        candidates.append((_created_at(container), source))
 
-    if len(sources) != 1:
-        raise ReconcileError("worker_pool_token_source_not_unique")
-    path = Path(next(iter(sources)))
+    if not candidates:
+        raise ReconcileError("worker_pool_token_source_missing")
+
+    newest = max(created for created, _source in candidates)
+    newest_sources = {source for created, source in candidates if created == newest}
+    if len(newest_sources) != 1:
+        raise ReconcileError("worker_pool_latest_token_source_ambiguous")
+
+    path = Path(next(iter(newest_sources)))
     if not path.is_file():
         raise ReconcileError("worker_pool_token_source_missing")
-    return path, "docker_mount_history"
+    return path, "latest_canonical_docker_mount_history"
 
 
 def resolve_rules_sha() -> str:

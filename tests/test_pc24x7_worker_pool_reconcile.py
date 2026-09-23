@@ -1,19 +1,34 @@
 import json
-from pathlib import Path
 
 import pytest
 
 from scripts import pc24x7_worker_pool_reconcile as reconcile
 
 
-def _container(source: str, *, running: bool = False, canonical_port: bool = False) -> dict:
-    bindings = []
-    if canonical_port:
-        bindings = [{"HostIp": reconcile.HOST_IP, "HostPort": reconcile.HOST_PORT}]
+def _container(
+    source: str,
+    *,
+    created: str,
+    running: bool = False,
+    canonical_binding: bool = True,
+    compose_file: str = reconcile.COMPOSE_FILE,
+) -> dict:
+    host_bindings = []
+    runtime_bindings = []
+    if canonical_binding:
+        host_bindings = [{"HostIp": reconcile.HOST_IP, "HostPort": reconcile.HOST_PORT}]
+        runtime_bindings = [{"HostIp": reconcile.HOST_IP, "HostPort": reconcile.HOST_PORT}]
     return {
-        "Config": {"Labels": {"com.docker.compose.service": reconcile.SERVICE}},
+        "Created": created,
+        "Config": {
+            "Labels": {
+                "com.docker.compose.service": reconcile.SERVICE,
+                "com.docker.compose.project.config_files": f"C:/dev/reqsys/{compose_file}",
+            }
+        },
+        "HostConfig": {"PortBindings": {reconcile.CONTAINER_PORT: host_bindings}},
         "State": {"Running": running},
-        "NetworkSettings": {"Ports": {reconcile.CONTAINER_PORT: bindings}},
+        "NetworkSettings": {"Ports": {reconcile.CONTAINER_PORT: runtime_bindings}},
         "Mounts": [
             {
                 "Type": "bind",
@@ -24,48 +39,119 @@ def _container(source: str, *, running: bool = False, canonical_port: bool = Fal
     }
 
 
-def test_discovers_unique_token_source_from_stopped_container_history(tmp_path, monkeypatch) -> None:
-    token = tmp_path / "worker-pool.token"
-    token.write_text("opaque", encoding="utf-8")
+def test_discovers_latest_canonical_token_source_from_container_history(
+    tmp_path, monkeypatch
+) -> None:
+    old = tmp_path / "old.token"
+    latest = tmp_path / "latest.token"
+    old.write_text("old", encoding="utf-8")
+    latest.write_text("latest", encoding="utf-8")
     monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
-    monkeypatch.setattr(reconcile, "_service_container_ids", lambda *, all_containers: ["old", "new"])
+    monkeypatch.setattr(
+        reconcile, "_service_container_ids", lambda *, all_containers: ["old", "new"]
+    )
     monkeypatch.setattr(
         reconcile,
         "_inspect",
-        lambda _ids: [_container(str(token)), _container(str(token))],
+        lambda _ids: [
+            _container(str(old), created="2026-09-20T10:00:00Z"),
+            _container(str(latest), created="2026-09-22T10:00:00Z"),
+        ],
     )
 
     resolved, method = reconcile.discover_token_source()
 
-    assert resolved == token
-    assert method == "docker_mount_history"
+    assert resolved == latest
+    assert method == "latest_canonical_docker_mount_history"
 
 
-def test_token_source_ambiguity_fails_closed(tmp_path, monkeypatch) -> None:
+def test_ignores_noncanonical_compose_and_binding_history(tmp_path, monkeypatch) -> None:
+    expected = tmp_path / "expected.token"
+    ignored = tmp_path / "ignored.token"
+    expected.write_text("expected", encoding="utf-8")
+    ignored.write_text("ignored", encoding="utf-8")
+    monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
+    monkeypatch.setattr(
+        reconcile,
+        "_service_container_ids",
+        lambda *, all_containers: ["one", "two", "three"],
+    )
+    monkeypatch.setattr(
+        reconcile,
+        "_inspect",
+        lambda _ids: [
+            _container(str(expected), created="2026-09-20T10:00:00Z"),
+            _container(
+                str(ignored),
+                created="2026-09-22T10:00:00Z",
+                canonical_binding=False,
+            ),
+            _container(
+                str(ignored),
+                created="2026-09-23T10:00:00Z",
+                compose_file="other-compose.yml",
+            ),
+        ],
+    )
+
+    resolved, _method = reconcile.discover_token_source()
+
+    assert resolved == expected
+
+
+def test_latest_timestamp_with_different_sources_fails_closed(
+    tmp_path, monkeypatch
+) -> None:
     first = tmp_path / "first.token"
     second = tmp_path / "second.token"
     first.write_text("a", encoding="utf-8")
     second.write_text("b", encoding="utf-8")
     monkeypatch.delenv("CODEX_WORKER_POOL_API_TOKEN_FILE_HOST", raising=False)
-    monkeypatch.setattr(reconcile, "_service_container_ids", lambda *, all_containers: ["one", "two"])
     monkeypatch.setattr(
-        reconcile,
-        "_inspect",
-        lambda _ids: [_container(str(first)), _container(str(second))],
+        reconcile, "_service_container_ids", lambda *, all_containers: ["one", "two"]
     )
-
-    with pytest.raises(reconcile.ReconcileError, match="worker_pool_token_source_not_unique"):
-        reconcile.discover_token_source()
-
-
-def test_canonical_endpoint_requires_exact_loopback_binding(monkeypatch) -> None:
-    monkeypatch.setattr(reconcile, "_service_container_ids", lambda *, all_containers: ["old", "active"])
     monkeypatch.setattr(
         reconcile,
         "_inspect",
         lambda _ids: [
-            _container("ignored", running=True, canonical_port=False),
-            _container("ignored", running=True, canonical_port=True),
+            _container(str(first), created="2026-09-22T10:00:00Z"),
+            _container(str(second), created="2026-09-22T10:00:00Z"),
+        ],
+    )
+
+    with pytest.raises(
+        reconcile.ReconcileError, match="worker_pool_latest_token_source_ambiguous"
+    ):
+        reconcile.discover_token_source()
+
+
+def test_created_timestamp_must_be_timezone_aware() -> None:
+    with pytest.raises(
+        reconcile.ReconcileError, match="worker_pool_container_created_invalid"
+    ):
+        reconcile._created_at({"Created": "2026-09-22T10:00:00"})
+
+
+def test_canonical_endpoint_requires_exact_loopback_binding(monkeypatch) -> None:
+    monkeypatch.setattr(
+        reconcile, "_service_container_ids", lambda *, all_containers: ["old", "active"]
+    )
+    monkeypatch.setattr(
+        reconcile,
+        "_inspect",
+        lambda _ids: [
+            _container(
+                "ignored",
+                created="2026-09-20T10:00:00Z",
+                running=True,
+                canonical_binding=False,
+            ),
+            _container(
+                "ignored",
+                created="2026-09-22T10:00:00Z",
+                running=True,
+                canonical_binding=True,
+            ),
         ],
     )
 
@@ -78,7 +164,7 @@ def test_evidence_does_not_require_secret_or_token_path(tmp_path) -> None:
     evidence = tmp_path / "evidence.json"
     payload = {
         "result": "WORKER_POOL_RUNTIME_RECONCILED",
-        "token_source_method": "docker_mount_history",
+        "token_source_method": "latest_canonical_docker_mount_history",
         "token_content_read": False,
     }
 
