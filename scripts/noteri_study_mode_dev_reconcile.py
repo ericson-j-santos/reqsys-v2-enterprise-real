@@ -288,15 +288,26 @@ def discover_runtime(repo_root: Path) -> tuple[str, dict[str, Any], dict[str, An
     return project, api_item, frontend_item, nginx_item
 
 
-def rw_bind_source(item: dict[str, Any], destination: str) -> Path | None:
+def bind_source(
+    item: dict[str, Any],
+    destination: str,
+    *,
+    require_rw: bool | None = None,
+) -> Path | None:
     for mount in item.get("Mounts") or []:
         if (
             mount.get("Destination") == destination
             and mount.get("Type") == "bind"
-            and mount.get("RW") is True
         ):
+            is_rw = mount.get("RW") is True
+            if require_rw is not None and is_rw is not require_rw:
+                continue
             return windows_path(str(mount.get("Source") or ""))
     return None
+
+
+def rw_bind_source(item: dict[str, Any], destination: str) -> Path | None:
+    return bind_source(item, destination, require_rw=True)
 
 
 def required_bind_source(
@@ -329,6 +340,69 @@ def container_host_port(item: dict[str, Any], port: str) -> str | None:
         return None
     value = str((bindings[0] or {}).get("HostPort") or "").strip()
     return value or None
+
+
+def runtime_working_dir(
+    api_item: dict[str, Any],
+    expected_project: str,
+) -> Path:
+    info = labels(api_item)
+    project = info.get("com.docker.compose.project")
+    if project != expected_project:
+        raise ReconcileError(f"compose_project_mismatch:{project}")
+    working_raw = info.get("com.docker.compose.project.working_dir") or ""
+    if not working_raw:
+        raise ReconcileError("compose_working_dir_missing")
+    working_dir = windows_path(working_raw)
+    if not working_dir.is_dir():
+        raise ReconcileError("compose_working_dir_not_found")
+    return working_dir
+
+
+def container_env_equals(
+    container: str,
+    key: str,
+    expected: str,
+    repo_root: Path,
+) -> bool:
+    if any(token in key or token in expected for token in ('"', "\r", "\n")):
+        raise ReconcileError("runtime_env_probe_invalid", stage="runtime_preconditions")
+    needle = f"{key}={expected}"
+    template = (
+        '{{range .Config.Env}}{{if eq . "'
+        + needle
+        + '"}}true{{end}}{{end}}'
+    )
+    observed = run(
+        ["docker", "inspect", "--format", template, container],
+        cwd=repo_root,
+        timeout=60,
+        stage="runtime_preconditions",
+    ).stdout.strip()
+    return observed == "true"
+
+
+def sync_frontend_runtime_source(
+    frontend_source: Path,
+    frontend_container: str,
+    repo_root: Path,
+    *,
+    stage: str,
+) -> None:
+    source = frontend_source / "src" / "services" / "hostProfileLocalAgent.js"
+    if not source.is_file():
+        raise ReconcileError("frontend_runtime_source_missing", stage=stage)
+    run(
+        [
+            "docker",
+            "cp",
+            str(source),
+            f"{frontend_container}:/app/src/services/hostProfileLocalAgent.js",
+        ],
+        cwd=repo_root,
+        timeout=120,
+        stage=stage,
+    )
 
 
 def compose_context(
@@ -719,15 +793,40 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "/app",
         stage="api_source_bind",
     )
-    working_dir, compose_files = compose_context(api_before, repo_root, project)
+    working_dir = runtime_working_dir(api_before, project)
+
+    nginx_bind_source = bind_source(
+        nginx_before,
+        "/etc/nginx/conf.d/default.conf",
+    )
+    expected_nginx_source = (working_dir / NGINX_CONFIG).resolve()
+    if (
+        nginx_bind_source is None
+        or nginx_bind_source.resolve() != expected_nginx_source
+    ):
+        raise ReconcileError(
+            "nginx_config_bind_mismatch",
+            stage="runtime_preconditions",
+        )
 
     frontend_bind_source = rw_bind_source(frontend_before, "/app")
-    frontend_requires_rebuild = frontend_bind_source is None
+    frontend_requires_container_sync = frontend_bind_source is None
     frontend_source = frontend_bind_source or (working_dir / "frontend")
     if not frontend_source.is_dir():
         raise ReconcileError(
             "frontend_source_dir_missing",
             stage="frontend_source_fallback",
+        )
+
+    if not container_env_equals(
+        api_container,
+        "NOTERI_CONTROL_PLANE_URL",
+        "http://host.docker.internal:8787",
+        repo_root,
+    ):
+        raise ReconcileError(
+            "runtime_control_plane_env_bootstrap_required",
+            stage="runtime_preconditions",
         )
 
     backup_root, changes = backup_and_copy(
@@ -738,55 +837,33 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         args.expected_sha,
     )
 
-    compose_env = os.environ.copy()
-    api_port = container_host_port(api_before, "8000/tcp")
-    gateway_port = container_host_port(nginx_before, "80/tcp")
-    if api_port:
-        compose_env["BACKEND_PORT"] = api_port
-    if gateway_port:
-        compose_env["GATEWAY_PORT"] = gateway_port
-
-    base = compose_base(project, compose_files, working_dir)
     try:
-        run(
-            [*base, "config"],
-            cwd=working_dir,
-            timeout=120,
-            env=compose_env,
-            stage="compose_config",
-        )
-        run(
-            [*base, "up", "-d", "--no-deps", "--force-recreate", "api"],
-            cwd=working_dir,
-            timeout=600,
-            env=compose_env,
-            stage="api_recreate",
-        )
-        wait_container_healthy(api_container, repo_root, args.health_timeout)
-
-        if frontend_requires_rebuild:
-            run(
-                [
-                    *base,
-                    "up",
-                    "-d",
-                    "--no-deps",
-                    "--build",
-                    "--force-recreate",
-                    "frontend",
-                ],
-                cwd=working_dir,
-                timeout=900,
-                env=compose_env,
-                stage="frontend_rebuild",
+        if frontend_requires_container_sync:
+            sync_frontend_runtime_source(
+                frontend_source,
+                frontend_container,
+                repo_root,
+                stage="frontend_container_sync",
             )
 
         run(
-            [*base, "up", "-d", "--no-deps", "--force-recreate", "nginx"],
-            cwd=working_dir,
-            timeout=300,
-            env=compose_env,
-            stage="nginx_recreate",
+            ["docker", "restart", api_container],
+            cwd=repo_root,
+            timeout=180,
+            stage="api_restart",
+        )
+        wait_container_healthy(api_container, repo_root, args.health_timeout)
+        run(
+            ["docker", "restart", frontend_container],
+            cwd=repo_root,
+            timeout=180,
+            stage="frontend_restart",
+        )
+        run(
+            ["docker", "restart", nginx_container],
+            cwd=repo_root,
+            timeout=180,
+            stage="nginx_restart",
         )
 
         _, public_health = http_json("GET", "/api/health")
@@ -801,14 +878,14 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             repo_root,
             stage="verify_runtime_profile",
         )
-        env_items = (api_after.get("Config") or {}).get("Env") or []
-        env_map = dict(entry.split("=", 1) for entry in env_items if "=" in entry)
-        mounts = api_after.get("Mounts") or []
-        if (
-            env_map.get("NOTERI_CONTROL_PLANE_URL")
-            != "http://host.docker.internal:8787"
+        if not container_env_equals(
+            api_container,
+            "NOTERI_CONTROL_PLANE_URL",
+            "http://host.docker.internal:8787",
+            repo_root,
         ):
             raise ReconcileError("runtime_control_plane_env_missing")
+        mounts = api_after.get("Mounts") or []
         if any(item.get("Destination") == "/noteri-runtime" for item in mounts):
             raise ReconcileError("legacy_noteri_profile_mount_present")
 
@@ -818,37 +895,31 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     except Exception:
         rollback_files(changes)
         try:
-            original_files = [path for path in compose_files if "StudyModeDeploy" not in str(path)]
-            original_base = compose_base(project, original_files, working_dir)
-            run(
-                [*original_base, "up", "-d", "--no-deps", "--force-recreate", "api"],
-                cwd=working_dir,
-                timeout=600,
-                env=compose_env,
-                stage="rollback_api_recreate",
-            )
-            if frontend_requires_rebuild:
-                run(
-                    [
-                        *original_base,
-                        "up",
-                        "-d",
-                        "--no-deps",
-                        "--build",
-                        "--force-recreate",
-                        "frontend",
-                    ],
-                    cwd=working_dir,
-                    timeout=900,
-                    env=compose_env,
-                    stage="rollback_frontend_rebuild",
+            if frontend_requires_container_sync:
+                sync_frontend_runtime_source(
+                    frontend_source,
+                    frontend_container,
+                    repo_root,
+                    stage="rollback_frontend_container_sync",
                 )
             run(
-                [*original_base, "up", "-d", "--no-deps", "--force-recreate", "nginx"],
-                cwd=working_dir,
-                timeout=300,
-                env=compose_env,
-                stage="rollback_nginx_recreate",
+                ["docker", "restart", api_container],
+                cwd=repo_root,
+                timeout=180,
+                stage="rollback_api_restart",
+            )
+            wait_container_healthy(api_container, repo_root, args.health_timeout)
+            run(
+                ["docker", "restart", frontend_container],
+                cwd=repo_root,
+                timeout=180,
+                stage="rollback_frontend_restart",
+            )
+            run(
+                ["docker", "restart", nginx_container],
+                cwd=repo_root,
+                timeout=180,
+                stage="rollback_nginx_restart",
             )
         except Exception:
             pass
@@ -865,10 +936,14 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "gateway_container": nginx_container,
         "runtime_discovery": "api_port_8210_compose_labels",
         "api_source_bind_observed": True,
-        "frontend_source_bind_observed": not frontend_requires_rebuild,
+        "frontend_source_bind_observed": not frontend_requires_container_sync,
         "frontend_runtime_refresh": (
-            "rebuild_from_compose_source" if frontend_requires_rebuild else "bind"
+            "container_copy_and_restart"
+            if frontend_requires_container_sync
+            else "bind_restart"
         ),
+        "runtime_refresh_strategy": "preserve_existing_containers",
+        "compose_recreation_used": False,
         "profile_mount_rw": False,
         "control_plane_bridge": True,
         "control_plane_url": "http://host.docker.internal:8787",
