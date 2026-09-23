@@ -25,7 +25,8 @@
     "A reconciliação sincroniza o Nginx DEV efetivo, recria o proxy e exige HTTP 200 em /api/health e /api/runtime/health antes do E2E.",
     "O reconciliador descobre o runtime DEV pela API única na porta 8210 e deriva projeto/serviços pelos labels Docker Compose; o gateway 8083 permanece validado funcionalmente por HTTP.",
     "Falhas de docker compose config publicam somente diagnostic_code allowlisted, sem stderr bruto, valores de ambiente, tokens, segredos ou caminhos sensíveis.",
-    "Quando diagnostic_code for insuficiente, a evidência publica somente diagnostic_markers de allowlist fixa, sem texto bruto, caminhos ou valores arbitrários."
+    "Quando diagnostic_code for insuficiente, a evidência publica somente diagnostic_markers de allowlist fixa, sem texto bruto, caminhos ou valores arbitrários.",
+    "A reconciliação do runtime DEV preserva os containers e seus ambientes existentes, não depende de docker compose para refresh, exige o bridge de control plane já configurado e usa restart/cópia controlada com rollback antes do E2E."
   ],
   "controls": {
     "hml_enabled": false,
