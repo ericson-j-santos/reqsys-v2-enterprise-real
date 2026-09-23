@@ -202,16 +202,35 @@ def test_reconciler_has_positive_negative_idempotency_and_restore_controls():
 
 
 def test_reconcile_failure_is_sanitized_and_stage_aware():
-    err = module.ReconcileError("command_failed:docker:exit_1", stage="inspect_runtime")
+    err = module.ReconcileError(
+        "command_failed:docker:exit_1",
+        stage="inspect_runtime",
+        diagnostic_details={"gateway_last_http_status": 502},
+    )
     assert err.code == "command_failed:docker"
     assert err.stage == "inspect_runtime"
+    assert err.diagnostic_details == {"gateway_last_http_status": 502}
 
     raw = SCRIPT.read_text(encoding="utf-8")
     assert '"error_code"' in raw
     assert '"failure_stage"' in raw
     assert '"diagnostic_code"' in raw
     assert '"diagnostic_markers"' in raw
+    assert '"diagnostic_details"' in raw
     assert 'str(exc)' not in raw
+
+
+def test_gateway_timeout_keeps_sanitized_last_status():
+    with pytest.raises(module.ReconcileError) as exc:
+        module.wait_gateway_status("/api/health", {200}, timeout_seconds=0)
+
+    assert exc.value.code == "gateway_status_timeout"
+    assert exc.value.stage == "live_bind_refresh"
+    assert exc.value.diagnostic_markers == ("api_health_not_observed",)
+    assert exc.value.diagnostic_details == {
+        "gateway_path": "/api/health",
+        "gateway_last_http_status": None,
+    }
 
 
 def test_compose_failure_diagnostic_is_allowlisted_and_secret_safe():
@@ -315,6 +334,10 @@ def test_reconciler_refreshes_nginx_runtime_contract_before_e2e():
     assert "proxy_pass http://api:8000;" in nginx
     assert '"runtime_health_not_observed"' in raw
     assert '"noteri_profile_not_observed"' in raw
+    assert '"gateway_tcp_8083_open"' in raw
+    assert '"nginx_upstream_api_health_ok"' in raw
+    assert '"nginx_active_contract"' in raw
+    assert '"direct_api_contract"' in raw
 
 
 def test_reconciler_discovers_compose_runtime_from_dev_api_port():
