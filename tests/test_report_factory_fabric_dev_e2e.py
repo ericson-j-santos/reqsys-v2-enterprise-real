@@ -83,6 +83,46 @@ def test_script_has_fixed_dev_boundary_and_no_prod_target() -> None:
     assert '_invoke("DELETE"' not in text
 
 
+def test_canonical_minimal_rdl_matches_fabric_public_envelope() -> None:
+    source = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    rdl = module.report_factory.generate_rdl(source)
+    canonical = module._canonical_minimal_rdl(rdl)
+    root = ET.fromstring(canonical)
+    q = module.report_factory._q
+    rd = module.report_factory._rd
+    df = module.report_factory._df
+
+    assert root.attrib.get("MustUnderstand") == "df"
+    assert root.findtext(rd("ReportUnitType")) == "Inch"
+    assert root.findtext(rd("ReportID"))
+    assert root.findtext(df("DefaultFontFamily")) == "Segoe UI"
+    assert root.findtext(q("AutoRefresh")) == "0"
+    assert root.find(q("DataSources")) is None
+    assert root.find(q("DataSets")) is None
+    assert root.find(q("ReportParameters")) is None
+    assert root.find(f".//{q('Tablix')}") is None
+
+    section = root.find(f"{q('ReportSections')}/{q('ReportSection')}")
+    assert section is not None
+    assert section.findtext(q("Width")) == "6in"
+    assert section.find(q("Page")) is not None
+
+    title = root.find(f".//{q('Textbox')}")
+    assert title is not None
+    assert title.findtext(rd("WatermarkTextbox")) == "Title"
+    assert title.findtext(rd("DefaultName")) == "ReportTitle"
+    assert title.findtext(q("KeepTogether")) == "true"
+
+    layout = root.find(q("ReportParametersLayout"))
+    assert layout is not None
+    grid = layout.find(q("GridLayoutDefinition"))
+    assert grid is not None
+    assert grid.findtext(q("NumberOfColumns")) == "4"
+    assert grid.findtext(q("NumberOfRows")) == "2"
+
+
 def test_progressive_rdl_variants_isolate_definition_layers() -> None:
     source = module.report_factory.load_spec(
         ROOT / "examples" / "report-factory" / "demandas_por_status.json"
@@ -91,20 +131,20 @@ def test_progressive_rdl_variants_isolate_definition_layers() -> None:
     variants = module._progressive_rdl_variants(rdl)
 
     assert [name for name, _ in variants] == [
-        "minimal",
+        "canonical_minimal",
         "datasource",
         "dataset",
-        "full",
+        "tablix",
+        "generated_full",
     ]
 
     roots = {name: ET.fromstring(value) for name, value in variants}
     q = module.report_factory._q
 
-    assert roots["minimal"].find(q("DataSources")) is None
-    assert roots["minimal"].find(q("DataSets")) is None
-    assert roots["minimal"].find(q("ReportParameters")) is None
-    assert roots["minimal"].find(q("ReportParametersLayout")) is None
-    assert roots["minimal"].find(f".//{q('Tablix')}") is None
+    assert roots["canonical_minimal"].find(q("DataSources")) is None
+    assert roots["canonical_minimal"].find(q("DataSets")) is None
+    assert roots["canonical_minimal"].find(q("ReportParameters")) is None
+    assert roots["canonical_minimal"].find(f".//{q('Tablix')}") is None
 
     assert roots["datasource"].find(q("DataSources")) is not None
     assert roots["datasource"].find(q("DataSets")) is None
@@ -117,8 +157,8 @@ def test_progressive_rdl_variants_isolate_definition_layers() -> None:
     assert roots["dataset"].find(q("ReportParametersLayout")) is not None
     assert roots["dataset"].find(f".//{q('Tablix')}") is None
 
+    assert roots["tablix"].find(f".//{q('Tablix')}") is not None
     assert variants[-1][1] == rdl
-    assert roots["full"].find(f".//{q('Tablix')}") is not None
 
 
 def test_create_progressively_promotes_one_item_without_extra_create() -> None:
@@ -148,9 +188,9 @@ def test_create_progressively_promotes_one_item_without_extra_create() -> None:
         )
 
     assert invoke.call_count == 1
-    assert update_definition.call_count == 3
+    assert update_definition.call_count == 4
     assert evidence["progressive_bootstrap_used"] is True
-    assert evidence["progressive_last_passed_phase"] == "full"
+    assert evidence["progressive_last_passed_phase"] == "generated_full"
     assert evidence["progressive_failed_phase"] is None
 
 
@@ -187,6 +227,34 @@ def test_create_progressively_records_exact_failed_phase() -> None:
 
     assert evidence["progressive_last_passed_phase"] == "datasource"
     assert evidence["progressive_failed_phase"] == "dataset"
+
+
+def test_create_progressively_records_canonical_create_failure() -> None:
+    source = module.report_factory.load_spec(
+        ROOT / "examples" / "report-factory" / "demandas_por_status.json"
+    )
+    rdl = module.report_factory.generate_rdl(source)
+    evidence: dict[str, object] = {}
+
+    with patch.object(
+        module,
+        "_invoke",
+        side_effect=module.E2EError("fabric_http_400:InvalidDefinitionFormat"),
+    ):
+        with pytest.raises(module.E2EError, match="progressive_canonical_minimal_create"):
+            module._create_progressively(
+                reports_url=module.FABRIC_BASE + "/workspaces/ws/paginatedReports",
+                workspace_id="ws",
+                report_name="DemandasPorStatus",
+                description="diagnostic",
+                rdl=rdl,
+                token="ephemeral-token",
+                evidence=evidence,
+            )
+
+    assert evidence["progressive_last_passed_phase"] is None
+    assert evidence["progressive_failed_phase"] == "canonical_minimal_create"
+
 
 
 def test_safe_fabric_error_code_extracts_only_structured_code() -> None:
