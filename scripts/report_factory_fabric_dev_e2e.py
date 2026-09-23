@@ -15,6 +15,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -376,6 +377,67 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _serialize_rdl_root(root: ET.Element) -> str:
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8") + "\n"
+
+
+def _staged_rdl_variants(rdl: str) -> list[tuple[str, str]]:
+    """Reduz o RDL validado em camadas para localizar InvalidDefinitionFormat."""
+    try:
+        ET.fromstring(rdl)
+    except ET.ParseError:
+        raise E2EError("definition_probe_rdl_invalid") from None
+
+    def build(*, remove_top: set[str], remove_tablix: bool) -> str:
+        root = ET.fromstring(rdl)
+        for name in remove_top:
+            node = root.find(report_factory._q(name))
+            if node is not None:
+                root.remove(node)
+        if remove_tablix:
+            for report_items in root.findall(f".//{report_factory._q('ReportItems')}"):
+                for child in list(report_items):
+                    if child.tag == report_factory._q("Tablix"):
+                        report_items.remove(child)
+        return _serialize_rdl_root(root)
+
+    return [
+        (
+            "layout",
+            build(
+                remove_top={
+                    "DataSources",
+                    "DataSets",
+                    "ReportParameters",
+                    "ReportParametersLayout",
+                },
+                remove_tablix=True,
+            ),
+        ),
+        (
+            "datasource",
+            build(
+                remove_top={
+                    "DataSets",
+                    "ReportParameters",
+                    "ReportParametersLayout",
+                },
+                remove_tablix=True,
+            ),
+        ),
+        (
+            "dataset_parameters",
+            build(remove_top=set(), remove_tablix=True),
+        ),
+        ("full", rdl),
+    ]
+
+
+def _is_invalid_definition_format(exc: E2EError) -> bool:
+    return str(exc).startswith("fabric_http_400:InvalidDefinitionFormat")
+
+
 def _get_definition(workspace_id: str, report_id: str, token: str) -> dict[str, Any]:
     return _invoke(
         "POST",
@@ -398,6 +460,78 @@ def _update_definition(
     )
 
 
+def _run_definition_probe(
+    *,
+    reports_url: str,
+    workspace_id: str,
+    report_name: str,
+    rdl: str,
+    token: str,
+    existing_report_id: str | None,
+) -> dict[str, Any]:
+    """Publica o mesmo item em camadas e confirma cada camada por getDefinition."""
+    report_id = existing_report_id
+    result: dict[str, Any] = {
+        "created": False,
+        "report_id": report_id,
+        "stages_passed": [],
+        "failed_stage": None,
+        "reason": None,
+    }
+
+    for stage_name, stage_rdl in _staged_rdl_variants(rdl):
+        definition = report_factory.build_fabric_definition(report_name, stage_rdl)
+        try:
+            if report_id is None:
+                _invoke(
+                    "POST",
+                    reports_url,
+                    token,
+                    {
+                        "displayName": report_name,
+                        "definition": definition,
+                    },
+                    success={200, 201},
+                )
+                matches = _exact_by_display_name(
+                    _paged_values(reports_url, token),
+                    report_name,
+                    "definition_probe_report",
+                )
+                if len(matches) != 1:
+                    raise E2EError(
+                        f"definition_probe_report_exact_count:{len(matches)}"
+                    )
+                report_id = str(matches[0].get("id") or "").strip()
+                if not report_id:
+                    raise E2EError("definition_probe_report_id_missing")
+                result["created"] = True
+                result["report_id"] = report_id
+            else:
+                _update_definition(
+                    workspace_id,
+                    report_id,
+                    definition,
+                    token,
+                )
+
+            observed = _extract_rdl(
+                _get_definition(workspace_id, report_id, token),
+                report_name,
+            )
+            if _sha256(observed) != _sha256(stage_rdl):
+                raise E2EError(
+                    f"definition_probe_readback_hash_mismatch:{stage_name}"
+                )
+            result["stages_passed"].append(stage_name)
+        except E2EError as exc:
+            result["failed_stage"] = stage_name
+            result["reason"] = str(exc)[:120]
+            return result
+
+    return result
+
+
 def execute(spec_path: Path, output: Path) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     correlation_id = (
@@ -405,7 +539,7 @@ def execute(spec_path: Path, output: Path) -> int:
         f"{os.getenv('GITHUB_RUN_ATTEMPT', '1')}"
     )
     evidence: dict[str, Any] = {
-        "schema": "report-factory-fabric-dev-e2e/v1",
+        "schema": "report-factory-fabric-dev-e2e/v2",
         "status": "blocked",
         "environment": ENVIRONMENT,
         "source_sha": os.getenv("GITHUB_SHA", ""),
@@ -420,6 +554,10 @@ def execute(spec_path: Path, output: Path) -> int:
         "idempotency_verified": False,
         "expected_rdl_sha256": None,
         "observed_rdl_sha256": None,
+        "definition_probe_used": False,
+        "definition_probe_stages_passed": [],
+        "definition_probe_failed_stage": None,
+        "definition_probe_report_exact_count": None,
         "secret_value_exposed": False,
         "production_touched": False,
     }
@@ -454,21 +592,66 @@ def execute(spec_path: Path, output: Path) -> int:
         existing = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
         evidence["initial_report_exact_count"] = len(existing)
 
-        if not existing:
-            _invoke(
-                "POST",
-                reports_url,
-                token,
-                report_factory.build_create_request(spec, rdl),
-                success={200, 201},
-            )
-            evidence["first_action"] = "created"
-        else:
-            report_id = str(existing[0].get("id") or "").strip()
-            if not report_id:
+        existing_report_id: str | None = None
+        if existing:
+            existing_report_id = str(existing[0].get("id") or "").strip()
+            if not existing_report_id:
                 raise E2EError("existing_report_id_missing")
-            _update_definition(workspace_id, report_id, definition, token)
-            evidence["first_action"] = "updated"
+
+        try:
+            if existing_report_id is None:
+                _invoke(
+                    "POST",
+                    reports_url,
+                    token,
+                    report_factory.build_create_request(spec, rdl),
+                    success={200, 201},
+                )
+                evidence["first_action"] = "created"
+            else:
+                _update_definition(
+                    workspace_id,
+                    existing_report_id,
+                    definition,
+                    token,
+                )
+                evidence["first_action"] = "updated"
+        except E2EError as exc:
+            if not _is_invalid_definition_format(exc):
+                raise
+
+            evidence["definition_probe_used"] = True
+            probe = _run_definition_probe(
+                reports_url=reports_url,
+                workspace_id=workspace_id,
+                report_name=report_name,
+                rdl=rdl,
+                token=token,
+                existing_report_id=existing_report_id,
+            )
+            evidence["definition_probe_stages_passed"] = probe["stages_passed"]
+            evidence["definition_probe_failed_stage"] = probe["failed_stage"]
+            probe_report_id = str(probe.get("report_id") or "").strip()
+            if probe_report_id:
+                probe_matches = _exact_by_display_name(
+                    _paged_values(reports_url, token),
+                    report_name,
+                    "definition_probe_report",
+                )
+                evidence["definition_probe_report_exact_count"] = len(probe_matches)
+
+            if probe["failed_stage"] is not None:
+                raise E2EError(
+                    "fabric_definition_probe:"
+                    f"{probe['failed_stage']}:"
+                    f"{probe['reason']}"
+                ) from None
+
+            evidence["first_action"] = (
+                "created_via_definition_probe"
+                if probe["created"]
+                else "updated_via_definition_probe"
+            )
 
         final_matches = _exact_by_display_name(_paged_values(reports_url, token), report_name, "report")
         evidence["final_report_exact_count"] = len(final_matches)
@@ -516,6 +699,8 @@ def execute(spec_path: Path, output: Path) -> int:
             "workspace_exact_count", "report_name", "initial_report_exact_count",
             "first_action", "final_report_exact_count", "definition_verified",
             "idempotency_verified", "expected_rdl_sha256", "observed_rdl_sha256",
+            "definition_probe_used", "definition_probe_stages_passed",
+            "definition_probe_failed_stage", "definition_probe_report_exact_count",
             "secret_value_exposed", "production_touched", "reason",
         ):
             if key in evidence:
