@@ -46,3 +46,7 @@
 - [x] Reconciliar a PR #2008 com a main após a integração concorrente da #2007, preservando o bootstrap progressivo e eliminando `behind_by=1` sem force-push.
 - [x] Adicionar `getDefinition` + SHA-256 após cada fase `minimal -> datasource -> dataset -> full` antes de avançar.
 - [ ] Revalidar Pre-PR/checks no novo HEAD e, após merge governado, repetir o E2E Fabric DEV no mesmo SHA integrado.
+- [x] Integrar a PR #2008 pela Governed Merge Queue em `main@d3f69a2ad370b221896c20dc49d2d9832a6efb49`.
+- [x] Executar E2E Fabric DEV no run `35883428772`: preflight/OIDC/workspace aprovados; `progressive_failed_phase=minimal_create`; `progressive_passed_phases=[]`; `InvalidDefinitionFormat`; sem segredo exposto e sem toque em produção.
+- [x] Reduzir a hipótese ao baseline estrutural anterior a datasource/dataset/Tablix e preservar `ReportParametersLayout` vazio nas variantes reduzidas, sem promover `AuthoringMetadata` opcional a requisito.
+- [ ] Revalidar Pre-PR no HEAD exato, integrar por merge governado e repetir o E2E Fabric DEV para confirmar se `minimal` passa e localizar a próxima camada real, se houver.
