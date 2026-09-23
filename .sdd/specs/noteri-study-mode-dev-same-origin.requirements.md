@@ -153,14 +153,21 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 
 
 17. Antes de iniciar o E2E de perfil, o workflow DEV deve validar o Engineering
-    Orchestrator em `127.0.0.1:8787`. Se readiness estiver indisponível, pode
-    solicitar somente a execução da tarefa agendada existente e fixa
+    Orchestrator em `127.0.0.1:8787`. Se readiness estiver indisponível, deve
+    primeiro solicitar a execução da tarefa agendada existente e fixa
     `\\Automation\\ReqSysOrchestrator24x7`, sem criar/alterar tarefa, sem shell
-    arbitrário e sem ler segredos. A execução prossegue somente após `/readyz`
-    retornar saudável e exatamente um worker Noteri estar `fresh`,
-    `controller_online` e `auth_valid`; caso contrário falha fechado antes da
-    mudança de perfil. A evidência deve indicar se houve recuperação, mantendo
-    `production_touched=false` e `secrets_read=false`.
+    arbitrário e sem ler segredos. Se a tarefa retornar sucesso de acionamento
+    mas `/readyz` continuar indisponível, o recovery pode iniciar diretamente
+    somente o supervisor versionado da instalação canônica fixa
+    `C:\\dev\\chatgpt-workers\\reqsys-orchestrator-24x7-runtime`, após validar
+    `service-config.json`, `worker-config.json`, porta 8787, endpoint loopback,
+    worker desktop-pdqk954 e arquivos esperados. O processo deve ser destacado
+    do lifecycle do runner removendo apenas `RUNNER_TRACKING_ID`. A execução
+    prossegue somente após `/readyz` saudável e exatamente um worker Noteri
+    `fresh`, `controller_online` e `auth_valid`; caso contrário falha fechado
+    antes da mudança de perfil. A evidência deve indicar o método de recovery,
+    sem persistir caminhos arbitrários, mantendo `production_touched=false`,
+    `secrets_read=false` e `task_created_or_modified=false`.
 
 ## Topologia
 
