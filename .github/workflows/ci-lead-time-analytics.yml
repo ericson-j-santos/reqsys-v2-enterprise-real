@@ -20,6 +20,7 @@ on:
       - '.github/workflows/workflow-command-center.yml'
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/build_ci_fixed_window_analytics.py'
+      - 'scripts/enrich_ci_pr_efficiency.py'
       - 'scripts/compare_ci_process_baseline.py'
       - 'scripts/annotate_ci_window_comparability.py'
       - 'scripts/update_ci_process_history.py'
@@ -30,6 +31,7 @@ on:
       - 'scripts/ci_fixed_window_sustainability.py'
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
+      - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
       - 'tests/scripts/test_annotate_ci_window_comparability.py'
       - 'tests/scripts/test_update_ci_process_history.py'
@@ -48,10 +50,12 @@ on:
       - '.github/workflows/ci-lead-time-analytics.yml'
       - '.github/workflows/workflow-command-center.yml'
       - 'scripts/build_ci_fixed_window_analytics.py'
+      - 'scripts/enrich_ci_pr_efficiency.py'
       - 'scripts/update_ci_fixed_window_history.py'
       - 'scripts/enrich_command_center_ci_fixed_history.py'
       - 'scripts/ci_fixed_window_sustainability.py'
       - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
+      - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
       - 'tests/scripts/test_update_ci_fixed_window_history.py'
       - 'tests/scripts/test_ci_fixed_window_sustainability.py'
       - 'docs/runbooks/ci-lead-time-analytics.md'
@@ -93,6 +97,7 @@ jobs:
         run: |
           python tests/scripts/test_build_ci_process_improvement_analytics.py
           python tests/scripts/test_build_ci_fixed_window_analytics.py
+          python tests/scripts/test_enrich_ci_pr_efficiency.py
           python tests/scripts/test_compare_ci_process_baseline.py
           python tests/scripts/test_annotate_ci_window_comparability.py
           python tests/scripts/test_update_ci_process_history.py
@@ -114,6 +119,12 @@ jobs:
 
       - name: Annotate historical baseline comparability
         run: python scripts/annotate_ci_window_comparability.py
+
+      - name: Enrich artifact with PR efficiency metrics
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python scripts/enrich_ci_pr_efficiency.py
 
       - name: Update fixed-window process improvement history
         run: python scripts/update_ci_fixed_window_history.py
