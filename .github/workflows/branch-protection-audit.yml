@@ -410,8 +410,8 @@ jobs:
           if ($data.status -notin @("PROTECTION_APPLIED", "ALREADY_COMPLIANT")) { throw "PROTECTION_NOT_CONFIRMED" }
           if ($data.repository -ne "ericson-j-santos/report-builder-platform") { throw "TARGET_REPOSITORY_MISMATCH" }
           if ($data.branch -ne "main") { throw "TARGET_BRANCH_MISMATCH" }
-          if ($data.evidence_pr_number -ne 5) { throw "EVIDENCE_PR_MISMATCH" }
-          if ($data.evidence_sha -ne "c4e5b4ffd677f854ca1107330c87312d995c619e") { throw "EVIDENCE_SHA_MISMATCH" }
+          if ($data.target_sha -ne "b80c999d83a82b3454bb6c486e16129f4f04f434") { throw "TARGET_SHA_MISMATCH" }
+          if ($data.evidence_sha -ne "b80c999d83a82b3454bb6c486e16129f4f04f434") { throw "EVIDENCE_SHA_MISMATCH" }
           if (-not $data.protected) { throw "BRANCH_NOT_PROTECTED" }
           if (-not $data.pull_request_required) { throw "PULL_REQUEST_NOT_REQUIRED" }
           if (-not $data.enforce_admins) { throw "ADMINS_NOT_ENFORCED" }
