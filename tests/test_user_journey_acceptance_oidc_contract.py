@@ -25,12 +25,15 @@ def test_business_probe_usa_graph_oidc_e_nao_secret():
     assert "POWER_PLATFORM_CLIENT_SECRET" not in business
 
 
-def test_acceptance_usa_runtime_pc24x7_e_bloqueia_fly():
+def test_acceptance_resolve_runtime_pc24x7_pelo_locator_assinado():
     text = _workflow()
-    assert "PC24X7_DEV_BASE_URL" in text
-    assert "PC24X7_DEV_FRONTEND_URL" in text
+    assert "resolve_pc24x7_dev_locator.mjs --self-test" in text
+    assert "steps.locator.outputs.base_url" in text
+    assert "PC24X7_DEV_BASE_URL" not in text
+    assert "PC24X7_DEV_FRONTEND_URL" not in text
     assert "/api/runtime/health" in text
-    assert "Fly.io está descontinuado" in text
+    assert "https://*.trycloudflare.com" in text
+    assert "Runtime legado Fly.io rejeitado" in text
     assert "reqsys-api-dev.fly.dev" not in text
     assert "reqsys-app-dev.fly.dev" not in text
     assert "flyctl" not in text
