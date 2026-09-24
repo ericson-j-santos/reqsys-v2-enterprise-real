@@ -69,9 +69,7 @@ jobs:
           orch_status=None
           if token:
               orch_status,_=req('/api/v1/actions-runtime/orchestrator/status',headers={'Authorization':'Bearer '+token})
-          interesting=sorted(p for p in paths if any(k in p.lower() for k in (
-              'runtime','action','admin','deploy','operacao','automation','command','worker','task','health','status'
-          )))
+          interesting=sorted(paths)
           result={
             'health_status':health_status,
             'build_status':build_status,
