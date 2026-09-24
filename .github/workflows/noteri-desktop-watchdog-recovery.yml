@@ -16,7 +16,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: 5af7b5ab6e31c24744176abd774855168c55953f
       CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
@@ -75,7 +75,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $recoveryScript = Join-Path $env:GITHUB_WORKSPACE "scripts\noteri_desktop_watchdog_rpc_recovery.py"
+          $recoveryScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_watchdog_rpc_recovery.py"
           $gatewayArgs = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
