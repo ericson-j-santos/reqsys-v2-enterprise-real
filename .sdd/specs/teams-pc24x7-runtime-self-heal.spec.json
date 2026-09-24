@@ -8,7 +8,8 @@
   "sdd_gate": {
     "tests": [
       "tests/test_reconcile_pc24x7_teams_dev_runtime.py",
-      "tests/test_pc24x7_teams_token_bootstrap_workflow.py"
+      "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
+      "tests/test_self_hosted_runner_governance.py"
     ]
   },
   "traceability": {
@@ -16,7 +17,10 @@
     "implementation": "scripts/reconcile_pc24x7_teams_dev_runtime.py",
     "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
     "recreate_runtime": "scripts/recreate_cofre_dev_pc24x7.py",
-    "issues": [1532]
+    "issues": [
+      1532
+    ],
+    "self_hosted_policy": ".github/self-hosted-runner-policy.json"
   },
   "implementation_constraints": {
     "environment": "dev",
@@ -32,6 +36,7 @@
     "same_sha_build_info": "required",
     "runtime_health_http_200": "required",
     "sanitized_artifact": "required",
-    "bootstrap_after_reconcile": "required"
+    "bootstrap_after_reconcile": "required",
+    "self_hosted_runner_governance": "required"
   }
 }
