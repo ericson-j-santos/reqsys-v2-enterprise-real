@@ -10,7 +10,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Adiciona ingresso HTTPS estável e governado para o bridge MCP Ollama no Desktop PC24x7 via Tailscale Funnel, reutilizando o workflow canônico codex-ollama-e2e-dev.yml e sem publicar Ollama ou gateway diretamente.",
+  "description": "Adiciona ingresso HTTPS estável e governado para o bridge MCP Ollama no Desktop PC24x7 via Tailscale Funnel, reconciliando antes a release imutável do supervisor no mesmo SHA e sem publicar Ollama ou gateway diretamente.",
   "acceptance_criteria": [
     "O alvo público é exclusivamente http://127.0.0.1:8010 sob /mcp e HTTPS 443.",
     "Ollama :11434, gateway :8008 e gateway DEV :8083 não são alvos do Funnel deste incremento.",
@@ -20,6 +20,8 @@
     "Caminho explícito TAILSCALE_CLI_PATH inexistente falha fechado e não permite fallback silencioso.",
     "O workflow canônico codex-ollama-e2e-dev.yml preserva codex-e2e e aceita apenas codex-e2e ou mcp-ingress, sem criar novo workflow.",
     "No runner self-hosted PC24x7, o workflow reutiliza o Python provisionado, valida o executável antes do uso e não usa actions/setup-python para instalar ou alterar o runtime do host.",
+    "O modo mcp-ingress valida a dependência MCP e reconcilia o supervisor PC24x7 no mesmo github.sha antes de alterar o Funnel; a release imutável inclui services/ollama-mcp-bridge.",
+    "O workflow e o reconciliador de Funnel não referenciam nem imprimem o bearer; o supervisor apenas consome o bearer local pré-provisionado e falha fechado quando ausente.",
     "Os testes de workflow impedem a reintrodução de actions/setup-python e comprovam o uso de REQSYS_PYTHON nos caminhos codex-e2e e mcp-ingress.",
     "O Authorized Actions Gateway mapeia o comando exato de MCP ingress para o modo mcp-ingress e mantém pickup/cancelamento fail-closed.",
     "A allowlist self-hosted vigente é preservada, inclusive branch-protection-audit.yml.",
@@ -33,7 +35,7 @@
       "tests/test_codex_ollama_e2e_selfhosted.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato, com workflow:surface-budget verde e crescimento líquido zero. O E2E físico posterior deve provar resolução da CLI Tailscale, bridge 8010 local, Funnel /mcp e reachability externa no mesmo SHA; ausência do binário, runner ou consentimento Tailscale falha fechado."
+    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato, com workflow:surface-budget verde e crescimento líquido zero. O E2E físico posterior deve provar supervisor/bridge 8010 saudável no mesmo SHA, resolução da CLI Tailscale, Funnel /mcp e reachability externa; ausência de bearer local, binário, runner ou consentimento Tailscale falha fechado."
   },
   "runtime_validation": {
     "environment": "DEV",
@@ -44,6 +46,9 @@
     "production_touched": false,
     "secrets_read": false,
     "workflow": ".github/workflows/codex-ollama-e2e-dev.yml",
-    "mode": "mcp-ingress"
+    "mode": "mcp-ingress",
+    "secrets_mutated": false,
+    "bearer_consumed_by_supervisor": true,
+    "bearer_exposed": false
   }
 }
