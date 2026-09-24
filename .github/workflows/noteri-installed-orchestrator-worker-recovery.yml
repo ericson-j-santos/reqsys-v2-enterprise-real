@@ -1,0 +1,74 @@
+name: Noteri Installed Orchestrator Worker Recovery
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/noteri-installed-orchestrator-worker-recovery.yml'
+      - 'scripts/recover_noteri_installed_orchestrator_worker.py'
+      - 'tests/test_noteri_installed_orchestrator_worker_recovery.py'
+      - '.sdd/specs/noteri-installed-orchestrator-worker-recovery.requirements.md'
+      - '.sdd/specs/noteri-installed-orchestrator-worker-recovery.spec.json'
+      - '.github/self-hosted-runner-policy.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-installed-orchestrator-worker-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Recover installed Noteri Orchestrator worker
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
+       github.actor == 'ericson-j-santos')
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/noteri-installed-orchestrator-worker/evidence.json
+    steps:
+      - name: Checkout immutable recovery SHA
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Recover installed worker and prove independent heartbeat
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/recover_noteri_installed_orchestrator_worker.py --confirm RECOVER-NOTERI-INSTALLED-ORCHESTRATOR-WORKER-DEV --source-root "$env:GITHUB_WORKSPACE" --expected-workflow-sha "${{ github.sha }}" --evidence-path "$env:EVIDENCE_FILE" --timeout-seconds 60
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate sanitized recovery evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $e = Get-Content -Raw -Encoding UTF8 $env:EVIDENCE_FILE | ConvertFrom-Json
+          if (-not $e.ok) { throw 'noteri_worker_recovery_failed' }
+          if ($e.host -ne 'Noteri') { throw 'noteri_worker_host_mismatch' }
+          if ($e.workflow_expected_sha -ne '${{ github.sha }}') { throw 'noteri_worker_expected_sha_mismatch' }
+          if ($e.workflow_observed_sha -ne '${{ github.sha }}') { throw 'noteri_worker_observed_sha_mismatch' }
+          if (-not $e.workflow_sha_verified) { throw 'noteri_worker_workflow_sha_not_verified' }
+          if (-not $e.installed_contract.profile_capability_code_present) { throw 'noteri_worker_profile_capability_code_missing' }
+          if (-not $e.after.operational) { throw 'noteri_worker_not_operational' }
+          if (-not $e.after.profile_task_capable) { throw 'noteri_worker_profile_task_capability_missing' }
+          if (-not $e.runner_tracking_removed_before_start) { throw 'runner_tracking_not_removed' }
+          if ($e.task_scheduler_modified) { throw 'task_scheduler_modified' }
+          if ($e.production_touched) { throw 'production_touched' }
+          if ($e.secrets_read) { throw 'secrets_read' }
+          if ($e.rdc_required) { throw 'rdc_dependency_detected' }
+
+      - name: Upload sanitized recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-installed-orchestrator-worker-${{ github.run_id }}
+          path: artifacts/noteri-installed-orchestrator-worker/evidence.json
+          if-no-files-found: error
+          retention-days: 30
