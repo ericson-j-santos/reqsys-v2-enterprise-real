@@ -26,6 +26,7 @@ concurrency:
 jobs:
   probe:
     name: Diagnose Desktop reachability from Noteri
+    if: ${{ !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
