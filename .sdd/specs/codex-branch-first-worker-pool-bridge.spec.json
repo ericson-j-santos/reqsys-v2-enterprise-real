@@ -2,17 +2,18 @@
   "feature_name": "codex-branch-first-worker-pool-bridge",
   "project": "ReqSys v2 Enterprise — Codex distribuído",
   "created_at": "2026-09-19",
-  "updated_at": "2026-09-19",
+  "updated_at": "2026-09-24",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Codex Worker Pool existente, com dispatch PC24x7 único, replay idempotente e leitura independente. Inclui correção estrita do scanner para não tratar referência dinâmica obrigatória de secret env como literal, preservando bloqueio de fallback literal.",
+  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Engineering Worker Pool por contrato público v1, com dispatch PC24x7 único, replay idempotente, leitura independente e fallback legado temporário somente quando o endpoint de contrato ainda não existe (404).",
   "issues": [
     1766,
-    1770
+    1770,
+    2020
   ],
   "scope": "local-dev-pc24x7",
   "files": [
@@ -34,7 +35,7 @@
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_enterprise_runtime_governance_gates.py"
     ],
-    "evidence_contract": "Provar dispatch local único ou recuperação de marcador legado, enqueue no Worker Pool no base_sha exato, replay created=false no mesmo task_id, leitura independente sem lease_token e continuidade pelo contrato Builder->produced_sha->Validator independente. Falha de runtime permanece explícita e fail-closed."
+    "evidence_contract": "Provar descoberta de engineering-worker-pool/v1 antes do enqueue; durante a migração, permitir legacy_fallback somente quando GET /v1/contract retornar 404. Versão/nome incompatível, 401, 503, transporte ou JSON inválido permanecem fail-closed. Provar enqueue no base_sha exato, replay created=false no mesmo task_id, leitura independente sem lease_token e continuidade Builder->produced_sha->Validator independente. Evidência registra contract_mode/version sem segredo."
   },
   "risk": {
     "production": false,

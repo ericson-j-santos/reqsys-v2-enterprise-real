@@ -20,6 +20,9 @@ def test_worker_pool_handoff_is_manual_scoped_and_fail_closed() -> None:
     assert "http://127.0.0.1:8097" in raw
     assert "replay_created" in raw
     assert "independent_readback" in raw
+    assert "contract_mode" in raw
+    assert "legacy_fallback" in raw
+    assert 'contract_version -ne "v1"' in raw
     assert "secrets." not in raw
     assert "merge" not in raw.lower().replace("merge/deploy: não", "")
     assert "deploy" not in raw.lower().replace("merge/deploy: não", "")

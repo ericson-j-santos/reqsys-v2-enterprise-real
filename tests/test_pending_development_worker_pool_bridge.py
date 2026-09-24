@@ -13,6 +13,11 @@ from scripts import pending_development_worker_pool_bridge as bridge
 BASE_SHA = "a" * 40
 
 
+def test_worker_pool_contract_identity_is_pinned_to_public_v1() -> None:
+    assert bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME == "engineering-worker-pool"
+    assert bridge.EXPECTED_WORKER_POOL_CONTRACT_VERSION == "v1"
+
+
 def report(status: str = "dispatched") -> dict[str, Any]:
     return {
         "schema_version": "1.0.0",
@@ -308,6 +313,11 @@ def test_enqueue_proves_replay_and_independent_readback() -> None:
         calls.append((method, url))
         if url.endswith("/health"):
             return 200, {"status": "healthy"}
+        if url.endswith("/v1/contract"):
+            return 200, {
+                "contract_name": bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME,
+                "contract_version": bridge.EXPECTED_WORKER_POOL_CONTRACT_VERSION,
+            }
         if method == "POST" and len([call for call in calls if call[0] == "POST"]) == 1:
             assert payload is not None and payload["base_sha"] == BASE_SHA
             return 201, {"created": True, "task": dict(task)}
@@ -331,8 +341,12 @@ def test_enqueue_proves_replay_and_independent_readback() -> None:
     assert result["items"][0]["replay_created"] is False
     assert result["items"][0]["independent_readback"] is True
     assert result["items"][0]["base_sha"] == BASE_SHA
+    assert result["contract_mode"] == "v1"
+    assert result["contract_version"] == "v1"
+    assert result["legacy_fallback_used"] is False
+    assert result["items"][0]["contract_mode"] == "v1"
     assert "local-secret" not in str(result)
-    assert [method for method, _url in calls] == ["GET", "POST", "POST", "GET"]
+    assert [method for method, _url in calls] == ["GET", "GET", "POST", "POST", "GET"]
 
 
 def test_already_dispatched_replays_into_same_idempotent_queue() -> None:
@@ -368,4 +382,69 @@ def test_invalid_base_sha_fails_before_network() -> None:
             pool_url="http://127.0.0.1:8097",
             token="local-secret",
             request_fn=forbidden,
+        )
+
+
+def test_contract_probe_allows_only_missing_endpoint_as_legacy_fallback() -> None:
+    def missing_contract(
+        _method: str,
+        _url: str,
+        _token: str,
+        _payload: dict[str, Any] | None,
+    ) -> tuple[int, dict[str, Any]]:
+        raise bridge.BridgeError("worker_pool_http_404")
+
+    assert bridge.verify_contract(
+        "http://127.0.0.1:8097",
+        "local-secret",
+        missing_contract,
+        allow_legacy_fallback=True,
+    ) == "legacy_fallback"
+
+    with pytest.raises(bridge.BridgeError, match="worker_pool_contract_required"):
+        bridge.verify_contract(
+            "http://127.0.0.1:8097",
+            "local-secret",
+            missing_contract,
+            allow_legacy_fallback=False,
+        )
+
+
+def test_contract_probe_rejects_incompatible_version() -> None:
+    def incompatible(
+        _method: str,
+        _url: str,
+        _token: str,
+        _payload: dict[str, Any] | None,
+    ) -> tuple[int, dict[str, Any]]:
+        return 200, {
+            "contract_name": bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME,
+            "contract_version": "v2",
+        }
+
+    with pytest.raises(bridge.BridgeError, match="worker_pool_contract_incompatible"):
+        bridge.verify_contract(
+            "http://127.0.0.1:8097",
+            "local-secret",
+            incompatible,
+            allow_legacy_fallback=True,
+        )
+
+
+@pytest.mark.parametrize("reason", ["worker_pool_http_401", "worker_pool_http_503", "worker_pool_unreachable"])
+def test_contract_probe_never_falls_back_on_auth_runtime_or_transport_failure(reason: str) -> None:
+    def failed(
+        _method: str,
+        _url: str,
+        _token: str,
+        _payload: dict[str, Any] | None,
+    ) -> tuple[int, dict[str, Any]]:
+        raise bridge.BridgeError(reason)
+
+    with pytest.raises(bridge.BridgeError, match=reason):
+        bridge.verify_contract(
+            "http://127.0.0.1:8097",
+            "local-secret",
+            failed,
+            allow_legacy_fallback=True,
         )
