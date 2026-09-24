@@ -112,8 +112,10 @@ def test_workflow_executes_only_new_http_probe() -> None:
     assert "scripts/noteri_desktop_dev_http_probe.py" in raw
     assert "tests/test_noteri_desktop_dev_http_probe.py" in raw
     assert "PROBE-NOTERI-DESKTOP-DEV-HTTP" in raw
-    assert "scripts/noteri_desktop_network_probe.py" not in raw
-    assert "tests/test_noteri_desktop_network_probe.py" not in raw
+    assert "scripts/noteri_desktop_network_probe.py" in raw
+    assert "tests/test_noteri_desktop_network_probe.py" in raw
+    assert "if: ${{ !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}" in raw
+    assert "if: ${{ startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}" in raw
     assert "session_launcher.py" in raw
     assert "command_gateway.py" in raw
     assert '"--risk", "2"' in raw
