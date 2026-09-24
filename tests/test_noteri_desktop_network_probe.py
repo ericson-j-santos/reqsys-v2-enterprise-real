@@ -154,3 +154,46 @@ def test_probe_reports_smb_without_persisting_remote_listing(monkeypatch) -> Non
     assert result["admin_staging_path"] == r"C:\Users\Public\Desktop"
     assert "listing" not in result
     assert "files" not in result
+
+
+def test_control_ports_are_fixed_and_sanitized() -> None:
+    assert probe.CONTROL_PORTS == {
+        "ssh": 22,
+        "rpc_epmapper": 135,
+        "smb": 445,
+        "winrm_http": 5985,
+        "winrm_https": 5986,
+        "rdp": 3389,
+    }
+
+
+def test_probe_reports_fixed_control_channel_reachability(monkeypatch) -> None:
+    monkeypatch.setattr(probe, "validate_host", lambda: "Noteri")
+    monkeypatch.setattr(
+        probe,
+        "resolve_target",
+        lambda: {"resolved": True, "address_count": 1},
+    )
+    monkeypatch.setattr(probe, "icmp_reachable", lambda: True)
+    monkeypatch.setattr(probe, "runtime_port_reachable", lambda: False)
+    monkeypatch.setattr(
+        probe,
+        "control_port_reachability",
+        lambda: {
+            "ssh": False,
+            "rpc_epmapper": True,
+            "smb": True,
+            "winrm_http": True,
+            "winrm_https": False,
+            "rdp": True,
+        },
+    )
+    monkeypatch.setattr(
+        probe,
+        "admin_staging_path_probe",
+        lambda: {"reachable": False, "result": "access_denied"},
+    )
+    result = probe.probe(probe.CONFIRM, "corr-network-control-ports")
+    assert result["control_ports"]["winrm_http"] is True
+    assert result["control_ports"]["ssh"] is False
+    assert "addresses" not in result
