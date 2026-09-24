@@ -45,6 +45,7 @@ RUN_VALUE = "ReqSysCodexPC24x7Supervisor"
 DEFAULT_GATEWAY_PORT = 8008
 DEFAULT_BACKEND_PORT = 8000
 DEFAULT_MCP_PORT = 8010
+DEFAULT_MCP_HEALTH_PORT = 8011
 DEFAULT_OLLAMA_PORT = 11434
 DEFAULT_WATCH_SECONDS = 15
 DEFAULT_SMOKE_SECONDS = 900
@@ -188,7 +189,28 @@ def build_mcp_bridge_env(
     bearer = str(source.get("OLLAMA_MCP_BEARER_TOKEN") or "").strip()
     if not bearer:
         raise SupervisorError("mcp_bearer_token_not_configured")
-    child = dict(source)
+
+    passthrough = (
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "TEMP",
+        "TMP",
+        "LOCALAPPDATA",
+        "APPDATA",
+        "USERPROFILE",
+        "PATH",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONIOENCODING",
+        "NO_PROXY",
+        "no_proxy",
+    )
+    child = {
+        key: str(source[key])
+        for key in passthrough
+        if str(source.get(key) or "").strip()
+    }
     child.update(
         {
             "OLLAMA_MCP_BEARER_TOKEN": bearer,
@@ -209,20 +231,24 @@ def build_mcp_bridge_env(
     return child
 
 
-def probe_mcp_bridge(env: dict[str, str] | None = None) -> dict[str, Any] | None:
-    source = os.environ if env is None else env
-    if not str(source.get("OLLAMA_MCP_BEARER_TOKEN") or "").strip():
+def probe_mcp_bridge() -> dict[str, Any] | None:
+    try:
+        code, payload = _request_json(
+            f"http://127.0.0.1:{DEFAULT_MCP_HEALTH_PORT}/health",
+            timeout=2,
+        )
+    except SupervisorError:
         return None
-    if not _port_open(DEFAULT_MCP_PORT):
+    if (
+        code != 200
+        or payload.get("status") != "ok"
+        or payload.get("service") != "reqsys-ollama-mcp-bridge"
+        or payload.get("auth_configured") is not True
+        or payload.get("secret_exposed") is not False
+        or not _port_open(DEFAULT_MCP_PORT)
+    ):
         return None
-    return {
-        "ok": True,
-        "service": "reqsys-ollama-mcp-bridge",
-        "bind": "127.0.0.1",
-        "port": DEFAULT_MCP_PORT,
-        "auth_configured": True,
-        "secret_exposed": False,
-    }
+    return payload
 
 
 def probe_ollama() -> dict[str, Any] | None:
@@ -417,8 +443,7 @@ class Supervisor:
         return {"status": "recovered", "managed": True, "pid": process.pid, "health": health}
 
     def ensure_mcp_bridge(self) -> dict[str, Any]:
-        env = build_mcp_bridge_env(self.profile)
-        health = probe_mcp_bridge(env)
+        health = probe_mcp_bridge()
         if health:
             return {
                 "status": "healthy",
@@ -429,19 +454,20 @@ class Supervisor:
         if process is not None and process.poll() is None:
             process.terminate()
             process.wait(timeout=8)
-        if _port_open(DEFAULT_MCP_PORT):
-            raise SupervisorError("porta 8010 ocupada sem bridge MCP saudável")
+        if _port_open(DEFAULT_MCP_PORT) or _port_open(DEFAULT_MCP_HEALTH_PORT):
+            raise SupervisorError("porta MCP ocupada sem health identificado do bridge")
         bridge = self.release_root / "mcp_bridge"
         server = bridge / "server.py"
         if not server.is_file():
             raise SupervisorError("bridge MCP ausente na release imutável")
+        env = build_mcp_bridge_env(self.profile)
         process = self._spawn(
             "mcp_bridge",
             [str(self.python), str(server)],
             bridge,
             env,
         )
-        health = wait_probe(lambda: probe_mcp_bridge(env), STARTUP_TIMEOUT_SECONDS, process)
+        health = wait_probe(probe_mcp_bridge, STARTUP_TIMEOUT_SECONDS, process)
         return {"status": "recovered", "managed": True, "pid": process.pid, "health": health}
 
     def ensure_backend(self) -> dict[str, Any]:
