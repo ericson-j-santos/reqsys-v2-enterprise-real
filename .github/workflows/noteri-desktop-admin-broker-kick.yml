@@ -2,6 +2,12 @@ name: Noteri → Desktop Admin Broker Kick
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - fix/noteri-desktop-admin-broker-kick-*
+    paths:
+      - .github/workflows/noteri-desktop-admin-broker-kick.yml
+      - scripts/noteri_desktop_admin_broker_kick.py
 
 permissions:
   contents: read
@@ -13,12 +19,14 @@ concurrency:
 jobs:
   kick:
     name: Start existing Desktop Admin Broker through Windows RPC
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
-      EVIDENCE_FILE: artifacts/noteri-desktop-admin-broker-kick/evidence.json
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      CORRELATION_ID: noteri-desktop-admin-broker-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\\noteri-desktop-admin-broker-kick\\evidence.json
       EVALUATED_SHA: ${{ github.sha }}
+      SYNC_REF: origin/${{ github.ref_name }}
 
     steps:
       - name: Checkout immutable workflow SHA
@@ -28,17 +36,212 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Run exact existing Desktop Admin Broker task
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
         shell: powershell
         run: |
-          python scripts/noteri_desktop_admin_broker_kick.py --confirm KICK-EXISTING-DESKTOP-ADMIN-BROKER --evidence-file "$env:EVIDENCE_FILE"
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:GITHUB_WORKSPACE,
+            "--session-prefix", "noteri-desktop-admin-broker",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $env:EVALUATED_SHA,
+            "--sync-ref", $env:SYNC_REF
+          )
+          $raw = & python $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $env:EVALUATED_SHA) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$($data.head)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Run exact existing Desktop Admin Broker task through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $kickScript = Join-Path $env:TARGET_PATH "scripts\\noteri_desktop_admin_broker_kick.py"
+          $gatewayArgs = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "90",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $kickScript,
+            "--confirm", "KICK-EXISTING-DESKTOP-ADMIN-BROKER",
+            "--evidence-file", $env:EVIDENCE_REL
+          )
+          & python $gateway @gatewayArgs
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized evidence
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING" }
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $evidence)) { throw "BROKER_KICK_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+          if (-not $e.ok -or $e.result -ne "EXISTING_DESKTOP_ADMIN_BROKER_RUN_REQUESTED") {
+            throw "DESKTOP_ADMIN_BROKER_KICK_NOT_CONFIRMED"
+          }
+          if ($e.source_host -ne "Noteri") { throw "SOURCE_HOST_MISMATCH" }
+          if ($e.target_host -ne "DESKTOP-PDQK954") { throw "TARGET_HOST_MISMATCH" }
+          if (-not $e.run_requested) { throw "BROKER_RUN_NOT_REQUESTED" }
+          if ($e.task_created_or_modified) { throw "TASK_MUTATION_REPORTED" }
+          if ($e.production_touched) { throw "PRODUCTION_TOUCHED" }
+          if ($e.secrets_read -or $e.credentials_supplied) { throw "SECRET_OR_CREDENTIAL_USE_REPORTED" }
 
       - name: Upload sanitized evidence
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: noteri-desktop-admin-broker-kick-${{ github.run_id }}
-          path: artifacts/noteri-desktop-admin-broker-kick/
+          path: ${{ steps.session.outputs.target_path }}\\artifacts\\noteri-desktop-admin-broker-kick\\evidence.json
           if-no-files-found: error
           retention-days: 30
+
+  physical_runner_watchdog:
+    name: Noteri runner queue watchdog
+    runs-on: windows-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+      contents: read
+    env:
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      TARGET_RUN_ID: ${{ github.run_id }}
+      TARGET_JOB_NAME: Start existing Desktop Admin Broker through Windows RPC
+      STALL_AFTER_SECONDS: "60"
+      CORRELATION_ID: noteri-runner-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout canonical progress watchdog
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Observe Noteri runner pickup
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const stallMs = Number(process.env.STALL_AFTER_SECONDS) * 1000;
+            const runId = Number(process.env.TARGET_RUN_ID);
+            if (!Number.isInteger(runId) || runId <= 0) {
+              core.setFailed('PHYSICAL_RUN_ID_INVALID');
+              return;
+            }
+
+            const runResponse = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+            const progressAnchor = new Date(runResponse.data.created_at || Date.now());
+
+            while (true) {
+              const jobsResponse = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+                per_page: 100,
+              });
+              const targetJob = jobsResponse.data.jobs.find(
+                (job) => job.name === process.env.TARGET_JOB_NAME,
+              ) || null;
+
+              if (
+                targetJob &&
+                (targetJob.status !== 'queued' || Number(targetJob.runner_id || 0) > 0)
+              ) {
+                fs.writeFileSync('progress-watchdog-input.json', JSON.stringify({
+                  task_id: String(targetJob.id),
+                  correlation_id: process.env.CORRELATION_ID,
+                  state: targetJob.status === 'completed' ? 'completed' : 'running',
+                  last_material_progress_at: new Date().toISOString(),
+                  last_observation_at: new Date().toISOString(),
+                  stall_after_seconds: Number(process.env.STALL_AFTER_SECONDS),
+                  alternative_route_available: false,
+                }));
+                return;
+              }
+
+              const noProgressMs = Date.now() - progressAnchor.getTime();
+              if (noProgressMs >= stallMs) {
+                fs.writeFileSync('progress-watchdog-input.json', JSON.stringify({
+                  task_id: targetJob ? String(targetJob.id) : 'noteri-runner-job-not-created',
+                  correlation_id: process.env.CORRELATION_ID,
+                  state: 'queued',
+                  last_material_progress_at: progressAnchor.toISOString(),
+                  last_observation_at: new Date().toISOString(),
+                  stall_after_seconds: Number(process.env.STALL_AFTER_SECONDS),
+                  alternative_route_available: false,
+                }));
+                return;
+              }
+
+              await sleep(Math.min(15000, stallMs - noProgressMs));
+            }
+
+      - name: Evaluate canonical progress watchdog
+        id: watchdog
+        continue-on-error: true
+        shell: pwsh
+        run: python _rules/scripts/progress_watchdog.py --input progress-watchdog-input.json --output progress-watchdog-output.json
+
+      - name: Fail closed and cancel stalled Noteri run
+        if: steps.watchdog.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('progress-watchdog-output.json')) {
+              core.setFailed('PROGRESS_WATCHDOG_EVIDENCE_MISSING');
+              return;
+            }
+            const decision = JSON.parse(fs.readFileSync('progress-watchdog-output.json', 'utf8'));
+            if (decision.decision !== 'block') {
+              core.setFailed(`PROGRESS_WATCHDOG_INVALID_DECISION:${decision.decision || 'missing'}`);
+              return;
+            }
+            core.setFailed(
+              `NOTERI_SELF_HOSTED_RUNNER_UNAVAILABLE: sem progresso material por ${decision.no_progress_seconds}s`,
+            );
+            await github.rest.actions.cancelWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: Number(process.env.TARGET_RUN_ID),
+            });
