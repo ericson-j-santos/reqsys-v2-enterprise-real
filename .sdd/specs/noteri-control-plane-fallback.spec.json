@@ -20,7 +20,10 @@
     ],
     "rdc_required": false,
     "environment": "DEV",
-    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml"
+    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml",
+    "runtime_repository": "ericson-j-santos/noteri-runtime",
+    "runtime_source_ref": "main_resolved_to_immutable_sha",
+    "runtime_e2e": "scripts/noteri_runtime_isolated_e2e.py"
   },
   "security": {
     "arbitrary_shell": false,
@@ -49,7 +52,7 @@
       "tests/test_activate_noteri_free_control_plane.py",
       "tests/test_noteri_runtime_auto_watch_workflow.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -60,7 +63,8 @@
     "bootstrap": "scripts/activate_noteri_free_control_plane.py",
     "policy": ".github/self-hosted-runner-policy.json",
     "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml"
+    "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml",
+    "runtime_repository": "ericson-j-santos/noteri-runtime"
   },
   "artifacts": {
     "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
@@ -147,6 +151,19 @@
         "ready_when": "exists=true && enabled=true && trigger_at_startup=true && logon_type=S4U",
         "requires_admin": false,
         "rdc_required": false
+      },
+      "runtime_e2e": {
+        "repository": "ericson-j-santos/noteri-runtime",
+        "source_ref": "main_resolved_to_immutable_sha",
+        "expected_host": "Noteri",
+        "transition": "NORMAL->ESTUDO->replay->NORMAL",
+        "independent_readback": true,
+        "source_sha_verified": true,
+        "idempotent_replay": true,
+        "negative_control": true,
+        "rdc_required": false,
+        "production_touched": false,
+        "secrets_read": false
       }
     },
     "auto_watch": {
