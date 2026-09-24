@@ -35,7 +35,8 @@
   ],
   "sdd_gate": {
     "tests": [
-      "tests/test_e2e_platform_branch_protection_noteri.py"
+      "tests/test_e2e_platform_branch_protection_noteri.py",
+      "tests/test_e2e_platform_branch_protection_automation.py"
     ],
     "evidence_contract": "PC24x7 exato; Session Launcher; Risk3 fixo; auth local sem segredo; SHA dinâmico estável; contract-self-test verde; readback da proteção."
   }
