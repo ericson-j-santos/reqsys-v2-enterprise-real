@@ -70,13 +70,24 @@ def test_workflow_is_explicitly_allowlisted() -> None:
     assert "Desktop Admin Broker" in policy["rationale"]
 
 
-def test_workflow_remote_kick_is_manual_only() -> None:
+def test_workflow_separates_remote_manual_and_local_probe_routes() -> None:
     raw = (
         ROOT / ".github" / "workflows" / "noteri-desktop-admin-broker-kick.yml"
     ).read_text(encoding="utf-8")
+
     assert "workflow_dispatch:" in raw
     assert "pull_request:" not in raw
     assert "pull_request_target:" not in raw
-    assert "\n  push:" not in raw
-    assert "github.event_name == 'workflow_dispatch'" in raw
+    assert "\n  push:" in raw
+    assert "fix/noteri-desktop-admin-broker-kick-*" in raw
+
+    assert "if: ${{ github.event_name == 'workflow_dispatch' }}" in raw
+    assert "if: ${{ github.event_name == 'push' }}" in raw
+    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "desktop_local_admin_broker_kick.py" in raw
+    assert "KICK-LOCAL-DESKTOP-ADMIN-BROKER" in raw
+    assert "session_launcher.py" in raw
+    assert "command_gateway.py" in raw
+    assert "STALL_AFTER_SECONDS: \"60\"" in raw
     assert "secrets." not in raw
