@@ -19,6 +19,16 @@ probe = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(probe)
 
 
+
+@pytest.fixture(autouse=True)
+def no_real_control_plane_network(monkeypatch) -> None:
+    monkeypatch.setattr(
+        probe,
+        "control_plane_probe",
+        lambda: {"port_reachable": False, "http_status": None, "ready": False},
+    )
+
+
 def test_rejects_non_noteri_host(monkeypatch) -> None:
     monkeypatch.setattr(probe.os, "name", "nt")
     monkeypatch.setattr(probe.socket, "gethostname", lambda: "DESKTOP-PDQK954")
@@ -78,12 +88,37 @@ def test_runtime_port_proves_reachability(monkeypatch) -> None:
     assert result["network_state"] == "runtime_port_reachable"
 
 
+def test_control_plane_probe_is_reported_without_remote_mutation(monkeypatch) -> None:
+    monkeypatch.setattr(probe, "validate_host", lambda: "Noteri")
+    monkeypatch.setattr(
+        probe,
+        "resolve_target",
+        lambda: {"resolved": True, "address_count": 1},
+    )
+    monkeypatch.setattr(probe, "icmp_reachable", lambda: True)
+    monkeypatch.setattr(probe, "runtime_port_reachable", lambda: False)
+    monkeypatch.setattr(
+        probe,
+        "control_plane_probe",
+        lambda: {"port_reachable": True, "http_status": 200, "ready": True},
+    )
+    result = probe.probe(probe.CONFIRM, "corr-control-plane-ready")
+    assert result["control_plane_port"] == 8787
+    assert result["control_plane_port_reachable"] is True
+    assert result["control_plane_http_status"] == 200
+    assert result["control_plane_ready"] is True
+    assert result["production_touched"] is False
+    assert result["secrets_read"] is False
+
+
 def test_target_is_fixed_and_no_arbitrary_target_argument() -> None:
     content = SCRIPT.read_text(encoding="utf-8")
     assert 'TARGET_HOST = "DESKTOP-PDQK954"' in content
     assert 'parser.add_argument("--target"' not in content
     assert "shell=True" not in content
     assert 'RUNTIME_PORT = 8081' in content
+    assert 'CONTROL_PLANE_PORT = 8787' in content
+    assert 'CONTROL_PLANE_PATH = "/readyz"' in content
     assert probe.ADMIN_STAGING_PATH == r"\\DESKTOP-PDQK954\C$\Users\Public\Desktop"
 
 
