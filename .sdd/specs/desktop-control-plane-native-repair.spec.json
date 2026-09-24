@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature_name": "Desktop PC24x7 native control-plane repair",
   "increment_type": "gap_fix",
-  "status": "implementation",
+  "phase": "implementation",
   "approvals": {
     "requirements": true
   },
@@ -33,18 +33,13 @@
     "implementation": "scripts/repair_desktop_control_plane_native.ps1",
     "tests": "tests/test_desktop_control_plane_native_repair.py"
   },
-  "acceptance": {
-    "code": [
-      "guardrail_tests_green",
-      "pre_pr_readiness_passed",
-      "ci_green_current_sha"
-    ],
-    "runtime": [
-      "broker_task_atstartup_s4u_highest",
-      "watchdog_task_atstartup_s4u_limited",
-      "fresh_pc24x7_runner_pickup",
-      "rdc_online_transport_broadcast_v1"
-    ],
-    "runtime_status_until_evidence": "activation_pending"
-  }
+  "acceptance_criteria": [
+    "Guardrail tests for the native repair pass on the exact HEAD.",
+    "Pre-PR Readiness passes on the exact HEAD with behind_by=0.",
+    "The repair validates host, metadata, source SHA, immutable release root, Python and run.py before registering any task.",
+    "The Watchdog is registered only as AtStartup + S4U + limited and the Admin Broker only as AtStartup + S4U + highest.",
+    "No network access, secret read, reboot or production mutation is performed by the repair.",
+    "Runtime remains activation_pending until fresh PC24x7 runner pickup and RDC transport_broadcast_v1 evidence are both observed."
+  ],
+  "runtime_status_until_evidence": "activation_pending"
 }
