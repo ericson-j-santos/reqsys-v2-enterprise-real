@@ -152,7 +152,10 @@ async def structured_access_log(request: Request, call_next):
     started = time.perf_counter()
     correlation_id = request.headers.get("x-correlation-id") or str(uuid.uuid4())
     causation_id = normalize_context_id(request.headers.get("x-causation-id"))
-    workflow_run_id = normalize_context_id(request.headers.get("x-workflow-run-id")) or normalize_context_id(settings.workflow_run_id)
+    raw_workflow_run_id = request.headers.get("x-workflow-run-id")
+    workflow_run_id = normalize_context_id(raw_workflow_run_id)
+    if raw_workflow_run_id is None:
+        workflow_run_id = normalize_context_id(settings.workflow_run_id)
     request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
     trace_id, span_id = parse_traceparent(request.headers.get("traceparent"))
     context = {
