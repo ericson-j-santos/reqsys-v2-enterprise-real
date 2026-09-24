@@ -173,6 +173,7 @@ def orchestrator_registry_probe(ports: dict[str, bool]) -> dict[str, Any]:
                 continue
             roles = item.get("roles") if isinstance(item.get("roles"), list) else []
             safe_workers.append({
+                "available_keys": sorted(str(key) for key in item.keys())[:50],
                 "device_name": device,
                 "worker_id": str(item.get("worker_id") or "")[:80],
                 "roles": [str(role)[:80] for role in roles[:12]],
@@ -180,6 +181,8 @@ def orchestrator_registry_probe(ports: dict[str, bool]) -> dict[str, Any]:
                 "controller_online": item.get("controller_online") is True,
                 "auth_valid": item.get("auth_valid") is True,
                 "profile": str(item.get("profile") or "")[:32],
+                "capabilities": [str(value)[:120] for value in item.get("capabilities", [])[:40]]
+                if isinstance(item.get("capabilities"), list) else [],
             })
 
     openapi_status, openapi_payload = get_json("/openapi.json")
@@ -190,12 +193,41 @@ def orchestrator_registry_probe(ports: dict[str, bool]) -> dict[str, Any]:
             if str(path).startswith("/v1/") or str(path) == "/readyz"
         )[:80]
 
+    metadata_paths = (
+        "/",
+        "/health",
+        "/healthz",
+        "/version",
+        "/v1/capabilities",
+        "/v1/task-types",
+        "/v1/handlers",
+        "/v1/work-items",
+    )
+    discovery: dict[str, Any] = {}
+    for path in metadata_paths:
+        status, payload = get_json(path)
+        summary: dict[str, Any] = {"status": status}
+        if isinstance(payload, dict):
+            summary["keys"] = sorted(str(key) for key in payload.keys())[:40]
+            for field in ("version", "service", "schema_version"):
+                value = payload.get(field)
+                if isinstance(value, (str, int, float, bool)) or value is None:
+                    summary[field] = value
+            for field in ("capabilities", "task_types", "handlers", "supported_task_types"):
+                value = payload.get(field)
+                if isinstance(value, list):
+                    summary[field] = [str(item)[:120] for item in value[:40]]
+        elif isinstance(payload, list):
+            summary["list_length"] = len(payload)
+        discovery[path] = summary
+
     return {
         "reachable": workers_status is not None,
         "result": "ok" if workers_status == 200 else f"http_{workers_status}",
         "workers": safe_workers,
         "openapi_status": openapi_status,
         "paths": safe_paths,
+        "discovery": discovery,
     }
 
 
