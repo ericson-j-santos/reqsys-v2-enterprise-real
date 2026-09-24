@@ -14,6 +14,7 @@ on:
           - audit
           - apply-observability-platform
           - apply-e2e-platform
+          - apply-reqsys-main
   schedule:
     - cron: "30 8 * * *"
 
@@ -404,5 +405,158 @@ jobs:
         with:
           name: e2e-platform-main-protection-pc24x7-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\artifacts\e2e-platform-main-protection-pc24x7\evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  apply-reqsys-main:
+    name: Proteger reqsys-v2-enterprise-real/main ruleset via PC24x7 Risk3
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-reqsys-main' }}
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 12
+    env:
+      TARGET_REPO: C:\\dev\\reqsys-v2-enterprise-real
+      CORRELATION_ID: reqsys-main-ruleset-protection-${{ github.run_id }}-${{ github.run_attempt }}
+      ACTION_ID: reqsys.reqsys-main-ruleset-protection.dev
+      ACTION_SCOPE: repo://ericson-j-santos/reqsys-v2-enterprise-real/ruleset/17998541
+      EVIDENCE_REL: artifacts/reqsys-main-ruleset-protection-pc24x7/evidence.json
+    steps:
+      - name: Checkout regras canônicas
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: main
+          path: _rules
+          fetch-depth: 1
+
+      - name: Validar host PC24x7 exato
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Bootstrap obrigatório de sessão
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "reqsys-ruleset",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", "${{ github.sha }}",
+            "--sync-ref", "origin/main"
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $line = @($raw)[-1]
+          $data = $line | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Instalar autorização Risk3 exata e temporária
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_reqsys_main_ruleset_risk3.py `
+              --enable `
+              --ttl-minutes 30 `
+              --confirm ENABLE-REQSYS-MAIN-RULESET-PROTECTION-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Aplicar required checks via Owner Risk3 Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\owner_risk3_gateway.py"
+          $riskArgs = @(
+            "--action-id", $env:ACTION_ID,
+            "--scope", $env:ACTION_SCOPE,
+            "--cwd", $env:TARGET_PATH,
+            "--timeout", "300",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          & python $gateway @riskArgs
+          exit $LASTEXITCODE
+
+      - name: Remover autorização Risk3 temporária
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_reqsys_main_ruleset_risk3.py `
+              --disable `
+              --confirm DISABLE-REQSYS-MAIN-RULESET-PROTECTION-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Validar evidência sanitizada
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_EVIDENCE" }
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path $evidence)) { throw "PROTECTION_EVIDENCE_MISSING" }
+          $data = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+          if ($data.status -notin @("PROTECTION_APPLIED", "ALREADY_COMPLIANT")) { throw "PROTECTION_NOT_CONFIRMED" }
+          if ($data.repository -ne "ericson-j-santos/reqsys-v2-enterprise-real") { throw "TARGET_REPOSITORY_MISMATCH" }
+          if ($data.branch -ne "main") { throw "TARGET_BRANCH_MISMATCH" }
+          if ($data.ruleset_id -ne 17998541) { throw "RULESET_ID_MISMATCH" }
+          $requiredChecks = @($data.required_checks)
+          $expectedChecks = @(
+            "Required Fast Gate",
+            "CI Router Result",
+            "Sumario CI Enterprise Fast",
+            "Validar artefatos de governança",
+            "governance-validation",
+            "Security Baseline",
+            "Auditar proteção enterprise da branch",
+            "Gate de merge governado"
+          )
+          if ($requiredChecks.Count -ne $expectedChecks.Count) { throw "REQUIRED_CHECKS_COUNT_MISMATCH" }
+          foreach ($check in $expectedChecks) {
+            if ($requiredChecks -notcontains $check) { throw "REQUIRED_CHECKS_MISMATCH: $check" }
+          }
+          if (-not $data.ruleset_active) { throw "RULESET_NOT_ACTIVE" }
+          if (-not $data.strict_required_status_checks) { throw "STRICT_CHECKS_NOT_ENABLED" }
+          if ($data.bypass_actor_count -ne 0) { throw "BYPASS_ACTOR_PRESENT" }
+          if (-not $data.protected) { throw "BRANCH_NOT_PROTECTED" }
+          if (-not $data.independent_readback) { throw "INDEPENDENT_READBACK_MISSING" }
+          if ($data.secret_value_exposed) { throw "SECRET_EXPOSURE_REPORTED" }
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-main-ruleset-protection-pc24x7-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\\artifacts\\reqsys-main-ruleset-protection-pc24x7\\evidence.json
           if-no-files-found: warn
           retention-days: 30

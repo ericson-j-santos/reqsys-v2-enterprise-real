@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "id": "reqsys-main-required-checks-ruleset",
+  "title": "Materializar required checks nativos no ruleset da main do ReqSys",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Atualiza somente required_status_checks do ruleset existente 17998541, preservando proteções atuais e validando readback fail-closed.",
+  "files": [
+    ".github/workflows/branch-protection-audit.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "scripts/configure_reqsys_main_ruleset_risk3.py",
+    "scripts/run_reqsys_main_ruleset_local.py",
+    "tests/test_reqsys_main_ruleset_protection.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_main_ruleset_protection.py"
+    ],
+    "evidence_contract": "O artifact deve registrar ruleset_id, SHA alvo, oito required checks, strict=true, bypass_actor_count=0, independent_readback=true e secret_value_exposed=false."
+  },
+  "risk": {
+    "level": 3,
+    "environment": "GitHub repository administration",
+    "authorization": "owner explicitamente autorizou a alteração administrativa do ruleset da main neste chat",
+    "rollback": "restaurar a regra required_status_checks anterior, preservando as demais regras do ruleset"
+  }
+}
