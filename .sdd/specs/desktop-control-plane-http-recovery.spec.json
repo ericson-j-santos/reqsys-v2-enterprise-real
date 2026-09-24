@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Desktop control plane narrow HTTP DEV actuator",
+  "increment_type": "gap_fix",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "environment": "DEV",
+  "target_host": "DESKTOP-PDQK954",
+  "transport": {
+    "ingress": "ReqSys DEV :8083",
+    "endpoint": "POST /api/internal/desktop-control-plane/recover",
+    "host_side_executor": "desktop-pc24x7-runtime admin broker issue #2",
+    "command": "/desktop-runtime admin recover-control-plane"
+  },
+  "security": {
+    "admin_auth_required": true,
+    "arbitrary_command": false,
+    "arbitrary_url": false,
+    "remote_shell": false,
+    "production": false,
+    "reboot": false,
+    "new_secret_required": false
+  },
+  "idempotency": {
+    "strategy": "reuse fresh exact owner command",
+    "window_seconds": 240
+  },
+  "traceability": {
+    "api": "backend/app/api/desktop_control_plane_recovery.py",
+    "service": "backend/app/services/desktop_control_plane_recovery.py",
+    "tests": "tests/test_desktop_control_plane_http_recovery.py",
+    "requirements": ".sdd/specs/desktop-control-plane-http-recovery.requirements.md"
+  },
+  "acceptance_criteria": [
+    "DEV-only and admin-only.",
+    "Only the fixed desktop-runtime recover-control-plane command can be emitted.",
+    "Fresh exact owner command is reused instead of duplicated.",
+    "No shell or direct privileged host execution exists in the API.",
+    "HTTP acceptance is not treated as proof of physical recovery."
+  ]
+}
