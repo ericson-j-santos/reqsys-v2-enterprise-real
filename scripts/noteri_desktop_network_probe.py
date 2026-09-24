@@ -176,6 +176,8 @@ def orchestrator_readback() -> dict[str, Any]:
             "eligible": worker.get("eligible") is True,
             "profile": str(worker.get("profile") or "").strip().upper(),
             "runner_recovery_capable": RUNNER_RECOVERY_TASK in safe_types,
+            "rdc_recovery_capable": "host.rdc.recover.v1" in safe_types,
+            "orchestrator_refresh_capable": "host.orchestrator.refresh.v1" in safe_types,
         }
 
     return {
