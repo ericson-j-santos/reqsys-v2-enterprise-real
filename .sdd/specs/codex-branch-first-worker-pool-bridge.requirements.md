@@ -32,6 +32,13 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 22. O comando deve mapear exclusivamente para `codex-worker-pool-handoff.yml`, em `main`, fixando `issue_number=2020`, `base_branch=main`, `base_sha` no SHA corrente capturado pelo próprio gateway e `request_id` determinístico de `repo:2020:main`; nenhum input arbitrário pode vir do comentário.
 23. O handoff E2E deve usar o mesmo watchdog de pickup self-hosted de 60 segundos do gateway e cancelar/falhar fechado quando o PC24x7 não adquirir o job.
 
+24. Deve existir um E2E portátil em runner GitHub-hosted que suba o repositório real `engineering-worker-pool` em SHA completo fixado e valide o consumidor ReqSys sem depender do runner físico.
+25. O E2E portátil deve usar banco SQLite e bearer token efêmeros no filesystem temporário do runner, sem GitHub Secret, sem persistência e sem exposição em log/evidência.
+26. Antes do handoff, o E2E portátil deve configurar a lane do ReqSys com `enabled=false`, não registrar workers e exigir `GET /v1/contract` v1 + `POST /v1/work` com `allow_legacy_fallback=false` e `allow_work_fallback=false`.
+27. O caso positivo deve provar criação, replay `created=false`, mesmo `work_id/task_id`, leitura independente, task `queued` sem lease e ausência de `lease_token`; o caso negativo deve provar HTTP 401 com token inválido.
+28. A evidência deve vincular SHA do ReqSys, SHA do Engineering Worker Pool, SHA canônico das regras e `correlation_id`, declarar `physical_runtime_validated=false` e nunca ser apresentada como substituta do smoke/E2E PC24x7.
+29. O E2E portátil pode executar em push dos arquivos do contrato e por `workflow_dispatch`, com `contents: read`, timeout finito, sem deploy, produção ou mutação de segredo.
+
 ## Critérios de aceite
 
 - testes do fallback provam dispatch antes do marcador, deduplicação e recuperação de marcador legado;
@@ -39,6 +46,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 - teste contratual do workflow prova gatilho manual, runner fixo, checkout por SHA e ausência de secret inline;
 - teste do Authorized Actions Gateway prova comando exato, target fixo, inputs derivados/fixos, `main` e pickup fail-closed para o handoff E2E;
 - `check_self_hosted_runner_governance.py` aceita apenas o workflow explicitamente allowlisted;
+- E2E portátil GitHub-hosted deve validar o repositório real `engineering-worker-pool` no SHA fixado, contrato v1/work_v1 estrito, replay, leitura independente, controle negativo 401 e lane desabilitada, sem substituir a prova física;
 - Pre-PR Readiness deve retornar `READY_FOR_PR=passed` no HEAD exato;
 - a conclusão física de #1766 permanece parcial até uma task real produzir branch/SHA, passar por Validator independente e chegar a `READY_FOR_PR`/PR sem duplicidade.
 

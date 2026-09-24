@@ -9,13 +9,13 @@
     "design": true,
     "tasks": true
   },
-  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Engineering Worker Pool por contrato público v1, prefere o Work Orchestrator /v1/work e adiciona despacho E2E DEV governado pelo Authorized Actions Gateway com inputs fixos/derivados e fallback temporário para /v1/tasks somente em 404.",
+  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Engineering Worker Pool por contrato público v1, prefere o Work Orchestrator /v1/work, mantém o E2E físico governado e adiciona E2E portátil GitHub-hosted contra o repositório real em SHA fixado sem substituir a prova PC24x7.",
   "issues": [
     1766,
     1770,
     2020
   ],
-  "scope": "local-dev-pc24x7",
+  "scope": "local-dev-pc24x7+github-hosted-contract-e2e",
   "files": [
     "scripts/pending_development_local_codex.py",
     "scripts/pending_development_worker_pool_bridge.py",
@@ -27,7 +27,10 @@
     "scripts/governance/enterprise_runtime_governance_gates.py",
     "tests/test_enterprise_runtime_governance_gates.py",
     ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "tests/test_reqsys_authorized_actions_gateway.py"
+    "tests/test_reqsys_authorized_actions_gateway.py",
+    "scripts/worker_pool_portable_contract_e2e.py",
+    ".github/workflows/worker-pool-portable-contract-e2e.yml",
+    "tests/test_worker_pool_portable_contract_e2e.py"
   ],
   "sdd_gate": {
     "tests": [
@@ -36,9 +39,10 @@
       "tests/test_codex_worker_pool_handoff_workflow.py",
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_enterprise_runtime_governance_gates.py",
-      "tests/test_reqsys_authorized_actions_gateway.py"
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_worker_pool_portable_contract_e2e.py"
     ],
-    "evidence_contract": "Provar descoberta de engineering-worker-pool/v1 antes do despacho. Em runtime v1, preferir POST /v1/work e provar replay created=false no mesmo work_id/task_id mais GET /v1/work/{work_id} independente sem lease_token. Durante a migração, permitir fallback para /v1/tasks somente quando /v1/work retornar 404; 401, 503, transporte, JSON inválido ou resposta inconsistente permanecem fail-closed. Para runtime sem GET /v1/contract, legacy_fallback continua permitido apenas quando esse endpoint retorna 404. Provar base_sha exato, request_id/correlation_id, leitura independente e ausência de segredo. --require-work-v1 e --require-contract-v1 permitem cutover fail-closed sem nova mudança de código. O E2E físico deve ser despachável somente pelo comando exato /reqsys run codex-worker-pool-handoff-e2e-dev na issue #1705, para codex-worker-pool-handoff.yml em main, com issue 2020, base_sha capturado pelo gateway, request_id determinístico e pickup PC24x7 fail-closed em 60s."
+    "evidence_contract": "Provar descoberta de engineering-worker-pool/v1 antes do despacho. Em runtime v1, preferir POST /v1/work e provar replay created=false no mesmo work_id/task_id mais GET /v1/work/{work_id} independente sem lease_token. Durante a migração, permitir fallback para /v1/tasks somente quando /v1/work retornar 404; 401, 503, transporte, JSON inválido ou resposta inconsistente permanecem fail-closed. Para runtime sem GET /v1/contract, legacy_fallback continua permitido apenas quando esse endpoint retorna 404. Provar base_sha exato, request_id/correlation_id, leitura independente e ausência de segredo. --require-work-v1 e --require-contract-v1 permitem cutover fail-closed sem nova mudança de código. O E2E físico deve ser despachável somente pelo comando exato /reqsys run codex-worker-pool-handoff-e2e-dev na issue #1705, para codex-worker-pool-handoff.yml em main, com issue 2020, base_sha capturado pelo gateway, request_id determinístico e pickup PC24x7 fail-closed em 60s. O E2E portátil deve executar em runner GitHub-hosted com o repositório real engineering-worker-pool preso a SHA completo, token/banco efêmeros, lane ReqSys disabled, nenhum worker registrado, contract v1 e work_v1 obrigatórios sem fallback, replay created=false, GET /v1/work independente, snapshot queued sem lease e controle negativo 401. A evidência deve registrar os SHAs ReqSys/Worker Pool/regras e physical_runtime_validated=false; ela reduz o acoplamento ao Desktop para regressão de contrato, mas não substitui smoke/E2E físico PC24x7."
   },
   "risk": {
     "production": false,
