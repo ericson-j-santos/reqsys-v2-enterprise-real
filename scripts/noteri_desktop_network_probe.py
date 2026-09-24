@@ -23,6 +23,7 @@ CONTROL_PORTS = {
     "winrm_http": 5985,
     "winrm_https": 5986,
     "rdp": 3389,
+    "engineering_orchestrator": 8787,
 }
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
