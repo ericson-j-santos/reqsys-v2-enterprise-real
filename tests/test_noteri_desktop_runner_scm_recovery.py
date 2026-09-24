@@ -122,7 +122,9 @@ def test_request_and_source_are_fixed() -> None:
         )
     content = SCRIPT.read_text(encoding="utf-8")
     assert 'TARGET_HOST = "DESKTOP-PDQK954"' in content
-    assert 'SCM_MACHINE = r"\\\\DESKTOP-PDQK954"' in content
+    assert recovery.SCM_MACHINE == r"\\DESKTOP-PDQK954"
+    assert recovery.SCM_MACHINE[2:] == "DESKTOP-PDQK954"
+    assert len(recovery.SCM_MACHINE) == len("DESKTOP-PDQK954") + 2
     assert 'parser.add_argument("--target"' not in content
     assert "shell=True" not in content
 
@@ -145,6 +147,10 @@ def test_workflow_and_policy_are_noteri_only() -> None:
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in content
     assert "--confirm RECOVER-NOTERI-DESKTOP-RUNNER-SCM" in content
     assert "workflow_dispatch:" in content
+    assert "_rules\\scripts\\session_launcher.py" in content
+    assert "_rules\\scripts\\command_gateway.py" in content
+    assert '"--risk", "2"' in content
+    assert '"--sync-ref", "origin/fix/noteri-desktop-runner-scm-recovery-20260924"' in content
     assert "inputs:" not in content
     assert "fix/noteri-desktop-runner-scm-recovery-*" in content
     policy = json.loads(POLICY.read_text(encoding="utf-8"))

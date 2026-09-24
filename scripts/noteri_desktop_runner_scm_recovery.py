@@ -14,7 +14,7 @@ from typing import Protocol
 
 EXPECTED_SOURCE_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
-SCM_MACHINE = r"\\\\DESKTOP-PDQK954"
+SCM_MACHINE = r"\\DESKTOP-PDQK954"
 CONFIRM = "RECOVER-NOTERI-DESKTOP-RUNNER-SCM"
 RUNNER_MARKERS = ("actions.runner", "github actions runner")
 
