@@ -17,14 +17,14 @@ Restaurar a autenticação local do Codex Worker Pool no PC24x7 quando o arquivo
 9. O caminho do arquivo deve ser derivado exclusivamente do único container ativo `codex-worker-pool` que prove `127.0.0.1:8097 -> 8097/tcp` e mount para `/run/secrets/codex_worker_pool_api_token`.
 10. Caminho ambíguo, falha ao criar/validar o diretório pai canônico, acesso negado, arquivo inválido ou container não único devem falhar fechado.
 11. O valor do token não pode aparecer em stdout, stderr, artifact, GitHub output, resumo ou evidência.
-12. Após rotação, o container deve ser reiniciado e a validação deve exigir `/health=200`, `auth_configured=true` e leitura autenticada independente de `/v1/snapshot=200`.
-13. A evidência pode informar somente rotação/reuso, restart, HTTP status, readback e `reason` sanitizado de readiness. Respostas HTTP 503 podem ser lidas apenas para classificar, sem registrar token, caminho sensível ou valor de variável. Devem existir reason codes distintos para endpoint indisponível, arquivo de auth não visível no container, `EXPECTED_RULES_SHA` ausente e mismatch de token; `secret_value_exposed=false` é obrigatório.
+12. Após criação atômica de um token ou quando um `401` comprovar mismatch e a comparação em memória provar que o conteúdo do bind mount no container diverge do arquivo host canônico, o serviço `codex-worker-pool` deve ser recriado pelo mesmo projeto/configuração Docker Compose (`--force-recreate --no-deps --no-build`) para remontar o arquivo. Um simples `docker restart` não é evidência suficiente para bind mount de arquivo. Se host e container já contiverem o mesmo token e a API ainda responder `401`, falhar fechado como `worker_pool_auth_process_mismatch`, sem rotação.
+13. A evidência pode informar somente rotação/reuso, recriação do serviço, ressincronização do bind mount, HTTP status, readback e `reason` sanitizado de readiness. Respostas HTTP 503 podem ser lidas apenas para classificar, sem registrar token, caminho sensível ou valor de variável. Devem existir reason codes distintos para endpoint indisponível, arquivo de auth não visível no container, `EXPECTED_RULES_SHA` ausente e mismatch de token; `secret_value_exposed=false` é obrigatório.
 14. Produção, deploy, permissões administrativas, firewall, outros serviços e outros segredos não podem ser alterados.
 15. Após a restauração aprovada, deve ser executado o smoke normal no mesmo SHA vigente e exigido `WORKER_POOL_SMOKE_PASSED`.
 
 ## Critérios de aceite
 
-- testes unitários positivos e negativos do restaurador, incluindo criação segura do diretório pai canônico, preservação sanitizada do payload 503 e reason codes específicos de readiness, e da allowlist Risk3 temporária verdes;
+- testes unitários positivos e negativos do restaurador, incluindo criação segura do diretório pai canônico, detecção de bind mount stale após troca atômica, recriação fail-closed do serviço, controle que impede recriação quando host/container já coincidem, preservação sanitizada do payload 503 e reason codes específicos de readiness, e da allowlist Risk3 temporária verdes;
 - teste de contrato prova que restore e smoke possuem rotas distintas;
 - runner policy continua allowlistando apenas o workflow já existente;
 - restore real retorna `WORKER_POOL_TOKEN_RESTORE_PASSED`;
