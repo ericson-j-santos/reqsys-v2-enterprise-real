@@ -559,7 +559,13 @@ def main() -> int:
             "production_touched": False,
             "deploy_executed": False,
         }
-        blocked.update(exc.diagnostics)
+        for key in (
+            "compose_error_fingerprint",
+            "compose_cli_version",
+            "compose_creator_version",
+        ):
+            if key in exc.diagnostics:
+                blocked[key] = exc.diagnostics[key]
         _write_evidence(args.output, blocked)
         print(json.dumps(blocked, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 2
