@@ -10,7 +10,6 @@ on:
       - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_bootstrap_pc24x7_teams_service_token.py'
       - 'tests/test_reconcile_pc24x7_teams_dev_runtime.py'
-      - 'tests/test_reconcile_pc24x7_teams_dev_runtime.py'
       - 'tests/test_pc24x7_teams_token_bootstrap_workflow.py'
       - '.github/workflows/pc24x7-teams-token-bootstrap.yml'
   push:
