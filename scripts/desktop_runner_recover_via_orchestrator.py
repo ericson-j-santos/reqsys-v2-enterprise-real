@@ -15,6 +15,8 @@ from typing import Any
 CONTROL_PLANE = "http://DESKTOP-PDQK954:8787"
 TARGET_HOST = "DESKTOP-PDQK954"
 TASK_TYPE = "host.github_runner.recover.v1"
+REFRESH_TASK_TYPE = "host.orchestrator.refresh.v1"
+EXPECTED_RUNTIME_SHA = "63d26ff024e9f782bdddb7e954a6e247c8ef13b7"
 CONFIRM = "RECOVER-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR"
 TERMINAL = {"CONCLUÍDO", "BLOQUEADO", "CANCELADO"}
 
@@ -55,7 +57,7 @@ def request_json(method: str, path: str, payload: dict[str, Any] | None = None) 
     return status, decoded
 
 
-def desktop_worker() -> dict[str, Any]:
+def desktop_worker(*, require_runner_capability: bool = False) -> dict[str, Any]:
     _, payload = request_json("GET", "/v1/workers")
     workers = payload.get("workers")
     if not isinstance(workers, list):
@@ -72,8 +74,8 @@ def desktop_worker() -> dict[str, Any]:
     if not isinstance(caps, dict):
         raise RecoveryError("desktop_capabilities_invalid")
     safe = caps.get("safe_task_types")
-    if not isinstance(safe, list) or TASK_TYPE not in safe:
-        raise RecoveryError("desktop_runner_recovery_capability_missing")
+    if not isinstance(safe, list):
+        raise RecoveryError("desktop_safe_task_types_invalid")
     roles = worker.get("roles")
     if not isinstance(roles, list) or "builder" not in roles:
         raise RecoveryError("desktop_builder_role_missing")
@@ -87,28 +89,39 @@ def desktop_worker() -> dict[str, Any]:
         raise RecoveryError("desktop_profile_not_normal")
     if "eligible" in worker and worker.get("eligible") is not True:
         raise RecoveryError("desktop_worker_not_eligible")
+    safe_set = {str(value) for value in safe}
+    if require_runner_capability and TASK_TYPE not in safe_set:
+        raise RecoveryError("desktop_runner_recovery_capability_missing")
     return {
         "worker_id": str(worker.get("worker_id") or ""),
         "fresh": True,
         "controller_online": True,
         "auth_valid": True,
         "profile": "NORMAL",
-        "capability_present": True,
+        "runner_recovery_capability": TASK_TYPE in safe_set,
+        "runtime_refresh_capability": REFRESH_TASK_TYPE in safe_set,
     }
 
 
-def recover(correlation_id: str) -> dict[str, Any]:
-    before = desktop_worker()
-    digest = hashlib.sha256(f"desktop-runner-recovery|{correlation_id}".encode("utf-8")).hexdigest()
+def enqueue_and_wait(
+    task_type: str,
+    *,
+    payload: dict[str, Any],
+    correlation_id: str,
+    timeout_seconds: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    digest = hashlib.sha256(
+        f"{task_type}|{correlation_id}".encode("utf-8")
+    ).hexdigest()
     _, intake = request_json(
         "POST",
         "/v1/intake",
         {
-            "event_id": f"desktop-runner-recovery-{digest[:32]}",
+            "event_id": f"desktop-maintenance-{digest[:32]}",
             "correlation_id": correlation_id,
-            "idempotency_key": f"desktop-runner-recovery:{digest}",
-            "task_type": TASK_TYPE,
-            "payload": {"target_host": TARGET_HOST, "worker_hint": "builder"},
+            "idempotency_key": f"desktop-maintenance:{digest}",
+            "task_type": task_type,
+            "payload": payload,
             "risk": 2,
             "max_attempts": 1,
             "lease_seconds": 60,
@@ -119,13 +132,16 @@ def recover(correlation_id: str) -> dict[str, Any]:
     if not isinstance(item, dict) or not isinstance(item.get("id"), str):
         raise RecoveryError("intake_item_invalid")
     if not isinstance(dispatch, dict):
-        raise RecoveryError("desktop_recovery_not_dispatched")
+        raise RecoveryError(f"{task_type}:not_dispatched")
     worker = dispatch.get("worker")
-    if not isinstance(worker, dict) or str(worker.get("device_name") or "").casefold() != TARGET_HOST.casefold():
-        raise RecoveryError("dispatch_target_mismatch")
+    if (
+        not isinstance(worker, dict)
+        or str(worker.get("device_name") or "").casefold() != TARGET_HOST.casefold()
+    ):
+        raise RecoveryError(f"{task_type}:dispatch_target_mismatch")
 
     item_id = item["id"]
-    deadline = time.monotonic() + 35.0
+    deadline = time.monotonic() + timeout_seconds
     terminal = None
     while time.monotonic() < deadline:
         _, snapshot = request_json("GET", f"/v1/work-items/{item_id}")
@@ -137,36 +153,97 @@ def recover(correlation_id: str) -> dict[str, Any]:
             terminal = observed
             break
         if status in TERMINAL:
-            raise RecoveryError(f"work_item_terminal_{status.lower()}")
+            error = str(observed.get("error") or "")[:160]
+            raise RecoveryError(f"{task_type}:terminal_{status.lower()}:{error}")
         time.sleep(0.5)
     if terminal is None:
-        raise RecoveryError("desktop_recovery_timeout")
-
+        raise RecoveryError(f"{task_type}:timeout")
     result = terminal.get("result")
     if not isinstance(result, dict):
-        raise RecoveryError("desktop_recovery_result_invalid")
+        raise RecoveryError(f"{task_type}:result_invalid")
+    return intake, result
+
+
+def wait_for_refreshed_worker(timeout_seconds: float = 50.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last_error = "not_observed"
+    while time.monotonic() < deadline:
+        try:
+            worker = desktop_worker()
+            if worker["runner_recovery_capability"]:
+                return worker
+            last_error = "runner_capability_not_yet_present"
+        except RecoveryError as exc:
+            last_error = str(exc)
+        time.sleep(1.0)
+    raise RecoveryError(f"runtime_refresh_readback_timeout:{last_error}")
+
+
+def recover(correlation_id: str) -> dict[str, Any]:
+    before = desktop_worker()
+    refresh = {
+        "performed": False,
+        "expected_sha": EXPECTED_RUNTIME_SHA,
+        "replayed": False,
+    }
+
+    if not before["runner_recovery_capability"]:
+        if not before["runtime_refresh_capability"]:
+            raise RecoveryError(
+                "desktop_runner_recovery_and_runtime_refresh_capabilities_missing"
+            )
+        refresh_intake, refresh_result = enqueue_and_wait(
+            REFRESH_TASK_TYPE,
+            payload={
+                "target_host": TARGET_HOST,
+                "expected_sha": EXPECTED_RUNTIME_SHA,
+                "worker_hint": "builder",
+            },
+            correlation_id=f"{correlation_id}-refresh",
+            timeout_seconds=20.0,
+        )
+        if refresh_result.get("handler") != REFRESH_TASK_TYPE:
+            raise RecoveryError("runtime_refresh_handler_mismatch")
+        if str(refresh_result.get("host") or "").casefold() != TARGET_HOST.casefold():
+            raise RecoveryError("runtime_refresh_host_mismatch")
+        if str(refresh_result.get("expected_sha") or "") != EXPECTED_RUNTIME_SHA:
+            raise RecoveryError("runtime_refresh_sha_mismatch")
+        refresh = {
+            "performed": True,
+            "expected_sha": EXPECTED_RUNTIME_SHA,
+            "replayed": refresh_intake.get("replayed") is True,
+        }
+        after_refresh = wait_for_refreshed_worker()
+    else:
+        after_refresh = before
+
+    recovery_intake, result = enqueue_and_wait(
+        TASK_TYPE,
+        payload={"target_host": TARGET_HOST, "worker_hint": "builder"},
+        correlation_id=f"{correlation_id}-runner",
+        timeout_seconds=25.0,
+    )
     if result.get("handler") != TASK_TYPE:
         raise RecoveryError("desktop_recovery_handler_mismatch")
     if str(result.get("host") or "").casefold() != TARGET_HOST.casefold():
         raise RecoveryError("desktop_recovery_host_mismatch")
-    if str(result.get("worker_id") or "") != before["worker_id"]:
+    if str(result.get("worker_id") or "") != after_refresh["worker_id"]:
         raise RecoveryError("desktop_recovery_worker_mismatch")
     if result.get("result") not in {"recovered", "already_running"}:
         raise RecoveryError("desktop_recovery_unexpected_result")
     if result.get("mode") not in {"service", "scheduled_task"}:
         raise RecoveryError("desktop_recovery_mode_invalid")
 
-    after = desktop_worker()
+    after = desktop_worker(require_runner_capability=True)
     return {
         "ok": True,
         "task_type": TASK_TYPE,
         "target_host": TARGET_HOST,
-        "work_item_id": item_id,
-        "created": intake.get("created") is True,
-        "replayed": intake.get("replayed") is True,
-        "dispatch_worker_id": before["worker_id"],
+        "dispatch_worker_id": after["worker_id"],
         "worker_before": before,
+        "worker_after_refresh": after_refresh,
         "worker_after": after,
+        "runtime_refresh": refresh,
         "handler_result": {
             "mode": result.get("mode"),
             "result": result.get("result"),
@@ -174,6 +251,7 @@ def recover(correlation_id: str) -> dict[str, Any]:
             "before_state": result.get("before_state"),
             "after_state": result.get("after_state"),
         },
+        "runner_recovery_replayed": recovery_intake.get("replayed") is True,
         "correlation_id": correlation_id,
         "production_touched": False,
         "secrets_read": False,
