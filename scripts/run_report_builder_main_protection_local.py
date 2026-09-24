@@ -14,8 +14,7 @@ from typing import Any
 
 TARGET_REPOSITORY = "ericson-j-santos/report-builder-platform"
 TARGET_BRANCH = "main"
-EVIDENCE_PR_NUMBER = 5
-EXPECTED_EVIDENCE_SHA = "c4e5b4ffd677f854ca1107330c87312d995c619e"
+EXPECTED_MAIN_SHA = "b80c999d83a82b3454bb6c486e16129f4f04f434"
 REQUIRED_CHECKS = (
     "Quality / Python 3.11",
     "Quality / Python 3.14",
@@ -77,18 +76,6 @@ def _branch() -> dict[str, Any]:
     )
 
 
-def _pull() -> dict[str, Any]:
-    return _gh_json(
-        [
-            "api",
-            "-H", "Accept: application/vnd.github+json",
-            "-H", f"X-GitHub-Api-Version: {API_VERSION}",
-            f"repos/{TARGET_REPOSITORY}/pulls/{EVIDENCE_PR_NUMBER}",
-        ],
-        "evidence_pr_read_failed",
-    )
-
-
 def _check_runs(sha: str) -> dict[str, Any]:
     return _gh_json(
         [
@@ -121,7 +108,7 @@ def _required_check_states(checks: list[Any]) -> dict[str, bool]:
             and item.get("name") == required
             and item.get("status") == "completed"
             and item.get("conclusion") == "success"
-            and item.get("head_sha") == EXPECTED_EVIDENCE_SHA
+            and item.get("head_sha") == EXPECTED_MAIN_SHA
             for item in checks
         )
     return states
@@ -187,8 +174,7 @@ def _blocked(
             "repository": TARGET_REPOSITORY,
             "branch": TARGET_BRANCH,
             "target_sha": target_sha,
-            "evidence_pr_number": EVIDENCE_PR_NUMBER,
-            "evidence_sha": EXPECTED_EVIDENCE_SHA,
+            "evidence_sha": EXPECTED_MAIN_SHA,
             "required_checks": list(REQUIRED_CHECKS),
             "required_check_states": check_states or {},
             "host": socket.gethostname(),
@@ -217,24 +203,15 @@ def main() -> int:
         if auth.returncode != 0:
             raise ProtectionError("github_local_auth_unavailable")
 
-        evidence_pr = _pull()
-        if evidence_pr.get("state") != "open":
-            raise ProtectionError("evidence_pr_not_open")
-        if str((evidence_pr.get("base") or {}).get("ref") or "") != TARGET_BRANCH:
-            raise ProtectionError("evidence_pr_base_mismatch")
-        evidence_head = str((evidence_pr.get("head") or {}).get("sha") or "").strip().lower()
-        if evidence_head != EXPECTED_EVIDENCE_SHA:
-            raise ProtectionError("evidence_pr_head_changed")
+        before = _branch()
+        target_sha = str((before.get("commit") or {}).get("sha") or "").strip().lower()
+        if target_sha != EXPECTED_MAIN_SHA:
+            raise ProtectionError("target_main_sha_changed")
 
-        checks = _check_runs(EXPECTED_EVIDENCE_SHA).get("check_runs") or []
+        checks = _check_runs(EXPECTED_MAIN_SHA).get("check_runs") or []
         check_states = _required_check_states(checks)
         if not all(check_states.values()):
             raise ProtectionError("required_checks_not_green")
-
-        before = _branch()
-        target_sha = str((before.get("commit") or {}).get("sha") or "").strip().lower()
-        if len(target_sha) != 40:
-            raise ProtectionError("target_sha_invalid")
 
         if before.get("protected") is True:
             current_protection = _protection()
@@ -246,8 +223,7 @@ def main() -> int:
                         "repository": TARGET_REPOSITORY,
                         "branch": TARGET_BRANCH,
                         "target_sha": target_sha,
-                        "evidence_pr_number": EVIDENCE_PR_NUMBER,
-                        "evidence_sha": EXPECTED_EVIDENCE_SHA,
+                        "evidence_sha": EXPECTED_MAIN_SHA,
                         "required_checks": list(REQUIRED_CHECKS),
                         "required_check_states": check_states,
                         "protected": True,
@@ -267,15 +243,13 @@ def main() -> int:
 
         before_write = _branch()
         current_sha = str((before_write.get("commit") or {}).get("sha") or "").strip().lower()
-        if current_sha != target_sha:
+        if current_sha != EXPECTED_MAIN_SHA:
             raise ProtectionError("target_sha_changed_before_write")
 
-        evidence_pr_before_write = _pull()
-        evidence_head_before_write = str(
-            (evidence_pr_before_write.get("head") or {}).get("sha") or ""
-        ).strip().lower()
-        if evidence_head_before_write != EXPECTED_EVIDENCE_SHA:
-            raise ProtectionError("evidence_pr_head_changed_before_write")
+        checks_before_write = _check_runs(EXPECTED_MAIN_SHA).get("check_runs") or []
+        check_states_before_write = _required_check_states(checks_before_write)
+        if not all(check_states_before_write.values()):
+            raise ProtectionError("required_checks_regressed_before_write")
 
         request_payload = {
             "required_status_checks": {
@@ -314,17 +288,10 @@ def main() -> int:
 
         after_branch = _branch()
         after_sha = str((after_branch.get("commit") or {}).get("sha") or "").strip().lower()
-        if after_sha != target_sha:
+        if after_sha != EXPECTED_MAIN_SHA:
             raise ProtectionError("target_sha_changed_after_write")
         if after_branch.get("protected") is not True:
             raise ProtectionError("branch_not_protected_after_write")
-
-        evidence_pr_after_write = _pull()
-        evidence_head_after_write = str(
-            (evidence_pr_after_write.get("head") or {}).get("sha") or ""
-        ).strip().lower()
-        if evidence_head_after_write != EXPECTED_EVIDENCE_SHA:
-            raise ProtectionError("evidence_pr_head_changed_after_write")
 
         after_protection = _protection()
         if not protection_compliant(after_protection):
@@ -336,11 +303,10 @@ def main() -> int:
                 "status": "PROTECTION_APPLIED",
                 "repository": TARGET_REPOSITORY,
                 "branch": TARGET_BRANCH,
-                "target_sha": target_sha,
-                "evidence_pr_number": EVIDENCE_PR_NUMBER,
-                "evidence_sha": EXPECTED_EVIDENCE_SHA,
+                "target_sha": after_sha,
+                "evidence_sha": EXPECTED_MAIN_SHA,
                 "required_checks": list(REQUIRED_CHECKS),
-                "required_check_states": check_states,
+                "required_check_states": check_states_before_write,
                 "protected": True,
                 "pull_request_required": True,
                 "enforce_admins": True,
