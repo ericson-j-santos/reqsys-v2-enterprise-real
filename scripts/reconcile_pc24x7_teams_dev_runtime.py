@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -16,7 +17,17 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from scripts import provision_pc24x7_teams_bot_runtime as provision
+def _load_provision_module():
+    module_path = Path(__file__).resolve().with_name("provision_pc24x7_teams_bot_runtime.py")
+    spec = importlib.util.spec_from_file_location("reqsys_pc24x7_teams_provision", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("provision_module_loader_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+provision = _load_provision_module()
 
 CONFIRMATION = "RECONCILE-PC24X7-TEAMS-DEV"
 EXPECTED_HOST = "DESKTOP-PDQK954"
