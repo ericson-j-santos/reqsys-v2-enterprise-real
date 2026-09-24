@@ -19,3 +19,4 @@ O bootstrap S2S da Central IA/Teams DEV exige que o runtime público PC24x7 exec
 11. O workflow `pc24x7-teams-token-bootstrap.yml` executa a reconciliação antes de validar/provisionar o token S2S.
 12. Falha na reconciliação bloqueia o bootstrap antes da mutação do token.
 13. A execução publica artifact sanitizado com correlation_id, SHA anterior/final e estado do runtime, sem valores sensíveis.
+14. O workflow self-hosted precisa permanecer explicitamente allowlisted em `.github/self-hosted-runner-policy.json`, coberto pelo ADR-046 e pelo teste de governança do repositório.
