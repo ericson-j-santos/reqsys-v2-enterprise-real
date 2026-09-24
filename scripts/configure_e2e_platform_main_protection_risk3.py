@@ -17,7 +17,7 @@ SCOPE = "repo://ericson-j-santos/e2e-platform/branch/main"
 MANAGED_BY = "reqsys-e2e-platform-main-protection-once"
 ENABLE_CONFIRM = "ENABLE-E2E-PLATFORM-MAIN-PROTECTION-ONCE"
 DISABLE_CONFIRM = "DISABLE-E2E-PLATFORM-MAIN-PROTECTION-ONCE"
-EVIDENCE_PATH = "artifacts/e2e-platform-main-protection-noteri/evidence.json"
+EVIDENCE_PATH = "artifacts/e2e-platform-main-protection-pc24x7/evidence.json"
 COMMAND = [
     "python",
     "scripts/run_e2e_platform_main_protection_local.py",

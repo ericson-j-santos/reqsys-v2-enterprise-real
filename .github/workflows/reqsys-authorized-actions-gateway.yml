@@ -44,7 +44,8 @@ jobs:
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
         github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
         github.event.comment.body == '/reqsys run protect-observability-platform-main' ||
-        github.event.comment.body == '/reqsys run protect-e2e-platform-main'
+        github.event.comment.body == '/reqsys run protect-e2e-platform-main' ||
+        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -141,6 +142,10 @@ jobs:
             '/reqsys run protect-e2e-platform-main')
               target='branch-protection-audit.yml'
               mode='apply-e2e-platform'
+              ;;
+            '/reqsys run protect-reqsys-main-ruleset')
+              target='branch-protection-audit.yml'
+              mode='apply-reqsys-main'
               ;;
             *)
               echo 'command_not_allowlisted' >&2
@@ -276,12 +281,14 @@ jobs:
           set -euo pipefail
           status='pending'
           wait_seconds=0
-          for attempt in $(seq 1 36); do
+          pickup_timeout_seconds=300
+          poll_seconds=5
+          for attempt in $(seq 1 $((pickup_timeout_seconds / poll_seconds))); do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
             case "$status" in
               pending|queued|requested|waiting)
-                sleep 5
-                wait_seconds=$((wait_seconds + 5))
+                sleep "$poll_seconds"
+                wait_seconds=$((wait_seconds + poll_seconds))
                 ;;
               *) break ;;
             esac

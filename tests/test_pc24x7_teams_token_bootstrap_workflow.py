@@ -41,3 +41,16 @@ def test_bootstrap_bloqueia_runtime_defasado_antes_de_oidc_e_mutacao() -> None:
     assert "'secret_value_exposed': False" in text
     assert "'production_touched': False" in text
 
+
+
+def test_bootstrap_autocorrige_runtime_pc24x7_antes_do_token() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    reconcile_job = text.index('  reconcile-runtime-dev:')
+    bootstrap_job = text.index('  bootstrap-dev:')
+    assert reconcile_job < bootstrap_job
+    assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in text
+    assert 'needs: [contract, reconcile-runtime-dev]' in text
+    assert 'reconcile_pc24x7_teams_dev_runtime.py' in text
+    assert '--confirm RECONCILE-PC24X7-TEAMS-DEV' in text
+    assert '--expected-sha "${{ github.sha }}"' in text
+    assert 'Publicar evidência sanitizada da reconciliação' in text

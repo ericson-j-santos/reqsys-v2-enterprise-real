@@ -183,6 +183,7 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
         return ""
 
     monkeypatch.setattr(module, "_docker", fake_docker)
+    monkeypatch.setattr(module, "_compose_cli_version", lambda: "2.40.0")
 
     recovered = module._compose_recreate_service(container, token_file)
 
@@ -274,6 +275,7 @@ def test_compose_recreate_recovers_stale_ephemeral_source_from_canonical_repo(
         return ""
 
     monkeypatch.setattr(module, "_docker", fake_docker)
+    monkeypatch.setattr(module, "_compose_cli_version", lambda: "2.40.0")
 
     recovered = module._compose_recreate_service(container, token_file)
 
@@ -311,6 +313,92 @@ def test_running_image_id_requires_immutable_sha256() -> None:
 )
 def test_compose_failure_reason_is_specific_and_sanitized(stderr: str, expected: str) -> None:
     assert module._compose_failure_reason(stderr) == expected
+
+
+def test_compose_cli_version_is_sanitized(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        module,
+        "_docker",
+        lambda _args, **_kwargs: "v2.40.3-desktop.1\n",
+    )
+    assert module._compose_cli_version() == "2.40.3-desktop.1"
+
+    monkeypatch.setattr(
+        module,
+        "_docker",
+        lambda _args, **_kwargs: "unexpected path=C:/private\n",
+    )
+    with pytest.raises(module.RestoreError, match="worker_pool_compose_version_invalid"):
+        module._compose_cli_version()
+
+
+def test_compose_failure_persists_only_sanitized_fingerprint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stderr = "invalid reference format path=C:/private/example"
+
+    def fail(*_args, **_kwargs):
+        raise module.subprocess.CalledProcessError(
+            returncode=1,
+            cmd=["docker", "compose", "up"],
+            stderr=stderr,
+        )
+
+    monkeypatch.setattr(module.subprocess, "run", fail)
+
+    with pytest.raises(module.RestoreError) as captured:
+        module._docker(
+            ["compose", "up"],
+            failure_reason="worker_pool_compose_recreate_failed",
+        )
+
+    exc = captured.value
+    assert str(exc) == "worker_pool_compose_image_reference_invalid"
+    assert set(exc.diagnostics) == {"compose_error_fingerprint"}
+    assert len(exc.diagnostics["compose_error_fingerprint"]) == 64
+    assert "private" not in json.dumps(exc.diagnostics)
+
+
+def test_compose_recreate_enriches_failure_with_safe_versions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    token_file = tmp_path / "token"
+    working_dir = tmp_path / "compose"
+    working_dir.mkdir()
+    config_file = working_dir / "docker-compose.pc24x7-codex-worker-pool.yml"
+    config_file.write_text("services: {}\n", encoding="utf-8")
+    container = {
+        "Image": "sha256:" + ("d" * 64),
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project": "reqsys",
+                "com.docker.compose.project.working_dir": str(working_dir),
+                "com.docker.compose.project.config_files": str(config_file),
+                "com.docker.compose.version": "v2.32.1",
+            },
+            "Env": ["CODEX_WORKER_POOL_EXPECTED_RULES_SHA=" + ("a" * 40)],
+        },
+    }
+    monkeypatch.setattr(module, "_compose_cli_version", lambda: "2.40.3-desktop.1")
+
+    def fail_recreate(*_args, **_kwargs):
+        raise module.RestoreError(
+            "worker_pool_compose_recreate_failed",
+            diagnostics={"compose_error_fingerprint": "a" * 64},
+        )
+
+    monkeypatch.setattr(module, "_docker", fail_recreate)
+
+    with pytest.raises(module.RestoreError) as captured:
+        module._compose_recreate_service(container, token_file)
+
+    assert str(captured.value) == "worker_pool_compose_recreate_failed"
+    assert captured.value.diagnostics == {
+        "compose_error_fingerprint": "a" * 64,
+        "compose_cli_version": "2.40.3-desktop.1",
+        "compose_creator_version": "2.32.1",
+    }
 
 
 def test_compose_recreate_rejects_stale_unexpected_compose_source(

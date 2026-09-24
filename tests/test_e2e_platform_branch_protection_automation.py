@@ -9,12 +9,12 @@ def test_protection_apply_is_fixed_and_fail_closed() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
     runner = RUNNER.read_text(encoding="utf-8")
     assert "apply-e2e-platform" in raw
-    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
-    assert "ericson-j-santos/e2e-platform" in runner
-    assert 'REQUIRED_CHECK = "contract-self-test"' in runner
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert 'TARGET_REPOSITORY = "ericson-j-santos/e2e-platform"' in runner
+    assert 'REQUIRED_CHECKS = ("contract-self-test",)' in runner
     assert '"target_sha_changed_before_write"' in runner
     assert '"target_sha_changed_after_write"' in runner
-    assert '"required_check_not_green"' in runner
+    assert '"required_checks_not_green"' in runner
     assert '"branch_not_protected_after_write"' in runner
     assert '"protection_readback_mismatch"' in runner
     assert '"required_pull_request_reviews"' in runner
