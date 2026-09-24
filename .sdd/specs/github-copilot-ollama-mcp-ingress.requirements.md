@@ -10,7 +10,7 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
 
 1. Executar somente em `DESKTOP-PDQK954`, DEV, no runner allowlisted
    `self-hosted, Windows, X64, pc24x7, reqsys-dev`.
-2. O único alvo público permitido é `http://127.0.0.1:8010`.
+2. O único alvo público permitido é `http://127.0.0.1:8010`; o health local `127.0.0.1:8011/health` nunca pode ser alvo do Funnel.
 3. O mount público é exatamente `/mcp`, HTTPS porta 443, usando
    `tailscale funnel --bg`.
 4. O reconciliador deve exigir `BackendState=Running`, MagicDNS e hostname
@@ -46,7 +46,7 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
 
 1. Testes provam host, target, path e comando Tailscale fixos e rejeitam alvo
    diferente.
-2. Testes provam que `:11434`, `:8008` e `:8083` não entram no comando
+2. Testes provam que `:11434`, `:8008`, `:8011` e `:8083` não entram no comando
    público deste incremento.
 3. O comando do gateway é inputless; o workflow canônico é DEV-only, consta da
    allowlist self-hosted, aceita apenas `codex-e2e|mcp-ingress` e não referencia
