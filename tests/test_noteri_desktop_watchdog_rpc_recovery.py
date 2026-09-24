@@ -125,6 +125,8 @@ def test_workflow_is_inputless_noteri_only_and_read_only() -> None:
     assert "session_launcher.py" in raw
     assert "SESSION_LAUNCH_OK" in raw
     assert "state_validated" in raw
+    assert '$syncRef = "origin/${{ github.ref_name }}"' in raw
+    assert '"--sync-ref", $syncRef' in raw
     assert "command_gateway.py" in raw
     assert '"--risk", "2"' in raw
     assert '"--expected-head", $env:ANCHOR_SHA' in raw
