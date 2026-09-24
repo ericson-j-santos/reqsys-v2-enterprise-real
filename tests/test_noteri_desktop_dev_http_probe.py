@@ -117,3 +117,5 @@ def test_workflow_executes_only_new_http_probe() -> None:
     assert "session_launcher.py" in raw
     assert "command_gateway.py" in raw
     assert '"--risk", "2"' in raw
+
+# E2E branch trigger: HTTP-only route.
