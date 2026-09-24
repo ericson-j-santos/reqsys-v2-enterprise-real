@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/teams-bot-dev-identity-bootstrap.yml"
+WORKFLOW = ROOT / ".github/workflows/teams-bot-dev-provision.yml"
 GATEWAY = ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml"
 CONFIG = ROOT / "scripts/configure_teams_bot_dev_identity_risk3.py"
 RUNNER = ROOT / "scripts/run_teams_bot_dev_identity_bootstrap_local.py"
@@ -40,6 +40,8 @@ def test_workflow_uses_session_launcher_owner_risk3_and_exact_noteri():
     assert "ENABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in raw
     assert "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in raw
     assert "CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}" in raw
+    assert "inputs.operation == 'identity-bootstrap'" in raw
+    assert "inputs.operation == 'activate'" in raw
 
 
 def test_runner_is_idempotent_and_reads_back_without_secret_output():
@@ -57,7 +59,9 @@ def test_runner_is_idempotent_and_reads_back_without_secret_output():
 def test_authorized_gateway_exposes_only_literal_command():
     raw = GATEWAY.read_text(encoding="utf-8")
     assert "/reqsys run teams-bot-dev-identity-bootstrap" in raw
-    assert "teams-bot-dev-identity-bootstrap.yml" in raw
+    assert "teams-bot-dev-provision.yml" in raw
+    assert "mode='identity-bootstrap'" in raw
+    assert "-f operation=identity-bootstrap" in raw
     assert "github.event.issue.number == 1705" in raw
     assert "github.event.comment.user.login == 'ericson-j-santos'" in raw
 
@@ -67,6 +71,6 @@ def test_self_hosted_policy_explicitly_allows_teams_identity_bootstrap():
 
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert policy["self_hosted_allowed"] is True
-    assert ".github/workflows/teams-bot-dev-identity-bootstrap.yml" in policy["approved_workflows"]
+    assert ".github/workflows/teams-bot-dev-provision.yml" in policy["approved_workflows"]
     assert policy["required_adr"] == "docs/adr/ADR-046-pc24x7-substituicao-flyio.md"
     assert "bootstrap governado da identidade Teams Bot DEV" in policy["rationale"]
