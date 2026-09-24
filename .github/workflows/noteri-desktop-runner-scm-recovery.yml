@@ -1,0 +1,52 @@
+name: Noteri to Desktop Runner SCM Recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'fix/noteri-desktop-runner-scm-recovery-*'
+    paths:
+      - 'scripts/noteri_desktop_runner_scm_recovery.py'
+      - 'tests/test_noteri_desktop_runner_scm_recovery.py'
+      - '.github/workflows/noteri-desktop-runner-scm-recovery.yml'
+      - '.github/self-hosted-runner-policy.json'
+      - '.sdd/specs/noteri-desktop-runner-scm-recovery.requirements.md'
+      - '.sdd/specs/noteri-desktop-runner-scm-recovery.spec.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-desktop-runner-scm-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Recover Desktop GitHub runner via SCM from Noteri
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 3
+    env:
+      EVIDENCE_FILE: artifacts/noteri-desktop-runner-scm/evidence.json
+      CORRELATION_ID: noteri-desktop-runner-scm-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Recover fixed Desktop runner service
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/noteri_desktop_runner_scm_recovery.py --confirm RECOVER-NOTERI-DESKTOP-RUNNER-SCM --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE" --timeout-seconds 20
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload sanitized SCM evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noteri-desktop-runner-scm-${{ github.run_id }}
+          path: artifacts/noteri-desktop-runner-scm/evidence.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Noteri to Desktop GitHub runner SCM recovery",
+  "status": "code_ready_runtime_pending",
+  "issue": 1705,
+  "increment_type": "gap_fix",
+  "architecture": {
+    "source_host": "Noteri",
+    "target_host": "DESKTOP-PDQK954",
+    "workflow": ".github/workflows/noteri-desktop-runner-scm-recovery.yml",
+    "recovery": "scripts/noteri_desktop_runner_scm_recovery.py",
+    "transport": "Windows Service Control Manager RPC",
+    "runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "noteri",
+      "reqsys-dev"
+    ],
+    "environment": "DEV"
+  },
+  "security": {
+    "arbitrary_target": false,
+    "arbitrary_service": false,
+    "arbitrary_shell": false,
+    "gui_input": false,
+    "credentials_read": false,
+    "service_create_or_modify": false,
+    "acl_change": false,
+    "firewall_change": false,
+    "reboot": false,
+    "production_touched": false
+  },
+  "evidence_contract": {
+    "artifact": "artifacts/noteri-desktop-runner-scm/evidence.json",
+    "correlation_id_required": true,
+    "independent_readback_required": true,
+    "exact_sha_required": true,
+    "terminal_errors": [
+      "runner_service_not_found",
+      "runner_service_ambiguous",
+      "scm_access_denied",
+      "service_start_access_denied"
+    ]
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_desktop_runner_scm_recovery.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "requirements": ".sdd/specs/noteri-desktop-runner-scm-recovery.requirements.md"
+  },
+  "approvals": {
+    "requirements": true
+  },
+  "updated_at": "2026-09-24"
+}
