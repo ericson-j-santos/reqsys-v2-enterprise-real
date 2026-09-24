@@ -52,8 +52,10 @@ jobs:
           foreach ($f in $m.files) {
             $full = Join-Path $root $f.path
             if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "snapshot_file_missing:$($f.path)" }
-            $blob = (& git hash-object --no-filters -- "$full").Trim()
-            if ($LASTEXITCODE -ne 0 -or $blob -ne $f.blob_sha) { throw "snapshot_blob_mismatch:$($f.path)" }
+            $repoPath = ($env:SNAPSHOT_ROOT.TrimEnd('/') + '/' + (($f.path -replace '\\','/').TrimStart('/')))
+            $blobSpec = "${{ github.sha }}:$repoPath"
+            $blob = (& git rev-parse "$blobSpec").Trim()
+            if ($LASTEXITCODE -ne 0 -or $blob -ne $f.blob_sha) { throw "snapshot_repo_blob_mismatch:$($f.path)" }
           }
 
       - name: Install exact Orchestrator source and start worker
@@ -72,10 +74,12 @@ jobs:
           $root = Join-Path $env:GITHUB_WORKSPACE $env:SNAPSHOT_ROOT
           $m = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'SOURCE.json') | ConvertFrom-Json
           foreach ($f in $m.files) {
+            $snapshot = Join-Path $root $f.path
             $installed = Join-Path $env:INSTALL_ROOT $f.path
             if (-not (Test-Path -LiteralPath $installed -PathType Leaf)) { throw "installed_file_missing:$($f.path)" }
-            $blob = (& git hash-object --no-filters -- "$installed").Trim()
-            if ($LASTEXITCODE -ne 0 -or $blob -ne $f.blob_sha) { throw "installed_blob_mismatch:$($f.path)" }
+            $snapshotHash = (Get-FileHash -LiteralPath $snapshot -Algorithm SHA256).Hash
+            $installedHash = (Get-FileHash -LiteralPath $installed -Algorithm SHA256).Hash
+            if ($snapshotHash -ne $installedHash) { throw "installed_checkout_hash_mismatch:$($f.path)" }
           }
           $version = [ordered]@{
             source_repository = $m.source_repository
@@ -90,8 +94,8 @@ jobs:
             host = 'Noteri'
             source_repository = $m.source_repository
             source_sha = $m.source_sha
-            snapshot_blobs_verified = $true
-            installed_blobs_verified = $true
+            snapshot_repo_blobs_verified = $true
+            installed_checkout_hashes_verified = $true
             file_count = $m.file_count
             production_touched = $false
             secrets_read = $false
