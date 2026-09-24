@@ -22,10 +22,11 @@ jobs:
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
 
     steps:
-      - name: Checkout immutable workflow SHA
+      - name: Checkout immutable workflow SHA into isolated target
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          path: _target
           fetch-depth: 1
           persist-credentials: false
 
