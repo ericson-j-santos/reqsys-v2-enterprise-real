@@ -10,22 +10,26 @@
     "design": true,
     "tasks": true
   },
-  "description": "Protege engineering-worker-pool/main e habilita auto-merge por rota PC24x7 Risk3 fixa, idempotente e com readback independente.",
-  "environment": "GitHub Actions / PC24x7 DEV / GitHub API",
+  "description": "Protege engineering-worker-pool/main e habilita auto-merge por rota Risk3 fixa, idempotente e com readback independente, mantendo PC24x7 como primário e Noteri como fallback governado quando o Desktop não adquire o job.",
+  "environment": "GitHub Actions / PC24x7 ou Noteri DEV / GitHub API",
   "production_enabled": false,
   "risk": {
     "admin_permission": true,
     "target_repository": "ericson-j-santos/engineering-worker-pool",
     "target_branch": "main",
-    "self_hosted_runner": "DESKTOP-PDQK954",
+    "self_hosted_runner": [
+      "DESKTOP-PDQK954",
+      "Noteri"
+    ],
     "force_push": false,
     "deletion": false,
     "secrets_exposed": false
   },
   "acceptance_criteria": [
-    "Branch Protection Audit reutiliza o workflow existente e adiciona somente o modo apply-engineering-worker-pool.",
-    "Authorized Actions Gateway aceita somente o comando literal protect-engineering-worker-pool-main.",
-    "Sessão passa por Session Launcher e Owner Risk3 Gateway no PC24x7 exato.",
+    "Branch Protection Audit reutiliza o workflow existente e preserva o modo PC24x7 apply-engineering-worker-pool.",
+    "Quando o PC24x7 não adquire o job, o modo apply-engineering-worker-pool-noteri pode executar somente no runner Noteri allowlisted e host exato.",
+    "Authorized Actions Gateway aceita somente os comandos literais protect-engineering-worker-pool-main e protect-engineering-worker-pool-main-noteri.",
+    "Ambas as rotas passam por Session Launcher e Owner Risk3 Gateway com action/scope fixos.",
     "O check test do SHA atual deve estar verde antes da mutação.",
     "Branch protection exige PR, test strict, admins protegidos e bloqueia force-push/exclusão.",
     "allow_auto_merge termina true e é comprovado por leitura independente.",
@@ -36,6 +40,6 @@
     "tests": [
       "tests/test_engineering_worker_pool_branch_protection.py"
     ],
-    "evidence_contract": "PC24x7 exato; Risk3 fixo; auth local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
+    "evidence_contract": "PC24x7 primário ou Noteri fallback exato; Risk3 fixo; auth gh local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
   }
 }
