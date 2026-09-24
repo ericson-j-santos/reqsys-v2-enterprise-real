@@ -217,7 +217,12 @@ def test_orchestrator_readback_is_sanitized(monkeypatch) -> None:
                         "eligible": True,
                         "profile": "NORMAL",
                         "capabilities": {
-                            "safe_task_types": ["host.github_runner.recover.v1"],
+                            "safe_task_types": [
+                                "host.rdc.recover.v1",
+                                "host.github_runner.recover.v1",
+                                "custom.future.v1",
+                                123,
+                            ],
                             "secret": "must-not-leak",
                         },
                     }
@@ -245,9 +250,15 @@ def test_orchestrator_readback_is_sanitized(monkeypatch) -> None:
     result = probe.orchestrator_readback()
     assert result["ready"] is True
     assert result["worker_match_count"] == 1
+    assert result["desktop_worker"]["safe_task_types"] == [
+        "custom.future.v1",
+        "host.github_runner.recover.v1",
+        "host.rdc.recover.v1",
+    ]
     assert result["desktop_worker"]["runner_recovery_capable"] is True
-    assert result["desktop_worker"]["rdc_recovery_capable"] is False
+    assert result["desktop_worker"]["rdc_recovery_capable"] is True
     assert result["desktop_worker"]["orchestrator_refresh_capable"] is False
     assert result["desktop_worker"]["reboot_once_capable"] is False
     assert "worker_id" not in json.dumps(result)
     assert "secret" not in json.dumps(result)
+    assert "123" not in result["desktop_worker"]["safe_task_types"]

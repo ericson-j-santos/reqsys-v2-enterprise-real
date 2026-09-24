@@ -170,16 +170,24 @@ def orchestrator_readback() -> dict[str, Any]:
         safe_types = capabilities.get("safe_task_types")
         if not isinstance(safe_types, list):
             safe_types = []
+        safe_task_types = sorted(
+            {
+                item.strip()
+                for item in safe_types
+                if isinstance(item, str) and item.strip()
+            }
+        )
         desktop = {
             "fresh": worker.get("fresh") is True,
             "controller_online": worker.get("controller_online") is True,
             "auth_valid": worker.get("auth_valid") is True,
             "eligible": worker.get("eligible") is True,
             "profile": str(worker.get("profile") or "").strip().upper(),
-            "runner_recovery_capable": RUNNER_RECOVERY_TASK in safe_types,
-            "rdc_recovery_capable": "host.rdc.recover.v1" in safe_types,
-            "orchestrator_refresh_capable": "host.orchestrator.refresh.v1" in safe_types,
-            "reboot_once_capable": "host.reboot.once.v1" in safe_types,
+            "safe_task_types": safe_task_types,
+            "runner_recovery_capable": RUNNER_RECOVERY_TASK in safe_task_types,
+            "rdc_recovery_capable": "host.rdc.recover.v1" in safe_task_types,
+            "orchestrator_refresh_capable": "host.orchestrator.refresh.v1" in safe_task_types,
+            "reboot_once_capable": "host.reboot.once.v1" in safe_task_types,
         }
 
     return {
