@@ -14,20 +14,102 @@ jobs:
   probe:
     name: Prove Noteri fallback without RDC
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
       CORRELATION_ID: noteri-control-plane-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_FILE: artifacts/noteri-control-plane/evidence.json
+      RUNTIME_EVIDENCE_FILE: artifacts/noteri-runtime/evidence.json
+      RUNTIME_CORRELATION_ID: noteri-runtime-cross-repo-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Prove exact host and active runner
         shell: powershell
         run: python scripts/noteri_control_plane_probe.py --confirm PROBE-NOTERI-CONTROL-PLANE --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+
+      - name: Resolve immutable noteri-runtime main SHA
+        id: noteri_runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $line = (& git ls-remote https://github.com/ericson-j-santos/noteri-runtime.git refs/heads/main | Select-Object -First 1)
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($line)) { throw 'noteri_runtime_main_resolution_failed' }
+          $sha = (($line -split '\\s+')[0]).Trim().ToLowerInvariant()
+          if ($sha -notmatch '^[0-9a-f]{40}      - name: Upload sanitized fallback evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-control-plane-${{ github.run_id }}
+          path: artifacts/noteri-control-plane/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload sanitized noteri-runtime E2E evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-runtime-physical-e2e-${{ github.run_id }}
+          path: artifacts/noteri-runtime/evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        shell: powershell
+        run: |
+          "## Noteri Control Plane Fallback" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host esperado: Noteri" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- RDC necessário: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- noteri-runtime SHA: ${{ steps.noteri_runtime.outputs.sha }}" | Add-Content $env:GITHUB_STEP_SUMMARY
+) { throw 'noteri_runtime_main_sha_invalid' }
+          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "sha=$sha`n", [System.Text.UTF8Encoding]::new($false))
+
+      - name: Checkout immutable noteri-runtime source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ericson-j-santos/noteri-runtime
+          ref: ${{ steps.noteri_runtime.outputs.sha }}
+          path: noteri-runtime-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify immutable noteri-runtime checkout
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $observed = (git -C "$env:GITHUB_WORKSPACE\\noteri-runtime-source" rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($observed -ne '${{ steps.noteri_runtime.outputs.sha }}') { throw "noteri_runtime_checkout_sha_mismatch:$observed" }
+
+      - name: Execute isolated physical E2E from noteri-runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python "$env:GITHUB_WORKSPACE\\noteri-runtime-source\\scripts\\noteri_runtime_isolated_e2e.py" --expected-sha "${{ steps.noteri_runtime.outputs.sha }}" --correlation-id "$env:RUNTIME_CORRELATION_ID" --evidence-path "$env:RUNTIME_EVIDENCE_FILE"
+
+      - name: Validate independent noteri-runtime evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $e = Get-Content -Raw -Encoding UTF8 $env:RUNTIME_EVIDENCE_FILE | ConvertFrom-Json
+          if (-not $e.ok) { throw 'noteri_runtime_physical_e2e_failed' }
+          if ($e.host -ne 'Noteri') { throw 'noteri_runtime_host_mismatch' }
+          if ($e.expected_sha -ne '${{ steps.noteri_runtime.outputs.sha }}') { throw 'noteri_runtime_expected_sha_mismatch' }
+          if ($e.observed_sha -ne '${{ steps.noteri_runtime.outputs.sha }}') { throw 'noteri_runtime_observed_sha_mismatch' }
+          if (-not $e.source_sha_verified) { throw 'noteri_runtime_source_sha_not_verified' }
+          if ($e.production_touched) { throw 'noteri_runtime_production_touched' }
+          if ($e.secrets_read) { throw 'noteri_runtime_secrets_read' }
+          if ($e.rdc_required) { throw 'noteri_runtime_rdc_dependency' }
+          if ($e.independent_readback.profile -ne 'NORMAL') { throw 'noteri_runtime_final_profile_not_normal' }
+          if (-not $e.independent_readback.idempotent_replay) { throw 'noteri_runtime_idempotency_missing' }
+          if (-not $e.independent_readback.negative_control) { throw 'noteri_runtime_negative_control_missing' }
 
       - name: Upload sanitized fallback evidence
         if: always()
