@@ -265,7 +265,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: observability-platform-main-protection-pc24x7-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\observability-main-protection-noteri\evidence.json
+          path: ${{ steps.session.outputs.target_path }}\artifacts\observability-main-protection-pc24x7\evidence.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -403,6 +403,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-platform-main-protection-pc24x7-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\e2e-platform-main-protection-noteri\evidence.json
+          path: ${{ steps.session.outputs.target_path }}\artifacts\e2e-platform-main-protection-pc24x7\evidence.json
           if-no-files-found: warn
           retention-days: 30
