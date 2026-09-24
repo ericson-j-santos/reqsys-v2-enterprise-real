@@ -1,37 +1,39 @@
-# Requisitos — recuperação do watchdog Desktop via Noteri
+# Requisitos — recuperação do plano de controle Desktop via Noteri
 
 ## Objetivo
 
-Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indisponíveis, usar o Noteri apenas para consultar e iniciar a tarefa Windows já existente `\Automation\ReqSysDesktopControlPlaneWatchdog`.
+Quando o DESKTOP-PDQK954 estiver com runner GitHub e/ou RDC indisponíveis, usar o runner Noteri como produtor governado para solicitar ao Engineering Orchestrator já residente no Desktop uma manutenção local allowlisted.
 
 ## Restrições
 
-1. O executor é exclusivamente o runner self-hosted do host `Noteri`.
+1. O executor produtor é exclusivamente o runner self-hosted do host `Noteri`.
 2. O destino é fixo: `DESKTOP-PDQK954`.
-3. A única tarefa permitida é `\Automation\ReqSysDesktopControlPlaneWatchdog`.
-4. O transporte usa `schtasks.exe /S` nativo do Windows, sem credenciais fornecidas pelo workflow.
-5. O script pode executar somente `/Query` e `/Run`; `/Create`, `/Change` e `/Delete` são proibidos.
-6. Antes de `/Run`, a leitura XML deve comprovar `BootTrigger` e `LogonType=S4U`.
-7. Falha de RPC, autorização, ausência da tarefa ou configuração divergente deve falhar fechado.
-8. Nenhum segredo, deploy, produção, reboot, RBAC ou bypass de UAC é permitido.
-9. Evidência registra reachability TCP 135/445 e resultado sem persistir XML bruto.
-10. O Authorized Actions Gateway expõe somente o comando exato `/reqsys run noteri-desktop-watchdog-recovery`.
-11. Sem pickup do Noteri, o gateway cancela o run abandonado e registra `SELF_HOSTED_RUNNER_UNAVAILABLE`.
-12. Após sucesso, E2E independente deve comprovar pickup do runner Desktop.
-13. Os passos PowerShell do workflow DEV devem usar `shell: powershell`, compatível com o runner Noteri evidenciado; `pwsh` não é requisito do host.
-
-14. Antes de executar o RPC, o workflow deve materializar sessão governada por `session_launcher.py` no SHA exato do ReqSys e exigir `SESSION_LAUNCH_OK` + `state_validated=true`.
-15. O script de recuperação deve executar exclusivamente por `command_gateway.py`, risco 2, dentro do `target_path` isolado e com `expected-head` igual ao SHA da execução.
+3. O transporte preferencial é o Engineering Orchestrator fixo `http://DESKTOP-PDQK954:8787`.
+4. Antes de qualquer mutação, `/readyz` deve responder saudável e `/v1/workers` deve conter exatamente um worker Desktop fresco, controller online, auth válido e elegível.
+5. O produtor nunca aceita task type, host, comando, porta ou endpoint fornecido pelo usuário.
+6. Se o worker anunciar `host.github_runner.recover.v1`, essa tarefa deve ser preferida.
+7. Se a recuperação do runner não estiver disponível e o worker anunciar `host.rdc.recover.v1`, a única alternativa permitida é reiniciar o RDC governado com `force_restart=true`.
+8. Nenhum comando arbitrário, shell remoto, WinRM, PsExec, WMI, SMB administrativo, deploy, produção, reboot, RBAC, segredo ou credencial faz parte deste fluxo.
+9. O enqueue usa `POST /v1/intake`, risco 1, `max_attempts=1`, lease limitado e idempotency key derivada do `github.run_id`; rerun do mesmo run não duplica o efeito lógico.
+10. A conclusão exige `GET /v1/work-items/{id}` independente, status `CONCLUÍDO`, handler idêntico ao task type selecionado e host igual ao Desktop.
+11. Evidência persistida deve ser sanitizada: não pode conter worker_id, token, corpo bruto do registry ou capabilities arbitrárias.
+12. O Authorized Actions Gateway continua expondo somente o comando exato `/reqsys run noteri-desktop-watchdog-recovery`.
+13. Sem pickup do Noteri, o gateway deve falhar fechado.
+14. O workflow deve materializar sessão governada por `session_launcher.py` no SHA exato e exigir `SESSION_LAUNCH_OK` + `state_validated=true`.
+15. O produtor deve executar exclusivamente por `command_gateway.py`, risco 2, dentro do `target_path` isolado e com `expected-head` igual ao SHA da execução.
 16. As regras operacionais usadas no E2E devem ser fixadas por SHA imutável e o checkout não pode persistir credenciais.
-17. A evidência produzida no worktree deve ser validada antes do upload: origem Noteri, destino DESKTOP-PDQK954, `EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED`, sem criação/alteração de tarefa, segredo, credencial ou produção.
-18. No Noteri, `${{ github.workspace }}` é somente a fonte transitória exata do Session Launcher; as regras ficam em `_rules` e a execução técnica deve ser materializada pelo launcher em worktree governado sob `C:\\dev\\chatgpt-workers`, sem depender de clone persistente `C:\\dev\\reqsys-v2-enterprise-real`.
-19. O script de recuperação deve ser resolvido a partir do `target_path` retornado pelo Session Launcher, não da raiz do workspace.
+17. No Noteri, `github.workspace` é somente fonte transitória do Session Launcher; a execução ocorre em worktree governado sob `C:\\dev\\chatgpt-workers`.
+18. O script de recuperação deve ser resolvido a partir do `target_path` retornado pelo Session Launcher.
+19. Após recuperação do runner, um workflow self-hosted Desktop deve fazer pickup antes de declarar o runner restaurado.
+20. Após recuperação do RDC, o controller deve ser observado online de forma independente antes de usá-lo como transporte.
 
 ## Critérios de aceite
 
-- workflow executa no Noteri após Session Launcher válido e por Command Gateway risco 2;
-- checkout transitório aceito somente como fonte do bootstrap, com execução posterior no worktree governado e sem dependência de `C:\\dev\\reqsys-v2-enterprise-real` no Noteri;
-- consulta encontra a tarefa exata;
-- AtStartup + S4U são comprovados;
-- `/Run` retorna sucesso;
-- novo workflow self-hosted do Desktop faz pickup.
+- Session Launcher e Command Gateway aprovam o SHA exato;
+- o Orchestrator residente está saudável;
+- worker Desktop único e elegível é lido de forma sanitizada;
+- somente handler allowlisted é despachado;
+- replay do mesmo run é idempotente;
+- resultado é lido de volta pelo item exato;
+- nenhuma produção, segredo ou comando arbitrário é tocado;
+- efeito terminal é comprovado por pickup do runner ou controller RDC online, conforme o handler executado.
