@@ -193,6 +193,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
           TARGET_MODE: ${{ steps.route.outputs.mode }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
