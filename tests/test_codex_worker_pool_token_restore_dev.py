@@ -147,12 +147,16 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     token_file = tmp_path / "token"
+    working_dir = tmp_path / "compose"
+    working_dir.mkdir()
+    config_file = working_dir / "docker-compose.pc24x7-codex-worker-pool.yml"
+    config_file.write_text("services: {}\n", encoding="utf-8")
     container = {
         "Config": {
             "Labels": {
                 "com.docker.compose.project": "reqsys",
-                "com.docker.compose.project.working_dir": "C:/dev/reqsys-v2-enterprise-real",
-                "com.docker.compose.project.config_files": "C:/dev/reqsys-v2-enterprise-real/docker-compose.pc24x7-codex-worker-pool.yml",
+                "com.docker.compose.project.working_dir": str(working_dir),
+                "com.docker.compose.project.config_files": str(config_file),
             },
             "Env": [
                 f"CODEX_WORKER_POOL_API_TOKEN_FILE={module.TOKEN_DESTINATION}",
@@ -160,28 +164,32 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
             ],
         }
     }
-    seen: list[tuple[list[str], dict[str, str] | None]] = []
+    seen: list[tuple[list[str], dict[str, str] | None, str]] = []
 
     def fake_docker(
-        args: list[str], *, env: dict[str, str] | None = None
+        args: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        failure_reason: str = "worker_pool_docker_command_failed",
     ) -> str:
-        seen.append((args, env))
+        seen.append((args, env, failure_reason))
         return ""
 
     monkeypatch.setattr(module, "_docker", fake_docker)
 
-    module._compose_recreate_service(container, token_file)
+    recovered = module._compose_recreate_service(container, token_file)
 
+    assert recovered is False
     assert len(seen) == 1
-    args, env = seen[0]
+    args, env, failure_reason = seen[0]
     assert args[:7] == [
         "compose",
         "--project-name",
         "reqsys",
         "--project-directory",
-        "C:/dev/reqsys-v2-enterprise-real",
+        str(working_dir),
         "--file",
-        "C:/dev/reqsys-v2-enterprise-real/docker-compose.pc24x7-codex-worker-pool.yml",
+        str(config_file),
     ]
     assert args[-6:] == [
         "up",
@@ -191,11 +199,91 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
         "--no-build",
         module.SERVICE,
     ]
+    assert failure_reason == "worker_pool_compose_recreate_failed"
     assert env is not None
     assert env["CODEX_WORKER_POOL_API_TOKEN_FILE_HOST"] == str(token_file)
     assert env["CODEX_WORKER_POOL_EXPECTED_RULES_SHA"] == "a" * 40
     assert "x" * 48 not in json.dumps(args)
     assert "x" * 48 not in json.dumps(env)
+
+
+def test_compose_recreate_recovers_stale_ephemeral_source_from_canonical_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    token_file = tmp_path / "token"
+    canonical_dir = tmp_path / "current"
+    canonical_dir.mkdir()
+    canonical = canonical_dir / "docker-compose.pc24x7-codex-worker-pool.yml"
+    canonical.write_text(
+        "\n".join(
+            [
+                "services:",
+                "  codex-worker-pool:",
+                "    restart: unless-stopped",
+                '    ports: ["127.0.0.1:8097:8097"]',
+                f"    environment: [\"CODEX_WORKER_POOL_API_TOKEN_FILE={module.TOKEN_DESTINATION}\", \"CODEX_WORKER_POOL_EXPECTED_RULES_SHA=x\"]",
+                f'    volumes: ["${CODEX_WORKER_POOL_API_TOKEN_FILE_HOST}:{module.TOKEN_DESTINATION}:ro", "codex-worker-pool-state:/data"]',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "CANONICAL_COMPOSE_FILE", canonical)
+    stale = Path("C:/dev/chatgpt-workers/wt-deleted") / canonical.name
+    container = {
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project": "reqsys",
+                "com.docker.compose.project.working_dir": str(stale.parent),
+                "com.docker.compose.project.config_files": str(stale),
+            },
+            "Env": ["CODEX_WORKER_POOL_EXPECTED_RULES_SHA=" + ("b" * 40)],
+        }
+    }
+    seen: list[tuple[list[str], str]] = []
+
+    def fake_docker(
+        args: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        failure_reason: str = "worker_pool_docker_command_failed",
+    ) -> str:
+        seen.append((args, failure_reason))
+        return ""
+
+    monkeypatch.setattr(module, "_docker", fake_docker)
+
+    recovered = module._compose_recreate_service(container, token_file)
+
+    assert recovered is True
+    args, failure_reason = seen[0]
+    assert "--project-directory" in args
+    assert args[args.index("--project-directory") + 1] == str(canonical.parent)
+    assert "--file" in args
+    assert args[args.index("--file") + 1] == str(canonical)
+    assert "--no-build" in args
+    assert failure_reason == "worker_pool_compose_recreate_failed"
+
+
+def test_compose_recreate_rejects_stale_unexpected_compose_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canonical = tmp_path / "docker-compose.pc24x7-codex-worker-pool.yml"
+    canonical.write_text("services: {}\n", encoding="utf-8")
+    monkeypatch.setattr(module, "CANONICAL_COMPOSE_FILE", canonical)
+    container = {
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project": "reqsys",
+                "com.docker.compose.project.working_dir": "C:/deleted",
+                "com.docker.compose.project.config_files": "C:/deleted/other-compose.yml",
+            },
+            "Env": ["CODEX_WORKER_POOL_EXPECTED_RULES_SHA=" + ("c" * 40)],
+        }
+    }
+
+    with pytest.raises(module.RestoreError, match="worker_pool_compose_source_unavailable"):
+        module._compose_recreate_service(container, tmp_path / "token")
 
 
 def test_compose_recreate_fails_closed_without_compose_identity(

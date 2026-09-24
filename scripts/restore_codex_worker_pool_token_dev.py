@@ -24,13 +24,20 @@ TOKEN_DESTINATION = "/run/secrets/codex_worker_pool_api_token"
 HEALTH_URL = "http://127.0.0.1:8097/health"
 SNAPSHOT_URL = "http://127.0.0.1:8097/v1/snapshot"
 MIN_TOKEN_LENGTH = 32
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_COMPOSE_FILE = REPO_ROOT / "docker-compose.pc24x7-codex-worker-pool.yml"
 
 
 class RestoreError(RuntimeError):
     pass
 
 
-def _docker(args: list[str], *, env: dict[str, str] | None = None) -> str:
+def _docker(
+    args: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    failure_reason: str = "worker_pool_docker_command_failed",
+) -> str:
     try:
         completed = subprocess.run(
             ["docker", *args],
@@ -41,7 +48,7 @@ def _docker(args: list[str], *, env: dict[str, str] | None = None) -> str:
             env=env,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-        raise RestoreError("worker_pool_docker_command_failed") from exc
+        raise RestoreError(failure_reason) from exc
     return completed.stdout
 
 
@@ -128,27 +135,65 @@ def _container_token_matches_host(container_id: str, host_token: str) -> bool:
         "from pathlib import Path; import sys; "
         f"sys.stdout.write(Path({TOKEN_DESTINATION!r}).read_text(encoding='utf-8').strip())"
     )
-    container_token = _docker(["exec", container_id, "python", "-c", script]).strip()
+    container_token = _docker(
+        ["exec", container_id, "python", "-c", script],
+        failure_reason="worker_pool_container_token_read_failed",
+    ).strip()
     if not container_token:
         raise RestoreError("worker_pool_container_token_empty")
     return hmac.compare_digest(container_token, host_token)
 
 
-def _compose_recreate_service(
-    container: dict[str, Any],
-    token_path: Path,
-) -> None:
-    labels = (container.get("Config") or {}).get("Labels") or {}
-    project = str(labels.get("com.docker.compose.project") or "").strip()
-    working_dir = str(
+def _canonical_compose_contract_valid(path: Path) -> bool:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    required_fragments = (
+        "codex-worker-pool:",
+        '127.0.0.1:8097:8097',
+        f"CODEX_WORKER_POOL_API_TOKEN_FILE: {TOKEN_DESTINATION}",
+        "CODEX_WORKER_POOL_API_TOKEN_FILE_HOST",
+        f":{TOKEN_DESTINATION}:ro",
+        "CODEX_WORKER_POOL_EXPECTED_RULES_SHA",
+        "codex-worker-pool-state:/data",
+        "restart: unless-stopped",
+    )
+    return all(fragment in raw for fragment in required_fragments)
+
+
+def _resolve_compose_source(labels: dict[str, Any]) -> tuple[Path, list[Path], bool]:
+    working_dir_raw = str(
         labels.get("com.docker.compose.project.working_dir") or ""
     ).strip()
     config_raw = str(
         labels.get("com.docker.compose.project.config_files") or ""
     ).strip()
-    config_files = [item.strip() for item in config_raw.split(",") if item.strip()]
-    if not project or not working_dir or not config_files:
+    configured = [Path(item.strip()) for item in config_raw.split(",") if item.strip()]
+    if working_dir_raw and configured:
+        working_dir = Path(working_dir_raw)
+        if working_dir.is_dir() and all(path.is_file() for path in configured):
+            return working_dir, configured, False
+
+    if len(configured) != 1 or configured[0].name != CANONICAL_COMPOSE_FILE.name:
+        raise RestoreError("worker_pool_compose_source_unavailable")
+    if not CANONICAL_COMPOSE_FILE.is_file() or not _canonical_compose_contract_valid(
+        CANONICAL_COMPOSE_FILE
+    ):
+        raise RestoreError("worker_pool_canonical_compose_invalid")
+    return CANONICAL_COMPOSE_FILE.parent, [CANONICAL_COMPOSE_FILE], True
+
+
+def _compose_recreate_service(
+    container: dict[str, Any],
+    token_path: Path,
+) -> bool:
+    labels = (container.get("Config") or {}).get("Labels") or {}
+    project = str(labels.get("com.docker.compose.project") or "").strip()
+    if not project:
         raise RestoreError("worker_pool_compose_identity_missing")
+
+    working_dir, config_files, recovered_source = _resolve_compose_source(labels)
 
     config_env = (container.get("Config") or {}).get("Env") or []
     rules_sha = ""
@@ -170,10 +215,10 @@ def _compose_recreate_service(
         "--project-name",
         project,
         "--project-directory",
-        working_dir,
+        str(working_dir),
     ]
     for config_file in config_files:
-        args.extend(["--file", config_file])
+        args.extend(["--file", str(config_file)])
     args.extend(
         [
             "up",
@@ -184,7 +229,12 @@ def _compose_recreate_service(
             SERVICE,
         ]
     )
-    _docker(args, env=process_env)
+    _docker(
+        args,
+        env=process_env,
+        failure_reason="worker_pool_compose_recreate_failed",
+    )
+    return recovered_source
 
 
 def _read_existing_token(path: Path) -> str | None:
@@ -326,17 +376,18 @@ def restore() -> dict[str, Any]:
 
     recreated = False
     bind_mount_resynced = False
+    compose_source_recovered = False
     health_status, healthy, reason = _validate_runtime(token)
 
     if rotated:
-        _compose_recreate_service(container, token_path)
+        compose_source_recovered = _compose_recreate_service(container, token_path)
         recreated = True
         bind_mount_resynced = True
         health_status = _wait_runtime(token)
     elif not healthy and reason == "worker_pool_token_mismatch_after_restore":
         if _container_token_matches_host(container_id, token):
             raise RestoreError("worker_pool_auth_process_mismatch")
-        _compose_recreate_service(container, token_path)
+        compose_source_recovered = _compose_recreate_service(container, token_path)
         recreated = True
         bind_mount_resynced = True
         health_status = _wait_runtime(token)
@@ -356,6 +407,7 @@ def restore() -> dict[str, Any]:
         "service_restarted": False,
         "service_recreated": recreated,
         "bind_mount_resynced": bind_mount_resynced,
+        "compose_source_recovered": compose_source_recovered,
         "health_http_status": health_status,
         "authenticated_readback": True,
         "secret_value_exposed": False,
