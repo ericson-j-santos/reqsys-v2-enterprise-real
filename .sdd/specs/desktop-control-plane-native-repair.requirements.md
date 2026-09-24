@@ -35,10 +35,12 @@ runner GitHub, SMB/WMI/WinRM remoto ou `pywin32`.
 9. Persistir evidência sanitizada em
    `%LOCALAPPDATA%\ReqSys\DesktopControlPlaneNativeRepair\last.json`.
 
-## Critério de conclusão
+## Critérios de aceite
 
-A correção de código é considerada pronta quando:
-- testes de guardrail passam;
-- Pre-PR Readiness passa no HEAD exato;
-- CI obrigatório fica verde;
-- o runtime só é considerado recuperado após evidência local de ambas as tarefas e posterior pickup real do runner + RDC online.
+1. Os testes de guardrail passam no HEAD exato.
+2. O Pre-PR Readiness retorna `passed` no HEAD exato e a branch permanece `behind_by=0`.
+3. Antes de qualquer registro, o reparador valida host, metadata, SHA fonte, release imutável, Python e `run.py`.
+4. O Watchdog só pode ser registrado como AtStartup + S4U + run level limitado.
+5. O Admin Broker só pode ser registrado como AtStartup + S4U + highest.
+6. O reparador não acessa rede, não lê segredo, não reinicia o host e não toca produção.
+7. O runtime permanece `activation_pending` até haver pickup novo do runner PC24x7 e RDC online com `transport_broadcast_v1=true`.
