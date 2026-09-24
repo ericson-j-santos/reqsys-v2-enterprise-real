@@ -123,6 +123,7 @@ def test_apply_command_exposes_only_mcp_bridge() -> None:
     joined = " ".join(command)
     assert "11434" not in joined
     assert "8008" not in joined
+    assert "8011" not in joined
     assert "8083" not in joined
 
 
