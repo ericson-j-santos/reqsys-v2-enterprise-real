@@ -8,6 +8,8 @@ import json
 import os
 import socket
 import subprocess
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ EXPECTED_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
 CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
+KNOWN_SERVICE_PORTS = (8000, 8008, 8081, 8083, 8097, 8787, 11434)
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
 ADMIN_STAGING_PATH = "\\\\" + TARGET_HOST + "\\C$\\Users\\Public\\Desktop"
@@ -108,6 +111,39 @@ def runtime_port_reachable() -> bool:
         return False
 
 
+def known_service_ports_probe() -> dict[str, bool]:
+    results: dict[str, bool] = {}
+    for port in KNOWN_SERVICE_PORTS:
+        try:
+            with socket.create_connection((TARGET_HOST, port), timeout=TCP_TIMEOUT_SECONDS):
+                results[str(port)] = True
+        except OSError:
+            results[str(port)] = False
+    return results
+
+
+def orchestrator_ready_probe(ports: dict[str, bool]) -> dict[str, Any]:
+    if not ports.get("8787"):
+        return {"reachable": False, "result": "port_closed", "ready": False}
+    request = urllib.request.Request(
+        f"http://{TARGET_HOST}:8787/readyz",
+        headers={"Accept": "application/json", "Cache-Control": "no-store"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=4) as response:
+            status = int(response.status)
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return {"reachable": True, "result": f"http_{exc.code}", "ready": False}
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
+        return {"reachable": True, "result": type(exc).__name__, "ready": False}
+    return {
+        "reachable": True,
+        "result": "ok" if status == 200 else f"http_{status}",
+        "ready": status == 200 and isinstance(payload, dict) and payload.get("ready") is True,
+    }
+
+
 def admin_staging_path_probe() -> dict[str, Any]:
     """Comprova apenas acesso de leitura ao Desktop Público via C$; não grava nada."""
     try:
@@ -134,9 +170,13 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     icmp: bool | None = None
     tcp = False
     staging = {"reachable": False, "result": "not_attempted"}
+    known_ports: dict[str, bool] = {}
+    orchestrator = {"reachable": False, "result": "not_attempted", "ready": False}
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
+        known_ports = known_service_ports_probe()
+        orchestrator = orchestrator_ready_probe(known_ports)
         staging = admin_staging_path_probe()
 
     if not resolution["resolved"]:
@@ -162,6 +202,8 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "icmp_reachable": icmp,
         "runtime_port": RUNTIME_PORT,
         "runtime_port_reachable": tcp,
+        "known_service_ports": known_ports,
+        "orchestrator_8787": orchestrator,
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
