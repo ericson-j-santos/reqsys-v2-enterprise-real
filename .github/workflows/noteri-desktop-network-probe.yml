@@ -7,12 +7,14 @@ on:
       - "fix/noteri-desktop-network-probe-*"
     paths:
       - "scripts/noteri_desktop_network_probe.py"
+      - "scripts/noteri_desktop_dev_http_probe.py"
       - ".github/workflows/noteri-desktop-network-probe.yml"
       - ".github/workflows/reqsys-authorized-actions-gateway.yml"
       - ".github/self-hosted-runner-policy.json"
       - ".sdd/specs/noteri-desktop-network-probe.*"
       - "tests/test_reqsys_authorized_actions_gateway.py"
       - "tests/test_noteri_desktop_network_probe.py"
+      - "tests/test_noteri_desktop_dev_http_probe.py"
 
 permissions:
   contents: read
