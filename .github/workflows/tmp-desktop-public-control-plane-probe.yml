@@ -69,19 +69,20 @@ jobs:
           orch_status=None
           if token:
               orch_status,_=req('/api/v1/actions-runtime/orchestrator/status',headers={'Authorization':'Bearer '+token})
+          interesting=sorted(p for p in paths if any(k in p.lower() for k in (
+              'runtime','action','admin','deploy','operacao','automation','command','worker','task','health','status'
+          )))
           result={
             'health_status':health_status,
             'build_status':build_status,
             'observed_sha':observed,
-            'expected_sha':os.environ['EXPECTED_SHA'],
             'openapi_status':openapi_status,
-            'has_actions_runtime_orchestrator': any('actions-runtime/orchestrator' in p for p in paths),
-            'has_noteri_profile': any('noteri/profile' in p for p in paths),
+            'interesting_paths':interesting,
             'login_status':login_status,
             'admin_token_obtained':bool(token),
             'orchestrator_status_http':orch_status,
           }
           print(json.dumps(result,sort_keys=True))
-          if health_status!=200 or build_status!=200:
+          if health_status!=200 or openapi_status!=200 or not token:
               raise SystemExit(2)
           PY
