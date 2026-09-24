@@ -20,6 +20,12 @@ def test_canonical_workflow_reuses_dev_runner_with_closed_mcp_mode() -> None:
     assert "actions/setup-python@" not in raw
     assert raw.count("Get-Command python -CommandType Application -ErrorAction Stop") == 2
     assert 'REQSYS_PYTHON=$pythonExe' in raw
+    assert "services/ollama-mcp-bridge/requirements.txt" in raw
+    assert '& "$env:REQSYS_PYTHON" scripts/codex_pc24x7_supervisor.py install' in raw
+    assert '--source-root "${{ github.workspace }}"' in raw
+    assert '--source-sha "${{ github.sha }}"' in raw
+    assert '--python-executable "$env:REQSYS_PYTHON"' in raw
+    assert "CODEX_PC24X7_SUPERVISOR_RECONCILE_FAILED" in raw
     assert '& "$env:REQSYS_PYTHON" scripts/pc24x7_ollama_mcp_funnel.py' in raw
     assert "pc24x7_ollama_mcp_funnel.py" in raw
     assert "--apply" in raw
