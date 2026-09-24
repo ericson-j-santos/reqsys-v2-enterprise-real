@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import http.client
 import json
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 
@@ -64,32 +63,52 @@ def _github_json(
     token: str,
     payload: dict[str, Any] | None = None,
 ) -> tuple[int, Any]:
-    body = None if payload is None else json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=body,
-        method=method,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "User-Agent": "ReqSys-Desktop-Control-Plane-Recovery/1.0",
-            "X-GitHub-Api-Version": "2022-11-28",
-            **({"Content-Type": "application/json"} if body is not None else {}),
-        },
-    )
     try:
-        with urllib.request.urlopen(request, timeout=10.0) as response:
-            raw = response.read().decode("utf-8")
-            data = json.loads(raw) if raw else None
-            return int(response.status), data
-    except urllib.error.HTTPError as exc:
-        raise DesktopRecoveryDispatchError(
-            f"github_http_{int(exc.code)}",
-            http_status=503,
-        ) from None
-    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
-        raise DesktopRecoveryDispatchError("github_transport_unavailable", http_status=503) from None
+        parsed = urllib.parse.urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        raise DesktopRecoveryDispatchError("github_url_not_allowed", http_status=503) from None
 
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "api.github.com"
+        or port not in (None, 443)
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise DesktopRecoveryDispatchError("github_url_not_allowed", http_status=503)
+
+    target = parsed.path or "/"
+    if parsed.query:
+        target = f"{target}?{parsed.query}"
+
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "ReqSys-Desktop-Control-Plane-Recovery/1.0",
+        "X-GitHub-Api-Version": "2022-11-28",
+        **({"Content-Type": "application/json"} if body is not None else {}),
+    }
+
+    connection = http.client.HTTPSConnection("api.github.com", timeout=10.0)
+    try:
+        connection.request(method, target, body=body, headers=headers)
+        response = connection.getresponse()
+        raw = response.read().decode("utf-8")
+        if int(response.status) >= 400:
+            raise DesktopRecoveryDispatchError(
+                f"github_http_{int(response.status)}",
+                http_status=503,
+            )
+        data = json.loads(raw) if raw else None
+        return int(response.status), data
+    except DesktopRecoveryDispatchError:
+        raise
+    except (OSError, http.client.HTTPException, UnicodeDecodeError, json.JSONDecodeError):
+        raise DesktopRecoveryDispatchError("github_transport_unavailable", http_status=503) from None
+    finally:
+        connection.close()
 
 def _parse_github_time(value: Any) -> datetime | None:
     raw = str(value or "").strip()
