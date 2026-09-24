@@ -38,6 +38,7 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 27. O caso positivo deve provar criação, replay `created=false`, mesmo `work_id/task_id`, leitura independente, task `queued` sem lease e ausência de `lease_token`; o caso negativo deve provar HTTP 401 com token inválido.
 28. A evidência deve vincular SHA do ReqSys, SHA do Engineering Worker Pool, SHA canônico das regras e `correlation_id`, declarar `physical_runtime_validated=false`; o E2E portátil não substitui o smoke/E2E PC24x7.
 29. O E2E portátil deve reutilizar `codex-worker-pool-handoff.yml`, executar somente em `push` dos arquivos do contrato com `contents: read`, timeout finito, sem deploy, produção ou mutação de segredo; o `workflow_dispatch` permanece reservado ao job físico.
+30. A evidência portátil só é válida quando `reqsys_sha` corresponde ao HEAD final já sincronizado com a `main` corrente (`behind_by=0`); qualquer novo commit ou avanço da base exige nova execução no novo SHA.
 
 ## Critérios de aceite
 
