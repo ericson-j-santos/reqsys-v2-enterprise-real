@@ -5,8 +5,12 @@ on:
   push:
     branches:
       - "fix/noteri-desktop-network-probe-*"
+      - "fix/noteri-desktop-runner-scm-recovery-*"
     paths:
       - "scripts/noteri_desktop_network_probe.py"
+      - "scripts/noteri_desktop_runner_scm_recovery.py"
+      - ".sdd/specs/noteri-desktop-runner-scm-recovery.*"
+      - "tests/test_noteri_desktop_runner_scm_recovery.py"
       - ".github/workflows/noteri-desktop-network-probe.yml"
       - ".github/workflows/reqsys-authorized-actions-gateway.yml"
       - ".github/self-hosted-runner-policy.json"
@@ -23,39 +27,255 @@ concurrency:
 
 jobs:
   probe:
+    if: ${{ !startsWith(github.ref_name, 'fix/noteri-desktop-runner-scm-recovery-') }}
     name: Diagnose Desktop reachability from Noteri
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
       CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_FILE: artifacts/noteri-desktop-network/evidence.json
+      EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
 
-      - name: Probe fixed Desktop target
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
         shell: powershell
-        run: python scripts/noteri_desktop_network_probe.py --confirm PROBE-NOTERI-DESKTOP-NETWORK --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $syncRef = "origin/$env:GITHUB_REF_NAME"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "noteri-desktop-network",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--sync-ref", $syncRef
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Validate targeted tests through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-tests",
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "1",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "pytest", "tests/test_noteri_desktop_network_probe.py", "-q"
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Probe fixed Desktop target through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $probeScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_network_probe.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $probeScript,
+            "--confirm", "PROBE-NOTERI-DESKTOP-NETWORK",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--evidence-file", $env:EVIDENCE_REL
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
 
       - name: Upload sanitized network evidence
-        if: always()
+        if: always() && steps.session.outputs.target_path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: noteri-desktop-network-${{ github.run_id }}
-          path: artifacts/noteri-desktop-network/evidence.json
-          if-no-files-found: error
+          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-network\evidence.json
+          if-no-files-found: warn
           retention-days: 30
 
-      - name: Summary
-        if: always()
+  recover_scm:
+    if: ${{ startsWith(github.ref_name, 'fix/noteri-desktop-runner-scm-recovery-') }}
+    name: Recover Desktop GitHub runner via SCM from Noteri
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      EVIDENCE_REL: artifacts\noteri-desktop-runner-scm\evidence.json
+      CORRELATION_ID: noteri-desktop-runner-scm-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
         shell: powershell
         run: |
-          "## Noteri -> Desktop Network Probe" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Fonte fixa: Noteri" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Destino fixo: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Porta DEV fixa: 8081" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- RDC necessário: não" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "noteri-desktop-runner-scm",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--sync-ref", "origin/fix/noteri-desktop-runner-scm-recovery-20260924"
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Validate targeted tests through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-tests",
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "1",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "pytest", "tests/test_noteri_desktop_runner_scm_recovery.py", "-q"
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Recover fixed Desktop runner service through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $recoveryScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_runner_scm_recovery.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $recoveryScript,
+            "--confirm", "RECOVER-NOTERI-DESKTOP-RUNNER-SCM",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--evidence-file", $env:EVIDENCE_REL,
+            "--timeout-seconds", "20"
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized SCM evidence
+        if: steps.session.outputs.target_path != ''
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $evidence)) { throw "SCM_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+          if (-not $e.ok) { throw "SCM_RECOVERY_NOT_OK" }
+          if ($e.source_host -ne "Noteri") { throw "SOURCE_HOST_MISMATCH" }
+          if ($e.target_host -ne "DESKTOP-PDQK954") { throw "TARGET_HOST_MISMATCH" }
+          if ($e.after_state -ne "running") { throw "RUNNER_SERVICE_NOT_RUNNING" }
+          if ($e.production_touched -or $e.secrets_read -or $e.rdc_required -or $e.remote_shell_used) {
+            throw "SCM_RECOVERY_GUARDRAIL_VIOLATION"
+          }
+
+      - name: Upload sanitized SCM evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: noteri-desktop-runner-scm-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-runner-scm\evidence.json
+          if-no-files-found: warn
+          retention-days: 30
