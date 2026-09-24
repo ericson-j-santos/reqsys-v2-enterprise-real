@@ -49,6 +49,7 @@ PC24x7 --Ed25519--> ntfy.sh
 21. A navegação para DEV deve usar a entrada estável GitHub Pages e encaminhar somente uma rota relativa validada ao Quick Tunnel selecionado; URL absoluta ou `//host` não pode ser aceita como destino.
 22. Alterações do Modo ESTUDO integradas em `main` devem disparar reconciliação DEV no runner `pc24x7` e validar NORMAL→ESTUDO→replay idempotente→NORMAL sem tocar HML/PROD.
 23. Smokes executivos acionados por `deployment_status` devem exigir `environment_url` pública não vazia antes de resolver o locator DEV; eventos genéricos do GitHub Environment sem URL pública devem ser ignorados, enquanto `workflow_dispatch` explícito permanece disponível. Esse filtro não pode converter falha funcional de um alvo público real em sucesso.
+24. O aceite real da jornada WSJF em DEV deve resolver `scripts/resolve_pc24x7_dev_locator.mjs`, reutilizar o `selected_url`/`base_url` validado como origem same-origin de API e frontend e não pode consumir `vars.PC24X7_DEV_BASE_URL` ou `vars.PC24X7_DEV_FRONTEND_URL` como endereço operacional.
 
 ## Critérios de aceite
 
@@ -71,3 +72,4 @@ PC24x7 --Ed25519--> ntfy.sh
 - smoke DEV com falha funcional não pode terminar verde;
 - `deployment_status` sem `environment_url` pública não dispara smoke executivo; com URL pública, o smoke continua fail-closed;
 - merge em `main` de arquivos do Modo ESTUDO dispara reconciliação física no PC24x7.
+- aceite WSJF resolve o locator assinado vigente, rejeita URL fora de `https://*.trycloudflare.com` e o gate preventivo bloqueia regressão para variáveis estáticas de runtime DEV.
