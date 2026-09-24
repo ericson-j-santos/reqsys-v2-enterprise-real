@@ -173,6 +173,15 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "shell: pwsh" not in workflow
     assert "workflow_dispatch:" in workflow
     assert "inputs:" not in workflow
+    assert "git ls-remote https://github.com/ericson-j-santos/noteri-runtime.git refs/heads/main" in workflow
+    assert "repository: ericson-j-santos/noteri-runtime" in workflow
+    assert "noteri_runtime_isolated_e2e.py" in workflow
+    assert "noteri_runtime_observed_sha_mismatch" in workflow
+    assert "noteri_runtime_source_sha_not_verified" in workflow
+    assert "noteri_runtime_final_profile_not_normal" in workflow
+    assert "noteri_runtime_idempotency_missing" in workflow
+    assert "noteri_runtime_negative_control_missing" in workflow
+    assert "persist-credentials: false" in workflow
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-control-plane-probe.yml" in policy["approved_workflows"]
 
