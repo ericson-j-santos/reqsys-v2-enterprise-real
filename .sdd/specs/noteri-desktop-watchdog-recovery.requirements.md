@@ -24,10 +24,13 @@ Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indispo
 15. O script de recuperação deve executar exclusivamente por `command_gateway.py`, risco 2, dentro do `target_path` isolado e com `expected-head` igual ao SHA da execução.
 16. As regras operacionais usadas no E2E devem ser fixadas por SHA imutável e o checkout não pode persistir credenciais.
 17. A evidência produzida no worktree deve ser validada antes do upload: origem Noteri, destino DESKTOP-PDQK954, `EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED`, sem criação/alteração de tarefa, segredo, credencial ou produção.
+18. No Noteri, o checkout do ReqSys usado pela sessão deve ficar isolado em `${{ github.workspace }}\\_target`; o checkout das regras permanece em `_rules`, evitando depender do caminho Desktop `C:\\dev\\reqsys-v2-enterprise-real` ou sujar a árvore governada.
+19. O script de recuperação deve ser resolvido a partir do `target_path` retornado pelo Session Launcher, não da raiz do workspace.
 
 ## Critérios de aceite
 
 - workflow executa no Noteri após Session Launcher válido e por Command Gateway risco 2;
+- checkout de sessão isolado em `_target`, sem dependência de `C:\\dev\\reqsys-v2-enterprise-real` no Noteri;
 - consulta encontra a tarefa exata;
 - AtStartup + S4U são comprovados;
 - `/Run` retorna sucesso;
