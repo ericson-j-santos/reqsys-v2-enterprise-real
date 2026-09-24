@@ -150,6 +150,10 @@ def is_ignored(relative: Path) -> bool:
     normalized = relative.as_posix()
     if normalized in EXCLUDED_FILES or normalized.startswith(EXCLUDED_PREFIXES):
         return True
+    if "__tests__" in relative.parts:
+        return True
+    if ".test." in relative.name or ".spec." in relative.name:
+        return True
     return bool(set(relative.parts).intersection(IGNORED_DIRS))
 
 

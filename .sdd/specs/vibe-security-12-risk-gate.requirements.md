@@ -22,6 +22,9 @@ Consolidar os 12 riscos do guia KipperDev em um gate versionado e verificável d
 10. Os relatórios JSON e Markdown devem ser publicados dentro do artifact já existente `security-baseline-report`.
 11. Gitleaks, CodeQL, Bandit, pip-audit, npm audit e SBOM existentes permanecem complementares e não devem ser removidos ou enfraquecidos.
 12. A documentação deve definir evidência positiva/negativa e explicitar que busca textual não comprova segurança.
+13. Arquivos de teste do frontend em `__tests__`, `*.test.*` e `*.spec.*` não devem compor o escopo de código de produção do scanner, evitando falso bloqueio por fixtures deliberadamente inseguras.
+14. Sinks `v-html` de produção continuam bloqueadores quando não houver sanitização explícita; o renderer de Markdown do Specs deve sanitizar a saída com DOMPurify antes de entregá-la ao DOM.
+15. A sanitização deve possuir teste negativo para `<script>`, event handlers e protocolo `javascript:`, além de controle positivo que preserve Markdown seguro.
 
 ## Critérios de aceite
 
@@ -29,6 +32,8 @@ Consolidar os 12 riscos do guia KipperDev em um gate versionado e verificável d
 - Um conjunto controlado de falhas de alta confiança é detectado como bloqueador.
 - Sinais contextuais são marcados para revisão e não geram falso "seguro".
 - Exemplos parametrizados/sanitizados não geram bloqueador indevido no teste de controle.
+- Fixtures de teste do frontend ficam fora do scan de produção, mas um `v-html` equivalente em arquivo de produção continua bloqueando.
+- O renderer de Markdown remove script, event handlers e URLs `javascript:` e preserva conteúdo seguro em teste automatizado.
 - Relatório sem achados contém as 12 linhas com `no_signal` e a ressalva de garantia.
 - O controle negativo interno retorna sucesso somente quando a falha conhecida é detectada.
 - O workflow compila e executa o novo gate em modo estrito no mesmo escopo do baseline.

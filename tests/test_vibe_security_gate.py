@@ -86,6 +86,34 @@ def test_sanitized_and_parameterized_examples_do_not_create_blockers(tmp_path):
     assert [item for item in findings if item.enforcement == "block"] == []
 
 
+def test_frontend_test_fixtures_are_excluded_but_production_xss_remains_blocking(tmp_path):
+    write(tmp_path, "frontend/src/__tests__/fixture.js", "box.innerHTML = comment;\n")
+    write(tmp_path, "frontend/src/component.test.js", "box.innerHTML = comment;\n")
+    write(tmp_path, "frontend/src/view.js", 'const tpl = \'<div v-html="raw"></div>\';\n')
+
+    findings, scanned = gate.scan_repository(tmp_path)
+
+    assert scanned == 1
+    blockers = [item for item in findings if item.risk_id == "05" and item.enforcement == "block"]
+    assert len(blockers) == 1
+    assert blockers[0].path == "frontend/src/view.js"
+
+
+def test_explicit_dompurify_sanitization_downgrades_raw_html_sink_to_review(tmp_path):
+    write(
+        tmp_path,
+        "frontend/src/view.js",
+        'const clean = DOMPurify.sanitize(raw);\nconst tpl = \'<div v-html="clean"></div>\';\n',
+    )
+
+    findings, _ = gate.scan_repository(tmp_path)
+    xss = [item for item in findings if item.risk_id == "05"]
+
+    assert len(xss) == 1
+    assert xss[0].enforcement == "review"
+    assert xss[0].severity == "high"
+
+
 def test_report_always_contains_12_risk_rows_and_no_signal_is_not_pass_claim(tmp_path):
     write(tmp_path, "backend/app/ok.py", "value = 1\n")
     findings, scanned = gate.scan_repository(tmp_path)
