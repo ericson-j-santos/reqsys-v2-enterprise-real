@@ -222,7 +222,7 @@ def test_compose_recreate_recovers_stale_ephemeral_source_from_canonical_repo(
                 "    restart: unless-stopped",
                 '    ports: ["127.0.0.1:8097:8097"]',
                 f"    environment: [\"CODEX_WORKER_POOL_API_TOKEN_FILE={module.TOKEN_DESTINATION}\", \"CODEX_WORKER_POOL_EXPECTED_RULES_SHA=x\"]",
-                f'    volumes: ["${CODEX_WORKER_POOL_API_TOKEN_FILE_HOST}:{module.TOKEN_DESTINATION}:ro", "codex-worker-pool-state:/data"]',
+                f'    volumes: ["${{CODEX_WORKER_POOL_API_TOKEN_FILE_HOST}}:{module.TOKEN_DESTINATION}:ro", "codex-worker-pool-state:/data"]',
             ]
         )
         + "\n",
