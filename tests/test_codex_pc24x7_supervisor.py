@@ -140,14 +140,18 @@ def test_mcp_bridge_env_is_fail_closed_and_loopback_only(monkeypatch) -> None:
         profile(),
         {
             "OLLAMA_MCP_BEARER_TOKEN": "secret-test-value",
-            "UNRELATED": "preserved",
+            "PATH": r"C:\\Windows\\System32",
+            "GITHUB_TOKEN": "must-not-propagate",
+            "UNRELATED": "must-not-propagate",
         },
     )
     assert env["OLLAMA_MCP_GATEWAY_URL"] == "http://127.0.0.1:8008"
     assert env["OLLAMA_MCP_ALLOWED_MODELS"] == "gemma4:31b-cloud,gemma4:26b-q8-code"
     assert env["OLLAMA_MCP_DEFAULT_MODEL"] == "gemma4:31b-cloud"
     assert env["OLLAMA_MCP_FALLBACK_MODEL"] == "gemma4:26b-q8-code"
-    assert env["UNRELATED"] == "preserved"
+    assert env["PATH"] == r"C:\\Windows\\System32"
+    assert "GITHUB_TOKEN" not in env
+    assert "UNRELATED" not in env
 
 
 def test_copy_release_includes_mcp_bridge(tmp_path: Path) -> None:
@@ -200,4 +204,40 @@ def test_runtime_status_requires_mcp_bridge_health(monkeypatch, tmp_path: Path) 
     healthy = m.runtime_status(metadata)
     assert healthy["runtime_healthy"] is True
     assert healthy["health"]["mcp_bridge"]["port"] == 8010
+
+def test_mcp_bridge_probe_requires_identified_health(monkeypatch) -> None:
+    monkeypatch.setattr(m, "_port_open", lambda port: port == 8010)
+    monkeypatch.setattr(
+        m,
+        "_request_json",
+        lambda *args, **kwargs: (
+            200,
+            {
+                "status": "ok",
+                "service": "reqsys-ollama-mcp-bridge",
+                "transport": "streamable-http",
+                "mcp_path": "/mcp",
+                "auth_configured": True,
+                "secret_exposed": False,
+            },
+        ),
+    )
+    health = m.probe_mcp_bridge()
+    assert health is not None
+    assert health["service"] == "reqsys-ollama-mcp-bridge"
+
+    monkeypatch.setattr(
+        m,
+        "_request_json",
+        lambda *args, **kwargs: (
+            200,
+            {
+                "status": "ok",
+                "service": "unexpected-service",
+                "auth_configured": True,
+                "secret_exposed": False,
+            },
+        ),
+    )
+    assert m.probe_mcp_bridge() is None
 
