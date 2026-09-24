@@ -244,6 +244,116 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+
+  network_probe:
+    name: Probe Desktop runtime from Noteri
+    if: ${{ github.event_name == 'push' }}
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\\noteri-desktop-network\\evidence.json
+      EVALUATED_SHA: ${{ github.sha }}
+      SYNC_REF: origin/${{ github.ref_name }}
+
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVALUATED_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed Noteri session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "Noteri") { throw "UNEXPECTED_HOST:$env:COMPUTERNAME" }
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:GITHUB_WORKSPACE,
+            "--session-prefix", "noteri-desktop-network",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $env:EVALUATED_SHA,
+            "--sync-ref", $env:SYNC_REF
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $env:EVALUATED_SHA) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$($data.head)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Probe fixed Desktop target through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $probeScript = Join-Path $env:TARGET_PATH "scripts\\noteri_desktop_network_probe.py"
+          $gatewayArgs = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $probeScript,
+            "--confirm", "PROBE-NOTERI-DESKTOP-NETWORK",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--evidence-file", $env:EVIDENCE_REL
+          )
+          & python $gateway @gatewayArgs
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized network evidence
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $evidence)) { throw "NETWORK_PROBE_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+          if (-not $e.ok -or -not $e.probe_completed) { throw "NETWORK_PROBE_NOT_COMPLETED" }
+          if ($e.source_host -ne "Noteri" -or $e.target_host -ne "DESKTOP-PDQK954") {
+            throw "NETWORK_PROBE_HOST_CONTRACT_MISMATCH"
+          }
+          if ($e.production_touched -or $e.secrets_read) { throw "NETWORK_PROBE_FORBIDDEN_EFFECT" }
+
+      - name: Upload sanitized network evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-desktop-network-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\\artifacts\\noteri-desktop-network\\evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
   local_runner_watchdog:
     name: Desktop legacy runner queue watchdog
     if: ${{ github.event_name == 'push' }}
