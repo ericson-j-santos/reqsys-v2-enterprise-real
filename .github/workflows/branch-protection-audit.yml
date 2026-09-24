@@ -277,7 +277,7 @@ jobs:
     timeout-minutes: 8
     env:
       TARGET_REPO: C:\dev\chatgpt-workers\operational-rules-validation
-      HELPER_SHA: a04aa57be662cdf4b4b833460f2df26b58a87873
+      HELPER_SHA: 0d5d73fff91efa56b50c5827c47b2666e291be3a
       HELPER_SYNC_REF: origin/ops/report-builder-main-protection-20260923
       CORRELATION_ID: report-builder-protection-validate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -362,7 +362,7 @@ jobs:
     timeout-minutes: 12
     env:
       TARGET_REPO: C:\dev\chatgpt-workers\operational-rules-validation
-      HELPER_SHA: a04aa57be662cdf4b4b833460f2df26b58a87873
+      HELPER_SHA: 0d5d73fff91efa56b50c5827c47b2666e291be3a
       HELPER_SYNC_REF: origin/ops/report-builder-main-protection-20260923
       CORRELATION_ID: report-builder-main-protection-${{ github.run_id }}-${{ github.run_attempt }}
       ACTION_ID: reqsys.report-builder-main-protection.dev
