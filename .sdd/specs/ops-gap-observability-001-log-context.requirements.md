@@ -10,10 +10,18 @@ Avançar o gap canônico de observabilidade distribuída sem abrir nova frente e
 2. `X-Causation-Id` e `X-Workflow-Run-Id` só podem ser propagados quando passarem por validação allowlist e limite de tamanho.
 3. Valores com whitespace arbitrário, quebra de linha ou mais de 128 caracteres devem falhar fechado e não aparecer nos headers de resposta.
 4. O filtro de redaction para tokens e dados pessoais deve continuar ativo.
-5. O caso positivo deve provar propagação dos três identificadores.
-6. O controle negativo deve provar ausência de propagação para identificadores inválidos.
-7. O TODO Padrão Ouro deve distinguir itens já evidenciados de dependências ainda abertas de retenção, backend OTLP, alertas e runtime real.
-8. O incremento deve permanecer `gap_fix`, sem deploy ou promoção de ambiente.
+5. O TODO Padrão Ouro deve distinguir itens já evidenciados de dependências ainda abertas de retenção, backend OTLP, alertas e runtime real.
+6. O incremento deve permanecer `gap_fix`, sem deploy ou promoção de ambiente.
+
+## Critérios de aceite
+
+1. O caso positivo comprova propagação de `correlation_id`, `causation_id` e `workflow_run_id`.
+2. O controle negativo comprova ausência de propagação de `causation_id` e `workflow_run_id` inválidos, inclusive sem fallback para `GITHUB_RUN_ID`.
+3. O teste de segurança comprova que redaction existente permanece ativa e que IDs com tentativa de injeção são rejeitados.
+4. O contrato HTTP em `/api/v1/environment` declara suporte aos novos identificadores.
+5. Os testes mapeados no SDD passam no HEAD exato.
+6. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato e `behind_by=0` antes da abertura da PR.
+7. Retenção, alertas, backend OTLP e operação real permanecem explicitamente fora da conclusão deste incremento.
 
 ## Validação
 
@@ -24,4 +32,4 @@ Avançar o gap canônico de observabilidade distribuída sem abrir nova frente e
 
 ## E2E
 
-A validação local/CI comprova contrato e controles contra falso positivo. A conclusão operacional de retenção/alertas/backend OTLP continua separada e não deve ser inferida destes testes.
+A validação local/CI comprova contrato, propagação positiva e controles negativos contra falso positivo. A conclusão operacional de retenção, alertas e backend OTLP continua separada e não deve ser inferida destes testes.
