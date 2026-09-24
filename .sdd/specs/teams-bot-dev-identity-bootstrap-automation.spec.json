@@ -10,7 +10,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Automatiza a execução autorizada do bootstrap idempotente da identidade Teams Bot DEV sem ampliar privilégio do CI, usando Session Launcher e Owner Risk3 Gateway no Noteri.",
+  "description": "Automatiza a execução autorizada do bootstrap idempotente da identidade Teams Bot DEV sem ampliar privilégio do CI, consolidando a operação no workflow Teams Bot DEV Provision e usando Session Launcher + Owner Risk3 Gateway no Noteri.",
   "environment": "GitHub Actions / Noteri DEV / Microsoft Entra / Azure Key Vault",
   "production_enabled": false,
   "risk": {
@@ -38,7 +38,7 @@
     "evidence_contract": "status READY/ALREADY_COMPLIANT, environment=dev, host=NOTERI, independent_readback=true, secret_value_exposed=false, production_touched=false"
   },
   "files": [
-    ".github/workflows/teams-bot-dev-identity-bootstrap.yml",
+    ".github/workflows/teams-bot-dev-provision.yml",
     ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "scripts/configure_teams_bot_dev_identity_risk3.py",
     "scripts/run_teams_bot_dev_identity_bootstrap_local.py",
