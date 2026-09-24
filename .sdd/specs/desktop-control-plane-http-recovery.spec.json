@@ -39,5 +39,10 @@
     "Fresh exact owner command is reused instead of duplicated.",
     "No shell or direct privileged host execution exists in the API.",
     "HTTP acceptance is not treated as proof of physical recovery."
-  ]
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_desktop_control_plane_http_recovery.py"
+    ]
+  }
 }
