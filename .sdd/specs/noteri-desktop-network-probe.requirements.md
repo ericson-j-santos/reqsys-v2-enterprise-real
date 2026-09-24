@@ -43,6 +43,6 @@ Produzir no Noteri evidência independente, sanitizada e somente leitura sobre a
 - O resultado físico deve ser lido independentemente após o workflow.
 - Nenhuma evidência de SHA anterior pode liberar a próxima etapa.
 
-## Critério para avançar
+## Critérios de aceite e condição para avançar
 
 Somente se \`wmi_result=accessible\` será permitido estudar um adaptador WMI fixo e allowlisted que transporte exclusivamente o bootstrap governado. Qualquer \`access_denied\`, indisponibilidade RPC/DCOM ou dependência ausente encerra a rota WMI sem retry até mudança objetiva da precondição.
