@@ -17,7 +17,7 @@ Materializar no ruleset existente, sem substituí-lo e sem criar bypass, os oito
 8. A execução administrativa deve passar por Session Launcher + Owner Risk3 Gateway e remover a autorização temporária ao final.
 9. Não alterar produção, deploy, banco ou runtime da aplicação.
 
-## Aceite
+## Critérios de aceite
 - ruleset 17998541 permanece active e targeting ~DEFAULT_BRANCH;
 - deletion, non_fast_forward e pull_request permanecem presentes;
 - required_status_checks contém os oito contextos canônicos e strict=true;
