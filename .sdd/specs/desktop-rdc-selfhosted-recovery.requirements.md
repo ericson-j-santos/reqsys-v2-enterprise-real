@@ -30,7 +30,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 16. O fluxo deve armar o fallback interativo mesmo quando V4 estiver saudável, permitindo takeover automático se o claim V4 desaparecer.
 17. O Authorized Actions Gateway deve vincular a evidência ao \`run_id\` retornado pelo próprio \`gh workflow run\`; é proibido selecionar um run apenas por \`head_sha\`, pois múltiplas execuções podem compartilhar o mesmo SHA.
 18. Para recuperação Desktop, estados \`pending\`, \`queued\`, \`requested\` ou \`waiting\` após no máximo 60 segundos de pickup devem produzir \`SELF_HOSTED_RUNNER_UNAVAILABLE\` e falhar fechado.
-19. Antes da falha terminal por ausência de pickup, o gateway deve solicitar o cancelamento do run self-hosted abandonado, aguardar confirmação `completed/cancelled` por janela limitada e registrar `target_cleanup_status`/`target_cleanup_error` na evidência. Falha na limpeza não autoriza redispatch nem retry automático.
+19. Antes da falha terminal por ausência de pickup, o gateway deve solicitar o cancelamento do run self-hosted abandonado, aguardar confirmação `completed/cancelled` por janela limitada e registrar `target_cleanup_status`/`target_cleanup_error` na evidência. O workflow `desktop-rdc-recovery` deve usar `cancel-in-progress=true` para que um novo dispatch substitua uma execução órfã anterior. Falha na limpeza não autoriza retry automático fora desse novo dispatch explícito.
 
 ## Critérios de aceite
 
