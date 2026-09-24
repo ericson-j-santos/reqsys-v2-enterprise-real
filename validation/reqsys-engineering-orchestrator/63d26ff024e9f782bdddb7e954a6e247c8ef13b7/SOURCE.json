@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0",
+  "purpose": "temporary immutable transport for Noteri DEV runtime refresh",
+  "source_repository": "ericson-j-santos/reqsys-engineering-orchestrator",
+  "source_sha": "63d26ff024e9f782bdddb7e954a6e247c8ef13b7",
+  "files": [
+    {
+      "path": "orchestrator/__init__.py",
+      "blob_sha": "a9e5ad7854ce8c6ad5abb20864fe25fdc054f87b",
+      "size": 350
+    },
+    {
+      "path": "orchestrator/__main__.py",
+      "blob_sha": "3a186975ecfa7542e95150aedf792efbfa64e6ba",
+      "size": 1439
+    },
+    {
+      "path": "orchestrator/core.py",
+      "blob_sha": "4bae801560ccc58bc076568fe56503650ef79b3f",
+      "size": 20327
+    },
+    {
+      "path": "orchestrator/maintenance.py",
+      "blob_sha": "269073eb6ede15b81157c97416e38236d86cc162",
+      "size": 30858
+    },
+    {
+      "path": "orchestrator/persistence.py",
+      "blob_sha": "59d7ff9343a000f0b83eccdca1e7c928cf7e8c31",
+      "size": 1292
+    },
+    {
+      "path": "orchestrator/pr_remediation_bridge.py",
+      "blob_sha": "410330047443085c72a7ab25d23f31cb59e223e3",
+      "size": 6799
+    },
+    {
+      "path": "orchestrator/pr_remediator.py",
+      "blob_sha": "ea89ad50e2cc13dda5e0d1abc74a78ccab03bd68",
+      "size": 5841
+    },
+    {
+      "path": "orchestrator/server.py",
+      "blob_sha": "8c108f67d086e52ccab2ca6387fe26582c951e1a",
+      "size": 11915
+    },
+    {
+      "path": "orchestrator/worker_agent.py",
+      "blob_sha": "2cb75fe00928ae87dcea6d57474dd19b65e7c736",
+      "size": 15496
+    },
+    {
+      "path": "orchestrator/workers.py",
+      "blob_sha": "84e6c99dc7576a82a9d19137a878a7e9ec08eee3",
+      "size": 19718
+    },
+    {
+      "path": "scripts/__init__.py",
+      "blob_sha": "30a99c88d71485bd643b7cdff556ca6c7295d7c0",
+      "size": 66
+    },
+    {
+      "path": "scripts/control_plane_client.py",
+      "blob_sha": "dd29f93d3e0124528c7ed7d29e67785757c46ea1",
+      "size": 4647
+    },
+    {
+      "path": "scripts/e2e_executor.py",
+      "blob_sha": "98045572d7791715af67518e3a922b5ac9281773",
+      "size": 4550
+    },
+    {
+      "path": "scripts/e2e_http.py",
+      "blob_sha": "f1d8e158cab55b708116290347455e64db46039c",
+      "size": 5443
+    },
+    {
+      "path": "scripts/e2e_workers.py",
+      "blob_sha": "9b8f1e9aea3b6f84b160d88f5644a91c35d98338",
+      "size": 7137
+    },
+    {
+      "path": "scripts/install_windows_autostart.py",
+      "blob_sha": "31caf0e7f1d4d8d8e53214a31ce9cd95cb459f20",
+      "size": 7282
+    },
+    {
+      "path": "scripts/install_windows_task_autostart.py",
+      "blob_sha": "be825f44a3b672618a2225594da66af1dcec5d42",
+      "size": 8241
+    },
+    {
+      "path": "scripts/pr_health_scan.py",
+      "blob_sha": "755f92f8bba29ba3f73518845448f084410ab68e",
+      "size": 8862
+    },
+    {
+      "path": "scripts/recover_noteri_worker_dev.py",
+      "blob_sha": "386f435e001e445c6b89ea73c31b0faf5fb2532c",
+      "size": 9347
+    },
+    {
+      "path": "scripts/recover_windows_runtime.py",
+      "blob_sha": "4787a16e4a1dcf902f1185a3b35c07de3efb4227",
+      "size": 7199
+    },
+    {
+      "path": "scripts/service_supervisor.py",
+      "blob_sha": "53540f367322128394b1a7da51879ae8e7b11a2e",
+      "size": 15692
+    },
+    {
+      "path": "scripts/supervisor_control.py",
+      "blob_sha": "c0f475959c3b515902ed172916a3ae2cd09368e0",
+      "size": 1600
+    },
+    {
+      "path": "scripts/windows_managed_process.py",
+      "blob_sha": "63d8f978bbd9bdd7887c22afb18f58dba578d0aa",
+      "size": 7426
+    },
+    {
+      "path": "scripts/worker_heartbeat.py",
+      "blob_sha": "cbf171536b371db6dd6471400d2dca127401ed4b",
+      "size": 4022
+    }
+  ],
+  "file_count": 24,
+  "total_bytes": 205549,
+  "merge_intent": false,
+  "production_touched": false,
+  "secrets_included": false
+}
