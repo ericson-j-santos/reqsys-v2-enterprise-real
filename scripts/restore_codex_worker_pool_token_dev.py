@@ -47,9 +47,45 @@ def _docker(
             timeout=60,
             env=env,
         )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+    except subprocess.CalledProcessError as exc:
+        reason = failure_reason
+        if failure_reason == "worker_pool_compose_recreate_failed":
+            reason = _compose_failure_reason(exc.stderr or "")
+        raise RestoreError(reason) from exc
+    except (OSError, subprocess.TimeoutExpired) as exc:
         raise RestoreError(failure_reason) from exc
     return completed.stdout
+
+
+def _compose_failure_reason(stderr: str) -> str:
+    normalized = stderr.casefold()
+    classifications = (
+        (
+            "worker_pool_compose_image_unavailable",
+            ("no such image", "pull access denied", "unable to get image"),
+        ),
+        (
+            "worker_pool_compose_bind_source_unavailable",
+            (
+                "bind source path does not exist",
+                "invalid mount config",
+                "path is not shared",
+                "file sharing",
+            ),
+        ),
+        (
+            "worker_pool_compose_port_conflict",
+            ("port is already allocated", "address already in use"),
+        ),
+        (
+            "worker_pool_compose_configuration_invalid",
+            ("required variable", "is missing a value", "invalid interpolation format"),
+        ),
+    )
+    for reason, markers in classifications:
+        if any(marker in normalized for marker in markers):
+            return reason
+    return "worker_pool_compose_recreate_failed"
 
 
 def _canonical_container_and_token_path() -> tuple[str, Path]:
@@ -184,6 +220,15 @@ def _resolve_compose_source(labels: dict[str, Any]) -> tuple[Path, list[Path], b
     return CANONICAL_COMPOSE_FILE.parent, [CANONICAL_COMPOSE_FILE], True
 
 
+def _running_image_id(container: dict[str, Any]) -> str:
+    image_id = str(container.get("Image") or "").strip().lower()
+    prefix = "sha256:"
+    digest = image_id[len(prefix):] if image_id.startswith(prefix) else ""
+    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+        raise RestoreError("worker_pool_running_image_invalid")
+    return image_id
+
+
 def _compose_recreate_service(
     container: dict[str, Any],
     token_path: Path,
@@ -206,36 +251,50 @@ def _compose_recreate_service(
     if not rules_sha:
         raise RestoreError("worker_pool_expected_rules_sha_not_configured")
 
+    image_id = _running_image_id(container)
     process_env = os.environ.copy()
     process_env["CODEX_WORKER_POOL_API_TOKEN_FILE_HOST"] = str(token_path)
     process_env["CODEX_WORKER_POOL_EXPECTED_RULES_SHA"] = rules_sha
 
-    args = [
-        "compose",
-        "--project-name",
-        project,
-        "--project-directory",
-        str(working_dir),
-    ]
-    for config_file in config_files:
-        args.extend(["--file", str(config_file)])
-    args.extend(
-        [
-            "up",
-            "-d",
-            "--force-recreate",
-            "--no-deps",
-            "--no-build",
-            SERVICE,
-        ]
-    )
-    _docker(
-        args,
-        env=process_env,
-        failure_reason="worker_pool_compose_recreate_failed",
-    )
-    return recovered_source
+    with tempfile.TemporaryDirectory(prefix="worker-pool-compose-") as temp_dir:
+        image_override = Path(temp_dir) / "running-image.override.json"
+        image_override.write_text(
+            json.dumps(
+                {"services": {SERVICE: {"image": image_id}}},
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
+        args = [
+            "compose",
+            "--project-name",
+            project,
+            "--project-directory",
+            str(working_dir),
+        ]
+        for config_file in config_files:
+            args.extend(["--file", str(config_file)])
+        args.extend(["--file", str(image_override)])
+        args.extend(
+            [
+                "up",
+                "-d",
+                "--force-recreate",
+                "--no-deps",
+                "--no-build",
+                "--pull",
+                "never",
+                SERVICE,
+            ]
+        )
+        _docker(
+            args,
+            env=process_env,
+            failure_reason="worker_pool_compose_recreate_failed",
+        )
+    return recovered_source
 
 def _read_existing_token(path: Path) -> str | None:
     if not path.exists():
