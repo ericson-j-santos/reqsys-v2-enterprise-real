@@ -38,11 +38,11 @@ def test_local_protection_script_is_dynamic_fail_closed_and_sanitized() -> None:
     raw = RUNNER.read_text(encoding="utf-8")
     assert 'TARGET_REPOSITORY = "ericson-j-santos/observability-platform"' in raw
     assert 'TARGET_BRANCH = "main"' in raw
-    assert 'REQUIRED_CHECK = "test"' in raw
+    assert 'REQUIRED_CHECKS = ("test", "E2E Platform Evidence Gate / validate-evidence")' in raw
     assert 'env.pop("GH_TOKEN", None)' in raw
     assert 'env.pop("GITHUB_TOKEN", None)' in raw
     assert '"github_local_auth_unavailable"' in raw
-    assert '"required_check_not_green"' in raw
+    assert '"required_checks_not_green"' in raw
     assert '"target_sha_changed_before_write"' in raw
     assert '"target_sha_changed_after_write"' in raw
     assert '"branch_protection_update_failed"' in raw
