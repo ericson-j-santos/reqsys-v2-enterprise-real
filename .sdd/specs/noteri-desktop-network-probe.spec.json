@@ -19,7 +19,15 @@
     ],
     "runtime_port": 8081,
     "environment": "DEV",
-    "admin_staging_probe": "C:\\\\Users\\\\Public\\\\Desktop via C$"
+    "admin_staging_probe": "C:\\\\Users\\\\Public\\\\Desktop via C$",
+    "control_ports": {
+      "ssh": 22,
+      "rpc_epmapper": 135,
+      "smb": 445,
+      "rdp": 3389,
+      "winrm_http": 5985,
+      "winrm_https": 5986
+    }
   },
   "security": {
     "arbitrary_target": false,
@@ -32,7 +40,8 @@
     "wake_on_lan": false,
     "raw_ip_persisted": false,
     "remote_write": false,
-    "remote_listing_persisted": false
+    "remote_listing_persisted": false,
+    "remote_command_execution": false
   },
   "evidence_contract": {
     "states": [
@@ -51,7 +60,8 @@
       "not_found",
       "os_error_*"
     ],
-    "remote_write": false
+    "remote_write": false,
+    "control_port_values": "boolean_only"
   },
   "sdd_gate": {
     "tests": [
@@ -64,5 +74,5 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-21"
+  "updated_at": "2026-09-24"
 }
