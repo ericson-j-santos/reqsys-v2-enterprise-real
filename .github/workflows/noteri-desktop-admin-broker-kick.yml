@@ -135,6 +135,7 @@ jobs:
   local_kick:
     name: Start existing Desktop Admin Broker locally
     if: ${{ github.event_name == 'push' }}
+    needs: network_probe
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 5
     env:
@@ -357,6 +358,7 @@ jobs:
   local_runner_watchdog:
     name: Desktop legacy runner queue watchdog
     if: ${{ github.event_name == 'push' }}
+    needs: network_probe
     runs-on: windows-latest
     timeout-minutes: 2
     permissions:
