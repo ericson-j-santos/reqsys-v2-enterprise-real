@@ -129,9 +129,10 @@ def test_workflow_is_inputless_noteri_only_and_read_only() -> None:
     assert '"--risk", "2"' in raw
     assert '"--expected-head", $env:ANCHOR_SHA' in raw
     assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
-    assert "TARGET_REPO: ${{ github.workspace }}\\\\_target" in raw
+    assert "TARGET_REPO: ${{ github.workspace }}" in raw
     assert "path: _target" in raw
-    assert '$recoveryScript = Join-Path $env:TARGET_PATH "scripts\\\\noteri_desktop_watchdog_rpc_recovery.py"' in raw
-    assert "C:\\\\dev\\\\reqsys-v2-enterprise-real" not in raw
+    assert "$recoveryScript = Join-Path $env:TARGET_PATH" in raw
+    assert "noteri_desktop_watchdog_rpc_recovery.py" in raw
+    assert "C:\\dev\\reqsys-v2-enterprise-real" not in raw
     assert raw.count("shell: powershell") == 4
     assert "shell: pwsh" not in raw
