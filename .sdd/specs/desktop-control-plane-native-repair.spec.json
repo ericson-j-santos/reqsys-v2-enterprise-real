@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Desktop PC24x7 native control-plane repair",
+  "increment_type": "gap_fix",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "target_host": "DESKTOP-PDQK954",
+  "scope": "local/dev",
+  "problem": "The existing one-time UAC launch path can fail when the local Python registration path depends on pywin32 or the staged launcher is incomplete, while RDC and the Desktop self-hosted runner are simultaneously unavailable.",
+  "solution": {
+    "primary": "Windows PowerShell 5.1 native COM Schedule.Service repair for the two existing governed tasks",
+    "tasks": [
+      "\\Automation\\ReqSysDesktopControlPlaneWatchdog",
+      "\\Automation\\ReqSysDesktopAdminBroker"
+    ],
+    "network_access": false,
+    "additional_dependencies": false,
+    "reboot_required": false,
+    "secrets_read": false,
+    "production_touched": false,
+    "uac_activation": "Self-elevates only the fixed repair script through Windows UAC"
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_desktop_control_plane_native_repair.py"
+    ],
+    "evidence_contract": "The repair must fail closed unless the existing local metadata, runtime root, immutable release root, source SHA, Python executable and run.py are valid. It may register only the fixed Broker and Watchdog tasks with their expected AtStartup, S4U and run-level contracts, and runtime recovery remains unproven until fresh runner pickup and RDC online evidence exist."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/desktop-control-plane-native-repair.requirements.md",
+    "implementation": "scripts/repair_desktop_control_plane_native.ps1",
+    "tests": "tests/test_desktop_control_plane_native_repair.py"
+  },
+  "acceptance_criteria": [
+    "Guardrail tests for the native repair pass on the exact HEAD.",
+    "Pre-PR Readiness passes on the exact HEAD with behind_by=0.",
+    "The repair validates host, metadata, source SHA, immutable release root, Python and run.py before registering any task.",
+    "The Watchdog is registered only as AtStartup + S4U + limited and the Admin Broker only as AtStartup + S4U + highest.",
+    "No network access, secret read, reboot or production mutation is performed by the repair.",
+    "Runtime remains activation_pending until fresh PC24x7 runner pickup and RDC transport_broadcast_v1 evidence are both observed."
+  ],
+  "runtime_status_until_evidence": "activation_pending"
+}
