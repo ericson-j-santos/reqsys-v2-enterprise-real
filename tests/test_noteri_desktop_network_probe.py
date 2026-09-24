@@ -199,3 +199,52 @@ def test_probe_reports_fixed_control_channel_reachability(monkeypatch) -> None:
     assert result["control_ports"]["winrm_http"] is True
     assert result["control_ports"]["ssh"] is False
     assert "addresses" not in result
+
+
+def test_orchestrator_readback_is_sanitized(monkeypatch) -> None:
+    responses = {
+        "/readyz": (200, {"ready": True}),
+        "/v1/workers": (
+            200,
+            {
+                "workers": [
+                    {
+                        "worker_id": "must-not-be-persisted",
+                        "device_name": "DESKTOP-PDQK954",
+                        "fresh": True,
+                        "controller_online": True,
+                        "auth_valid": True,
+                        "eligible": True,
+                        "profile": "NORMAL",
+                        "capabilities": {
+                            "safe_task_types": ["host.github_runner.recover.v1"],
+                            "secret": "must-not-leak",
+                        },
+                    }
+                ]
+            },
+        ),
+    }
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.status = payload[0]
+            self._body = json.dumps(payload[1]).encode("utf-8")
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc, tb):
+            return False
+        def read(self):
+            return self._body
+
+    def fake_urlopen(request, timeout=3.0):
+        from urllib.parse import urlparse
+        return FakeResponse(responses[urlparse(request.full_url).path])
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", fake_urlopen)
+    result = probe.orchestrator_readback()
+    assert result["ready"] is True
+    assert result["worker_match_count"] == 1
+    assert result["desktop_worker"]["runner_recovery_capable"] is True
+    assert "worker_id" not in json.dumps(result)
+    assert "secret" not in json.dumps(result)
