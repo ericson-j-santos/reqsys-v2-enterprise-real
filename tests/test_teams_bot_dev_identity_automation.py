@@ -6,6 +6,7 @@ WORKFLOW = ROOT / ".github/workflows/teams-bot-dev-identity-bootstrap.yml"
 GATEWAY = ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml"
 CONFIG = ROOT / "scripts/configure_teams_bot_dev_identity_risk3.py"
 RUNNER = ROOT / "scripts/run_teams_bot_dev_identity_bootstrap_local.py"
+POLICY = ROOT / ".github/self-hosted-runner-policy.json"
 
 config_spec = importlib.util.spec_from_file_location("teams_bot_identity_risk3", CONFIG)
 assert config_spec and config_spec.loader
@@ -59,3 +60,13 @@ def test_authorized_gateway_exposes_only_literal_command():
     assert "teams-bot-dev-identity-bootstrap.yml" in raw
     assert "github.event.issue.number == 1705" in raw
     assert "github.event.comment.user.login == 'ericson-j-santos'" in raw
+
+
+def test_self_hosted_policy_explicitly_allows_teams_identity_bootstrap():
+    import json
+
+    policy = json.loads(POLICY.read_text(encoding="utf-8"))
+    assert policy["self_hosted_allowed"] is True
+    assert ".github/workflows/teams-bot-dev-identity-bootstrap.yml" in policy["approved_workflows"]
+    assert policy["required_adr"] == "docs/adr/ADR-046-pc24x7-substituicao-flyio.md"
+    assert "bootstrap governado da identidade Teams Bot DEV" in policy["rationale"]
