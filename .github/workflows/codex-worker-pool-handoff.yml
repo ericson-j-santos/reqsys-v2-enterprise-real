@@ -71,6 +71,12 @@ jobs:
           if ($evidence.enqueued -ne 1) {
             throw "Quantidade inesperada de tasks enfileiradas."
           }
+          if (@("v1", "legacy_fallback") -notcontains $evidence.contract_mode) {
+            throw "Modo de contrato do Worker Pool inválido."
+          }
+          if ($evidence.contract_version -ne "v1") {
+            throw "Versão esperada do contrato não foi preservada."
+          }
           $item = $evidence.items[0]
           if ($item.request_id -ne "${{ inputs.request_id }}") {
             throw "request_id divergente do handoff solicitado."

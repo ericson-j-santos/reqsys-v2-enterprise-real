@@ -23,11 +23,16 @@ O `Pending Development Orchestrator` continua sendo a fonte de seleção de trab
 13. O Worker Pool existente permanece responsável por Builder → `produced_sha` → Validator independente → `completed`; este incremento não duplica essa lógica.
 14. Ausência de token, Worker Pool não saudável, URL não-loopback, SHA inválido ou readback divergente devem falhar fechado.
 15. O incremento não executa merge, deploy, produção, mudança de segredo, permissão administrativa ou reboot.
+16. Após health positivo, o bridge deve consultar `GET /v1/contract` antes de enfileirar trabalho.
+17. Quando o endpoint existir, `contract_name` deve ser `engineering-worker-pool` e `contract_version` deve ser `v1`; divergência deve falhar fechado sem fallback.
+18. Durante a janela de migração, somente HTTP 404 do endpoint de contrato pode ativar `legacy_fallback`; 401, 503, erro de transporte ou JSON inválido permanecem bloqueantes.
+19. A evidência deve registrar `contract_mode`, versão esperada e se o fallback legado foi usado, sem registrar token.
+20. O parâmetro `--require-contract-v1` deve desabilitar o fallback legado sem exigir nova alteração de código.
 
 ## Critérios de aceite
 
 - testes do fallback provam dispatch antes do marcador, deduplicação e recuperação de marcador legado;
-- testes do bridge provam positivo, replay, leitura independente, ausência de trabalho, URL não-loopback e SHA inválido;
+- testes do bridge provam positivo, replay, leitura independente, ausência de trabalho, URL não-loopback, SHA inválido, contrato v1, fallback exclusivo em 404 e bloqueio de versões incompatíveis;
 - teste contratual do workflow prova gatilho manual, runner fixo, checkout por SHA e ausência de secret inline;
 - `check_self_hosted_runner_governance.py` aceita apenas o workflow explicitamente allowlisted;
 - Pre-PR Readiness deve retornar `READY_FOR_PR=passed` no HEAD exato;

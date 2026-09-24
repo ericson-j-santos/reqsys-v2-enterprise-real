@@ -259,6 +259,36 @@ def verify_health(pool_url: str, token: str, request_fn: RequestFn) -> None:
         raise BridgeError("worker_pool_not_ready")
 
 
+def verify_contract(
+    pool_url: str,
+    token: str,
+    request_fn: RequestFn,
+    *,
+    allow_legacy_fallback: bool,
+) -> str:
+    try:
+        code, payload = request_fn("GET", f"{pool_url}/v1/contract", token, None)
+    except BridgeError as exc:
+        if str(exc) == "worker_pool_http_404":
+            if allow_legacy_fallback:
+                return "legacy_fallback"
+            raise BridgeError("worker_pool_contract_required") from exc
+        raise
+
+    if code == 404:
+        if allow_legacy_fallback:
+            return "legacy_fallback"
+        raise BridgeError("worker_pool_contract_required")
+    if code != 200:
+        raise BridgeError("worker_pool_contract_probe_failed")
+    if (
+        payload.get("contract_name") != EXPECTED_WORKER_POOL_CONTRACT_NAME
+        or payload.get("contract_version") != EXPECTED_WORKER_POOL_CONTRACT_VERSION
+    ):
+        raise BridgeError("worker_pool_contract_incompatible")
+    return "v1"
+
+
 def _task_id(payload: dict[str, Any]) -> str:
     task = payload.get("task")
     if not isinstance(task, dict) or not str(task.get("task_id") or ""):
@@ -273,6 +303,7 @@ def enqueue_local_work(
     pool_url: str,
     token: str,
     request_fn: RequestFn = http_request,
+    allow_legacy_fallback: bool = True,
 ) -> dict[str, Any]:
     decisions = local_codex_decisions(report)
     if not decisions:
@@ -292,6 +323,12 @@ def enqueue_local_work(
         raise BridgeError("orchestrator_identity_invalid")
 
     verify_health(pool_url, token, request_fn)
+    contract_mode = verify_contract(
+        pool_url,
+        token,
+        request_fn,
+        allow_legacy_fallback=allow_legacy_fallback,
+    )
     evidence: list[dict[str, Any]] = []
     for item in decisions:
         issue_number = int(item["number"])
@@ -347,6 +384,7 @@ def enqueue_local_work(
                 "created": first.get("created") is True,
                 "replay_created": replay.get("created"),
                 "independent_readback": True,
+                "contract_mode": contract_mode,
             }
         )
 
@@ -356,6 +394,10 @@ def enqueue_local_work(
         "repository": repository,
         "base_sha": base_sha,
         "orchestrator_correlation_id": parent_correlation,
+        "contract_name": EXPECTED_WORKER_POOL_CONTRACT_NAME,
+        "contract_version": EXPECTED_WORKER_POOL_CONTRACT_VERSION,
+        "contract_mode": contract_mode,
+        "legacy_fallback_used": contract_mode == "legacy_fallback",
         "enqueued": len(evidence),
         "items": evidence,
     }
@@ -379,6 +421,11 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("--token-file", type=Path)
     root.add_argument("--output", type=Path, default=Path("artifacts/pending-development-worker-pool/evidence.json"))
     root.add_argument("--probe-only", action="store_true")
+    root.add_argument(
+        "--require-contract-v1",
+        action="store_true",
+        help="Bloqueia runtime legado sem GET /v1/contract; usar após o cutover.",
+    )
     return root
 
 
@@ -405,6 +452,7 @@ def main() -> int:
             base_sha=args.base_sha,
             pool_url=args.pool_url,
             token=token,
+            allow_legacy_fallback=not args.require_contract_v1,
         )
         write_evidence(args.output, result)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
