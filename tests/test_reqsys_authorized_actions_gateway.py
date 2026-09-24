@@ -74,6 +74,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-runner-registry-repair.yml'" in content
     assert "target='pc24x7-teams-token-bootstrap.yml'" in content
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
+    assert "target='teams-bot-dev-provision.yml'" in content
     assert (
         "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
@@ -95,6 +96,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "pc24x7-runner-registry-repair.yml|"
         "pc24x7-teams-token-bootstrap.yml|"
         "pc24x7-teams-ephemeral-e2e.yml|"
+        "teams-bot-dev-provision.yml|"
         "noteri-study-mode-dev-reconcile.yml"
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
