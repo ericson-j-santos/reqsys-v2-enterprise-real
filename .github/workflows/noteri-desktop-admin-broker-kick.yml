@@ -9,8 +9,12 @@ on:
       - .github/workflows/noteri-desktop-admin-broker-kick.yml
       - scripts/noteri_desktop_admin_broker_kick.py
       - scripts/desktop_local_admin_broker_kick.py
+      - scripts/noteri_desktop_network_probe.py
       - tests/test_noteri_desktop_admin_broker_kick.py
       - tests/test_desktop_local_admin_broker_kick.py
+      - tests/test_noteri_desktop_network_probe.py
+      - .sdd/specs/noteri-desktop-network-probe.requirements.md
+      - .sdd/specs/noteri-desktop-network-probe.spec.json
       - .sdd/specs/noteri-desktop-admin-broker-kick.requirements.md
       - .sdd/specs/noteri-desktop-admin-broker-kick.spec.json
 
@@ -343,6 +347,10 @@ jobs:
           if (-not $e.ok -or -not $e.probe_completed) { throw "NETWORK_PROBE_NOT_COMPLETED" }
           if ($e.source_host -ne "Noteri" -or $e.target_host -ne "DESKTOP-PDQK954") {
             throw "NETWORK_PROBE_HOST_CONTRACT_MISMATCH"
+          }
+          if ($e.control_plane_port -ne 8787) { throw "CONTROL_PLANE_PORT_CONTRACT_MISMATCH" }
+          if ($null -eq $e.control_plane_port_reachable -or $null -eq $e.control_plane_ready) {
+            throw "CONTROL_PLANE_PROBE_EVIDENCE_MISSING"
           }
           if ($e.production_touched -or $e.secrets_read) { throw "NETWORK_PROBE_FORBIDDEN_EFFECT" }
 
