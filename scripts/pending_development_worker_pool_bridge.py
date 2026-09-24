@@ -31,6 +31,8 @@ WORKER_POOL_HOST_IP = "127.0.0.1"
 WORKER_POOL_HOST_PORT = "8097"
 WORKER_POOL_CONTAINER_PORT = "8097/tcp"
 WORKER_POOL_TOKEN_DESTINATION = "/run/secrets/codex_worker_pool_api_token"
+EXPECTED_WORKER_POOL_CONTRACT_NAME = "engineering-worker-pool"
+EXPECTED_WORKER_POOL_CONTRACT_VERSION = "v1"
 
 
 class BridgeError(RuntimeError):
