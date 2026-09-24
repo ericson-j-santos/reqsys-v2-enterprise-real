@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import os
 import secrets
@@ -29,14 +30,15 @@ class RestoreError(RuntimeError):
     pass
 
 
-def _docker(args: list[str]) -> str:
+def _docker(args: list[str], *, env: dict[str, str] | None = None) -> str:
     try:
         completed = subprocess.run(
             ["docker", *args],
             check=True,
             text=True,
             capture_output=True,
-            timeout=30,
+            timeout=60,
+            env=env,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         raise RestoreError("worker_pool_docker_command_failed") from exc
@@ -98,6 +100,91 @@ def _canonical_container_and_token_path() -> tuple[str, Path]:
     if len(candidates) != 1:
         raise RestoreError("worker_pool_endpoint_container_not_unique")
     return candidates[0]
+
+
+def _inspect_container(container_id: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(_docker(["inspect", container_id]))
+    except json.JSONDecodeError as exc:
+        raise RestoreError("worker_pool_container_inspect_invalid") from exc
+    if (
+        not isinstance(payload, list)
+        or len(payload) != 1
+        or not isinstance(payload[0], dict)
+    ):
+        raise RestoreError("worker_pool_container_inspect_invalid")
+    return payload[0]
+
+
+def _validate_container_auth_contract(container: dict[str, Any]) -> None:
+    env_entries = (container.get("Config") or {}).get("Env") or []
+    expected = f"CODEX_WORKER_POOL_API_TOKEN_FILE={TOKEN_DESTINATION}"
+    if expected not in env_entries:
+        raise RestoreError("worker_pool_token_env_mismatch")
+
+
+def _container_token_matches_host(container_id: str, host_token: str) -> bool:
+    script = (
+        "from pathlib import Path; import sys; "
+        f"sys.stdout.write(Path({TOKEN_DESTINATION!r}).read_text(encoding='utf-8').strip())"
+    )
+    container_token = _docker(["exec", container_id, "python", "-c", script]).strip()
+    if not container_token:
+        raise RestoreError("worker_pool_container_token_empty")
+    return hmac.compare_digest(container_token, host_token)
+
+
+def _compose_recreate_service(
+    container: dict[str, Any],
+    token_path: Path,
+) -> None:
+    labels = (container.get("Config") or {}).get("Labels") or {}
+    project = str(labels.get("com.docker.compose.project") or "").strip()
+    working_dir = str(
+        labels.get("com.docker.compose.project.working_dir") or ""
+    ).strip()
+    config_raw = str(
+        labels.get("com.docker.compose.project.config_files") or ""
+    ).strip()
+    config_files = [item.strip() for item in config_raw.split(",") if item.strip()]
+    if not project or not working_dir or not config_files:
+        raise RestoreError("worker_pool_compose_identity_missing")
+
+    config_env = (container.get("Config") or {}).get("Env") or []
+    rules_sha = ""
+    for item in config_env:
+        if isinstance(item, str) and item.startswith(
+            "CODEX_WORKER_POOL_EXPECTED_RULES_SHA="
+        ):
+            rules_sha = item.split("=", 1)[1].strip()
+            break
+    if not rules_sha:
+        raise RestoreError("worker_pool_expected_rules_sha_not_configured")
+
+    process_env = os.environ.copy()
+    process_env["CODEX_WORKER_POOL_API_TOKEN_FILE_HOST"] = str(token_path)
+    process_env["CODEX_WORKER_POOL_EXPECTED_RULES_SHA"] = rules_sha
+
+    args = [
+        "compose",
+        "--project-name",
+        project,
+        "--project-directory",
+        working_dir,
+    ]
+    for config_file in config_files:
+        args.extend(["--file", config_file])
+    args.extend(
+        [
+            "up",
+            "-d",
+            "--force-recreate",
+            "--no-deps",
+            "--no-build",
+            SERVICE,
+        ]
+    )
+    _docker(args, env=process_env)
 
 
 def _read_existing_token(path: Path) -> str | None:
@@ -229,17 +316,32 @@ def _wait_runtime(token: str, attempts: int = 12) -> int:
 
 def restore() -> dict[str, Any]:
     container_id, token_path = _canonical_container_and_token_path()
+    container = _inspect_container(container_id)
+    _validate_container_auth_contract(container)
+
     token = _read_existing_token(token_path)
     rotated = token is None
     if rotated:
         token = _write_new_token(token_path)
 
-    restarted = False
-    health_status, healthy, _reason = _validate_runtime(token)
-    if rotated or not healthy:
-        _docker(["restart", container_id])
-        restarted = True
+    recreated = False
+    bind_mount_resynced = False
+    health_status, healthy, reason = _validate_runtime(token)
+
+    if rotated:
+        _compose_recreate_service(container, token_path)
+        recreated = True
+        bind_mount_resynced = True
         health_status = _wait_runtime(token)
+    elif not healthy and reason == "worker_pool_token_mismatch_after_restore":
+        if _container_token_matches_host(container_id, token):
+            raise RestoreError("worker_pool_auth_process_mismatch")
+        _compose_recreate_service(container, token_path)
+        recreated = True
+        bind_mount_resynced = True
+        health_status = _wait_runtime(token)
+    elif not healthy:
+        raise RestoreError(reason or "worker_pool_runtime_not_ready_after_restore")
 
     _, healthy, final_reason = _validate_runtime(token)
     if not healthy:
@@ -251,7 +353,9 @@ def restore() -> dict[str, Any]:
         "environment": "dev",
         "token_rotated": rotated,
         "existing_token_reused": not rotated,
-        "service_restarted": restarted,
+        "service_restarted": False,
+        "service_recreated": recreated,
+        "bind_mount_resynced": bind_mount_resynced,
         "health_http_status": health_status,
         "authenticated_readback": True,
         "secret_value_exposed": False,
