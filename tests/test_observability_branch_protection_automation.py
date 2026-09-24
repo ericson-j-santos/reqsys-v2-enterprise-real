@@ -9,7 +9,7 @@ def test_protection_apply_is_fixed_and_fail_closed() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
     runner = RUNNER.read_text(encoding="utf-8")
     assert "apply-observability-platform" in raw
-    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
     assert "ericson-j-santos/observability-platform" in runner
     assert 'REQUIRED_CHECKS = ("test", "E2E Platform Evidence Gate / validate-evidence")' in runner
     assert '"target_sha_changed_before_write"' in runner
