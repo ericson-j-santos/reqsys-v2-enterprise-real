@@ -31,6 +31,9 @@ def test_origin_accepts_only_expected_repository() -> None:
     assert not reconcile._origin_is_expected(
         "https://github.com/ericson-j-santos/outro-repo.git"
     )
+    assert not reconcile._origin_is_expected(
+        "C:/cache/ericson-j-santos/reqsys-v2-enterprise-real.git"
+    )
 
 
 def test_sync_rejects_tracked_dirty_tree(monkeypatch, tmp_path: Path) -> None:
