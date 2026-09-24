@@ -43,7 +43,9 @@ jobs:
         github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
         github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
-        github.event.comment.body == '/reqsys run protect-observability-platform-main'
+        github.event.comment.body == '/reqsys run protect-observability-platform-main' ||
+        github.event.comment.body == '/reqsys run protect-e2e-platform-main' ||
+        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -136,6 +138,14 @@ jobs:
             '/reqsys run protect-observability-platform-main')
               target='branch-protection-audit.yml'
               mode='apply-observability-platform'
+              ;;
+            '/reqsys run protect-e2e-platform-main')
+              target='branch-protection-audit.yml'
+              mode='apply-e2e-platform'
+              ;;
+            '/reqsys run protect-reqsys-main-ruleset')
+              target='branch-protection-audit.yml'
+              mode='apply-reqsys-main'
               ;;
             *)
               echo 'command_not_allowlisted' >&2
