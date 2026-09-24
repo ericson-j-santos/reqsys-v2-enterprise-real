@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import urllib.error
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -68,62 +67,75 @@ def test_normalization_clock_and_secret_resolution(monkeypatch) -> None:
 
 
 def test_github_json_success_and_fail_closed_transport(monkeypatch) -> None:
-    class Response:
-        status = 201
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self) -> bytes:
-            return b'{"id": 42}'
-
     captured = {}
 
-    def urlopen_ok(request, timeout):
-        captured["request"] = request
-        captured["timeout"] = timeout
-        return Response()
+    class Response:
+        def __init__(self, status: int, body: bytes):
+            self.status = status
+            self._body = body
 
-    monkeypatch.setattr(recovery.urllib.request, "urlopen", urlopen_ok)
+        def read(self) -> bytes:
+            return self._body
+
+    class Connection:
+        def __init__(self, host: str, timeout: float):
+            captured["host"] = host
+            captured["timeout"] = timeout
+            self.response = Response(201, b'{"id": 42}')
+
+        def request(self, method, target, *, body, headers):
+            captured["method"] = method
+            captured["target"] = target
+            captured["body"] = body
+            captured["headers"] = headers
+
+        def getresponse(self):
+            return self.response
+
+        def close(self):
+            captured["closed"] = True
+
+    monkeypatch.setattr(recovery.http.client, "HTTPSConnection", Connection)
     status_code, payload = recovery._github_json(
         "POST",
-        "https://api.github.com/example",
+        "https://api.github.com/example?per_page=100",
         "secret-token",
         {"body": recovery.COMMAND},
     )
     assert status_code == 201
     assert payload == {"id": 42}
+    assert captured["host"] == "api.github.com"
     assert captured["timeout"] == 10.0
-    assert captured["request"].get_method() == "POST"
+    assert captured["method"] == "POST"
+    assert captured["target"] == "/example?per_page=100"
+    assert captured["headers"]["Authorization"] == "Bearer secret-token"
+    assert captured["closed"] is True
 
-    def urlopen_http_error(_request, timeout):
-        assert timeout == 10.0
-        raise urllib.error.HTTPError(
-            "https://api.github.com/example",
-            403,
-            "forbidden",
-            hdrs=None,
-            fp=None,
-        )
+    class HttpErrorConnection(Connection):
+        def __init__(self, host: str, timeout: float):
+            super().__init__(host, timeout)
+            self.response = Response(403, b'{"message":"forbidden"}')
 
-    monkeypatch.setattr(recovery.urllib.request, "urlopen", urlopen_http_error)
+    monkeypatch.setattr(recovery.http.client, "HTTPSConnection", HttpErrorConnection)
     with pytest.raises(recovery.DesktopRecoveryDispatchError, match="github_http_403"):
         recovery._github_json("GET", "https://api.github.com/example", "secret-token")
 
-    def urlopen_transport_error(_request, timeout):
-        assert timeout == 10.0
-        raise urllib.error.URLError("offline")
+    class TransportErrorConnection(Connection):
+        def request(self, method, target, *, body, headers):
+            raise OSError("offline")
 
-    monkeypatch.setattr(recovery.urllib.request, "urlopen", urlopen_transport_error)
+    monkeypatch.setattr(recovery.http.client, "HTTPSConnection", TransportErrorConnection)
     with pytest.raises(
         recovery.DesktopRecoveryDispatchError,
         match="github_transport_unavailable",
     ):
         recovery._github_json("GET", "https://api.github.com/example", "secret-token")
 
+    with pytest.raises(recovery.DesktopRecoveryDispatchError, match="github_url_not_allowed"):
+        recovery._github_json("GET", "file:///tmp/forbidden", "secret-token")
+
+    with pytest.raises(recovery.DesktopRecoveryDispatchError, match="github_url_not_allowed"):
+        recovery._github_json("GET", "https://api.github.com:bad/example", "secret-token")
 
 def test_parse_time_and_reusable_comment_filters() -> None:
     now = datetime(2026, 9, 24, 22, 10, tzinfo=UTC)
