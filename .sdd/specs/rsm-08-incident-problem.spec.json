@@ -20,4 +20,4 @@
     ],
     "evidence_contract": "E2E deve provar build_sha == expected_sha, INCIDENT -> PROBLEM persistido, causa raiz com URI/SHA-256/correlation_id, leitura canônica no INCIDENT, leitura PostgreSQL independente, replay por event_id e identidade lógica sem duplicidade, controle negativo sem mutação e teste do teste inválido detectado."
   }
-}\n
+}
