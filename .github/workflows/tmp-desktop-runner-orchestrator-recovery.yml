@@ -84,7 +84,7 @@ jobs:
             "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
             "--risk", "2",
-            "--timeout", "60",
+            "--timeout", "120",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
             "python", $script,
