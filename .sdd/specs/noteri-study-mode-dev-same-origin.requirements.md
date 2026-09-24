@@ -34,8 +34,13 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 10. Repetir o mesmo perfil retorna `changed=false` sem novo enqueue.
 11. Nenhum comando arbitrário, GUI, Remote Desktop Commander, HML, PROD ou
     segredo faz parte deste fluxo.
-12. O E2E deve provar NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL, autenticação,
-    leitura independente e bloqueio de trabalho normal durante ESTUDO.
+12. O E2E deve ser independente do perfil encontrado no início. Antes do teste
+    positivo, deve solicitar NORMAL, aceitar `changed=true` ou `changed=false`
+    nessa normalização, exigir leitura independente confirmando NORMAL e
+    `accepts_new_development=true` e somente então provar
+    NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL. A primeira transição para ESTUDO
+    após a pré-condição deve retornar `changed=true`, evitando falso positivo e
+    falso negativo quando o runtime chega ao E2E já em ESTUDO.
 13. A reconciliação deve exigir os bind mounts efetivos do backend e frontend.
     O bind de `infra/nginx/default.dev.conf` deve coincidir exatamente com o
     `com.docker.compose.project.working_dir` observado no próprio serviço
@@ -134,9 +139,10 @@ esse padrão caracteriza configuração Nginx efetiva desatualizada no PC24x7.
 14. O E2E deve comprovar primeiro no backend direto da porta 8210 que os dois
     paths críticos estão registrados; depois comprovar que o restart controlado
     da API e o reload do Nginx, sem queda do listener 8083, restauraram
-    `/api/runtime/health`, que a API
-    carregou a rota same-origin e que o ciclo
-    NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL terminou em NORMAL.
+    `/api/runtime/health`, que a API carregou a rota same-origin e que,
+    independentemente do perfil inicial, uma pré-condição NORMAL foi aplicada e
+    lida de forma independente antes de o ciclo
+    NORMAL→ESTUDO→ESTUDO(idempotente)→NORMAL terminar em NORMAL.
 15. Uma falha `gateway_status_timeout` deve publicar diagnóstico sanitizado
     suficiente para distinguir porta 8083 indisponível, resposta HTTP não
     esperada, falha do upstream Nginx→API e contrato Nginx ausente. Nenhuma
