@@ -49,6 +49,9 @@ def _base_probe(monkeypatch) -> None:
         lambda: {
             "reachable": False,
             "result": "access_denied",
+            "stage": "connect_server",
+            "error_type": "com_error",
+            "hresult": "0x80070005",
             "namespace": probe.WMI_NAMESPACE,
             "query_class": probe.WMI_QUERY_CLASS,
         },
@@ -103,6 +106,9 @@ def test_wmi_can_independently_prove_reachability(monkeypatch) -> None:
         lambda: {
             "reachable": True,
             "result": "accessible",
+            "stage": "completed",
+            "error_type": None,
+            "hresult": None,
             "namespace": probe.WMI_NAMESPACE,
             "query_class": probe.WMI_QUERY_CLASS,
         },
@@ -158,6 +164,8 @@ def test_wmi_access_denied_is_sanitized(monkeypatch) -> None:
     result = probe.wmi_readonly_probe()
     assert result["reachable"] is False
     assert result["result"] == "access_denied"
+    assert result["stage"] == "connect_server"
+    assert result["hresult"] == "0x80070005"
     assert "error" not in result
 
 
@@ -200,6 +208,9 @@ def test_wmi_accessible_returns_only_sanitized_metadata(monkeypatch) -> None:
     assert result == {
         "reachable": True,
         "result": "accessible",
+        "stage": "completed",
+        "error_type": None,
+        "hresult": None,
         "namespace": r"root\cimv2",
         "query_class": "Win32_OperatingSystem",
     }
@@ -266,3 +277,9 @@ def test_probe_reports_smb_and_wmi_without_sensitive_remote_data(monkeypatch) ->
     assert "files" not in result
     assert result["remote_shell_used"] is False
     assert result["credentials_supplied"] is False
+
+
+def test_nested_rpc_hresult_is_classified() -> None:
+    exc = RuntimeError("outer", (-2147023174, "inner"))
+    assert probe._classify_wmi_error(exc) == "rpc_server_unavailable"
+    assert probe._safe_hresult(exc) == "0x800706BA"

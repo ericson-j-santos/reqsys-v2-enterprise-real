@@ -136,16 +136,26 @@ def _wmi_client():
     return pythoncom, win32com_client
 
 
-def _classify_wmi_error(exc: BaseException) -> str:
+def _error_codes(exc: BaseException) -> list[int]:
     codes: list[int] = []
-    for attr in ("hresult", "winerror", "errno"):
-        value = getattr(exc, attr, None)
-        if isinstance(value, int):
-            codes.append(value)
-    for value in getattr(exc, "args", ()):
-        if isinstance(value, int):
-            codes.append(value)
 
+    def visit(value: Any) -> None:
+        if isinstance(value, bool):
+            return
+        if isinstance(value, int):
+            codes.append(value)
+        elif isinstance(value, (tuple, list)):
+            for item in value:
+                visit(item)
+
+    for attr in ("hresult", "winerror", "errno"):
+        visit(getattr(exc, attr, None))
+    visit(getattr(exc, "args", ()))
+    return codes
+
+
+def _classify_wmi_error(exc: BaseException) -> str:
+    codes = _error_codes(exc)
     unsigned = {value & 0xFFFFFFFF for value in codes}
     if 0x80070005 in unsigned or 5 in codes:
         return "access_denied"
@@ -156,6 +166,14 @@ def _classify_wmi_error(exc: BaseException) -> str:
     return "wmi_error"
 
 
+def _safe_hresult(exc: BaseException) -> str | None:
+    for value in _error_codes(exc):
+        unsigned = value & 0xFFFFFFFF
+        if unsigned >= 0x80000000:
+            return f"0x{unsigned:08X}"
+    return None
+
+
 def wmi_readonly_probe() -> dict[str, Any]:
     """Consulta WMI por DCOM usando a identidade corrente, sem credenciais ou mutação."""
     try:
@@ -164,18 +182,27 @@ def wmi_readonly_probe() -> dict[str, Any]:
         return {
             "reachable": False,
             "result": "dependency_unavailable",
+            "stage": "load_client",
+            "error_type": "ImportError",
+            "hresult": None,
             "namespace": WMI_NAMESPACE,
             "query_class": WMI_QUERY_CLASS,
         }
 
     initialized = False
+    stage = "coinitialize"
     try:
         pythoncom.CoInitialize()
         initialized = True
+        stage = "dispatch_locator"
         locator = win32com_client.Dispatch("WbemScripting.SWbemLocator")
+        stage = "connect_server"
         services = locator.ConnectServer(TARGET_HOST, WMI_NAMESPACE)
+        stage = "set_impersonation"
         services.Security_.ImpersonationLevel = 3
+        stage = "exec_query"
         rows = services.ExecQuery(WMI_QUERY, "WQL", 0x20)
+        stage = "iterate_result"
         count = 0
         for _ in rows:
             count += 1
@@ -184,6 +211,9 @@ def wmi_readonly_probe() -> dict[str, Any]:
         return {
             "reachable": count > 0,
             "result": "accessible" if count > 0 else "empty_result",
+            "stage": "completed",
+            "error_type": None,
+            "hresult": None,
             "namespace": WMI_NAMESPACE,
             "query_class": WMI_QUERY_CLASS,
         }
@@ -191,6 +221,9 @@ def wmi_readonly_probe() -> dict[str, Any]:
         return {
             "reachable": False,
             "result": _classify_wmi_error(exc),
+            "stage": stage,
+            "error_type": type(exc).__name__[:80],
+            "hresult": _safe_hresult(exc),
             "namespace": WMI_NAMESPACE,
             "query_class": WMI_QUERY_CLASS,
         }
@@ -210,6 +243,9 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     wmi = {
         "reachable": False,
         "result": "not_attempted",
+        "stage": "not_attempted",
+        "error_type": None,
+        "hresult": None,
         "namespace": WMI_NAMESPACE,
         "query_class": WMI_QUERY_CLASS,
     }
@@ -250,6 +286,9 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "admin_staging_path": r"C:\Users\Public\Desktop",
         "wmi_reachable": bool(wmi["reachable"]),
         "wmi_result": str(wmi["result"]),
+        "wmi_stage": str(wmi.get("stage") or "not_attempted"),
+        "wmi_error_type": wmi.get("error_type"),
+        "wmi_hresult": wmi.get("hresult"),
         "wmi_namespace": str(wmi["namespace"]),
         "wmi_query_class": str(wmi["query_class"]),
         "wmi_read_only": True,
