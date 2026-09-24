@@ -16,6 +16,14 @@ EXPECTED_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
 CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
+CONTROL_PORTS = {
+    "ssh": 22,
+    "rpc_epmapper": 135,
+    "smb": 445,
+    "winrm_http": 5985,
+    "winrm_https": 5986,
+    "rdp": 3389,
+}
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
 ADMIN_STAGING_PATH = "\\\\" + TARGET_HOST + "\\C$\\Users\\Public\\Desktop"
@@ -97,15 +105,26 @@ def icmp_reachable() -> bool:
     return completed.returncode == 0
 
 
-def runtime_port_reachable() -> bool:
+def tcp_port_reachable(port: int) -> bool:
     try:
         with socket.create_connection(
-            (TARGET_HOST, RUNTIME_PORT),
+            (TARGET_HOST, port),
             timeout=TCP_TIMEOUT_SECONDS,
         ):
             return True
     except OSError:
         return False
+
+
+def runtime_port_reachable() -> bool:
+    return tcp_port_reachable(RUNTIME_PORT)
+
+
+def control_port_reachability() -> dict[str, bool]:
+    return {
+        name: tcp_port_reachable(port)
+        for name, port in CONTROL_PORTS.items()
+    }
 
 
 def admin_staging_path_probe() -> dict[str, Any]:
@@ -134,9 +153,11 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     icmp: bool | None = None
     tcp = False
     staging = {"reachable": False, "result": "not_attempted"}
+    control_ports = {name: False for name in CONTROL_PORTS}
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
+        control_ports = control_port_reachability()
         staging = admin_staging_path_probe()
 
     if not resolution["resolved"]:
@@ -162,6 +183,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "icmp_reachable": icmp,
         "runtime_port": RUNTIME_PORT,
         "runtime_port_reachable": tcp,
+        "control_ports": control_ports,
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
