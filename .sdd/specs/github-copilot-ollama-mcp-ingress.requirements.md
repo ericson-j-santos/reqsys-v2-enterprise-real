@@ -39,7 +39,8 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
     arquivo existente, tentar descoberta pelo `PATH` do serviço e pelos diretórios
     de instalação locais conhecidos e falhar fechado com `TAILSCALE_CLI_NOT_FOUND`
     quando nenhum binário for comprovado.
-13. HML e PROD ficam fora do escopo.
+13. Antes de reconciliar o Funnel, o modo `mcp-ingress` deve validar a dependência MCP e reconciliar a release imutável do supervisor PC24x7 no mesmo `github.sha`, incluindo o bridge `:8010`. O workflow e o reconciliador de Funnel não podem ler/imprimir o valor do bearer nem criar/rotacionar segredos; o supervisor apenas consome o bearer pré-provisionado do ambiente local e falha fechado se ele estiver ausente.
+14. HML e PROD ficam fora do escopo.
 
 ## Critérios de aceite
 
@@ -61,3 +62,4 @@ reutilizando Tailscale Funnel no Desktop PC24x7. Ollama `:11434` e o gateway
 9. Testes do reconciliador comprovam resolução explícita da CLI do Tailscale,
    rejeição de caminho configurado inexistente e erro determinístico quando o
    binário não estiver disponível no ambiente do serviço.
+10. Testes do workflow comprovam a reconciliação do supervisor PC24x7 no SHA exato antes do Funnel, a inclusão do bridge na release e a ausência de referência literal ao bearer no YAML.
