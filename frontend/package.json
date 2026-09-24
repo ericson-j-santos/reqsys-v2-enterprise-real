@@ -40,6 +40,7 @@
         "@mdi/font": "^7.4.47",
         "@vitejs/plugin-vue": "^6.0.8",
         "axios": "^1.19.0",
+        "dompurify": "^3.4.13",
         "mermaid": "^11.16.1",
         "pinia": "^4.0.2",
         "vite": "^8.2.1",
