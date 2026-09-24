@@ -20,7 +20,9 @@ def test_gateway_pickup_timeout_is_not_reported_as_runner_unavailable() -> None:
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "SELF_HOSTED_RUNNER_UNAVAILABLE" not in content
     assert "wait_seconds=0" in content
-    assert "for attempt in $(seq 1 36)" in content
+    assert "pickup_timeout_seconds=300" in content
+    assert "poll_seconds=5" in content
+    assert "seq 1 $((pickup_timeout_seconds / poll_seconds))" in content
     assert "runner_pickup_wait_seconds" in content
 
 
