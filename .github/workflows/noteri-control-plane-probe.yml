@@ -9,6 +9,9 @@ on:
       - '.github/workflows/noteri-control-plane-probe.yml'
       - 'scripts/noteri_control_plane_probe.py'
       - 'scripts/noteri_control_plane_watchdog.py'
+      - 'tests/test_noteri_control_plane_fallback.py'
+      - '.sdd/specs/noteri-control-plane-fallback.requirements.md'
+      - '.sdd/specs/noteri-control-plane-fallback.spec.json'
 
 permissions:
   contents: read

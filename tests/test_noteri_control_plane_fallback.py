@@ -177,6 +177,9 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "github.actor == 'ericson-j-santos'" in workflow
     assert "pull_request:" not in workflow
     assert "'.github/workflows/noteri-control-plane-probe.yml'" in workflow
+    assert "'tests/test_noteri_control_plane_fallback.py'" in workflow
+    assert "'.sdd/specs/noteri-control-plane-fallback.requirements.md'" in workflow
+    assert "'.sdd/specs/noteri-control-plane-fallback.spec.json'" in workflow
     assert "inputs:" not in workflow
     assert "git ls-remote https://github.com/ericson-j-santos/noteri-runtime.git refs/heads/main" in workflow
     assert "repository: ericson-j-santos/noteri-runtime" in workflow
