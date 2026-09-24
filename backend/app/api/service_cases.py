@@ -141,7 +141,10 @@ class ProblemRootCauseRequest(BaseModel):
     event_id: UUID
     statement: str = Field(min_length=1, max_length=2000)
     evidence_uri: str = Field(min_length=1, max_length=1000)
-    evidence_sha256: str = Field(pattern=r'^[a-f0-9]{64}
+    evidence_sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
+class ServiceCaseCreateRequest(BaseModel):
     case_type: ServiceCaseType
     service_id: str
     requester: str = Field(min_length=1, max_length=200)
