@@ -9,12 +9,12 @@
     "design": true,
     "tasks": true
   },
-  "description": "Mantém Ollama, gateway, bridge MCP e backend Codex em loopback no Desktop PC24x7, com autostart Windows sem senha, recuperação automática, bearer MCP fail-closed, smoke ReqSys→IA e evidência pós-reboot.",
+  "description": "Mantém Ollama, gateway, bridge MCP e backend Codex em loopback no Desktop PC24x7, com health MCP identificado em :8011, ambiente mínimo do subprocesso, autostart Windows sem senha, recuperação automática, bearer MCP fail-closed, smoke ReqSys→IA e evidência pós-reboot.",
   "sdd_gate": {
     "tests": [
       "tests/test_codex_pc24x7_supervisor.py",
       "tests/test_codex_pc24x7_headless_uac_launcher.py"
     ],
-    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato. O launcher UAC só pode elevar register-task-com da release imutável instalada e só remover HKCU Run após leitura independente de AtStartup+S4U. O runtime deve comprovar 11434/8008/8010/8000 saudáveis, bridge MCP com bearer pré-provisionado sem exposição, smoke sem publicação e modelo efetivo observável. E2E GitHub.com→HTTPS MCP→PC24x7→Ollama e E2E pós-reboot permanecem obrigatórios antes de conclusão funcional."
+    "evidence_contract": "READY_FOR_PR deve passar no HEAD exato. O launcher UAC só pode elevar register-task-com da release imutável instalada e só remover HKCU Run após leitura independente de AtStartup+S4U. O runtime deve comprovar 11434/8008/8010/8011/8000 saudáveis, health MCP identificado, bearer pré-provisionado sem exposição, ambiente mínimo do subprocesso, smoke sem publicação e modelo efetivo observável. E2E GitHub.com→HTTPS MCP→PC24x7→Ollama e E2E pós-reboot permanecem obrigatórios antes de conclusão funcional."
   }
 }
