@@ -12,11 +12,14 @@ concurrency:
 
 jobs:
   recover:
-    name: Run existing Desktop watchdog through Windows RPC
+    name: Run existing Desktop watchdog through governed Windows RPC
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
-      EVIDENCE_FILE: artifacts/noteri-desktop-watchdog-recovery/evidence.json
+      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      RULES_SHA: ac2297988651f41ab03469808e41f83496e9c58f
+      CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
 
     steps:
       - name: Checkout immutable workflow SHA
@@ -26,31 +29,116 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Query and run exact existing Desktop watchdog
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
         shell: powershell
         run: |
-          python scripts/noteri_desktop_watchdog_rpc_recovery.py --confirm RUN-EXISTING-DESKTOP-WATCHDOG --evidence-file "$env:EVIDENCE_FILE"
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "noteri-desktop-watchdog",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--sync-ref", "origin/main"
+          )
+          $raw = & python $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Query and run exact existing Desktop watchdog through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $recoveryScript = Join-Path $env:GITHUB_WORKSPACE "scripts\noteri_desktop_watchdog_rpc_recovery.py"
+          $gatewayArgs = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "90",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $recoveryScript,
+            "--confirm", "RUN-EXISTING-DESKTOP-WATCHDOG",
+            "--evidence-file", $env:EVIDENCE_REL
+          )
+          & python $gateway @gatewayArgs
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized recovery evidence
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING" }
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $evidence)) { throw "RECOVERY_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+          if (-not $e.ok -or $e.result -ne "EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED") {
+            throw "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED"
+          }
+          if ($e.source_host -ne "Noteri") { throw "SOURCE_HOST_MISMATCH" }
+          if ($e.target_host -ne "DESKTOP-PDQK954") { throw "TARGET_HOST_MISMATCH" }
+          if (-not $e.run_requested) { throw "WATCHDOG_RUN_NOT_REQUESTED" }
+          if ($e.task_created_or_modified) { throw "TASK_MUTATION_REPORTED" }
+          if ($e.production_touched) { throw "PRODUCTION_TOUCHED" }
+          if ($e.secrets_read -or $e.credentials_supplied) { throw "SECRET_OR_CREDENTIAL_USE_REPORTED" }
 
       - name: Upload sanitized evidence
-        if: always()
+        if: always() && steps.session.outputs.target_path != ''
         uses: actions/upload-artifact@v4
         with:
           name: noteri-desktop-watchdog-recovery-${{ github.run_id }}
-          path: artifacts/noteri-desktop-watchdog-recovery/
+          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-watchdog-recovery\evidence.json
           if-no-files-found: error
           retention-days: 30
 
       - name: Summary
         if: always()
         shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
         run: |
           "## Noteri → Desktop Watchdog Recovery" | Add-Content $env:GITHUB_STEP_SUMMARY
-          if (Test-Path "$env:EVIDENCE_FILE") {
-            $e = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
-            "- Resultado: $($e.result)" | Add-Content $env:GITHUB_STEP_SUMMARY
-            "- Target: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
-            "- Task criada/alterada: $($e.task_created_or_modified)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          if ($env:TARGET_PATH) {
+            $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+            if (Test-Path -LiteralPath $evidence) {
+              $e = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+              "- Resultado: $($e.result)" | Add-Content $env:GITHUB_STEP_SUMMARY
+              "- Target: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+              "- Task criada/alterada: $($e.task_created_or_modified)" | Add-Content $env:GITHUB_STEP_SUMMARY
+            }
           }
+          "- Session Launcher: obrigatório" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Command Gateway risco: 2" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Credenciais fornecidas: não" | Add-Content $env:GITHUB_STEP_SUMMARY
