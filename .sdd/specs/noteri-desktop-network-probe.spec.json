@@ -79,5 +79,13 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-24"
+  "updated_at": "2026-09-24",
+  "acceptance_criteria": [
+    "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
+    "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
+    "O resultado WMI é sanitizado para estados allowlisted e não persiste Caption, versão, hostname remoto, endereço IP, stdout/stderr ou credenciais.",
+    "wmi_result=accessible somente é aceito quando a consulta read-only retorna ao menos uma instância; access_denied não é tratado como autorização para execução remota.",
+    "A execução física produz artifact vinculado ao correlation_id e SHA atuais, com remote_shell_used=false, credentials_supplied=false, production_touched=false e secrets_read=false.",
+    "Pre-PR Readiness retorna READY_FOR_PR=passed no HEAD exato e behind_by=0 antes de qualquer PR."
+  ]
 }
