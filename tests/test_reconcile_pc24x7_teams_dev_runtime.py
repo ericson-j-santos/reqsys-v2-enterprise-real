@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from scripts import reconcile_pc24x7_teams_dev_runtime as reconcile
+ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = ROOT / "scripts" / "reconcile_pc24x7_teams_dev_runtime.py"
+SPEC = importlib.util.spec_from_file_location("reconcile_pc24x7_teams_dev_runtime", MODULE_PATH)
+assert SPEC and SPEC.loader
+reconcile = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(reconcile)
 
 
 def _args(tmp_path: Path) -> argparse.Namespace:
