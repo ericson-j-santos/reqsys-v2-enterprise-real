@@ -13,6 +13,7 @@ from app.api.service_cases import (
     IncidentProblemLinkRecord,
     ProblemRootCauseRecord,
     ServiceCaseEventRecord,
+    ServiceCaseRecord,
     require_service_case_auth,
 )
 from app.core.service_tokens import ServiceAuthContext
@@ -42,13 +43,28 @@ def _auth_override():
     return ServiceAuthContext(ator='rsm-08-test', via_token=False)
 
 
+def _clear_test_state() -> None:
+    db = TestingSession()
+    try:
+        db.query(ProblemRootCauseRecord).delete()
+        db.query(IncidentProblemLinkRecord).delete()
+        db.query(ServiceCaseEventRecord).delete()
+        db.query(ServiceCaseRecord).delete()
+        db.query(ServicoTI).delete()
+        db.commit()
+    finally:
+        db.close()
+
+
 @pytest.fixture(autouse=True)
 def _overrides():
+    _clear_test_state()
     app.dependency_overrides[get_db] = _db_override
     app.dependency_overrides[require_service_case_auth] = _auth_override
     yield
     app.dependency_overrides.pop(get_db, None)
     app.dependency_overrides.pop(require_service_case_auth, None)
+    _clear_test_state()
 
 
 @pytest.fixture
@@ -203,12 +219,14 @@ def test_invalid_relations_fail_closed_without_mutation(service_id):
         json={'problem_case_id': problem['case_id'], 'event_id': str(uuid4())},
     )
     assert invalid_source.status_code == 422
+    assert invalid_source.json()['detail'] == 'requisição RSM inválida'
 
     invalid_target = client.post(
         f"/v1/service-cases/{incident['case_id']}/problem-links",
         json={'problem_case_id': incident['case_id'], 'event_id': str(uuid4())},
     )
     assert invalid_target.status_code == 422
+    assert invalid_target.json()['detail'] == 'requisição RSM inválida'
 
     invalid_rca = client.post(
         f"/v1/service-cases/{incident['case_id']}/root-causes",
@@ -220,6 +238,7 @@ def test_invalid_relations_fail_closed_without_mutation(service_id):
         },
     )
     assert invalid_rca.status_code == 422
+    assert invalid_rca.json()['detail'] == 'requisição RSM inválida'
 
     db = TestingSession()
     try:
@@ -256,6 +275,7 @@ def test_conflicting_event_reuse_is_rejected(service_id):
         json={'problem_case_id': problem_b['case_id'], 'event_id': event_id},
     )
     assert conflict.status_code == 409
+    assert conflict.json()['detail'] == 'conflito de estado ou identidade RSM'
 
     db = TestingSession()
     try:
@@ -272,6 +292,8 @@ def test_missing_problem_is_rejected_without_mutation(service_id):
         json={'problem_case_id': str(uuid4()), 'event_id': str(uuid4())},
     )
     assert response.status_code == 404
+    assert response.json()['detail'] == 'recurso RSM não encontrado'
+    assert str(response.request.url).split('/')[-2] not in response.text
 
     db = TestingSession()
     try:
@@ -294,6 +316,7 @@ def test_distinct_non_problem_target_is_rejected_without_mutation(service_id):
         json={'problem_case_id': request_target['case_id'], 'event_id': str(uuid4())},
     )
     assert response.status_code == 422
+    assert response.json()['detail'] == 'requisição RSM inválida'
 
     db = TestingSession()
     try:
