@@ -153,14 +153,13 @@ def _discover_runtime() -> tuple[Path, Path, str]:
 
 def _origin_is_expected(raw: str) -> bool:
     value = raw.strip().replace("\\", "/").rstrip("/")
-    value = re.sub(r"\.git$", "", value, flags=re.IGNORECASE)
-    lowered = value.casefold()
+    value = re.sub(r"\.git$", "", value, flags=re.IGNORECASE).casefold()
     expected = EXPECTED_REPOSITORY.casefold()
-    return (
-        lowered.endswith("/" + expected)
-        or lowered.endswith(":" + expected)
-        or lowered == expected
-    )
+    return value in {
+        f"https://github.com/{expected}",
+        f"git@github.com:{expected}",
+        f"ssh://git@github.com/{expected}",
+    }
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
