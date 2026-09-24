@@ -171,5 +171,5 @@ Permitir que o Noteri produza evidência independente e sanitizada sobre a dispo
 
 
 19. Quando a porta fixa 8787 estiver acessível, a sonda DEVE ler somente `/readyz` e `/v1/workers` do Engineering Orchestrator.
-20. O readback DEVE persistir apenas status HTTP, readiness, quantidade de workers Desktop e booleanos sanitizados `fresh/controller_online/auth_valid/eligible/runner_recovery_capable/rdc_recovery_capable/orchestrator_refresh_capable` mais o perfil; IDs, tokens, corpo bruto, capabilities arbitrárias e segredos são proibidos.
+20. O readback DEVE persistir apenas status HTTP, readiness, quantidade de workers Desktop e booleanos sanitizados `fresh/controller_online/auth_valid/eligible/runner_recovery_capable/rdc_recovery_capable/orchestrator_refresh_capable/reboot_once_capable` mais o perfil; IDs, tokens, corpo bruto, capabilities arbitrárias e segredos são proibidos.
 21. `runner_recovery_capable=true` somente quando o worker Desktop único anunciar explicitamente `host.github_runner.recover.v1`.
