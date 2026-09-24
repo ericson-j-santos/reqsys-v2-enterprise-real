@@ -184,7 +184,7 @@ def main() -> int:
             "target_host": TARGET_HOST,
             "target_port": DEV_GATEWAY_PORT,
             "correlation_id": args.correlation_id,
-            "error": str(exc)[:300],
+            "error": "probe_runtime_error",
             "error_type": type(exc).__name__[:80],
             "rdc_required": False,
             "remote_shell_used": False,

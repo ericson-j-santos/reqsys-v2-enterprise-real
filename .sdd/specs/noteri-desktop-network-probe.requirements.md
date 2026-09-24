@@ -46,3 +46,23 @@ Produzir no Noteri evidência independente, sanitizada e somente leitura sobre a
 ## Critérios de aceite e condição para avançar
 
 Somente se \`wmi_result=accessible\` será permitido estudar um adaptador WMI fixo e allowlisted que transporte exclusivamente o bootstrap governado. Qualquer \`access_denied\`, indisponibilidade RPC/DCOM ou dependência ausente encerra a rota WMI sem retry até mudança objetiva da precondição.
+
+## Incremento atual — rota HTTP DEV `:8083`
+
+Após o checkpoint terminal da rota WMI/DCOM, este incremento testa somente uma rota tecnicamente nova e de custo adicional zero: o gateway HTTP DEV já previsto no `DESKTOP-PDQK954:8083`.
+
+1. A execução física ocorre somente no `Noteri` allowlisted e no SHA exato, por `Session Launcher → Command Gateway`.
+2. O alvo é fixo em `DESKTOP-PDQK954:8083`; host, porta e paths não aceitam input externo.
+3. São permitidos apenas `GET /api/health` e `GET /api/runtime/health`; nenhum corpo de resposta é persistido.
+4. A sonda não envia requisição mutante, não fornece credenciais, não lê segredos e não altera UAC, ACL, firewall ou configuração do Desktop.
+5. WMI, SCM, Task Scheduler/`schtasks`, `C$` e Admin Broker ficam explicitamente fora desta execução.
+6. O job legado permanece preservado para compatibilidade, mas DEVE ser ignorado quando `github.ref_name` iniciar por `fix/noteri-desktop-network-probe-http-8083-`.
+7. A branch HTTP executa somente `scripts/noteri_desktop_dev_http_probe.py` e `tests/test_noteri_desktop_dev_http_probe.py`.
+8. A evidência aceita os estados `name_resolution_failed`, `dev_gateway_tcp_closed`, `dev_gateway_http_reachable` e `dev_gateway_tcp_reachable_http_unresponsive`.
+9. Status HTTP válido comprova somente transporte/aplicação alcançável; não comprova capacidade de recuperação até existir endpoint fixo, autenticado e allowlisted para esse fim.
+10. Erros persistidos devem ser sanitizados e nunca conter texto bruto de exceção.
+
+### Critério para avançar
+
+Somente `candidate_transport_reachable=true`, acompanhado de evidência de um endpoint fixo e governado capaz de recuperar o plano de controle sem shell remoto irrestrito, permite avançar esta rota. Caso a porta esteja fechada ou nenhum endpoint de recuperação exista, a rota HTTP é terminal e não deve ser repetida sem mudança objetiva de precondição.
+
