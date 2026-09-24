@@ -17,16 +17,15 @@ jobs:
     timeout-minutes: 8
     env:
       TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
-      RULES_SHA: ac2297988651f41ab03469808e41f83496e9c58f
+      RULES_SHA: 5af7b5ab6e31c24744176abd774855168c55953f
       CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
 
     steps:
-      - name: Checkout immutable workflow SHA into isolated target
+      - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          path: _target
           fetch-depth: 1
           persist-credentials: false
 

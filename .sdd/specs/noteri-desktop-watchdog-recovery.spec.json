@@ -25,7 +25,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Fixed target/task; Query+Run only; isolated ReqSys checkout under GitHub workspace _target; operational rules in _rules; Session Launcher on exact SHA; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
+    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; operational rules in _rules pinned to 5af7b5ab6e31c24744176abd774855168c55953f; isolated governed worktree under C:\\dev\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
   },
   "risk": {
     "production": false,
@@ -40,14 +40,14 @@
     "session_launcher_required": true,
     "command_gateway_required": true,
     "command_gateway_risk": 2,
-    "rules_sha": "ac2297988651f41ab03469808e41f83496e9c58f"
+    "rules_sha": "5af7b5ab6e31c24744176abd774855168c55953f"
   },
   "acceptance_criteria": [
     "O workflow executa somente no runner Noteri allowlisted e host esperado.",
-    "O checkout ReqSys usado pela sessão fica isolado em ${ github.workspace }\\_target e as regras em _rules.",
+    "`${ github.workspace }` é somente a fonte transitória do bootstrap; a execução ocorre no worktree governado retornado pelo Session Launcher.",
     "O Session Launcher exige SESSION_LAUNCH_OK e state_validated=true no SHA exato.",
     "O script de recuperação é resolvido a partir do target_path retornado pela sessão e executado exclusivamente pelo Command Gateway risco 2.",
-    "Nenhum caminho C:\\dev\\reqsys-v2-enterprise-real é requisito do Noteri.",
+    "Nenhum clone persistente C:\\dev\\reqsys-v2-enterprise-real é requisito do Noteri; o único destino de execução é o worktree governado.",
     "O RPC permanece limitado a Query+Run da tarefa watchdog existente; criação/alteração de tarefa, segredo, credencial e produção são proibidos.",
     "Após sucesso do RPC, pickup real do runner Desktop continua sendo a prova terminal."
   ]
