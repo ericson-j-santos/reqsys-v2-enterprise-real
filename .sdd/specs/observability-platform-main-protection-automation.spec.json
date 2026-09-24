@@ -28,8 +28,8 @@
     "A sessão é materializada por session_launcher.py no SHA atual do ReqSys antes da ação administrativa.",
     "A mutação passa por owner_risk3_gateway.py com action e escopo fixos e autorização temporária removida em always().",
     "O script usa apenas autenticação gh local, remove GH_TOKEN/GITHUB_TOKEN dos subprocessos e não expõe credenciais.",
-    "O SHA corrente da main alvo é capturado, test precisa estar verde e o SHA é relido imediatamente antes e depois do PUT.",
-    "A proteção exige test strict, Pull Request, enforce admins e bloqueia force-push e exclusão.",
+    "O SHA corrente da main alvo é capturado, test e E2E Platform Evidence Gate / validate-evidence precisam estar verdes e o SHA é relido imediatamente antes e depois do PUT.",
+    "A proteção exige test e E2E Platform Evidence Gate / validate-evidence strict, Pull Request, enforce admins e bloqueia force-push e exclusão.",
     "Readback independente confirma a proteção e execução repetida pode concluir ALREADY_COMPLIANT.",
     "Nenhum deploy, produção, banco, STG/PROD ou conteúdo da branch alvo é alterado."
   ],
@@ -38,6 +38,6 @@
       "tests/test_observability_branch_protection_automation.py",
       "tests/test_observability_branch_protection_noteri.py"
     ],
-    "evidence_contract": "Noteri exato; Session Launcher; Risk3 fixo; auth local sem segredo; SHA dinâmico estável; test verde; readback da proteção."
+    "evidence_contract": "Noteri/PC24x7 exato; Session Launcher; Risk3 fixo; auth local sem segredo; SHA dinâmico estável; test e E2E Platform Evidence Gate / validate-evidence verdes; readback da proteção."
   }
 }
