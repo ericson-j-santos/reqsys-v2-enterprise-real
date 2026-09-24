@@ -139,7 +139,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 12
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: C:\dev\chatgpt-workers\operational-rules-validation
       CORRELATION_ID: observability-main-protection-${{ github.run_id }}-${{ github.run_attempt }}
       ACTION_ID: reqsys.observability-main-protection.dev
       ACTION_SCOPE: repo://ericson-j-santos/observability-platform/branch/main
@@ -173,7 +173,7 @@ jobs:
             "--repo", $env:TARGET_REPO,
             "--session-prefix", "obs-protect",
             "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", "${{ github.sha }}",
+            "--expected-head", $env:HELPER_SHA,
             "--sync-ref", "origin/main"
           )
           $raw = & python $launcher @launcherArgs
@@ -183,7 +183,7 @@ jobs:
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
             throw "SESSION_LAUNCH_BLOCKED"
           }
-          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          if ($data.head -ne $env:HELPER_SHA) { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Instalar autorização Risk3 exata e temporária
@@ -276,7 +276,9 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: C:\dev\chatgpt-workers\operational-rules-validation
+      HELPER_SHA: a04aa57be662cdf4b4b833460f2df26b58a87873
+      HELPER_SYNC_REF: origin/ops/report-builder-main-protection-20260923
       CORRELATION_ID: report-builder-protection-validate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout regras canônicas para validação
@@ -302,13 +304,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $syncRef = "origin/${{ github.ref_name }}"
+          $syncRef = $env:HELPER_SYNC_REF
           $launcherArgs = @(
             "--policy", $policy,
             "--repo", $env:TARGET_REPO,
             "--session-prefix", "report-builder-validate",
             "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", "${{ github.sha }}",
+            "--expected-head", $env:HELPER_SHA,
             "--sync-ref", $syncRef
           )
           $raw = & python $launcher @launcherArgs
@@ -318,7 +320,7 @@ jobs:
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
             throw "SESSION_LAUNCH_BLOCKED"
           }
-          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          if ($data.head -ne $env:HELPER_SHA) { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
 
@@ -334,7 +336,7 @@ jobs:
           $commands = @(
             @("python", "-B", "scripts/run_report_builder_main_protection_local.py", "--help"),
             @("python", "-B", "scripts/configure_report_builder_main_protection_risk3.py", "--help"),
-            @("python", "-B", "tests/test_report_builder_branch_protection_noteri.py")
+            @("python", "-B", "tests/test_report_builder_main_protection_ops.py")
           )
           $index = 0
           foreach ($command in $commands) {
@@ -359,7 +361,9 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 12
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: C:\dev\chatgpt-workers\operational-rules-validation
+      HELPER_SHA: a04aa57be662cdf4b4b833460f2df26b58a87873
+      HELPER_SYNC_REF: origin/ops/report-builder-main-protection-20260923
       CORRELATION_ID: report-builder-main-protection-${{ github.run_id }}-${{ github.run_attempt }}
       ACTION_ID: reqsys.report-builder-main-protection.dev
       ACTION_SCOPE: repo://ericson-j-santos/report-builder-platform/branch/main
@@ -388,13 +392,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $syncRef = "origin/${{ github.ref_name }}"
+          $syncRef = $env:HELPER_SYNC_REF
           $launcherArgs = @(
             "--policy", $policy,
             "--repo", $env:TARGET_REPO,
             "--session-prefix", "report-builder-protect",
             "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", "${{ github.sha }}",
+            "--expected-head", $env:HELPER_SHA,
             "--sync-ref", $syncRef
           )
           $raw = & python $launcher @launcherArgs
@@ -404,7 +408,7 @@ jobs:
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
             throw "SESSION_LAUNCH_BLOCKED"
           }
-          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          if ($data.head -ne $env:HELPER_SHA) { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Instalar autorização Risk3 exata e temporária Report Builder
