@@ -14,7 +14,7 @@ from typing import Any
 
 TARGET_REPOSITORY = "ericson-j-santos/observability-platform"
 TARGET_BRANCH = "main"
-REQUIRED_CHECK = "test"
+REQUIRED_CHECKS = ("test", "E2E Platform Evidence Gate / validate-evidence")
 API_VERSION = "2026-03-10"
 
 
@@ -109,7 +109,7 @@ def protection_compliant(payload: dict[str, Any]) -> bool:
     force_push = bool((payload.get("allow_force_pushes") or {}).get("enabled"))
     deletion = bool((payload.get("allow_deletions") or {}).get("enabled"))
     return (
-        REQUIRED_CHECK in (contexts | checks)
+        set(REQUIRED_CHECKS).issubset(contexts | checks)
         and bool(required.get("strict"))
         and enforce_admins
         and pr_required
@@ -144,7 +144,7 @@ def _blocked(path: Path, reason: str, target_sha: str | None = None) -> int:
         "repository": TARGET_REPOSITORY,
         "branch": TARGET_BRANCH,
         "target_sha": target_sha,
-        "required_check": REQUIRED_CHECK,
+        "required_checks": list(REQUIRED_CHECKS),
         "host": socket.gethostname(),
         "secret_value_exposed": False,
         "production_touched": False,
@@ -173,15 +173,16 @@ def main() -> int:
             raise ProtectionError("target_sha_invalid")
 
         checks = _check_runs(target_sha).get("check_runs") or []
-        check_green = any(
-            isinstance(item, dict)
-            and item.get("name") == REQUIRED_CHECK
+        green_checks = {
+            str(item.get("name"))
+            for item in checks
+            if isinstance(item, dict)
             and item.get("status") == "completed"
             and item.get("conclusion") == "success"
-            for item in checks
-        )
-        if not check_green:
-            raise ProtectionError("required_check_not_green")
+            and item.get("name")
+        }
+        if not set(REQUIRED_CHECKS).issubset(green_checks):
+            raise ProtectionError("required_checks_not_green")
 
         if before.get("protected") is True:
             current_protection = _protection()
@@ -191,7 +192,7 @@ def main() -> int:
                     "repository": TARGET_REPOSITORY,
                     "branch": TARGET_BRANCH,
                     "target_sha": target_sha,
-                    "required_check": REQUIRED_CHECK,
+                    "required_checks": list(REQUIRED_CHECKS),
                     "protected": True,
                     "pull_request_required": True,
                     "enforce_admins": True,
@@ -211,7 +212,7 @@ def main() -> int:
             raise ProtectionError("target_sha_changed_before_write")
 
         request_payload = {
-            "required_status_checks": {"strict": True, "contexts": [REQUIRED_CHECK]},
+            "required_status_checks": {"strict": True, "contexts": list(REQUIRED_CHECKS)},
             "enforce_admins": True,
             "required_pull_request_reviews": {
                 "dismiss_stale_reviews": False,
@@ -258,7 +259,7 @@ def main() -> int:
             "repository": TARGET_REPOSITORY,
             "branch": TARGET_BRANCH,
             "target_sha": target_sha,
-            "required_check": REQUIRED_CHECK,
+            "required_checks": list(REQUIRED_CHECKS),
             "protected": True,
             "pull_request_required": True,
             "enforce_admins": True,
