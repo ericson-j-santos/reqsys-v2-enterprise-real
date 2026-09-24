@@ -179,6 +179,99 @@ def wait_for_refreshed_worker(timeout_seconds: float = 50.0) -> dict[str, Any]:
     raise RecoveryError(f"runtime_refresh_readback_timeout:{last_error}")
 
 
+
+def recover_via_remote_scm() -> dict[str, Any]:
+    if socket.gethostname().casefold() != "noteri":
+        raise RecoveryError("remote_scm_source_not_noteri")
+    try:
+        import win32service
+    except ImportError as exc:
+        raise RecoveryError("remote_scm_pywin32_unavailable") from exc
+
+    scm_handle = None
+    service_handle = None
+    try:
+        access = (
+            win32service.SC_MANAGER_CONNECT
+            | win32service.SC_MANAGER_ENUMERATE_SERVICE
+        )
+        scm_handle = win32service.OpenSCManager(TARGET_HOST, None, access)
+        entries = win32service.EnumServicesStatus(
+            scm_handle,
+            win32service.SERVICE_WIN32,
+            win32service.SERVICE_STATE_ALL,
+        )
+        candidates: list[tuple[str, str, int]] = []
+        for service_name, display_name, status in entries:
+            haystack = f"{service_name} {display_name}".casefold()
+            if "actions.runner" not in haystack and "github actions runner" not in haystack:
+                continue
+            current_state = int(status[1])
+            candidates.append((str(service_name), str(display_name), current_state))
+
+        if len(candidates) == 0:
+            raise RecoveryError("remote_scm_github_runner_service_not_found")
+        if len(candidates) > 1:
+            raise RecoveryError("remote_scm_multiple_github_runner_services")
+
+        service_name, _display_name, before_state = candidates[0]
+        service_handle = win32service.OpenService(
+            scm_handle,
+            service_name,
+            win32service.SERVICE_QUERY_STATUS | win32service.SERVICE_START,
+        )
+        observed_before = int(win32service.QueryServiceStatus(service_handle)[1])
+        if observed_before != before_state:
+            before_state = observed_before
+
+        running_state = int(win32service.SERVICE_RUNNING)
+        if before_state == running_state:
+            return {
+                "mode": "remote_scm_service",
+                "result": "already_running",
+                "started": False,
+                "before_state": before_state,
+                "after_state": before_state,
+            }
+
+        win32service.StartService(service_handle, None)
+        deadline = time.monotonic() + 20.0
+        after_state = before_state
+        while time.monotonic() < deadline:
+            after_state = int(win32service.QueryServiceStatus(service_handle)[1])
+            if after_state == running_state:
+                return {
+                    "mode": "remote_scm_service",
+                    "result": "recovered",
+                    "started": True,
+                    "before_state": before_state,
+                    "after_state": after_state,
+                }
+            time.sleep(0.5)
+        raise RecoveryError(f"remote_scm_runner_not_running:{after_state}")
+    except RecoveryError:
+        raise
+    except Exception as exc:
+        code = getattr(exc, "winerror", None)
+        if code is None and getattr(exc, "args", None):
+            try:
+                code = int(exc.args[0])
+            except (TypeError, ValueError):
+                code = None
+        suffix = str(code) if code is not None else type(exc).__name__
+        raise RecoveryError(f"remote_scm_failed:{suffix}") from exc
+    finally:
+        if service_handle is not None:
+            try:
+                win32service.CloseServiceHandle(service_handle)
+            except Exception:
+                pass
+        if scm_handle is not None:
+            try:
+                win32service.CloseServiceHandle(scm_handle)
+            except Exception:
+                pass
+
 def recover(correlation_id: str) -> dict[str, Any]:
     before = desktop_worker()
     refresh = {
@@ -189,9 +282,24 @@ def recover(correlation_id: str) -> dict[str, Any]:
 
     if not before["runner_recovery_capability"]:
         if not before["runtime_refresh_capability"]:
-            raise RecoveryError(
-                "desktop_runner_recovery_and_runtime_refresh_capabilities_missing"
-            )
+            scm_result = recover_via_remote_scm()
+            after = desktop_worker()
+            return {
+                "ok": True,
+                "task_type": TASK_TYPE,
+                "target_host": TARGET_HOST,
+                "dispatch_worker_id": after["worker_id"],
+                "worker_before": before,
+                "worker_after": after,
+                "runtime_refresh": refresh,
+                "recovery_channel": "remote_scm",
+                "handler_result": scm_result,
+                "runner_recovery_replayed": False,
+                "correlation_id": correlation_id,
+                "production_touched": False,
+                "secrets_read": False,
+                "observed_at": now_iso(),
+            }
         refresh_intake, refresh_result = enqueue_and_wait(
             REFRESH_TASK_TYPE,
             payload={
