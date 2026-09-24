@@ -272,7 +272,7 @@ jobs:
 
   validate-report-builder-protection-helper:
     name: Validar helper de proteção Report Builder via Noteri Gateway
-    if: ${{ github.event_name == 'push' && github.ref_name == 'ops/report-builder-main-protection-20260923' }}
+    if: ${{ false }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:
@@ -357,7 +357,7 @@ jobs:
   apply-report-builder-platform:
     name: Proteger report-builder-platform/main via Noteri Risk3
     needs: validate-report-builder-protection-helper
-    if: ${{ github.event_name == 'push' && github.ref_name == 'ops/report-builder-main-protection-20260923' }}
+    if: ${{ false }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 12
     env:
