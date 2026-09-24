@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
 SERVICE = ROOT / "backend" / "app" / "services" / "desktop_control_plane_recovery.py"
 API = ROOT / "backend" / "app" / "api" / "desktop_control_plane_recovery.py"
 MAIN = ROOT / "backend" / "app" / "main.py"
