@@ -1,6 +1,9 @@
 name: Branch Protection Audit
 
 on:
+  push:
+    branches:
+      - ops/report-builder-main-protection-20260923
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
@@ -264,5 +267,166 @@ jobs:
         with:
           name: observability-platform-main-protection-noteri-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\artifacts\observability-main-protection-noteri\evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  validate-report-builder-protection-helper:
+    name: Validar helper de proteção Report Builder
+    if: ${{ github.event_name == 'push' && github.ref_name == 'ops/report-builder-main-protection-20260923' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar sintaxe Python
+        run: |
+          python -m py_compile scripts/run_report_builder_main_protection_local.py
+          python -m py_compile scripts/configure_report_builder_main_protection_risk3.py
+
+      - name: Validar contrato fail-closed
+        run: python tests/test_report_builder_branch_protection_noteri.py
+
+  apply-report-builder-platform:
+    name: Proteger report-builder-platform/main via Noteri Risk3
+    needs: validate-report-builder-protection-helper
+    if: ${{ github.event_name == 'push' && github.ref_name == 'ops/report-builder-main-protection-20260923' }}
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 12
+    env:
+      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      CORRELATION_ID: report-builder-main-protection-${{ github.run_id }}-${{ github.run_attempt }}
+      ACTION_ID: reqsys.report-builder-main-protection.dev
+      ACTION_SCOPE: repo://ericson-j-santos/report-builder-platform/branch/main
+      EVIDENCE_REL: artifacts/report-builder-main-protection-noteri/evidence.json
+    steps:
+      - name: Checkout regras canônicas
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: main
+          path: _rules
+          fetch-depth: 1
+
+      - name: Validar host Noteri exato
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME.ToLowerInvariant() -ne "noteri") {
+            throw "UNEXPECTED_HOST"
+          }
+
+      - name: Bootstrap obrigatório de sessão Report Builder
+        id: report_builder_session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $syncRef = "origin/${{ github.ref_name }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "report-builder-protect",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", "${{ github.sha }}",
+            "--sync-ref", $syncRef
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $line = @($raw)[-1]
+          $data = $line | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Instalar autorização Risk3 exata e temporária Report Builder
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.report_builder_session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_report_builder_main_protection_risk3.py `
+              --enable `
+              --ttl-minutes 30 `
+              --confirm ENABLE-REPORT-BUILDER-MAIN-PROTECTION-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Aplicar proteção Report Builder via Owner Risk3 Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.report_builder_session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\owner_risk3_gateway.py"
+          $riskArgs = @(
+            "--action-id", $env:ACTION_ID,
+            "--scope", $env:ACTION_SCOPE,
+            "--cwd", $env:TARGET_PATH,
+            "--timeout", "300",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          & python $gateway @riskArgs
+          exit $LASTEXITCODE
+
+      - name: Remover autorização Risk3 temporária Report Builder
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.report_builder_session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_report_builder_main_protection_risk3.py `
+              --disable `
+              --confirm DISABLE-REPORT-BUILDER-MAIN-PROTECTION-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Validar evidência sanitizada Report Builder
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.report_builder_session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_EVIDENCE" }
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path $evidence)) { throw "PROTECTION_EVIDENCE_MISSING" }
+          $data = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+          if ($data.status -notin @("PROTECTION_APPLIED", "ALREADY_COMPLIANT")) { throw "PROTECTION_NOT_CONFIRMED" }
+          if ($data.repository -ne "ericson-j-santos/report-builder-platform") { throw "TARGET_REPOSITORY_MISMATCH" }
+          if ($data.branch -ne "main") { throw "TARGET_BRANCH_MISMATCH" }
+          if ($data.evidence_pr_number -ne 5) { throw "EVIDENCE_PR_MISMATCH" }
+          if ($data.evidence_sha -ne "c4e5b4ffd677f854ca1107330c87312d995c619e") { throw "EVIDENCE_SHA_MISMATCH" }
+          if (-not $data.protected) { throw "BRANCH_NOT_PROTECTED" }
+          if (-not $data.pull_request_required) { throw "PULL_REQUEST_NOT_REQUIRED" }
+          if (-not $data.enforce_admins) { throw "ADMINS_NOT_ENFORCED" }
+          if (-not $data.strict_required_checks) { throw "REQUIRED_CHECKS_NOT_STRICT" }
+          if ($data.force_push_allowed) { throw "FORCE_PUSH_ALLOWED" }
+          if ($data.deletion_allowed) { throw "BRANCH_DELETION_ALLOWED" }
+          if (-not $data.required_check_states."Quality / Python 3.11") { throw "PY311_CHECK_NOT_GREEN" }
+          if (-not $data.required_check_states."Quality / Python 3.14") { throw "PY314_CHECK_NOT_GREEN" }
+          if ($data.secret_value_exposed) { throw "SECRET_EXPOSURE_REPORTED" }
+
+      - name: Publicar evidência sanitizada Report Builder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-builder-main-protection-noteri-${{ github.run_id }}
+          path: ${{ steps.report_builder_session.outputs.target_path }}\artifacts\report-builder-main-protection-noteri\evidence.json
           if-no-files-found: warn
           retention-days: 30
