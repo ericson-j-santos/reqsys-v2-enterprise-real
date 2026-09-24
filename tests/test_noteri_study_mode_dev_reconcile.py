@@ -289,10 +289,61 @@ def test_reconciler_has_positive_negative_idempotency_and_restore_controls():
     assert '"profile": "ESTUDO"' in raw
     assert "estudo_idempotency_failed" in raw
     assert '"profile": "NORMAL"' in raw
+    assert "normal_precondition_failed" in raw
+    assert '"precondition_normal": True' in raw
     assert "NOTERI_CONTROL_PLANE_URL" in OVERLAY.read_text(encoding="utf-8")
     assert '"control_plane_bridge": True' in raw
     assert "rollback_files(changes)" in raw
     assert "loopback_agent_exposed" in raw
+
+
+def test_api_e2e_normalizes_initial_estudo_before_positive_transition(monkeypatch):
+    state = {"profile": "ESTUDO"}
+    writes = []
+
+    def payload(*, changed=None):
+        data = {
+            "host": "Noteri",
+            "profile": state["profile"],
+            "accepts_new_development": state["profile"] == "NORMAL",
+        }
+        if changed is not None:
+            data["changed"] = changed
+        return {"data": data}
+
+    def fake_http_json(method, path, *, body=None, expected=None, stage=None, **kwargs):
+        if stage == "api_auth_config":
+            return 200, {"data": {"demo_login_enabled": True}}
+        if stage == "api_negative_auth_profile":
+            return 401, {}
+        if method == "GET" and path == "/api/v1/noteri/profile":
+            return 200, payload()
+        if method == "POST" and path == "/api/v1/noteri/profile":
+            target = body["profile"]
+            changed = state["profile"] != target
+            state["profile"] = target
+            writes.append((stage, target, changed))
+            return 200, payload(changed=changed)
+        raise AssertionError((method, path, stage, expected))
+
+    monkeypatch.setattr(module, "http_json", fake_http_json)
+    monkeypatch.setattr(
+        module,
+        "login_admin",
+        lambda *, stage: ("token", {"papel": "admin"}),
+    )
+
+    result = module.api_e2e()
+
+    assert result["initial_profile"] == "ESTUDO"
+    assert result["precondition_normal"] is True
+    assert writes == [
+        ("api_precondition_normal", "NORMAL", True),
+        ("api_set_estudo", "ESTUDO", True),
+        ("api_estudo_replay", "ESTUDO", False),
+        ("api_restore_normal", "NORMAL", True),
+    ]
+    assert result["final_profile"] == "NORMAL"
 
 
 def test_http_e2e_failures_expose_only_safe_stage_and_status():
@@ -311,6 +362,8 @@ def test_http_e2e_failures_expose_only_safe_stage_and_status():
         "api_negative_auth_profile",
         "api_admin_login",
         "api_profile_before",
+        "api_precondition_normal",
+        "api_precondition_readback",
         "api_set_estudo",
         "api_estudo_readback",
         "api_estudo_replay",

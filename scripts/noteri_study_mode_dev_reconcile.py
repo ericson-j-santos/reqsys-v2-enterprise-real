@@ -1413,6 +1413,43 @@ def api_e2e() -> dict[str, Any]:
     )
     before = profile_data(before_payload)
 
+    # O runtime pode chegar ao E2E já em ESTUDO. Normalize a pré-condição para
+    # NORMAL antes de provar a transição positiva NORMAL -> ESTUDO.
+    corr0 = f"study-dev-e2e-{int(time.time())}-0"
+    _, normalized_payload = http_json(
+        "POST",
+        "/api/v1/noteri/profile",
+        token=token,
+        correlation_id=corr0,
+        body={"profile": "NORMAL", "correlation_id": corr0},
+        stage="api_precondition_normal",
+    )
+    normalized = profile_data(normalized_payload)
+    if (
+        normalized.get("profile") != "NORMAL"
+        or normalized.get("accepts_new_development") is not True
+    ):
+        raise ReconcileError(
+            "normal_precondition_failed",
+            stage="api_precondition_normal",
+        )
+
+    _, normalized_readback_payload = http_json(
+        "GET",
+        "/api/v1/noteri/profile",
+        token=token,
+        stage="api_precondition_readback",
+    )
+    normalized_readback = profile_data(normalized_readback_payload)
+    if (
+        normalized_readback.get("profile") != "NORMAL"
+        or normalized_readback.get("accepts_new_development") is not True
+    ):
+        raise ReconcileError(
+            "normal_precondition_readback_failed",
+            stage="api_precondition_readback",
+        )
+
     corr1 = f"study-dev-e2e-{int(time.time())}-1"
     _, changed_payload = http_json(
         "POST",
@@ -1424,7 +1461,7 @@ def api_e2e() -> dict[str, Any]:
     )
     changed = profile_data(changed_payload)
     if changed.get("profile") != "ESTUDO" or changed.get("changed") is not True:
-        raise ReconcileError("estudo_change_failed")
+        raise ReconcileError("estudo_change_failed", stage="api_set_estudo")
 
     _, readback_payload = http_json(
         "GET",
@@ -1434,7 +1471,7 @@ def api_e2e() -> dict[str, Any]:
     )
     readback = profile_data(readback_payload)
     if readback.get("profile") != "ESTUDO" or readback.get("accepts_new_development") is not False:
-        raise ReconcileError("estudo_readback_failed")
+        raise ReconcileError("estudo_readback_failed", stage="api_estudo_readback")
 
     corr2 = f"study-dev-e2e-{int(time.time())}-2"
     _, replay_payload = http_json(
@@ -1447,7 +1484,7 @@ def api_e2e() -> dict[str, Any]:
     )
     replay = profile_data(replay_payload)
     if replay.get("changed") is not False:
-        raise ReconcileError("estudo_idempotency_failed")
+        raise ReconcileError("estudo_idempotency_failed", stage="api_estudo_replay")
 
     corr3 = f"study-dev-e2e-{int(time.time())}-3"
     _, restored_payload = http_json(
@@ -1460,12 +1497,14 @@ def api_e2e() -> dict[str, Any]:
     )
     restored = profile_data(restored_payload)
     if restored.get("profile") != "NORMAL" or restored.get("accepts_new_development") is not True:
-        raise ReconcileError("normal_restore_failed")
+        raise ReconcileError("normal_restore_failed", stage="api_restore_normal")
 
     return {
         "auth_demo_enabled": auth_data.get("demo_login_enabled") is True,
         "negative_unauthenticated_status": 401,
         "initial_profile": before.get("profile"),
+        "precondition_normal": True,
+        "precondition_changed": normalized.get("changed") is True,
         "estudo_changed": True,
         "estudo_readback": True,
         "idempotent_replay": True,
