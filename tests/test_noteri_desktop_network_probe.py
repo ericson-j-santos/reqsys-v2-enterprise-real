@@ -164,6 +164,7 @@ def test_control_ports_are_fixed_and_sanitized() -> None:
         "winrm_http": 5985,
         "winrm_https": 5986,
         "rdp": 3389,
+        "engineering_orchestrator": 8787,
     }
 
 
@@ -186,6 +187,7 @@ def test_probe_reports_fixed_control_channel_reachability(monkeypatch) -> None:
             "winrm_http": True,
             "winrm_https": False,
             "rdp": True,
+            "engineering_orchestrator": True,
         },
     )
     monkeypatch.setattr(
