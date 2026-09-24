@@ -1,0 +1,22 @@
+{
+  "feature_name": "teams-bot-dev-identity-bootstrap-automation",
+  "project": "ReqSys Central IA/Teams",
+  "created_at": "2026-09-24",
+  "updated_at": "2026-09-24",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Automatiza a execução autorizada do bootstrap idempotente da identidade Teams Bot DEV sem ampliar privilégio do CI, usando Session Launcher e Owner Risk3 Gateway no Noteri.",
+  "environment": "GitHub Actions / Noteri DEV / Microsoft Entra / Azure Key Vault",
+  "production_enabled": false,
+  "risk": {"level": 3, "admin_permission": true, "target_environment": "dev", "self_hosted_runner": "Noteri", "application_readwrite_all_granted": false, "production_touched": false, "secrets_exposed": false},
+  "acceptance_criteria": [
+    "Comando literal allowlisted e restrito ao owner/issue de operações.",
+    "Execução somente no Noteri após Session Launcher no SHA exato da main.",
+    "Mutação somente por Owner Risk3 Gateway com action_id e scope fixos e TTL máximo de 30 minutos.",
+    "Tenant obtido de variável não secreta; nenhum token, senha, MFA ou client secret em comando, log ou artifact.",
+    "Dry-run, execução idempotente e leitura independente confirmam o estado final.",
+    "TEST/HML/STG/PROD não são alterados e a autorização temporária é removida mesmo em falha."
+  ],
+  "sdd_gate": {"tests": ["tests/test_teams_bot_dev_identity_automation.py"], "evidence_contract": "status READY/ALREADY_COMPLIANT, environment=dev, host=NOTERI, independent_readback=true, secret_value_exposed=false, production_touched=false"}
+}
