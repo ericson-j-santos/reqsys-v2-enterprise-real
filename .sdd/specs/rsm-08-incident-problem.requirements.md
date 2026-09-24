@@ -27,6 +27,9 @@ O E2E deve executar HTTP real contra FastAPI e PostgreSQL real no SHA exato, val
 ## Requisito 8 — escopo e segurança
 Este incremento não executa merge, deploy, promoção, alteração de segredo, branch protection ou ação em HML/PROD. CMDB Lite / Service Graph permanece fora do escopo.
 
+## Requisito 9 — erros públicos sanitizados
+Falhas de domínio devem preservar o status HTTP necessário ao cliente sem retornar `str(exc)`, IDs internos, detalhes de banco ou mensagem bruta da exceção. Diagnóstico interno deve registrar apenas o tipo da exceção e `correlation_id` sanitizado.
+
 ## Critérios de aceite
 1. INCIDENT -> PROBLEM válido é persistido uma única vez.
 2. Origem não INCIDENT e destino não PROBLEM são rejeitados sem mutação.
@@ -38,3 +41,4 @@ Este incremento não executa merge, deploy, promoção, alteração de segredo, 
 8. Controle negativo preserva contagens/estado.
 9. Teste do teste detecta SHA-256 inválido.
 10. Evidência pertence ao HEAD atual e nenhuma evidência anterior é reutilizada.
+11. Respostas 404/409/422 usam mensagens públicas estáveis e não expõem a exceção interna.
