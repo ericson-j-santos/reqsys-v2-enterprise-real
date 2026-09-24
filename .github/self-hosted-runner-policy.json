@@ -14,7 +14,6 @@
     ".github/workflows/noteri-control-plane-probe.yml",
     ".github/workflows/noteri-desktop-admin-broker-kick.yml",
     ".github/workflows/noteri-desktop-network-probe.yml",
-    ".github/workflows/noteri-desktop-runner-scm-recovery.yml",
     ".github/workflows/noteri-desktop-watchdog-recovery.yml",
     ".github/workflows/noteri-headless-control-plane-activation.yml",
     ".github/workflows/noteri-study-mode-dev-reconcile.yml",

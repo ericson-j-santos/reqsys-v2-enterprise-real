@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "noteri_desktop_runner_scm_recovery.py"
-WORKFLOW = ROOT / ".github" / "workflows" / "noteri-desktop-runner-scm-recovery.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "noteri-desktop-network-probe.yml"
 POLICY = ROOT / ".github" / "self-hosted-runner-policy.json"
 
 SPEC = importlib.util.spec_from_file_location("noteri_desktop_runner_scm_recovery", SCRIPT)
@@ -122,9 +122,8 @@ def test_request_and_source_are_fixed() -> None:
         )
     content = SCRIPT.read_text(encoding="utf-8")
     assert 'TARGET_HOST = "DESKTOP-PDQK954"' in content
-    assert recovery.SCM_MACHINE == r"\\DESKTOP-PDQK954"
-    assert recovery.SCM_MACHINE[2:] == "DESKTOP-PDQK954"
-    assert len(recovery.SCM_MACHINE) == len("DESKTOP-PDQK954") + 2
+    assert recovery.SCM_MACHINE == recovery.TARGET_HOST
+    assert "SCM_MACHINE = TARGET_HOST" in content
     assert 'parser.add_argument("--target"' not in content
     assert "shell=True" not in content
 
@@ -145,8 +144,9 @@ def test_blocked_payload_is_sanitized() -> None:
 def test_workflow_and_policy_are_noteri_only() -> None:
     content = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in content
-    assert "--confirm RECOVER-NOTERI-DESKTOP-RUNNER-SCM" in content
+    assert '"--confirm", "RECOVER-NOTERI-DESKTOP-RUNNER-SCM"' in content
     assert "workflow_dispatch:" in content
+    assert "fix/noteri-desktop-runner-scm-recovery-*" in content
     assert "_rules\\scripts\\session_launcher.py" in content
     assert "_rules\\scripts\\command_gateway.py" in content
     assert '"--risk", "2"' in content
@@ -154,4 +154,5 @@ def test_workflow_and_policy_are_noteri_only() -> None:
     assert "inputs:" not in content
     assert "fix/noteri-desktop-runner-scm-recovery-*" in content
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
-    assert ".github/workflows/noteri-desktop-runner-scm-recovery.yml" in policy["approved_workflows"]
+    assert ".github/workflows/noteri-desktop-network-probe.yml" in policy["approved_workflows"]
+    assert ".github/workflows/noteri-desktop-runner-scm-recovery.yml" not in policy["approved_workflows"]

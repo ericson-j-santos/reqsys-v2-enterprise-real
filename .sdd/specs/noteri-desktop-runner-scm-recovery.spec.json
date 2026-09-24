@@ -7,7 +7,7 @@
   "architecture": {
     "source_host": "Noteri",
     "target_host": "DESKTOP-PDQK954",
-    "workflow": ".github/workflows/noteri-desktop-runner-scm-recovery.yml",
+    "workflow": ".github/workflows/noteri-desktop-network-probe.yml",
     "recovery": "scripts/noteri_desktop_runner_scm_recovery.py",
     "transport": "Windows Service Control Manager RPC",
     "runner_labels": [
@@ -17,7 +17,8 @@
       "noteri",
       "reqsys-dev"
     ],
-    "environment": "DEV"
+    "environment": "DEV",
+    "workflow_mode": "branch:fix/noteri-desktop-runner-scm-recovery-*"
   },
   "security": {
     "arbitrary_target": false,

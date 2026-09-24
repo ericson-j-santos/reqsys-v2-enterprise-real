@@ -21,7 +21,7 @@ Usar um canal Windows nativo e governado, diferente de Task Scheduler/RDC/WinRM/
 10. A evidência NÃO DEVE persistir lista de serviços, credenciais, tokens, command line, caminho binário ou dados de processo.
 11. A evidência DEVE registrar correlation_id, origem, destino, transporte, serviço único, estados antes/depois, changed, timestamp e marcadores de segurança.
 12. A execução NÃO DEVE usar RDC, GUI, WinRM, SSH, PowerShell Remoting, criação/alteração de serviço, alteração de ACL, firewall, reboot ou produção.
-13. O workflow DEVE ser inputless, executar somente no runner Noteri allowlisted e publicar artifact sanitizado mesmo em falha.
+13. A recuperação DEVE reutilizar o workflow Noteri já existente, permanecer inputless, executar somente no runner Noteri allowlisted e publicar artifact sanitizado quando a ação física for tentada.
 14. A mudança é descartável/diagnóstica e não autoriza merge automático.
 
 ## Controles contra falso positivo
@@ -35,7 +35,7 @@ Usar um canal Windows nativo e governado, diferente de Task Scheduler/RDC/WinRM/
 ## Validação
 
 - Testes: `tests/test_noteri_desktop_runner_scm_recovery.py`, governança self-hosted e SDD.
-- E2E físico: workflow `noteri-desktop-runner-scm-recovery.yml`.
+- E2E físico: job SCM condicionado à branch `fix/noteri-desktop-runner-scm-recovery-*` no workflow existente `noteri-desktop-network-probe.yml`.
 - Após sucesso, a fonte independente é a retomada do runner Desktop e a capacidade do workflow `PC24x7 Orchestrator DEV Recovery` ser assumido pelo host correto.
 
 ## Critérios de aceite
