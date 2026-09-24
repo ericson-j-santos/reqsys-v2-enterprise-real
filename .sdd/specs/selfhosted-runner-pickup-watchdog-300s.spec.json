@@ -1,0 +1,30 @@
+{
+  "feature_name": "selfhosted-runner-pickup-watchdog-300s",
+  "project": "ReqSys v2 Enterprise — Authorized Actions Gateway",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-23",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Alinha o timeout de pickup de workflows self-hosted ao watchdog canônico de 300 segundos, preservando polling de 5 segundos e cleanup fail-closed após o limite.",
+  "scope": "authorized-actions-gateway-selfhosted-pickup",
+  "files": [
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "tests/test_reqsys_authorized_actions_gateway.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Provar timeout de pickup de 300 segundos, polling de 5 segundos, ausência do limite legado de 180 segundos e preservação do cleanup fail-closed no HEAD exato."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false
+  }
+}
