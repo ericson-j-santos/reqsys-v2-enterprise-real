@@ -128,6 +128,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
           "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
+      - name: Ensure MCP bridge dependency
+        shell: powershell
+        run: |
+          & "$env:REQSYS_PYTHON" -c "import importlib.metadata as m; v=m.version('mcp'); raise SystemExit(0 if int(v.split('.')[0]) == 2 else 1)"
+          if ($LASTEXITCODE -ne 0) {
+            & "$env:REQSYS_PYTHON" -m pip install --disable-pip-version-check -r "services/ollama-mcp-bridge/requirements.txt"
+            if ($LASTEXITCODE -ne 0) { throw "MCP_RUNTIME_DEPENDENCY_INSTALL_FAILED" }
+          }
+
+      - name: Reconcile PC24x7 supervisor with MCP bridge
+        shell: powershell
+        run: |
+          & "$env:REQSYS_PYTHON" scripts/codex_pc24x7_supervisor.py install `
+            --source-root "${{ github.workspace }}" `
+            --source-sha "${{ github.sha }}" `
+            --python-executable "$env:REQSYS_PYTHON"
+          if ($LASTEXITCODE -ne 0) { throw "CODEX_PC24X7_SUPERVISOR_RECONCILE_FAILED" }
+
       - name: Reconcile stable HTTPS MCP route
         shell: powershell
         run: |
