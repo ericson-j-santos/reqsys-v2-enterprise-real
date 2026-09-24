@@ -3,7 +3,7 @@
 
 Escopo local/DEV:
 - lê somente configuração Ollama allowlisted do perfil Windows;
-- mantém Ollama :11434, gateway :8008 e backend :8000 em loopback;
+- mantém Ollama :11434, gateway :8008, bridge MCP :8010 e backend :8000 em loopback;
 - reinicia somente processos iniciados pela instância corrente do supervisor;
 - executa smoke ReqSys -> ollama_gateway -> Ollama sem publicar no ReqSys;
 - registra estado/evidência em LOCALAPPDATA;
@@ -44,6 +44,7 @@ RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_VALUE = "ReqSysCodexPC24x7Supervisor"
 DEFAULT_GATEWAY_PORT = 8008
 DEFAULT_BACKEND_PORT = 8000
+DEFAULT_MCP_PORT = 8010
 DEFAULT_OLLAMA_PORT = 11434
 DEFAULT_WATCH_SECONDS = 15
 DEFAULT_SMOKE_SECONDS = 900
@@ -179,6 +180,51 @@ def _port_open(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
+def build_mcp_bridge_env(
+    profile: dict[str, str],
+    env: dict[str, str] | None = None,
+) -> dict[str, str]:
+    source = os.environ if env is None else env
+    bearer = str(source.get("OLLAMA_MCP_BEARER_TOKEN") or "").strip()
+    if not bearer:
+        raise SupervisorError("mcp_bearer_token_not_configured")
+    child = dict(source)
+    child.update(
+        {
+            "OLLAMA_MCP_BEARER_TOKEN": bearer,
+            "OLLAMA_MCP_GATEWAY_URL": "http://127.0.0.1:8008",
+            "OLLAMA_MCP_ALLOWED_MODELS": ",".join(
+                dict.fromkeys(
+                    (
+                        profile["CODEX_OLLAMA_GATEWAY_MODEL"],
+                        profile["CODEX_OLLAMA_FALLBACK_MODEL"],
+                    )
+                )
+            ),
+            "OLLAMA_MCP_DEFAULT_MODEL": profile["CODEX_OLLAMA_GATEWAY_MODEL"],
+            "OLLAMA_MCP_FALLBACK_MODEL": profile["CODEX_OLLAMA_FALLBACK_MODEL"],
+            "OLLAMA_MCP_TIMEOUT_SECONDS": "60",
+        }
+    )
+    return child
+
+
+def probe_mcp_bridge(env: dict[str, str] | None = None) -> dict[str, Any] | None:
+    source = os.environ if env is None else env
+    if not str(source.get("OLLAMA_MCP_BEARER_TOKEN") or "").strip():
+        return None
+    if not _port_open(DEFAULT_MCP_PORT):
+        return None
+    return {
+        "ok": True,
+        "service": "reqsys-ollama-mcp-bridge",
+        "bind": "127.0.0.1",
+        "port": DEFAULT_MCP_PORT,
+        "auth_configured": True,
+        "secret_exposed": False,
+    }
+
+
 def probe_ollama() -> dict[str, Any] | None:
     try:
         code, payload = _request_json("http://127.0.0.1:11434/api/version", timeout=2)
@@ -306,7 +352,7 @@ class Supervisor:
         self.profile = read_profile()
         self.children: dict[str, subprocess.Popen[Any]] = {}
         self.log_handles: list[Any] = []
-        self.restart_counts = {"ollama": 0, "gateway": 0, "backend": 0}
+        self.restart_counts = {"ollama": 0, "gateway": 0, "mcp_bridge": 0, "backend": 0}
         self.last_smoke_at = 0.0
 
     def _spawn(self, name: str, command: list[str], cwd: Path, env: dict[str, str]) -> subprocess.Popen[Any]:
@@ -368,6 +414,34 @@ class Supervisor:
         ]
         process = self._spawn("gateway", command, self.release_root, build_gateway_env(self.profile))
         health = wait_probe(probe_gateway, STARTUP_TIMEOUT_SECONDS, process)
+        return {"status": "recovered", "managed": True, "pid": process.pid, "health": health}
+
+    def ensure_mcp_bridge(self) -> dict[str, Any]:
+        env = build_mcp_bridge_env(self.profile)
+        health = probe_mcp_bridge(env)
+        if health:
+            return {
+                "status": "healthy",
+                "managed": self._child_alive("mcp_bridge"),
+                "health": health,
+            }
+        process = self.children.get("mcp_bridge")
+        if process is not None and process.poll() is None:
+            process.terminate()
+            process.wait(timeout=8)
+        if _port_open(DEFAULT_MCP_PORT):
+            raise SupervisorError("porta 8010 ocupada sem bridge MCP saudável")
+        bridge = self.release_root / "mcp_bridge"
+        server = bridge / "server.py"
+        if not server.is_file():
+            raise SupervisorError("bridge MCP ausente na release imutável")
+        process = self._spawn(
+            "mcp_bridge",
+            [str(self.python), str(server)],
+            bridge,
+            env,
+        )
+        health = wait_probe(lambda: probe_mcp_bridge(env), STARTUP_TIMEOUT_SECONDS, process)
         return {"status": "recovered", "managed": True, "pid": process.pid, "health": health}
 
     def ensure_backend(self) -> dict[str, Any]:
@@ -478,6 +552,7 @@ class Supervisor:
         observed = {
             "ollama": self.ensure_ollama(),
             "gateway": self.ensure_gateway(),
+            "mcp_bridge": self.ensure_mcp_bridge(),
             "backend": self.ensure_backend(),
         }
         smoke = None
@@ -882,6 +957,11 @@ def _copy_release(source_root: Path, release_root: Path) -> None:
         temp / "gateway_src",
         ignore=ignore,
     )
+    shutil.copytree(
+        source_root / "services" / "ollama-mcp-bridge",
+        temp / "mcp_bridge",
+        ignore=ignore,
+    )
     scripts = temp / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     shutil.copy2(Path(__file__).resolve(), scripts / Path(__file__).name)
@@ -904,6 +984,7 @@ def install(
     for path in (
         source_root / "backend",
         source_root / "docs" / "ollama-local-gateway" / "bootstrap-files" / "src",
+        source_root / "services" / "ollama-mcp-bridge",
     ):
         if not path.is_dir():
             raise SupervisorError(f"fonte necessária ausente: {path}")
@@ -934,7 +1015,9 @@ def install(
     atomic_json(metadata_file, metadata)
     launcher = _write_launcher(runtime_root)
     action = _task_action(python_executable, launcher)
-    was_healthy = all((probe_ollama(), probe_gateway(), probe_backend()))
+    was_healthy = all(
+        (probe_ollama(), probe_gateway(), probe_mcp_bridge(), probe_backend())
+    )
     registration = _register_task_via_base_python(
         release_supervisor=supervisor,
         python_executable=python_executable,
@@ -1019,6 +1102,7 @@ def runtime_status(metadata_file: Path) -> dict[str, Any]:
     health = {
         "ollama": probe_ollama(),
         "gateway": probe_gateway(),
+        "mcp_bridge": probe_mcp_bridge(),
         "backend": probe_backend(),
     }
     return {
