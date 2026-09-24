@@ -20,7 +20,7 @@ def test_gateway_pickup_timeout_is_not_reported_as_runner_unavailable() -> None:
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "SELF_HOSTED_RUNNER_UNAVAILABLE" not in content
     assert "wait_seconds=0" in content
-    assert "pickup_timeout_seconds=300" in content
+    assert "pickup_timeout_seconds=60" in content
     assert "poll_seconds=5" in content
     assert "seq 1 $((pickup_timeout_seconds / poll_seconds))" in content
     assert "runner_pickup_wait_seconds" in content
@@ -197,10 +197,10 @@ def test_gateway_desktop_rdc_considera_pending_como_runner_nao_adquirido() -> No
     assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
 
 
-def test_gateway_self_hosted_pickup_usa_watchdog_canonico_300s() -> None:
+def test_gateway_self_hosted_pickup_usa_watchdog_canonico_60s() -> None:
     content = _workflow()
 
-    assert "pickup_timeout_seconds=300" in content
+    assert "pickup_timeout_seconds=60" in content
     assert "poll_seconds=5" in content
     assert "seq 1 $((pickup_timeout_seconds / poll_seconds))" in content
     assert 'sleep "$poll_seconds"' in content

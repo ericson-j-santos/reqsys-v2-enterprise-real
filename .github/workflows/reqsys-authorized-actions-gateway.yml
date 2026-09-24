@@ -291,7 +291,7 @@ jobs:
           set -euo pipefail
           status='pending'
           wait_seconds=0
-          pickup_timeout_seconds=300
+          pickup_timeout_seconds=60
           poll_seconds=5
           for attempt in $(seq 1 $((pickup_timeout_seconds / poll_seconds))); do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
