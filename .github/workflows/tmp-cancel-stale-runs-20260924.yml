@@ -33,10 +33,13 @@ jobs:
               printf '%s already terminal: %s\n' "$run_id" "$conclusion"
               continue
             fi
-            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY"
+            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
+            if [ "$run_id" = "36019040530" ]; then
+              gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/force-cancel" >/dev/null
+            fi
           done
 
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          for attempt in 1 2 3 4 5 6; do
             all_terminal=true
             for run_id in 36019040530 36018117667; do
               status="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
