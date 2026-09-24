@@ -17,7 +17,7 @@ SCOPE = "repo://ericson-j-santos/observability-platform/branch/main"
 MANAGED_BY = "reqsys-observability-main-protection-once"
 ENABLE_CONFIRM = "ENABLE-OBSERVABILITY-MAIN-PROTECTION-ONCE"
 DISABLE_CONFIRM = "DISABLE-OBSERVABILITY-MAIN-PROTECTION-ONCE"
-EVIDENCE_PATH = "artifacts/observability-main-protection-noteri/evidence.json"
+EVIDENCE_PATH = "artifacts/observability-main-protection-pc24x7/evidence.json"
 COMMAND = [
     "python",
     "scripts/run_observability_main_protection_local.py",
