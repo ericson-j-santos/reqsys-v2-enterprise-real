@@ -66,6 +66,7 @@ def test_install_falls_back_to_logon_when_startup_task_denied(monkeypatch, tmp_p
     source = tmp_path / "source"
     (source / "backend").mkdir(parents=True)
     (source / "docs/ollama-local-gateway/bootstrap-files/src").mkdir(parents=True)
+    (source / "services/ollama-mcp-bridge").mkdir(parents=True)
     python = tmp_path / "python.exe"
     python.write_text("", encoding="utf-8")
     monkeypatch.setattr(m, "require_windows_desktop", lambda: m.EXPECTED_HOST)
