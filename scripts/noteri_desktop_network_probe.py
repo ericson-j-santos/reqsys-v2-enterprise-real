@@ -8,6 +8,8 @@ import json
 import os
 import socket
 import subprocess
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,8 @@ EXPECTED_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
 CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
+CONTROL_PLANE_PORT = 8787
+CONTROL_PLANE_PATH = "/readyz"
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
 ADMIN_STAGING_PATH = "\\\\" + TARGET_HOST + "\\C$\\Users\\Public\\Desktop"
@@ -97,15 +101,59 @@ def icmp_reachable() -> bool:
     return completed.returncode == 0
 
 
-def runtime_port_reachable() -> bool:
+def tcp_port_reachable(port: int) -> bool:
     try:
         with socket.create_connection(
-            (TARGET_HOST, RUNTIME_PORT),
+            (TARGET_HOST, port),
             timeout=TCP_TIMEOUT_SECONDS,
         ):
             return True
     except OSError:
         return False
+
+
+def runtime_port_reachable() -> bool:
+    return tcp_port_reachable(RUNTIME_PORT)
+
+
+def control_plane_probe() -> dict[str, Any]:
+    if not tcp_port_reachable(CONTROL_PLANE_PORT):
+        return {
+            "port_reachable": False,
+            "http_status": None,
+            "ready": False,
+        }
+
+    request = urllib.request.Request(
+        f"http://{TARGET_HOST}:{CONTROL_PLANE_PORT}{CONTROL_PLANE_PATH}",
+        headers={"Accept": "application/json", "Cache-Control": "no-store"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TCP_TIMEOUT_SECONDS) as response:
+            status = int(response.status)
+            raw = response.read(8192).decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        return {
+            "port_reachable": True,
+            "http_status": int(exc.code),
+            "ready": False,
+        }
+    except (urllib.error.URLError, OSError):
+        return {
+            "port_reachable": True,
+            "http_status": None,
+            "ready": False,
+        }
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        payload = None
+    return {
+        "port_reachable": True,
+        "http_status": status,
+        "ready": status == 200 and isinstance(payload, dict) and payload.get("ready") is True,
+    }
 
 
 def admin_staging_path_probe() -> dict[str, Any]:
@@ -134,9 +182,15 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     icmp: bool | None = None
     tcp = False
     staging = {"reachable": False, "result": "not_attempted"}
+    control_plane = {
+        "port_reachable": False,
+        "http_status": None,
+        "ready": False,
+    }
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
+        control_plane = control_plane_probe()
         staging = admin_staging_path_probe()
 
     if not resolution["resolved"]:
@@ -162,6 +216,10 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "icmp_reachable": icmp,
         "runtime_port": RUNTIME_PORT,
         "runtime_port_reachable": tcp,
+        "control_plane_port": CONTROL_PLANE_PORT,
+        "control_plane_port_reachable": bool(control_plane["port_reachable"]),
+        "control_plane_http_status": control_plane["http_status"],
+        "control_plane_ready": bool(control_plane["ready"]),
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
