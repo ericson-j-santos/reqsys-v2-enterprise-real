@@ -10,7 +10,7 @@ RUNNER = ROOT / "scripts/run_observability_main_protection_local.py"
 
 def test_apply_job_uses_noteri_session_launcher_and_risk3() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
     assert 'TARGET_REPO: C:\\dev\\reqsys-v2-enterprise-real' in raw
     assert "chatgpt-operational-rules" in raw
     assert "session_launcher.py" in raw
