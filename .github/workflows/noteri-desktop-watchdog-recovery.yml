@@ -2,22 +2,31 @@ name: Noteri → Desktop Watchdog Recovery
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'fix/noteri-desktop-watchdog-orchestrator-*'
+    paths:
+      - '.github/workflows/noteri-desktop-watchdog-recovery.yml'
+      - 'scripts/noteri_desktop_orchestrator_recovery.py'
+      - 'tests/test_noteri_desktop_orchestrator_recovery.py'
+      - '.sdd/specs/noteri-desktop-watchdog-recovery.requirements.md'
+      - '.sdd/specs/noteri-desktop-watchdog-recovery.spec.json'
 
 permissions:
   contents: read
 
 concurrency:
   group: noteri-desktop-watchdog-recovery
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   recover:
-    name: Run existing Desktop watchdog through governed Windows RPC
+    name: Recover Desktop through governed Engineering Orchestrator
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5af7b5ab6e31c24744176abd774855168c55953f
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
       CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
 
@@ -65,7 +74,7 @@ jobs:
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
 
-      - name: Query and run exact existing Desktop watchdog through Command Gateway
+      - name: Recover Desktop through resident Orchestrator via Command Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -75,7 +84,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $recoveryScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_watchdog_rpc_recovery.py"
+          $recoveryScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_orchestrator_recovery.py"
           $gatewayArgs = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
@@ -87,7 +96,9 @@ jobs:
             "--expected-head", $env:ANCHOR_SHA,
             "--",
             "python", $recoveryScript,
-            "--confirm", "RUN-EXISTING-DESKTOP-WATCHDOG",
+            "--confirm", "RECOVER-DESKTOP-CONTROL-VIA-ORCHESTRATOR",
+            "--operation-id", "${{ github.run_id }}",
+            "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL
           )
           & python $gateway @gatewayArgs
@@ -103,15 +114,18 @@ jobs:
           $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
           if (-not (Test-Path -LiteralPath $evidence)) { throw "RECOVERY_EVIDENCE_MISSING" }
           $e = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
-          if (-not $e.ok -or $e.result -ne "EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED") {
-            throw "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED"
+          if (-not $e.ok -or $e.result -ne "DESKTOP_CONTROL_RECOVERY_COMPLETED") {
+            throw "DESKTOP_CONTROL_RECOVERY_NOT_CONFIRMED"
           }
           if ($e.source_host -ne "Noteri") { throw "SOURCE_HOST_MISMATCH" }
           if ($e.target_host -ne "DESKTOP-PDQK954") { throw "TARGET_HOST_MISMATCH" }
-          if (-not $e.run_requested) { throw "WATCHDOG_RUN_NOT_REQUESTED" }
-          if ($e.task_created_or_modified) { throw "TASK_MUTATION_REPORTED" }
+          if (-not $e.handler_confirmed) { throw "RECOVERY_HANDLER_NOT_CONFIRMED" }
+          if ($e.selected_task -notin @("host.github_runner.recover.v1", "host.rdc.recover.v1")) {
+            throw "RECOVERY_TASK_NOT_ALLOWLISTED"
+          }
           if ($e.production_touched) { throw "PRODUCTION_TOUCHED" }
           if ($e.secrets_read -or $e.credentials_supplied) { throw "SECRET_OR_CREDENTIAL_USE_REPORTED" }
+          if ($e.arbitrary_command_enabled) { throw "ARBITRARY_COMMAND_REPORTED" }
 
       - name: Upload sanitized evidence
         if: always() && steps.session.outputs.target_path != ''
@@ -135,7 +149,8 @@ jobs:
               $e = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
               "- Resultado: $($e.result)" | Add-Content $env:GITHUB_STEP_SUMMARY
               "- Target: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
-              "- Task criada/alterada: $($e.task_created_or_modified)" | Add-Content $env:GITHUB_STEP_SUMMARY
+              "- Handler: $($e.selected_task)" | Add-Content $env:GITHUB_STEP_SUMMARY
+              "- Status final: $($e.final_status)" | Add-Content $env:GITHUB_STEP_SUMMARY
             }
           }
           "- Session Launcher: obrigatório" | Add-Content $env:GITHUB_STEP_SUMMARY
