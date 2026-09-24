@@ -7,19 +7,14 @@
   "architecture": {
     "source_host": "Noteri",
     "target_host": "DESKTOP-PDQK954",
-    "workflow": ".github/workflows/noteri-desktop-network-probe.yml",
+    "workflow": ".github/workflows/noteri-desktop-admin-broker-kick.yml",
     "probe": "scripts/noteri_desktop_network_probe.py",
-    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
-    "runner_labels": [
-      "self-hosted",
-      "Windows",
-      "X64",
-      "noteri",
-      "reqsys-dev"
-    ],
+    "runner_labels": ["self-hosted", "Windows", "X64", "noteri", "reqsys-dev"],
     "runtime_port": 8081,
+    "control_plane_port": 8787,
+    "control_plane_ready_path": "/readyz",
     "environment": "DEV",
-    "admin_staging_probe": "C:\\\\Users\\\\Public\\\\Desktop via C$"
+    "admin_staging_probe": "C:\\Users\\Public\\Desktop via C$"
   },
   "security": {
     "arbitrary_target": false,
@@ -32,7 +27,8 @@
     "wake_on_lan": false,
     "raw_ip_persisted": false,
     "remote_write": false,
-    "remote_listing_persisted": false
+    "remote_listing_persisted": false,
+    "control_plane_body_persisted": false
   },
   "evidence_contract": {
     "states": [
@@ -45,12 +41,13 @@
     "correlation_id_required": true,
     "independent_readback_required": true,
     "exact_sha_required": true,
-    "admin_staging_states": [
-      "accessible",
-      "access_denied",
-      "not_found",
-      "os_error_*"
+    "control_plane_fields": [
+      "control_plane_port",
+      "control_plane_port_reachable",
+      "control_plane_http_status",
+      "control_plane_ready"
     ],
+    "admin_staging_states": ["accessible", "access_denied", "not_found", "os_error_*"],
     "remote_write": false
   },
   "sdd_gate": {
@@ -62,7 +59,9 @@
     "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
   },
   "approvals": {
-    "requirements": true
+    "requirements": true,
+    "design": true,
+    "tasks": true
   },
-  "updated_at": "2026-09-21"
+  "updated_at": "2026-09-24"
 }
