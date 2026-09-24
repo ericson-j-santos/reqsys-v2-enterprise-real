@@ -1,6 +1,18 @@
 name: Codex Ollama E2E DEV
 
 on:
+  push:
+    branches:
+      - chore/ollama-local-validate-20260924
+    paths:
+      - .github/workflows/codex-ollama-e2e-dev.yml
+      - scripts/ollama_local_benchmark.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/codex-ollama-e2e-dev.yml
+      - scripts/ollama_local_benchmark.py
   workflow_dispatch:
     inputs:
       mode:
@@ -20,6 +32,92 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  local-benchmark:
+    name: Local-only Ollama benchmark on PC24x7 DEV
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 8
+    env:
+      RULES_SHA: ac2297988651f41ab03469808e41f83496e9c58f
+      TARGET_REPO: C:\\dev\\reqsys-v2-enterprise-real
+      MODEL: gemma4:26b-q8-code
+      CORRELATION_ID: ollama-local-validate-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout immutable benchmark SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact DEV host
+        shell: powershell
+        run: |
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "ollama-local",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = (@($raw)[-1] | ConvertFrom-Json)
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$($data.head)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Run local-only benchmark through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $benchmark = Join-Path $env:GITHUB_WORKSPACE "scripts\\ollama_local_benchmark.py"
+          $gatewayArgs = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "1",
+            "--timeout", "330",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $benchmark,
+            "--model", $env:MODEL,
+            "--timeout", "150",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          & python $gateway @gatewayArgs
+          exit $LASTEXITCODE
+
   e2e:
     name: ReqSys → Ollama Gateway → cloud/fallback on PC24x7 DEV
     if: inputs.mode == 'codex-e2e'
