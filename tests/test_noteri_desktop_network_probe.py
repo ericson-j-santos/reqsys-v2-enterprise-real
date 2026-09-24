@@ -248,5 +248,6 @@ def test_orchestrator_readback_is_sanitized(monkeypatch) -> None:
     assert result["desktop_worker"]["runner_recovery_capable"] is True
     assert result["desktop_worker"]["rdc_recovery_capable"] is False
     assert result["desktop_worker"]["orchestrator_refresh_capable"] is False
+    assert result["desktop_worker"]["reboot_once_capable"] is False
     assert "worker_id" not in json.dumps(result)
     assert "secret" not in json.dumps(result)
