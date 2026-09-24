@@ -1,36 +1,31 @@
-name: Noteri to Desktop Network Probe
+name: Noteri to Desktop DEV HTTP Probe
 
 on:
-  workflow_dispatch:
   push:
     branches:
-      - "fix/noteri-desktop-network-probe-*"
+      - "fix/noteri-desktop-network-probe-http-8083-*"
     paths:
-      - "scripts/noteri_desktop_network_probe.py"
+      - "scripts/noteri_desktop_dev_http_probe.py"
       - ".github/workflows/noteri-desktop-network-probe.yml"
-      - ".github/workflows/reqsys-authorized-actions-gateway.yml"
-      - ".github/self-hosted-runner-policy.json"
-      - ".sdd/specs/noteri-desktop-network-probe.*"
-      - "tests/test_reqsys_authorized_actions_gateway.py"
-      - "tests/test_noteri_desktop_network_probe.py"
+      - "tests/test_noteri_desktop_dev_http_probe.py"
 
 permissions:
   contents: read
 
 concurrency:
-  group: noteri-desktop-network-probe-${{ github.ref }}
+  group: noteri-desktop-dev-http-probe-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   probe:
-    name: Diagnose Desktop reachability from Noteri
+    name: Diagnose Desktop DEV HTTP route from Noteri
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
-      CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
+      CORRELATION_ID: noteri-desktop-dev-http-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\noteri-desktop-dev-http\evidence.json
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
@@ -60,7 +55,7 @@ jobs:
           $launcherArgs = @(
             "--policy", $policy,
             "--repo", $env:TARGET_REPO,
-            "--session-prefix", "noteri-desktop-network",
+            "--session-prefix", "noteri-desktop-dev-http",
             "--correlation-id", $env:CORRELATION_ID,
             "--expected-head", $anchorSha,
             "--sync-ref", $syncRef
@@ -96,12 +91,12 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "pytest", "tests/test_noteri_desktop_network_probe.py", "-q"
+            "pytest", "tests/test_noteri_desktop_dev_http_probe.py", "-q"
           )
           & python $gateway @args
           exit $LASTEXITCODE
 
-      - name: Probe fixed Desktop target through Command Gateway
+      - name: Probe fixed Desktop DEV HTTP route through Command Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -111,7 +106,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $probeScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_network_probe.py"
+          $probeScript = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_dev_http_probe.py"
           $args = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
@@ -123,18 +118,18 @@ jobs:
             "--expected-head", $env:ANCHOR_SHA,
             "--",
             "python", $probeScript,
-            "--confirm", "PROBE-NOTERI-DESKTOP-NETWORK",
+            "--confirm", "PROBE-NOTERI-DESKTOP-DEV-HTTP",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL
           )
           & python $gateway @args
           exit $LASTEXITCODE
 
-      - name: Upload sanitized network evidence
+      - name: Upload sanitized DEV HTTP evidence
         if: always() && steps.session.outputs.target_path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: noteri-desktop-network-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-network\evidence.json
+          name: noteri-desktop-dev-http-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-dev-http\evidence.json
           if-no-files-found: warn
           retention-days: 30
