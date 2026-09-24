@@ -351,6 +351,11 @@ def test_gateway_report_factory_fabric_dev_e2e_is_exact_main_dev_only() -> None:
 def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None:
     content = _workflow()
 
+    dispatch_section = content.split(
+        "- name: Dispatch fixed workflow on main", maxsplit=1
+    )[1].split("- name: Validate exact dispatched run evidence", maxsplit=1)[0]
+    assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in dispatch_section
+
     assert "github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev'" in content
     assert "'/reqsys run codex-worker-pool-handoff-e2e-dev')" in content
     assert "target='codex-worker-pool-handoff.yml'" in content
