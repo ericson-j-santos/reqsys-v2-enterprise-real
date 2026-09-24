@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/user-journey-acceptance-dev.yml"
+      - "scripts/resolve_pc24x7_dev_locator.mjs"
       - "scripts/wsjf_business_effect_probe.py"
       - "scripts/wsjf_business_effect_gate.py"
       - "scripts/user_journey_acceptance_gate.py"
@@ -29,8 +30,6 @@ permissions:
 
 env:
   FEATURE: wsjf_planner_excel_simples
-  FRONTEND_URL: ${{ vars.PC24X7_DEV_FRONTEND_URL }}
-  API_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
   EVIDENCE_DIR: audit/user-journey/wsjf-planner-excel-dev
 
 concurrency:
@@ -50,23 +49,54 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
+      - name: Preparar Node para locator DEV assinado
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar contrato fail-closed do locator DEV
+        shell: bash
+        run: node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+
+      - name: Resolver runtime PC24x7 DEV vigente
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          node scripts/resolve_pc24x7_dev_locator.mjs \
+            --output "$EVIDENCE_DIR/signed-locator.json" >/dev/null
+
+      - name: Exportar runtime DEV resolvido para a jornada
+        shell: bash
+        env:
+          RESOLVED_DEV_BASE_URL: ${{ steps.locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          test -n "$RESOLVED_DEV_BASE_URL"
+          case "$RESOLVED_DEV_BASE_URL" in
+            https://*.trycloudflare.com) ;;
+            *) echo "::error::Runtime DEV resolvido fora do contrato permitido."; exit 1 ;;
+          esac
+          printf 'API_URL=%s\n' "$RESOLVED_DEV_BASE_URL" >> "$GITHUB_ENV"
+          printf 'FRONTEND_URL=%s\n' "$RESOLVED_DEV_BASE_URL" >> "$GITHUB_ENV"
+          echo "Runtime legado Fly.io rejeitado; jornada usa locator DEV assinado."
+          echo "Somente o runtime validado pelo locator pode produzir sucesso verde."
+
       - name: Validar configuração PC24x7 DEV
         shell: bash
         run: |
           set -euo pipefail
-          for pair in "PC24X7_DEV_BASE_URL:$API_URL" "PC24X7_DEV_FRONTEND_URL:$FRONTEND_URL"; do
+          for pair in "API_URL:$API_URL" "FRONTEND_URL:$FRONTEND_URL"; do
             name="${pair%%:*}"
             value="${pair#*:}"
             if [ -z "$value" ]; then
-              echo "::error::$name não configurada."
+              echo "::error::$name não resolvida."
               exit 1
             fi
             case "$value" in
-              https://*) ;;
-              *) echo "::error::$name deve usar HTTPS."; exit 1 ;;
-            esac
-            case "${value,,}" in
-              *fly.io*|*fly.dev*) echo "::error::Fly.io está descontinuado; $name deve apontar para PC24x7."; exit 1 ;;
+              https://*.trycloudflare.com) ;;
+              *) echo "::error::$name fora do locator DEV assinado."; exit 1 ;;
             esac
           done
           curl --fail --silent --show-error --max-time 20 "$API_URL/api/runtime/health" >/dev/null
