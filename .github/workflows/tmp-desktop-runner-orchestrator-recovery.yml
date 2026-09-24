@@ -54,7 +54,8 @@ jobs:
             "--repo", $env:GITHUB_WORKSPACE,
             "--session-prefix", "desktop-runner-orchestrator",
             "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", $anchorSha
+            "--expected-head", $anchorSha,
+            "--sync-ref", "origin/ops/desktop-runner-orchestrator-recovery-20260924"
           )
           $raw = & python $launcher @argsList
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
