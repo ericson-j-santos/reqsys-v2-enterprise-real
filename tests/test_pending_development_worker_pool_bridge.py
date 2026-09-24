@@ -13,6 +13,11 @@ from scripts import pending_development_worker_pool_bridge as bridge
 BASE_SHA = "a" * 40
 
 
+def test_worker_pool_contract_identity_is_pinned_to_public_v1() -> None:
+    assert bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME == "engineering-worker-pool"
+    assert bridge.EXPECTED_WORKER_POOL_CONTRACT_VERSION == "v1"
+
+
 def report(status: str = "dispatched") -> dict[str, Any]:
     return {
         "schema_version": "1.0.0",
