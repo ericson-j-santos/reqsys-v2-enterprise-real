@@ -144,6 +144,61 @@ def orchestrator_ready_probe(ports: dict[str, bool]) -> dict[str, Any]:
     }
 
 
+def orchestrator_registry_probe(ports: dict[str, bool]) -> dict[str, Any]:
+    if not ports.get("8787"):
+        return {"reachable": False, "result": "port_closed", "workers": [], "paths": []}
+
+    def get_json(path: str) -> tuple[int | None, Any]:
+        request = urllib.request.Request(
+            f"http://{TARGET_HOST}:8787{path}",
+            headers={"Accept": "application/json", "Cache-Control": "no-store"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=4) as response:
+                return int(response.status), json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            return int(exc.code), None
+        except (urllib.error.URLError, OSError, json.JSONDecodeError):
+            return None, None
+
+    workers_status, workers_payload = get_json("/v1/workers")
+    safe_workers: list[dict[str, Any]] = []
+    raw_workers = workers_payload.get("workers") if isinstance(workers_payload, dict) else []
+    if isinstance(raw_workers, list):
+        for item in raw_workers:
+            if not isinstance(item, dict):
+                continue
+            device = str(item.get("device_name") or "")
+            if device.casefold() not in {"noteri", "desktop-pdqk954"}:
+                continue
+            roles = item.get("roles") if isinstance(item.get("roles"), list) else []
+            safe_workers.append({
+                "device_name": device,
+                "worker_id": str(item.get("worker_id") or "")[:80],
+                "roles": [str(role)[:80] for role in roles[:12]],
+                "fresh": item.get("fresh") is True,
+                "controller_online": item.get("controller_online") is True,
+                "auth_valid": item.get("auth_valid") is True,
+                "profile": str(item.get("profile") or "")[:32],
+            })
+
+    openapi_status, openapi_payload = get_json("/openapi.json")
+    safe_paths: list[str] = []
+    if isinstance(openapi_payload, dict) and isinstance(openapi_payload.get("paths"), dict):
+        safe_paths = sorted(
+            str(path) for path in openapi_payload["paths"]
+            if str(path).startswith("/v1/") or str(path) == "/readyz"
+        )[:80]
+
+    return {
+        "reachable": workers_status is not None,
+        "result": "ok" if workers_status == 200 else f"http_{workers_status}",
+        "workers": safe_workers,
+        "openapi_status": openapi_status,
+        "paths": safe_paths,
+    }
+
+
 def admin_staging_path_probe() -> dict[str, Any]:
     """Comprova apenas acesso de leitura ao Desktop Público via C$; não grava nada."""
     try:
@@ -172,11 +227,13 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     staging = {"reachable": False, "result": "not_attempted"}
     known_ports: dict[str, bool] = {}
     orchestrator = {"reachable": False, "result": "not_attempted", "ready": False}
+    orchestrator_registry = {"reachable": False, "result": "not_attempted", "workers": [], "paths": []}
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
         known_ports = known_service_ports_probe()
         orchestrator = orchestrator_ready_probe(known_ports)
+        orchestrator_registry = orchestrator_registry_probe(known_ports)
         staging = admin_staging_path_probe()
 
     if not resolution["resolved"]:
@@ -204,6 +261,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "runtime_port_reachable": tcp,
         "known_service_ports": known_ports,
         "orchestrator_8787": orchestrator,
+        "orchestrator_registry": orchestrator_registry,
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
