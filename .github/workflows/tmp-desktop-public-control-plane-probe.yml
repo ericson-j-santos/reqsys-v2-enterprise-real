@@ -1,0 +1,87 @@
+name: Temporary Desktop Public Control Plane Probe
+
+on:
+  push:
+    branches:
+      - probe/desktop-public-control-plane-20260924
+    paths:
+      - .github/workflows/tmp-desktop-public-control-plane-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Resolve signed DEV locator
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/resolve_pc24x7_dev_locator.mjs --output /tmp/locator.json >/dev/null
+          base_url="$(python - <<'PY'
+          import json
+          print(json.load(open('/tmp/locator.json', encoding='utf-8'))['selected_url'])
+          PY
+          )"
+          echo "base_url=$base_url" >> "$GITHUB_OUTPUT"
+      - name: Probe public runtime and admin API
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          base=os.environ['BASE_URL'].rstrip('/')
+          def req(path, method='GET', data=None, headers=None):
+              body=None if data is None else json.dumps(data).encode()
+              h={'Accept':'application/json','User-Agent':'reqsys-control-plane-probe/1.0'}
+              if body is not None: h['Content-Type']='application/json'
+              if headers: h.update(headers)
+              r=urllib.request.Request(base+path,data=body,method=method,headers=h)
+              try:
+                  with urllib.request.urlopen(r,timeout=15) as x:
+                      raw=x.read(262144).decode()
+                      return x.status, json.loads(raw) if raw else {}
+              except urllib.error.HTTPError as e:
+                  raw=e.read(262144).decode()
+                  try: p=json.loads(raw)
+                  except: p={}
+                  return e.code,p
+          build_status,build=req('/api/runtime/build-info')
+          data=build.get('data',build) if isinstance(build,dict) else {}
+          observed=str(data.get('build_sha') or data.get('commit_sha') or '')
+          health_status,_=req('/api/health')
+          openapi_status,openapi=req('/api/openapi.json')
+          paths=(openapi.get('paths') or {}) if isinstance(openapi,dict) else {}
+          login_status,login=req('/api/v1/auth/login','POST',{'email':'ericsonjosedossantos@tieri659.onmicrosoft.com'})
+          token=''
+          if isinstance(login,dict):
+              token=str((login.get('data') or {}).get('access_token') or '')
+          orch_status=None
+          if token:
+              orch_status,_=req('/api/v1/actions-runtime/orchestrator/status',headers={'Authorization':'Bearer '+token})
+          result={
+            'health_status':health_status,
+            'build_status':build_status,
+            'observed_sha':observed,
+            'expected_sha':os.environ['EXPECTED_SHA'],
+            'openapi_status':openapi_status,
+            'has_actions_runtime_orchestrator': any('actions-runtime/orchestrator' in p for p in paths),
+            'has_noteri_profile': any('noteri/profile' in p for p in paths),
+            'login_status':login_status,
+            'admin_token_obtained':bool(token),
+            'orchestrator_status_http':orch_status,
+          }
+          print(json.dumps(result,sort_keys=True))
+          if health_status!=200 or build_status!=200:
+              raise SystemExit(2)
+          PY
