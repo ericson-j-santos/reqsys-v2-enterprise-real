@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protege observability-platform/main usando apenas a autenticação GitHub local do PC24x7."""
+"""Protege e2e-platform/main usando apenas a autenticação GitHub local do PC24x7."""
 from __future__ import annotations
 
 import argparse
@@ -12,9 +12,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-TARGET_REPOSITORY = "ericson-j-santos/observability-platform"
+TARGET_REPOSITORY = "ericson-j-santos/e2e-platform"
 TARGET_BRANCH = "main"
-REQUIRED_CHECKS = ("test", "E2E Platform Evidence Gate / validate-evidence")
+REQUIRED_CHECKS = ("contract-self-test",)
 API_VERSION = "2026-03-10"
 
 
@@ -127,7 +127,7 @@ def _write_evidence(path: Path, payload: dict[str, Any]) -> None:
         raise ProtectionError("evidence_path_outside_repo") from exc
     target.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    fd, temp_name = tempfile.mkstemp(prefix="obs-protection-", suffix=".json", dir=str(target.parent))
+    fd, temp_name = tempfile.mkstemp(prefix="e2e-protection-", suffix=".json", dir=str(target.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
@@ -153,7 +153,7 @@ def _blocked(path: Path, reason: str, target_sha: str | None = None) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Protege observability-platform/main via auth local do PC24x7")
+    parser = argparse.ArgumentParser(description="Protege e2e-platform/main via auth local do PC24x7")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     output = args.output

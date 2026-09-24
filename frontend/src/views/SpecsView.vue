@@ -262,6 +262,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../services/api'
+import { renderMarkdown } from '../utils/markdownRenderer'
 
 // ---------------------------------------------------------------------------
 // Estado
@@ -406,58 +407,6 @@ async function criarFeature() {
 function fecharDialogNova() {
   dialogNova.value = false
   nova.value = { titulo: '', slug: '', descricao: '', autor: '', modo: 'template', exemplo_base: null, templates: ['requirements', 'design'] }
-}
-
-// ---------------------------------------------------------------------------
-// Markdown renderer
-// ---------------------------------------------------------------------------
-
-function renderMarkdown(md) {
-  if (!md) return ''
-  let html = md
-    // Remove bloco HTML de comentários (cabeçalho gerado)
-    .replace(/<!--[\s\S]*?-->/g, '')
-    // Mermaid: preserva como bloco de código estilizado
-    .replace(/```mermaid([\s\S]*?)```/g, '<pre class="mermaid-block"><code>mermaid$1</code></pre>')
-    // Blocos de código
-    .replace(/```([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>')
-    // Código inline
-    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-    // Headers
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // Negrito e itálico
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Links — REQ-XXXXX linkados ao ReqSys
-    .replace(/\b(REQ-\d+)\b/g, '<a href="/requisitos" class="req-link" title="Ver requisitos">$1</a>')
-    // Links externos
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // Tabelas
-    .replace(/^\|(.+)\|$/gm, (_, row) => {
-      const cells = row.split('|').map(c => c.trim())
-      const isHeader = cells.some(c => /^[-:]+$/.test(c))
-      if (isHeader) return ''
-      const tag = 'td'
-      return `<tr>${cells.map(c => `<${tag}>${c}</${tag}>`).join('')}</tr>`
-    })
-    // HR
-    .replace(/^---+$/gm, '<hr>')
-    // Listas
-    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-    // Parágrafos
-    .replace(/\n{2,}/g, '</p><p>')
-
-  // Wrap em tabela se tem <tr>
-  if (html.includes('<tr>')) {
-    html = html.replace(/((<tr>.*<\/tr>\s*)+)/gs, '<table class="md-table">$1</table>')
-  }
-  // Wrap listas
-  html = html.replace(/((<li>.*<\/li>\s*)+)/gs, '<ul>$1</ul>')
-
-  return `<p>${html}</p>`
 }
 
 // ---------------------------------------------------------------------------

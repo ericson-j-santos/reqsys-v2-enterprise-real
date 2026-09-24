@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Instala uma exceção Owner Risk3 temporária para proteger observability-platform/main."""
+"""Instala uma exceção Owner Risk3 temporária para proteger e2e-platform/main."""
 from __future__ import annotations
 
 import argparse
@@ -12,15 +12,15 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-ACTION_ID = "reqsys.observability-main-protection.dev"
-SCOPE = "repo://ericson-j-santos/observability-platform/branch/main"
-MANAGED_BY = "reqsys-observability-main-protection-once"
-ENABLE_CONFIRM = "ENABLE-OBSERVABILITY-MAIN-PROTECTION-ONCE"
-DISABLE_CONFIRM = "DISABLE-OBSERVABILITY-MAIN-PROTECTION-ONCE"
-EVIDENCE_PATH = "artifacts/observability-main-protection-pc24x7/evidence.json"
+ACTION_ID = "reqsys.e2e-platform-main-protection.dev"
+SCOPE = "repo://ericson-j-santos/e2e-platform/branch/main"
+MANAGED_BY = "reqsys-e2e-platform-main-protection-once"
+ENABLE_CONFIRM = "ENABLE-E2E-PLATFORM-MAIN-PROTECTION-ONCE"
+DISABLE_CONFIRM = "DISABLE-E2E-PLATFORM-MAIN-PROTECTION-ONCE"
+EVIDENCE_PATH = "artifacts/e2e-platform-main-protection-pc24x7/evidence.json"
 COMMAND = [
     "python",
-    "scripts/run_observability_main_protection_local.py",
+    "scripts/run_e2e_platform_main_protection_local.py",
     "--output",
     EVIDENCE_PATH,
 ]
@@ -129,7 +129,7 @@ def disable(path: Path) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Autoriza uma proteção Risk3 única do observability-platform/main")
+    parser = argparse.ArgumentParser(description="Autoriza uma proteção Risk3 única do e2e-platform/main")
     parser.add_argument("--config", type=Path, default=default_config_path())
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--enable", action="store_true")
