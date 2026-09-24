@@ -114,6 +114,47 @@ def test_explicit_dompurify_sanitization_downgrades_raw_html_sink_to_review(tmp_
     assert xss[0].severity == "high"
 
 
+def test_specs_view_accepts_only_verified_trusted_markdown_sanitizer(tmp_path):
+    write(
+        tmp_path,
+        "frontend/src/views/SpecsView.vue",
+        "import { renderMarkdown } from '../utils/markdownRenderer'\n"
+        '<div v-html="renderMarkdown(content)"></div>\n',
+    )
+    write(
+        tmp_path,
+        "frontend/src/utils/markdownRenderer.js",
+        "const clean = DOMPurify.sanitize(html);\nexport function renderMarkdown() { return clean }\n",
+    )
+
+    findings, _ = gate.scan_repository(tmp_path)
+    xss = [item for item in findings if item.risk_id == "05"]
+
+    assert len(xss) == 1
+    assert xss[0].path == "frontend/src/views/SpecsView.vue"
+    assert xss[0].enforcement == "review"
+
+
+def test_specs_view_blocks_when_trusted_markdown_helper_loses_sanitization(tmp_path):
+    write(
+        tmp_path,
+        "frontend/src/views/SpecsView.vue",
+        "import { renderMarkdown } from '../utils/markdownRenderer'\n"
+        '<div v-html="renderMarkdown(content)"></div>\n',
+    )
+    write(
+        tmp_path,
+        "frontend/src/utils/markdownRenderer.js",
+        "export function renderMarkdown(html) { return html }\n",
+    )
+
+    findings, _ = gate.scan_repository(tmp_path)
+    blockers = [item for item in findings if item.risk_id == "05" and item.enforcement == "block"]
+
+    assert len(blockers) == 1
+    assert blockers[0].path == "frontend/src/views/SpecsView.vue"
+
+
 def test_report_always_contains_12_risk_rows_and_no_signal_is_not_pass_claim(tmp_path):
     write(tmp_path, "backend/app/ok.py", "value = 1\n")
     findings, scanned = gate.scan_repository(tmp_path)

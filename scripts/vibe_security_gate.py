@@ -195,6 +195,31 @@ def add(findings: list[Finding], risk_id: str, severity: str, enforcement: str, 
     findings.append(Finding(risk_id, severity, enforcement, path.relative_to(root).as_posix(), line_no, compact(line_text), recommendation))
 
 
+SANITIZER_CALL = re.compile(r"(?i)(DOMPurify\.sanitize|sanitizeHtml|sanitize_html|bleach\.clean)")
+TRUSTED_SANITIZER_IMPORT = re.compile(
+    r"""(?x)import\s*\{\s*renderMarkdown\s*\}\s*from\s*['"]\.\./utils/markdownRenderer['"]"""
+)
+TRUSTED_SANITIZER_BY_CONSUMER = {
+    "frontend/src/views/SpecsView.vue": "frontend/src/utils/markdownRenderer.js",
+}
+
+
+def has_explicit_sanitizer(path: Path, root: Path, content: str) -> bool:
+    if SANITIZER_CALL.search(content):
+        return True
+
+    relative = path.relative_to(root).as_posix()
+    helper_relative = TRUSTED_SANITIZER_BY_CONSUMER.get(relative)
+    if helper_relative is None or not TRUSTED_SANITIZER_IMPORT.search(content):
+        return False
+
+    helper = root / helper_relative
+    if not helper.is_file():
+        return False
+    helper_content = helper.read_text(encoding="utf-8", errors="replace")
+    return SANITIZER_CALL.search(helper_content) is not None
+
+
 def scan_file(path: Path, root: Path) -> list[Finding]:
     content = path.read_text(encoding="utf-8", errors="replace")
     relative = path.relative_to(root).as_posix()
@@ -217,7 +242,7 @@ def scan_file(path: Path, root: Path) -> list[Finding]:
         assert match is not None
         add(findings, "04", "high", "review", path, root, content, match, "Comprovar autorização de ferramenta no backend com identidade da sessão, escopo mínimo e teste de prompt injection.")
 
-    sanitizer_present = bool(re.search(r"(?i)(DOMPurify\.sanitize|sanitizeHtml|sanitize_html|bleach\.clean)", content))
+    sanitizer_present = has_explicit_sanitizer(path, root, content)
     for match in RAW_HTML.finditer(content):
         add(
             findings,
