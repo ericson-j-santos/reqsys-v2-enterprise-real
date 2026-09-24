@@ -143,6 +143,68 @@ def test_container_auth_contract_requires_exact_token_file_env() -> None:
         module._validate_container_auth_contract({"Config": {"Env": []}})
 
 
+def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    token_file = tmp_path / "token"
+    container = {
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project": "reqsys",
+                "com.docker.compose.project.working_dir": "C:/dev/reqsys-v2-enterprise-real",
+                "com.docker.compose.project.config_files": "C:/dev/reqsys-v2-enterprise-real/docker-compose.pc24x7-codex-worker-pool.yml",
+            },
+            "Env": [
+                f"CODEX_WORKER_POOL_API_TOKEN_FILE={module.TOKEN_DESTINATION}",
+                "CODEX_WORKER_POOL_EXPECTED_RULES_SHA=" + ("a" * 40),
+            ],
+        }
+    }
+    seen: list[tuple[list[str], dict[str, str] | None]] = []
+
+    def fake_docker(
+        args: list[str], *, env: dict[str, str] | None = None
+    ) -> str:
+        seen.append((args, env))
+        return ""
+
+    monkeypatch.setattr(module, "_docker", fake_docker)
+
+    module._compose_recreate_service(container, token_file)
+
+    assert len(seen) == 1
+    args, env = seen[0]
+    assert args[:7] == [
+        "compose",
+        "--project-name",
+        "reqsys",
+        "--project-directory",
+        "C:/dev/reqsys-v2-enterprise-real",
+        "--file",
+        "C:/dev/reqsys-v2-enterprise-real/docker-compose.pc24x7-codex-worker-pool.yml",
+    ]
+    assert args[-6:] == [
+        "up",
+        "-d",
+        "--force-recreate",
+        "--no-deps",
+        "--no-build",
+        module.SERVICE,
+    ]
+    assert env is not None
+    assert env["CODEX_WORKER_POOL_API_TOKEN_FILE_HOST"] == str(token_file)
+    assert env["CODEX_WORKER_POOL_EXPECTED_RULES_SHA"] == "a" * 40
+    assert "x" * 48 not in json.dumps(args)
+    assert "x" * 48 not in json.dumps(env)
+
+
+def test_compose_recreate_fails_closed_without_compose_identity(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(module.RestoreError, match="worker_pool_compose_identity_missing"):
+        module._compose_recreate_service({"Config": {"Labels": {}, "Env": []}}, tmp_path / "token")
+
+
 def test_restore_fails_closed_for_non_file_token_path(tmp_path: Path) -> None:
     with pytest.raises(module.RestoreError, match="worker_pool_token_path_not_file"):
         module._read_existing_token(tmp_path)
