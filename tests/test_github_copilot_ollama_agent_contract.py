@@ -26,6 +26,10 @@ def test_server_requires_bearer_and_is_read_only_loopback_service() -> None:
     assert "destructive_hint=False" in raw
     assert 'host="127.0.0.1"' in raw
     assert "port=8010" in raw
+    assert 'ThreadingHTTPServer(("127.0.0.1", 8011)' in raw
+    assert '"service": "reqsys-ollama-mcp-bridge"' in raw
+    assert '"auth_configured": bool(os.getenv("OLLAMA_MCP_BEARER_TOKEN", "").strip())' in raw
+    assert '"secret_exposed": False' in raw
     assert "11434" not in raw
 
 
