@@ -4,14 +4,22 @@ on:
   pull_request:
     paths:
       - 'scripts/bootstrap_pc24x7_teams_service_token.py'
+      - 'scripts/reconcile_pc24x7_teams_dev_runtime.py'
+      - 'scripts/recreate_cofre_dev_pc24x7.py'
+      - 'config/pc24x7-teams-bot-runtime.override.yml'
       - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_bootstrap_pc24x7_teams_service_token.py'
+      - 'tests/test_reconcile_pc24x7_teams_dev_runtime.py'
+      - 'tests/test_reconcile_pc24x7_teams_dev_runtime.py'
       - 'tests/test_pc24x7_teams_token_bootstrap_workflow.py'
       - '.github/workflows/pc24x7-teams-token-bootstrap.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/bootstrap_pc24x7_teams_service_token.py'
+      - 'scripts/reconcile_pc24x7_teams_dev_runtime.py'
+      - 'scripts/recreate_cofre_dev_pc24x7.py'
+      - 'config/pc24x7-teams-bot-runtime.override.yml'
       - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_pc24x7_teams_token_bootstrap_workflow.py'
       - '.github/workflows/pc24x7-teams-token-bootstrap.yml'
@@ -39,9 +47,9 @@ jobs:
           python-version: '3.12'
       - name: Validar sintaxe e testes
         run: |
-          python -m py_compile scripts/bootstrap_pc24x7_teams_service_token.py
+          python -m py_compile scripts/bootstrap_pc24x7_teams_service_token.py scripts/reconcile_pc24x7_teams_dev_runtime.py
           python -m pip install --disable-pip-version-check pytest==9.0.3
-          pytest -q tests/test_bootstrap_pc24x7_teams_service_token.py tests/test_pc24x7_teams_token_bootstrap_workflow.py
+          pytest -q tests/test_bootstrap_pc24x7_teams_service_token.py tests/test_reconcile_pc24x7_teams_dev_runtime.py tests/test_pc24x7_teams_token_bootstrap_workflow.py
 
   probe-repository-admin-jwt:
     if: github.event_name == 'pull_request'
@@ -61,9 +69,64 @@ jobs:
             echo 'REPOSITORY_ADMIN_JWT_PRESENT=false'
           fi
 
-  bootstrap-dev:
+
+  reconcile-runtime-dev:
     if: github.event_name != 'pull_request'
     needs: contract
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    environment: development
+    timeout-minutes: 20
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      EVIDENCE_FILE: artifacts/pc24x7-teams-runtime-reconcile/evidence.json
+      CORRELATION_ID: pc24x7-teams-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validar configuração OIDC sem expor valores
+        shell: powershell
+        run: |
+          $names = @('REQSYS_KEY_VAULT_NAME','CCP_AZURE_CLIENT_ID','CCP_AZURE_TENANT_ID','CCP_AZURE_SUBSCRIPTION_ID')
+          foreach ($name in $names) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              Write-Error "$name não configurado. Reconciliação permanece fail-closed."
+              exit 2
+            }
+          }
+
+      - name: Login Azure por OIDC da identidade mutadora
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Reconciliar runtime PC24x7 DEV no SHA do workflow
+        shell: powershell
+        run: |
+          python scripts/reconcile_pc24x7_teams_dev_runtime.py --confirm RECONCILE-PC24X7-TEAMS-DEV --expected-sha "${{ github.sha }}" --vault-name "$env:REQSYS_KEY_VAULT_NAME" --expected-tenant-id "$env:CCP_AZURE_TENANT_ID" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publicar evidência sanitizada da reconciliação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-teams-runtime-reconcile-${{ github.run_id }}
+          path: artifacts/pc24x7-teams-runtime-reconcile/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  bootstrap-dev:
+    if: github.event_name != 'pull_request'
+    needs: [contract, reconcile-runtime-dev]
     runs-on: ubuntu-latest
     environment: development
     timeout-minutes: 10
