@@ -45,6 +45,7 @@ jobs:
         github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
         github.event.comment.body == '/reqsys run protect-observability-platform-main' ||
         github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main' ||
+        github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main-noteri' ||
         github.event.comment.body == '/reqsys run protect-e2e-platform-main' ||
         github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset'
       )
@@ -143,6 +144,10 @@ jobs:
             '/reqsys run protect-engineering-worker-pool-main')
               target='branch-protection-audit.yml'
               mode='apply-engineering-worker-pool'
+              ;;
+            '/reqsys run protect-engineering-worker-pool-main-noteri')
+              target='branch-protection-audit.yml'
+              mode='apply-engineering-worker-pool-noteri'
               ;;
             '/reqsys run protect-e2e-platform-main')
               target='branch-protection-audit.yml'
