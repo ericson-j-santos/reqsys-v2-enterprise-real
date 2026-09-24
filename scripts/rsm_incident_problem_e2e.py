@@ -294,7 +294,7 @@ def main() -> int:
         evidence = {
             'status': 'failed',
             'error': type(exc).__name__,
-            'detail': str(exc)[:500],
+            'detail': 'rsm-08-e2e-failed',
             'production_touched': False,
         }
         code = 2
