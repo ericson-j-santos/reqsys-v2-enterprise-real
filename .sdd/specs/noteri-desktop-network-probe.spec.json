@@ -62,7 +62,16 @@
       "os_error_*"
     ],
     "remote_write": false,
-    "control_port_values": "boolean_only"
+    "control_port_values": "boolean_only",
+    "engineering_orchestrator": {
+      "endpoints": [
+        "/readyz",
+        "/v1/workers"
+      ],
+      "runner_recovery_task": "host.github_runner.recover.v1",
+      "raw_worker_payload_persisted": false,
+      "identifiers_persisted": false
+    }
   },
   "sdd_gate": {
     "tests": [
