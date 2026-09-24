@@ -1,0 +1,41 @@
+{
+  "feature_name": "engineering-worker-pool-main-protection-automation",
+  "project": "Engineering Control Plane",
+  "created_at": "2026-09-24",
+  "updated_at": "2026-09-24",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Protege engineering-worker-pool/main e habilita auto-merge por rota PC24x7 Risk3 fixa, idempotente e com readback independente.",
+  "environment": "GitHub Actions / PC24x7 DEV / GitHub API",
+  "production_enabled": false,
+  "risk": {
+    "admin_permission": true,
+    "target_repository": "ericson-j-santos/engineering-worker-pool",
+    "target_branch": "main",
+    "self_hosted_runner": "DESKTOP-PDQK954",
+    "force_push": false,
+    "deletion": false,
+    "secrets_exposed": false
+  },
+  "acceptance_criteria": [
+    "Branch Protection Audit reutiliza o workflow existente e adiciona somente o modo apply-engineering-worker-pool.",
+    "Authorized Actions Gateway aceita somente o comando literal protect-engineering-worker-pool-main.",
+    "Sessão passa por Session Launcher e Owner Risk3 Gateway no PC24x7 exato.",
+    "O check test do SHA atual deve estar verde antes da mutação.",
+    "Branch protection exige PR, test strict, admins protegidos e bloqueia force-push/exclusão.",
+    "allow_auto_merge termina true e é comprovado por leitura independente.",
+    "SHA alvo permanece estável antes/depois e replay pode retornar ALREADY_COMPLIANT.",
+    "Nenhum segredo, deploy, produção ou conteúdo da branch alvo é alterado."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_engineering_worker_pool_branch_protection.py"
+    ],
+    "evidence_contract": "PC24x7 exato; Risk3 fixo; auth local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
+  }
+}
