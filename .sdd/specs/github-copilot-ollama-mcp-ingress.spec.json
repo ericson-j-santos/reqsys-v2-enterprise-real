@@ -13,7 +13,7 @@
   "description": "Adiciona ingresso HTTPS estável e governado para o bridge MCP Ollama no Desktop PC24x7 via Tailscale Funnel, reconciliando antes a release imutável do supervisor no mesmo SHA e sem publicar Ollama ou gateway diretamente.",
   "acceptance_criteria": [
     "O alvo público é exclusivamente http://127.0.0.1:8010 sob /mcp e HTTPS 443.",
-    "Ollama :11434, gateway :8008 e gateway DEV :8083 não são alvos do Funnel deste incremento.",
+    "Ollama :11434, gateway :8008, health MCP :8011 e gateway DEV :8083 não são alvos do Funnel deste incremento.",
     "O reconciliador falha fechado sem bridge local, Tailscale Running, MagicDNS ou rota observável.",
     "Consentimento de Funnel ausente é classificado sem interação automática.",
     "A CLI do Tailscale é resolvida sem depender do PATH interativo: caminho explícito válido, descoberta no PATH do serviço ou diretórios locais conhecidos; ausência resulta em TAILSCALE_CLI_NOT_FOUND.",
@@ -49,6 +49,8 @@
     "mode": "mcp-ingress",
     "secrets_mutated": false,
     "bearer_consumed_by_supervisor": true,
-    "bearer_exposed": false
+    "bearer_exposed": false,
+    "local_health_endpoint": "http://127.0.0.1:8011/health",
+    "health_public": false
   }
 }
