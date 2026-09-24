@@ -17,7 +17,9 @@ usando o Ollama do PC24x7 como ferramenta MCP governada, sem expor a porta
    literal pode ser versionado.
 4. O bridge local deve aceitar somente o gateway
    `http://127.0.0.1:8008`/localhost:8008 e permanecer em bind loopback
-   `127.0.0.1:8010`.
+   `127.0.0.1:8010`; o health identificado deve existir somente em
+   `127.0.0.1:8011/health`, informar `auth_configured` sem revelar o bearer e
+   nunca ser publicado pelo Funnel.
 5. Apenas modelos allowlisted podem ser solicitados ou retornados. O baseline é
    `gemma4:31b-cloud` com fallback `gemma4:26b-q8-code`.
 6. A chamada MCP deve exigir Bearer token e comparar o valor em tempo constante.
@@ -28,7 +30,8 @@ usando o Ollama do PC24x7 como ferramenta MCP governada, sem expor a porta
 9. Erros do gateway devem falhar com mensagem sanitizada; prompt, resposta e
    token não devem ser registrados como evidência.
 10. Testes devem provar caso positivo, bloqueio de endpoint remoto, bloqueio de
-    modelo não allowlisted, correlação inválida e contrato do custom agent.
+    modelo não allowlisted, correlação inválida, contrato do custom agent e
+    contrato do health loopback sem exposição de segredo.
 
 ## Critérios de aceite
 
@@ -36,8 +39,8 @@ usando o Ollama do PC24x7 como ferramenta MCP governada, sem expor a porta
    apenas `ollama-reqsys/ollama_analyze` para inferência Ollama.
 2. Endpoint remoto do gateway, modelo fora da allowlist e `correlation_id`
    inválido são recusados antes de qualquer chamada de rede.
-3. O bridge exige Bearer token, permanece em loopback e não contém acesso direto
-   ao Ollama `:11434`.
+3. O bridge exige Bearer token, permanece em loopback, expõe health identificado
+   somente em `:8011` sem segredo e não contém acesso direto ao Ollama `:11434`.
 4. Os testes `tests/test_ollama_mcp_bridge.py` e
    `tests/test_github_copilot_ollama_agent_contract.py` passam no HEAD exato.
 5. O Pre-PR Readiness retorna `READY_FOR_PR=passed` no HEAD exato e
