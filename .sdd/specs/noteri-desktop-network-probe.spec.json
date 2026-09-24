@@ -26,7 +26,8 @@
       "smb": 445,
       "rdp": 3389,
       "winrm_http": 5985,
-      "winrm_https": 5986
+      "winrm_https": 5986,
+      "engineering_orchestrator": 8787
     }
   },
   "security": {
