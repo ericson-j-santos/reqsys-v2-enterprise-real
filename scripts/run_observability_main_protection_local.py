@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protege observability-platform/main usando apenas a autenticação GitHub local do Noteri."""
+"""Protege observability-platform/main usando apenas a autenticação GitHub local do PC24x7."""
 from __future__ import annotations
 
 import argparse
@@ -153,14 +153,14 @@ def _blocked(path: Path, reason: str, target_sha: str | None = None) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Protege observability-platform/main via auth local do Noteri")
+    parser = argparse.ArgumentParser(description="Protege observability-platform/main via auth local do PC24x7")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     output = args.output
 
     target_sha: str | None = None
     try:
-        if socket.gethostname().casefold() != "noteri":
+        if socket.gethostname().upper() != "DESKTOP-PDQK954":
             raise ProtectionError("unexpected_host")
 
         auth = _gh(["auth", "status", "--hostname", "github.com"])
