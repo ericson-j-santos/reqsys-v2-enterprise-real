@@ -1,6 +1,7 @@
 name: RSM ServiceCase & CHANGE Evidence E2E
 
 on:
+  workflow_dispatch:
   push:
     branches-ignore:
       - main
