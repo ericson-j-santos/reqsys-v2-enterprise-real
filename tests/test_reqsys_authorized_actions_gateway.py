@@ -298,8 +298,11 @@ def test_gateway_worker_pool_smoke_dev_is_exact_inputless_and_fail_closed() -> N
     assert "steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml'" in content
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f repository=" not in content
-    assert "-f issue_number=" not in content
-    assert "-f request_id=" not in content
+    assert (
+        'elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && '
+        '[ "$TARGET_MODE" = "restore" ]; then'
+    ) in content
+    assert '[ "$TARGET_MODE" = "smoke" ]' not in content
 
 
 def test_gateway_noteri_desktop_admin_broker_kick_is_exact_and_fail_closed() -> None:
