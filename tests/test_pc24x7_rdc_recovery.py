@@ -187,6 +187,7 @@ def test_workflow_contract_is_fixed_to_pc24x7_desktop():
     assert "--confirm RECOVER-GOVERNED-RDC" in workflow
     assert "workflow_dispatch:" in workflow
     assert "workflow_call:" not in workflow
+    assert "cancel-in-progress: true" in workflow
     assert "inputs:" not in workflow
     assert "production_touched" not in workflow.lower()
 
