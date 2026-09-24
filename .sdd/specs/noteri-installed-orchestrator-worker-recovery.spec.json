@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Noteri installed Engineering Orchestrator worker recovery",
+  "status": "implementation_with_premerge_physical_gate",
+  "approvals": {
+    "requirements": true
+  },
+  "architecture": {
+    "environment": "DEV",
+    "workflow": ".github/workflows/noteri-installed-orchestrator-worker-recovery.yml",
+    "recovery_script": "scripts/recover_noteri_installed_orchestrator_worker.py",
+    "runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "noteri",
+      "reqsys-dev"
+    ],
+    "install_root": "C:\\dev\\chatgpt-workers\\reqsys-orchestrator-24x7-runtime",
+    "control_plane": "http://DESKTOP-PDQK954:8787",
+    "worker_id": "noteri"
+  },
+  "security": {
+    "arbitrary_shell": false,
+    "pull_request_self_hosted_trigger": false,
+    "owner_push_only": true,
+    "task_scheduler_modified": false,
+    "production": false,
+    "secrets_read": false,
+    "rdc_required": false,
+    "reboot": false
+  },
+  "runtime_gate": {
+    "exact_workflow_sha": true,
+    "profile_task_required": "host.profile.set.v1",
+    "independent_readback": "GET /v1/workers",
+    "required_state": [
+      "fresh",
+      "controller_online",
+      "auth_valid",
+      "profile_task_capable"
+    ]
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/noteri-installed-orchestrator-worker-recovery.requirements.md",
+    "tests": "tests/test_noteri_installed_orchestrator_worker_recovery.py"
+  }
+}
