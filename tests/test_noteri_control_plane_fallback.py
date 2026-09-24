@@ -172,7 +172,24 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "shell: powershell" in workflow
     assert "shell: pwsh" not in workflow
     assert "workflow_dispatch:" in workflow
+    assert "push:" in workflow
+    assert "github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real'" in workflow
+    assert "github.actor == 'ericson-j-santos'" in workflow
+    assert "pull_request:" not in workflow
+    assert "'.github/workflows/noteri-control-plane-probe.yml'" in workflow
+    assert "'tests/test_noteri_control_plane_fallback.py'" in workflow
+    assert "'.sdd/specs/noteri-control-plane-fallback.requirements.md'" in workflow
+    assert "'.sdd/specs/noteri-control-plane-fallback.spec.json'" in workflow
     assert "inputs:" not in workflow
+    assert "git ls-remote https://github.com/ericson-j-santos/noteri-runtime.git refs/heads/main" in workflow
+    assert "repository: ericson-j-santos/noteri-runtime" in workflow
+    assert "noteri_runtime_isolated_e2e.py" in workflow
+    assert "noteri_runtime_observed_sha_mismatch" in workflow
+    assert "noteri_runtime_source_sha_not_verified" in workflow
+    assert "noteri_runtime_final_profile_not_normal" in workflow
+    assert "noteri_runtime_idempotency_missing" in workflow
+    assert "noteri_runtime_negative_control_missing" in workflow
+    assert "persist-credentials: false" in workflow
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-control-plane-probe.yml" in policy["approved_workflows"]
 
