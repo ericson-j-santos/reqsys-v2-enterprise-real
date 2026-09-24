@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "feature_name": "Noteri control-plane fallback without RDC",
-  "status": "code_ready_activation_pending",
+  "status": "implementation_with_premerge_physical_gate",
   "approvals": {
     "requirements": true
   },
@@ -32,7 +32,9 @@
     "production": false,
     "reboot": false,
     "fail_closed_on_missing_runner": true,
-    "elevated_result_contains_secrets": false
+    "elevated_result_contains_secrets": false,
+    "self_hosted_pull_request_trigger": false,
+    "premerge_owner_push_only": true
   },
   "runtime_gate": {
     "prerequisite": "GitHub CLI autenticado e bootstrap governado capaz de provisionar ou reutilizar o runner do Noteri",
@@ -42,7 +44,9 @@
       "workflow pickup proven"
     ],
     "unavailable_error": "SELF_HOSTED_RUNNER_UNAVAILABLE",
-    "abandoned_run_cleanup": "cancel_exact_run_and_record_terminal_state"
+    "abandoned_run_cleanup": "cancel_exact_run_and_record_terminal_state",
+    "premerge_branch_sha_required": true,
+    "premerge_trigger": "canonical_owner_push_paths"
   },
   "sdd_gate": {
     "tests": [
@@ -52,7 +56,7 @@
       "tests/test_activate_noteri_free_control_plane.py",
       "tests/test_noteri_runtime_auto_watch_workflow.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -164,6 +168,13 @@
         "rdc_required": false,
         "production_touched": false,
         "secrets_read": false
+      },
+      "premerge_evidence": {
+        "required": true,
+        "trigger": "canonical_repo_push",
+        "actor": "ericson-j-santos",
+        "forbidden_trigger": "pull_request",
+        "exact_branch_sha": true
       }
     },
     "auto_watch": {
@@ -185,5 +196,6 @@
       "production_touched": false,
       "secrets_read": false
     }
-  }
+  },
+  "updated_at": "2026-09-23"
 }

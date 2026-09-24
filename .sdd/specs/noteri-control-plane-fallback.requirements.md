@@ -20,6 +20,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 8. Um runtime auto watch em GitHub-hosted runner deve verificar periodicamente o retorno do Noteri sem depender do chat: despachar somente `noteri-control-plane-probe.yml` na `main`, validar o SHA exato, cancelar o run sem pickup e atualizar um único comentário de estado na issue governada.
 9. Quando houver pickup, o auto watch deve aguardar o probe, baixar somente o artifact sanitizado e declarar `runtime_active` apenas com `ok=true`, host Noteri, `Runner.Listener.exe` comprovado, `headless_ready=true` e `rdc_required=false`.
 10. O mesmo probe deve resolver o SHA atual de `ericson-j-santos/noteri-runtime/main`, fazer checkout desse SHA imutável no host Noteri e executar o E2E isolado `NORMAL -> ESTUDO -> replay -> NORMAL`, exigindo leitura independente e igualdade entre SHA esperado e observado.
+11. Alterações do próprio probe ou dos scripts de controle devem disparar o E2E físico no SHA da branch antes do merge por `push` no repositório canônico, somente quando o ator for `ericson-j-santos`; `pull_request` é proibido como gatilho do runner self-hosted para impedir execução de código de fork não confiável.
 
 ## Requisitos
 
@@ -62,6 +63,7 @@ A autenticação interativa do GitHub pode exigir ação humana por consentiment
 - Gateway continua com allowlist estática;
 - workflow sem inputs arbitrários;
 - CI do PR verde no SHA atual.
+- E2E físico pré-merge verde no mesmo SHA da branch quando o workflow/probe/watchdog forem alterados; o gatilho deve ser `push` canônico do owner e nunca `pull_request`.
 
 ## Critérios de aceite runtime
 

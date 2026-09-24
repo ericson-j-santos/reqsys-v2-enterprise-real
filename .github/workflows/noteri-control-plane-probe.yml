@@ -2,6 +2,13 @@ name: Noteri Control Plane Fallback Probe
 
 on:
   workflow_dispatch:
+  # Pre-merge evidence runs only for owner pushes in the canonical repository.
+  # Fork pull_request code is never executed on this self-hosted runner.
+  push:
+    paths:
+      - '.github/workflows/noteri-control-plane-probe.yml'
+      - 'scripts/noteri_control_plane_probe.py'
+      - 'scripts/noteri_control_plane_watchdog.py'
 
 permissions:
   contents: read
@@ -13,6 +20,11 @@ concurrency:
 jobs:
   probe:
     name: Prove Noteri fallback without RDC
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
+       github.actor == 'ericson-j-santos')
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:

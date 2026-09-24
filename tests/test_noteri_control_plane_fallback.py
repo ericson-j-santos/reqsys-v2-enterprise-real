@@ -172,6 +172,11 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "shell: powershell" in workflow
     assert "shell: pwsh" not in workflow
     assert "workflow_dispatch:" in workflow
+    assert "push:" in workflow
+    assert "github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real'" in workflow
+    assert "github.actor == 'ericson-j-santos'" in workflow
+    assert "pull_request:" not in workflow
+    assert "'.github/workflows/noteri-control-plane-probe.yml'" in workflow
     assert "inputs:" not in workflow
     assert "git ls-remote https://github.com/ericson-j-santos/noteri-runtime.git refs/heads/main" in workflow
     assert "repository: ericson-j-santos/noteri-runtime" in workflow
