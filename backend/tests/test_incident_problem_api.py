@@ -61,7 +61,7 @@ def service_id() -> str:
                 servico_id=value,
                 codigo=f'RSM08_{value[:8].upper()}',
                 nome='Servico RSM-08 teste',
-                criticidade='alta',
+                criticidade='media',
                 responsavel_tecnico='rsm-08-test',
                 responsavel_negocio='rsm-08-test',
                 ativo=True,
@@ -260,5 +260,43 @@ def test_conflicting_event_reuse_is_rejected(service_id):
     db = TestingSession()
     try:
         assert db.query(IncidentProblemLinkRecord).count() == 1
+    finally:
+        db.close()
+
+
+
+def test_missing_problem_is_rejected_without_mutation(service_id):
+    incident = _create('INCIDENT', service_id)
+    response = client.post(
+        f"/v1/service-cases/{incident['case_id']}/problem-links",
+        json={'problem_case_id': str(uuid4()), 'event_id': str(uuid4())},
+    )
+    assert response.status_code == 404
+
+    db = TestingSession()
+    try:
+        assert db.query(IncidentProblemLinkRecord).count() == 0
+        assert (
+            db.query(ServiceCaseEventRecord)
+            .filter_by(case_id=incident['case_id'], event_type='INCIDENT_LINKED_TO_PROBLEM')
+            .count()
+            == 0
+        )
+    finally:
+        db.close()
+
+
+def test_distinct_non_problem_target_is_rejected_without_mutation(service_id):
+    incident = _create('INCIDENT', service_id)
+    request_target = _create('REQUEST', service_id)
+    response = client.post(
+        f"/v1/service-cases/{incident['case_id']}/problem-links",
+        json={'problem_case_id': request_target['case_id'], 'event_id': str(uuid4())},
+    )
+    assert response.status_code == 422
+
+    db = TestingSession()
+    try:
+        assert db.query(IncidentProblemLinkRecord).count() == 0
     finally:
         db.close()
