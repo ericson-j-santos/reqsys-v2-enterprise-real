@@ -130,3 +130,74 @@ def test_postboot_requires_real_reboot_for_headless_evidence(monkeypatch, tmp_pa
 def test_windows_encoding_dependency_is_imported() -> None:
     assert hasattr(m, "locale")
     assert callable(m.locale.getpreferredencoding)
+
+def test_mcp_bridge_env_is_fail_closed_and_loopback_only(monkeypatch) -> None:
+    monkeypatch.delenv("OLLAMA_MCP_BEARER_TOKEN", raising=False)
+    with pytest.raises(m.SupervisorError, match="mcp_bearer_token_not_configured"):
+        m.build_mcp_bridge_env(profile())
+
+    env = m.build_mcp_bridge_env(
+        profile(),
+        {
+            "OLLAMA_MCP_BEARER_TOKEN": "secret-test-value",
+            "UNRELATED": "preserved",
+        },
+    )
+    assert env["OLLAMA_MCP_GATEWAY_URL"] == "http://127.0.0.1:8008"
+    assert env["OLLAMA_MCP_ALLOWED_MODELS"] == "gemma4:31b-cloud,gemma4:26b-q8-code"
+    assert env["OLLAMA_MCP_DEFAULT_MODEL"] == "gemma4:31b-cloud"
+    assert env["OLLAMA_MCP_FALLBACK_MODEL"] == "gemma4:26b-q8-code"
+    assert env["UNRELATED"] == "preserved"
+
+
+def test_copy_release_includes_mcp_bridge(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    (source / "backend").mkdir(parents=True)
+    (source / "docs/ollama-local-gateway/bootstrap-files/src").mkdir(parents=True)
+    bridge = source / "services" / "ollama-mcp-bridge"
+    bridge.mkdir(parents=True)
+    (bridge / "server.py").write_text("print('bridge')\n", encoding="utf-8")
+    (bridge / "requirements.txt").write_text("mcp>=2.0,<3.0\n", encoding="utf-8")
+
+    release = tmp_path / "runtime" / "releases" / ("b" * 40)
+    m._copy_release(source, release)
+
+    assert (release / "mcp_bridge" / "server.py").is_file()
+    assert (release / "mcp_bridge" / "requirements.txt").read_text(encoding="utf-8") == "mcp>=2.0,<3.0\n"
+
+
+def test_runtime_status_requires_mcp_bridge_health(monkeypatch, tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    metadata = runtime / "metadata.json"
+    metadata.write_text(
+        '{"runtime_root":"' + str(runtime).replace("\\", "\\\\") + '"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(m, "probe_ollama", lambda: {"ok": True})
+    monkeypatch.setattr(m, "probe_gateway", lambda: {"ok": True})
+    monkeypatch.setattr(m, "probe_backend", lambda: {"ok": True})
+    monkeypatch.setattr(m, "task_status", lambda: {"exists": True})
+    monkeypatch.setattr(m, "run_key_status", lambda: {"configured": False})
+
+    monkeypatch.setattr(m, "probe_mcp_bridge", lambda: None)
+    blocked = m.runtime_status(metadata)
+    assert blocked["runtime_healthy"] is False
+    assert blocked["health"]["mcp_bridge"] is None
+
+    monkeypatch.setattr(
+        m,
+        "probe_mcp_bridge",
+        lambda: {
+            "ok": True,
+            "service": "reqsys-ollama-mcp-bridge",
+            "bind": "127.0.0.1",
+            "port": 8010,
+            "auth_configured": True,
+            "secret_exposed": False,
+        },
+    )
+    healthy = m.runtime_status(metadata)
+    assert healthy["runtime_healthy"] is True
+    assert healthy["health"]["mcp_bridge"]["port"] == 8010
+
