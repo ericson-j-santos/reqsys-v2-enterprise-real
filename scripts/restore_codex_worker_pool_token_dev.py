@@ -285,10 +285,6 @@ def _compose_recreate_service(
     if not project:
         raise RestoreError("worker_pool_compose_identity_missing")
 
-    compose_cli_version = _compose_cli_version()
-    compose_creator_version = _sanitize_compose_version(
-        labels.get("com.docker.compose.version")
-    )
     working_dir, config_files, recovered_source = _resolve_compose_source(labels)
 
     config_env = (container.get("Config") or {}).get("Env") or []
@@ -303,6 +299,10 @@ def _compose_recreate_service(
         raise RestoreError("worker_pool_expected_rules_sha_not_configured")
 
     image_id = _running_image_id(container)
+    compose_cli_version = _compose_cli_version()
+    compose_creator_version = _sanitize_compose_version(
+        labels.get("com.docker.compose.version")
+    )
     process_env = os.environ.copy()
     process_env["CODEX_WORKER_POOL_API_TOKEN_FILE_HOST"] = str(token_path)
     process_env["CODEX_WORKER_POOL_EXPECTED_RULES_SHA"] = rules_sha
