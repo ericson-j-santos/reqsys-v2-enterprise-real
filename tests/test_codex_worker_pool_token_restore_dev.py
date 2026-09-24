@@ -152,6 +152,7 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
     config_file = working_dir / "docker-compose.pc24x7-codex-worker-pool.yml"
     config_file.write_text("services: {}\n", encoding="utf-8")
     container = {
+        "Image": "sha256:" + ("d" * 64),
         "Config": {
             "Labels": {
                 "com.docker.compose.project": "reqsys",
@@ -164,7 +165,7 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
             ],
         }
     }
-    seen: list[tuple[list[str], dict[str, str] | None, str]] = []
+    seen: list[tuple[list[str], dict[str, str] | None, str, dict[str, object]]] = []
 
     def fake_docker(
         args: list[str],
@@ -172,7 +173,13 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
         env: dict[str, str] | None = None,
         failure_reason: str = "worker_pool_docker_command_failed",
     ) -> str:
-        seen.append((args, env, failure_reason))
+        compose_files = [
+            Path(args[index + 1])
+            for index, item in enumerate(args)
+            if item == "--file"
+        ]
+        override = json.loads(compose_files[-1].read_text(encoding="utf-8"))
+        seen.append((args, env, failure_reason, override))
         return ""
 
     monkeypatch.setattr(module, "_docker", fake_docker)
@@ -181,7 +188,7 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
 
     assert recovered is False
     assert len(seen) == 1
-    args, env, failure_reason = seen[0]
+    args, env, failure_reason, override = seen[0]
     assert args[:7] == [
         "compose",
         "--project-name",
@@ -191,14 +198,24 @@ def test_compose_recreate_is_scoped_and_does_not_put_token_in_command(
         "--file",
         str(config_file),
     ]
-    assert args[-6:] == [
+    assert args.count("--file") == 2
+    assert args[-8:] == [
         "up",
         "-d",
         "--force-recreate",
         "--no-deps",
         "--no-build",
+        "--pull",
+        "never",
         module.SERVICE,
     ]
+    assert override == {
+        "services": {
+            module.SERVICE: {
+                "image": "sha256:" + ("d" * 64),
+            }
+        }
+    }
     assert failure_reason == "worker_pool_compose_recreate_failed"
     assert env is not None
     assert env["CODEX_WORKER_POOL_API_TOKEN_FILE_HOST"] == str(token_file)
@@ -235,6 +252,7 @@ def test_compose_recreate_recovers_stale_ephemeral_source_from_canonical_repo(
     monkeypatch.setattr(module, "CANONICAL_COMPOSE_FILE", canonical)
     stale = Path("C:/dev/chatgpt-workers/wt-deleted") / canonical.name
     container = {
+        "Image": "sha256:" + ("e" * 64),
         "Config": {
             "Labels": {
                 "com.docker.compose.project": "reqsys",
@@ -266,7 +284,33 @@ def test_compose_recreate_recovers_stale_ephemeral_source_from_canonical_repo(
     assert "--file" in args
     assert args[args.index("--file") + 1] == str(canonical)
     assert "--no-build" in args
+    assert args[args.index("--pull") + 1] == "never"
     assert failure_reason == "worker_pool_compose_recreate_failed"
+
+
+
+def test_running_image_id_requires_immutable_sha256() -> None:
+    image_id = "sha256:" + ("a" * 64)
+    assert module._running_image_id({"Image": image_id}) == image_id
+
+    for invalid in ("", "reqsys-codex-worker-pool:latest", "sha256:abc", "sha256:" + ("g" * 64)):
+        with pytest.raises(module.RestoreError, match="worker_pool_running_image_invalid"):
+            module._running_image_id({"Image": invalid})
+
+
+@pytest.mark.parametrize(
+    ("stderr", "expected"),
+    [
+        ("Error response from daemon: No such image: reqsys-worker", "worker_pool_compose_image_unavailable"),
+        ("invalid mount config for type bind", "worker_pool_compose_bind_source_unavailable"),
+        ("Bind source path does not exist: C:/missing", "worker_pool_compose_bind_source_unavailable"),
+        ("port is already allocated", "worker_pool_compose_port_conflict"),
+        ("required variable CODEX_WORKER_POOL_EXPECTED_RULES_SHA is missing a value", "worker_pool_compose_configuration_invalid"),
+        ("unexpected compose failure", "worker_pool_compose_recreate_failed"),
+    ],
+)
+def test_compose_failure_reason_is_specific_and_sanitized(stderr: str, expected: str) -> None:
+    assert module._compose_failure_reason(stderr) == expected
 
 
 def test_compose_recreate_rejects_stale_unexpected_compose_source(
