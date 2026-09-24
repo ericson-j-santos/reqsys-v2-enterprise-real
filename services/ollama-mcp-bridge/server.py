@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import hmac
+import json
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Literal
 
 from mcp.server import MCPServer
@@ -17,6 +20,44 @@ mcp = MCPServer(
         "The tool is read-only and routes only through the governed loopback Ollama gateway."
     ),
 )
+
+
+def _health_payload() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "service": "reqsys-ollama-mcp-bridge",
+        "transport": "streamable-http",
+        "mcp_path": "/mcp",
+        "auth_configured": bool(os.getenv("OLLAMA_MCP_BEARER_TOKEN", "").strip()),
+        "secret_exposed": False,
+    }
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path != "/health":
+            self.send_error(404)
+            return
+        body = json.dumps(_health_payload(), sort_keys=True).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+def _start_health_server() -> ThreadingHTTPServer:
+    server = ThreadingHTTPServer(("127.0.0.1", 8011), _HealthHandler)
+    thread = threading.Thread(
+        target=server.serve_forever,
+        name="reqsys-ollama-mcp-health",
+        daemon=True,
+    )
+    thread.start()
+    return server
 
 
 def _authorize(ctx: Context) -> None:
@@ -65,11 +106,16 @@ def ollama_analyze(
 
 
 if __name__ == "__main__":
-    mcp.run(
-        transport="streamable-http",
-        host="127.0.0.1",
-        port=8010,
-        streamable_http_path="/mcp",
-        stateless_http=True,
-        json_response=True,
-    )
+    health_server = _start_health_server()
+    try:
+        mcp.run(
+            transport="streamable-http",
+            host="127.0.0.1",
+            port=8010,
+            streamable_http_path="/mcp",
+            stateless_http=True,
+            json_response=True,
+        )
+    finally:
+        health_server.shutdown()
+        health_server.server_close()
