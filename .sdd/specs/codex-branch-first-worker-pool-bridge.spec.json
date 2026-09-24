@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Engineering Worker Pool por contrato público v1, com dispatch PC24x7 único, replay idempotente, leitura independente e fallback legado temporário somente quando o endpoint de contrato ainda não existe (404).",
+  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Engineering Worker Pool por contrato público v1, preferindo o Work Orchestrator /v1/work com visão única persistente e mantendo fallback temporário para /v1/tasks somente quando o endpoint Work ainda não existe (404).",
   "issues": [
     1766,
     1770,
@@ -35,7 +35,7 @@
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_enterprise_runtime_governance_gates.py"
     ],
-    "evidence_contract": "Provar descoberta de engineering-worker-pool/v1 antes do enqueue; durante a migração, permitir legacy_fallback somente quando GET /v1/contract retornar 404. Versão/nome incompatível, 401, 503, transporte ou JSON inválido permanecem fail-closed. Provar enqueue no base_sha exato, replay created=false no mesmo task_id, leitura independente sem lease_token e continuidade Builder->produced_sha->Validator independente. Evidência registra contract_mode/version sem segredo."
+    "evidence_contract": "Provar descoberta de engineering-worker-pool/v1 antes do despacho. Em runtime v1, preferir POST /v1/work e provar replay created=false no mesmo work_id/task_id mais GET /v1/work/{work_id} independente sem lease_token. Durante a migração, permitir fallback para /v1/tasks somente quando /v1/work retornar 404; 401, 503, transporte, JSON inválido ou resposta inconsistente permanecem fail-closed. Para runtime sem GET /v1/contract, legacy_fallback continua permitido apenas quando esse endpoint retorna 404. Provar base_sha exato, request_id/correlation_id, leitura independente e ausência de segredo. --require-work-v1 e --require-contract-v1 permitem cutover fail-closed sem nova mudança de código."
   },
   "risk": {
     "production": false,

@@ -22,6 +22,9 @@ def test_worker_pool_handoff_is_manual_scoped_and_fail_closed() -> None:
     assert "independent_readback" in raw
     assert "contract_mode" in raw
     assert "legacy_fallback" in raw
+    assert "dispatch_mode" in raw
+    assert "work_v1" in raw
+    assert "work_id" in raw
     assert 'contract_version -ne "v1"' in raw
     assert "secrets." not in raw
     assert "merge" not in raw.lower().replace("merge/deploy: não", "")
