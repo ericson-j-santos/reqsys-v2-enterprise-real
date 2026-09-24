@@ -13,6 +13,7 @@ on:
         options:
           - audit
           - apply-observability-platform
+          - apply-e2e-platform
   schedule:
     - cron: "30 8 * * *"
 
@@ -131,16 +132,16 @@ jobs:
           retention-days: 30
 
   apply-observability-platform:
-    name: Proteger observability-platform/main via Noteri Risk3
+    name: Proteger observability-platform/main via PC24x7 Risk3
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-observability-platform' }}
-    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 12
     env:
       TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
       CORRELATION_ID: observability-main-protection-${{ github.run_id }}-${{ github.run_attempt }}
       ACTION_ID: reqsys.observability-main-protection.dev
       ACTION_SCOPE: repo://ericson-j-santos/observability-platform/branch/main
-      EVIDENCE_REL: artifacts/observability-main-protection-noteri/evidence.json
+      EVIDENCE_REL: artifacts/observability-main-protection-pc24x7/evidence.json
     steps:
       - name: Checkout regras canônicas
         uses: actions/checkout@v4
@@ -150,12 +151,12 @@ jobs:
           path: _rules
           fetch-depth: 1
 
-      - name: Validar host Noteri exato
+      - name: Validar host PC24x7 exato
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          if ($env:COMPUTERNAME.ToLowerInvariant() -ne "noteri") {
-            throw "UNEXPECTED_HOST"
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
           }
 
       - name: Bootstrap obrigatório de sessão
@@ -251,7 +252,8 @@ jobs:
           if ($data.status -notin @("PROTECTION_APPLIED", "ALREADY_COMPLIANT")) { throw "PROTECTION_NOT_CONFIRMED" }
           if ($data.repository -ne "ericson-j-santos/observability-platform") { throw "TARGET_REPOSITORY_MISMATCH" }
           if ($data.branch -ne "main") { throw "TARGET_BRANCH_MISMATCH" }
-          if ($data.required_check -ne "test") { throw "REQUIRED_CHECK_MISMATCH" }
+          $requiredChecks = @($data.required_checks)
+          if ($requiredChecks.Count -ne 2 -or $requiredChecks -notcontains "test" -or $requiredChecks -notcontains "E2E Platform Evidence Gate / validate-evidence") { throw "REQUIRED_CHECKS_MISMATCH" }
           if (-not $data.protected) { throw "BRANCH_NOT_PROTECTED" }
           if (-not $data.pull_request_required) { throw "PULL_REQUEST_NOT_REQUIRED" }
           if ($data.force_push_allowed) { throw "FORCE_PUSH_ALLOWED" }
@@ -262,7 +264,145 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: observability-platform-main-protection-noteri-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\observability-main-protection-noteri\evidence.json
+          name: observability-platform-main-protection-pc24x7-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\observability-main-protection-pc24x7\evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  apply-e2e-platform:
+    name: Proteger e2e-platform/main via PC24x7 Risk3
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-e2e-platform' }}
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 12
+    env:
+      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      CORRELATION_ID: e2e-platform-main-protection-${{ github.run_id }}-${{ github.run_attempt }}
+      ACTION_ID: reqsys.e2e-platform-main-protection.dev
+      ACTION_SCOPE: repo://ericson-j-santos/e2e-platform/branch/main
+      EVIDENCE_REL: artifacts/e2e-platform-main-protection-pc24x7/evidence.json
+    steps:
+      - name: Checkout regras canônicas
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: main
+          path: _rules
+          fetch-depth: 1
+
+      - name: Validar host PC24x7 exato
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Bootstrap obrigatório de sessão
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "e2e-protect",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", "${{ github.sha }}",
+            "--sync-ref", "origin/main"
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $line = @($raw)[-1]
+          $data = $line | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Instalar autorização Risk3 exata e temporária
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_e2e_platform_main_protection_risk3.py `
+              --enable `
+              --ttl-minutes 30 `
+              --confirm ENABLE-E2E-PLATFORM-MAIN-PROTECTION-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Aplicar proteção via Owner Risk3 Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\owner_risk3_gateway.py"
+          $riskArgs = @(
+            "--action-id", $env:ACTION_ID,
+            "--scope", $env:ACTION_SCOPE,
+            "--cwd", $env:TARGET_PATH,
+            "--timeout", "300",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          & python $gateway @riskArgs
+          exit $LASTEXITCODE
+
+      - name: Remover autorização Risk3 temporária
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_e2e_platform_main_protection_risk3.py `
+              --disable `
+              --confirm DISABLE-E2E-PLATFORM-MAIN-PROTECTION-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Validar evidência sanitizada
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_EVIDENCE" }
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path $evidence)) { throw "PROTECTION_EVIDENCE_MISSING" }
+          $data = Get-Content -Raw -Encoding UTF8 $evidence | ConvertFrom-Json
+          if ($data.status -notin @("PROTECTION_APPLIED", "ALREADY_COMPLIANT")) { throw "PROTECTION_NOT_CONFIRMED" }
+          if ($data.repository -ne "ericson-j-santos/e2e-platform") { throw "TARGET_REPOSITORY_MISMATCH" }
+          if ($data.branch -ne "main") { throw "TARGET_BRANCH_MISMATCH" }
+          $requiredChecks = @($data.required_checks)
+          if ($requiredChecks.Count -ne 1 -or $requiredChecks -notcontains "contract-self-test") { throw "REQUIRED_CHECKS_MISMATCH" }
+          if (-not $data.protected) { throw "BRANCH_NOT_PROTECTED" }
+          if (-not $data.pull_request_required) { throw "PULL_REQUEST_NOT_REQUIRED" }
+          if ($data.force_push_allowed) { throw "FORCE_PUSH_ALLOWED" }
+          if ($data.deletion_allowed) { throw "BRANCH_DELETION_ALLOWED" }
+          if ($data.secret_value_exposed) { throw "SECRET_EXPOSURE_REPORTED" }
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-platform-main-protection-pc24x7-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\e2e-platform-main-protection-pc24x7\evidence.json
           if-no-files-found: warn
           retention-days: 30
