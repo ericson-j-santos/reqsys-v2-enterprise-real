@@ -6,10 +6,7 @@ on:
     paths:
       - '.github/workflows/noteri-installed-orchestrator-worker-recovery.yml'
       - 'scripts/recover_noteri_installed_orchestrator_worker.py'
-      - 'tests/test_noteri_installed_orchestrator_worker_recovery.py'
-      - '.sdd/specs/noteri-installed-orchestrator-worker-recovery.requirements.md'
-      - '.sdd/specs/noteri-installed-orchestrator-worker-recovery.spec.json'
-      - '.github/self-hosted-runner-policy.json'
+      - 'validation/reqsys-engineering-orchestrator/**'
 
 permissions:
   contents: read
@@ -20,16 +17,20 @@ concurrency:
 
 jobs:
   recover:
-    name: Recover installed Noteri Orchestrator worker
+    name: Refresh and recover installed Noteri Orchestrator worker
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' &&
        github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
        github.actor == 'ericson-j-santos')
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
+      ORCHESTRATOR_SOURCE_SHA: 63d26ff024e9f782bdddb7e954a6e247c8ef13b7
+      SNAPSHOT_ROOT: validation/reqsys-engineering-orchestrator/63d26ff024e9f782bdddb7e954a6e247c8ef13b7
+      INSTALL_ROOT: C:\dev\chatgpt-workers\reqsys-orchestrator-24x7-runtime
       EVIDENCE_FILE: artifacts/noteri-installed-orchestrator-worker/evidence.json
+      REFRESH_EVIDENCE_FILE: artifacts/noteri-installed-orchestrator-worker/source-refresh.json
     steps:
       - name: Checkout immutable recovery SHA
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -38,7 +39,69 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Recover installed worker and prove independent heartbeat
+      - name: Verify immutable Orchestrator snapshot
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:GITHUB_WORKSPACE $env:SNAPSHOT_ROOT
+          $manifestPath = Join-Path $root 'SOURCE.json'
+          $m = Get-Content -Raw -Encoding UTF8 $manifestPath | ConvertFrom-Json
+          if ($m.source_repository -ne 'ericson-j-santos/reqsys-engineering-orchestrator') { throw 'snapshot_repository_mismatch' }
+          if ($m.source_sha -ne $env:ORCHESTRATOR_SOURCE_SHA) { throw 'snapshot_source_sha_mismatch' }
+          if ($m.file_count -ne 24) { throw 'snapshot_file_count_mismatch' }
+          foreach ($f in $m.files) {
+            $full = Join-Path $root $f.path
+            if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "snapshot_file_missing:$($f.path)" }
+            $blob = (& git hash-object --no-filters -- "$full").Trim()
+            if ($LASTEXITCODE -ne 0 -or $blob -ne $f.blob_sha) { throw "snapshot_blob_mismatch:$($f.path)" }
+          }
+
+      - name: Install exact Orchestrator source and start worker
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:GITHUB_WORKSPACE $env:SNAPSHOT_ROOT
+          $installer = Join-Path $root 'scripts\install_windows_autostart.py'
+          python "$installer" --source-root "$root" --install-root "$env:INSTALL_ROOT" --mode worker --endpoint "http://DESKTOP-PDQK954:8787" --worker-id noteri --controller-version "0.2.52" --dispatch-priority 20 --port 8787 --start-now
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify installed source and bind runtime version
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:GITHUB_WORKSPACE $env:SNAPSHOT_ROOT
+          $m = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'SOURCE.json') | ConvertFrom-Json
+          foreach ($f in $m.files) {
+            $installed = Join-Path $env:INSTALL_ROOT $f.path
+            if (-not (Test-Path -LiteralPath $installed -PathType Leaf)) { throw "installed_file_missing:$($f.path)" }
+            $blob = (& git hash-object --no-filters -- "$installed").Trim()
+            if ($LASTEXITCODE -ne 0 -or $blob -ne $f.blob_sha) { throw "installed_blob_mismatch:$($f.path)" }
+          }
+          $version = [ordered]@{
+            source_repository = $m.source_repository
+            source_sha = $m.source_sha
+            manifest_file_count = $m.file_count
+            installed_blobs_verified = $true
+          } | ConvertTo-Json
+          [System.IO.File]::WriteAllText((Join-Path $env:INSTALL_ROOT 'runtime-version.json'), $version + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+          $refresh = [ordered]@{
+            ok = $true
+            environment = 'dev'
+            host = 'Noteri'
+            source_repository = $m.source_repository
+            source_sha = $m.source_sha
+            snapshot_blobs_verified = $true
+            installed_blobs_verified = $true
+            file_count = $m.file_count
+            production_touched = $false
+            secrets_read = $false
+            rdc_required = $false
+          } | ConvertTo-Json
+          $out = Join-Path $env:GITHUB_WORKSPACE $env:REFRESH_EVIDENCE_FILE
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $out) | Out-Null
+          [System.IO.File]::WriteAllText($out, $refresh + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Recover worker and prove independent heartbeat
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -55,6 +118,7 @@ jobs:
           if ($e.workflow_expected_sha -ne '${{ github.sha }}') { throw 'noteri_worker_expected_sha_mismatch' }
           if ($e.workflow_observed_sha -ne '${{ github.sha }}') { throw 'noteri_worker_observed_sha_mismatch' }
           if (-not $e.workflow_sha_verified) { throw 'noteri_worker_workflow_sha_not_verified' }
+          if ($e.installed_contract.runtime_source_sha -ne $env:ORCHESTRATOR_SOURCE_SHA) { throw 'noteri_worker_runtime_source_sha_mismatch' }
           if (-not $e.installed_contract.profile_capability_code_present) { throw 'noteri_worker_profile_capability_code_missing' }
           if (-not $e.after.operational) { throw 'noteri_worker_not_operational' }
           if (-not $e.after.profile_task_capable) { throw 'noteri_worker_profile_task_capability_missing' }
@@ -69,6 +133,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: noteri-installed-orchestrator-worker-${{ github.run_id }}
-          path: artifacts/noteri-installed-orchestrator-worker/evidence.json
+          path: |
+            artifacts/noteri-installed-orchestrator-worker/evidence.json
+            artifacts/noteri-installed-orchestrator-worker/source-refresh.json
           if-no-files-found: error
           retention-days: 30
