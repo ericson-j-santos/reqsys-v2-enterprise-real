@@ -102,7 +102,7 @@ jobs:
             }
           }
 
-      - name: Login Azure por OIDC da identidade mutadora
+      - name: Login Azure por OIDC para reconciliar runtime DEV
         uses: azure/login@v2
         with:
           client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
