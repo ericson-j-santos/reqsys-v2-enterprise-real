@@ -47,7 +47,8 @@
       "stale_or_invalid_policy": "interactive_fallback"
     },
     "interactive_fallback": "always_armed",
-    "runner_pickup_timeout_seconds": 60
+    "runner_pickup_timeout_seconds": 60,
+    "cancel_in_progress": true
   },
   "sdd_gate": {
     "tests": [
