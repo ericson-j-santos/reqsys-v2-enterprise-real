@@ -5,11 +5,11 @@ Manter os caminhos locais `ReqSys → ollama_gateway → Ollama` e `GitHub Copil
 
 ## Requisitos
 1. O supervisor opera somente em `DESKTOP-PDQK954`, Windows e ambiente local/DEV.
-2. Ollama, gateway, bridge MCP e backend devem escutar somente em loopback nas portas `11434`, `8008`, `8010` e `8000`.
-3. O provider deve ser lido de `HKCU\Environment`; o bearer MCP pré-provisionado pode ser consumido somente de `OLLAMA_MCP_BEARER_TOKEN` no ambiente do processo e nunca pode ser copiado para Git, logs, metadata ou evidência.
+2. Ollama, gateway, bridge MCP e backend devem escutar somente em loopback nas portas `11434`, `8008`, `8010` e `8000`; o bridge deve expor health identificado somente em `127.0.0.1:8011/health`.
+3. O provider deve ser lido de `HKCU\Environment`; o bearer MCP pré-provisionado pode ser consumido somente de `OLLAMA_MCP_BEARER_TOKEN` no ambiente do processo e nunca pode ser copiado para Git, logs, metadata ou evidência. O subprocesso do bridge deve receber apenas uma allowlist mínima de variáveis do SO/Python e não propagar `GITHUB_TOKEN` ou variáveis arbitrárias do runner.
 4. O bridge MCP deve falhar fechado com `mcp_bearer_token_not_configured` quando o bearer não estiver disponível e deve chamar exclusivamente o gateway `http://127.0.0.1:8008`.
 5. O modelo primário é o já configurado no perfil e o fallback local permanece explícito; ambos formam a allowlist do bridge MCP.
-6. O supervisor só pode encerrar/reiniciar processos iniciados pela própria instância; porta ocupada por processo não reconhecido ou sem health esperado falha fechada.
+6. O supervisor só pode encerrar/reiniciar processos iniciados pela própria instância; porta `8010` ou `8011` ocupada por processo sem health identificado `service=reqsys-ollama-mcp-bridge`, `auth_configured=true` e `secret_exposed=false` falha fechada.
 7. O smoke ReqSys deve autenticar com identidade demo sintética apenas no backend local, chamar `/v1/codex/analyze` com `publicar_no_reqsys=false` e provar resposta real.
 8. O gateway deve registrar `requested_model`, modelo efetivo e `fallback_used`.
 9. A release imutável do supervisor deve incluir `services/ollama-mcp-bridge`; o processo MCP deve ser supervisionado e recuperado junto com Ollama, gateway e backend.
@@ -22,8 +22,8 @@ Manter os caminhos locais `ReqSys → ollama_gateway → Ollama` e `GitHub Copil
 
 ## Critérios de aceite
 - testes unitários do supervisor e do launcher UAC verdes;
-- contrato prova que ausência de bearer MCP falha fechada e que o bridge usa somente gateway loopback `:8008`;
-- release imutável inclui o bridge MCP e runtime health exige `11434/8008/8010/8000`;
+- contrato prova que ausência de bearer MCP falha fechada, o bridge usa somente gateway loopback `:8008`, o health `:8011` não expõe segredo e o subprocesso não herda variáveis arbitrárias do runner;
+- release imutável inclui o bridge MCP e runtime health exige `11434/8008/8010/8011/8000`, com identidade do health MCP validada;
 - ciclo físico no Desktop comprova os quatro componentes + smoke ReqSys→IA;
 - recuperação de componentes é observável por health/restart count, incluindo `mcp_bridge`;
 - persistência instalada e classificada corretamente;
