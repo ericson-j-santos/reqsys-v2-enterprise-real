@@ -8,6 +8,8 @@ import json
 import os
 import socket
 import subprocess
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,8 @@ EXPECTED_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
 CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
+ORCHESTRATOR_BASE = "http://DESKTOP-PDQK954:8787"
+RUNNER_RECOVERY_TASK = "host.github_runner.recover.v1"
 CONTROL_PORTS = {
     "ssh": 22,
     "rpc_epmapper": 135,
@@ -128,6 +132,65 @@ def control_port_reachability() -> dict[str, bool]:
     }
 
 
+def orchestrator_readback() -> dict[str, Any]:
+    def get_json(path: str) -> tuple[int | None, Any]:
+        request = urllib.request.Request(
+            ORCHESTRATOR_BASE + path,
+            headers={"Accept": "application/json", "Cache-Control": "no-store"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=3.0) as response:
+                status = int(response.status)
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            return int(exc.code), None
+        except (urllib.error.URLError, OSError):
+            return None, None
+        try:
+            return status, json.loads(raw)
+        except json.JSONDecodeError:
+            return status, None
+
+    ready_status, ready_payload = get_json("/readyz")
+    workers_status, workers_payload = get_json("/v1/workers")
+    workers = workers_payload.get("workers") if isinstance(workers_payload, dict) else None
+    matches = []
+    if isinstance(workers, list):
+        matches = [
+            item for item in workers
+            if isinstance(item, dict)
+            and str(item.get("device_name") or "").casefold() == TARGET_HOST.casefold()
+        ]
+
+    desktop = None
+    if len(matches) == 1:
+        worker = matches[0]
+        capabilities = worker.get("capabilities") if isinstance(worker.get("capabilities"), dict) else {}
+        safe_types = capabilities.get("safe_task_types")
+        if not isinstance(safe_types, list):
+            safe_types = []
+        desktop = {
+            "fresh": worker.get("fresh") is True,
+            "controller_online": worker.get("controller_online") is True,
+            "auth_valid": worker.get("auth_valid") is True,
+            "eligible": worker.get("eligible") is True,
+            "profile": str(worker.get("profile") or "").strip().upper(),
+            "runner_recovery_capable": RUNNER_RECOVERY_TASK in safe_types,
+        }
+
+    return {
+        "ready_http_status": ready_status,
+        "ready": (
+            ready_status == 200
+            and isinstance(ready_payload, dict)
+            and ready_payload.get("ready") is True
+        ),
+        "workers_http_status": workers_status,
+        "worker_match_count": len(matches) if isinstance(workers, list) else None,
+        "desktop_worker": desktop,
+    }
+
+
 def admin_staging_path_probe() -> dict[str, Any]:
     """Comprova apenas acesso de leitura ao Desktop Público via C$; não grava nada."""
     try:
@@ -155,10 +218,19 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     tcp = False
     staging = {"reachable": False, "result": "not_attempted"}
     control_ports = {name: False for name in CONTROL_PORTS}
+    orchestrator = {
+        "ready_http_status": None,
+        "ready": False,
+        "workers_http_status": None,
+        "worker_match_count": None,
+        "desktop_worker": None,
+    }
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
         control_ports = control_port_reachability()
+        if control_ports.get("engineering_orchestrator") is True:
+            orchestrator = orchestrator_readback()
         staging = admin_staging_path_probe()
 
     if not resolution["resolved"]:
@@ -185,6 +257,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "runtime_port": RUNTIME_PORT,
         "runtime_port_reachable": tcp,
         "control_ports": control_ports,
+        "engineering_orchestrator": orchestrator,
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
