@@ -160,3 +160,11 @@ Permitir que o Noteri produza evidência independente e sanitizada sobre a dispo
 5. Porta 8081 aberta deve produzir `runtime_port_reachable`, mesmo quando ICMP não responder.
 6. O workflow deve produzir artifact sanitizado no E2E físico do Noteri.
  a partir do Noteri, sem persistir listagem remota.
+
+
+## Incremento 2026-09-24 — descoberta de canal de execução remoto
+
+15. A sonda DEVE testar, somente por conexão TCP sem autenticação e sem escrita, as portas fixas: SSH 22, RPC Endpoint Mapper 135, SMB 445, RDP 3389, WinRM HTTP 5985 e WinRM HTTPS 5986.
+16. Nenhum host, porta ou protocolo pode vir de input externo.
+17. A evidência DEVE persistir somente booleanos de alcançabilidade por nome lógico; não deve persistir IP bruto, banner, credencial ou conteúdo remoto.
+18. Porta aberta é somente evidência de transporte disponível; não comprova autenticação nem autorização para executar comandos.
