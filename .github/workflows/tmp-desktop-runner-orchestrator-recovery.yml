@@ -21,14 +21,14 @@ jobs:
     timeout-minutes: 4
     env:
       RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
-      CORRELATION_ID: desktop-runner-orchestrator-\${{ github.run_id }}-\${{ github.run_attempt }}
+      CORRELATION_ID: desktop-runner-orchestrator-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\desktop-runner-orchestrator-recovery\evidence.json
 
     steps:
       - name: Checkout immutable probe SHA
         uses: actions/checkout@v4
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
-          ref: \${{ env.RULES_SHA }}
+          ref: ${{ env.RULES_SHA }}
           path: _rules
           fetch-depth: 1
           persist-credentials: false
@@ -48,7 +48,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $anchorSha = "\${{ github.sha }}"
+          $anchorSha = "${{ github.sha }}"
           $argsList = @(
             "--policy", $policy,
             "--repo", $env:GITHUB_WORKSPACE,
@@ -68,9 +68,9 @@ jobs:
       - name: Recover exact Desktop GitHub runner via allowlisted orchestrator task
         shell: powershell
         env:
-          TARGET_PATH: \${{ steps.session.outputs.target_path }}
-          SESSION_ID: \${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: \${{ steps.session.outputs.anchor_sha }}
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -97,7 +97,7 @@ jobs:
       - name: Validate sanitized evidence
         shell: powershell
         env:
-          TARGET_PATH: \${{ steps.session.outputs.target_path }}
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
         run: |
           $ErrorActionPreference = "Stop"
           $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
@@ -112,7 +112,7 @@ jobs:
         if: always() && steps.session.outputs.target_path != ''
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-runner-orchestrator-recovery-\${{ github.run_id }}
-          path: \${{ steps.session.outputs.target_path }}\artifacts\desktop-runner-orchestrator-recovery\evidence.json
+          name: desktop-runner-orchestrator-recovery-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\desktop-runner-orchestrator-recovery\evidence.json
           if-no-files-found: error
           retention-days: 7
