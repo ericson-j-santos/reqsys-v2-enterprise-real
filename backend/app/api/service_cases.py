@@ -171,6 +171,23 @@ class ServiceCaseConflictError(RuntimeError):
     pass
 
 
+_PUBLIC_CONFLICT_DETAILS = frozenset(
+    {
+        'operação CHANGE rejeitada por pré-condição',
+        'transição PENDING_APPROVAL -> IN_PROGRESS exige aprovação APPROVED',
+    }
+)
+
+
+def _public_conflict_detail(exc: Exception) -> str:
+    """Preserva apenas contratos públicos conhecidos; nunca ecoa erro arbitrário."""
+    if len(exc.args) == 1 and isinstance(exc.args[0], str):
+        candidate = exc.args[0]
+        if candidate in _PUBLIC_CONFLICT_DETAILS:
+            return candidate
+    return 'conflito de estado ou identidade RSM'
+
+
 TransitionGuard = Callable[[Session, 'ServiceCaseRecord', ServiceCaseState], None]
 
 # Pré-condições adicionais de transição registradas por adaptadores (ex.: portão de
@@ -665,7 +682,7 @@ def _raise_http(exc: Exception, *, correlation_id: str | None = None) -> None:
     if isinstance(exc, ServiceCaseNotFoundError):
         raise HTTPException(status_code=404, detail='recurso RSM não encontrado') from None
     if isinstance(exc, (ServiceCaseConflictError, InvalidStateTransition)):
-        raise HTTPException(status_code=409, detail='conflito de estado ou identidade RSM') from None
+        raise HTTPException(status_code=409, detail=_public_conflict_detail(exc)) from None
     if isinstance(exc, ServiceManagementValidationError):
         raise HTTPException(status_code=422, detail='requisição RSM inválida') from None
     raise exc
