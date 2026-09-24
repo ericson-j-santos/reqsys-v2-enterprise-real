@@ -25,6 +25,7 @@ CRITICAL_FILES = (
     ".github/workflows/executive-public-smoke-confirmation.yml",
     ".github/workflows/executive-final-sync-history-public-smoke-trend-public.yml",
     ".github/workflows/noteri-study-mode-dev-reconcile.yml",
+    ".github/workflows/user-journey-acceptance-dev.yml",
     "docs/public-dev-locator/index.html",
 )
 
@@ -32,6 +33,7 @@ SIGNED_LOCATOR_CONSUMERS = (
     ".github/workflows/executive-promotion-advisor-public-smoke.yml",
     ".github/workflows/executive-public-smoke-confirmation.yml",
     ".github/workflows/executive-final-sync-history-public-smoke-trend-public.yml",
+    ".github/workflows/user-journey-acceptance-dev.yml",
 )
 
 
@@ -67,6 +69,8 @@ def validate() -> list[str]:
         raw = read(relative)
         if "resolve_pc24x7_dev_locator.mjs" not in raw:
             errors.append(f"signed_locator_resolution_missing:{relative}")
+        if "vars.PC24X7_DEV_BASE_URL" in raw or "vars.PC24X7_DEV_FRONTEND_URL" in raw:
+            errors.append(f"static_dev_runtime_variable_forbidden:{relative}")
         if "Runtime legado Fly.io rejeitado" not in raw:
             errors.append(f"legacy_runtime_fail_closed_missing:{relative}")
         if "successo verde" in raw.lower():
