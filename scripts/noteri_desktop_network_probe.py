@@ -20,6 +20,7 @@ CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
 ORCHESTRATOR_BASE = "http://DESKTOP-PDQK954:8787"
 RUNNER_RECOVERY_TASK = "host.github_runner.recover.v1"
+PROBE_REVISION = "control-channels-v2"
 CONTROL_PORTS = {
     "ssh": 22,
     "rpc_epmapper": 135,
@@ -252,6 +253,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     return {
         "ok": True,
         "probe_completed": True,
+        "probe_revision": PROBE_REVISION,
         "source_host": host,
         "target_host": TARGET_HOST,
         "dns_resolved": resolution["resolved"],
