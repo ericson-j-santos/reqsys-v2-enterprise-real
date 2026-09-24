@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "OPS-GAP-OBSERVABILITY-001 distributed log context",
+  "status": "implemented_pending_ci",
+  "gap_reference": "OPS-GAP-OBSERVABILITY-001",
+  "increment_type": "gap_fix",
+  "scope": {
+    "service": "services/environment-observability-api",
+    "runtime_target": "pc24x7",
+    "production_touched": false
+  },
+  "acceptance_criteria": [
+    "Logs estruturados suportam correlation_id, causation_id e workflow_run_id.",
+    "IDs operacionais inválidos ou com caracteres de injeção não são propagados.",
+    "Redaction existente permanece ativa e coberta por teste negativo.",
+    "O contrato HTTP expõe suporte aos novos identificadores sem exigir backend pago.",
+    "Pre-PR Readiness deve retornar READY_FOR_PR=passed no HEAD exato com behind_by=0."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "services/environment-observability-api/tests/test_api.py",
+      "services/environment-observability-api/tests/test_log_security.py",
+      "services/environment-observability-api/tests/test_collector_contract.py"
+    ]
+  }
+}
