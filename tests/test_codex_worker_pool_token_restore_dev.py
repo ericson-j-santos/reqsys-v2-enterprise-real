@@ -69,48 +69,61 @@ def test_restore_generates_token_locally_and_recreates_service(
     assert "y" * 64 not in json.dumps(result)
 
 
-def test_restore_recreates_stale_file_bind_without_rotating_token(
+def test_restore_resyncs_host_file_from_valid_runtime_token_without_recreate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     token_file = tmp_path / "token"
-    token_file.write_text("x" * 48, encoding="utf-8")
+    host_token = "x" * 48
+    runtime_token = "r" * 48
+    token_file.write_text(host_token, encoding="utf-8")
     container = {"Config": {"Env": []}}
-    monkeypatch.setattr(module, "_canonical_container_and_token_path", lambda: ("container-1", token_file))
+    monkeypatch.setattr(
+        module,
+        "_canonical_container_and_token_path",
+        lambda: ("container-1", token_file),
+    )
     monkeypatch.setattr(module, "_inspect_container", lambda _container_id: container)
     monkeypatch.setattr(module, "_validate_container_auth_contract", lambda _container: None)
 
-    validations = iter(
-        [
-            (200, False, "worker_pool_token_mismatch_after_restore"),
-            (200, True, ""),
-        ]
-    )
-    monkeypatch.setattr(module, "_validate_runtime", lambda _token: next(validations))
-    monkeypatch.setattr(module, "_container_token_matches_host", lambda _container_id, _token: False)
-    monkeypatch.setattr(module, "_wait_runtime", lambda _token: 200)
-    recreated: list[tuple[dict, Path]] = []
+    def validate(token: str) -> tuple[int, bool, str]:
+        if token == host_token:
+            return 200, False, "worker_pool_token_mismatch_after_restore"
+        if token == runtime_token:
+            return 200, True, ""
+        pytest.fail("unexpected token")
+
+    monkeypatch.setattr(module, "_validate_runtime", validate)
+    monkeypatch.setattr(module, "_read_container_token", lambda _container_id: runtime_token)
     monkeypatch.setattr(
         module,
         "_compose_recreate_service",
-        lambda inspected, path: recreated.append((inspected, path)),
+        lambda _container, _path: pytest.fail("mismatch must not recreate the service"),
     )
 
     result = module.restore()
 
+    assert token_file.read_text(encoding="utf-8").strip() == runtime_token
     assert result["token_rotated"] is False
     assert result["existing_token_reused"] is True
-    assert result["service_recreated"] is True
-    assert result["bind_mount_resynced"] is True
-    assert recreated == [(container, token_file)]
-
+    assert result["service_recreated"] is False
+    assert result["bind_mount_resynced"] is False
+    assert result["runtime_token_reused"] is True
+    assert result["host_file_resynced_from_runtime"] is True
+    assert result["authenticated_readback"] is True
+    assert runtime_token not in json.dumps(result)
 
 def test_restore_fails_closed_when_container_and_host_token_match_but_api_rejects(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     token_file = tmp_path / "token"
-    token_file.write_text("x" * 48, encoding="utf-8")
+    host_token = "x" * 48
+    token_file.write_text(host_token, encoding="utf-8")
     container = {"Config": {"Env": []}}
-    monkeypatch.setattr(module, "_canonical_container_and_token_path", lambda: ("container-1", token_file))
+    monkeypatch.setattr(
+        module,
+        "_canonical_container_and_token_path",
+        lambda: ("container-1", token_file),
+    )
     monkeypatch.setattr(module, "_inspect_container", lambda _container_id: container)
     monkeypatch.setattr(module, "_validate_container_auth_contract", lambda _container: None)
     monkeypatch.setattr(
@@ -118,15 +131,45 @@ def test_restore_fails_closed_when_container_and_host_token_match_but_api_reject
         "_validate_runtime",
         lambda _token: (200, False, "worker_pool_token_mismatch_after_restore"),
     )
-    monkeypatch.setattr(module, "_container_token_matches_host", lambda _container_id, _token: True)
+    monkeypatch.setattr(module, "_read_container_token", lambda _container_id: host_token)
     monkeypatch.setattr(
         module,
-        "_compose_recreate_service",
-        lambda _container, _path: pytest.fail("must not recreate when bind content already matches"),
+        "_write_token",
+        lambda _path, _token: pytest.fail("must not rewrite when host/runtime already match"),
     )
 
     with pytest.raises(module.RestoreError, match="worker_pool_auth_process_mismatch"):
         module.restore()
+
+def test_restore_keeps_host_unchanged_when_runtime_token_is_not_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    token_file = tmp_path / "token"
+    host_token = "x" * 48
+    runtime_token = "r" * 48
+    token_file.write_text(host_token, encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "_canonical_container_and_token_path",
+        lambda: ("container-1", token_file),
+    )
+    monkeypatch.setattr(module, "_inspect_container", lambda _container_id: {"Config": {"Env": []}})
+    monkeypatch.setattr(module, "_validate_container_auth_contract", lambda _container: None)
+
+    def validate(token: str) -> tuple[int, bool, str]:
+        if token == host_token:
+            return 200, False, "worker_pool_token_mismatch_after_restore"
+        if token == runtime_token:
+            return 200, False, "worker_pool_token_mismatch_after_restore"
+        pytest.fail("unexpected token")
+
+    monkeypatch.setattr(module, "_validate_runtime", validate)
+    monkeypatch.setattr(module, "_read_container_token", lambda _container_id: runtime_token)
+
+    with pytest.raises(module.RestoreError, match="worker_pool_token_mismatch_after_restore"):
+        module.restore()
+
+    assert token_file.read_text(encoding="utf-8").strip() == host_token
 
 
 def test_container_auth_contract_requires_exact_token_file_env() -> None:

@@ -130,7 +130,7 @@ def _validate_container_auth_contract(container: dict[str, Any]) -> None:
         raise RestoreError("worker_pool_token_env_mismatch")
 
 
-def _container_token_matches_host(container_id: str, host_token: str) -> bool:
+def _read_container_token(container_id: str) -> str:
     script = (
         "from pathlib import Path; import sys; "
         f"sys.stdout.write(Path({TOKEN_DESTINATION!r}).read_text(encoding='utf-8').strip())"
@@ -141,7 +141,9 @@ def _container_token_matches_host(container_id: str, host_token: str) -> bool:
     ).strip()
     if not container_token:
         raise RestoreError("worker_pool_container_token_empty")
-    return hmac.compare_digest(container_token, host_token)
+    if len(container_token) < MIN_TOKEN_LENGTH:
+        raise RestoreError("worker_pool_container_token_too_short")
+    return container_token
 
 
 def _canonical_compose_contract_valid(path: Path) -> bool:
@@ -264,12 +266,11 @@ def _ensure_token_parent(parent: Path) -> None:
         raise RestoreError("worker_pool_token_parent_unusable")
 
 
-def _write_new_token(path: Path) -> str:
+def _write_token(path: Path, token: str) -> None:
+    if len(token) < MIN_TOKEN_LENGTH:
+        raise RestoreError("worker_pool_token_value_invalid")
     parent = path.parent
     _ensure_token_parent(parent)
-    token = secrets.token_urlsafe(48)
-    if len(token) < MIN_TOKEN_LENGTH:
-        raise RestoreError("worker_pool_generated_token_invalid")
 
     temp_name: str | None = None
     try:
@@ -295,6 +296,13 @@ def _write_new_token(path: Path) -> str:
             except OSError:
                 pass
         raise RestoreError("worker_pool_token_write_failed") from exc
+
+
+def _write_new_token(path: Path) -> str:
+    token = secrets.token_urlsafe(48)
+    if len(token) < MIN_TOKEN_LENGTH:
+        raise RestoreError("worker_pool_generated_token_invalid")
+    _write_token(path, token)
     return token
 
 
@@ -377,6 +385,8 @@ def restore() -> dict[str, Any]:
     recreated = False
     bind_mount_resynced = False
     compose_source_recovered = False
+    runtime_token_reused = False
+    host_file_resynced_from_runtime = False
     health_status, healthy, reason = _validate_runtime(token)
 
     if rotated:
@@ -385,12 +395,25 @@ def restore() -> dict[str, Any]:
         bind_mount_resynced = True
         health_status = _wait_runtime(token)
     elif not healthy and reason == "worker_pool_token_mismatch_after_restore":
-        if _container_token_matches_host(container_id, token):
+        runtime_token = _read_container_token(container_id)
+        if hmac.compare_digest(runtime_token, token):
             raise RestoreError("worker_pool_auth_process_mismatch")
-        compose_source_recovered = _compose_recreate_service(container, token_path)
-        recreated = True
-        bind_mount_resynced = True
-        health_status = _wait_runtime(token)
+
+        runtime_status, runtime_healthy, runtime_reason = _validate_runtime(runtime_token)
+        if not runtime_healthy:
+            raise RestoreError(
+                runtime_reason or "worker_pool_runtime_token_not_accepted"
+            )
+
+        _write_token(token_path, runtime_token)
+        persisted = _read_existing_token(token_path)
+        if persisted is None or not hmac.compare_digest(persisted, runtime_token):
+            raise RestoreError("worker_pool_host_token_resync_failed")
+
+        token = runtime_token
+        runtime_token_reused = True
+        host_file_resynced_from_runtime = True
+        health_status = runtime_status
     elif not healthy:
         raise RestoreError(reason or "worker_pool_runtime_not_ready_after_restore")
 
@@ -408,6 +431,8 @@ def restore() -> dict[str, Any]:
         "service_recreated": recreated,
         "bind_mount_resynced": bind_mount_resynced,
         "compose_source_recovered": compose_source_recovered,
+        "runtime_token_reused": runtime_token_reused,
+        "host_file_resynced_from_runtime": host_file_resynced_from_runtime,
         "health_http_status": health_status,
         "authenticated_readback": True,
         "secret_value_exposed": False,
