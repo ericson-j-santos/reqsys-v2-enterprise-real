@@ -19,6 +19,8 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 7. Quando não houver pickup, o Gateway cancela o run self-hosted abandonado, confirma `completed/cancelled` por janela limitada e registra o resultado da limpeza; nenhuma nova tentativa é criada automaticamente.
 8. Um runtime auto watch em GitHub-hosted runner deve verificar periodicamente o retorno do Noteri sem depender do chat: despachar somente `noteri-control-plane-probe.yml` na `main`, validar o SHA exato, cancelar o run sem pickup e atualizar um único comentário de estado na issue governada.
 9. Quando houver pickup, o auto watch deve aguardar o probe, baixar somente o artifact sanitizado e declarar `runtime_active` apenas com `ok=true`, host Noteri, `Runner.Listener.exe` comprovado, `headless_ready=true` e `rdc_required=false`.
+10. O mesmo probe deve resolver o SHA atual de `ericson-j-santos/noteri-runtime/main`, fazer checkout desse SHA imutável no host Noteri e executar o E2E isolado `NORMAL -> ESTUDO -> replay -> NORMAL`, exigindo leitura independente e igualdade entre SHA esperado e observado.
+11. Alterações do próprio probe, dos scripts de controle, do teste de contrato ou do SDD correspondente devem disparar o E2E físico no SHA da branch antes do merge por `push` no repositório canônico, somente quando o ator for `ericson-j-santos`; `pull_request` é proibido como gatilho do runner self-hosted para impedir execução de código de fork não confiável.
 
 ## Requisitos
 
@@ -36,6 +38,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - se Task Scheduler negar `AtStartup + S4U`, retornar `activation_pending=true` e não declarar ativação concluída;
 - a ativação headless administrativa deve ocorrer somente por workflow self-hosted fixo no Noteri, sem inputs arbitrários, via UAC legítimo e validação posterior de tarefa `AtStartup + S4U`;
 - o workflow de ativação headless não pode executar reboot, produção, shell genérico ou ler segredos.
+- a evidência do `noteri-runtime` deve registrar `expected_sha`, `observed_sha` e `source_sha_verified=true`, falhando fechado em divergência, estado final diferente de NORMAL, ausência de replay idempotente ou controle negativo.
 - o runtime auto watch deve executar em `ubuntu-latest`, sem segredos, sem reboot, sem GUI, sem produção/deploy e sem shell arbitrário; ausência de pickup é estado observável, não motivo para deixar runs órfãos na fila.
 
 ## Bootstrap físico único
@@ -60,6 +63,7 @@ A autenticação interativa do GitHub pode exigir ação humana por consentiment
 - Gateway continua com allowlist estática;
 - workflow sem inputs arbitrários;
 - CI do PR verde no SHA atual.
+- E2E físico pré-merge verde no mesmo SHA da branch quando o workflow/probe/watchdog forem alterados; o gatilho deve ser `push` canônico do owner e nunca `pull_request`.
 
 ## Critérios de aceite runtime
 
@@ -71,7 +75,8 @@ A rota só fica `runtime_active` após evidência nova de:
 4. comando do Gateway despachando `noteri-control-plane-probe.yml`;
 5. workflow saindo de queued/pending e executando no Noteri;
 6. artifact mostrando `ok=true`, host Noteri e `rdc_required=false`.
-7. em caso negativo sem pickup, o run alvo termina cancelado (ou a falha de cancelamento fica explicitamente registrada), sem fila residual criada pelo Gateway.
+7. E2E físico do `noteri-runtime/main` no SHA resolvido, com `NORMAL -> ESTUDO -> replay -> NORMAL`, leitura independente, idempotência e controle negativo aprovados.
+8. em caso negativo sem pickup, o run alvo termina cancelado (ou a falha de cancelamento fica explicitamente registrada), sem fila residual criada pelo Gateway.
 
 Sem esses itens o estado permanece `activation_pending`.
 
