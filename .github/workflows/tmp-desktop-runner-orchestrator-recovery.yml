@@ -1,0 +1,118 @@
+name: Temporary Desktop Runner Recovery via Orchestrator
+
+on:
+  push:
+    branches:
+      - "ops/desktop-runner-orchestrator-recovery-20260924"
+    paths:
+      - "scripts/desktop_runner_recover_via_orchestrator.py"
+      - ".github/workflows/tmp-desktop-runner-orchestrator-recovery.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tmp-desktop-runner-orchestrator-recovery
+  cancel-in-progress: true
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 4
+    env:
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      CORRELATION_ID: desktop-runner-orchestrator-\${{ github.run_id }}-\${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\desktop-runner-orchestrator-recovery\evidence.json
+
+    steps:
+      - name: Checkout immutable probe SHA
+        uses: actions/checkout@v4
+        with:
+          ref: \${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: \${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "\${{ github.sha }}"
+          $argsList = @(
+            "--policy", $policy,
+            "--repo", $env:GITHUB_WORKSPACE,
+            "--session-prefix", "desktop-runner-orchestrator",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha
+          )
+          $raw = & python $launcher @argsList
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) { throw "SESSION_LAUNCH_BLOCKED" }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Recover exact Desktop GitHub runner via allowlisted orchestrator task
+        shell: powershell
+        env:
+          TARGET_PATH: \${{ steps.session.outputs.target_path }}
+          SESSION_ID: \${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: \${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\desktop_runner_recover_via_orchestrator.py"
+          $gatewayArgs = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $script,
+            "--confirm", "RECOVER-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--evidence-file", $env:EVIDENCE_REL
+          )
+          & python $gateway @gatewayArgs
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized evidence
+        shell: powershell
+        env:
+          TARGET_PATH: \${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $path)) { throw "RECOVERY_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+          if (-not $e.ok) { throw "DESKTOP_RUNNER_RECOVERY_NOT_CONFIRMED: $($e.error_code)" }
+          if ($e.task_type -ne "host.github_runner.recover.v1") { throw "TASK_TYPE_MISMATCH" }
+          if ($e.target_host -ne "DESKTOP-PDQK954") { throw "TARGET_HOST_MISMATCH" }
+          if ($e.production_touched -or $e.secrets_read) { throw "FORBIDDEN_EFFECT_REPORTED" }
+
+      - name: Upload sanitized evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runner-orchestrator-recovery-\${{ github.run_id }}
+          path: \${{ steps.session.outputs.target_path }}\artifacts\desktop-runner-orchestrator-recovery\evidence.json
+          if-no-files-found: error
+          retention-days: 7
