@@ -268,7 +268,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-apply-e2e-platform:
+  apply-e2e-platform:
     name: Proteger e2e-platform/main via Noteri Risk3
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-e2e-platform' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
