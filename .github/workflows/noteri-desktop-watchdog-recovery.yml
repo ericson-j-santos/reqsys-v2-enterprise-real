@@ -9,6 +9,7 @@ on:
       - '.github/workflows/noteri-desktop-watchdog-recovery.yml'
       - 'scripts/noteri_desktop_orchestrator_recovery.py'
       - 'tests/test_noteri_desktop_orchestrator_recovery.py'
+      - 'tests/test_noteri_desktop_watchdog_rpc_recovery.py'
       - '.sdd/specs/noteri-desktop-watchdog-recovery.requirements.md'
       - '.sdd/specs/noteri-desktop-watchdog-recovery.spec.json'
 
