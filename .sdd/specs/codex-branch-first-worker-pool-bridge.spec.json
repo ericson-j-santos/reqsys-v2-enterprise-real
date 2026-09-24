@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Engineering Worker Pool por contrato público v1, preferindo o Work Orchestrator /v1/work com visão única persistente e mantendo fallback temporário para /v1/tasks somente quando o endpoint Work ainda não existe (404).",
+  "description": "Conecta o fallback local branch-first do Pending Development Orchestrator ao Engineering Worker Pool por contrato público v1, prefere o Work Orchestrator /v1/work e adiciona despacho E2E DEV governado pelo Authorized Actions Gateway com inputs fixos/derivados e fallback temporário para /v1/tasks somente em 404.",
   "issues": [
     1766,
     1770,
@@ -25,7 +25,9 @@
     "tests/test_pending_development_worker_pool_bridge.py",
     "tests/test_codex_worker_pool_handoff_workflow.py",
     "scripts/governance/enterprise_runtime_governance_gates.py",
-    "tests/test_enterprise_runtime_governance_gates.py"
+    "tests/test_enterprise_runtime_governance_gates.py",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "tests/test_reqsys_authorized_actions_gateway.py"
   ],
   "sdd_gate": {
     "tests": [
@@ -33,9 +35,10 @@
       "tests/test_pending_development_worker_pool_bridge.py",
       "tests/test_codex_worker_pool_handoff_workflow.py",
       "tests/test_self_hosted_runner_governance.py",
-      "tests/test_enterprise_runtime_governance_gates.py"
+      "tests/test_enterprise_runtime_governance_gates.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Provar descoberta de engineering-worker-pool/v1 antes do despacho. Em runtime v1, preferir POST /v1/work e provar replay created=false no mesmo work_id/task_id mais GET /v1/work/{work_id} independente sem lease_token. Durante a migração, permitir fallback para /v1/tasks somente quando /v1/work retornar 404; 401, 503, transporte, JSON inválido ou resposta inconsistente permanecem fail-closed. Para runtime sem GET /v1/contract, legacy_fallback continua permitido apenas quando esse endpoint retorna 404. Provar base_sha exato, request_id/correlation_id, leitura independente e ausência de segredo. --require-work-v1 e --require-contract-v1 permitem cutover fail-closed sem nova mudança de código."
+    "evidence_contract": "Provar descoberta de engineering-worker-pool/v1 antes do despacho. Em runtime v1, preferir POST /v1/work e provar replay created=false no mesmo work_id/task_id mais GET /v1/work/{work_id} independente sem lease_token. Durante a migração, permitir fallback para /v1/tasks somente quando /v1/work retornar 404; 401, 503, transporte, JSON inválido ou resposta inconsistente permanecem fail-closed. Para runtime sem GET /v1/contract, legacy_fallback continua permitido apenas quando esse endpoint retorna 404. Provar base_sha exato, request_id/correlation_id, leitura independente e ausência de segredo. --require-work-v1 e --require-contract-v1 permitem cutover fail-closed sem nova mudança de código. O E2E físico deve ser despachável somente pelo comando exato /reqsys run codex-worker-pool-handoff-e2e-dev na issue #1705, para codex-worker-pool-handoff.yml em main, com issue 2020, base_sha capturado pelo gateway, request_id determinístico e pickup PC24x7 fail-closed em 60s."
   },
   "risk": {
     "production": false,
