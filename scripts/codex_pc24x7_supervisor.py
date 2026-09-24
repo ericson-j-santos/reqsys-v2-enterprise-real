@@ -630,7 +630,7 @@ class Supervisor:
 
     def watch(self) -> int:
         interval = int(self.metadata.get("watch_interval_seconds") or DEFAULT_WATCH_SECONDS)
-        lock_handle = self._acquire_watch_lock()
+        _lock_handle = self._acquire_watch_lock()
         while True:
             try:
                 self.cycle()
