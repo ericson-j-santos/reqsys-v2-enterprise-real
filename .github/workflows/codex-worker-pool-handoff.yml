@@ -87,6 +87,12 @@ jobs:
           if ($item.replay_created -ne $false -or $item.independent_readback -ne $true) {
             throw "Replay idempotente ou leitura independente não comprovados."
           }
+          if (@("work_v1", "task_v1_fallback", "legacy_task_fallback") -notcontains $item.dispatch_mode) {
+            throw "Modo de despacho do Worker Pool inválido."
+          }
+          if ($item.dispatch_mode -eq "work_v1" -and [string]::IsNullOrWhiteSpace([string]$item.work_id)) {
+            throw "work_id obrigatório quando o Work Orchestrator v1 foi usado."
+          }
 
       - name: Publicar evidência sanitizada
         if: always()
