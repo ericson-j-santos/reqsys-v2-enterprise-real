@@ -51,3 +51,30 @@ def test_canary_rejects_runner_name_mismatch(tmp_path: Path) -> None:
                 host=subject.TARGET_HOST,
                 platform="nt",
             )
+
+
+def test_canary_failure_evidence_does_not_leak_exception(tmp_path: Path) -> None:
+    evidence = tmp_path / "blocked.json"
+    with (
+        patch.object(
+            subject,
+            "execute",
+            side_effect=subject.CanaryError("token=must-not-leak"),
+        ),
+        patch(
+            "sys.argv",
+            [
+                "desktop_runner_pickup_canary.py",
+                "--confirm",
+                subject.CONFIRM,
+                "--evidence-file",
+                str(evidence),
+            ],
+        ),
+    ):
+        assert subject.main() == 2
+
+    persisted = evidence.read_text(encoding="utf-8")
+    assert "must-not-leak" not in persisted
+    payload = subject.json.loads(persisted)
+    assert payload["error"] == "desktop_runner_pickup_not_proven"
