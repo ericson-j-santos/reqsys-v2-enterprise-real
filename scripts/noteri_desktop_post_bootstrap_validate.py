@@ -388,7 +388,7 @@ def main() -> int:
             "target_host": TARGET_HOST,
             "endpoint": ENDPOINT,
             "correlation_id": args.correlation_id,
-            "error": str(exc)[:500],
+            "error": "desktop_post_bootstrap_validation_failed",\n            "error_type": type(exc).__name__,
             "remote_shell_used": False,
             "reboot_performed": False,
             "production_touched": False,
