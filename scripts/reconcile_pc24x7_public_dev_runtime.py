@@ -370,8 +370,8 @@ def _verify(expected_sha: str) -> dict[str, Any]:
                 "vite_http": vite["status"],
                 "static_ok": static_ok,
             }
-        except ReconcileError as exc:
-            last = {"error": str(exc)}
+        except ReconcileError:
+            last = {"error": "runtime_probe_failed"}
         time.sleep(2)
     raise ReconcileError("runtime_verification_timeout:" + json.dumps(last, sort_keys=True))
 
@@ -441,7 +441,7 @@ def main() -> int:
             "expected_sha": args.expected_sha,
             "correlation_id": args.correlation_id,
             "reason": type(exc).__name__,
-            "detail": str(exc)[:360],
+            "detail": "reconciliation_failed",
             "production_touched": False,
             "secrets_read": False,
         }
