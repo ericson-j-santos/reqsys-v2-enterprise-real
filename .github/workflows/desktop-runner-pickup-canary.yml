@@ -1,0 +1,121 @@
+name: Desktop Runner Pickup Canary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-runner-pickup-canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Prove physical GitHub Actions pickup on DESKTOP-PDQK954
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
+      CORRELATION_ID: desktop-runner-pickup-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\\desktop-runner-pickup\\evidence.json
+
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "desktop-runner-pickup",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--sync-ref", "origin/main"
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Prove exact physical host through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\\desktop_runner_pickup_canary.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "60",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $script,
+            "--confirm", "PROVE-DESKTOP-GITHUB-RUNNER-PICKUP",
+            "--evidence-file", $env:EVIDENCE_REL
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Validate independent pickup evidence
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $path)) { throw "PICKUP_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+          if (-not $e.ok -or $e.result -ne "DESKTOP_GITHUB_RUNNER_PICKUP_PROVEN") {
+            throw "DESKTOP_RUNNER_PICKUP_NOT_PROVEN"
+          }
+          if ($e.host -ne "DESKTOP-PDQK954" -or $e.runner_name -ne "DESKTOP-PDQK954") {
+            throw "DESKTOP_IDENTITY_MISMATCH"
+          }
+          if ($e.sha -ne "${{ github.sha }}") { throw "SHA_MISMATCH" }
+          if ($e.production_touched -or $e.secrets_read) { throw "SAFETY_INVARIANT_FAILED" }
+
+      - name: Upload sanitized pickup evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runner-pickup-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\\artifacts\\desktop-runner-pickup\\evidence.json
+          if-no-files-found: error
+          retention-days: 30
