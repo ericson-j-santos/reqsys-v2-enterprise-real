@@ -45,6 +45,19 @@ def _base_probe(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         probe,
+        "orchestrator_readonly_probe",
+        lambda: {
+            "reachable": False,
+            "port": probe.ORCHESTRATOR_PORT,
+            "health_ok": False,
+            "ready": False,
+            "worker_found": False,
+            "worker": None,
+            "read_only": True,
+        },
+    )
+    monkeypatch.setattr(
+        probe,
         "wmi_readonly_probe",
         lambda: {
             "reachable": False,
@@ -125,6 +138,7 @@ def test_target_is_fixed_and_no_arbitrary_target_argument() -> None:
     assert 'parser.add_argument("--target"' not in content
     assert "shell=True" not in content
     assert 'RUNTIME_PORT = 8081' in content
+    assert 'ORCHESTRATOR_PORT = 8787' in content
     assert probe.ADMIN_STAGING_PATH == r"\\DESKTOP-PDQK954\C$\Users\Public\Desktop"
 
 
@@ -214,6 +228,89 @@ def test_wmi_accessible_returns_only_sanitized_metadata(monkeypatch) -> None:
         "namespace": r"root\cimv2",
         "query_class": "Win32_OperatingSystem",
     }
+
+
+def test_orchestrator_probe_returns_only_sanitized_worker_metadata(monkeypatch) -> None:
+    def fake_get(path: str):
+        if path == "/healthz":
+            return {"ok": True, "internal": "ignore"}
+        if path == "/readyz":
+            return {"ok": True, "ready": True, "db_path": "ignore"}
+        if path == "/v1/workers":
+            return {
+                "workers": [
+                    {
+                        "worker_id": "desktop-pdqk954",
+                        "device_name": "DESKTOP-PDQK954",
+                        "profile": "NORMAL",
+                        "controller_online": True,
+                        "auth_valid": True,
+                        "fresh": True,
+                        "eligible": True,
+                        "controller_version": "0.2.51",
+                        "capabilities": {
+                            "safe_task_types": [
+                                "host.orchestrator.refresh.v1",
+                                "host.rdc.recover.v1",
+                            ],
+                            "token": "must-not-leak",
+                        },
+                    }
+                ],
+                "sensitive": "must-not-leak",
+            }
+        raise AssertionError(path)
+
+    monkeypatch.setattr(probe, "_orchestrator_get_json", fake_get)
+    result = probe.orchestrator_readonly_probe()
+
+    assert result["reachable"] is True
+    assert result["health_ok"] is True
+    assert result["ready"] is True
+    assert result["worker_found"] is True
+    assert result["read_only"] is True
+    assert result["worker"] == {
+        "worker_id": "desktop-pdqk954",
+        "device_name": "DESKTOP-PDQK954",
+        "profile": "NORMAL",
+        "controller_online": True,
+        "auth_valid": True,
+        "fresh": True,
+        "eligible": True,
+        "controller_version": "0.2.51",
+        "safe_task_types": [
+            "host.orchestrator.refresh.v1",
+            "host.rdc.recover.v1",
+        ],
+    }
+    encoded = json.dumps(result)
+    assert "must-not-leak" not in encoded
+    assert "token" not in encoded
+
+
+def test_orchestrator_can_independently_prove_desktop_reachability(monkeypatch) -> None:
+    _base_probe(monkeypatch)
+    monkeypatch.setattr(probe, "icmp_reachable", lambda: False)
+    monkeypatch.setattr(probe, "runtime_port_reachable", lambda: False)
+    monkeypatch.setattr(
+        probe,
+        "orchestrator_readonly_probe",
+        lambda: {
+            "reachable": True,
+            "port": 8787,
+            "health_ok": True,
+            "ready": True,
+            "worker_found": False,
+            "worker": None,
+            "read_only": True,
+        },
+    )
+    result = probe.probe(probe.CONFIRM, "corr-network-orchestrator")
+    assert result["desktop_reachable"] is True
+    assert result["network_state"] == "orchestrator_reachable"
+    assert result["orchestrator_port"] == 8787
+    assert result["orchestrator_ready"] is True
+    assert result["orchestrator_read_only"] is True
 
 
 def test_workflow_is_noteri_only_inputless_and_governed() -> None:
