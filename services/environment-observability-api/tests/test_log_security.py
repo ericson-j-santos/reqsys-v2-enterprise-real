@@ -1,7 +1,14 @@
 import json
 import logging
 
-from app.main import JsonFormatter, LOG_SCHEMA_VERSION, parse_traceparent, redact
+from app.main import JsonFormatter, LOG_SCHEMA_VERSION, normalize_context_id, parse_traceparent, redact
+
+
+def test_context_id_accepts_safe_values_and_rejects_log_injection():
+    assert normalize_context_id("evt-123/child:1") == "evt-123/child:1"
+    assert normalize_context_id(" bad value ") is None
+    assert normalize_context_id("ok\\nforged") is None
+    assert normalize_context_id("x" * 129) is None
 
 
 def test_parse_valid_w3c_traceparent():
@@ -48,11 +55,15 @@ def test_json_formatter_never_emits_sensitive_values():
     )
     record.event_name = "security.redaction.test"
     record.event_category = "security"
+    record.causation_id = "evt-parent-123"
+    record.workflow_run_id = "35999999999"
     output = JsonFormatter().format(record)
     payload = json.loads(output)
 
     assert payload["log_schema_version"] == LOG_SCHEMA_VERSION
     assert payload["event_category"] == "security"
+    assert payload["causation_id"] == "evt-parent-123"
+    assert payload["workflow_run_id"] == "35999999999"
     for sensitive in ("token-value", "user@example.com", "01059656930", "11989196498"):
         assert sensitive not in output
     assert "deployment_id" in payload
