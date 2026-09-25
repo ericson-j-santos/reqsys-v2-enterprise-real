@@ -244,6 +244,28 @@ def test_execute_refreshes_runtime_before_bootstrap(tmp_path: Path) -> None:
     assert result["preflight"]["capability_present"] is True
 
 
+
+def test_runtime_refresh_targets_orchestrator_reexec_fix() -> None:
+    assert subject.ORCHESTRATOR_BOOTSTRAP_SHA == "d44c9f0e64705fa50f7798cb7ff41afbea668784"
+
+
+def test_runner_bootstrap_evidence_stays_outside_governed_worktree() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "noteri-desktop-watchdog-recovery.yml"
+    ).read_text(encoding="utf-8")
+    section = workflow.split("  runner-bootstrap:", maxsplit=1)[1].split(
+        "  runner-canary:", maxsplit=1
+    )[0]
+
+    assert "$env:RUNNER_TEMP" in section
+    assert "evidence_file=$evidenceFile" in section
+    assert '"--evidence-file", $env:EVIDENCE_FILE' in section
+    assert "path: ${{ steps.session.outputs.evidence_file }}" in section
+    assert "Join-Path $env:TARGET_PATH $env:EVIDENCE_REL" not in section
+
 def test_work_item_id_rejects_path_injection() -> None:
     with pytest.raises(subject.BootstrapError, match="work_item_id_invalid"):
         subject.validate_work_item_id("../../v1/status")
