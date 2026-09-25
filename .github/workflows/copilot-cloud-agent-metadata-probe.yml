@@ -67,6 +67,7 @@ jobs:
           python scripts/probe_copilot_cloud_agent_metadata.py \
             --repository "${GITHUB_REPOSITORY}" \
             --correlation-id "${CORRELATION_ID}" \
+            --auth-source "governed_repository_credential" \
             --output "${EVIDENCE_FILE}"
 
       - name: Validate evidence safety contract
