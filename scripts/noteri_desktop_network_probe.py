@@ -12,11 +12,16 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 EXPECTED_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
 CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
 RUNTIME_PORT = 8081
+ORCHESTRATOR_PORT = 8787
+ORCHESTRATOR_TIMEOUT_SECONDS = 2.0
+ORCHESTRATOR_MAX_BODY_BYTES = 65536
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
 ADMIN_STAGING_PATH = "\\\\" + TARGET_HOST + "\\C$\\Users\\Public\\Desktop"
@@ -232,6 +237,76 @@ def wmi_readonly_probe() -> dict[str, Any]:
             pythoncom.CoUninitialize()
 
 
+def _orchestrator_get_json(path: str) -> dict[str, Any] | None:
+    request = Request(
+        f"http://{TARGET_HOST}:{ORCHESTRATOR_PORT}{path}",
+        method="GET",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=ORCHESTRATOR_TIMEOUT_SECONDS) as response:
+            if int(response.status) != 200:
+                return None
+            raw = response.read(ORCHESTRATOR_MAX_BODY_BYTES + 1)
+    except (OSError, HTTPError, URLError):
+        return None
+    if len(raw) > ORCHESTRATOR_MAX_BODY_BYTES:
+        return None
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def orchestrator_readonly_probe() -> dict[str, Any]:
+    health = _orchestrator_get_json("/healthz")
+    ready = _orchestrator_get_json("/readyz")
+    registry = _orchestrator_get_json("/v1/workers")
+
+    matched: dict[str, Any] | None = None
+    workers = registry.get("workers", []) if isinstance(registry, dict) else []
+    if isinstance(workers, list):
+        for candidate in workers:
+            if not isinstance(candidate, dict):
+                continue
+            if str(candidate.get("device_name") or "").casefold() != TARGET_HOST.casefold():
+                continue
+            capabilities = candidate.get("capabilities")
+            safe_task_types: list[str] = []
+            if isinstance(capabilities, dict):
+                raw_safe = capabilities.get("safe_task_types", [])
+                if isinstance(raw_safe, list):
+                    safe_task_types = sorted(
+                        value
+                        for value in raw_safe
+                        if isinstance(value, str) and 0 < len(value) <= 128
+                    )
+            matched = {
+                "worker_id": str(candidate.get("worker_id") or "")[:128],
+                "device_name": TARGET_HOST,
+                "profile": str(candidate.get("profile") or "")[:32],
+                "controller_online": bool(candidate.get("controller_online")),
+                "auth_valid": bool(candidate.get("auth_valid")),
+                "fresh": bool(candidate.get("fresh")),
+                "eligible": bool(candidate.get("eligible")),
+                "controller_version": str(candidate.get("controller_version") or "")[:64],
+                "safe_task_types": safe_task_types,
+            }
+            break
+
+    reachable = health is not None or ready is not None or registry is not None
+    return {
+        "reachable": reachable,
+        "port": ORCHESTRATOR_PORT,
+        "health_ok": bool(isinstance(health, dict) and health.get("ok") is True),
+        "ready": bool(isinstance(ready, dict) and ready.get("ready") is True),
+        "worker_found": matched is not None,
+        "worker": matched,
+        "read_only": True,
+    }
+
+
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     correlation_id = validate_request(confirm, correlation_id)
     host = validate_host()
@@ -240,6 +315,15 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     icmp: bool | None = None
     tcp = False
     staging = {"reachable": False, "result": "not_attempted"}
+    orchestrator = {
+        "reachable": False,
+        "port": ORCHESTRATOR_PORT,
+        "health_ok": False,
+        "ready": False,
+        "worker_found": False,
+        "worker": None,
+        "read_only": True,
+    }
     wmi = {
         "reachable": False,
         "result": "not_attempted",
@@ -254,12 +338,16 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         tcp = runtime_port_reachable()
         staging = admin_staging_path_probe()
         wmi = wmi_readonly_probe()
+        orchestrator = orchestrator_readonly_probe()
 
     if not resolution["resolved"]:
         state = "name_resolution_failed"
         desktop_reachable = False
     elif tcp:
         state = "runtime_port_reachable"
+        desktop_reachable = True
+    elif orchestrator["reachable"]:
+        state = "orchestrator_reachable"
         desktop_reachable = True
     elif icmp:
         state = "host_reachable_runtime_port_closed"
@@ -284,6 +372,13 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
+        "orchestrator_port": ORCHESTRATOR_PORT,
+        "orchestrator_reachable": bool(orchestrator["reachable"]),
+        "orchestrator_health_ok": bool(orchestrator["health_ok"]),
+        "orchestrator_ready": bool(orchestrator["ready"]),
+        "orchestrator_worker_found": bool(orchestrator["worker_found"]),
+        "orchestrator_worker": orchestrator["worker"],
+        "orchestrator_read_only": True,
         "wmi_reachable": bool(wmi["reachable"]),
         "wmi_result": str(wmi["result"]),
         "wmi_stage": str(wmi.get("stage") or "not_attempted"),
