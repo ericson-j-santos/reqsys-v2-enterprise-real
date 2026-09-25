@@ -286,13 +286,13 @@ def main() -> int:
             timeout_seconds=args.timeout_seconds,
             evidence_file=args.evidence_file.resolve(),
         )
-    except (BootstrapError, OSError, ValueError) as exc:
+    except (BootstrapError, OSError, ValueError):
         blocked = {
             "schema_version": "1",
             "generated_at_utc": now_iso(),
             "ok": False,
             "result": "DESKTOP_GITHUB_RUNNER_BOOTSTRAP_BLOCKED",
-            "error": sanitize(exc),
+            "error": "desktop_github_runner_bootstrap_failed",
             "source_host": EXPECTED_SOURCE_HOST,
             "target_host": TARGET_HOST,
             "correlation_id": args.correlation_id,
