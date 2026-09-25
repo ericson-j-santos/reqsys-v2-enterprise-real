@@ -28,7 +28,9 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Noteri -> Session Launcher -> Command Gateway risk 2 -> DESKTOP-PDQK954:8787 -> host.github_runner.bootstrap.v1 -> listener local verificado; prova terminal separada pelo modo runner-canary no runner DESKTOP-PDQK954 e SHA exato."
+    "evidence_contract": "Noteri -> Session Launcher -> Command Gateway risk 2 -> DESKTOP-PDQK954:8787 -> host.github_runner.bootstrap.v1 -> listener local verificado; prova terminal separada pelo modo runner-canary no runner DESKTOP-PDQK954 e SHA exato.",
+    "orchestrator_runtime_sha": "d44c9f0e64705fa50f7798cb7ff41afbea668784",
+    "evidence_location": "RUNNER_TEMP outside governed worktree"
   },
   "risk": {
     "production": false,
@@ -52,6 +54,7 @@
     "Sucesso local exige local_listener_verified=true e ainda mantém pickup_required=true.",
     "Canário terminal exige host, runner, repositório e SHA exatos.",
     "Nenhum modo lê segredos, toca produção, executa shell remoto arbitrário ou reinicia o host.",
-    "A superfície de GitHub Actions não cresce; os modos reutilizam noteri-desktop-watchdog-recovery.yml."
+    "A superfície de GitHub Actions não cresce; os modos reutilizam noteri-desktop-watchdog-recovery.yml.",
+    "A evidência do bootstrap permanece fora do worktree governado e não altera o estado Git da sessão."
   ]
 }
