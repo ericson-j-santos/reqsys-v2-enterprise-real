@@ -374,7 +374,8 @@ def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f workflow=" not in content
     assert "-f repository=" not in content
-    assert "-f environment=prod" not in content\n
+    assert "-f environment=prod" not in content
+
 
 def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -> None:
     content = _workflow()
