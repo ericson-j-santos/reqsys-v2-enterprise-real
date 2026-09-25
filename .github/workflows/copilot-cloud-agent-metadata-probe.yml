@@ -44,12 +44,24 @@ jobs:
           python -m pip install --disable-pip-version-check pytest==8.4.2
           python -m pytest -q tests/test_probe_copilot_cloud_agent_metadata.py
 
+      - name: Validate governed GitHub credential presence
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GITHUB_TOKEN:-}" ]; then
+            echo "GH_PAT_ACTIONS is not configured."
+            exit 2
+          fi
+          echo "Governed GitHub credential is configured; value remains masked."
+
       - name: Probe repository metadata
         id: metadata_probe
         continue-on-error: true
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
         run: |
           set -euo pipefail
           python scripts/probe_copilot_cloud_agent_metadata.py \
@@ -118,5 +130,5 @@ jobs:
         if: steps.metadata_probe.outcome != 'success'
         shell: bash
         run: |
-          echo "Copilot cloud-agent metadata is not readable with the bounded GitHub Actions token."
+          echo "Copilot cloud-agent metadata is not readable with the governed GitHub credential."
           exit 1
