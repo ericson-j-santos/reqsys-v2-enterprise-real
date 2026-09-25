@@ -40,3 +40,16 @@ O incremento cobre somente development. Ele não provisiona cluster, não instal
 7. O workflow CI E2E Governado seleciona o E2E Kubernetes somente para escopo GitOps relevante ou dispatch explícito, sem criar novo workflow.
 8. O job Kubernetes + Argo CD GitOps E2E conclui verde no HEAD da PR.
 9. Após merge, uma execução em main produz evidência passada no SHA de merge antes de considerar a cadeia GitOps comprovada fora do ambiente local.
+
+## Disparo pós-merge governado
+
+13. O Authorized Actions Gateway deve aceitar somente o comando exato `/reqsys run kubernetes-argocd-e2e-dev` na issue operacional allowlisted e mapear exclusivamente para `ci-e2e-governado.yml` em `main`.
+14. O comando não pode aceitar nome de workflow, ref, SHA, namespace ou parâmetro arbitrário.
+15. O workflow despachado deve ficar vinculado ao SHA corrente de `main` pela validação existente do gateway.
+16. Como o E2E usa runner GitHub-hosted, essa rota não deve entrar no watchdog de pickup self-hosted.
+
+### Critérios adicionais de aceite — dispatch
+
+10. O teste contratual confirma comando literal, workflow fixo e presença na allowlist estática.
+11. O Pre-PR Readiness fica verde no HEAD exato antes da PR.
+12. Após merge, o comando na issue #1705 cria uma execução `workflow_dispatch` do CI E2E Governado no SHA corrente de `main`, e o artifact Kubernetes GitOps desse run comprova `status=passed`.

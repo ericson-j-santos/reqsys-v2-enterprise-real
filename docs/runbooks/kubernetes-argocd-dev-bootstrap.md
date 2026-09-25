@@ -77,3 +77,11 @@ O aceite exige simultaneamente:
 - cluster kind removido ao final, inclusive em falha.
 
 Esse E2E comprova a cadeia declarativa em Kubernetes real. Ele não transforma o runner do GitHub em runtime persistente. O destino persistente continua sendo o PC24x7 Desktop, condicionado à recuperação do bootstrap host-side e do Command Gateway.
+
+## Disparo pós-merge sem interface manual
+
+O merge governado pode ser criado por um workflow com `GITHUB_TOKEN`; nesse caso, o GitHub não dispara outro workflow por `push` recursivo. Para produzir a evidência pós-merge no SHA real de `main`, usar o comando exato na issue operacional #1705:
+
+    /reqsys run kubernetes-argocd-e2e-dev
+
+O Authorized Actions Gateway captura o SHA corrente de `main`, despacha somente `ci-e2e-governado.yml` por `workflow_dispatch` e valida `run_id`, URL, `headSha` e evento antes de registrar a evidência sanitizada. Nenhum parâmetro arbitrário é aceito e a rota usa runner GitHub-hosted, sem depender do PC24x7.
