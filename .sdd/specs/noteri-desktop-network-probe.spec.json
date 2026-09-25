@@ -39,6 +39,14 @@
       ],
       "branch_prefix": "fix/noteri-desktop-network-probe-http-8083-",
       "legacy_job_skipped_on_http_branch": true
+    },
+    "orchestrator_runner_bootstrap": {
+      "endpoint": "http://DESKTOP-PDQK954:8787",
+      "recovery_contract_version": "1",
+      "refresh_task": "host.orchestrator.refresh.v1",
+      "bootstrap_task": "host.github_runner.bootstrap.v1",
+      "independent_github_pickup_required": true,
+      "evidence_outside_governed_worktree": true
     }
   },
   "security": {
@@ -64,7 +72,9 @@
       "schtasks",
       "c$",
       "admin_broker"
-    ]
+    ],
+    "raw_exception_text_persisted": false,
+    "runner_token_supplied": false
   },
   "evidence_contract": {
     "states": [
@@ -101,14 +111,15 @@
       "tests/test_noteri_desktop_network_probe.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py",
-      "tests/test_noteri_desktop_dev_http_probe.py"
+      "tests/test_noteri_desktop_dev_http_probe.py",
+      "tests/test_noteri_desktop_orchestrator_rdc_recover.py"
     ],
     "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
   },
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-24",
+  "updated_at": "2026-09-25",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -119,6 +130,7 @@
     "Na branch fix/noteri-desktop-network-probe-http-8083-*, o job legado é ignorado e somente a sonda HTTP DEV executa.",
     "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
-    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente."
+    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
+    "Runner recovery is accepted only after recovery contract v1 readback, governed bootstrap and independent GitHub Actions pickup; local listener success alone is insufficient."
   ]
 }
