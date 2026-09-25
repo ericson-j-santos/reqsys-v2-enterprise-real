@@ -82,7 +82,7 @@ def sanitize_variable(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_evidence(repository: str, bearer: str, correlation_id: str) -> dict[str, Any]:
+def build_evidence(repository: str, bearer: str, correlation_id: str, auth_source: str) -> dict[str, Any]:
     config_status, config_payload = _request_json(repository, CLOUD_CONFIG_PATH, bearer)
     variable_status, variable_payload = _request_json(
         repository,
@@ -131,13 +131,13 @@ def main() -> int:
     if not bearer:
         raise SystemExit("GITHUB_TOKEN ausente")
 
-    evidence = build_evidence(args.repository, bearer, args.correlation_id)
+    evidence = build_evidence(args.repository, bearer, args.correlation_id, args.auth_source)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(evidence, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({
         "result": evidence["result"],
-        "cloud_config_status": evidence["cloud_agent_configuration"]["http_status"],
+        "auth_source": evidence["auth_source"],\n        "cloud_config_status": evidence["cloud_agent_configuration"]["http_status"],
         "variable_status": evidence["ollama_mcp_variable"]["http_status"],
         "credential_endpoint_called": False,
     }, ensure_ascii=False))
