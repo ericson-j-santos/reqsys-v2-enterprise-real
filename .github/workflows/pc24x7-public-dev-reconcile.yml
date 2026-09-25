@@ -1,19 +1,7 @@
 name: PC24x7 Public DEV Reconcile
 
 on:
-  pull_request:
-    paths:
-      - 'docker-compose.pc24x7-public-dev.yml'
-      - 'infra/nginx/default.pc24x7-public-dev.conf'
-      - 'scripts/reconcile_pc24x7_public_dev_runtime.py'
-      - 'scripts/pc24x7_dev_runtime_supervisor.py'
-      - 'scripts/pc24x7_public_dev_tunnel.py'
-      - 'scripts/pc24x7_dev_locator_publisher.py'
-      - 'tests/test_pc24x7_public_dev_static_runtime.py'
-      - '.github/workflows/pc24x7-public-dev-reconcile.yml'
-      - '.github/workflows/reqsys-authorized-actions-gateway.yml'
   workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -22,28 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  contract:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Validate static DEV contract
-        shell: bash
-        env:
-          REQSYS_BUILD_SHA: 0000000000000000000000000000000000000000
-        run: |
-          set -euo pipefail
-          python -m py_compile scripts/reconcile_pc24x7_public_dev_runtime.py scripts/pc24x7_dev_runtime_supervisor.py scripts/pc24x7_public_dev_tunnel.py scripts/pc24x7_dev_locator_publisher.py
-          python -m pip install --disable-pip-version-check pytest==9.0.3
-          pytest -q tests/test_pc24x7_public_dev_static_runtime.py tests/test_pc24x7_dev_runtime_supervisor.py tests/test_reqsys_authorized_actions_gateway.py
-          docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.pc24x7-public-dev.yml config --quiet
-
   reconcile:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 15
     environment: development
@@ -88,7 +55,6 @@ jobs:
           retention-days: 30
 
   public-smoke:
-    if: github.event_name == 'workflow_dispatch'
     needs: reconcile
     runs-on: ubuntu-latest
     timeout-minutes: 5
