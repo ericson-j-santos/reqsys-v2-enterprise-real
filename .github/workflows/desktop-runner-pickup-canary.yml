@@ -27,9 +27,6 @@ jobs:
       TARGET_REPO: ${{ github.workspace }}
       CORRELATION_ID: desktop-runner-pickup-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\desktop-runner-pickup\evidence.json
-      OBSERVED_RUNNER_NAME: ${{ runner.name }}
-      OBSERVED_RUNNER_OS: ${{ runner.os }}
-      OBSERVED_RUNNER_ARCH: ${{ runner.arch }}
 
     steps:
       - name: Checkout immutable workflow SHA
@@ -106,6 +103,9 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          OBSERVED_RUNNER_NAME: ${{ runner.name }}
+          OBSERVED_RUNNER_OS: ${{ runner.os }}
+          OBSERVED_RUNNER_ARCH: ${{ runner.arch }}
         run: |
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
