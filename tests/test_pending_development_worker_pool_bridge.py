@@ -13,6 +13,11 @@ from scripts import pending_development_worker_pool_bridge as bridge
 BASE_SHA = "a" * 40
 
 
+def test_worker_pool_contract_identity_is_pinned_to_public_v1() -> None:
+    assert bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME == "engineering-worker-pool"
+    assert bridge.EXPECTED_WORKER_POOL_CONTRACT_VERSION == "v1"
+
+
 def report(status: str = "dispatched") -> dict[str, Any]:
     return {
         "schema_version": "1.0.0",
@@ -285,7 +290,7 @@ def test_token_resolution_fails_closed_for_noncanonical_endpoint_binding(monkeyp
         bridge.resolve_token_file(None)
 
 
-def test_enqueue_proves_replay_and_independent_readback() -> None:
+def test_enqueue_prefers_work_v1_and_proves_replay_and_independent_readback() -> None:
     calls: list[tuple[str, str]] = []
     task = {
         "task_id": "cwp-123",
@@ -296,6 +301,14 @@ def test_enqueue_proves_replay_and_independent_readback() -> None:
         "workspace_key": "worker-abc",
         "base_sha": BASE_SHA,
         "state": "queued",
+    }
+    work = {
+        "work_id": "work-123",
+        "task_id": task["task_id"],
+        "phase": "queue",
+        "task": dict(task),
+        "evidence": {"state": "pending"},
+        "merge": {"state": "pending"},
     }
 
     def fake_request(
@@ -308,13 +321,21 @@ def test_enqueue_proves_replay_and_independent_readback() -> None:
         calls.append((method, url))
         if url.endswith("/health"):
             return 200, {"status": "healthy"}
-        if method == "POST" and len([call for call in calls if call[0] == "POST"]) == 1:
+        if url.endswith("/v1/contract"):
+            return 200, {
+                "contract_name": bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME,
+                "contract_version": bridge.EXPECTED_WORKER_POOL_CONTRACT_VERSION,
+            }
+        if method == "POST" and url.endswith("/v1/work"):
             assert payload is not None and payload["base_sha"] == BASE_SHA
-            return 201, {"created": True, "task": dict(task)}
-        if method == "POST":
-            return 200, {"created": False, "task": dict(task)}
-        if method == "GET" and "/v1/tasks/" in url:
-            return 200, dict(task)
+            post_count = sum(1 for m, u in calls if m == "POST" and u.endswith("/v1/work"))
+            return (
+                (201, {"created": True, "work": dict(work)})
+                if post_count == 1
+                else (200, {"created": False, "work": dict(work)})
+            )
+        if method == "GET" and url.endswith("/v1/work/work-123"):
+            return 200, dict(work)
         raise AssertionError((method, url))
 
     result = bridge.enqueue_local_work(
@@ -325,14 +346,108 @@ def test_enqueue_proves_replay_and_independent_readback() -> None:
         request_fn=fake_request,
     )
 
+    item = result["items"][0]
     assert result["result"] == "WORKER_POOL_ENQUEUED"
     assert result["enqueued"] == 1
-    assert result["items"][0]["created"] is True
-    assert result["items"][0]["replay_created"] is False
-    assert result["items"][0]["independent_readback"] is True
-    assert result["items"][0]["base_sha"] == BASE_SHA
+    assert item["created"] is True
+    assert item["replay_created"] is False
+    assert item["independent_readback"] is True
+    assert item["base_sha"] == BASE_SHA
+    assert item["work_id"] == "work-123"
+    assert item["task_id"] == "cwp-123"
+    assert item["dispatch_mode"] == "work_v1"
+    assert item["work_phase"] == "queue"
+    assert result["dispatch_modes"] == ["work_v1"]
+    assert result["work_orchestrator_preferred"] is True
+    assert result["contract_mode"] == "v1"
+    assert result["contract_version"] == "v1"
+    assert result["legacy_fallback_used"] is False
     assert "local-secret" not in str(result)
-    assert [method for method, _url in calls] == ["GET", "POST", "POST", "GET"]
+    assert [method for method, _url in calls] == ["GET", "GET", "POST", "POST", "GET"]
+
+
+def test_work_v1_404_falls_back_to_task_v1_only_when_allowed() -> None:
+    calls: list[tuple[str, str]] = []
+    task = {
+        "task_id": "cwp-fallback",
+        "repository": "owner/repo",
+        "issue_number": 1766,
+        "request_id": bridge.local_codex_request_id("owner/repo", 1766, "main"),
+        "branch": "codex/issue-1766-fallback",
+        "workspace_key": "worker-fallback",
+        "base_sha": BASE_SHA,
+        "state": "queued",
+    }
+
+    def fake_request(method, url, _token, _payload):
+        calls.append((method, url))
+        if url.endswith("/health"):
+            return 200, {"status": "healthy"}
+        if url.endswith("/v1/contract"):
+            return 200, {
+                "contract_name": bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME,
+                "contract_version": "v1",
+            }
+        if method == "POST" and url.endswith("/v1/work"):
+            raise bridge.BridgeError("worker_pool_http_404")
+        if method == "POST" and url.endswith("/v1/tasks"):
+            post_count = sum(1 for m, u in calls if m == "POST" and u.endswith("/v1/tasks"))
+            return (
+                (201, {"created": True, "task": dict(task)})
+                if post_count == 1
+                else (200, {"created": False, "task": dict(task)})
+            )
+        if method == "GET" and url.endswith("/v1/tasks/cwp-fallback"):
+            return 200, dict(task)
+        raise AssertionError((method, url))
+
+    result = bridge.enqueue_local_work(
+        report(),
+        base_sha=BASE_SHA,
+        pool_url="http://127.0.0.1:8097",
+        token="local-secret",
+        request_fn=fake_request,
+        allow_work_fallback=True,
+    )
+    assert result["items"][0]["dispatch_mode"] == "task_v1_fallback"
+    assert result["items"][0]["work_id"] is None
+    assert result["items"][0]["independent_readback"] is True
+    assert result["dispatch_modes"] == ["task_v1_fallback"]
+
+    with pytest.raises(bridge.BridgeError, match="worker_pool_work_contract_required"):
+        bridge.enqueue_local_work(
+            report(),
+            base_sha=BASE_SHA,
+            pool_url="http://127.0.0.1:8097",
+            token="local-secret",
+            request_fn=fake_request,
+            allow_work_fallback=False,
+        )
+
+
+@pytest.mark.parametrize("reason", ["worker_pool_http_401", "worker_pool_http_503", "worker_pool_unreachable"])
+def test_work_v1_never_falls_back_on_auth_runtime_or_transport_failure(reason: str) -> None:
+    def failed(method, url, _token, _payload):
+        if url.endswith("/health"):
+            return 200, {"status": "healthy"}
+        if url.endswith("/v1/contract"):
+            return 200, {
+                "contract_name": bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME,
+                "contract_version": "v1",
+            }
+        if method == "POST" and url.endswith("/v1/work"):
+            raise bridge.BridgeError(reason)
+        raise AssertionError((method, url))
+
+    with pytest.raises(bridge.BridgeError, match=reason):
+        bridge.enqueue_local_work(
+            report(),
+            base_sha=BASE_SHA,
+            pool_url="http://127.0.0.1:8097",
+            token="local-secret",
+            request_fn=failed,
+            allow_work_fallback=True,
+        )
 
 
 def test_already_dispatched_replays_into_same_idempotent_queue() -> None:
@@ -368,4 +483,69 @@ def test_invalid_base_sha_fails_before_network() -> None:
             pool_url="http://127.0.0.1:8097",
             token="local-secret",
             request_fn=forbidden,
+        )
+
+
+def test_contract_probe_allows_only_missing_endpoint_as_legacy_fallback() -> None:
+    def missing_contract(
+        _method: str,
+        _url: str,
+        _token: str,
+        _payload: dict[str, Any] | None,
+    ) -> tuple[int, dict[str, Any]]:
+        raise bridge.BridgeError("worker_pool_http_404")
+
+    assert bridge.verify_contract(
+        "http://127.0.0.1:8097",
+        "local-secret",
+        missing_contract,
+        allow_legacy_fallback=True,
+    ) == "legacy_fallback"
+
+    with pytest.raises(bridge.BridgeError, match="worker_pool_contract_required"):
+        bridge.verify_contract(
+            "http://127.0.0.1:8097",
+            "local-secret",
+            missing_contract,
+            allow_legacy_fallback=False,
+        )
+
+
+def test_contract_probe_rejects_incompatible_version() -> None:
+    def incompatible(
+        _method: str,
+        _url: str,
+        _token: str,
+        _payload: dict[str, Any] | None,
+    ) -> tuple[int, dict[str, Any]]:
+        return 200, {
+            "contract_name": bridge.EXPECTED_WORKER_POOL_CONTRACT_NAME,
+            "contract_version": "v2",
+        }
+
+    with pytest.raises(bridge.BridgeError, match="worker_pool_contract_incompatible"):
+        bridge.verify_contract(
+            "http://127.0.0.1:8097",
+            "local-secret",
+            incompatible,
+            allow_legacy_fallback=True,
+        )
+
+
+@pytest.mark.parametrize("reason", ["worker_pool_http_401", "worker_pool_http_503", "worker_pool_unreachable"])
+def test_contract_probe_never_falls_back_on_auth_runtime_or_transport_failure(reason: str) -> None:
+    def failed(
+        _method: str,
+        _url: str,
+        _token: str,
+        _payload: dict[str, Any] | None,
+    ) -> tuple[int, dict[str, Any]]:
+        raise bridge.BridgeError(reason)
+
+    with pytest.raises(bridge.BridgeError, match=reason):
+        bridge.verify_contract(
+            "http://127.0.0.1:8097",
+            "local-secret",
+            failed,
+            allow_legacy_fallback=True,
         )

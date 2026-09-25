@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: reqsys-dev-bootstrap
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: reqsys
+    reqsys.io/environment: development
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real.git
+    targetRevision: main
+    path: k8s/bootstrap/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: reqsys-dev
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reqsys-gitops-bootstrap
+  labels:
+    app.kubernetes.io/name: reqsys-gitops-bootstrap
+    app.kubernetes.io/part-of: reqsys
+    app.kubernetes.io/managed-by: argocd
+    reqsys.io/environment: development
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
+data:
+  purpose: gitops-bootstrap-canary
+  environment: development
+  expected_namespace: reqsys-dev
+  source_repository: https://github.com/ericson-j-santos/reqsys-v2-enterprise-real

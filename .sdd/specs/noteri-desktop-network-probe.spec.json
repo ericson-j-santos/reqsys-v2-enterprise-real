@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.0",
-  "feature_name": "Noteri to Desktop network probe",
-  "status": "code_ready_runtime_pending",
+  "schema_version": "1.1",
+  "feature_name": "Noteri to Desktop governed network probes",
+  "status": "implementation",
   "issue": 1899,
   "increment_type": "gap_fix",
   "architecture": {
@@ -10,6 +10,7 @@
     "workflow": ".github/workflows/noteri-desktop-network-probe.yml",
     "probe": "scripts/noteri_desktop_network_probe.py",
     "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "execution_control": "Session Launcher -> Command Gateway",
     "runner_labels": [
       "self-hosted",
       "Windows",
@@ -19,50 +20,105 @@
     ],
     "runtime_port": 8081,
     "environment": "DEV",
-    "admin_staging_probe": "C:\\\\Users\\\\Public\\\\Desktop via C$"
+    "admin_staging_probe": "C:\\Users\\Public\\Desktop via C$",
+    "wmi": {
+      "transport": "DCOM/WMI",
+      "namespace": "root\\cimv2",
+      "query_class": "Win32_OperatingSystem",
+      "query": "SELECT Caption FROM Win32_OperatingSystem",
+      "credentials": "current Windows identity only",
+      "read_only": true
+    },
+    "dev_http_probe": {
+      "script": "scripts/noteri_desktop_dev_http_probe.py",
+      "port": 8083,
+      "method": "GET",
+      "paths": [
+        "/api/health",
+        "/api/runtime/health"
+      ],
+      "branch_prefix": "fix/noteri-desktop-network-probe-http-8083-",
+      "legacy_job_skipped_on_http_branch": true
+    }
   },
   "security": {
     "arbitrary_target": false,
     "arbitrary_shell": false,
+    "remote_shell": false,
     "gui_input": false,
+    "credentials_supplied": false,
     "credentials_read": false,
     "firewall_change": false,
     "reboot": false,
     "shutdown": false,
-    "wake_on_lan": false,
     "raw_ip_persisted": false,
     "remote_write": false,
-    "remote_listing_persisted": false
+    "remote_listing_persisted": false,
+    "wmi_mutation": false,
+    "dev_http_mutation": false,
+    "dev_http_credentials": false,
+    "uac_or_acl_relaxed": false,
+    "excluded_recovery_routes": [
+      "wmi",
+      "scm",
+      "schtasks",
+      "c$",
+      "admin_broker"
+    ]
   },
   "evidence_contract": {
     "states": [
       "name_resolution_failed",
       "resolved_not_reachable",
       "host_reachable_runtime_port_closed",
+      "host_reachable_wmi_runtime_port_closed",
       "runtime_port_reachable"
+    ],
+    "wmi_states": [
+      "accessible",
+      "empty_result",
+      "access_denied",
+      "rpc_server_unavailable",
+      "namespace_unavailable",
+      "dependency_unavailable",
+      "wmi_error"
     ],
     "artifact": "artifacts/noteri-desktop-network/evidence.json",
     "correlation_id_required": true,
     "independent_readback_required": true,
     "exact_sha_required": true,
-    "admin_staging_states": [
-      "accessible",
-      "access_denied",
-      "not_found",
-      "os_error_*"
+    "remote_write": false,
+    "dev_http_states": [
+      "name_resolution_failed",
+      "dev_gateway_tcp_closed",
+      "dev_gateway_http_reachable",
+      "dev_gateway_tcp_reachable_http_unresponsive"
     ],
-    "remote_write": false
+    "dev_http_artifact": "artifacts/noteri-desktop-dev-http/evidence.json"
   },
   "sdd_gate": {
     "tests": [
       "tests/test_noteri_desktop_network_probe.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
-      "tests/test_self_hosted_runner_governance.py"
+      "tests/test_self_hosted_runner_governance.py",
+      "tests/test_noteri_desktop_dev_http_probe.py"
     ],
     "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
   },
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-21"
+  "updated_at": "2026-09-24",
+  "acceptance_criteria": [
+    "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
+    "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
+    "O resultado WMI é sanitizado para estados allowlisted e não persiste Caption, versão, hostname remoto, endereço IP, stdout/stderr ou credenciais.",
+    "wmi_result=accessible somente é aceito quando a consulta read-only retorna ao menos uma instância; access_denied não é tratado como autorização para execução remota.",
+    "A execução física produz artifact vinculado ao correlation_id e SHA atuais, com remote_shell_used=false, credentials_supplied=false, production_touched=false e secrets_read=false.",
+    "Pre-PR Readiness retorna READY_FOR_PR=passed no HEAD exato e behind_by=0 antes de qualquer PR.",
+    "Na branch fix/noteri-desktop-network-probe-http-8083-*, o job legado é ignorado e somente a sonda HTTP DEV executa.",
+    "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
+    "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
+    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente."
+  ]
 }

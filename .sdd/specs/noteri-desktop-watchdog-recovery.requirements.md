@@ -20,9 +20,17 @@ Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indispo
 12. Após sucesso, E2E independente deve comprovar pickup do runner Desktop.
 13. Os passos PowerShell do workflow DEV devem usar `shell: powershell`, compatível com o runner Noteri evidenciado; `pwsh` não é requisito do host.
 
+14. Antes de executar o RPC, o workflow deve materializar sessão governada por `session_launcher.py` no SHA exato do ReqSys e exigir `SESSION_LAUNCH_OK` + `state_validated=true`.
+15. O script de recuperação deve executar exclusivamente por `command_gateway.py`, risco 2, dentro do `target_path` isolado e com `expected-head` igual ao SHA da execução.
+16. As regras operacionais usadas no E2E devem ser fixadas por SHA imutável e o checkout não pode persistir credenciais.
+17. A evidência produzida no worktree deve ser validada antes do upload: origem Noteri, destino DESKTOP-PDQK954, `EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED`, sem criação/alteração de tarefa, segredo, credencial ou produção.
+18. No Noteri, `${{ github.workspace }}` é somente a fonte transitória exata do Session Launcher; as regras ficam em `_rules` e a execução técnica deve ser materializada pelo launcher em worktree governado sob `C:\\dev\\chatgpt-workers`, sem depender de clone persistente `C:\\dev\\reqsys-v2-enterprise-real`.
+19. O script de recuperação deve ser resolvido a partir do `target_path` retornado pelo Session Launcher, não da raiz do workspace.
+
 ## Critérios de aceite
 
-- workflow executa no Noteri;
+- workflow executa no Noteri após Session Launcher válido e por Command Gateway risco 2;
+- checkout transitório aceito somente como fonte do bootstrap, com execução posterior no worktree governado e sem dependência de `C:\\dev\\reqsys-v2-enterprise-real` no Noteri;
 - consulta encontra a tarefa exata;
 - AtStartup + S4U são comprovados;
 - `/Run` retorna sucesso;

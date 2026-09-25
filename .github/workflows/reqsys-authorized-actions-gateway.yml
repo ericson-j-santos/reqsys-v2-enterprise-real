@@ -22,6 +22,7 @@ jobs:
         github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev' ||
         github.event.comment.body == '/reqsys run fly-dev-fast-deploy' ||
         github.event.comment.body == '/reqsys run runtime-e2e-dev' ||
+        github.event.comment.body == '/reqsys run kubernetes-argocd-e2e-dev' ||
         github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
         github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
         github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
@@ -35,6 +36,7 @@ jobs:
         github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
         github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
         github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
         github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery' ||
@@ -42,8 +44,15 @@ jobs:
         github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
+        github.event.comment.body == '/reqsys run teams-bot-dev-identity-bootstrap' ||
         github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
-        github.event.comment.body == '/reqsys run protect-observability-platform-main'
+        github.event.comment.body == '/reqsys run pc24x7-public-dev-reconcile' ||
+        github.event.comment.body == '/reqsys run protect-observability-platform-main' ||
+        github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main' ||
+        github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main-noteri' ||
+        github.event.comment.body == '/reqsys run protect-e2e-platform-main' ||
+        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset' ||
+        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset-noteri'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -65,6 +74,9 @@ jobs:
               ;;
             '/reqsys run runtime-e2e-dev')
               target='runtime-e2e-continuous.yml'
+              ;;
+            '/reqsys run kubernetes-argocd-e2e-dev')
+              target='ci-e2e-governado.yml'
               ;;
             '/reqsys run pending-agent-pr-permission-watch')
               target='pending-development-agent-pr-permission-watch.yml'
@@ -108,6 +120,10 @@ jobs:
               target='codex-worker-pool-smoke-dev.yml'
               mode='smoke'
               ;;
+            '/reqsys run codex-worker-pool-handoff-e2e-dev')
+              target='codex-worker-pool-handoff.yml'
+              mode='work-e2e'
+              ;;
             '/reqsys run codex-worker-pool-token-restore-dev')
               target='codex-worker-pool-smoke-dev.yml'
               mode='restore'
@@ -130,12 +146,40 @@ jobs:
             '/reqsys run pc24x7-teams-e2e-dev')
               target='pc24x7-teams-ephemeral-e2e.yml'
               ;;
+            '/reqsys run teams-bot-dev-identity-bootstrap')
+              target='teams-bot-dev-provision.yml'
+              mode='identity-bootstrap'
+              ;;
             '/reqsys run noteri-study-mode-dev-reconcile')
               target='noteri-study-mode-dev-reconcile.yml'
+              ;;
+            '/reqsys run pc24x7-public-dev-reconcile')
+              target='noteri-study-mode-dev-reconcile.yml'
+              mode='public-static'
               ;;
             '/reqsys run protect-observability-platform-main')
               target='branch-protection-audit.yml'
               mode='apply-observability-platform'
+              ;;
+            '/reqsys run protect-engineering-worker-pool-main')
+              target='branch-protection-audit.yml'
+              mode='apply-engineering-worker-pool'
+              ;;
+            '/reqsys run protect-engineering-worker-pool-main-noteri')
+              target='branch-protection-audit.yml'
+              mode='apply-engineering-worker-pool-noteri'
+              ;;
+            '/reqsys run protect-e2e-platform-main')
+              target='branch-protection-audit.yml'
+              mode='apply-e2e-platform'
+              ;;
+            '/reqsys run protect-reqsys-main-ruleset')
+              target='branch-protection-audit.yml'
+              mode='apply-reqsys-main'
+              ;;
+            '/reqsys run protect-reqsys-main-ruleset-noteri')
+              target='branch-protection-audit.yml'
+              mode='apply-reqsys-main-noteri'
               ;;
             *)
               echo 'command_not_allowlisted' >&2
@@ -163,10 +207,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
           TARGET_MODE: ${{ steps.route.outputs.mode }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|noteri-study-mode-dev-reconcile.yml|branch-protection-audit.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|branch-protection-audit.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
@@ -194,6 +239,23 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=restore)"
+          elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-handoff.yml" ]; then
+            test "$TARGET_MODE" = "work-e2e" || { echo 'worker_pool_handoff_mode_not_allowlisted' >&2; exit 3; }
+            request_id="$(python -c 'import hashlib, os; raw=(os.environ["GITHUB_REPOSITORY"]+":2020:main").encode("utf-8"); print(hashlib.sha256(raw).hexdigest()[:24])')"
+            correlation_id="work-v1-e2e-${GITHUB_RUN_ID}"
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f issue_number=2020 \
+              -f request_id="$request_id" \
+              -f base_branch=main \
+              -f base_sha="$EXPECTED_SHA" \
+              -f correlation_id="$correlation_id")"
+          elif [ "$TARGET_WORKFLOW" = "noteri-study-mode-dev-reconcile.yml" ] && [ "$TARGET_MODE" = "public-static" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=public-static)"
           elif [ "$TARGET_WORKFLOW" = "branch-protection-audit.yml" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
@@ -204,6 +266,16 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=publish-e2e)"
+          elif [ "$TARGET_WORKFLOW" = "teams-bot-dev-provision.yml" ]; then
+            if [ "$TARGET_MODE" != "identity-bootstrap" ]; then
+              echo 'teams_bot_dev_mode_not_allowlisted' >&2
+              exit 3
+            fi
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f operation=identity-bootstrap \
+              -f force_runtime_sync=false)"
           else
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
@@ -262,7 +334,7 @@ jobs:
 
       - name: Validate self-hosted runner pickup
         id: pickup
-        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml'
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-handoff.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -271,12 +343,14 @@ jobs:
           set -euo pipefail
           status='pending'
           wait_seconds=0
-          for attempt in $(seq 1 36); do
+          pickup_timeout_seconds=60
+          poll_seconds=5
+          for attempt in $(seq 1 $((pickup_timeout_seconds / poll_seconds))); do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
             case "$status" in
               pending|queued|requested|waiting)
-                sleep 5
-                wait_seconds=$((wait_seconds + 5))
+                sleep "$poll_seconds"
+                wait_seconds=$((wait_seconds + poll_seconds))
                 ;;
               *) break ;;
             esac
@@ -291,7 +365,7 @@ jobs:
 
       - name: Cancel self-hosted run without pickup
         id: cleanup
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-handoff.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -377,7 +451,7 @@ jobs:
           retention-days: 30
 
       - name: Fail closed when self-hosted runner pickup times out or is busy
-        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-handoff.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
         shell: bash
         run: |
           echo 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' >&2

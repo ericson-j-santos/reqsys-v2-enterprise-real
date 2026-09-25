@@ -20,6 +20,7 @@ from app.api import (
     cofre_runtime_control,
     connectors,
     dashboard,
+    desktop_control_plane_recovery,
     diagramas,
     estatisticas,
     figma_github,
@@ -162,6 +163,7 @@ app.include_router(govbi.router)
 app.include_router(github_merge_console.router)
 app.include_router(repository_admin.router)
 app.include_router(rag_governado.router)
+app.include_router(desktop_control_plane_recovery.router)
 app.include_router(operational_autonomy.router)
 app.include_router(ocr_review.router)
 

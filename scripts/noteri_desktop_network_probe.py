@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Sonda de rede fail-closed do Noteri para o Desktop PC24x7."""
+"""Sonda governada e somente leitura do Noteri para o Desktop PC24x7."""
 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import socket
@@ -19,6 +20,9 @@ RUNTIME_PORT = 8081
 PING_TIMEOUT_MS = 1500
 TCP_TIMEOUT_SECONDS = 1.5
 ADMIN_STAGING_PATH = "\\\\" + TARGET_HOST + "\\C$\\Users\\Public\\Desktop"
+WMI_NAMESPACE = r"root\cimv2"
+WMI_QUERY_CLASS = "Win32_OperatingSystem"
+WMI_QUERY = f"SELECT Caption FROM {WMI_QUERY_CLASS}"
 
 
 class ProbeError(RuntimeError):
@@ -70,7 +74,7 @@ def resolve_target() -> dict[str, Any]:
 
 
 def ping_path() -> Path:
-    root = Path(os.environ.get("SystemRoot") or r"C:\\Windows")
+    root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
     target = root / "System32" / "PING.EXE"
     if not target.is_file():
         raise ProbeError("PING.EXE não encontrado")
@@ -109,7 +113,7 @@ def runtime_port_reachable() -> bool:
 
 
 def admin_staging_path_probe() -> dict[str, Any]:
-    """Comprova apenas acesso de leitura ao Desktop Público via C$; não grava nada."""
+    """Comprova somente acesso de leitura via C$; não grava nem persiste listagem."""
     try:
         with os.scandir(ADMIN_STAGING_PATH) as entries:
             next(entries, None)
@@ -126,6 +130,108 @@ def admin_staging_path_probe() -> dict[str, Any]:
         }
 
 
+def _wmi_client():
+    pythoncom = importlib.import_module("pythoncom")
+    win32com_client = importlib.import_module("win32com.client")
+    return pythoncom, win32com_client
+
+
+def _error_codes(exc: BaseException) -> list[int]:
+    codes: list[int] = []
+
+    def visit(value: Any) -> None:
+        if isinstance(value, bool):
+            return
+        if isinstance(value, int):
+            codes.append(value)
+        elif isinstance(value, (tuple, list)):
+            for item in value:
+                visit(item)
+
+    for attr in ("hresult", "winerror", "errno"):
+        visit(getattr(exc, attr, None))
+    visit(getattr(exc, "args", ()))
+    return codes
+
+
+def _classify_wmi_error(exc: BaseException) -> str:
+    codes = _error_codes(exc)
+    unsigned = {value & 0xFFFFFFFF for value in codes}
+    if 0x80070005 in unsigned or 5 in codes:
+        return "access_denied"
+    if 0x800706BA in unsigned:
+        return "rpc_server_unavailable"
+    if 0x8004100E in unsigned:
+        return "namespace_unavailable"
+    return "wmi_error"
+
+
+def _safe_hresult(exc: BaseException) -> str | None:
+    for value in _error_codes(exc):
+        unsigned = value & 0xFFFFFFFF
+        if unsigned >= 0x80000000:
+            return f"0x{unsigned:08X}"
+    return None
+
+
+def wmi_readonly_probe() -> dict[str, Any]:
+    """Consulta WMI por DCOM usando a identidade corrente, sem credenciais ou mutação."""
+    try:
+        pythoncom, win32com_client = _wmi_client()
+    except ImportError:
+        return {
+            "reachable": False,
+            "result": "dependency_unavailable",
+            "stage": "load_client",
+            "error_type": "ImportError",
+            "hresult": None,
+            "namespace": WMI_NAMESPACE,
+            "query_class": WMI_QUERY_CLASS,
+        }
+
+    initialized = False
+    stage = "coinitialize"
+    try:
+        pythoncom.CoInitialize()
+        initialized = True
+        stage = "dispatch_locator"
+        locator = win32com_client.Dispatch("WbemScripting.SWbemLocator")
+        stage = "connect_server"
+        services = locator.ConnectServer(TARGET_HOST, WMI_NAMESPACE)
+        stage = "set_impersonation"
+        services.Security_.ImpersonationLevel = 3
+        stage = "exec_query"
+        rows = services.ExecQuery(WMI_QUERY, "WQL", 0x20)
+        stage = "iterate_result"
+        count = 0
+        for _ in rows:
+            count += 1
+            if count >= 2:
+                break
+        return {
+            "reachable": count > 0,
+            "result": "accessible" if count > 0 else "empty_result",
+            "stage": "completed",
+            "error_type": None,
+            "hresult": None,
+            "namespace": WMI_NAMESPACE,
+            "query_class": WMI_QUERY_CLASS,
+        }
+    except Exception as exc:
+        return {
+            "reachable": False,
+            "result": _classify_wmi_error(exc),
+            "stage": stage,
+            "error_type": type(exc).__name__[:80],
+            "hresult": _safe_hresult(exc),
+            "namespace": WMI_NAMESPACE,
+            "query_class": WMI_QUERY_CLASS,
+        }
+    finally:
+        if initialized:
+            pythoncom.CoUninitialize()
+
+
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     correlation_id = validate_request(confirm, correlation_id)
     host = validate_host()
@@ -134,10 +240,20 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     icmp: bool | None = None
     tcp = False
     staging = {"reachable": False, "result": "not_attempted"}
+    wmi = {
+        "reachable": False,
+        "result": "not_attempted",
+        "stage": "not_attempted",
+        "error_type": None,
+        "hresult": None,
+        "namespace": WMI_NAMESPACE,
+        "query_class": WMI_QUERY_CLASS,
+    }
     if resolution["resolved"]:
         icmp = icmp_reachable()
         tcp = runtime_port_reachable()
         staging = admin_staging_path_probe()
+        wmi = wmi_readonly_probe()
 
     if not resolution["resolved"]:
         state = "name_resolution_failed"
@@ -147,6 +263,9 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         desktop_reachable = True
     elif icmp:
         state = "host_reachable_runtime_port_closed"
+        desktop_reachable = True
+    elif wmi["reachable"]:
+        state = "host_reachable_wmi_runtime_port_closed"
         desktop_reachable = True
     else:
         state = "resolved_not_reachable"
@@ -165,10 +284,20 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "admin_staging_path_reachable": bool(staging["reachable"]),
         "admin_staging_path_result": staging["result"],
         "admin_staging_path": r"C:\Users\Public\Desktop",
+        "wmi_reachable": bool(wmi["reachable"]),
+        "wmi_result": str(wmi["result"]),
+        "wmi_stage": str(wmi.get("stage") or "not_attempted"),
+        "wmi_error_type": wmi.get("error_type"),
+        "wmi_hresult": wmi.get("hresult"),
+        "wmi_namespace": str(wmi["namespace"]),
+        "wmi_query_class": str(wmi["query_class"]),
+        "wmi_read_only": True,
         "desktop_reachable": desktop_reachable,
         "network_state": state,
         "correlation_id": correlation_id,
         "rdc_required": False,
+        "remote_shell_used": False,
+        "credentials_supplied": False,
         "production_touched": False,
         "secrets_read": False,
         "observed_at": now_iso(),
@@ -195,6 +324,8 @@ def main() -> int:
             "error": str(exc)[:1000],
             "error_type": type(exc).__name__,
             "rdc_required": False,
+            "remote_shell_used": False,
+            "credentials_supplied": False,
             "production_touched": False,
             "secrets_read": False,
             "observed_at": now_iso(),

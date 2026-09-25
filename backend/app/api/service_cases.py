@@ -7,7 +7,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func, update
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+    update,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
@@ -18,12 +26,16 @@ from app.db import Base, get_db
 from app.domain.service_management import (
     EvidenceReference,
     Impact,
+    IncidentProblemRelation,
     InvalidStateTransition,
+    ProblemRootCause,
     ServiceCase,
     ServiceCaseState,
     ServiceCaseType,
     ServiceManagementValidationError,
     Urgency,
+    validate_incident_problem_relation,
+    validate_problem_root_cause,
 )
 from app.models.gestao_ti import ServicoTI
 
@@ -84,6 +96,62 @@ class ServiceCaseEventRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class IncidentProblemLinkRecord(Base):
+    __tablename__ = 'rsm_incident_problem_links'
+    __table_args__ = (
+        UniqueConstraint(
+            'incident_case_id',
+            'problem_case_id',
+            name='uq_rsm_incident_problem_link',
+        ),
+    )
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    incident_case_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey('rsm_service_cases.case_id'),
+        nullable=False,
+        index=True,
+    )
+    problem_case_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey('rsm_service_cases.case_id'),
+        nullable=False,
+        index=True,
+    )
+    correlation_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProblemRootCauseRecord(Base):
+    __tablename__ = 'rsm_problem_root_causes'
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    problem_case_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey('rsm_service_cases.case_id'),
+        nullable=False,
+        index=True,
+    )
+    statement: Mapped[str] = mapped_column(String(2000), nullable=False)
+    evidence_uri: Mapped[str] = mapped_column(String(1000), nullable=False)
+    evidence_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IncidentProblemLinkRequest(BaseModel):
+    problem_case_id: UUID
+    event_id: UUID
+
+
+class ProblemRootCauseRequest(BaseModel):
+    event_id: UUID
+    statement: str = Field(min_length=1, max_length=2000)
+    evidence_uri: str = Field(min_length=1, max_length=1000)
+    evidence_sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
 class ServiceCaseCreateRequest(BaseModel):
     case_type: ServiceCaseType
     service_id: str
@@ -109,6 +177,23 @@ class ServiceCaseNotFoundError(LookupError):
 
 class ServiceCaseConflictError(RuntimeError):
     pass
+
+
+_PUBLIC_CONFLICT_DETAILS = frozenset(
+    {
+        'operação CHANGE rejeitada por pré-condição',
+        'transição PENDING_APPROVAL -> IN_PROGRESS exige aprovação APPROVED',
+    }
+)
+
+
+def _public_conflict_detail(exc: Exception) -> str:
+    """Preserva apenas contratos públicos conhecidos; nunca ecoa erro arbitrário."""
+    if len(exc.args) == 1 and isinstance(exc.args[0], str):
+        candidate = exc.args[0]
+        if candidate in _PUBLIC_CONFLICT_DETAILS:
+            return candidate
+    return 'conflito de estado ou identidade RSM'
 
 
 TransitionGuard = Callable[[Session, 'ServiceCaseRecord', ServiceCaseState], None]
@@ -337,13 +422,277 @@ def transition_service_case(
     return refreshed, False
 
 
-def _raise_http(exc: Exception) -> None:
+def _serialize_incident_problem_link(record: IncidentProblemLinkRecord) -> dict:
+    return {
+        'event_id': record.event_id,
+        'incident_case_id': record.incident_case_id,
+        'problem_case_id': record.problem_case_id,
+        'correlation_id': record.correlation_id,
+        'created_at': record.created_at.isoformat() if record.created_at else None,
+    }
+
+
+def _serialize_root_cause(record: ProblemRootCauseRecord) -> dict:
+    return {
+        'event_id': record.event_id,
+        'problem_case_id': record.problem_case_id,
+        'statement': record.statement,
+        'evidence_uri': record.evidence_uri,
+        'evidence_sha256': record.evidence_sha256,
+        'correlation_id': record.correlation_id,
+        'created_at': record.created_at.isoformat() if record.created_at else None,
+    }
+
+
+def _enrich_problem_context(db: Session, record: ServiceCaseRecord, payload: dict) -> None:
+    related_cases: list[dict] = []
+    if record.case_type == ServiceCaseType.INCIDENT.value:
+        links = (
+            db.query(IncidentProblemLinkRecord)
+            .filter(IncidentProblemLinkRecord.incident_case_id == record.case_id)
+            .order_by(IncidentProblemLinkRecord.created_at, IncidentProblemLinkRecord.event_id)
+            .all()
+        )
+        for link in links:
+            related = db.get(ServiceCaseRecord, link.problem_case_id)
+            if related is not None:
+                related_cases.append(
+                    {
+                        'relation': 'INCIDENT_TO_PROBLEM',
+                        'case_id': related.case_id,
+                        'case_type': related.case_type,
+                        'event_id': link.event_id,
+                        'correlation_id': link.correlation_id,
+                    }
+                )
+    elif record.case_type == ServiceCaseType.PROBLEM.value:
+        links = (
+            db.query(IncidentProblemLinkRecord)
+            .filter(IncidentProblemLinkRecord.problem_case_id == record.case_id)
+            .order_by(IncidentProblemLinkRecord.created_at, IncidentProblemLinkRecord.event_id)
+            .all()
+        )
+        for link in links:
+            related = db.get(ServiceCaseRecord, link.incident_case_id)
+            if related is not None:
+                related_cases.append(
+                    {
+                        'relation': 'PROBLEM_FROM_INCIDENT',
+                        'case_id': related.case_id,
+                        'case_type': related.case_type,
+                        'event_id': link.event_id,
+                        'correlation_id': link.correlation_id,
+                    }
+                )
+    payload['related_cases'] = related_cases
+
+    if record.case_type == ServiceCaseType.PROBLEM.value:
+        causes = (
+            db.query(ProblemRootCauseRecord)
+            .filter(ProblemRootCauseRecord.problem_case_id == record.case_id)
+            .order_by(ProblemRootCauseRecord.created_at, ProblemRootCauseRecord.event_id)
+            .all()
+        )
+        payload['root_causes'] = [_serialize_root_cause(item) for item in causes]
+    else:
+        payload['root_causes'] = []
+
+
+def link_incident_to_problem(
+    db: Session,
+    incident_case_id: str,
+    payload: IncidentProblemLinkRequest,
+    *,
+    correlation_id: str,
+) -> tuple[IncidentProblemLinkRecord, bool]:
+    event_id = str(payload.event_id)
+    problem_case_id = str(payload.problem_case_id)
+
+    replay = db.get(IncidentProblemLinkRecord, event_id)
+    if replay is not None:
+        if (
+            replay.incident_case_id != incident_case_id
+            or replay.problem_case_id != problem_case_id
+        ):
+            raise ServiceCaseConflictError(
+                'event_id já utilizado por outra relação INCIDENT -> PROBLEM'
+            )
+        return replay, True
+
+    existing_event = db.get(ServiceCaseEventRecord, event_id)
+    if existing_event is not None:
+        raise ServiceCaseConflictError('event_id já utilizado por outro efeito')
+
+    incident = db.get(ServiceCaseRecord, incident_case_id)
+    if incident is None:
+        raise ServiceCaseNotFoundError('INCIDENT não encontrado')
+    problem = db.get(ServiceCaseRecord, problem_case_id)
+    if problem is None:
+        raise ServiceCaseNotFoundError('PROBLEM não encontrado')
+
+    relation = IncidentProblemRelation(
+        incident_case_id=incident_case_id,
+        problem_case_id=problem_case_id,
+        correlation_id=correlation_id,
+    )
+    validate_incident_problem_relation(_domain(incident), _domain(problem), relation)
+
+    logical = (
+        db.query(IncidentProblemLinkRecord)
+        .filter(
+            IncidentProblemLinkRecord.incident_case_id == relation.incident_case_id,
+            IncidentProblemLinkRecord.problem_case_id == relation.problem_case_id,
+        )
+        .first()
+    )
+    if logical is not None:
+        return logical, True
+
+    record = IncidentProblemLinkRecord(
+        event_id=event_id,
+        incident_case_id=relation.incident_case_id,
+        problem_case_id=relation.problem_case_id,
+        correlation_id=relation.correlation_id,
+    )
+    db.add(record)
+    db.add(
+        ServiceCaseEventRecord(
+            event_id=event_id,
+            case_id=relation.incident_case_id,
+            event_type='INCIDENT_LINKED_TO_PROBLEM',
+            from_state=None,
+            to_state=None,
+            correlation_id=relation.correlation_id,
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        replay = db.get(IncidentProblemLinkRecord, event_id)
+        if replay is not None:
+            if (
+                replay.incident_case_id == relation.incident_case_id
+                and replay.problem_case_id == relation.problem_case_id
+            ):
+                return replay, True
+            raise ServiceCaseConflictError('event_id já utilizado por outro efeito') from exc
+        if db.get(ServiceCaseEventRecord, event_id) is not None:
+            raise ServiceCaseConflictError('event_id já utilizado por outro efeito') from exc
+        logical = (
+            db.query(IncidentProblemLinkRecord)
+            .filter(
+                IncidentProblemLinkRecord.incident_case_id == relation.incident_case_id,
+                IncidentProblemLinkRecord.problem_case_id == relation.problem_case_id,
+            )
+            .first()
+        )
+        if logical is not None:
+            return logical, True
+        raise ServiceCaseConflictError('relação ou event_id já utilizado') from exc
+    db.refresh(record)
+    return record, False
+
+
+def record_problem_root_cause(
+    db: Session,
+    problem_case_id: str,
+    payload: ProblemRootCauseRequest,
+    *,
+    correlation_id: str,
+) -> tuple[ProblemRootCauseRecord, bool]:
+    event_id = str(payload.event_id)
+    replay = db.get(ProblemRootCauseRecord, event_id)
+    if replay is not None:
+        same_effect = (
+            replay.problem_case_id == problem_case_id
+            and replay.statement == payload.statement.strip()
+            and replay.evidence_uri == payload.evidence_uri.strip()
+            and replay.evidence_sha256 == payload.evidence_sha256
+        )
+        if not same_effect:
+            raise ServiceCaseConflictError('event_id já utilizado por outra causa raiz')
+        return replay, True
+
+    existing_event = db.get(ServiceCaseEventRecord, event_id)
+    if existing_event is not None:
+        raise ServiceCaseConflictError('event_id já utilizado por outro efeito')
+
+    problem = db.get(ServiceCaseRecord, problem_case_id)
+    if problem is None:
+        raise ServiceCaseNotFoundError('PROBLEM não encontrado')
+
+    evidence = EvidenceReference(
+        evidence_id=event_id,
+        kind='root-cause',
+        uri=payload.evidence_uri,
+        sha256=payload.evidence_sha256,
+    )
+    root_cause = ProblemRootCause(
+        problem_case_id=problem_case_id,
+        statement=payload.statement,
+        evidence=evidence,
+        correlation_id=correlation_id,
+    )
+    validate_problem_root_cause(_domain(problem), root_cause)
+
+    record = ProblemRootCauseRecord(
+        event_id=event_id,
+        problem_case_id=root_cause.problem_case_id,
+        statement=root_cause.statement,
+        evidence_uri=root_cause.evidence.uri,
+        evidence_sha256=root_cause.evidence.sha256,
+        correlation_id=root_cause.correlation_id,
+    )
+    db.add(record)
+    db.add(
+        ServiceCaseEventRecord(
+            event_id=event_id,
+            case_id=root_cause.problem_case_id,
+            event_type='PROBLEM_ROOT_CAUSE_RECORDED',
+            from_state=None,
+            to_state=None,
+            correlation_id=root_cause.correlation_id,
+            evidence_uri=root_cause.evidence.uri,
+            evidence_sha256=root_cause.evidence.sha256,
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        replay = db.get(ProblemRootCauseRecord, event_id)
+        if replay is not None:
+            same_effect = (
+                replay.problem_case_id == problem_case_id
+                and replay.statement == root_cause.statement
+                and replay.evidence_uri == root_cause.evidence.uri
+                and replay.evidence_sha256 == root_cause.evidence.sha256
+            )
+            if same_effect:
+                return replay, True
+        raise ServiceCaseConflictError('event_id já utilizado') from exc
+    db.refresh(record)
+    return record, False
+
+
+def _raise_http(exc: Exception, *, correlation_id: str | None = None) -> None:
+    if isinstance(
+        exc,
+        (ServiceCaseNotFoundError, ServiceCaseConflictError, InvalidStateTransition,
+         ServiceManagementValidationError),
+    ):
+        logger.warning(
+            'rsm_request_rejected error_type=%s correlation_id=%s',
+            type(exc).__name__,
+            _safe_log_value(correlation_id or 'not-provided'),
+        )
     if isinstance(exc, ServiceCaseNotFoundError):
-        raise HTTPException(status_code=404, detail=str(exc)) from None
+        raise HTTPException(status_code=404, detail='recurso RSM não encontrado') from None
     if isinstance(exc, (ServiceCaseConflictError, InvalidStateTransition)):
-        raise HTTPException(status_code=409, detail=str(exc)) from None
+        raise HTTPException(status_code=409, detail=_public_conflict_detail(exc)) from None
     if isinstance(exc, ServiceManagementValidationError):
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+        raise HTTPException(status_code=422, detail='requisição RSM inválida') from None
     raise exc
 
 
@@ -358,7 +707,7 @@ def create_case(
     try:
         record, duplicate = create_service_case(db, payload, correlation_id=correlation_id)
     except Exception as exc:
-        _raise_http(exc)
+        _raise_http(exc, correlation_id=correlation_id)
     return ok({'case': _serialize(record), 'duplicate': duplicate}, correlation_id)
 
 
@@ -378,6 +727,7 @@ def get_case(
         .all()
     )
     payload = _serialize(record)
+    _enrich_problem_context(db, record, payload)
     payload['events'] = [
         {
             'event_id': event.event_id,
@@ -410,5 +760,53 @@ def transition_case(
             correlation_id=correlation_id,
         )
     except Exception as exc:
-        _raise_http(exc)
+        _raise_http(exc, correlation_id=correlation_id)
     return ok({'case': _serialize(record), 'duplicate': duplicate}, correlation_id)
+
+@router.post('/{case_id}/problem-links')
+def create_problem_link(
+    case_id: str,
+    payload: IncidentProblemLinkRequest,
+    _ctx: ServiceAuthContext = Depends(require_service_case_auth),
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    try:
+        record, duplicate = link_incident_to_problem(
+            db,
+            case_id,
+            payload,
+            correlation_id=correlation_id,
+        )
+    except Exception as exc:
+        _raise_http(exc, correlation_id=correlation_id)
+    return ok(
+        {'relation': _serialize_incident_problem_link(record), 'duplicate': duplicate},
+        correlation_id,
+    )
+
+
+@router.post('/{case_id}/root-causes')
+def create_root_cause(
+    case_id: str,
+    payload: ProblemRootCauseRequest,
+    _ctx: ServiceAuthContext = Depends(require_service_case_auth),
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+):
+    correlation_id = resolver_correlation_id(x_correlation_id, None)
+    try:
+        record, duplicate = record_problem_root_cause(
+            db,
+            case_id,
+            payload,
+            correlation_id=correlation_id,
+        )
+    except Exception as exc:
+        _raise_http(exc, correlation_id=correlation_id)
+    return ok(
+        {'root_cause': _serialize_root_cause(record), 'duplicate': duplicate},
+        correlation_id,
+    )
+

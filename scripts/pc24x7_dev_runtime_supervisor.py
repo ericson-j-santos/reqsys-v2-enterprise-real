@@ -42,6 +42,8 @@ def probe(url: str, timeout: float = 5.0) -> dict[str, Any]:
         request = urllib.request.Request(url, headers={"User-Agent": "ReqSysDevSupervisor/2.0"})
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return {"ok": True, "status": int(response.status)}
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "status": int(exc.code), "error": repr(exc)}
     except (OSError, urllib.error.URLError) as exc:
         return {"ok": False, "error": repr(exc)}
 
@@ -104,19 +106,26 @@ def main() -> int:
         "frontend": probe(LOCAL_GATEWAY + "/task-console"),
         "health": probe(LOCAL_GATEWAY + "/api/health"),
         "runtime_health": probe(LOCAL_GATEWAY + "/api/runtime/health"),
+        "runtime_readiness": probe(LOCAL_GATEWAY + "/api/runtime/readiness"),
         "build_info": probe(LOCAL_GATEWAY + "/api/runtime/build-info"),
+        "vite_client": probe(LOCAL_GATEWAY + "/@vite/client"),
     }
     payload["runtime"] = ensure_containers() if args.apply else {"changed": False}
     payload["local_after"] = {
         "frontend": probe(LOCAL_GATEWAY + "/task-console"),
         "health": probe(LOCAL_GATEWAY + "/api/health"),
         "runtime_health": probe(LOCAL_GATEWAY + "/api/runtime/health"),
+        "runtime_readiness": probe(LOCAL_GATEWAY + "/api/runtime/readiness"),
         "build_info": probe(LOCAL_GATEWAY + "/api/runtime/build-info"),
+        "vite_client": probe(LOCAL_GATEWAY + "/@vite/client"),
     }
 
-    local_ready = all(
-        payload["local_after"][key].get("status") == 200
-        for key in ("frontend", "health", "runtime_health", "build_info")
+    local_ready = (
+        all(
+            payload["local_after"][key].get("status") == 200
+            for key in ("frontend", "health", "runtime_health", "runtime_readiness", "build_info")
+        )
+        and payload["local_after"]["vite_client"].get("status") == 404
     )
 
     payload["cloudflare"] = run_json_script(

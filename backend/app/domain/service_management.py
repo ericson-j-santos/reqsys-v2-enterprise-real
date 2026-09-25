@@ -439,3 +439,71 @@ def validate_change_ci(
         raise ServiceManagementValidationError('CI verde de outro SHA não pode avançar CHANGE')
     if evidence.conclusion != 'success':
         raise ServiceManagementValidationError('CI do SHA atual deve concluir com success')
+
+
+@dataclass(frozen=True, slots=True)
+class IncidentProblemRelation:
+    """Relação causal tipada entre um INCIDENT e um PROBLEM canônicos."""
+
+    incident_case_id: str
+    problem_case_id: str
+    correlation_id: str
+
+    def __post_init__(self) -> None:
+        incident = _uuid(self.incident_case_id, 'incident_case_id')
+        problem = _uuid(self.problem_case_id, 'problem_case_id')
+        if incident == problem:
+            raise ServiceManagementValidationError('INCIDENT não pode apontar para si mesmo como PROBLEM')
+        object.__setattr__(self, 'incident_case_id', incident)
+        object.__setattr__(self, 'problem_case_id', problem)
+        object.__setattr__(
+            self,
+            'correlation_id',
+            _text(self.correlation_id, 'correlation_id', max_length=120),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProblemRootCause:
+    """Registro append-only de causa raiz com evidência objetiva."""
+
+    problem_case_id: str
+    statement: str
+    evidence: EvidenceReference
+    correlation_id: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'problem_case_id', _uuid(self.problem_case_id, 'problem_case_id'))
+        object.__setattr__(self, 'statement', _text(self.statement, 'statement', max_length=2000))
+        if not isinstance(self.evidence, EvidenceReference):
+            raise ServiceManagementValidationError('evidence deve usar EvidenceReference')
+        object.__setattr__(
+            self,
+            'correlation_id',
+            _text(self.correlation_id, 'correlation_id', max_length=120),
+        )
+
+
+def validate_incident_problem_relation(
+    incident: ServiceCase,
+    problem: ServiceCase,
+    relation: IncidentProblemRelation,
+) -> None:
+    """Falha fechado para relações causalmente inválidas entre ServiceCases."""
+    if incident.case_type is not ServiceCaseType.INCIDENT:
+        raise ServiceManagementValidationError('origem da relação deve ser case_type INCIDENT')
+    if problem.case_type is not ServiceCaseType.PROBLEM:
+        raise ServiceManagementValidationError('destino da relação deve ser case_type PROBLEM')
+    if incident.case_id != relation.incident_case_id or problem.case_id != relation.problem_case_id:
+        raise ServiceManagementValidationError('relação não corresponde aos ServiceCases informados')
+
+
+def validate_problem_root_cause(
+    problem: ServiceCase,
+    root_cause: ProblemRootCause,
+) -> None:
+    """Garante que causa raiz só seja anexada ao PROBLEM canônico correspondente."""
+    if problem.case_type is not ServiceCaseType.PROBLEM:
+        raise ServiceManagementValidationError('causa raiz aceita somente case_type PROBLEM')
+    if problem.case_id != root_cause.problem_case_id:
+        raise ServiceManagementValidationError('causa raiz não corresponde ao PROBLEM informado')

@@ -54,5 +54,8 @@ def test_supervisor_requires_runtime_health_and_build_info_before_publication():
     assert '"/api/runtime/health"' in raw
     assert '"/api/runtime/build-info"' in raw
     assert '"local_runtime_contract_failed"' in raw
-    assert 'for key in ("frontend", "health", "runtime_health", "build_info")' in raw
+    assert '"/api/runtime/readiness"' in raw
+    assert '"/@vite/client"' in raw
+    assert 'for key in ("frontend", "health", "runtime_health", "runtime_readiness", "build_info")' in raw
+    assert 'payload["local_after"]["vite_client"].get("status") == 404' in raw
     assert 'locator_ready if args.apply else True' in raw

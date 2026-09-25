@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -29,7 +31,9 @@ CANONICAL_COMPOSE_FILE = REPO_ROOT / "docker-compose.pc24x7-codex-worker-pool.ym
 
 
 class RestoreError(RuntimeError):
-    pass
+    def __init__(self, reason: str, *, diagnostics: dict[str, str] | None = None) -> None:
+        super().__init__(reason)
+        self.diagnostics = diagnostics or {}
 
 
 def _docker(
@@ -49,9 +53,14 @@ def _docker(
         )
     except subprocess.CalledProcessError as exc:
         reason = failure_reason
+        diagnostics: dict[str, str] = {}
         if failure_reason == "worker_pool_compose_recreate_failed":
-            reason = _compose_failure_reason(exc.stderr or "")
-        raise RestoreError(reason) from exc
+            stderr = exc.stderr or ""
+            reason = _compose_failure_reason(stderr)
+            diagnostics["compose_error_fingerprint"] = hashlib.sha256(
+                stderr.encode("utf-8", errors="replace")
+            ).hexdigest()
+        raise RestoreError(reason, diagnostics=diagnostics) from exc
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RestoreError(failure_reason) from exc
     return completed.stdout
@@ -81,11 +90,49 @@ def _compose_failure_reason(stderr: str) -> str:
             "worker_pool_compose_configuration_invalid",
             ("required variable", "is missing a value", "invalid interpolation format"),
         ),
+        (
+            "worker_pool_compose_image_reference_invalid",
+            (
+                "invalid repository name",
+                "invalid reference format",
+                "cannot specify 64-byte hexadecimal strings",
+            ),
+        ),
+        (
+            "worker_pool_compose_cli_incompatible",
+            (
+                "unknown flag: --pull",
+                "unknown shorthand flag",
+                'invalid value "never" for --pull',
+                "invalid value 'never' for --pull",
+            ),
+        ),
     )
     for reason, markers in classifications:
         if any(marker in normalized for marker in markers):
             return reason
     return "worker_pool_compose_recreate_failed"
+
+
+_COMPOSE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+
+
+def _sanitize_compose_version(value: object) -> str:
+    normalized = str(value or "").strip()
+    if normalized.lower().startswith("v"):
+        normalized = normalized[1:]
+    return normalized if _COMPOSE_VERSION_RE.fullmatch(normalized) else "unknown"
+
+
+def _compose_cli_version() -> str:
+    raw = _docker(
+        ["compose", "version", "--short"],
+        failure_reason="worker_pool_compose_version_unavailable",
+    )
+    version = _sanitize_compose_version(raw)
+    if version == "unknown":
+        raise RestoreError("worker_pool_compose_version_invalid")
+    return version
 
 
 def _canonical_container_and_token_path() -> tuple[str, Path]:
@@ -252,6 +299,10 @@ def _compose_recreate_service(
         raise RestoreError("worker_pool_expected_rules_sha_not_configured")
 
     image_id = _running_image_id(container)
+    compose_cli_version = _compose_cli_version()
+    compose_creator_version = _sanitize_compose_version(
+        labels.get("com.docker.compose.version")
+    )
     process_env = os.environ.copy()
     process_env["CODEX_WORKER_POOL_API_TOKEN_FILE_HOST"] = str(token_path)
     process_env["CODEX_WORKER_POOL_EXPECTED_RULES_SHA"] = rules_sha
@@ -289,11 +340,17 @@ def _compose_recreate_service(
                 SERVICE,
             ]
         )
-        _docker(
-            args,
-            env=process_env,
-            failure_reason="worker_pool_compose_recreate_failed",
-        )
+        try:
+            _docker(
+                args,
+                env=process_env,
+                failure_reason="worker_pool_compose_recreate_failed",
+            )
+        except RestoreError as exc:
+            diagnostics = dict(exc.diagnostics)
+            diagnostics["compose_cli_version"] = compose_cli_version
+            diagnostics["compose_creator_version"] = compose_creator_version
+            raise RestoreError(str(exc), diagnostics=diagnostics) from exc
     return recovered_source
 
 def _read_existing_token(path: Path) -> str | None:
@@ -502,6 +559,13 @@ def main() -> int:
             "production_touched": False,
             "deploy_executed": False,
         }
+        for key in (
+            "compose_error_fingerprint",
+            "compose_cli_version",
+            "compose_creator_version",
+        ):
+            if key in exc.diagnostics:
+                blocked[key] = exc.diagnostics[key]
         _write_evidence(args.output, blocked)
         print(json.dumps(blocked, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 2

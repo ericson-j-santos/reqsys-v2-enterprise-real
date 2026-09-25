@@ -118,7 +118,21 @@ def test_workflow_is_inputless_noteri_only_and_read_only() -> None:
     assert "contents: write" not in raw
     assert "actions: write" not in raw
     assert "secrets." not in raw
-    assert "--confirm RUN-EXISTING-DESKTOP-WATCHDOG" in raw
+    assert "--confirm" in raw and "RUN-EXISTING-DESKTOP-WATCHDOG" in raw
     assert "persist-credentials: false" in raw
-    assert raw.count("shell: powershell") == 2
+    assert "chatgpt-operational-rules" in raw
+    assert "5af7b5ab6e31c24744176abd774855168c55953f" in raw
+    assert "session_launcher.py" in raw
+    assert "SESSION_LAUNCH_OK" in raw
+    assert "state_validated" in raw
+    assert "command_gateway.py" in raw
+    assert '"--risk", "2"' in raw
+    assert '"--expected-head", $env:ANCHOR_SHA' in raw
+    assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
+    assert "TARGET_REPO: ${{ github.workspace }}" in raw
+    assert "path: _target" not in raw
+    assert "$recoveryScript = Join-Path $env:TARGET_PATH" in raw
+    assert "noteri_desktop_watchdog_rpc_recovery.py" in raw
+    assert "C:\\dev\\reqsys-v2-enterprise-real" not in raw
+    assert raw.count("shell: powershell") == 4
     assert "shell: pwsh" not in raw

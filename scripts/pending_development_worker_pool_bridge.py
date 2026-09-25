@@ -31,6 +31,8 @@ WORKER_POOL_HOST_IP = "127.0.0.1"
 WORKER_POOL_HOST_PORT = "8097"
 WORKER_POOL_CONTAINER_PORT = "8097/tcp"
 WORKER_POOL_TOKEN_DESTINATION = "/run/secrets/codex_worker_pool_api_token"
+EXPECTED_WORKER_POOL_CONTRACT_NAME = "engineering-worker-pool"
+EXPECTED_WORKER_POOL_CONTRACT_VERSION = "v1"
 
 
 class BridgeError(RuntimeError):
@@ -259,11 +261,220 @@ def verify_health(pool_url: str, token: str, request_fn: RequestFn) -> None:
         raise BridgeError("worker_pool_not_ready")
 
 
+def verify_contract(
+    pool_url: str,
+    token: str,
+    request_fn: RequestFn,
+    *,
+    allow_legacy_fallback: bool,
+) -> str:
+    try:
+        code, payload = request_fn("GET", f"{pool_url}/v1/contract", token, None)
+    except BridgeError as exc:
+        if str(exc) == "worker_pool_http_404":
+            if allow_legacy_fallback:
+                return "legacy_fallback"
+            raise BridgeError("worker_pool_contract_required") from exc
+        raise
+
+    if code == 404:
+        if allow_legacy_fallback:
+            return "legacy_fallback"
+        raise BridgeError("worker_pool_contract_required")
+    if code != 200:
+        raise BridgeError("worker_pool_contract_probe_failed")
+    if (
+        payload.get("contract_name") != EXPECTED_WORKER_POOL_CONTRACT_NAME
+        or payload.get("contract_version") != EXPECTED_WORKER_POOL_CONTRACT_VERSION
+    ):
+        raise BridgeError("worker_pool_contract_incompatible")
+    return "v1"
+
+
 def _task_id(payload: dict[str, Any]) -> str:
     task = payload.get("task")
     if not isinstance(task, dict) or not str(task.get("task_id") or ""):
         raise BridgeError("worker_pool_task_response_invalid")
     return str(task["task_id"])
+
+
+def _work_view(payload: dict[str, Any]) -> dict[str, Any]:
+    work = payload.get("work")
+    if not isinstance(work, dict):
+        raise BridgeError("worker_pool_work_response_invalid")
+    work_id = str(work.get("work_id") or "").strip()
+    task_id = str(work.get("task_id") or "").strip()
+    task = work.get("task")
+    if not work_id or not task_id or not isinstance(task, dict):
+        raise BridgeError("worker_pool_work_response_invalid")
+    if str(task.get("task_id") or "") != task_id:
+        raise BridgeError("worker_pool_work_task_mismatch")
+    if "lease_token" in task:
+        raise BridgeError("worker_pool_readback_leaked_lease")
+    return work
+
+
+def _validate_task_identity(
+    task: dict[str, Any],
+    *,
+    task_id: str,
+    repository: str,
+    issue_number: int,
+    request_id: str,
+    base_sha: str,
+) -> None:
+    expected = {
+        "task_id": task_id,
+        "repository": repository,
+        "issue_number": issue_number,
+        "request_id": request_id,
+        "base_sha": base_sha,
+    }
+    if any(task.get(key) != value for key, value in expected.items()):
+        raise BridgeError("worker_pool_readback_mismatch")
+    if "lease_token" in task:
+        raise BridgeError("worker_pool_readback_leaked_lease")
+
+
+def _enqueue_task_fallback(
+    *,
+    pool_url: str,
+    token: str,
+    body: dict[str, Any],
+    request_fn: RequestFn,
+    repository: str,
+    issue_number: int,
+    request_id: str,
+    base_sha: str,
+    dispatch_mode: str,
+) -> dict[str, Any]:
+    first_code, first = request_fn("POST", f"{pool_url}/v1/tasks", token, body)
+    if first_code not in {200, 201}:
+        raise BridgeError("worker_pool_enqueue_failed")
+    task_id = _task_id(first)
+
+    replay_code, replay = request_fn("POST", f"{pool_url}/v1/tasks", token, body)
+    if replay_code != 200 or replay.get("created") is not False:
+        raise BridgeError("worker_pool_replay_not_idempotent")
+    if _task_id(replay) != task_id:
+        raise BridgeError("worker_pool_replay_task_mismatch")
+
+    read_code, readback = request_fn("GET", f"{pool_url}/v1/tasks/{task_id}", token, None)
+    if read_code != 200:
+        raise BridgeError("worker_pool_readback_failed")
+    _validate_task_identity(
+        readback,
+        task_id=task_id,
+        repository=repository,
+        issue_number=issue_number,
+        request_id=request_id,
+        base_sha=base_sha,
+    )
+    return {
+        "dispatch_mode": dispatch_mode,
+        "work_id": None,
+        "task_id": task_id,
+        "task": first["task"],
+        "readback": readback,
+        "created": first.get("created") is True,
+        "replay_created": replay.get("created"),
+    }
+
+
+def _enqueue_work_v1(
+    *,
+    pool_url: str,
+    token: str,
+    body: dict[str, Any],
+    request_fn: RequestFn,
+    repository: str,
+    issue_number: int,
+    request_id: str,
+    base_sha: str,
+    allow_work_fallback: bool,
+) -> dict[str, Any]:
+    try:
+        first_code, first = request_fn("POST", f"{pool_url}/v1/work", token, body)
+    except BridgeError as exc:
+        if str(exc) == "worker_pool_http_404":
+            if allow_work_fallback:
+                return _enqueue_task_fallback(
+                    pool_url=pool_url,
+                    token=token,
+                    body=body,
+                    request_fn=request_fn,
+                    repository=repository,
+                    issue_number=issue_number,
+                    request_id=request_id,
+                    base_sha=base_sha,
+                    dispatch_mode="task_v1_fallback",
+                )
+            raise BridgeError("worker_pool_work_contract_required") from exc
+        raise
+
+    if first_code == 404:
+        if allow_work_fallback:
+            return _enqueue_task_fallback(
+                pool_url=pool_url,
+                token=token,
+                body=body,
+                request_fn=request_fn,
+                repository=repository,
+                issue_number=issue_number,
+                request_id=request_id,
+                base_sha=base_sha,
+                dispatch_mode="task_v1_fallback",
+            )
+        raise BridgeError("worker_pool_work_contract_required")
+    if first_code not in {200, 201}:
+        raise BridgeError("worker_pool_work_enqueue_failed")
+
+    first_work = _work_view(first)
+    work_id = str(first_work["work_id"])
+    task_id = str(first_work["task_id"])
+    _validate_task_identity(
+        first_work["task"],
+        task_id=task_id,
+        repository=repository,
+        issue_number=issue_number,
+        request_id=request_id,
+        base_sha=base_sha,
+    )
+
+    replay_code, replay = request_fn("POST", f"{pool_url}/v1/work", token, body)
+    if replay_code != 200 or replay.get("created") is not False:
+        raise BridgeError("worker_pool_work_replay_not_idempotent")
+    replay_work = _work_view(replay)
+    if replay_work["work_id"] != work_id or replay_work["task_id"] != task_id:
+        raise BridgeError("worker_pool_work_replay_mismatch")
+
+    read_code, readback = request_fn("GET", f"{pool_url}/v1/work/{work_id}", token, None)
+    if read_code != 200:
+        raise BridgeError("worker_pool_work_readback_failed")
+    if (
+        str(readback.get("work_id") or "") != work_id
+        or str(readback.get("task_id") or "") != task_id
+        or not isinstance(readback.get("task"), dict)
+    ):
+        raise BridgeError("worker_pool_work_readback_mismatch")
+    _validate_task_identity(
+        readback["task"],
+        task_id=task_id,
+        repository=repository,
+        issue_number=issue_number,
+        request_id=request_id,
+        base_sha=base_sha,
+    )
+    return {
+        "dispatch_mode": "work_v1",
+        "work_id": work_id,
+        "task_id": task_id,
+        "task": first_work["task"],
+        "readback": readback["task"],
+        "work_phase": readback.get("phase"),
+        "created": first.get("created") is True,
+        "replay_created": replay.get("created"),
+    }
 
 
 def enqueue_local_work(
@@ -273,6 +484,8 @@ def enqueue_local_work(
     pool_url: str,
     token: str,
     request_fn: RequestFn = http_request,
+    allow_legacy_fallback: bool = True,
+    allow_work_fallback: bool = True,
 ) -> dict[str, Any]:
     decisions = local_codex_decisions(report)
     if not decisions:
@@ -292,6 +505,12 @@ def enqueue_local_work(
         raise BridgeError("orchestrator_identity_invalid")
 
     verify_health(pool_url, token, request_fn)
+    contract_mode = verify_contract(
+        pool_url,
+        token,
+        request_fn,
+        allow_legacy_fallback=allow_legacy_fallback,
+    )
     evidence: list[dict[str, Any]] = []
     for item in decisions:
         issue_number = int(item["number"])
@@ -307,55 +526,66 @@ def enqueue_local_work(
             "max_attempts": 3,
         }
 
-        first_code, first = request_fn("POST", f"{pool_url}/v1/tasks", token, body)
-        if first_code not in {200, 201}:
-            raise BridgeError("worker_pool_enqueue_failed")
-        task_id = _task_id(first)
+        if contract_mode == "v1":
+            dispatched = _enqueue_work_v1(
+                pool_url=pool_url,
+                token=token,
+                body=body,
+                request_fn=request_fn,
+                repository=repository,
+                issue_number=issue_number,
+                request_id=request_id,
+                base_sha=base_sha,
+                allow_work_fallback=allow_work_fallback,
+            )
+        else:
+            dispatched = _enqueue_task_fallback(
+                pool_url=pool_url,
+                token=token,
+                body=body,
+                request_fn=request_fn,
+                repository=repository,
+                issue_number=issue_number,
+                request_id=request_id,
+                base_sha=base_sha,
+                dispatch_mode="legacy_task_fallback",
+            )
 
-        replay_code, replay = request_fn("POST", f"{pool_url}/v1/tasks", token, body)
-        if replay_code != 200 or replay.get("created") is not False:
-            raise BridgeError("worker_pool_replay_not_idempotent")
-        if _task_id(replay) != task_id:
-            raise BridgeError("worker_pool_replay_task_mismatch")
-
-        read_code, readback = request_fn("GET", f"{pool_url}/v1/tasks/{task_id}", token, None)
-        if read_code != 200:
-            raise BridgeError("worker_pool_readback_failed")
-        expected = {
-            "task_id": task_id,
-            "repository": repository,
-            "issue_number": issue_number,
-            "request_id": request_id,
-            "base_sha": base_sha,
-        }
-        if any(readback.get(key) != value for key, value in expected.items()):
-            raise BridgeError("worker_pool_readback_mismatch")
-        if "lease_token" in readback:
-            raise BridgeError("worker_pool_readback_leaked_lease")
-
-        task = first["task"]
+        task = dispatched["task"]
+        readback = dispatched["readback"]
         evidence.append(
             {
                 "issue_number": issue_number,
                 "request_id": request_id,
                 "correlation_id": correlation_id,
-                "task_id": task_id,
+                "work_id": dispatched.get("work_id"),
+                "task_id": dispatched["task_id"],
+                "dispatch_mode": dispatched["dispatch_mode"],
+                "work_phase": dispatched.get("work_phase"),
                 "branch": task.get("branch"),
                 "workspace_key": task.get("workspace_key"),
                 "state": readback.get("state"),
                 "base_sha": base_sha,
-                "created": first.get("created") is True,
-                "replay_created": replay.get("created"),
+                "created": dispatched["created"],
+                "replay_created": dispatched["replay_created"],
                 "independent_readback": True,
+                "contract_mode": contract_mode,
             }
         )
 
+    dispatch_modes = sorted({str(item["dispatch_mode"]) for item in evidence})
     return {
         "schema_version": "1.0.0",
         "result": "WORKER_POOL_ENQUEUED",
         "repository": repository,
         "base_sha": base_sha,
         "orchestrator_correlation_id": parent_correlation,
+        "contract_name": EXPECTED_WORKER_POOL_CONTRACT_NAME,
+        "contract_version": EXPECTED_WORKER_POOL_CONTRACT_VERSION,
+        "contract_mode": contract_mode,
+        "dispatch_modes": dispatch_modes,
+        "work_orchestrator_preferred": contract_mode == "v1",
+        "legacy_fallback_used": contract_mode == "legacy_fallback",
         "enqueued": len(evidence),
         "items": evidence,
     }
@@ -379,6 +609,16 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("--token-file", type=Path)
     root.add_argument("--output", type=Path, default=Path("artifacts/pending-development-worker-pool/evidence.json"))
     root.add_argument("--probe-only", action="store_true")
+    root.add_argument(
+        "--require-contract-v1",
+        action="store_true",
+        help="Bloqueia runtime legado sem GET /v1/contract; usar após o cutover.",
+    )
+    root.add_argument(
+        "--require-work-v1",
+        action="store_true",
+        help="Bloqueia fallback para /v1/tasks quando /v1/work ainda não existe.",
+    )
     return root
 
 
@@ -405,6 +645,8 @@ def main() -> int:
             base_sha=args.base_sha,
             pool_url=args.pool_url,
             token=token,
+            allow_legacy_fallback=not args.require_contract_v1,
+            allow_work_fallback=not args.require_work_v1,
         )
         write_evidence(args.output, result)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))

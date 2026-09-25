@@ -24,16 +24,25 @@ on:
         description: "Correlation ID do handoff"
         required: true
         type: string
+  push:
+    paths:
+      - "scripts/worker_pool_portable_contract_e2e.py"
+      - "scripts/pending_development_worker_pool_bridge.py"
+      - ".github/workflows/codex-worker-pool-handoff.yml"
+      - "tests/test_worker_pool_portable_contract_e2e.py"
+      - ".sdd/specs/codex-branch-first-worker-pool-bridge.requirements.md"
+      - ".sdd/specs/codex-branch-first-worker-pool-bridge.spec.json"
 
 permissions:
   contents: read
 
 concurrency:
-  group: codex-worker-pool-handoff-${{ inputs.request_id }}
+  group: codex-worker-pool-handoff-${{ inputs.request_id || github.ref }}
   cancel-in-progress: false
 
 jobs:
   enqueue:
+    if: github.event_name == 'workflow_dispatch'
     name: Enfileirar fallback local no Worker Pool
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 10
@@ -71,6 +80,12 @@ jobs:
           if ($evidence.enqueued -ne 1) {
             throw "Quantidade inesperada de tasks enfileiradas."
           }
+          if (@("v1", "legacy_fallback") -notcontains $evidence.contract_mode) {
+            throw "Modo de contrato do Worker Pool inválido."
+          }
+          if ($evidence.contract_version -ne "v1") {
+            throw "Versão esperada do contrato não foi preservada."
+          }
           $item = $evidence.items[0]
           if ($item.request_id -ne "${{ inputs.request_id }}") {
             throw "request_id divergente do handoff solicitado."
@@ -80,6 +95,12 @@ jobs:
           }
           if ($item.replay_created -ne $false -or $item.independent_readback -ne $true) {
             throw "Replay idempotente ou leitura independente não comprovados."
+          }
+          if (@("work_v1", "task_v1_fallback", "legacy_task_fallback") -notcontains $item.dispatch_mode) {
+            throw "Modo de despacho do Worker Pool inválido."
+          }
+          if ($item.dispatch_mode -eq "work_v1" -and [string]::IsNullOrWhiteSpace([string]$item.work_id)) {
+            throw "work_id obrigatório quando o Work Orchestrator v1 foi usado."
           }
 
       - name: Publicar evidência sanitizada
@@ -101,3 +122,102 @@ jobs:
           "- Request ID: `${{ inputs.request_id }}`" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Merge/deploy: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Token exposto: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  portable-contract-e2e:
+    name: Validar ReqSys contra Engineering Worker Pool v1
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      WORKER_POOL_SHA: 0b4a5be12e49b45e3ff288dccacdd69fd87b57e0
+      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      CORRELATION_ID: worker-pool-portable-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/worker-pool-portable-contract-e2e/evidence.json
+
+    steps:
+      - name: Checkout ReqSys no SHA imutável
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Checkout Engineering Worker Pool no SHA fixado
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/engineering-worker-pool
+          ref: 0b4a5be12e49b45e3ff288dccacdd69fd87b57e0
+          path: _worker_pool
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências do Worker Pool fixado
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -r _worker_pool/requirements.txt
+
+      - name: Executar E2E portátil estrito Work v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/worker_pool_portable_contract_e2e.py \
+            --reqsys-sha "$GITHUB_SHA" \
+            --worker-pool-root "$GITHUB_WORKSPACE/_worker_pool" \
+            --worker-pool-sha "$WORKER_POOL_SHA" \
+            --rules-sha "$RULES_SHA" \
+            --correlation-id "$CORRELATION_ID" \
+            --output "$EVIDENCE_FILE"
+
+      - name: Validar evidência contra falso positivo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = json.loads(Path(os.environ["EVIDENCE_FILE"]).read_text(encoding="utf-8"))
+          assert evidence["result"] == "WORKER_POOL_PORTABLE_CONTRACT_E2E_PASSED"
+          assert evidence["reqsys_sha"] == os.environ["GITHUB_SHA"]
+          assert evidence["worker_pool_sha"] == os.environ["WORKER_POOL_SHA"]
+          assert evidence["rules_sha"] == os.environ["RULES_SHA"]
+          assert evidence["contract_name"] == "engineering-worker-pool"
+          assert evidence["contract_version"] == "v1"
+          assert evidence["dispatch_mode"] == "work_v1"
+          assert evidence["replay_created"] is False
+          assert evidence["independent_readback"] is True
+          assert evidence["negative_auth_control"] is True
+          assert evidence["lane_enabled"] is False
+          assert evidence["task_state"] == "queued"
+          assert evidence["leased_by"] is None
+          assert evidence["legacy_fallback_used"] is False
+          assert evidence["physical_runtime_validated"] is False
+          assert evidence["production_touched"] is False
+          assert evidence["deploy_executed"] is False
+          PY
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-pool-portable-contract-e2e-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumo
+        if: always()
+        shell: bash
+        run: |
+          echo "## Worker Pool Portable Contract E2E" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ReqSys SHA: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Worker Pool SHA: \`$WORKER_POOL_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Contrato exigido: engineering-worker-pool/v1 + work_v1" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Fallback legado: proibido" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Lane efêmera: desabilitada" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Prova física PC24x7: não substituída" >> "$GITHUB_STEP_SUMMARY"

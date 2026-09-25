@@ -10,19 +10,31 @@ POLICY = ROOT / ".github/self-hosted-runner-policy.json"
 
 def test_worker_pool_handoff_is_manual_scoped_and_fail_closed() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
+    enqueue = raw.split("  enqueue:", maxsplit=1)[1].split(
+        "  portable-contract-e2e:", maxsplit=1
+    )[0]
+
     assert "workflow_dispatch:" in raw
+    assert "push:" in raw
     assert "schedule:" not in raw
     assert "pull_request:" not in raw
     assert "issues:" not in raw
-    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
-    assert "ref: ${{ inputs.base_sha }}" in raw
-    assert "pending_development_worker_pool_bridge.py" in raw
-    assert "http://127.0.0.1:8097" in raw
-    assert "replay_created" in raw
-    assert "independent_readback" in raw
+    assert "if: github.event_name == 'workflow_dispatch'" in enqueue
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in enqueue
+    assert "ref: ${{ inputs.base_sha }}" in enqueue
+    assert "pending_development_worker_pool_bridge.py" in enqueue
+    assert "http://127.0.0.1:8097" in enqueue
+    assert "replay_created" in enqueue
+    assert "independent_readback" in enqueue
+    assert "contract_mode" in enqueue
+    assert "legacy_fallback" in enqueue
+    assert "dispatch_mode" in enqueue
+    assert "work_v1" in enqueue
+    assert "work_id" in enqueue
+    assert 'contract_version -ne "v1"' in enqueue
     assert "secrets." not in raw
-    assert "merge" not in raw.lower().replace("merge/deploy: não", "")
-    assert "deploy" not in raw.lower().replace("merge/deploy: não", "")
+    assert "merge" not in enqueue.lower().replace("merge/deploy: não", "")
+    assert "deploy" not in enqueue.lower().replace("merge/deploy: não", "")
 
 
 def test_worker_pool_handoff_requires_exact_identity_inputs() -> None:
