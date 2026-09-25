@@ -14,7 +14,10 @@ def test_kubernetes_argocd_dispatch_command_is_exact_and_issue_scoped() -> None:
 
 def test_kubernetes_argocd_dispatch_maps_only_to_existing_ci_e2e_workflow() -> None:
     assert "target='ci-e2e-governado.yml'" in GATEWAY
-    assert "runtime-e2e-continuous.yml|ci-e2e-governado.yml|pending-development-agent-pr-permission-watch.yml" in GATEWAY
+    dispatch_allowlist = GATEWAY.split("case \"$TARGET_WORKFLOW\" in", maxsplit=1)[1].split("esac", maxsplit=1)[0]
+    assert "runtime-e2e-continuous.yml" in dispatch_allowlist
+    assert "ci-e2e-governado.yml" in dispatch_allowlist
+    assert "pending-development-agent-pr-permission-watch.yml" in dispatch_allowlist
     assert 'gh workflow run "$TARGET_WORKFLOW"' in GATEWAY
     assert "--ref main" in GATEWAY
 

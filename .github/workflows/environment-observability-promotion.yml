@@ -12,6 +12,11 @@ on:
           - development
           - staging
           - production
+      build_only:
+        description: Publish the immutable GHCR image without any Fly deployment
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -100,6 +105,7 @@ jobs:
               "digest": "${{ steps.build.outputs.digest }}",
               "built_at": datetime.now(timezone.utc).isoformat(),
               "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+              "build_only": "${{ inputs.build_only }}" == "true",
           }
           Path("evidence/build.json").write_text(
               json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8"
@@ -116,6 +122,7 @@ jobs:
 
   deploy-development:
     name: Deploy development
+    if: ${{ !inputs.build_only }}
     needs: validate-and-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -159,7 +166,7 @@ jobs:
 
   deploy-staging:
     name: Promote to staging
-    if: ${{ inputs.promote_to == 'staging' || inputs.promote_to == 'production' }}
+    if: ${{ !inputs.build_only && (inputs.promote_to == 'staging' || inputs.promote_to == 'production') }}
     needs:
       - validate-and-publish
       - deploy-development
@@ -205,7 +212,7 @@ jobs:
 
   deploy-production:
     name: Promote to production
-    if: ${{ inputs.promote_to == 'production' }}
+    if: ${{ !inputs.build_only && inputs.promote_to == 'production' }}
     needs:
       - validate-and-publish
       - deploy-development
