@@ -29,7 +29,7 @@ permissions:
   checks: read
 
 concurrency:
-  group: branch-protection-audit-${{ github.ref }}
+  group: branch-protection-audit-${{ github.event_name }}-${{ github.ref }}-${{ github.event.inputs.mode || 'audit' }}
   cancel-in-progress: true
 
 env:
