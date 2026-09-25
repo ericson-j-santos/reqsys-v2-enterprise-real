@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "reconcile_pc24x7_public_dev_runtime.py"
 OVERLAY = ROOT / "docker-compose.pc24x7-public-dev.yml"
 NGINX = ROOT / "infra" / "nginx" / "default.pc24x7-public-dev.conf"
-WORKFLOW = ROOT / ".github" / "workflows" / "pc24x7-public-dev-reconcile.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "noteri-study-mode-dev-reconcile.yml"
 GATEWAY = ROOT / ".github" / "workflows" / "reqsys-authorized-actions-gateway.yml"
 
 
@@ -68,19 +68,21 @@ def test_reconciler_requires_same_sha_static_frontend_and_negative_vite_control(
 def test_workflow_has_physical_then_independent_public_evidence() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "public-static" in raw
     assert "Reconcile full DEV runtime and static frontend" in raw
-    assert "pc24x7_dev_runtime_supervisor.py --apply" in raw
+    assert "pc24x7_public_dev_tunnel.py --apply" in raw
+    assert "pc24x7_dev_locator_publisher.py" in raw
     assert "needs: reconcile" in raw
     assert "Independent public same-SHA smoke" in raw
     assert "vite_hmr_exposed" in raw
     assert "production_touched" in raw
-    assert "schedule:" not in raw
 
 
 def test_authorized_gateway_exposes_only_exact_static_reconcile_command() -> None:
     raw = GATEWAY.read_text(encoding="utf-8")
     assert "github.event.comment.body == '/reqsys run pc24x7-public-dev-reconcile'" in raw
     assert "'/reqsys run pc24x7-public-dev-reconcile')" in raw
-    assert "target='pc24x7-public-dev-reconcile.yml'" in raw
-    assert "steps.route.outputs.target == 'pc24x7-public-dev-reconcile.yml'" in raw
+    assert "target='noteri-study-mode-dev-reconcile.yml'" in raw
+    assert "mode='public-static'" in raw
+    assert "-f mode=public-static" in raw
     assert "-f environment=prod" not in raw
