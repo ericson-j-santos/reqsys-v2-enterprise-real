@@ -1,0 +1,19 @@
+{
+  "feature_name": "kubernetes-argocd-dev-bootstrap",
+  "project": "ReqSys v2 Enterprise — plataforma GitOps",
+  "created_at": "2026-09-25",
+  "updated_at": "2026-09-25",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Bootstrap GitOps fail-closed de Kubernetes + Argo CD restrito a DEV, com canário não sensível e auto-sync bloqueado até E2E real.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_kubernetes_gitops_bootstrap.py"
+    ],
+    "evidence_contract": "Pre-PR Readiness registra o HEAD exato; E2E real exige Git -> Argo CD -> Kubernetes e leitura independente do ConfigMap canário."
+  }
+}
