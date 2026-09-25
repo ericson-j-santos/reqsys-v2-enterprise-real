@@ -46,7 +46,9 @@
     "Readback independente do ruleset confirma os oito checks e preservação das regras preexistentes antes de declarar sucesso.",
     "Reexecução idempotente pode concluir ALREADY_COMPLIANT sem mutação adicional.",
     "Nenhum deploy, promoção, banco, segredo ou runtime da aplicação é alterado.",
-    "O fallback Noteri é exposto somente pelo comando exato /reqsys run protect-reqsys-main-ruleset-noteri, sem workflow, branch, ruleset ou parâmetro arbitrário."
+    "O fallback Noteri é exposto somente pelo comando exato /reqsys run protect-reqsys-main-ruleset-noteri, sem workflow, branch, ruleset ou parâmetro arbitrário.",
+    "Após o merge da PR #2079, o fallback Noteri executa uma única vez pelo evento pull_request closed condicionado a merged=true, número 2079 e branch head exata; nenhum outro PR dispara a mutação.",
+    "No disparo pós-merge, Session Launcher exige o merge_commit_sha da PR como expected_head e origin/main deve apontar exatamente para o mesmo SHA; avanço concorrente falha fechado."
   ],
   "sdd_gate": {
     "tests": [
