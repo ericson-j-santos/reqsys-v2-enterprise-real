@@ -20,6 +20,10 @@ def test_locator_requires_valid_signed_fresh_cloudflare_state():
     assert "environment!==\"dev\"" in raw
     assert '.endsWith(".trycloudflare.com")' in raw
     assert "signature_b64" in raw
+    assert 'contract.version!=="2.0.0"' in raw
+    assert "static_frontend_required!==true" in raw
+    assert "vite_hmr_forbidden!==true" in raw
+    assert '"/api/runtime/readiness"' in raw
     assert "reqsys-dev-locator-" in raw
     assert "PRIVATE" not in raw.upper()
 
@@ -142,6 +146,9 @@ def test_publisher_requires_complete_runtime_contract_before_locator():
     assert '"runtime_contract_required": True' in raw
     assert '"static_frontend_required": True' in raw
     assert '"vite_hmr_forbidden": True' in raw
+    assert '"runtime_contract": {' in raw
+    assert '"version": "2.0.0"' in raw
+    assert '"required_endpoints": list(REQUIRED_PUBLIC_ENDPOINTS)' in raw
 
 
 def test_supervisor_does_not_publish_when_runtime_contract_is_partial():
@@ -153,3 +160,17 @@ def test_supervisor_does_not_publish_when_runtime_contract_is_partial():
     assert '"local_runtime_contract_failed"' in raw
     assert 'payload["local_runtime_contract_ready"] = local_ready' in raw
     assert 'payload["ready"] = local_ready and cloudflare_ready and (locator_ready if args.apply else True)' in raw
+
+
+def test_signed_locator_contract_v2_is_required_by_pages_and_ci_resolver():
+    html = HTML.read_text(encoding="utf-8")
+    resolver = RESOLVER.read_text(encoding="utf-8")
+    publisher = PUBLISHER.read_text(encoding="utf-8")
+
+    assert '"runtime_contract": {' in publisher
+    assert '"version": "2.0.0"' in publisher
+    assert 'contract.version!=="2.0.0"' in html
+    assert 'payload?.runtime_contract?.version !== "2.0.0"' in resolver
+    assert "self_test_legacy_locator_accepted" in resolver
+    assert "reqsys-app-dev.fly.dev" not in html
+    assert "reqsys-api-dev.fly.dev" not in html
