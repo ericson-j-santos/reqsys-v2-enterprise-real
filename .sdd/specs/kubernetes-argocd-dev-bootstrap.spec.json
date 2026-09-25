@@ -13,8 +13,9 @@
   "sdd_gate": {
     "tests": [
       "tests/test_kubernetes_gitops_bootstrap.py",
-      "tests/test_kubernetes_argocd_ephemeral_e2e_contract.py"
+      "tests/test_kubernetes_argocd_ephemeral_e2e_contract.py",
+      "tests/test_kubernetes_argocd_authorized_dispatch_contract.py"
     ],
-    "evidence_contract": "Pre-PR Readiness registra o HEAD exato; CI E2E Governado executa kind + Argo CD e exige Synced/Healthy, revisão observada igual ao SHA, leitura independente do ConfigMap, controle negativo e artifact JSON."
+    "evidence_contract": "Pre-PR Readiness registra o HEAD exato; CI E2E Governado executa kind + Argo CD e exige Synced/Healthy, revisão observada igual ao SHA, leitura independente do ConfigMap, controle negativo e artifact JSON. O Authorized Actions Gateway expõe somente /reqsys run kubernetes-argocd-e2e-dev para despachar esse E2E em main e valida o run_id/run_url/headSha/event exatos."
   }
 }
