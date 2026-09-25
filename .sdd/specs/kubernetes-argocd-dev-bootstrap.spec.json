@@ -9,11 +9,12 @@
     "design": true,
     "tasks": true
   },
-  "description": "Bootstrap GitOps fail-closed de Kubernetes + Argo CD restrito a DEV, com canário não sensível e auto-sync bloqueado até E2E real.",
+  "description": "Bootstrap GitOps fail-closed de Kubernetes + Argo CD restrito a DEV, com canário não sensível, auto-sync bloqueado e E2E efêmero real em kind.",
   "sdd_gate": {
     "tests": [
-      "tests/test_kubernetes_gitops_bootstrap.py"
+      "tests/test_kubernetes_gitops_bootstrap.py",
+      "tests/test_kubernetes_argocd_ephemeral_e2e_contract.py"
     ],
-    "evidence_contract": "Pre-PR Readiness registra o HEAD exato; E2E real exige Git -> Argo CD -> Kubernetes e leitura independente do ConfigMap canário."
+    "evidence_contract": "Pre-PR Readiness registra o HEAD exato; CI E2E Governado executa kind + Argo CD e exige Synced/Healthy, revisão observada igual ao SHA, leitura independente do ConfigMap, controle negativo e artifact JSON."
   }
 }
