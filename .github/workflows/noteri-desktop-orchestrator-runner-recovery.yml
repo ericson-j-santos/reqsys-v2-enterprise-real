@@ -199,3 +199,44 @@ jobs:
           path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-orchestrator-runner\evidence.json
           if-no-files-found: warn
           retention-days: 30
+
+
+  queue_watchdog:
+    name: Noteri recovery queue watchdog
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+      contents: read
+    env:
+      TARGET_RUN_ID: ${{ github.run_id }}
+      TARGET_JOB_NAME: Recover Desktop runner through Engineering Orchestrator
+      STALL_AFTER_SECONDS: "75"
+    steps:
+      - name: Observe Noteri pickup and fail closed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const runId = Number(process.env.TARGET_RUN_ID);
+            const deadline = Date.now() + Number(process.env.STALL_AFTER_SECONDS) * 1000;
+            while (Date.now() < deadline) {
+              const jobs = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+                per_page: 100,
+              });
+              const target = jobs.data.jobs.find((job) => job.name === process.env.TARGET_JOB_NAME) || null;
+              if (target && (target.status !== 'queued' || Number(target.runner_id || 0) > 0)) {
+                core.info(`NOTERI_PICKUP_OBSERVED job=${target.id} status=${target.status}`);
+                return;
+              }
+              await sleep(5000);
+            }
+            core.setFailed('NOTERI_RUNNER_PICKUP_TIMEOUT');
+            await github.rest.actions.cancelWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
