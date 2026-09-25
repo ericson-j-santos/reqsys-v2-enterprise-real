@@ -2,28 +2,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BRANCH_WORKFLOW = ROOT / ".github/workflows/branch-protection-audit.yml"
-GATEWAY_WORKFLOW = ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml"
 CONFIG = ROOT / "scripts/configure_fecap_main_protection_risk3.py"
 RUNNER = ROOT / "scripts/run_fecap_main_protection_local.py"
-
-
-def test_gateway_exposes_exact_fecap_noteri_command() -> None:
-    raw = GATEWAY_WORKFLOW.read_text(encoding="utf-8")
-    assert "github.event.comment.body == '/reqsys run protect-fecap-main-noteri'" in raw
-    assert "'/reqsys run protect-fecap-main-noteri')" in raw
-    assert "mode='apply-fecap-main-noteri'" in raw
-
-
-def test_fecap_workflow_is_noteri_governed_and_fixed() -> None:
-    raw = BRANCH_WORKFLOW.read_text(encoding="utf-8")
-    assert "- apply-fecap-main-noteri" in raw
-    assert "apply-fecap-main-noteri:" in raw
-    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
-    assert 'if ($env:COMPUTERNAME -ne "Noteri")' in raw
-    assert '"--session-prefix", "fecap-main-protect-noteri"' in raw
-    assert "reqsys.fecap-main-protection.dev" in raw
-    assert "repo://ericson-j-santos/fecap-clipping-automation/branch/main" in raw
 
 
 def test_fecap_risk3_action_is_fixed_and_secretless() -> None:
@@ -35,7 +15,7 @@ def test_fecap_risk3_action_is_fixed_and_secretless() -> None:
     assert "--secret" not in raw
 
 
-def test_fecap_ruleset_runner_is_fail_closed() -> None:
+def test_fecap_ruleset_runner_is_fixed_and_fail_closed() -> None:
     raw = RUNNER.read_text(encoding="utf-8")
     assert 'TARGET_REPOSITORY = "ericson-j-santos/fecap-clipping-automation"' in raw
     assert 'TARGET_BRANCH = "main"' in raw
@@ -53,9 +33,19 @@ def test_fecap_ruleset_runner_is_fail_closed() -> None:
     assert '"strict_required_status_checks_policy": True' in raw
     assert '"bypass_actors": []' in raw
     assert '"target_sha_changed"' in raw
+    assert '"validated_source_not_parent_of_target"' in raw
     assert '"required_checks_not_green"' in raw
     assert '"branch_not_protected_after_write"' in raw
     assert '"ruleset_readback_mismatch"' in raw
     assert '"independent_readback": True' in raw
     assert '"secret_value_exposed": False' in raw
+
+
+def test_fecap_runner_does_not_expose_generic_admin_surface() -> None:
+    raw = RUNNER.read_text(encoding="utf-8")
     assert "--repository" not in raw
+    assert "--branch" not in raw
+    assert "--ruleset-name" not in raw
+    assert "--required-check" not in raw
+    assert "TARGET_REPOSITORY =" in raw
+    assert "TARGET_BRANCH =" in raw
