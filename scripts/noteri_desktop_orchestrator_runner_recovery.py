@@ -224,7 +224,7 @@ def recover(
         sleep_fn(0.5)
     if terminal is None:
         raise RecoveryError("runner_recovery_timeout")
-    result = validate_completed(terminal)
+    validate_completed(terminal)
 
     replay_status, replay = requester("POST", "/v1/intake", body)
     replay_item = replay.get("item") if isinstance(replay, dict) else None
