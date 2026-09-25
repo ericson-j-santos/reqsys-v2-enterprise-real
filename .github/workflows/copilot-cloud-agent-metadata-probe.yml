@@ -44,24 +44,33 @@ jobs:
           python -m pip install --disable-pip-version-check pytest==8.4.2
           python -m pytest -q tests/test_probe_copilot_cloud_agent_metadata.py
 
-      - name: Validate governed GitHub credential presence
+      - name: Mint bounded repository GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+
+      - name: Validate governed GitHub App identity
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           if [ -z "${GITHUB_TOKEN:-}" ]; then
-            echo "GH_PAT_ACTIONS is not configured."
+            echo "Governed GitHub App token was not minted."
             exit 2
           fi
-          echo "Governed GitHub credential is configured; value remains masked."
+          echo "Governed GitHub App identity is active; token value remains masked."
 
       - name: Probe repository metadata
         id: metadata_probe
         continue-on-error: true
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           python scripts/probe_copilot_cloud_agent_metadata.py \
@@ -131,5 +140,5 @@ jobs:
         if: steps.metadata_probe.outcome != 'success'
         shell: bash
         run: |
-          echo "Copilot cloud-agent metadata is not readable with the governed GitHub credential."
+          echo "Copilot cloud-agent metadata is not readable with the governed GitHub App identity."
           exit 1
