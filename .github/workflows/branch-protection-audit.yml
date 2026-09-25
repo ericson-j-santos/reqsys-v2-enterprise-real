@@ -175,7 +175,7 @@ jobs:
             "--repo", $env:TARGET_REPO,
             "--session-prefix", "obs-protect",
             "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", "${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}",
+            "--expected-head", "${{ github.sha }}",
             "--sync-ref", "origin/main"
           )
           $raw = & python $launcher @launcherArgs
@@ -185,8 +185,7 @@ jobs:
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
             throw "SESSION_LAUNCH_BLOCKED"
           }
-          $expectedHead = "${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}"
-          if ($data.head -ne $expectedHead) { throw "SESSION_HEAD_MISMATCH" }
+          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Instalar autorização Risk3 exata e temporária
@@ -617,7 +616,7 @@ jobs:
             "--repo", $env:TARGET_REPO,
             "--session-prefix", "reqsys-ruleset-noteri",
             "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", "${{ github.sha }}",
+            "--expected-head", "${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}",
             "--sync-ref", "origin/main"
           )
           $raw = & python $launcher @launcherArgs
@@ -627,7 +626,8 @@ jobs:
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
             throw "SESSION_LAUNCH_BLOCKED"
           }
-          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          $expectedHead = "${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}"
+          if ($data.head -ne $expectedHead) { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Instalar autorização Risk3 exata e temporária
