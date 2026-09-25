@@ -22,7 +22,7 @@ Recuperar o runner GitHub Actions já registrado no `DESKTOP-PDQK954` usando o E
     - `/reqsys run desktop-runner-pickup-canary`.
 13. Nenhum input arbitrário é aceito por esses dois comandos.
 
-## Critério de aceite
+## Critérios de aceite
 
 O fluxo só é concluído quando houver evidência atual e vinculada ao mesmo ciclo operacional de:
 
