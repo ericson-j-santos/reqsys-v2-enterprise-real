@@ -29,7 +29,7 @@ issue/request
 5. Um workspace ativo não pode ser compartilhado.
 6. Worker `ESTUDO`, stale, sem Gateway, sem `state_validated` ou com `rules_sha` diferente do SHA canônico esperado não adquire trabalho.
 7. Lease expirado é recuperado; ao atingir `max_attempts`, a task vai para `failed` + quarentena.
-8. Heartbeat, renovação de lease e polling sem mudança provam liveness, não progresso; `last_material_progress_at` só avança em transição material. Após 900s sem avanço, o watchdog reroteia para worker alternativo elegível ou bloqueia/libera capacidade.
+8. Heartbeat, renovação de lease e polling sem mudança provam liveness, não progresso; `last_material_progress_at` só avança em transição material. Após 300s sem avanço, o watchdog reroteia para worker alternativo elegível ou bloqueia/libera capacidade.
 9. Builder entrega exatamente um `produced_sha`; Validator diferente valida o SHA.
 10. Task `blocked` não mantém lease e não ocupa worker.
 11. Token da API é lido de arquivo e não aparece em snapshot/log.

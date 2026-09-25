@@ -1,6 +1,6 @@
 # TODO — Environment Observability API até Padrão Ouro 100%
 
-Atualizado em: 2026-07-14
+Atualizado em: 2026-09-23
 
 ## Regra de configuração
 
@@ -48,13 +48,15 @@ Cada contrato deve manter `APP_ENV`, `PUBLIC_ENVIRONMENT` e `API_PUBLIC_URL` coe
 
 ## P1 — Logs e observabilidade
 
-- [ ] Versionar o schema de logs (`log_schema_version`).
-- [ ] Adicionar `span_id`, `deployment_id`, `region`, `instance_id` e categoria do evento.
-- [ ] Validar `traceparent` conforme W3C em vez de apenas dividir a string.
-- [ ] Implementar filtro central de redaction para Authorization, cookies, tokens, secrets, CPF, e-mail e telefone.
-- [ ] Criar testes negativos que garantam ausência de dados sensíveis nos logs.
+Evidência revalidada em 2026-09-23: o serviço já possui schema JSON versionado, masking central com testes negativos, validação W3C de `traceparent`, dimensões de deployment/instância e métricas RED. Este incremento adiciona `causation_id` e `workflow_run_id` ao contrato distribuído para avançar `OPS-GAP-OBSERVABILITY-001`. Itens que dependem de retenção, alertas, backend OTLP e operação real permanecem abertos.
+
+- [x] Versionar o schema de logs (`log_schema_version`).
+- [x] Adicionar `span_id`, `deployment_id`, `region`, `instance_id` e categoria do evento.
+- [x] Validar `traceparent` conforme W3C em vez de apenas dividir a string.
+- [x] Implementar filtro central de redaction para Authorization, cookies, tokens, secrets, CPF, e-mail e telefone.
+- [x] Criar testes negativos que garantam ausência de dados sensíveis nos logs.
 - [ ] Integrar OpenTelemetry SDK e Collector para logs, métricas e traces.
-- [ ] Publicar métricas RED: taxa, erros e duração.
+- [x] Publicar métricas RED: taxa, erros e duração.
 - [ ] Definir retenção por ambiente e trilha de auditoria protegida.
 - [ ] Criar alertas por impacto/SLO e runbooks associados.
 - [ ] Detectar perda de telemetria e falha do collector.

@@ -110,29 +110,62 @@ def test_wrong_source_host_is_rejected(tmp_path: Path) -> None:
         )
 
 
-def test_workflow_is_inputless_noteri_only_and_read_only() -> None:
+def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
+
+    # Superfície única e explicitamente limitada: nenhum input livre além do modo.
     assert "workflow_dispatch:" in raw
-    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    assert "mode:" in raw
+    assert "type: choice" in raw
+    assert "default: watchdog" in raw
+    for mode in ("watchdog", "runner-bootstrap", "runner-canary"):
+        assert f"- {mode}" in raw
+    assert raw.count("description: 'Bounded recovery mode'") == 1
+
+    # Permissões e invariantes comuns permanecem somente leitura/fail-closed.
     assert "contents: read" in raw
     assert "contents: write" not in raw
     assert "actions: write" not in raw
     assert "secrets." not in raw
-    assert "--confirm" in raw and "RUN-EXISTING-DESKTOP-WATCHDOG" in raw
     assert "persist-credentials: false" in raw
     assert "chatgpt-operational-rules" in raw
-    assert "5af7b5ab6e31c24744176abd774855168c55953f" in raw
     assert "session_launcher.py" in raw
     assert "SESSION_LAUNCH_OK" in raw
     assert "state_validated" in raw
     assert "command_gateway.py" in raw
     assert '"--risk", "2"' in raw
     assert '"--expected-head", $env:ANCHOR_SHA' in raw
-    assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
     assert "TARGET_REPO: ${{ github.workspace }}" in raw
     assert "path: _target" not in raw
+    assert "C:\\dev\\reqsys-v2-enterprise-real" not in raw
+    assert "shell: pwsh" not in raw
+
+    # Modo watchdog legado continua restrito ao Noteri e à tarefa fixa existente.
+    assert "if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}" in raw
+    assert "RUN-EXISTING-DESKTOP-WATCHDOG" in raw
+    assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
     assert "$recoveryScript = Join-Path $env:TARGET_PATH" in raw
     assert "noteri_desktop_watchdog_rpc_recovery.py" in raw
-    assert "C:\\dev\\reqsys-v2-enterprise-real" not in raw
-    assert raw.count("shell: powershell") == 4
-    assert "shell: pwsh" not in raw
+
+    # Bootstrap usa somente o Noteri e o action id fixo já allowlisted no Orchestrator.
+    assert "runner-bootstrap:" in raw
+    assert "if: ${{ inputs.mode == 'runner-bootstrap' }}" in raw
+    assert "Bootstrap registered Desktop GitHub runner through control plane" in raw
+    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    assert "desktop_runner_bootstrap_via_orchestrator.py" in raw
+    assert "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR" in raw
+    assert "DESKTOP_GITHUB_RUNNER_LOCAL_BOOTSTRAP_VERIFIED" in raw
+    assert "IDEMPOTENCY_NOT_PROVEN" in raw
+
+    # Canário terminal exige pickup no runner físico exato, não apenas listener local.
+    assert "runner-canary:" in raw
+    assert "if: ${{ inputs.mode == 'runner-canary' }}" in raw
+    assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
+    assert "desktop_runner_pickup_canary.py" in raw
+    assert "PROVE-DESKTOP-GITHUB-RUNNER-PICKUP" in raw
+    assert "DESKTOP_GITHUB_RUNNER_PICKUP_PROVEN" in raw
+    assert "DESKTOP-PDQK954" in raw
+
+    # Os dois novos modos usam regras canônicas atuais; watchdog mantém seu pin legado
+    # até migração dedicada, sem transformar isso em requisito funcional do recovery.
+    assert "881d9ca2f8e77025edb7298b22981109c567a730" in raw

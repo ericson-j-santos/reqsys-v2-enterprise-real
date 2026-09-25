@@ -375,3 +375,22 @@ def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None
     assert "-f workflow=" not in content
     assert "-f repository=" not in content
     assert "-f environment=prod" not in content
+
+
+def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run desktop-runner-bootstrap-via-orchestrator'" in content
+    assert "'/reqsys run desktop-runner-bootstrap-via-orchestrator')" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "mode='runner-bootstrap'" in content
+
+    assert "github.event.comment.body == '/reqsys run desktop-runner-pickup-canary'" in content
+    assert "'/reqsys run desktop-runner-pickup-canary')" in content
+    assert "mode='runner-canary'" in content
+
+    assert "runner-bootstrap|runner-canary" in content
+    assert '-f mode="$recovery_mode"' in content
+    assert "-f target_host=" not in content
+    assert "-f endpoint=" not in content
+    assert "-f command=" not in content
