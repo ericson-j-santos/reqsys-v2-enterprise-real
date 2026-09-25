@@ -311,7 +311,7 @@ jobs:
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
 
-      - name: Validate physical Desktop capabilities and inventory
+      - name: Validate Desktop recovery contract and recover runner
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -322,7 +322,7 @@ jobs:
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $script = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_post_bootstrap_validate.py"
-          & python $gateway --policy $policy --correlation-id $env:CORRELATION_ID run --cwd $env:TARGET_PATH --session-id $env:SESSION_ID --risk 1 --timeout 120 --expected-head $env:ANCHOR_SHA -- python $script --confirm VALIDATE-DESKTOP-STABLE-BOOTSTRAP --correlation-id $env:CORRELATION_ID --evidence-file $env:EVIDENCE_REL
+          & python $gateway --policy $policy --correlation-id $env:CORRELATION_ID run --cwd $env:TARGET_PATH --session-id $env:SESSION_ID --risk 2 --timeout 120 --expected-head $env:ANCHOR_SHA -- python $script --confirm VALIDATE-DESKTOP-STABLE-BOOTSTRAP --correlation-id $env:CORRELATION_ID --evidence-file $env:EVIDENCE_REL
           exit $LASTEXITCODE
 
       - name: Upload sanitized post-bootstrap evidence
