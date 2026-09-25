@@ -375,3 +375,15 @@ def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None
     assert "-f workflow=" not in content
     assert "-f repository=" not in content
     assert "-f environment=prod" not in content
+
+
+def test_gateway_desktop_runner_bootstrap_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-runner-bootstrap'" in content
+    assert "'/reqsys run noteri-desktop-runner-bootstrap')" in content
+    assert "target='noteri-desktop-runner-bootstrap.yml'" in content
+    assert "noteri-desktop-runner-bootstrap.yml|pc24x7-runner-registry-repair.yml" in content
+    assert "steps.route.outputs.target == 'noteri-desktop-runner-bootstrap.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f target=" not in content
+    assert "-f command=" not in content
