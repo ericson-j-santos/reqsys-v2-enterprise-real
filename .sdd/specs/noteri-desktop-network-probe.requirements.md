@@ -85,3 +85,20 @@ Após comprovar que o worker ativo em `:8787` está defasado e que WMI, SCM, Tas
 
 Somente uma superfície não-Orchestrator alcançável, acompanhada de contrato versionado que prove um executor estreito, governado e independente dos transportes descartados, pode habilitar a etapa seguinte. Caso a superfície seja apenas health/inferência/aplicação, ela deve ser classificada como não atuadora e não pode ser usada como atalho para execução remota.
 
+
+## Incremento atual — transporte alternativo via Noteri (runtime-surfaces-v2)
+
+Como o arquivo de reparo não está materializado na pasta esperada do Desktop e os atuadores anteriores permanecem indisponíveis, este incremento procura somente canais de transporte já residentes, gratuitos e independentes, sem executar recuperação remota.
+
+1. A execução continua exclusivamente no `Noteri`, por `Session Launcher → Command Gateway`, no SHA exato.
+2. Além das superfícies v1, somente `:2375/version` (Docker HTTP) e TCP `:2376` (Docker TLS) podem ser sondados.
+3. SMB é avaliado apenas por `net.exe view \\\\DESKTOP-PDQK954`, sem `/ALL`, sem `C$`, sem nome de share persistido, sem credencial fornecida e sem escrita remota.
+4. A evidência SMB pode persistir somente `status` sanitizado e contagem de shares visíveis; nomes, stdout e stderr são proibidos.
+5. `docker_remote_api_candidate=true` exige HTTP 2xx em `:2375/version`; nenhum corpo HTTP é persistido e nenhuma mutação Docker é executada.
+6. `smb_non_admin_transport_candidate=true` exige enumeração acessível e pelo menos um share visível; isso NÃO comprova permissão de escrita.
+7. `recovery_actuator_proven` permanece `false` e `remote_write_attempted=false` neste incremento.
+8. Continuam proibidos WMI de mutação, SCM, Task Scheduler remoto, `C$`, Admin Broker, RDC pago, Opera, SSH, WinRM, reboot, shell remoto e relaxamento de UAC/ACL.
+
+### Critério para avançar
+
+Somente um candidato SMB não administrativo ou Docker remoto comprovado pela evidência do mesmo SHA permite desenhar a próxima ação estreita de materialização. A escrita/execução no Desktop continua bloqueada até validação específica do candidato e autorização de risco aplicável.
