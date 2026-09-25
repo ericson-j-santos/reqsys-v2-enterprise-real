@@ -114,7 +114,7 @@ def test_workflow_executes_only_new_http_probe() -> None:
     assert "PROBE-NOTERI-DESKTOP-DEV-HTTP" in raw
     assert "scripts/noteri_desktop_network_probe.py" in raw
     assert "tests/test_noteri_desktop_network_probe.py" in raw
-    assert "if: ${{ !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}" in raw
+    assert (\n        "if: ${{ !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') " \n        "&& !startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-rdc-bootstrap-') }}"\n        in raw\n    )
     assert "if: ${{ startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}" in raw
     assert "session_launcher.py" in raw
     assert "command_gateway.py" in raw
