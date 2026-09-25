@@ -266,6 +266,7 @@ def test_runner_bootstrap_evidence_stays_outside_governed_worktree() -> None:
     assert "path: ${{ steps.session.outputs.evidence_file }}" in section
     assert "Join-Path $env:TARGET_PATH $env:EVIDENCE_REL" not in section
 
+
 def test_work_item_id_rejects_path_injection() -> None:
     with pytest.raises(subject.BootstrapError, match="work_item_id_invalid"):
         subject.validate_work_item_id("../../v1/status")
