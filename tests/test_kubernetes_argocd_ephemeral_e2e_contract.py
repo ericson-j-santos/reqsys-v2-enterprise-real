@@ -37,12 +37,12 @@ def test_kind_and_argocd_sources_are_pinned() -> None:
 def test_e2e_is_ephemeral_and_fails_closed() -> None:
     assert 'trap cleanup EXIT' in SCRIPT
     assert 'kind delete cluster --name "$CLUSTER_NAME"' in SCRIPT
-    assert '--patch "{\\\"spec\\\":{\\\"source\\\":{\\\"targetRevision\\\":\\\"${GITHUB_SHA}\\\"}}}"' in SCRIPT
+    assert '--patch "{\\\"spec\\\":{\\\"source\\\":{\\\"targetRevision\\\":\\\"${EVALUATED_SHA}\\\"}}}"' in SCRIPT
     assert "AUTO_SYNC_MUST_REMAIN_DISABLED" in SCRIPT
     assert 'operation_phase" == "Failed"' in SCRIPT
     assert 'sync_status" == "Synced"' in SCRIPT
     assert 'health_status" == "Healthy"' in SCRIPT
-    assert 'observed_revision" == "$GITHUB_SHA"' in SCRIPT
+    assert 'observed_revision" == "$EVALUATED_SHA"' in SCRIPT
 
 
 def test_e2e_uses_independent_kubernetes_read_and_negative_controls() -> None:
@@ -59,3 +59,11 @@ def test_evidence_is_bound_to_sha_and_correlation_id() -> None:
     assert 'observed_revision": sha' in SCRIPT
     assert 'correlation_id": os.environ["CORRELATION_ID"]' in SCRIPT
     assert "KUBERNETES_ARGOCD_E2E_OK" in SCRIPT
+
+def test_evaluated_sha_is_explicit_and_not_github_reserved_sha() -> None:
+    assert "GITHUB_SHA" not in SCRIPT
+    assert ': "${EVALUATED_SHA:?EVALUATED_SHA obrigatorio}"' in SCRIPT
+    assert "EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}" in WORKFLOW
+    assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in WORKFLOW
+    assert "GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}" not in WORKFLOW
+    assert 'cat "$ARTIFACT_DIR/evidence.json"' in SCRIPT

@@ -217,6 +217,7 @@ jobs:
       - name: Checkout do SHA avaliado
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Python 3.12
         uses: actions/setup-python@v5
@@ -226,7 +227,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
       - name: Executar E2E Kubernetes + Argo CD
         env:
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: bash scripts/kubernetes_argocd_ephemeral_e2e.sh

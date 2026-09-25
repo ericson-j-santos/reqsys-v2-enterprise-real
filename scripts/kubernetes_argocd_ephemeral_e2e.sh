@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${GITHUB_SHA:?GITHUB_SHA obrigatorio}"
+: "${EVALUATED_SHA:?EVALUATED_SHA obrigatorio}"
 : "${GITHUB_RUN_ID:?GITHUB_RUN_ID obrigatorio}"
 
 KIND_VERSION="v0.33.0"
@@ -20,7 +20,7 @@ mkdir -p "$ARTIFACT_DIR"
 
 write_failure_evidence() {
   local exit_code="$1"
-  python3 - "$ARTIFACT_DIR/evidence.json" "$exit_code" "$CORRELATION_ID" "$GITHUB_SHA" <<'PY'
+  python3 - "$ARTIFACT_DIR/evidence.json" "$exit_code" "$CORRELATION_ID" "$EVALUATED_SHA" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -104,7 +104,7 @@ kubectl -n "$ARGO_NAMESPACE" rollout status statefulset/argocd-application-contr
 
 kubectl apply -f argocd/applications/reqsys-dev-bootstrap.yaml
 kubectl -n "$ARGO_NAMESPACE" patch application "$APPLICATION_NAME" --type merge \
-  --patch "{\"spec\":{\"source\":{\"targetRevision\":\"${GITHUB_SHA}\"}}}"
+  --patch "{\"spec\":{\"source\":{\"targetRevision\":\"${EVALUATED_SHA}\"}}}"
 
 kubectl -n "$ARGO_NAMESPACE" get application "$APPLICATION_NAME" -o json > "$TMP_DIR/application.json"
 python3 - "$TMP_DIR/application.json" <<'PY'
@@ -118,7 +118,7 @@ if "automated" in sync_policy:
 PY
 
 kubectl -n "$ARGO_NAMESPACE" patch application "$APPLICATION_NAME" --type merge \
-  --patch "{\"operation\":{\"sync\":{\"revision\":\"${GITHUB_SHA}\",\"prune\":false,\"syncOptions\":[\"CreateNamespace=true\"]}}}"
+  --patch "{\"operation\":{\"sync\":{\"revision\":\"${EVALUATED_SHA}\",\"prune\":false,\"syncOptions\":[\"CreateNamespace=true\"]}}}"
 
 synced=false
 for _ in $(seq 1 72); do
@@ -130,14 +130,14 @@ for _ in $(seq 1 72); do
     echo "Argo CD sync falhou: phase=$operation_phase" >&2
     exit 20
   fi
-  if [[ "$sync_status" == "Synced" && "$health_status" == "Healthy" && "$observed_revision" == "$GITHUB_SHA" && "$operation_phase" == "Succeeded" ]]; then
+  if [[ "$sync_status" == "Synced" && "$health_status" == "Healthy" && "$observed_revision" == "$EVALUATED_SHA" && "$operation_phase" == "Succeeded" ]]; then
     synced=true
     break
   fi
   sleep 5
 done
 [[ "$synced" == "true" ]] || {
-  echo "Timeout aguardando Argo CD Synced/Healthy no SHA $GITHUB_SHA" >&2
+  echo "Timeout aguardando Argo CD Synced/Healthy no SHA $EVALUATED_SHA" >&2
   exit 21
 }
 
@@ -156,7 +156,7 @@ WORKLOAD_COUNT="$(kubectl -n "$TARGET_NAMESPACE" get deployment,statefulset,daem
 
 KUBERNETES_VERSION="$(kubectl version -o json | python3 -c 'import json,sys; print(json.load(sys.stdin)["serverVersion"]["gitVersion"])')"
 export OBS_ENV OBS_NAMESPACE OBS_PURPOSE KUBERNETES_VERSION ARGO_CD_VERSION ARGO_CD_COMMIT CORRELATION_ID
-python3 - "$ARTIFACT_DIR/evidence.json" "$GITHUB_SHA" <<'PY'
+python3 - "$ARTIFACT_DIR/evidence.json" "$EVALUATED_SHA" <<'PY'
 import json
 import os
 import sys
@@ -192,4 +192,5 @@ payload = {
 Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
-echo "KUBERNETES_ARGOCD_E2E_OK sha=$GITHUB_SHA correlation_id=$CORRELATION_ID"
+cat "$ARTIFACT_DIR/evidence.json"
+echo "KUBERNETES_ARGOCD_E2E_OK sha=$EVALUATED_SHA correlation_id=$CORRELATION_ID"
