@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Sonda governada e somente leitura do Noteri para o Desktop PC24x7."""
+"""Sonda governada e somente leitura de superfícies runtime Noteri -> Desktop."""
 
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import os
 import socket
-import subprocess
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,13 +16,30 @@ from typing import Any
 EXPECTED_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
 CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
-RUNTIME_PORT = 8081
-PING_TIMEOUT_MS = 1500
+PROBE_REVISION = "runtime-surfaces-v1"
 TCP_TIMEOUT_SECONDS = 1.5
-ADMIN_STAGING_PATH = "\\\\" + TARGET_HOST + "\\C$\\Users\\Public\\Desktop"
-WMI_NAMESPACE = r"root\cimv2"
-WMI_QUERY_CLASS = "Win32_OperatingSystem"
-WMI_QUERY = f"SELECT Caption FROM {WMI_QUERY_CLASS}"
+HTTP_TIMEOUT_SECONDS = 3.0
+
+SURFACES = {
+    "reqsys_dev_gateway": {"port": 8083, "path": "/api/health"},
+    "codex_backend": {"port": 8000, "path": "/health"},
+    "codex_gateway": {"port": 8008, "path": "/health"},
+    "engineering_worker_pool": {"port": 8097, "path": "/health"},
+    "engineering_orchestrator": {"port": 8787, "path": "/readyz"},
+    "ollama": {"port": 11434, "path": "/api/tags"},
+}
+
+FORBIDDEN_TRANSPORTS = (
+    "wmi",
+    "scm",
+    "schtasks",
+    "admin_share",
+    "admin_broker",
+    "rdc",
+    "opera",
+    "ssh",
+    "winrm",
+)
 
 
 class ProbeError(RuntimeError):
@@ -55,251 +72,92 @@ def resolve_target() -> dict[str, Any]:
     try:
         info = socket.getaddrinfo(
             TARGET_HOST,
-            RUNTIME_PORT,
+            None,
             family=socket.AF_INET,
             type=socket.SOCK_STREAM,
         )
     except socket.gaierror:
         return {"resolved": False, "address_count": 0}
-
     addresses = {
         str(item[4][0])
         for item in info
         if len(item) >= 5 and item[4] and item[4][0]
     }
-    return {
-        "resolved": bool(addresses),
-        "address_count": len(addresses),
-    }
+    return {"resolved": bool(addresses), "address_count": len(addresses)}
 
 
-def ping_path() -> Path:
-    root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
-    target = root / "System32" / "PING.EXE"
-    if not target.is_file():
-        raise ProbeError("PING.EXE não encontrado")
-    return target
-
-
-def icmp_reachable() -> bool:
-    completed = subprocess.run(
-        [
-            str(ping_path()),
-            "-n",
-            "1",
-            "-w",
-            str(PING_TIMEOUT_MS),
-            TARGET_HOST,
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=5,
-        check=False,
-    )
-    return completed.returncode == 0
-
-
-def runtime_port_reachable() -> bool:
+def tcp_port_reachable(port: int) -> bool:
     try:
-        with socket.create_connection(
-            (TARGET_HOST, RUNTIME_PORT),
-            timeout=TCP_TIMEOUT_SECONDS,
-        ):
+        with socket.create_connection((TARGET_HOST, port), timeout=TCP_TIMEOUT_SECONDS):
             return True
     except OSError:
         return False
 
 
-def admin_staging_path_probe() -> dict[str, Any]:
-    """Comprova somente acesso de leitura via C$; não grava nem persiste listagem."""
+def http_status(port: int, path: str) -> int | None:
+    request = urllib.request.Request(
+        f"http://{TARGET_HOST}:{port}{path}",
+        headers={"Accept": "application/json", "Cache-Control": "no-store"},
+        method="GET",
+    )
     try:
-        with os.scandir(ADMIN_STAGING_PATH) as entries:
-            next(entries, None)
-        return {"reachable": True, "result": "accessible"}
-    except PermissionError:
-        return {"reachable": False, "result": "access_denied"}
-    except FileNotFoundError:
-        return {"reachable": False, "result": "not_found"}
-    except OSError as exc:
-        code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
-        return {
-            "reachable": False,
-            "result": f"os_error_{code}" if code is not None else "os_error",
+        with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+            return int(response.status)
+    except urllib.error.HTTPError as exc:
+        return int(exc.code)
+    except (urllib.error.URLError, OSError):
+        return None
+
+
+def probe_surfaces() -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for name, config in SURFACES.items():
+        port = int(config["port"])
+        path = str(config["path"])
+        reachable = tcp_port_reachable(port)
+        result[name] = {
+            "port": port,
+            "tcp_reachable": reachable,
+            "http_status": http_status(port, path) if reachable else None,
         }
-
-
-def _wmi_client():
-    pythoncom = importlib.import_module("pythoncom")
-    win32com_client = importlib.import_module("win32com.client")
-    return pythoncom, win32com_client
-
-
-def _error_codes(exc: BaseException) -> list[int]:
-    codes: list[int] = []
-
-    def visit(value: Any) -> None:
-        if isinstance(value, bool):
-            return
-        if isinstance(value, int):
-            codes.append(value)
-        elif isinstance(value, (tuple, list)):
-            for item in value:
-                visit(item)
-
-    for attr in ("hresult", "winerror", "errno"):
-        visit(getattr(exc, attr, None))
-    visit(getattr(exc, "args", ()))
-    return codes
-
-
-def _classify_wmi_error(exc: BaseException) -> str:
-    codes = _error_codes(exc)
-    unsigned = {value & 0xFFFFFFFF for value in codes}
-    if 0x80070005 in unsigned or 5 in codes:
-        return "access_denied"
-    if 0x800706BA in unsigned:
-        return "rpc_server_unavailable"
-    if 0x8004100E in unsigned:
-        return "namespace_unavailable"
-    return "wmi_error"
-
-
-def _safe_hresult(exc: BaseException) -> str | None:
-    for value in _error_codes(exc):
-        unsigned = value & 0xFFFFFFFF
-        if unsigned >= 0x80000000:
-            return f"0x{unsigned:08X}"
-    return None
-
-
-def wmi_readonly_probe() -> dict[str, Any]:
-    """Consulta WMI por DCOM usando a identidade corrente, sem credenciais ou mutação."""
-    try:
-        pythoncom, win32com_client = _wmi_client()
-    except ImportError:
-        return {
-            "reachable": False,
-            "result": "dependency_unavailable",
-            "stage": "load_client",
-            "error_type": "ImportError",
-            "hresult": None,
-            "namespace": WMI_NAMESPACE,
-            "query_class": WMI_QUERY_CLASS,
-        }
-
-    initialized = False
-    stage = "coinitialize"
-    try:
-        pythoncom.CoInitialize()
-        initialized = True
-        stage = "dispatch_locator"
-        locator = win32com_client.Dispatch("WbemScripting.SWbemLocator")
-        stage = "connect_server"
-        services = locator.ConnectServer(TARGET_HOST, WMI_NAMESPACE)
-        stage = "set_impersonation"
-        services.Security_.ImpersonationLevel = 3
-        stage = "exec_query"
-        rows = services.ExecQuery(WMI_QUERY, "WQL", 0x20)
-        stage = "iterate_result"
-        count = 0
-        for _ in rows:
-            count += 1
-            if count >= 2:
-                break
-        return {
-            "reachable": count > 0,
-            "result": "accessible" if count > 0 else "empty_result",
-            "stage": "completed",
-            "error_type": None,
-            "hresult": None,
-            "namespace": WMI_NAMESPACE,
-            "query_class": WMI_QUERY_CLASS,
-        }
-    except Exception as exc:
-        return {
-            "reachable": False,
-            "result": _classify_wmi_error(exc),
-            "stage": stage,
-            "error_type": type(exc).__name__[:80],
-            "hresult": _safe_hresult(exc),
-            "namespace": WMI_NAMESPACE,
-            "query_class": WMI_QUERY_CLASS,
-        }
-    finally:
-        if initialized:
-            pythoncom.CoUninitialize()
+    return result
 
 
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     correlation_id = validate_request(confirm, correlation_id)
-    host = validate_host()
+    source_host = validate_host()
     resolution = resolve_target()
 
-    icmp: bool | None = None
-    tcp = False
-    staging = {"reachable": False, "result": "not_attempted"}
-    wmi = {
-        "reachable": False,
-        "result": "not_attempted",
-        "stage": "not_attempted",
-        "error_type": None,
-        "hresult": None,
-        "namespace": WMI_NAMESPACE,
-        "query_class": WMI_QUERY_CLASS,
+    surfaces = {
+        name: {"port": int(config["port"]), "tcp_reachable": False, "http_status": None}
+        for name, config in SURFACES.items()
     }
     if resolution["resolved"]:
-        icmp = icmp_reachable()
-        tcp = runtime_port_reachable()
-        staging = admin_staging_path_probe()
-        wmi = wmi_readonly_probe()
+        surfaces = probe_surfaces()
 
-    if not resolution["resolved"]:
-        state = "name_resolution_failed"
-        desktop_reachable = False
-    elif tcp:
-        state = "runtime_port_reachable"
-        desktop_reachable = True
-    elif icmp:
-        state = "host_reachable_runtime_port_closed"
-        desktop_reachable = True
-    elif wmi["reachable"]:
-        state = "host_reachable_wmi_runtime_port_closed"
-        desktop_reachable = True
-    else:
-        state = "resolved_not_reachable"
-        desktop_reachable = False
-
+    open_surfaces = sorted(
+        name for name, state in surfaces.items() if state["tcp_reachable"] is True
+    )
     return {
         "ok": True,
         "probe_completed": True,
-        "source_host": host,
+        "probe_revision": PROBE_REVISION,
+        "source_host": source_host,
         "target_host": TARGET_HOST,
         "dns_resolved": resolution["resolved"],
         "resolved_address_count": resolution["address_count"],
-        "icmp_reachable": icmp,
-        "runtime_port": RUNTIME_PORT,
-        "runtime_port_reachable": tcp,
-        "admin_staging_path_reachable": bool(staging["reachable"]),
-        "admin_staging_path_result": staging["result"],
-        "admin_staging_path": r"C:\Users\Public\Desktop",
-        "wmi_reachable": bool(wmi["reachable"]),
-        "wmi_result": str(wmi["result"]),
-        "wmi_stage": str(wmi.get("stage") or "not_attempted"),
-        "wmi_error_type": wmi.get("error_type"),
-        "wmi_hresult": wmi.get("hresult"),
-        "wmi_namespace": str(wmi["namespace"]),
-        "wmi_query_class": str(wmi["query_class"]),
-        "wmi_read_only": True,
-        "desktop_reachable": desktop_reachable,
-        "network_state": state,
-        "correlation_id": correlation_id,
-        "rdc_required": False,
+        "surfaces": surfaces,
+        "open_surfaces": open_surfaces,
+        "independent_surface_found": any(
+            name != "engineering_orchestrator" for name in open_surfaces
+        ),
+        "forbidden_transports_probed": False,
+        "forbidden_transports": list(FORBIDDEN_TRANSPORTS),
         "remote_shell_used": False,
         "credentials_supplied": False,
         "production_touched": False,
         "secrets_read": False,
+        "correlation_id": correlation_id,
         "observed_at": now_iso(),
     }
 
@@ -314,16 +172,17 @@ def main() -> int:
     code = 0
     try:
         payload = probe(args.confirm, args.correlation_id)
-    except (ProbeError, OSError, subprocess.SubprocessError) as exc:
+    except (ProbeError, OSError) as exc:
         payload = {
             "ok": False,
             "probe_completed": False,
+            "probe_revision": PROBE_REVISION,
             "source_host": socket.gethostname(),
             "target_host": TARGET_HOST,
             "correlation_id": args.correlation_id,
-            "error": str(exc)[:1000],
+            "error": str(exc)[:500],
             "error_type": type(exc).__name__,
-            "rdc_required": False,
+            "forbidden_transports_probed": False,
             "remote_shell_used": False,
             "credentials_supplied": False,
             "production_touched": False,
