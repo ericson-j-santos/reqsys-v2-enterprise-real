@@ -1,0 +1,43 @@
+{
+  "feature_name": "fecap-main-protection-risk3-runner",
+  "project": "Engineering Control Plane",
+  "created_at": "2026-09-25",
+  "updated_at": "2026-09-25",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Prepara uma ação Risk3 fixa, auditável e fail-closed para aplicar o ruleset main-protection no FECAP sem criar superfície administrativa genérica.",
+  "environment": "Noteri DEV / Owner Risk3 Gateway / GitHub API",
+  "production_enabled": false,
+  "risk": {
+    "admin_permission": true,
+    "target_repository": "ericson-j-santos/fecap-clipping-automation",
+    "target_branch": "main",
+    "executor_host": "Noteri",
+    "force_push": false,
+    "deletion": false,
+    "secrets_exposed": false
+  },
+  "acceptance_criteria": [
+    "A autorização Risk3 é vinculada a action_id e scope fixos do FECAP/main.",
+    "O executor não aceita repository, branch, ruleset ou required check por input.",
+    "A autenticação GitHub usa o perfil local do gh e remove GH_TOKEN/GITHUB_TOKEN dos subprocessos.",
+    "A execução exige o SHA alvo esperado e comprova que o source SHA validado do PR #59 é parent do merge commit alvo.",
+    "O check tests do source SHA validado precisa estar completed/success antes da mutação.",
+    "O ruleset alvo exige Pull Request, stale reviews dismissed, linear history, tests strict, bypass vazio e bloqueio de force-push/exclusão.",
+    "Após a escrita, branch e ruleset são relidos e precisam comprovar protected=true e conformidade integral.",
+    "O SHA do FECAP/main deve permanecer idêntico antes e depois da mutação.",
+    "A evidência é sanitizada e não contém segredo.",
+    "Wiring de workflow/dispatch permanece fora deste incremento enquanto a ferramenta conectada bloquear essa mutação; o PR deve permanecer draft até existir rota governada executável."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_fecap_branch_protection.py"
+    ],
+    "evidence_contract": "Noteri exato; Risk3 fixo; target/source SHA fixos; tests verde; ruleset main-protection; readback independente; sem segredo; nenhum workflow/dispatch considerado concluído neste incremento."
+  }
+}
