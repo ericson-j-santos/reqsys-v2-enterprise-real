@@ -1,0 +1,23 @@
+{
+  "feature_name": "pc24x7-public-dev-static-runtime",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-24",
+  "updated_at": "2026-09-24",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Reconcilia o ReqSys DEV público no PC24x7 para o SHA exato e substitui Vite/HMR remoto por build estático Nginx.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_public_dev_static_runtime.py",
+      "tests/test_pc24x7_dev_runtime_supervisor.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "DEV somente; fast-forward; api/frontend/nginx; build_sha same-SHA; frontend estático; /@vite/client 404; health/readiness/build-info 200; smoke público independente; sem produção ou segredo."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-public-dev-static-runtime.requirements.md",
+    "implementation": "scripts/reconcile_pc24x7_public_dev_runtime.py",
+    "workflow": ".github/workflows/pc24x7-public-dev-reconcile.yml",
+    "issue": 1596
+  }
+}
