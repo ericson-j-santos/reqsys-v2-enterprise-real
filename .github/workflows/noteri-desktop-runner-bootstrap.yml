@@ -33,7 +33,6 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      EVIDENCE_FILE: ${{ runner.temp }}\desktop-runner-bootstrap-${{ github.run_id }}.json
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
@@ -113,6 +112,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          EVIDENCE_FILE: ${{ runner.temp }}\desktop-runner-bootstrap-${{ github.run_id }}.json
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -141,7 +141,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-runner-bootstrap-${{ github.run_id }}
-          path: ${{ env.EVIDENCE_FILE }}
+          path: ${{ runner.temp }}\desktop-runner-bootstrap-${{ github.run_id }}.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -152,7 +152,6 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      EVIDENCE_FILE: ${{ runner.temp }}\desktop-runner-pickup-${{ github.run_id }}.json
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
@@ -204,6 +203,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          EVIDENCE_FILE: ${{ runner.temp }}\desktop-runner-pickup-${{ github.run_id }}.json
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -232,6 +232,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-runner-pickup-${{ github.run_id }}
-          path: ${{ env.EVIDENCE_FILE }}
+          path: ${{ runner.temp }}\desktop-runner-pickup-${{ github.run_id }}.json
           if-no-files-found: error
           retention-days: 30
