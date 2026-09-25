@@ -231,7 +231,7 @@ def main() -> int:
             "endpoint": ENDPOINT,
             "task_type": TASK_TYPE,
             "correlation_id": args.correlation_id,
-            "error": str(exc)[:500],
+            "error": "desktop_rdc_recovery_failed",\n            "error_type": type(exc).__name__,
             "remote_shell_used": False,
             "arbitrary_command_supported": False,
             "production_touched": False,
