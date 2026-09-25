@@ -237,10 +237,13 @@ def test_backend_requires_auth_for_read_and_admin_for_write():
     assert "correlation_id_mismatch" in raw
 
 
-def test_workflow_is_inputless_pc24x7_only_and_no_production():
+def test_workflow_keeps_study_mode_default_and_allows_only_governed_public_static_mode():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert "workflow_dispatch:" in raw
-    assert "inputs:" not in raw
+    assert "inputs:" in raw
+    assert "default: 'study-mode'" in raw
+    assert "- study-mode" in raw
+    assert "- public-static" in raw
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
     assert "environment: development" in raw
     assert "--confirm RECONCILE-NOTERI-STUDY-MODE-DEV" in raw
