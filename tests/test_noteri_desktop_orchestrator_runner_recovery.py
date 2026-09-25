@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -167,7 +166,7 @@ def test_workflow_uses_governed_noteri_session_and_gateway() -> None:
         Path(__file__).resolve().parents[1]
         / ".github"
         / "workflows"
-        / "noteri-desktop-orchestrator-runner-recovery.yml"
+        / "noteri-desktop-network-probe.yml"
     ).read_text(encoding="utf-8")
 
     assert "881d9ca2f8e77025edb7298b22981109c567a730" in workflow
