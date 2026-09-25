@@ -160,10 +160,8 @@ def test_workflow_contract_uses_governed_two_stage_physical_e2e():
     assert "RECOVER-DESKTOP-GITHUB-RUNNER-VIA-CONTROL-PLANE" in raw
     assert "PROVE-DESKTOP-GITHUB-RUNNER-PICKUP" in raw
     assert "runner.temp" in raw
-    assert "risk\", \"2" not in raw
-    assert '"--risk", "2"' not in raw
-    assert '"--risk", "1"' not in raw
-    assert '"--risk", "2"' not in raw
-    assert '"--risk", "1"' not in raw
+    assert '"--risk", "2"' in raw
+    assert '"--risk", "1"' in raw
     assert "schtasks" not in raw.lower()
     assert "remote-desktop" not in raw.lower()
+    assert "wmi" not in raw.lower()
