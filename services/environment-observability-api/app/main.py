@@ -30,6 +30,7 @@ EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 CPF = re.compile(r"(?<!\d)(?:\d{3}\.?){2}\d{3}-?\d{2}(?!\d)")
 PHONE = re.compile(r"(?<!\d)(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}(?!\d)")
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*\b")
+WORKFLOW_RUN_ID = re.compile(r"^\\d{1,20}$")
 
 CONTEXT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 
