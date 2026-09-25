@@ -163,7 +163,6 @@ jobs:
       TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
       CORRELATION_ID: desktop-runner-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: artifacts\desktop-runner-bootstrap\evidence.json
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
@@ -207,6 +206,8 @@ jobs:
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+          $evidenceFile = Join-Path $env:RUNNER_TEMP "desktop-runner-bootstrap\evidence.json"
+          "evidence_file=$evidenceFile" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Dispatch fixed runner bootstrap through Command Gateway
         shell: powershell
@@ -214,6 +215,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          EVIDENCE_FILE: ${{ steps.session.outputs.evidence_file }}
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -233,7 +235,7 @@ jobs:
             "--confirm", "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR",
             "--correlation-id", $env:CORRELATION_ID,
             "--timeout-seconds", "90",
-            "--evidence-file", $env:EVIDENCE_REL
+            "--evidence-file", $env:EVIDENCE_FILE
           )
           & python $gateway @args
           exit $LASTEXITCODE
@@ -241,10 +243,10 @@ jobs:
       - name: Validate sanitized bootstrap evidence
         shell: powershell
         env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          EVIDENCE_FILE: ${{ steps.session.outputs.evidence_file }}
         run: |
           $ErrorActionPreference = "Stop"
-          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          $path = $env:EVIDENCE_FILE
           if (-not (Test-Path -LiteralPath $path)) { throw "BOOTSTRAP_EVIDENCE_MISSING" }
           $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
           if (-not $e.ok -or $e.result -ne "DESKTOP_GITHUB_RUNNER_LOCAL_BOOTSTRAP_VERIFIED") {
@@ -258,11 +260,11 @@ jobs:
           if ($e.production_touched -or $e.secrets_read) { throw "SAFETY_INVARIANT_FAILED" }
 
       - name: Upload sanitized bootstrap evidence
-        if: always() && steps.session.outputs.target_path != ''
+        if: always() && steps.session.outputs.evidence_file != ''
         uses: actions/upload-artifact@v4
         with:
           name: desktop-runner-bootstrap-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\desktop-runner-bootstrap\evidence.json
+          path: ${{ steps.session.outputs.evidence_file }}
           if-no-files-found: error
           retention-days: 30
 

@@ -21,7 +21,7 @@ TARGET_WORKER = "desktop-pdqk954"
 ENDPOINT = "http://DESKTOP-PDQK954:8787"
 TASK_TYPE = "host.github_runner.bootstrap.v1"
 REFRESH_TASK_TYPE = "host.orchestrator.refresh.v1"
-ORCHESTRATOR_BOOTSTRAP_SHA = "4dbc927595a40fc2fd6b207c0d53fd6e895049ae"
+ORCHESTRATOR_BOOTSTRAP_SHA = "d44c9f0e64705fa50f7798cb7ff41afbea668784"
 CONFIRM = "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR"
 TERMINAL = {"CONCLUÍDO", "BLOQUEADO", "CANCELADO"}
 
@@ -425,13 +425,14 @@ def main() -> int:
             timeout_seconds=args.timeout_seconds,
             evidence_file=args.evidence_file.resolve(),
         )
-    except (BootstrapError, OSError, ValueError):
+    except (BootstrapError, OSError, ValueError) as exc:
         blocked = {
             "schema_version": "1",
             "generated_at_utc": now_iso(),
             "ok": False,
             "result": "DESKTOP_GITHUB_RUNNER_BOOTSTRAP_BLOCKED",
             "error": "desktop_github_runner_bootstrap_failed",
+            "reason": sanitize(exc),
             "source_host": EXPECTED_SOURCE_HOST,
             "target_host": TARGET_HOST,
             "correlation_id": args.correlation_id,
