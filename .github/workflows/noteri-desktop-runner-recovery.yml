@@ -114,13 +114,13 @@ jobs:
             "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
             "--risk", "2",
-            "--timeout", "90",
+            "--timeout", "240",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
             "python", $script,
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL,
-            "--timeout-seconds", "45"
+            "--timeout-seconds", "60"
           )
           & python $gateway @args
           exit $LASTEXITCODE
@@ -137,6 +137,8 @@ jobs:
           if (-not $e.ok) { throw ("desktop_runner_recovery_failed: " + $e.error) }
           if ($e.controller_version -ne "0.2.53") { throw "controller_version_mismatch" }
           if ([int]$e.recovery_contract_version -ne 1) { throw "recovery_contract_mismatch" }
+          if (-not $e.runner_bootstrap_result.local_listener_verified) { throw "runner_listener_not_verified" }
+          if (-not $e.runner_bootstrap_result.pickup_required) { throw "pickup_contract_missing" }
           if ($e.production_touched) { throw "production_touched" }
           if ($e.secrets_read) { throw "secrets_read" }
 
