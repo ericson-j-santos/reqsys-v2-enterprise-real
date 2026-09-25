@@ -17,8 +17,8 @@ CONFIRM = "RECEIVE-DESKTOP-PATHS"
 MAX_BODY_BYTES = 32768
 DEFAULT_PORT = 8766
 ALLOWED_MARKERS = (
-    "desktop_control_plane_watchdog",
-    "desktop_admin_broker",
+    "desktopcontrolplanewatchdog",
+    "desktopadminbroker",
 )
 ALLOWED_LEAFS = {
     "metadata.json",
@@ -37,14 +37,11 @@ def sanitize_path(raw: str) -> str | None:
     if not value or len(value) > 600:
         return None
     folded = value.casefold()
-    if not any(marker in folded for marker in ALLOWED_MARKERS):
+    compact = "".join(ch for ch in folded if ch.isalnum())
+    if not any(marker in compact for marker in ALLOWED_MARKERS):
         return None
-    leaf = Path(value).name.casefold()
-    if (
-        "desktop_control_plane_watchdog" not in folded
-        and "desktop_admin_broker" not in folded
-        and leaf not in ALLOWED_LEAFS
-    ):
+    leaf = value.rsplit("\\", 1)[-1].casefold()
+    if leaf in {"id_rsa", "id_ed25519", ".env"}:
         return None
 
     prefix = "c:\\users\\"
