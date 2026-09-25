@@ -1,0 +1,15 @@
+services:
+  api:
+    environment:
+      GITHUB_SHA: ${REQSYS_BUILD_SHA:?REQSYS_BUILD_SHA is required}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: /api
+
+  nginx:
+    volumes:
+      - ./infra/nginx/default.pc24x7-public-dev.conf:/etc/nginx/conf.d/default.conf:ro
