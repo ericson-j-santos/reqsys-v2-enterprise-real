@@ -51,6 +51,9 @@ settings = Settings()
 
 
 def redact(value: Any, key: str | None = None) -> Any:
+    if key == "workflow_run_id":
+        candidate = str(value)
+        return candidate if WORKFLOW_RUN_ID.fullmatch(candidate) else "[REDACTED]"
     if key and SENSITIVE_KEY.search(key):
         return "[REDACTED]"
     if isinstance(value, dict):
