@@ -75,13 +75,13 @@ def main() -> int:
     args = parser.parse_args()
     try:
         result = execute(confirm=args.confirm, evidence_file=args.evidence_file.resolve())
-    except (CanaryError, OSError) as exc:
+    except (CanaryError, OSError):
         blocked = {
             "schema_version": "1",
             "generated_at_utc": now_iso(),
             "ok": False,
             "result": "DESKTOP_GITHUB_RUNNER_PICKUP_NOT_PROVEN",
-            "error": str(exc)[:300],
+            "error": "desktop_runner_pickup_not_proven",
             "production_touched": False,
             "secrets_read": False,
         }
