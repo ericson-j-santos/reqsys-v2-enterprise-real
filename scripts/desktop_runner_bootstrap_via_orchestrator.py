@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ TARGET_HOST = "DESKTOP-PDQK954"
 TARGET_WORKER = "desktop-pdqk954"
 ENDPOINT = "http://DESKTOP-PDQK954:8787"
 TASK_TYPE = "host.github_runner.bootstrap.v1"
+REFRESH_TASK_TYPE = "host.orchestrator.refresh.v1"
+ORCHESTRATOR_BOOTSTRAP_SHA = "4dbc927595a40fc2fd6b207c0d53fd6e895049ae"
 CONFIRM = "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR"
 TERMINAL = {"CONCLUÍDO", "BLOQUEADO", "CANCELADO"}
 
@@ -82,7 +85,7 @@ def parse_version(value: str) -> tuple[int, ...]:
         raise BootstrapError("controller_version_invalid") from exc
 
 
-def worker_preflight() -> dict[str, Any]:
+def worker_preflight(*, require_bootstrap: bool = True) -> dict[str, Any]:
     ready_status, ready = request_json("GET", "/readyz")
     if ready_status != 200 or ready.get("ready") is not True:
         raise BootstrapError("orchestrator_not_ready")
@@ -108,7 +111,13 @@ def worker_preflight() -> dict[str, Any]:
     if capabilities.get("recovery_contract_version") != 1:
         raise BootstrapError("desktop_recovery_contract_not_v1")
     safe_tasks = capabilities.get("safe_task_types")
-    if not isinstance(safe_tasks, list) or TASK_TYPE not in safe_tasks:
+    if not isinstance(safe_tasks, list):
+        raise BootstrapError("desktop_safe_task_types_invalid")
+    if REFRESH_TASK_TYPE not in safe_tasks:
+        raise BootstrapError("desktop_runtime_refresh_capability_missing")
+
+    bootstrap_present = TASK_TYPE in safe_tasks
+    if require_bootstrap and not bootstrap_present:
         raise BootstrapError("desktop_runner_bootstrap_capability_missing")
 
     return {
@@ -118,7 +127,8 @@ def worker_preflight() -> dict[str, Any]:
         "recovery_contract_version": capabilities.get("recovery_contract_version"),
         "fresh": worker.get("fresh"),
         "eligible": worker.get("eligible"),
-        "capability_present": True,
+        "capability_present": bootstrap_present,
+        "refresh_capability_present": True,
     }
 
 
@@ -137,24 +147,57 @@ def build_intake(correlation_id: str) -> dict[str, Any]:
     }
 
 
-def validate_dispatch(response: dict[str, Any]) -> str:
+def build_refresh_intake(correlation_id: str) -> dict[str, Any]:
+    logical = (
+        f"{REFRESH_TASK_TYPE}|{TARGET_HOST}|{ORCHESTRATOR_BOOTSTRAP_SHA}|{correlation_id}"
+    )
+    digest = hashlib.sha256(logical.encode("utf-8")).hexdigest()
+    return {
+        "event_id": f"runtime-refresh-{digest}",
+        "correlation_id": correlation_id,
+        "idempotency_key": f"runtime-refresh-{digest}",
+        "task_type": REFRESH_TASK_TYPE,
+        "payload": {
+            "target_host": TARGET_HOST,
+            "expected_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+        },
+        "risk": 2,
+        "max_attempts": 1,
+        "lease_seconds": 60,
+    }
+
+
+def validate_work_item_id(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    try:
+        parsed = uuid.UUID(raw)
+    except (ValueError, AttributeError) as exc:
+        raise BootstrapError("work_item_id_invalid") from exc
+    normalized = str(parsed)
+    if raw != normalized:
+        raise BootstrapError("work_item_id_not_canonical")
+    return normalized
+
+
+def validate_dispatch(response: dict[str, Any], *, operation: str) -> str:
     dispatch = response.get("dispatch")
     if not isinstance(dispatch, dict):
-        raise BootstrapError("runner_bootstrap_not_dispatched")
+        raise BootstrapError(f"{operation}_not_dispatched")
     worker = dispatch.get("worker")
     if not isinstance(worker, dict) or worker.get("worker_id") != TARGET_WORKER:
-        raise BootstrapError("runner_bootstrap_dispatched_to_wrong_worker")
+        raise BootstrapError(f"{operation}_dispatched_to_wrong_worker")
     item = response.get("item")
     if not isinstance(item, dict) or not item.get("id"):
-        raise BootstrapError("runner_bootstrap_item_missing")
-    return str(item["id"])
+        raise BootstrapError(f"{operation}_item_missing")
+    return validate_work_item_id(item["id"])
 
 
 def await_terminal(item_id: str, timeout_seconds: int) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     last_status = ""
     while time.monotonic() < deadline:
-        status_code, payload = request_json("GET", f"/v1/work-items/{item_id}")
+        work_item_path = "/v1/work-items/" + validate_work_item_id(item_id)
+        status_code, payload = request_json("GET", work_item_path)
         if status_code != 200:
             raise BootstrapError(f"work_item_http_{status_code}")
         item = payload.get("item")
@@ -165,6 +208,91 @@ def await_terminal(item_id: str, timeout_seconds: int) -> dict[str, Any]:
             return item
         time.sleep(2)
     raise BootstrapError(f"work_item_timeout:last_status={sanitize(last_status)}")
+
+
+def remaining_seconds(deadline: float) -> int:
+    remaining = int(deadline - time.monotonic())
+    if remaining < 1:
+        raise BootstrapError("bootstrap_deadline_exceeded")
+    return remaining
+
+
+def validate_refresh_result(item: dict[str, Any]) -> dict[str, Any]:
+    if item.get("status") != "CONCLUÍDO":
+        raise BootstrapError("runtime_refresh_terminal_failure")
+    result = item.get("result")
+    if not isinstance(result, dict):
+        raise BootstrapError("runtime_refresh_result_missing")
+    if result.get("handler") != REFRESH_TASK_TYPE:
+        raise BootstrapError("runtime_refresh_handler_mismatch")
+    if result.get("worker_id") != TARGET_WORKER:
+        raise BootstrapError("runtime_refresh_worker_mismatch")
+    return {
+        "handler": REFRESH_TASK_TYPE,
+        "worker_id": TARGET_WORKER,
+        "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+        "request_replayed": result.get("replayed") is True,
+    }
+
+
+def refresh_runtime_for_bootstrap(
+    correlation_id: str,
+    deadline: float,
+) -> dict[str, Any]:
+    intake = build_refresh_intake(correlation_id)
+    status_code, submitted = request_json("POST", "/v1/intake", intake)
+    if status_code != 201 or submitted.get("replayed") is not False:
+        raise BootstrapError(f"runtime_refresh_intake_invalid:http={status_code}")
+    item_id = validate_dispatch(submitted, operation="runtime_refresh")
+    terminal = await_terminal(item_id, min(30, remaining_seconds(deadline)))
+    result = validate_refresh_result(terminal)
+
+    replay_status, replay = request_json("POST", "/v1/intake", intake)
+    if replay_status != 200 or replay.get("replayed") is not True:
+        raise BootstrapError("runtime_refresh_replay_not_idempotent")
+    replay_item = replay.get("item")
+    if (
+        not isinstance(replay_item, dict)
+        or validate_work_item_id(replay_item.get("id")) != item_id
+    ):
+        raise BootstrapError("runtime_refresh_replay_item_mismatch")
+    if replay.get("dispatch") is not None:
+        raise BootstrapError("runtime_refresh_replay_redispatched")
+
+    return {
+        "required": True,
+        "performed": True,
+        "work_item_id": item_id,
+        "work_item_status": terminal.get("status"),
+        "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+        "result": result,
+        "replay": {
+            "replayed": True,
+            "same_work_item": True,
+            "redispatched": False,
+        },
+    }
+
+
+def wait_for_bootstrap_capability(deadline: float) -> dict[str, Any]:
+    transient_prefixes = (
+        "control_plane_unavailable:",
+        "orchestrator_not_ready",
+        "orchestrator_status_http_",
+        "desktop_worker_not_unique",
+        "desktop_worker_not_eligible",
+    )
+    while time.monotonic() < deadline:
+        try:
+            snapshot = worker_preflight(require_bootstrap=False)
+            if snapshot["capability_present"] is True:
+                return snapshot
+        except BootstrapError as exc:
+            code = str(exc)
+            if not code.startswith(transient_prefixes):
+                raise
+        time.sleep(2)
+    raise BootstrapError("desktop_runner_bootstrap_capability_readback_timeout")
 
 
 def validate_result(item: dict[str, Any]) -> dict[str, Any]:
@@ -228,13 +356,23 @@ def execute(
         raise BootstrapError("correlation_id_invalid")
     require_noteri(source_host, platform)
 
-    preflight = worker_preflight()
+    deadline = time.monotonic() + timeout_seconds
+    preflight = worker_preflight(require_bootstrap=False)
+    runtime_refresh: dict[str, Any] = {
+        "required": False,
+        "performed": False,
+        "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+    }
+    if preflight["capability_present"] is not True:
+        runtime_refresh = refresh_runtime_for_bootstrap(correlation_id, deadline)
+        preflight = wait_for_bootstrap_capability(deadline)
+
     intake = build_intake(correlation_id)
     status_code, submitted = request_json("POST", "/v1/intake", intake)
     if status_code != 201 or submitted.get("replayed") is not False:
         raise BootstrapError(f"runner_bootstrap_intake_invalid:http={status_code}")
-    item_id = validate_dispatch(submitted)
-    terminal = await_terminal(item_id, timeout_seconds)
+    item_id = validate_dispatch(submitted, operation="runner_bootstrap")
+    terminal = await_terminal(item_id, remaining_seconds(deadline))
     result = validate_result(terminal)
 
     replay_status, replay = request_json("POST", "/v1/intake", intake)
@@ -256,6 +394,7 @@ def execute(
         "endpoint": ENDPOINT,
         "correlation_id": correlation_id,
         "preflight": preflight,
+        "runtime_refresh": runtime_refresh,
         "work_item_id": item_id,
         "work_item_status": terminal.get("status"),
         "bootstrap": result,
