@@ -76,6 +76,17 @@ def test_reqsys_ruleset_automation_e_exata_governada_e_sem_segredo():
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in workflow
     assert "/reqsys run protect-reqsys-main-ruleset" in gateway
     assert "mode='apply-reqsys-main'" in gateway
+    assert "apply-reqsys-main-noteri" in workflow
+    assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
+    assert "Checkout ReqSys no SHA governado" in workflow
+    assert "TARGET_REPO: ${{ github.workspace }}" in workflow
+    assert "/reqsys run protect-reqsys-main-ruleset-noteri" in gateway
+    assert "mode='apply-reqsys-main-noteri'" in gateway
+    assert "ready_for_review, closed" in workflow
+    assert "github.event.pull_request.number == 2079" in workflow
+    assert "github.event.pull_request.merged == true" in workflow
+    assert "fix/reqsys-main-ruleset-noteri-fallback-20260924" in workflow
+    assert "github.event.pull_request.merge_commit_sha" in workflow
     assert 'TARGET_RULESET_ID = 17998541' in raw
     assert 'TARGET_REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"' in raw
     assert 'env.pop("GH_TOKEN", None)' in raw
