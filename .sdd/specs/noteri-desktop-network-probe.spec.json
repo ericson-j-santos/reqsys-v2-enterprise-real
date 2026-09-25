@@ -39,6 +39,21 @@
       ],
       "branch_prefix": "fix/noteri-desktop-network-probe-http-8083-",
       "legacy_job_skipped_on_http_branch": true
+    },
+    "orchestrator_runner_recovery": {
+      "source_host": "Noteri",
+      "target_host": "DESKTOP-PDQK954",
+      "port": 8787,
+      "task_type": "host.github_runner.recover.v1",
+      "client": "scripts/noteri_desktop_orchestrator_runner_recovery.py",
+      "execution_control": "Session Launcher -> Command Gateway",
+      "trigger_branch_prefix": "hotfix/noteri-desktop-orchestrator-runner-recovery-",
+      "post_merge_branch": "main",
+      "arbitrary_host": false,
+      "arbitrary_port": false,
+      "arbitrary_url": false,
+      "arbitrary_task_type": false,
+      "remote_shell": false
     }
   },
   "security": {
@@ -94,21 +109,30 @@
       "dev_gateway_http_reachable",
       "dev_gateway_tcp_reachable_http_unresponsive"
     ],
-    "dev_http_artifact": "artifacts/noteri-desktop-dev-http/evidence.json"
+    "dev_http_artifact": "artifacts/noteri-desktop-dev-http/evidence.json",
+    "orchestrator_runner_recovery_artifact": "artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json",
+    "orchestrator_runner_recovery_required": [
+      "replay_idempotent",
+      "negative_read_control",
+      "independent_readback",
+      "exact_target_host",
+      "exact_task_type"
+    ]
   },
   "sdd_gate": {
     "tests": [
       "tests/test_noteri_desktop_network_probe.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py",
-      "tests/test_noteri_desktop_dev_http_probe.py"
+      "tests/test_noteri_desktop_dev_http_probe.py",
+      "tests/test_noteri_desktop_orchestrator_runner_recovery.py"
     ],
     "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
   },
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-24",
+  "updated_at": "2026-09-25",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -119,6 +143,8 @@
     "Na branch fix/noteri-desktop-network-probe-http-8083-*, o job legado é ignorado e somente a sonda HTTP DEV executa.",
     "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
-    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente."
-  ]
+    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
+    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente."
+  ],
+  "hotfix_issue": 2088
 }
