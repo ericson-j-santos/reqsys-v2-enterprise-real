@@ -2,7 +2,7 @@ name: Branch Protection Audit
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
   workflow_dispatch:
     inputs:
       mode:
@@ -175,7 +175,7 @@ jobs:
             "--repo", $env:TARGET_REPO,
             "--session-prefix", "obs-protect",
             "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", "${{ github.sha }}",
+            "--expected-head", "${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}",
             "--sync-ref", "origin/main"
           )
           $raw = & python $launcher @launcherArgs
@@ -185,7 +185,8 @@ jobs:
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
             throw "SESSION_LAUNCH_BLOCKED"
           }
-          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          $expectedHead = "${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}"
+          if ($data.head -ne $expectedHead) { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Instalar autorização Risk3 exata e temporária
@@ -566,7 +567,13 @@ jobs:
 
   apply-reqsys-main-noteri:
     name: Proteger reqsys-v2-enterprise-real/main ruleset via Noteri Risk3
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-reqsys-main-noteri' }}
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-reqsys-main-noteri') ||
+      (github.event_name == 'pull_request' &&
+       github.event.action == 'closed' &&
+       github.event.pull_request.merged == true &&
+       github.event.pull_request.number == 2079 &&
+       github.event.pull_request.head.ref == 'fix/reqsys-main-ruleset-noteri-fallback-20260924')
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 12
     env:
@@ -576,9 +583,10 @@ jobs:
       ACTION_SCOPE: repo://ericson-j-santos/reqsys-v2-enterprise-real/ruleset/17998541
       EVIDENCE_REL: artifacts/reqsys-main-ruleset-protection-pc24x7/evidence.json
     steps:
-      - name: Checkout ReqSys no SHA despachado
+      - name: Checkout ReqSys no SHA governado
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Checkout regras canônicas
