@@ -58,3 +58,22 @@ O E2E real deve usar o mesmo SHA e registrar um correlation_id:
 Depois do canário real, usar environment-observability-api como primeiro workload. A imagem já possui pipeline de build no GHCR e deve entrar no manifesto Kubernetes por referência imutável ghcr.io/...@sha256:<digest>, com probes de startup/readiness/liveness e contexto de segurança de pod/container.
 
 O backend principal do ReqSys só entra depois que o piloto comprovar reconciliação, observabilidade e rollback no cluster DEV.
+
+## E2E real sem depender do host físico
+
+O workflow CI E2E Governado possui uma rota específica para o escopo Kubernetes/GitOps. Ela cria um cluster kind efêmero no runner, instala Argo CD v3.5.3 a partir do commit imutável c9c369efcc5b2a0bd720803f8d14a1c3eaddf579, aplica a Application e dispara uma sincronização manual no SHA exato avaliado.
+
+O aceite exige simultaneamente:
+
+- Application com auto-sync ausente;
+- status Argo CD Synced e Healthy;
+- status.sync.revision igual ao SHA avaliado;
+- operação de sync Succeeded;
+- leitura independente de ConfigMap/reqsys-gitops-bootstrap em reqsys-dev;
+- environment=development, expected_namespace=reqsys-dev e purpose=gitops-bootstrap-canary;
+- zero Deployment, StatefulSet, DaemonSet, Job ou CronJob no namespace;
+- controle negativo do validador aprovado;
+- artifact artifacts/kubernetes-gitops-e2e/evidence.json ligado a SHA e correlation_id;
+- cluster kind removido ao final, inclusive em falha.
+
+Esse E2E comprova a cadeia declarativa em Kubernetes real. Ele não transforma o runner do GitHub em runtime persistente. O destino persistente continua sendo o PC24x7 Desktop, condicionado à recuperação do bootstrap host-side e do Command Gateway.
