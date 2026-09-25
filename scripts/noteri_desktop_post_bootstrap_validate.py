@@ -11,7 +11,10 @@ from typing import Any
 ENDPOINT = "http://DESKTOP-PDQK954:8787"
 TARGET_HOST = "DESKTOP-PDQK954"
 TASK_TYPE = "host.inventory.files.v1"
-RUNNER_TASK_TYPE = "host.github_runner.recover.v1"
+RUNNER_RECOVERY_TASK_TYPE = "host.github_runner.recover.v1"
+REFRESH_TASK_TYPE = "host.orchestrator.refresh.v1"
+RUNNER_BOOTSTRAP_TASK_TYPE = "host.github_runner.bootstrap.v1"
+ORCHESTRATOR_SHA = "4dbc927595a40fc2fd6b207c0d53fd6e895049ae"
 SCOPE = "reqsys-control-plane"
 REQUIRED_CAPABILITIES = {
     "host.inventory.files.v1",
@@ -93,6 +96,82 @@ def desktop_worker() -> dict[str, Any]:
     }
 
 
+def wait_work_item(item: dict[str, Any], label: str, timeout_seconds: int) -> dict[str, Any]:
+    item_id = str(item.get("id") or "")
+    if not item_id:
+        raise ValidationError(f"{label}_item_missing")
+    observed = item
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        state = str(observed.get("status") or "")
+        if state in TERMINAL:
+            return observed
+        time.sleep(2)
+        read_status, snapshot = call("GET", f"/v1/work-items/{item_id}")
+        if read_status != 200:
+            raise ValidationError(f"{label}_read_http_{read_status}")
+        loaded = snapshot.get("item")
+        if not isinstance(loaded, dict):
+            raise ValidationError(f"{label}_item_invalid")
+        observed = loaded
+    return observed
+
+
+def intake_and_wait(
+    request: dict[str, Any],
+    label: str,
+    timeout_seconds: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    status, accepted = call("POST", "/v1/intake", request)
+    if status not in {200, 201}:
+        raise ValidationError(f"{label}_intake_http_{status}")
+    item = accepted.get("item")
+    if not isinstance(item, dict) or not item.get("id"):
+        raise ValidationError(f"{label}_item_missing")
+    observed = wait_work_item(item, label, timeout_seconds)
+    if str(observed.get("status") or "") != "CONCLUÍDO":
+        raise ValidationError(
+            f"{label}_not_completed:"
+            + str(observed.get("status") or "timeout")
+            + ":"
+            + str(observed.get("last_error") or "")[:180]
+        )
+    return accepted, observed
+
+
+def wait_for_bootstrap_capability(timeout_seconds: int) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last_error = "not_observed"
+    while time.monotonic() < deadline:
+        try:
+            ready_status, ready = call("GET", "/readyz")
+            if ready_status == 200 and ready.get("ready") is True:
+                worker = desktop_worker()
+                if RUNNER_BOOTSTRAP_TASK_TYPE in set(worker["safe_task_types"]):
+                    return worker
+                last_error = "bootstrap_capability_absent"
+            else:
+                last_error = f"ready_http_{ready_status}"
+        except ValidationError as exc:
+            last_error = str(exc)
+        time.sleep(2)
+    raise ValidationError("runtime_refresh_readback_failed:" + last_error)
+
+
+def replay_proven(request: dict[str, Any], item_id: str, label: str) -> bool:
+    status, replay = call("POST", "/v1/intake", request)
+    if status != 200:
+        raise ValidationError(f"{label}_replay_http_{status}")
+    replay_item = replay.get("item")
+    if not isinstance(replay_item, dict):
+        raise ValidationError(f"{label}_replay_item_invalid")
+    if str(replay_item.get("id") or "") != item_id:
+        raise ValidationError(f"{label}_replay_item_mismatch")
+    if replay.get("replayed") is not True:
+        raise ValidationError(f"{label}_replay_not_idempotent")
+    return True
+
+
 def validate(correlation_id: str, timeout_seconds: int = 90) -> dict[str, Any]:
     correlation = str(correlation_id or "").strip()
     if not 8 <= len(correlation) <= 160:
@@ -171,12 +250,52 @@ def validate(correlation_id: str, timeout_seconds: int = 90) -> dict[str, Any]:
     if not isinstance(matches, list):
         raise ValidationError("inventory_matches_invalid")
 
-    runner_event_id = f"{correlation}-runner-recover"
+    refresh_evidence: dict[str, Any] | None = None
+    worker_after = worker
+    if RUNNER_BOOTSTRAP_TASK_TYPE not in set(worker["safe_task_types"]):
+        refresh_request = {
+            "event_id": f"{correlation}-runtime-refresh",
+            "correlation_id": correlation,
+            "idempotency_key": f"desktop-runtime-refresh:{correlation}",
+            "task_type": REFRESH_TASK_TYPE,
+            "payload": {
+                "target_host": TARGET_HOST,
+                "expected_sha": ORCHESTRATOR_SHA,
+            },
+            "risk": 2,
+            "max_attempts": 1,
+            "lease_seconds": 90,
+        }
+        refresh_accepted, refresh_observed = intake_and_wait(
+            refresh_request, "runtime_refresh", timeout_seconds
+        )
+        refresh_result = refresh_observed.get("result")
+        if not isinstance(refresh_result, dict):
+            raise ValidationError("runtime_refresh_result_missing")
+        if refresh_result.get("handler") != REFRESH_TASK_TYPE:
+            raise ValidationError("runtime_refresh_handler_mismatch")
+        if str(refresh_result.get("host") or "").casefold() != TARGET_HOST.casefold():
+            raise ValidationError("runtime_refresh_host_mismatch")
+        if refresh_result.get("expected_sha") != ORCHESTRATOR_SHA:
+            raise ValidationError("runtime_refresh_sha_mismatch")
+        worker_after = wait_for_bootstrap_capability(timeout_seconds)
+        refresh_evidence = {
+            "work_item_id": str(refresh_observed.get("id") or ""),
+            "created": bool(refresh_accepted.get("created")),
+            "replayed": bool(refresh_accepted.get("replayed")),
+            "handler": refresh_result.get("handler"),
+            "expected_sha": ORCHESTRATOR_SHA,
+            "bootstrap_capability_readback": True,
+        }
+
+    if RUNNER_BOOTSTRAP_TASK_TYPE not in set(worker_after["safe_task_types"]):
+        raise ValidationError("runner_bootstrap_capability_missing")
+
     runner_request = {
-        "event_id": runner_event_id,
+        "event_id": f"{correlation}-runner-bootstrap",
         "correlation_id": correlation,
-        "idempotency_key": f"desktop-post-bootstrap-runner-recover:{correlation}",
-        "task_type": RUNNER_TASK_TYPE,
+        "idempotency_key": f"desktop-runner-bootstrap:{correlation}",
+        "task_type": RUNNER_BOOTSTRAP_TASK_TYPE,
         "payload": {
             "target_host": TARGET_HOST,
         },
@@ -184,65 +303,27 @@ def validate(correlation_id: str, timeout_seconds: int = 90) -> dict[str, Any]:
         "max_attempts": 1,
         "lease_seconds": 90,
     }
-    runner_status, runner_accepted = call("POST", "/v1/intake", runner_request)
-    if runner_status not in {200, 201}:
-        raise ValidationError(f"runner_recovery_intake_http_{runner_status}")
-    runner_item = runner_accepted.get("item")
-    if not isinstance(runner_item, dict) or not runner_item.get("id"):
-        raise ValidationError("runner_recovery_item_missing")
-
-    runner_item_id = str(runner_item["id"])
-    runner_observed = runner_item
-    runner_deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < runner_deadline:
-        runner_state = str(runner_observed.get("status") or "")
-        if runner_state in TERMINAL:
-            break
-        time.sleep(2)
-        runner_read_status, runner_snapshot = call(
-            "GET", f"/v1/work-items/{runner_item_id}"
-        )
-        if runner_read_status != 200:
-            raise ValidationError(
-                f"runner_recovery_read_http_{runner_read_status}"
-            )
-        runner_loaded = runner_snapshot.get("item")
-        if not isinstance(runner_loaded, dict):
-            raise ValidationError("runner_recovery_item_invalid")
-        runner_observed = runner_loaded
-
-    if str(runner_observed.get("status") or "") != "CONCLUÍDO":
-        raise ValidationError(
-            "runner_recovery_not_completed:"
-            + str(runner_observed.get("status") or "timeout")
-            + ":"
-            + str(runner_observed.get("last_error") or "")[:180]
-        )
-
+    runner_accepted, runner_observed = intake_and_wait(
+        runner_request, "runner_bootstrap", timeout_seconds
+    )
+    runner_item_id = str(runner_observed.get("id") or "")
     runner_result = runner_observed.get("result")
     if not isinstance(runner_result, dict):
-        raise ValidationError("runner_recovery_result_missing")
-    if runner_result.get("handler") != RUNNER_TASK_TYPE:
-        raise ValidationError("runner_recovery_handler_mismatch")
+        raise ValidationError("runner_bootstrap_result_missing")
+    if runner_result.get("handler") != RUNNER_BOOTSTRAP_TASK_TYPE:
+        raise ValidationError("runner_bootstrap_handler_mismatch")
     if str(runner_result.get("host") or "").casefold() != TARGET_HOST.casefold():
-        raise ValidationError("runner_recovery_host_mismatch")
-    if runner_result.get("mode") not in {"service", "scheduled_task"}:
-        raise ValidationError("runner_recovery_mode_invalid")
-    if runner_result.get("result") not in {"already_running", "recovered"}:
-        raise ValidationError("runner_recovery_result_invalid")
-    if int(runner_result.get("after_state") or 0) != 4:
-        raise ValidationError("runner_recovery_not_running")
+        raise ValidationError("runner_bootstrap_host_mismatch")
+    if runner_result.get("local_listener_verified") is not True:
+        raise ValidationError("runner_bootstrap_listener_not_verified")
+    if runner_result.get("pickup_required") is not True:
+        raise ValidationError("runner_bootstrap_pickup_contract_missing")
+    if runner_result.get("production_touched") is not False:
+        raise ValidationError("runner_bootstrap_production_contract_violation")
+    if runner_result.get("secrets_read") is not False:
+        raise ValidationError("runner_bootstrap_secrets_contract_violation")
 
-    replay_status, replay = call("POST", "/v1/intake", runner_request)
-    if replay_status != 200:
-        raise ValidationError(f"runner_recovery_replay_http_{replay_status}")
-    replay_item = replay.get("item")
-    if not isinstance(replay_item, dict):
-        raise ValidationError("runner_recovery_replay_item_invalid")
-    if str(replay_item.get("id") or "") != runner_item_id:
-        raise ValidationError("runner_recovery_replay_item_mismatch")
-    if replay.get("replayed") is not True:
-        raise ValidationError("runner_recovery_replay_not_idempotent")
+    replay_proven(runner_request, runner_item_id, "runner_bootstrap")
 
     return {
         "ok": True,
@@ -265,16 +346,23 @@ def validate(correlation_id: str, timeout_seconds: int = 90) -> dict[str, Any]:
             "secrets_read": False,
             "production_touched": False,
         },
-        "github_runner_recovery": {
+        "runtime_refresh": refresh_evidence,
+        "worker_after_refresh": worker_after,
+        "github_runner_bootstrap": {
             "work_item_id": runner_item_id,
             "created": bool(runner_accepted.get("created")),
             "replayed": bool(runner_accepted.get("replayed")),
             "handler": runner_result.get("handler"),
-            "mode": runner_result.get("mode"),
-            "result": runner_result.get("result"),
-            "started": bool(runner_result.get("started")),
-            "after_state": runner_result.get("after_state"),
+            "runner_home": runner_result.get("runner_home"),
+            "listener_pid": runner_result.get("listener_pid"),
+            "local_listener_verified": True,
+            "github_connectivity_verified": bool(
+                runner_result.get("github_connectivity_verified")
+            ),
+            "pickup_required": True,
             "idempotent_replay_proven": True,
+            "production_touched": False,
+            "secrets_read": False,
         },
         "stable_bootstrap_capabilities_validated": True,
         "remote_shell_used": False,
