@@ -239,7 +239,7 @@ def main() -> int:
         payload = {
             "ok": False,
             "route": "native_rdp_saved_credential",
-            "error": str(exc)[:500],
+            "error": "native_rdp_bootstrap_failed",\n            "error_type": type(exc).__name__,
             "rdp_port_open": tcp_open(TARGET_HOST, RDP_PORT),
             "saved_credential_present": saved_termsrv_credential() if os.name == "nt" else False,
             "credential_value_read": False,
