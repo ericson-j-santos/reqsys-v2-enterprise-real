@@ -17,7 +17,7 @@
   "traceability": {
     "requirements": ".sdd/specs/pc24x7-public-dev-static-runtime.requirements.md",
     "implementation": "scripts/reconcile_pc24x7_public_dev_runtime.py",
-    "workflow": ".github/workflows/pc24x7-public-dev-reconcile.yml",
+    "workflow": ".github/workflows/noteri-study-mode-dev-reconcile.yml",
     "issue": 1596
   }
 }
