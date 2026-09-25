@@ -10,6 +10,7 @@ on:
       - "scripts/noteri_desktop_network_probe.py"
       - "scripts/noteri_desktop_dev_http_probe.py"
       - "scripts/noteri_desktop_orchestrator_rdc_recover.py"
+      - "scripts/noteri_native_rdp_desktop_bootstrap.py"
       - ".github/workflows/noteri-desktop-network-probe.yml"
       - ".github/workflows/reqsys-authorized-actions-gateway.yml"
       - ".github/self-hosted-runner-policy.json"
@@ -264,16 +265,16 @@ jobs:
           retention-days: 30
 
 
-  orchestrator_rdc_recover:
-    name: Recover Desktop RDC through existing Orchestrator
+  native_rdp_bootstrap:
+    name: Bootstrap Desktop through native Windows RDP
     if: ${{ startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-rdc-bootstrap-') }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
-      CORRELATION_ID: noteri-desktop-rdc-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: artifacts\noteri-desktop-rdc\evidence.json
+      CORRELATION_ID: noteri-native-rdp-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\noteri-native-rdp\evidence.json
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
@@ -299,27 +300,16 @@ jobs:
           $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $anchorSha = "${{ github.sha }}"
-          $syncRef = "origin/$env:GITHUB_REF_NAME"
-          $launcherArgs = @(
-            "--policy", $policy,
-            "--repo", $env:TARGET_REPO,
-            "--session-prefix", "noteri-desktop-rdc",
-            "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", $anchorSha,
-            "--sync-ref", $syncRef
-          )
-          $raw = & python $launcher @launcherArgs
+          $raw = & python $launcher --policy $policy --repo $env:TARGET_REPO --session-prefix "noteri-native-rdp" --correlation-id $env:CORRELATION_ID --expected-head $anchorSha --sync-ref "origin/$env:GITHUB_REF_NAME"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
-          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
-            throw "SESSION_LAUNCH_BLOCKED"
-          }
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) { throw "SESSION_LAUNCH_BLOCKED" }
           if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
 
-      - name: Validate bounded recovery contract
+      - name: Execute zero-cost native RDP bootstrap
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -329,28 +319,16 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          & python $gateway --policy $policy --correlation-id "$env:CORRELATION_ID-tests" run --cwd $env:TARGET_PATH --session-id $env:SESSION_ID --risk 1 --timeout 60 --expected-head $env:ANCHOR_SHA -- pytest tests/test_noteri_desktop_orchestrator_rdc_recover.py -q
+          $script = Join-Path $env:TARGET_PATH "scripts\noteri_native_rdp_desktop_bootstrap.py"
+          $bootstrap = Join-Path $env:TARGET_PATH "Activate-Desktop-Stable-Bootstrap.cmd"
+          & python $gateway --policy $policy --correlation-id $env:CORRELATION_ID run --cwd $env:TARGET_PATH --session-id $env:SESSION_ID --risk 2 --timeout 150 --expected-head $env:ANCHOR_SHA -- python $script --confirm BOOTSTRAP-DESKTOP-VIA-NATIVE-RDP --bootstrap-path $bootstrap --evidence-file $env:EVIDENCE_REL
           exit $LASTEXITCODE
 
-      - name: Execute exact RDC recovery through Desktop Orchestrator
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $script = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_orchestrator_rdc_recover.py"
-          & python $gateway --policy $policy --correlation-id $env:CORRELATION_ID run --cwd $env:TARGET_PATH --session-id $env:SESSION_ID --risk 2 --timeout 120 --expected-head $env:ANCHOR_SHA -- python $script --confirm RECOVER-DESKTOP-RDC-VIA-ORCHESTRATOR --correlation-id $env:CORRELATION_ID --evidence-file $env:EVIDENCE_REL --timeout-seconds 90
-          exit $LASTEXITCODE
-
-      - name: Upload sanitized RDC recovery evidence
+      - name: Upload sanitized native RDP evidence
         if: always() && steps.session.outputs.target_path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: noteri-desktop-rdc-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-rdc\evidence.json
+          name: noteri-native-rdp-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-native-rdp\evidence.json
           if-no-files-found: warn
           retention-days: 7
