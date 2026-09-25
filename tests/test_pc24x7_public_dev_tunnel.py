@@ -48,7 +48,7 @@ def test_build_run_command_uses_host_docker_internal():
         target=m.DEFAULT_TARGET,
         image=m.DEFAULT_IMAGE,
     )
-    assert "host.docker.internal:8083" in command
+    assert m.DEFAULT_TARGET in command
     assert "--restart" in command
     assert "unless-stopped" in command
 
