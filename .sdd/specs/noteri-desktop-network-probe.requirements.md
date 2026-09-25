@@ -66,3 +66,21 @@ Após o checkpoint terminal da rota WMI/DCOM, este incremento testa somente uma 
 
 Somente `candidate_transport_reachable=true`, acompanhado de evidência de um endpoint fixo e governado capaz de recuperar o plano de controle sem shell remoto irrestrito, permite avançar esta rota. Caso a porta esteja fechada ou nenhum endpoint de recuperação exista, a rota HTTP é terminal e não deve ser repetida sem mudança objetiva de precondição.
 
+## Incremento atual — recovery contract v1 e bootstrap governado do runner
+
+Após a migração física do `DESKTOP-PDQK954` para `controller_version=0.2.53` e `recovery_contract_version=1`, a frente passa a validar recuperação do GitHub Actions runner exclusivamente pelo Engineering Orchestrator em `:8787`.
+
+1. A execução DEVE ocorrer no `Noteri` por `Session Launcher → Command Gateway`, em SHA exato e sessão validada.
+2. O Desktop DEVE estar `fresh=true`, `eligible=true` e anunciar o recovery contract v1 antes de qualquer mutação.
+3. `host.orchestrator.refresh.v1` DEVE atualizar o runtime governado para o SHA exato esperado e exigir readback das capabilities.
+4. `host.github_runner.bootstrap.v1` DEVE descobrir somente runner já registrado em caminhos allowlisted; não pode aceitar caminho, token, shell ou comando arbitrário no payload.
+5. O bootstrap local DEVE validar a identidade do listener pelo executável esperado, instalar persistência somente no Startup do usuário e permanecer sem admin/UAC/reboot.
+6. Sucesso local do listener NÃO comprova conclusão: é obrigatório pickup independente pelo GitHub Actions antes de declarar o runner recuperado.
+7. Evidências de erro persistidas DEVEM usar somente códigos/tipos sanitizados; texto bruto de exceção, stdout/stderr remoto e segredos são proibidos.
+8. Replay da mesma operação DEVE ser idempotente e não criar segundo listener, segunda reserva ou mutação redundante.
+9. O artifact de recovery DEVE ficar fora do worktree governado para que a validação de estado do Command Gateway não produza falso negativo por `state_changed`.
+10. WMI, SCM, `schtasks` remoto, `C$`, GUI/RDC, shell remoto irrestrito, reboot e produção permanecem fora desta rota.
+
+### Critério para avançar
+
+A frente só pode avançar para o E2E físico do `desktop-pc24x7-runtime` quando houver, no ciclo atual, readback do recovery contract v1, bootstrap concluído e pickup independente do runner do Desktop. Sem pickup, o estado permanece parcial/bloqueado mesmo que o listener local tenha sido iniciado.
