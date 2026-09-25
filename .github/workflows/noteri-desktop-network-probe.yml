@@ -194,7 +194,7 @@ jobs:
             "--session-prefix", "desktop-runner",
             "--correlation-id", $env:CORRELATION_ID,
             "--expected-head", "${{ github.sha }}",
-            "--sync-ref", "origin/main"
+            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
           )
           $raw = & python $launcher @args
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
