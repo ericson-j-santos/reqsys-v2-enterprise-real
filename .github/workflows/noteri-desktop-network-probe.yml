@@ -276,7 +276,6 @@ jobs:
       TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
       CORRELATION_ID: desktop-post-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: artifacts\desktop-post-bootstrap\evidence.json
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
@@ -322,7 +321,8 @@ jobs:
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $script = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_post_bootstrap_validate.py"
-          & python $gateway --policy $policy --correlation-id $env:CORRELATION_ID run --cwd $env:TARGET_PATH --session-id $env:SESSION_ID --risk 2 --timeout 120 --expected-head $env:ANCHOR_SHA -- python $script --confirm VALIDATE-DESKTOP-STABLE-BOOTSTRAP --correlation-id $env:CORRELATION_ID --evidence-file $env:EVIDENCE_REL
+          $evidenceFile = Join-Path $env:RUNNER_TEMP "desktop-post-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}.json"
+          & python $gateway --policy $policy --correlation-id $env:CORRELATION_ID run --cwd $env:TARGET_PATH --session-id $env:SESSION_ID --risk 2 --timeout 120 --expected-head $env:ANCHOR_SHA -- python $script --confirm VALIDATE-DESKTOP-STABLE-BOOTSTRAP --correlation-id $env:CORRELATION_ID --evidence-file $evidenceFile
           exit $LASTEXITCODE
 
       - name: Upload sanitized post-bootstrap evidence
@@ -330,6 +330,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-post-bootstrap-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\desktop-post-bootstrap\evidence.json
+          path: ${{ runner.temp }}\desktop-post-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}.json
           if-no-files-found: warn
           retention-days: 30
