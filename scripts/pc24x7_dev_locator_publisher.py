@@ -11,6 +11,7 @@ import json
 import os
 import secrets
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -26,7 +27,12 @@ KEY_BLOB = RUNTIME / "dev-locator-key.dpapi"
 PUBLIC_CFG = RUNTIME / "dev-locator-public.json"
 PUBLISH_STATE = PUBLIC / "dev-locator-publish.json"
 TTL_SECONDS = 900
-REQUIRED_PUBLIC_ENDPOINTS = ("/api/health", "/api/runtime/health", "/api/runtime/build-info")
+REQUIRED_PUBLIC_ENDPOINTS = (
+    "/api/health",
+    "/api/runtime/health",
+    "/api/runtime/readiness",
+    "/api/runtime/build-info",
+)
 
 
 def b64e(data: bytes) -> str:
@@ -95,8 +101,26 @@ def probe(base_url: str, path: str) -> bool:
         return False
 
 
+def probe_status(base_url: str, path: str) -> int | None:
+    try:
+        request = urllib.request.Request(
+            base_url.rstrip("/") + path,
+            headers={"User-Agent": "ReqSysLocatorPublisher/3.0", "Accept": "*/*"},
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return int(response.status)
+    except urllib.error.HTTPError as exc:
+        return int(exc.code)
+    except Exception:
+        return None
+
+
 def runtime_contract_ready(base_url: str) -> bool:
-    return all(probe(base_url, path) for path in REQUIRED_PUBLIC_ENDPOINTS)
+    return (
+        all(probe(base_url, path) for path in REQUIRED_PUBLIC_ENDPOINTS)
+        and probe_status(base_url, "/task-console") == 200
+        and probe_status(base_url, "/@vite/client") == 404
+    )
 
 
 def healthy_urls() -> list[str]:
@@ -165,6 +189,8 @@ def main() -> int:
         "public_key_b64": cfg["public_key_b64"],
         "required_public_endpoints": list(REQUIRED_PUBLIC_ENDPOINTS),
         "runtime_contract_required": True,
+        "static_frontend_required": True,
+        "vite_hmr_forbidden": True,
     }
     PUBLISH_STATE.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",

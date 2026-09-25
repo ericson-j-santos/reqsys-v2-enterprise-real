@@ -2,6 +2,15 @@ name: Noteri Study Mode DEV Reconcile
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Modo governado de reconciliação DEV'
+        required: false
+        default: 'study-mode'
+        type: choice
+        options:
+          - study-mode
+          - public-static
   push:
     branches:
       - main
@@ -42,7 +51,45 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
+      - name: Validate public static reconciler syntax
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m py_compile scripts/reconcile_pc24x7_public_dev_runtime.py scripts/pc24x7_dev_runtime_supervisor.py scripts/pc24x7_public_dev_tunnel.py scripts/pc24x7_dev_locator_publisher.py
+
+      - name: Reconcile full DEV runtime and static frontend
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        env:
+          PUBLIC_DEV_EVIDENCE_FILE: artifacts/pc24x7-public-dev/evidence.json
+          PUBLIC_DEV_CORRELATION_ID: pc24x7-public-dev-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/reconcile_pc24x7_public_dev_runtime.py --confirm RECONCILE-PC24X7-PUBLIC-DEV --environment dev --expected-sha "${{ github.sha }}" --correlation-id "$env:PUBLIC_DEV_CORRELATION_ID" --evidence-file "$env:PUBLIC_DEV_EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Reconcile public tunnels and publish signed locator
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/pc24x7_public_dev_tunnel.py --apply
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pc24x7_dev_locator_publisher.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload public DEV physical evidence
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-public-dev-${{ github.run_id }}
+          path: artifacts/pc24x7-public-dev/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Recover and validate Engineering Orchestrator DEV
+        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode'
         shell: powershell
         env:
           ORCHESTRATOR_EVIDENCE_FILE: artifacts/noteri-study-mode-dev/orchestrator-recovery.json
@@ -51,6 +98,7 @@ jobs:
           python scripts/recover_reqsys_engineering_orchestrator_dev.py --confirm RECOVER-REQSYS-ENGINEERING-ORCHESTRATOR-DEV --evidence-path "$env:ORCHESTRATOR_EVIDENCE_FILE" --timeout-seconds 60
 
       - name: Reconcile same-origin Study Mode and execute physical E2E
+        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode'
         shell: powershell
         env:
           EVIDENCE_FILE: artifacts/noteri-study-mode-dev/evidence.json
@@ -59,6 +107,7 @@ jobs:
           python scripts/noteri_study_mode_dev_reconcile.py --repo-root "$env:GITHUB_WORKSPACE" --expected-sha "${{ github.sha }}" --confirm RECONCILE-NOTERI-STUDY-MODE-DEV --evidence-path "$env:EVIDENCE_FILE"
 
       - name: Validate sanitized evidence
+        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode'
         shell: powershell
         env:
           EVIDENCE_FILE: artifacts/noteri-study-mode-dev/evidence.json
@@ -79,10 +128,108 @@ jobs:
           if ($e.browser_e2e.final_profile -ne 'NORMAL') { throw 'ui_final_profile_not_normal' }
 
       - name: Upload runtime evidence
-        if: always()
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode')
         uses: actions/upload-artifact@v4
         with:
           name: noteri-study-mode-dev-evidence
           path: artifacts/noteri-study-mode-dev/
           if-no-files-found: error
           retention-days: 14
+
+  public-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
+    needs: reconcile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve signed locator
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pc24x7-public-dev
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-public-dev/locator.json
+
+      - name: Independent public same-SHA smoke
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, time
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"].lower()
+
+          def get(path, timeout=20):
+              started = time.monotonic()
+              request = Request(base + path, headers={"User-Agent": "ReqSysPublicDevSmoke/1.0", "Accept": "*/*"})
+              try:
+                  with urlopen(request, timeout=timeout) as response:
+                      body = response.read(524288).decode("utf-8", errors="replace")
+                      return response.status, body, round((time.monotonic()-started)*1000, 2)
+              except HTTPError as exc:
+                  return exc.code, exc.read(524288).decode("utf-8", errors="replace"), round((time.monotonic()-started)*1000, 2)
+
+          evidence = {"environment": "dev", "expected_sha": expected}
+          for path in ("/api/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/build-info"):
+              status, body, latency = get(path)
+              if status != 200:
+                  raise SystemExit(f"{path}: HTTP {status}")
+              evidence[path] = {"http": status, "latency_ms": latency}
+              if path == "/api/runtime/build-info":
+                  payload = json.loads(body)
+                  data = payload.get("data", payload)
+                  observed = str(data.get("build_sha") or "").lower()
+                  if observed != expected:
+                      raise SystemExit("build_sha_mismatch")
+                  evidence["observed_sha"] = observed
+
+          status, html, latency = get("/task-console")
+          if status != 200 or "/assets/" not in html or "/src/main.js" in html:
+              raise SystemExit("frontend_not_static")
+          vite_status, _, _ = get("/@vite/client")
+          if vite_status != 404:
+              raise SystemExit("vite_hmr_exposed")
+          asset = re.search(r'(?:src|href)="([^"]*/assets/[^"]+)"', html)
+          if not asset:
+              raise SystemExit("static_asset_not_found")
+          asset_status, _, asset_latency = get(asset.group(1))
+          if asset_status != 200:
+              raise SystemExit("static_asset_unavailable")
+
+          evidence["frontend"] = {
+              "http": status,
+              "latency_ms": latency,
+              "vite_client_http": vite_status,
+              "asset_http": asset_status,
+              "asset_latency_ms": asset_latency,
+              "mode": "static_nginx",
+          }
+          evidence["production_touched"] = False
+          with open("artifacts/pc24x7-public-dev/public-smoke.json", "w", encoding="utf-8") as fh:
+              json.dump(evidence, fh, ensure_ascii=False, indent=2)
+              fh.write("\n")
+          print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Upload independent public smoke
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-public-dev-smoke-${{ github.run_id }}
+          path: artifacts/pc24x7-public-dev/
+          if-no-files-found: error
+          retention-days: 30
+

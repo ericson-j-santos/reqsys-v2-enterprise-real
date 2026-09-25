@@ -97,6 +97,8 @@ def probe(url: str, timeout: float = 8.0) -> dict[str, Any]:
                 "status": int(response.status),
                 "content_type": response.headers.get("Content-Type"),
             }
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "status": int(exc.code), "error": repr(exc)}
     except (OSError, urllib.error.URLError) as exc:
         return {"ok": False, "error": repr(exc)}
 
@@ -134,12 +136,20 @@ def reconcile_one(name: str, *, target: str, image: str, apply: bool) -> dict[st
 
     after = inspect_container(name)
     health = probe(f"{url}/api/health") if url else {"ok": False, "error": "quick_tunnel_url_missing"}
+    runtime_health = probe(f"{url}/api/runtime/health") if url else {"ok": False, "error": "quick_tunnel_url_missing"}
+    runtime_readiness = probe(f"{url}/api/runtime/readiness") if url else {"ok": False, "error": "quick_tunnel_url_missing"}
+    build_info = probe(f"{url}/api/runtime/build-info") if url else {"ok": False, "error": "quick_tunnel_url_missing"}
     task_console = probe(f"{url}/task-console") if url else {"ok": False, "error": "quick_tunnel_url_missing"}
+    vite_client = probe(f"{url}/@vite/client") if url else {"ok": False, "error": "quick_tunnel_url_missing"}
     ready = (
         container_matches(after, target=target, image=image)
         and bool(url)
         and health.get("status") == 200
+        and runtime_health.get("status") == 200
+        and runtime_readiness.get("status") == 200
+        and build_info.get("status") == 200
         and task_console.get("status") == 200
+        and vite_client.get("status") == 404
     )
     return {
         "name": name,
@@ -148,7 +158,11 @@ def reconcile_one(name: str, *, target: str, image: str, apply: bool) -> dict[st
         "after": after,
         "url": url,
         "health": health,
+        "runtime_health": runtime_health,
+        "runtime_readiness": runtime_readiness,
+        "build_info": build_info,
         "task_console": task_console,
+        "vite_client": vite_client,
         "ready": ready,
     }
 

@@ -131,16 +131,25 @@ def test_automatic_promotion_resolves_current_locator_instead_of_static_quick_tu
 
 def test_publisher_requires_complete_runtime_contract_before_locator():
     raw = PUBLISHER.read_text(encoding="utf-8")
-    assert 'REQUIRED_PUBLIC_ENDPOINTS = ("/api/health", "/api/runtime/health", "/api/runtime/build-info")' in raw
+    assert '"/api/health"' in raw
+    assert '"/api/runtime/health"' in raw
+    assert '"/api/runtime/readiness"' in raw
+    assert '"/api/runtime/build-info"' in raw
     assert "def runtime_contract_ready" in raw
+    assert 'probe_status(base_url, "/task-console") == 200' in raw
+    assert 'probe_status(base_url, "/@vite/client") == 404' in raw
     assert "and runtime_contract_ready(value)" in raw
     assert '"runtime_contract_required": True' in raw
+    assert '"static_frontend_required": True' in raw
+    assert '"vite_hmr_forbidden": True' in raw
 
 
 def test_supervisor_does_not_publish_when_runtime_contract_is_partial():
     raw = SUPERVISOR.read_text(encoding="utf-8")
     assert 'probe(LOCAL_GATEWAY + "/api/runtime/health")' in raw
     assert 'probe(LOCAL_GATEWAY + "/api/runtime/build-info")' in raw
+    assert 'probe(LOCAL_GATEWAY + "/api/runtime/readiness")' in raw
+    assert 'probe(LOCAL_GATEWAY + "/@vite/client")' in raw
     assert '"local_runtime_contract_failed"' in raw
     assert 'payload["local_runtime_contract_ready"] = local_ready' in raw
     assert 'payload["ready"] = local_ready and cloudflare_ready and (locator_ready if args.apply else True)' in raw

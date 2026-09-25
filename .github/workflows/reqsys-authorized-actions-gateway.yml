@@ -45,6 +45,7 @@ jobs:
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
         github.event.comment.body == '/reqsys run teams-bot-dev-identity-bootstrap' ||
         github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
+        github.event.comment.body == '/reqsys run pc24x7-public-dev-reconcile' ||
         github.event.comment.body == '/reqsys run protect-observability-platform-main' ||
         github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main' ||
         github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main-noteri' ||
@@ -148,6 +149,10 @@ jobs:
             '/reqsys run noteri-study-mode-dev-reconcile')
               target='noteri-study-mode-dev-reconcile.yml'
               ;;
+            '/reqsys run pc24x7-public-dev-reconcile')
+              target='noteri-study-mode-dev-reconcile.yml'
+              mode='public-static'
+              ;;
             '/reqsys run protect-observability-platform-main')
               target='branch-protection-audit.yml'
               mode='apply-observability-platform'
@@ -242,6 +247,11 @@ jobs:
               -f base_branch=main \
               -f base_sha="$EXPECTED_SHA" \
               -f correlation_id="$correlation_id")"
+          elif [ "$TARGET_WORKFLOW" = "noteri-study-mode-dev-reconcile.yml" ] && [ "$TARGET_MODE" = "public-static" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=public-static)"
           elif [ "$TARGET_WORKFLOW" = "branch-protection-audit.yml" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \

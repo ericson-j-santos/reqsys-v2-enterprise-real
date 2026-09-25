@@ -48,7 +48,7 @@ def test_build_run_command_uses_host_docker_internal():
         target=m.DEFAULT_TARGET,
         image=m.DEFAULT_IMAGE,
     )
-    assert "host.docker.internal:8083" in command
+    assert m.DEFAULT_TARGET in command
     assert "--restart" in command
     assert "unless-stopped" in command
 
@@ -61,3 +61,13 @@ def test_public_access_manifest_has_no_required_fly_targets():
         target.get("provider") == "fly" and target.get("required") is not False
         for target in manifest["targets"]
     )
+
+
+def test_tunnel_requires_complete_runtime_and_static_frontend() -> None:
+    raw = MODULE.read_text(encoding="utf-8")
+    assert "/api/runtime/health" in raw
+    assert "/api/runtime/readiness" in raw
+    assert "/api/runtime/build-info" in raw
+    assert "/task-console" in raw
+    assert "/@vite/client" in raw
+    assert 'vite_client.get("status") == 404' in raw
