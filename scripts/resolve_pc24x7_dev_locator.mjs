@@ -99,6 +99,13 @@ export function verifyEnvelope(
     !Array.isArray(payload.urls) ||
     payload.urls.length === 0 ||
     !payload.urls.includes(payload.selected_url) ||
+    payload?.runtime_contract?.version !== "2.0.0" ||
+    payload?.runtime_contract?.static_frontend_required !== true ||
+    payload?.runtime_contract?.vite_hmr_forbidden !== true ||
+    !Array.isArray(payload?.runtime_contract?.required_endpoints) ||
+    !["/api/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/build-info"].every(
+      (endpoint) => payload.runtime_contract.required_endpoints.includes(endpoint),
+    ) ||
     !allowedRuntimeUrl(payload.selected_url) ||
     !payload.urls.every(allowedRuntimeUrl)
   ) {
@@ -111,6 +118,12 @@ export function verifyEnvelope(
     expires_at: payload.expires_at,
     selected_url: payload.selected_url.replace(/\/$/, ""),
     urls: [...new Set(payload.urls.map((item) => item.replace(/\/$/, "")))],
+    runtime_contract: {
+      version: payload.runtime_contract.version,
+      required_endpoints: [...payload.runtime_contract.required_endpoints],
+      static_frontend_required: true,
+      vite_hmr_forbidden: true,
+    },
   };
 }
 
@@ -168,6 +181,12 @@ function selfTest() {
     expires_at: now + 300,
     selected_url: "https://valid-example.trycloudflare.com",
     urls: ["https://valid-example.trycloudflare.com"],
+    runtime_contract: {
+      version: "2.0.0",
+      required_endpoints: ["/api/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/build-info"],
+      static_frontend_required: true,
+      vite_hmr_forbidden: true,
+    },
   };
 
   const good = verifyEnvelope(envelopeForTest(validPayload, privateKey), {
@@ -181,6 +200,12 @@ function selfTest() {
   const expired = { ...validPayload, expires_at: now - 1 };
   if (verifyEnvelope(envelopeForTest(expired, privateKey), { publicKeyB64, nowEpoch: now })) {
     throw new Error("self_test_expired_locator_accepted");
+  }
+
+  const legacyContract = { ...validPayload };
+  delete legacyContract.runtime_contract;
+  if (verifyEnvelope(envelopeForTest(legacyContract, privateKey), { publicKeyB64, nowEpoch: now })) {
+    throw new Error("self_test_legacy_locator_accepted");
   }
 
   const wrongHost = {
