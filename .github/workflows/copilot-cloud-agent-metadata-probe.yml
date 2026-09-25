@@ -1,135 +1,210 @@
-name: Copilot Cloud Agent Metadata Probe
+name: Noteri Public Bridge Probe
 
 on:
   push:
     branches:
       - "fix/ollama-cloud-agent-metadata-probe-*"
     paths:
-      - "scripts/probe_copilot_cloud_agent_metadata.py"
-      - "tests/test_probe_copilot_cloud_agent_metadata.py"
       - ".github/workflows/copilot-cloud-agent-metadata-probe.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: copilot-cloud-agent-metadata-probe-${{ github.ref }}
+  group: noteri-public-bridge-probe-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   probe:
-    name: Probe read-only Copilot agent metadata
+    name: Probe Noteri worker through public DEV bridge
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      EVIDENCE_FILE: artifacts/copilot-cloud-agent-metadata/evidence.json
-      CORRELATION_ID: copilot-agent-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/noteri-public-bridge/evidence.json
+      LOCATOR_FILE: artifacts/noteri-public-bridge/locator.json
+      CORRELATION_ID: noteri-public-bridge-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
-      - name: Checkout exact SHA
+      - name: Checkout exact diagnostic SHA
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
+          node-version: "20"
 
-      - name: Run sanitization contract tests
+      - name: Resolve signed DEV locator
+        id: locator
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check pytest==8.4.2
-          python -m pytest -q tests/test_probe_copilot_cloud_agent_metadata.py
+          mkdir -p "$(dirname "$LOCATOR_FILE")"
+          node scripts/resolve_pc24x7_dev_locator.mjs --output "$LOCATOR_FILE" >/dev/null
+          test -s "$LOCATOR_FILE"
 
-      - name: Validate existing cross-repository GitHub credential
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
-        run: |
-          set -euo pipefail
-          if [ -z "${GITHUB_TOKEN:-}" ]; then
-            echo "GITHUB_PAT is not configured."
-            exit 2
-          fi
-          echo "Existing cross-repository GitHub credential is configured; value remains masked."
-
-      - name: Probe repository metadata
-        id: metadata_probe
+      - name: Probe public backend and Noteri control-plane bridge
+        id: bridge
         continue-on-error: true
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
         run: |
           set -euo pipefail
-          python scripts/probe_copilot_cloud_agent_metadata.py \
-            --repository "${GITHUB_REPOSITORY}" \
-            --correlation-id "${CORRELATION_ID}" \
-            --auth-source "governed_repository_credential" \
-            --output "${EVIDENCE_FILE}"
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
 
-      - name: Validate evidence safety contract
+          locator = json.loads(Path(os.environ["LOCATOR_FILE"]).read_text(encoding="utf-8"))
+          base = str(locator["selected_url"]).rstrip("/")
+          evidence = {
+              "schema_version": "1.0.0",
+              "contract": "noteri-public-bridge-probe",
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "locator_environment": locator.get("environment"),
+              "locator_issued_at": locator.get("issued_at"),
+              "locator_expires_at": locator.get("expires_at"),
+              "runtime_origin_scheme": "https",
+              "runtime_host_suffix_valid": base.endswith(".trycloudflare.com"),
+              "health_http": None,
+              "runtime_health_http": None,
+              "auth_config_http": None,
+              "demo_login_enabled": False,
+              "negative_profile_http": None,
+              "admin_login_http": None,
+              "admin_role_confirmed": False,
+              "profile_http": None,
+              "noteri_worker_operational": False,
+              "profile": None,
+              "profile_source": None,
+              "mutation_executed": False,
+              "access_token_persisted": False,
+              "production_touched": False,
+          }
+
+          def request(method, path, body=None, token=None):
+              headers = {
+                  "Accept": "application/json",
+                  "User-Agent": "ReqSysNoteriPublicBridgeProbe/1.0",
+              }
+              data = None
+              if body is not None:
+                  data = json.dumps(body).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+              req = urllib.request.Request(base + path, data=data, method=method, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as response:
+                      raw = response.read(262144).decode("utf-8", errors="replace")
+                      payload = json.loads(raw) if raw else {}
+                      return int(response.status), payload if isinstance(payload, dict) else {}
+              except urllib.error.HTTPError as exc:
+                  return int(exc.code), {}
+
+          health_status, _ = request("GET", "/api/health")
+          evidence["health_http"] = health_status
+
+          runtime_status, runtime_payload = request("GET", "/api/runtime/health")
+          evidence["runtime_health_http"] = runtime_status
+          runtime_data = runtime_payload.get("data", runtime_payload) if isinstance(runtime_payload, dict) else {}
+          evidence["runtime_status"] = runtime_data.get("status") if isinstance(runtime_data, dict) else None
+
+          auth_status, auth_payload = request("GET", "/api/v1/auth/config")
+          evidence["auth_config_http"] = auth_status
+          auth_data = auth_payload.get("data", {}) if isinstance(auth_payload, dict) else {}
+          evidence["demo_login_enabled"] = auth_data.get("demo_login_enabled") is True
+
+          negative_status, _ = request("GET", "/api/v1/noteri/profile")
+          evidence["negative_profile_http"] = negative_status
+
+          token = ""
+          if evidence["demo_login_enabled"]:
+              login_status, login_payload = request(
+                  "POST",
+                  "/api/v1/auth/login",
+                  body={"email": "ericsonjosedossantos@tieri659.onmicrosoft.com"},
+              )
+              evidence["admin_login_http"] = login_status
+              login_data = login_payload.get("data", {}) if isinstance(login_payload, dict) else {}
+              token = str(login_data.get("access_token") or "")
+              user = login_data.get("usuario") or {}
+              evidence["admin_role_confirmed"] = bool(token) and user.get("papel") == "admin"
+
+          if token:
+              profile_status, profile_payload = request(
+                  "GET",
+                  "/api/v1/noteri/profile",
+                  token=token,
+              )
+              evidence["profile_http"] = profile_status
+              profile_data = profile_payload.get("data", {}) if isinstance(profile_payload, dict) else {}
+              if profile_status == 200:
+                  evidence["noteri_worker_operational"] = (
+                      profile_data.get("host") == "Noteri"
+                      and profile_data.get("source") == "control_plane"
+                      and profile_data.get("profile") in {"NORMAL", "ESTUDO"}
+                  )
+                  evidence["profile"] = profile_data.get("profile")
+                  evidence["profile_source"] = profile_data.get("source")
+
+          evidence["result"] = (
+              "NOTERI_WORKER_OPERATIONAL"
+              if evidence["noteri_worker_operational"]
+              else "NOTERI_WORKER_NOT_OPERATIONAL"
+          )
+          output = Path(os.environ["EVIDENCE_FILE"])
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps({
+              "result": evidence["result"],
+              "health_http": evidence["health_http"],
+              "runtime_health_http": evidence["runtime_health_http"],
+              "auth_config_http": evidence["auth_config_http"],
+              "negative_profile_http": evidence["negative_profile_http"],
+              "admin_login_http": evidence["admin_login_http"],
+              "profile_http": evidence["profile_http"],
+              "noteri_worker_operational": evidence["noteri_worker_operational"],
+              "mutation_executed": False,
+          }, ensure_ascii=False))
+          raise SystemExit(0 if evidence["noteri_worker_operational"] else 2)
+          PY
+
+      - name: Validate sanitized evidence
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          test -f "${EVIDENCE_FILE}"
+          test -f "$EVIDENCE_FILE"
           python - <<'PY'
           import json
           import os
           from pathlib import Path
-
-          evidence = json.loads(Path(os.environ["EVIDENCE_FILE"]).read_text(encoding="utf-8"))
-          assert evidence["repository"] == os.environ["GITHUB_REPOSITORY"]
-          assert evidence["credential_endpoint_called"] is False
-          assert evidence["mcp_configuration_body_persisted"] is False
-          assert evidence["mutation_executed"] is False
-          assert evidence["ollama_mcp_variable"]["value_persisted"] is False
-          serialized = json.dumps(evidence, sort_keys=True)
-          assert "Authorization" not in serialized
-          assert "Bearer " not in serialized
+          e = json.loads(Path(os.environ["EVIDENCE_FILE"]).read_text(encoding="utf-8"))
+          assert e["mutation_executed"] is False
+          assert e["access_token_persisted"] is False
+          assert e["production_touched"] is False
+          raw = json.dumps(e, sort_keys=True)
+          assert "Bearer " not in raw
+          assert "access_token" not in raw
+          assert "Authorization" not in raw
           PY
 
       - name: Publish sanitized evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: copilot-cloud-agent-metadata-${{ github.run_id }}
-          path: ${{ env.EVIDENCE_FILE }}
-          if-no-files-found: error
-          retention-days: 30
+          name: noteri-public-bridge-${{ github.run_id }}
+          path: |
+            ${{ env.EVIDENCE_FILE }}
+            ${{ env.LOCATOR_FILE }}
+          if-no-files-found: warn
+          retention-days: 7
 
-      - name: Summary
-        if: always()
+      - name: Fail closed when Noteri worker is not operational
+        if: steps.bridge.outcome != 'success'
         shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
-          import os
-          from pathlib import Path
-
-          path = Path(os.environ["EVIDENCE_FILE"])
-          print("## Copilot Cloud Agent Metadata Probe")
-          print(f"- SHA: `{os.environ['GITHUB_SHA']}`")
-          print(f"- Correlation ID: `{os.environ['CORRELATION_ID']}`")
-          if not path.exists():
-              print("- Result: evidence missing")
-          else:
-              evidence = json.loads(path.read_text(encoding="utf-8"))
-              print(f"- Result: `{evidence['result']}`")
-              print(f"- Cloud-agent config HTTP: `{evidence['cloud_agent_configuration']['http_status']}`")
-              print(f"- Ollama MCP variable HTTP: `{evidence['ollama_mcp_variable']['http_status']}`")
-              print("- Variable value persisted: no")
-              print("- Credential endpoint called: no")
-              print("- Mutation executed: no")
-          PY
-
-      - name: Fail closed when metadata is inaccessible
-        if: steps.metadata_probe.outcome != 'success'
-        shell: bash
-        run: |
-          echo "Copilot cloud-agent metadata is not readable with the existing cross-repository GitHub credential."
-          exit 1
+        run: exit 1
