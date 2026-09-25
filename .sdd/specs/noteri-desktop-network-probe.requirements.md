@@ -66,3 +66,22 @@ Após o checkpoint terminal da rota WMI/DCOM, este incremento testa somente uma 
 
 Somente `candidate_transport_reachable=true`, acompanhado de evidência de um endpoint fixo e governado capaz de recuperar o plano de controle sem shell remoto irrestrito, permite avançar esta rota. Caso a porta esteja fechada ou nenhum endpoint de recuperação exista, a rota HTTP é terminal e não deve ser repetida sem mudança objetiva de precondição.
 
+## Incremento atual — sonda de superfícies runtime independentes
+
+Após comprovar que o worker ativo em `:8787` está defasado e que WMI, SCM, Task Scheduler remoto, `C$`, Admin Broker, RDC pago, Opera, SSH e WinRM não são rotas válidas para este ciclo, a branch `fix/noteri-desktop-network-probe-runtime-surfaces-20260924` executa uma sonda estritamente somente leitura.
+
+1. A execução física DEVE ocorrer somente no `Noteri` allowlisted, por `Session Launcher → Command Gateway`, vinculada ao SHA exato.
+2. O destino permanece fixo em `DESKTOP-PDQK954`; não existe argumento para host ou porta arbitrários.
+3. As únicas superfícies sondadas são `:8083/api/health`, `:8000/health`, `:8008/health`, `:8097/health`, `:8787/readyz` e `:11434/api/tags`.
+4. A sonda usa somente resolução DNS, conexão TCP e HTTP `GET`; não executa shell remoto, WMI, SCM, Task Scheduler, compartilhamento administrativo, Admin Broker, RDC, Opera, SSH ou WinRM.
+5. Nenhum corpo HTTP é persistido. A evidência registra somente porta, alcance TCP e status HTTP sanitizado.
+6. Nenhuma credencial, token, segredo ou conteúdo de negócio é enviado ou persistido.
+7. Porta aberta NÃO comprova executor de recuperação. A evidência deve manter `recovery_actuator_proven=false` até análise independente do contrato versionado da superfície encontrada.
+8. Falhas devem usar código genérico sanitizado e nunca persistir texto bruto de exceção.
+9. A execução não toca produção e não altera firewall, UAC, ACL, serviço, tarefa, processo ou configuração do Desktop.
+10. Retry só é permitido após mudança objetiva de SHA/correção do próprio probe ou mudança de precondição do runtime.
+
+### Critério para avançar
+
+Somente uma superfície não-Orchestrator alcançável, acompanhada de contrato versionado que prove um executor estreito, governado e independente dos transportes descartados, pode habilitar a etapa seguinte. Caso a superfície seja apenas health/inferência/aplicação, ela deve ser classificada como não atuadora e não pode ser usada como atalho para execução remota.
+

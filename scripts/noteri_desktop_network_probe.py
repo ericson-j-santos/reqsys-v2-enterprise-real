@@ -29,18 +29,6 @@ SURFACES = {
     "ollama": {"port": 11434, "path": "/api/tags"},
 }
 
-FORBIDDEN_TRANSPORTS = (
-    "wmi",
-    "scm",
-    "schtasks",
-    "admin_share",
-    "admin_broker",
-    "rdc",
-    "opera",
-    "ssh",
-    "winrm",
-)
-
 
 class ProbeError(RuntimeError):
     pass
@@ -138,6 +126,9 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     open_surfaces = sorted(
         name for name, state in surfaces.items() if state["tcp_reachable"] is True
     )
+    non_orchestrator = [
+        name for name in open_surfaces if name != "engineering_orchestrator"
+    ]
     return {
         "ok": True,
         "probe_completed": True,
@@ -148,11 +139,9 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "resolved_address_count": resolution["address_count"],
         "surfaces": surfaces,
         "open_surfaces": open_surfaces,
-        "independent_surface_found": any(
-            name != "engineering_orchestrator" for name in open_surfaces
-        ),
+        "non_orchestrator_surfaces": non_orchestrator,
+        "recovery_actuator_proven": False,
         "forbidden_transports_probed": False,
-        "forbidden_transports": list(FORBIDDEN_TRANSPORTS),
         "remote_shell_used": False,
         "credentials_supplied": False,
         "production_touched": False,
@@ -172,7 +161,7 @@ def main() -> int:
     code = 0
     try:
         payload = probe(args.confirm, args.correlation_id)
-    except (ProbeError, OSError) as exc:
+    except (ProbeError, OSError):
         payload = {
             "ok": False,
             "probe_completed": False,
@@ -180,8 +169,7 @@ def main() -> int:
             "source_host": socket.gethostname(),
             "target_host": TARGET_HOST,
             "correlation_id": args.correlation_id,
-            "error": str(exc)[:500],
-            "error_type": type(exc).__name__,
+            "error_code": "probe_failed",
             "forbidden_transports_probed": False,
             "remote_shell_used": False,
             "credentials_supplied": False,

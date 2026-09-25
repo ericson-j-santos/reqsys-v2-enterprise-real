@@ -40,14 +40,14 @@ def test_surfaces_are_fixed_and_read_only() -> None:
     }
     raw = SCRIPT.read_text(encoding="utf-8").casefold()
     assert 'parser.add_argument("--target"' not in raw
-    assert "method=\"get\"" in raw
+    assert 'method="get"' in raw
     assert "subprocess" not in raw
     assert "shell=true" not in raw
 
 
-def test_forbidden_transports_are_not_executed_by_probe() -> None:
+def test_forbidden_execution_surfaces_are_absent() -> None:
     raw = SCRIPT.read_text(encoding="utf-8").casefold()
-    forbidden_calls = (
+    for marker in (
         "win32com",
         "openscmanager",
         "schtasks",
@@ -56,20 +56,9 @@ def test_forbidden_transports_are_not_executed_by_probe() -> None:
         "remote desktop commander",
         "tailscale ssh",
         "paramiko",
-    )
-    for item in forbidden_calls:
-        assert item not in raw
-    assert probe.FORBIDDEN_TRANSPORTS == (
-        "wmi",
-        "scm",
-        "schtasks",
-        "admin_share",
-        "admin_broker",
-        "rdc",
-        "opera",
-        "ssh",
         "winrm",
-    )
+    ):
+        assert marker not in raw
 
 
 def test_probe_reports_only_sanitized_surface_state(monkeypatch) -> None:
@@ -94,7 +83,8 @@ def test_probe_reports_only_sanitized_surface_state(monkeypatch) -> None:
     result = probe.probe(probe.CONFIRM, "corr-runtime-surfaces-001")
     assert result["ok"] is True
     assert result["open_surfaces"] == ["engineering_orchestrator", "reqsys_dev_gateway"]
-    assert result["independent_surface_found"] is True
+    assert result["non_orchestrator_surfaces"] == ["reqsys_dev_gateway"]
+    assert result["recovery_actuator_proven"] is False
     assert result["forbidden_transports_probed"] is False
     assert result["remote_shell_used"] is False
     assert result["credentials_supplied"] is False
@@ -102,7 +92,7 @@ def test_probe_reports_only_sanitized_surface_state(monkeypatch) -> None:
     assert result["secrets_read"] is False
 
 
-def test_only_orchestrator_is_not_independent(monkeypatch) -> None:
+def test_only_orchestrator_does_not_prove_independent_actuator(monkeypatch) -> None:
     monkeypatch.setattr(probe, "validate_host", lambda: "Noteri")
     monkeypatch.setattr(
         probe,
@@ -120,7 +110,8 @@ def test_only_orchestrator_is_not_independent(monkeypatch) -> None:
     monkeypatch.setattr(probe, "probe_surfaces", lambda: states)
     result = probe.probe(probe.CONFIRM, "corr-runtime-surfaces-002")
     assert result["open_surfaces"] == ["engineering_orchestrator"]
-    assert result["independent_surface_found"] is False
+    assert result["non_orchestrator_surfaces"] == []
+    assert result["recovery_actuator_proven"] is False
 
 
 def test_resolution_failure_does_not_probe_ports(monkeypatch) -> None:
@@ -138,7 +129,8 @@ def test_resolution_failure_does_not_probe_ports(monkeypatch) -> None:
     result = probe.probe(probe.CONFIRM, "corr-runtime-surfaces-003")
     assert result["dns_resolved"] is False
     assert result["open_surfaces"] == []
-    assert result["independent_surface_found"] is False
+    assert result["non_orchestrator_surfaces"] == []
+    assert result["recovery_actuator_proven"] is False
 
 
 def test_workflow_remains_governed_and_noteri_only() -> None:
