@@ -41,6 +41,16 @@ async function verifyEnvelope(rawMessage){
   try{ payload=JSON.parse(bytesText(b64bytes(envelope.payload_b64))); }catch{return null;}
   const now=Math.floor(Date.now()/1000);
   if(payload.environment!=="dev" || payload.expires_at<=now || payload.issued_at>now+60) return null;
+  const contract=payload.runtime_contract;
+  const requiredEndpoints=["/api/health","/api/runtime/health","/api/runtime/readiness","/api/runtime/build-info"];
+  if(
+    !contract ||
+    contract.version!=="2.0.0" ||
+    contract.static_frontend_required!==true ||
+    contract.vite_hmr_forbidden!==true ||
+    !Array.isArray(contract.required_endpoints) ||
+    !requiredEndpoints.every(endpoint=>contract.required_endpoints.includes(endpoint))
+  ) return null;
   if(!Array.isArray(payload.urls) || !payload.urls.includes(payload.selected_url)) return null;
   const allowed=u=>{
     try{
@@ -90,7 +100,7 @@ async function load(){
     if(!noRedirect) setTimeout(()=>location.replace(payload.selected_url+target),900);
   }catch(err){
     status.className="error";
-    status.textContent="DEV temporariamente sem locator vigente. Os transportes estão em recuperação automática.";
+    status.textContent="DEV PC24x7 não está homologado para navegação agora. Nenhum redirecionamento foi executado.";
     const p=document.createElement("p");
     p.textContent=String(err);
     links.appendChild(p);
