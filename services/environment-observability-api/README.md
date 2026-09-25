@@ -17,7 +17,7 @@ A integração é feita por HTTP, sem acoplamento ao domínio do ReqSys. Cada ap
 
 ## Logs
 
-Saída JSON em `stdout`, com ambiente, serviço, versão, commit, correlation ID, request ID, trace context, rota, status e duração. Senhas, tokens, cookies, connection strings e payloads pessoais não são registrados.
+Saída JSON em `stdout`, com ambiente, serviço, versão, commit, `correlation_id`, `causation_id`, `workflow_run_id`, request ID, trace context, rota, status e duração. Os headers opcionais `X-Causation-Id` e `X-Workflow-Run-Id` são aceitos apenas em formato seguro e são propagados na resposta quando válidos. Senhas, tokens, cookies, connection strings e payloads pessoais não são registrados.
 
 ## Execução local
 

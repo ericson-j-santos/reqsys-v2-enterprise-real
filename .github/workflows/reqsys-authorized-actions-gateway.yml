@@ -43,6 +43,8 @@ jobs:
         github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery' ||
         github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick' ||
         github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair' ||
+        github.event.comment.body == '/reqsys run desktop-runner-bootstrap-via-orchestrator' ||
+        github.event.comment.body == '/reqsys run desktop-runner-pickup-canary' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
         github.event.comment.body == '/reqsys run teams-bot-dev-identity-bootstrap' ||
@@ -144,6 +146,14 @@ jobs:
               ;;
             '/reqsys run pc24x7-runner-registry-repair')
               target='pc24x7-runner-registry-repair.yml'
+              ;;
+            '/reqsys run desktop-runner-bootstrap-via-orchestrator')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-bootstrap'
+              ;;
+            '/reqsys run desktop-runner-pickup-canary')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-canary'
               ;;
             '/reqsys run pc24x7-teams-token-bootstrap-dev')
               target='pc24x7-teams-token-bootstrap.yml'
@@ -268,6 +278,16 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
               -f mode=public-static)"
+          elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
+            case "$TARGET_MODE" in
+              default) recovery_mode='watchdog' ;;
+              runner-bootstrap|runner-canary) recovery_mode="$TARGET_MODE" ;;
+              *) echo 'desktop_runner_recovery_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$recovery_mode")"
           elif [ "$TARGET_WORKFLOW" = "branch-protection-audit.yml" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \

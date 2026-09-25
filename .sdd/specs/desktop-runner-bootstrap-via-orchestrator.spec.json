@@ -1,0 +1,57 @@
+{
+  "feature_name": "desktop-runner-bootstrap-via-orchestrator",
+  "project": "ReqSys v2 Enterprise — Desktop control plane",
+  "created_at": "2026-09-25",
+  "updated_at": "2026-09-25",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Recuperação governada do runner GitHub já registrado no DESKTOP-PDQK954 via Engineering Orchestrator, seguida por canário de pickup físico independente.",
+  "scope": "local-dev",
+  "files": [
+    "scripts/desktop_runner_bootstrap_via_orchestrator.py",
+    "scripts/desktop_runner_pickup_canary.py",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    ".github/self-hosted-runner-policy.json",
+    "tests/test_desktop_runner_bootstrap_via_orchestrator.py",
+    "tests/test_desktop_runner_pickup_canary.py",
+    "tests/test_reqsys_authorized_actions_gateway.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_desktop_runner_bootstrap_via_orchestrator.py",
+      "tests/test_desktop_runner_pickup_canary.py",
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "Noteri -> Session Launcher -> Command Gateway risk 2 -> DESKTOP-PDQK954:8787 -> host.github_runner.bootstrap.v1 -> listener local verificado; prova terminal separada pelo modo runner-canary no runner DESKTOP-PDQK954 e SHA exato."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "reboot": false,
+    "secrets": false,
+    "arbitrary_command": false
+  },
+  "increment_type": "gap_fix",
+  "governance": {
+    "session_launcher_required": true,
+    "command_gateway_required": true,
+    "command_gateway_risk": 2,
+    "rules_sha": "881d9ca2f8e77025edb7298b22981109c567a730",
+    "workflow_surface_growth": 0
+  },
+  "acceptance_criteria": [
+    "Bootstrap executa somente a partir do Noteri e para DESKTOP-PDQK954.",
+    "Payload do Orchestrator contém somente target_host fixo e capability allowlisted.",
+    "Replay do mesmo evento não produz segundo dispatch.",
+    "Sucesso local exige local_listener_verified=true e ainda mantém pickup_required=true.",
+    "Canário terminal exige host, runner, repositório e SHA exatos.",
+    "Nenhum modo lê segredos, toca produção, executa shell remoto arbitrário ou reinicia o host.",
+    "A superfície de GitHub Actions não cresce; os modos reutilizam noteri-desktop-watchdog-recovery.yml."
+  ]
+}

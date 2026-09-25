@@ -66,3 +66,41 @@ Após o checkpoint terminal da rota WMI/DCOM, este incremento testa somente uma 
 
 Somente `candidate_transport_reachable=true`, acompanhado de evidência de um endpoint fixo e governado capaz de recuperar o plano de controle sem shell remoto irrestrito, permite avançar esta rota. Caso a porta esteja fechada ou nenhum endpoint de recuperação exista, a rota HTTP é terminal e não deve ser repetida sem mudança objetiva de precondição.
 
+## Hotfix #2088 — recuperação do runner via Engineering Orchestrator `:8787`
+
+O Desktop está ligado e alcançável, porém as rotas WMI/C$, Task Scheduler remoto e
+registro GitHub não produziram um canal de recuperação utilizável. O próximo caminho
+control-plane-first reutiliza o Engineering Orchestrator já existente.
+
+### Requisitos
+
+1. A origem permanece fixa em `Noteri` e o destino em `DESKTOP-PDQK954:8787`.
+2. A única ação mutante permitida é `host.github_runner.recover.v1`.
+3. O cliente não aceita host, porta, URL, task type, executável ou shell como input.
+4. O Orchestrator deve responder `ready=true` antes do intake.
+5. Deve existir exatamente um worker Desktop `fresh`, `NORMAL`,
+   `controller_online=true`, `auth_valid=true` e com a capability explícita.
+6. O intake usa `event_id`, `correlation_id`, `idempotency_key`, risco 2,
+   `max_attempts=1` e lease finito.
+7. O dispatch deve apontar ao worker do `DESKTOP-PDQK954`.
+8. O work item deve atingir estado terminal dentro do timeout e somente
+   `CONCLUÍDO` é sucesso.
+9. O resultado deve conter handler `host.github_runner.recover.v1`, host exato e
+   resultado `recovered` ou `already_running`.
+10. O mesmo intake deve ser repetido e retornar replay sem segundo dispatch.
+11. Uma leitura independente do work item deve confirmar o resultado terminal.
+12. Um GET deliberadamente inexistente deve retornar 404 como controle negativo.
+13. Não usar WMI, C$, RPC Task Scheduler, WinRM, SSH, RDC, GUI ou shell remoto.
+
+### Critérios de aceite
+
+- O teste `tests/test_noteri_desktop_orchestrator_runner_recovery.py` deve passar.
+- A execução física deve ocorrer no Noteri, por `Session Launcher → Command Gateway`,
+  no SHA exato do hotfix.
+- O artifact deve registrar `DESKTOP_GITHUB_RUNNER_RECOVERY_COMPLETED`,
+  `replay_idempotent=true`, `negative_read_control=true` e
+  `independent_readback=true`.
+- `remote_shell_used`, `credentials_supplied`, `secrets_read`,
+  `production_touched` e `reboot_performed` devem permanecer `false`.
+- Após a recuperação, um pickup GitHub Actions independente do Desktop deve ser
+  observado antes de declarar o runner recuperado.

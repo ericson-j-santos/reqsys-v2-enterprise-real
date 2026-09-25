@@ -31,6 +31,8 @@ CPF = re.compile(r"(?<!\d)(?:\d{3}\.?){2}\d{3}-?\d{2}(?!\d)")
 PHONE = re.compile(r"(?<!\d)(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}(?!\d)")
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*\b")
 
+CONTEXT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+
 
 class Settings(BaseModel):
     service_name: str = os.getenv("SERVICE_NAME", "environment-observability-api")
@@ -42,6 +44,7 @@ class Settings(BaseModel):
     deployment_id: str = os.getenv("DEPLOYMENT_ID", os.getenv("FLY_IMAGE_REF", "unknown"))
     region: str = os.getenv("FLY_REGION", os.getenv("REGION", "unknown"))
     instance_id: str = os.getenv("FLY_MACHINE_ID", os.getenv("INSTANCE_ID", "unknown"))
+    workflow_run_id: str | None = os.getenv("GITHUB_RUN_ID") or None
 
 
 settings = Settings()
@@ -62,6 +65,15 @@ def redact(value: Any, key: str | None = None) -> Any:
     sanitized = CPF.sub("[REDACTED_CPF]", sanitized)
     sanitized = PHONE.sub("[REDACTED_PHONE]", sanitized)
     return sanitized
+
+
+def normalize_context_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized or not CONTEXT_ID.fullmatch(normalized):
+        return None
+    return normalized
 
 
 def parse_traceparent(value: str | None) -> tuple[str | None, str | None]:
@@ -96,6 +108,8 @@ class JsonFormatter(logging.Formatter):
             "event_name",
             "event_category",
             "correlation_id",
+            "causation_id",
+            "workflow_run_id",
             "request_id",
             "trace_id",
             "span_id",
@@ -137,11 +151,18 @@ app = FastAPI(
 async def structured_access_log(request: Request, call_next):
     started = time.perf_counter()
     correlation_id = request.headers.get("x-correlation-id") or str(uuid.uuid4())
+    causation_id = normalize_context_id(request.headers.get("x-causation-id"))
+    raw_workflow_run_id = request.headers.get("x-workflow-run-id")
+    workflow_run_id = normalize_context_id(raw_workflow_run_id)
+    if raw_workflow_run_id is None:
+        workflow_run_id = normalize_context_id(settings.workflow_run_id)
     request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
     trace_id, span_id = parse_traceparent(request.headers.get("traceparent"))
     context = {
         "event_category": "http",
         "correlation_id": correlation_id,
+        "causation_id": causation_id,
+        "workflow_run_id": workflow_run_id,
         "request_id": request_id,
         "trace_id": trace_id,
         "span_id": span_id,
@@ -164,16 +185,27 @@ async def structured_access_log(request: Request, call_next):
                 "duration_ms": round(duration_seconds * 1000, 2),
             },
         )
-        return JSONResponse(
+        error_response = JSONResponse(
             status_code=500,
             content={"detail": "internal_error", "correlation_id": correlation_id},
         )
+        error_response.headers["x-correlation-id"] = correlation_id
+        error_response.headers["x-request-id"] = request_id
+        if causation_id:
+            error_response.headers["x-causation-id"] = causation_id
+        if workflow_run_id:
+            error_response.headers["x-workflow-run-id"] = workflow_run_id
+        return error_response
 
     duration_seconds = time.perf_counter() - started
     route = normalize_route(request)
     record_request(request.method, route, response.status_code, duration_seconds)
     response.headers["x-correlation-id"] = correlation_id
     response.headers["x-request-id"] = request_id
+    if causation_id:
+        response.headers["x-causation-id"] = causation_id
+    if workflow_run_id:
+        response.headers["x-workflow-run-id"] = workflow_run_id
     logger.info(
         "Requisição concluída",
         extra={
@@ -211,6 +243,7 @@ def runtime_health() -> dict[str, Any]:
         "version": settings.version,
         "environment": settings.environment,
         "commit_sha": settings.commit_sha,
+        "workflow_run_id": normalize_context_id(settings.workflow_run_id),
     }
 
 
@@ -231,6 +264,8 @@ def environment_contract() -> dict[str, Any]:
             "schema_version": LOG_SCHEMA_VERSION,
             "level": settings.log_level,
             "correlation_id": True,
+            "causation_id": True,
+            "workflow_run_id": True,
             "request_id": True,
             "trace_context": "w3c",
             "redaction": True,

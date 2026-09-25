@@ -11,7 +11,7 @@ Serviço local/DEV para coordenar workers Codex em múltiplos hosts sem comparti
 - lanes lógicas por repositório com `max_in_flight`, pausa (`enabled=false`) e fairness determinístico;
 - afinidade opcional de worker por repositório, mantendo pool compartilhado quando não configurada;
 - lease renovável e recuperação automática após timeout;
-- watchdog de progresso material: heartbeat, polling e renovação de lease não reiniciam o relógio; após 900s sem avanço, a task é reroteada quando houver worker alternativo elegível ou bloqueada quando não houver;
+- watchdog de progresso material: heartbeat, polling e renovação de lease não reiniciam o relógio; após 300s sem avanço, a task é reroteada quando houver worker alternativo elegível ou bloqueada quando não houver;
 - tentativas limitadas e quarentena/DLQ auditável;
 - contrato `Builder -> produced_sha -> Validator`, impedindo autovalidação;
 - task `BLOCKED_EXTERNAL` libera o worker e pode ser reenfileirada sem duplicar identidade;
@@ -26,7 +26,7 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 $env:CODEX_WORKER_POOL_API_TOKEN_FILE="C:\caminho\seguro\token"
 $env:CODEX_WORKER_POOL_EXPECTED_RULES_SHA="<sha-canônico-de-40-caracteres>"
-$env:CODEX_WORKER_POOL_PROGRESS_STALL_SECONDS="900"
+$env:CODEX_WORKER_POOL_PROGRESS_STALL_SECONDS="300"
 .venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8097
 ```
 
@@ -35,7 +35,7 @@ Linux/macOS:
 ```bash
 CODEX_WORKER_POOL_API_TOKEN_FILE=/run/secrets/codex_worker_pool_api_token \
 CODEX_WORKER_POOL_EXPECTED_RULES_SHA=<sha-canônico-de-40-caracteres> \
-CODEX_WORKER_POOL_PROGRESS_STALL_SECONDS=900 \
+CODEX_WORKER_POOL_PROGRESS_STALL_SECONDS=300 \
 uvicorn app.main:app --host 127.0.0.1 --port 8097
 ```
 
