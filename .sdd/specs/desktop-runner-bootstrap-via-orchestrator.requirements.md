@@ -8,7 +8,7 @@ Recuperar o runner GitHub Actions já registrado no `DESKTOP-PDQK954` usando o E
 
 1. A origem do bootstrap é exclusivamente o host `Noteri`.
 2. O destino é fixo em `DESKTOP-PDQK954:8787`.
-3. Antes da mutação, exigir worker `desktop-pdqk954` fresco, elegível, controller >= `0.2.53` e `recovery_contract_version=1`. Se `host.github_runner.bootstrap.v1` ainda não estiver anunciado, exigir `host.orchestrator.refresh.v1`, despachar refresh governado e pinado ao SHA `4dbc927595a40fc2fd6b207c0d53fd6e895049ae`, e comprovar por readback que `bootstrap.v1` passou a existir antes de prosseguir.
+3. Antes da mutação, exigir worker `desktop-pdqk954` fresco, elegível, controller >= `0.2.53` e `recovery_contract_version=1`. Se `host.github_runner.bootstrap.v1` ainda não estiver anunciado, exigir `host.orchestrator.refresh.v1`, despachar refresh governado e pinado ao SHA `d44c9f0e64705fa50f7798cb7ff41afbea668784` (versão que reexecuta o supervisor após refresh), e comprovar por readback que `bootstrap.v1` passou a existir antes de prosseguir.
 4. O payload enviado ao Orchestrator contém somente `target_host=DESKTOP-PDQK954`; não aceita caminho, comando, URL, token ou segredo.
 5. O item usa risco 2, uma tentativa e timeout finito.
 6. Sucesso local exige estado `CONCLUÍDO`, handler/host/worker exatos, `local_listener_verified=true`, `pickup_required=true`, `github_connectivity_verified=false`, `production_touched=false` e `secrets_read=false`.
@@ -21,6 +21,7 @@ Recuperar o runner GitHub Actions já registrado no `DESKTOP-PDQK954` usando o E
     - `/reqsys run desktop-runner-bootstrap-via-orchestrator`;
     - `/reqsys run desktop-runner-pickup-canary`.
 13. Nenhum input arbitrário é aceito por esses dois comandos.
+14. O arquivo de evidência do bootstrap deve ser gravado em `RUNNER_TEMP`, fora do worktree validado pelo Command Gateway, para que observabilidade não produza falso `state_changed`.
 
 ## Critérios de aceite
 
