@@ -78,7 +78,7 @@ def test_reqsys_ruleset_automation_e_exata_governada_e_sem_segredo():
     assert "mode='apply-reqsys-main'" in gateway
     assert "apply-reqsys-main-noteri" in workflow
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
-    assert "Checkout ReqSys no SHA despachado" in workflow
+    assert "Checkout ReqSys no SHA governado" in workflow
     assert "TARGET_REPO: ${{ github.workspace }}" in workflow
     assert "/reqsys run protect-reqsys-main-ruleset-noteri" in gateway
     assert "mode='apply-reqsys-main-noteri'" in gateway
