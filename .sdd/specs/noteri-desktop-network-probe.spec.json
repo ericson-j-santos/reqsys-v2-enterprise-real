@@ -39,6 +39,22 @@
       ],
       "branch_prefix": "fix/noteri-desktop-network-probe-http-8083-",
       "legacy_job_skipped_on_http_branch": true
+    },
+    "runtime_surfaces_probe": {
+      "script": "scripts/noteri_desktop_network_probe.py",
+      "revision": "runtime-surfaces-v1",
+      "target_host": "DESKTOP-PDQK954",
+      "execution_control": "Session Launcher -> Command Gateway",
+      "method": "GET",
+      "surfaces": [
+        "8083/api/health",
+        "8000/health",
+        "8008/health",
+        "8097/health",
+        "8787/readyz",
+        "11434/api/tags"
+      ],
+      "arbitrary_target": false
     }
   },
   "security": {
@@ -63,8 +79,15 @@
       "scm",
       "schtasks",
       "c$",
-      "admin_broker"
-    ]
+      "admin_broker",
+      "rdc",
+      "opera",
+      "ssh",
+      "winrm"
+    ],
+    "runtime_surfaces_remote_write": false,
+    "runtime_surfaces_credentials": false,
+    "runtime_surfaces_body_persisted": false
   },
   "evidence_contract": {
     "states": [
@@ -94,7 +117,10 @@
       "dev_gateway_http_reachable",
       "dev_gateway_tcp_reachable_http_unresponsive"
     ],
-    "dev_http_artifact": "artifacts/noteri-desktop-dev-http/evidence.json"
+    "dev_http_artifact": "artifacts/noteri-desktop-dev-http/evidence.json",
+    "runtime_surface_artifact": "artifacts/noteri-desktop-network/evidence.json",
+    "runtime_surface_revision": "runtime-surfaces-v1",
+    "recovery_actuator_proven_default": false
   },
   "sdd_gate": {
     "tests": [
@@ -119,6 +145,9 @@
     "Na branch fix/noteri-desktop-network-probe-http-8083-*, o job legado é ignorado e somente a sonda HTTP DEV executa.",
     "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
-    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente."
+    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
+    "Na branch runtime-surfaces-v1, a sonda usa somente DNS, TCP e HTTP GET nas seis superfícies fixas e não executa WMI, SCM, schtasks, C$, Admin Broker, RDC, Opera, SSH ou WinRM.",
+    "Porta ou health alcançável não comprova executor de recuperação; recovery_actuator_proven permanece false até validação independente de contrato versionado e governado.",
+    "Falhas da sonda runtime-surfaces-v1 são persistidas somente por código genérico sanitizado, sem texto bruto de exceção."
   ]
 }
