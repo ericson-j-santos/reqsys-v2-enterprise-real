@@ -76,7 +76,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert "target='teams-bot-dev-provision.yml'" in content
     assert (
-        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|"
+        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
         "bacen-57-simulation-assessment.yml|"
         "cofre-runtime-evidence-gate.yml|"
@@ -375,3 +375,18 @@ def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None
     assert "-f workflow=" not in content
     assert "-f repository=" not in content
     assert "-f environment=prod" not in content
+
+
+def test_gateway_environment_observability_build_only_is_exact_and_nonprod() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run environment-observability-build-only-dev'" in content
+    assert "'/reqsys run environment-observability-build-only-dev')" in content
+    assert "target='environment-observability-promotion.yml'" in content
+    assert "mode='build-only'" in content
+    assert 'TARGET_WORKFLOW" = "environment-observability-promotion.yml"' in content
+    assert "-f promote_to=development" in content
+    assert "-f build_only=true" in content
+    assert "steps.route.outputs.target == 'environment-observability-promotion.yml'" not in content
+    assert "-f promote_to=staging" not in content
+    assert "-f promote_to=production" not in content
