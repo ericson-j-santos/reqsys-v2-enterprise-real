@@ -52,8 +52,7 @@ jobs:
         github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main-noteri' ||
         github.event.comment.body == '/reqsys run protect-e2e-platform-main' ||
         github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset' ||
-        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset-noteri' ||
-        github.event.comment.body == '/reqsys run protect-fecap-main-noteri'
+        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset-noteri'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -181,10 +180,6 @@ jobs:
             '/reqsys run protect-reqsys-main-ruleset-noteri')
               target='branch-protection-audit.yml'
               mode='apply-reqsys-main-noteri'
-              ;;
-            '/reqsys run protect-fecap-main-noteri')
-              target='branch-protection-audit.yml'
-              mode='apply-fecap-main-noteri'
               ;;
             *)
               echo 'command_not_allowlisted' >&2
