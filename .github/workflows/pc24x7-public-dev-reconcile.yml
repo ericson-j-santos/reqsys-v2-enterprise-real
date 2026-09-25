@@ -1,0 +1,183 @@
+name: PC24x7 Public DEV Reconcile
+
+on:
+  pull_request:
+    paths:
+      - 'docker-compose.pc24x7-public-dev.yml'
+      - 'infra/nginx/default.pc24x7-public-dev.conf'
+      - 'scripts/reconcile_pc24x7_public_dev_runtime.py'
+      - 'scripts/pc24x7_dev_runtime_supervisor.py'
+      - 'scripts/pc24x7_public_dev_tunnel.py'
+      - 'scripts/pc24x7_dev_locator_publisher.py'
+      - 'tests/test_pc24x7_public_dev_static_runtime.py'
+      - '.github/workflows/pc24x7-public-dev-reconcile.yml'
+      - '.github/workflows/reqsys-authorized-actions-gateway.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc24x7-public-dev-reconcile
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate static DEV contract
+        shell: bash
+        env:
+          REQSYS_BUILD_SHA: 0000000000000000000000000000000000000000
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/reconcile_pc24x7_public_dev_runtime.py scripts/pc24x7_dev_runtime_supervisor.py scripts/pc24x7_public_dev_tunnel.py scripts/pc24x7_dev_locator_publisher.py
+          python -m pip install --disable-pip-version-check pytest==9.0.3
+          pytest -q tests/test_pc24x7_public_dev_static_runtime.py tests/test_pc24x7_dev_runtime_supervisor.py tests/test_reqsys_authorized_actions_gateway.py
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.pc24x7-public-dev.yml config --quiet
+
+  reconcile:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 15
+    environment: development
+    env:
+      EVIDENCE_FILE: artifacts/pc24x7-public-dev/evidence.json
+      CORRELATION_ID: pc24x7-public-dev-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout immutable main SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate contract before mutation
+        shell: powershell
+        run: |
+          python -m py_compile scripts/reconcile_pc24x7_public_dev_runtime.py scripts/pc24x7_dev_runtime_supervisor.py scripts/pc24x7_public_dev_tunnel.py scripts/pc24x7_dev_locator_publisher.py
+          python -m pip install --disable-pip-version-check pytest==9.0.3
+          pytest -q tests/test_pc24x7_public_dev_static_runtime.py tests/test_pc24x7_dev_runtime_supervisor.py tests/test_reqsys_authorized_actions_gateway.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Reconcile full DEV runtime and static frontend
+        shell: powershell
+        run: |
+          python scripts/reconcile_pc24x7_public_dev_runtime.py --confirm RECONCILE-PC24X7-PUBLIC-DEV --environment dev --expected-sha "${{ github.sha }}" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Reconcile tunnels and publish signed locator
+        shell: powershell
+        run: |
+          python scripts/pc24x7_dev_runtime_supervisor.py --apply
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload sanitized physical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-public-dev-${{ github.run_id }}
+          path: artifacts/pc24x7-public-dev/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  public-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    needs: reconcile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Resolve signed locator
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pc24x7-public-dev
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-public-dev/locator.json
+
+      - name: Independent public same-SHA smoke
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, time
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"].lower()
+
+          def get(path, timeout=20):
+              started = time.monotonic()
+              request = Request(base + path, headers={"User-Agent": "ReqSysPublicDevSmoke/1.0", "Accept": "*/*"})
+              try:
+                  with urlopen(request, timeout=timeout) as response:
+                      body = response.read(524288).decode("utf-8", errors="replace")
+                      return response.status, body, round((time.monotonic()-started)*1000, 2)
+              except HTTPError as exc:
+                  return exc.code, exc.read(524288).decode("utf-8", errors="replace"), round((time.monotonic()-started)*1000, 2)
+
+          evidence = {"environment": "dev", "expected_sha": expected, "base_url": base}
+          for path in ("/api/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/build-info"):
+              status, body, latency = get(path)
+              if status != 200:
+                  raise SystemExit(f"{path}: HTTP {status}")
+              evidence[path] = {"http": status, "latency_ms": latency}
+              if path == "/api/runtime/build-info":
+                  payload = json.loads(body)
+                  data = payload.get("data", payload)
+                  observed = str(data.get("build_sha") or "").lower()
+                  if observed != expected:
+                      raise SystemExit(f"build_sha mismatch: {observed}")
+                  evidence["observed_sha"] = observed
+
+          status, html, latency = get("/task-console")
+          if status != 200 or "/assets/" not in html or "/src/main.js" in html:
+              raise SystemExit("frontend_not_static")
+          vite_status, _, _ = get("/@vite/client")
+          if vite_status != 404:
+              raise SystemExit(f"vite_hmr_exposed:{vite_status}")
+          asset = re.search(r'(?:src|href)="([^"]*/assets/[^"]+)"', html)
+          if not asset:
+              raise SystemExit("static_asset_not_found")
+          asset_status, _, asset_latency = get(asset.group(1))
+          if asset_status != 200:
+              raise SystemExit(f"static_asset_http_{asset_status}")
+          evidence["frontend"] = {
+              "http": status,
+              "latency_ms": latency,
+              "vite_client_http": vite_status,
+              "asset_http": asset_status,
+              "asset_latency_ms": asset_latency,
+              "mode": "static_nginx",
+          }
+          evidence["production_touched"] = False
+          with open("artifacts/pc24x7-public-dev/public-smoke.json", "w", encoding="utf-8") as fh:
+              json.dump(evidence, fh, ensure_ascii=False, indent=2)
+              fh.write("\n")
+          print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Upload independent public smoke
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-public-dev-smoke-${{ github.run_id }}
+          path: artifacts/pc24x7-public-dev/
+          if-no-files-found: error
+          retention-days: 30
