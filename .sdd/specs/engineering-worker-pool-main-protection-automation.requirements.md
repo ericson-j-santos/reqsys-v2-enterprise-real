@@ -11,7 +11,7 @@ Fechar o gap de governança do repositório `ericson-j-santos/engineering-worker
 3. Se o PC24x7 não adquirir o job, a rota de fallback deve executar somente por `workflow_dispatch` no modo exato `apply-engineering-worker-pool-noteri`.
 4. O Authorized Actions Gateway deve aceitar somente os comandos literais `/reqsys run protect-engineering-worker-pool-main` e `/reqsys run protect-engineering-worker-pool-main-noteri`.
 5. A rota primária deve usar `[self-hosted, Windows, X64, pc24x7, reqsys-dev]` e exigir `DESKTOP-PDQK954`; o fallback deve usar `[self-hosted, Windows, X64, noteri, reqsys-dev]` e exigir `Noteri`.
-6. A sessão deve passar por `session_launcher.py`, exigir `SESSION_LAUNCH_OK`, `state_validated=true` e o SHA atual do ReqSys.
+6. A sessão deve passar por `session_launcher.py`, exigir `SESSION_LAUNCH_OK`, `state_validated=true` e o SHA atual do ReqSys; no Noteri, a origem deve ser o checkout imutável `${{ github.workspace }}` do próprio run, sem depender de clone fixo em `C:\\dev`.
 7. A mutação deve passar exclusivamente por `owner_risk3_gateway.py` com action `reqsys.engineering-worker-pool-main-protection.dev` e escopo `repo://ericson-j-santos/engineering-worker-pool/branch/main`.
 8. O alvo, branch, check e comandos não podem ser recebidos por input livre.
 9. A autenticação GitHub deve usar somente o perfil local existente do `gh`; subprocessos removem `GH_TOKEN` e `GITHUB_TOKEN`.
@@ -27,7 +27,7 @@ Fechar o gap de governança do repositório `ericson-j-santos/engineering-worker
 ## Critérios de aceite
 
 - O modo de auditoria existente permanece somente leitura.
-- A rota primária permanece no PC24x7 allowlisted; o fallback executa somente no Noteri allowlisted e host exato.
+- A rota primária permanece no PC24x7 allowlisted; o fallback executa somente no Noteri allowlisted e host exato, usando checkout imutável como origem da sessão.
 - O SHA alvo é estável antes/depois da mutação.
 - O check `test` do SHA corrente está verde antes da escrita.
 - A API confirma `protected=true`, Pull Request obrigatório, enforcement para admins, `test` strict, force-push bloqueado e exclusão bloqueada.
