@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import socket
+import subprocess
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ from typing import Any
 EXPECTED_HOST = "Noteri"
 TARGET_HOST = "DESKTOP-PDQK954"
 CONFIRM = "PROBE-NOTERI-DESKTOP-NETWORK"
-PROBE_REVISION = "runtime-surfaces-v1"
+PROBE_REVISION = "runtime-surfaces-v2"
 TCP_TIMEOUT_SECONDS = 1.5
 HTTP_TIMEOUT_SECONDS = 3.0
 
@@ -27,6 +28,8 @@ SURFACES = {
     "engineering_worker_pool": {"port": 8097, "path": "/health"},
     "engineering_orchestrator": {"port": 8787, "path": "/readyz"},
     "ollama": {"port": 11434, "path": "/api/tags"},
+    "docker_engine_http": {"port": 2375, "path": "/version"},
+    "docker_engine_tls": {"port": 2376, "path": None},
 }
 
 
@@ -97,16 +100,99 @@ def http_status(port: int, path: str) -> int | None:
         return None
 
 
+def system32_executable(name: str) -> Path | None:
+    root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
+    target = root / "System32" / name
+    return target if target.is_file() else None
+
+
+def parse_visible_share_count(stdout: str) -> int:
+    """Conta linhas de shares visíveis sem persistir nomes."""
+    separator_seen = False
+    count = 0
+    for raw_line in (stdout or "").splitlines():
+        line = raw_line.strip()
+        if not separator_seen:
+            if len(line) >= 3 and set(line) == {"-"}:
+                separator_seen = True
+            continue
+        if not line:
+            continue
+        lowered = line.casefold()
+        if lowered.startswith(
+            (
+                "the command",
+                "o comando",
+                "there are no",
+                "não há",
+                "nao ha",
+            )
+        ):
+            continue
+        if set(line) == {"-"}:
+            continue
+        count += 1
+    return count
+
+
+def probe_visible_smb_shares() -> dict[str, Any]:
+    """Enumera somente shares não administrativos visíveis via NET VIEW.
+
+    Nenhum nome de share, stdout ou stderr é persistido.
+    """
+    executable = system32_executable("net.exe")
+    if executable is None:
+        return {"status": "dependency_unavailable", "visible_share_count": 0}
+    try:
+        completed = subprocess.run(
+            [str(executable), "view", rf"\\{TARGET_HOST}"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"status": "timeout", "visible_share_count": 0}
+    except OSError:
+        return {"status": "dependency_unavailable", "visible_share_count": 0}
+
+    combined = f"{completed.stdout}\n{completed.stderr}".casefold()
+    if completed.returncode == 0:
+        return {
+            "status": "accessible",
+            "visible_share_count": parse_visible_share_count(completed.stdout),
+        }
+    if any(
+        marker in combined
+        for marker in (
+            "access is denied",
+            "acesso negado",
+            "system error 5",
+            "erro de sistema 5",
+        )
+    ):
+        return {"status": "access_denied", "visible_share_count": 0}
+    return {"status": "unavailable", "visible_share_count": 0}
+
+
 def probe_surfaces() -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for name, config in SURFACES.items():
         port = int(config["port"])
-        path = str(config["path"])
+        path = config.get("path")
         reachable = tcp_port_reachable(port)
         result[name] = {
             "port": port,
             "tcp_reachable": reachable,
-            "http_status": http_status(port, path) if reachable else None,
+            "http_status": (
+                http_status(port, str(path))
+                if reachable and isinstance(path, str) and path
+                else None
+            ),
         }
     return result
 
@@ -120,8 +206,10 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         name: {"port": int(config["port"]), "tcp_reachable": False, "http_status": None}
         for name, config in SURFACES.items()
     }
+    smb_probe = {"status": "not_probed", "visible_share_count": 0}
     if resolution["resolved"]:
         surfaces = probe_surfaces()
+        smb_probe = probe_visible_smb_shares()
 
     open_surfaces = sorted(
         name for name, state in surfaces.items() if state["tcp_reachable"] is True
@@ -129,6 +217,14 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     non_orchestrator = [
         name for name in open_surfaces if name != "engineering_orchestrator"
     ]
+    docker_status = surfaces["docker_engine_http"]["http_status"]
+    docker_remote_api_candidate = (
+        isinstance(docker_status, int) and 200 <= docker_status < 300
+    )
+    smb_non_admin_transport_candidate = (
+        smb_probe["status"] == "accessible"
+        and int(smb_probe["visible_share_count"]) > 0
+    )
     return {
         "ok": True,
         "probe_completed": True,
@@ -140,6 +236,10 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "surfaces": surfaces,
         "open_surfaces": open_surfaces,
         "non_orchestrator_surfaces": non_orchestrator,
+        "smb_visible_share_probe": smb_probe,
+        "smb_non_admin_transport_candidate": smb_non_admin_transport_candidate,
+        "docker_remote_api_candidate": docker_remote_api_candidate,
+        "remote_write_attempted": False,
         "recovery_actuator_proven": False,
         "forbidden_transports_probed": False,
         "remote_shell_used": False,
