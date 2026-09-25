@@ -374,4 +374,22 @@ def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f workflow=" not in content
     assert "-f repository=" not in content
-    assert "-f environment=prod" not in content
+    assert "-f environment=prod" not in content\n
+
+def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run desktop-runner-bootstrap-via-orchestrator'" in content
+    assert "'/reqsys run desktop-runner-bootstrap-via-orchestrator')" in content
+    assert "target='desktop-runner-bootstrap-via-orchestrator.yml'" in content
+    assert "steps.route.outputs.target == 'desktop-runner-bootstrap-via-orchestrator.yml'" in content
+
+    assert "github.event.comment.body == '/reqsys run desktop-runner-pickup-canary'" in content
+    assert "'/reqsys run desktop-runner-pickup-canary')" in content
+    assert "target='desktop-runner-pickup-canary.yml'" in content
+    assert "steps.route.outputs.target == 'desktop-runner-pickup-canary.yml'" in content
+
+    assert "desktop-runner-bootstrap-via-orchestrator.yml|desktop-runner-pickup-canary.yml" in content
+    assert "-f target_host=" not in content
+    assert "-f endpoint=" not in content
+    assert "-f command=" not in content
