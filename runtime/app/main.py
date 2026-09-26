@@ -188,6 +188,17 @@ async def runtime_health() -> dict[str, object]:
     }
 
 
+@app.get("/api/runtime/build-info", tags=["runtime"])
+async def runtime_build_info() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "service": settings.service_name,
+        "environment": settings.runtime_environment,
+        "build_sha": (os.getenv("GITHUB_SHA") or "unknown").strip() or "unknown",
+        "schema_version": settings.schema_version,
+    }
+
+
 @app.get("/api/runtime/analytics", tags=["runtime"])
 async def runtime_analytics() -> dict[str, object]:
     metrics = await job_service.metricas()

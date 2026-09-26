@@ -102,7 +102,7 @@ class JobService:
                 correlation_id=stored.correlation_id,
                 idempotency_key=str(stored.payload["idempotency_key"]),
                 duplicate_event=True,
-                status_url=f"/api/jobs/{stored.job_id}",
+                status_url=f"/api/todo-events/{event.event_id}",
                 message="Evento já persistido; nenhum novo efeito lógico foi criado.",
             )
 
@@ -119,7 +119,7 @@ class JobService:
             job_id=job.job_id,
             correlation_id=event.correlation_id,
             idempotency_key=event.idempotency_key,
-            status_url=f"/api/jobs/{job.job_id}",
+            status_url=f"/api/todo-events/{event.event_id}",
         )
 
     async def consultar_job(self, job_id: str):

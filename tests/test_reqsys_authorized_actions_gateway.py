@@ -98,6 +98,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
         "noteri-desktop-watchdog-recovery.yml|"
         "noteri-desktop-admin-broker-kick.yml|"
         "pc24x7-runner-registry-repair.yml|"
+        "todo-global-hourly-cycle.yml|"
         "pc24x7-teams-token-bootstrap.yml|"
         "pc24x7-teams-ephemeral-e2e.yml|"
         "teams-bot-dev-provision.yml|"
@@ -438,3 +439,27 @@ def test_gateway_pages_deploy_is_exact_current_main_and_explicitly_authorized() 
     assert '-f expected_sha="$EXPECTED_SHA"' in content
     assert '-f authorization=DEPLOY_PAGES' in content
     assert "producer_run_id=" not in content
+
+
+def test_gateway_todo_runtime_reconcile_is_exact_dev_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev'" in content
+    assert "'/reqsys run pc24x7-todo-runtime-reconcile-dev')" in content
+    assert "target='todo-global-hourly-cycle.yml'" in content
+    assert "mode='reconcile-runtime'" in content
+    assert "steps.route.outputs.mode == 'reconcile-runtime'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f environment=prod" not in content
+    assert "-f target_host=" not in content
+
+
+def test_gateway_todo_global_hourly_cycle_is_exact_github_hosted() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev'" in content
+    assert "'/reqsys run todo-global-hourly-cycle-dev')" in content
+    assert "target='todo-global-hourly-cycle.yml'" in content
+    assert "mode='cycle'" in content
+    assert 'cycle|reconcile-runtime)' in content
+    assert '-f operation="$TARGET_MODE"' in content
+    assert "-f runtime_url=" not in content
+    assert "-f token=" not in content

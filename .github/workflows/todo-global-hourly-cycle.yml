@@ -3,8 +3,42 @@ name: TODO Global Hourly Cycle
 on:
   schedule:
     - cron: "3 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/todo-global-hourly-cycle.yml'
+      - 'backend/app/api/todo_global_adapter.py'
+      - 'backend/app/main.py'
+      - 'docker-compose.pc24x7-todo-runtime.yml'
+      - 'infra/nginx/default.dev.conf'
+      - 'infra/nginx/default.pc24x7-public-dev.conf'
+      - 'runtime/**'
+      - 'scripts/reconcile_pc24x7_todo_runtime.py'
+      - 'scripts/todo_global_hourly_cycle.py'
+  pull_request:
+    paths:
+      - '.github/workflows/todo-global-hourly-cycle.yml'
+      - 'backend/app/api/todo_global_adapter.py'
+      - 'backend/app/main.py'
+      - 'backend/tests/test_todo_global_adapter.py'
+      - 'docker-compose.pc24x7-todo-runtime.yml'
+      - 'infra/nginx/default.dev.conf'
+      - 'infra/nginx/default.pc24x7-public-dev.conf'
+      - 'runtime/**'
+      - 'scripts/reconcile_pc24x7_todo_runtime.py'
+      - 'scripts/todo_global_hourly_cycle.py'
+      - 'tests/test_pc24x7_todo_runtime_reconcile.py'
+      - 'tests/test_todo_global_hourly_cycle.py'
   workflow_dispatch:
     inputs:
+      operation:
+        description: "Operação DEV governada"
+        required: true
+        default: "cycle"
+        type: choice
+        options:
+          - cycle
+          - reconcile-runtime
       timeout_seconds:
         description: "Limite para aguardar o estado terminal"
         required: false
@@ -13,60 +47,279 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: todo-global-hourly-cycle
   cancel-in-progress: false
 
 jobs:
-  reconcile:
-    name: Reconciliar TODO Global com E2E e replay
+  contract:
+    name: Validar contrato TODO Global / Runtime
     runs-on: ubuntu-latest
-    timeout-minutes: 12
-    env:
-      TODO_GLOBAL_RUNTIME_URL: ${{ vars.TODO_GLOBAL_RUNTIME_URL }}
-      TODO_GLOBAL_RUNTIME_TOKEN: ${{ secrets.TODO_GLOBAL_RUNTIME_TOKEN }}
-      CORRELATION_ID: todo-global-hourly-${{ github.run_id }}-${{ github.run_attempt }}
-
+    timeout-minutes: 8
     steps:
-      - name: Checkout do SHA agendado
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar sintaxe e contratos focados
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest==9.0.3 PyYAML==6.0.2
+          python -m py_compile scripts/reconcile_pc24x7_todo_runtime.py scripts/todo_global_hourly_cycle.py
+          python -m pytest -q             tests/test_pc24x7_todo_runtime_reconcile.py             tests/test_todo_global_hourly_cycle.py
+
+  reconcile-runtime:
+    name: Materializar TODO Runtime no Desktop PC24x7
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime')
+    needs: contract
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    environment: development
+    timeout-minutes: 20
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+      CORRELATION_ID: todo-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/pc24x7-todo-runtime/evidence.json
+    steps:
+      - name: Checkout immutable workflow SHA
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - name: Validar configuração governada
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('REQSYS_KEY_VAULT_NAME','CCP_AZURE_CLIENT_ID','CCP_AZURE_TENANT_ID','CCP_AZURE_SUBSCRIPTION_ID')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "$name missing"
+            }
+          }
+
+      - name: Login Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Preparar dependências do reconciliador
+        shell: powershell
+        run: |
+          python -m pip install --disable-pip-version-check azure-identity azure-keyvault-secrets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Reconciliar runtime, autenticação e E2E físico
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/reconcile_pc24x7_todo_runtime.py --confirm RECONCILE-PC24X7-TODO-RUNTIME-DEV --environment dev --expected-sha "${{ github.sha }}" --vault-name "$env:REQSYS_KEY_VAULT_NAME" --run-id "${{ github.run_id }}" --run-attempt "${{ github.run_attempt }}" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publicar evidência física sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-todo-runtime-${{ github.run_id }}
+          path: artifacts/pc24x7-todo-runtime/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  public-e2e:
+    name: E2E público TODO Runtime + Notion
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime')
+    needs: [contract, reconcile-runtime]
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 10
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Validar contrato local e controle negativo
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --disable-pip-version-check pytest==9.0.3
-          python -m pytest -q tests/test_todo_global_hourly_cycle.py
+      - name: Login Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validar configuração sem expor segredo
+      - name: Resolver locator DEV assinado
+        id: locator
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${TODO_GLOBAL_RUNTIME_URL}" ]]; then
-            echo "::error::A variável TODO_GLOBAL_RUNTIME_URL não está configurada."
-            exit 1
-          fi
-          case "${TODO_GLOBAL_RUNTIME_URL}" in
+          mkdir -p artifacts/pc24x7-todo-runtime
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-todo-runtime/locator.json
+
+      - name: Ler token de produtor sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-pc24x7-todo-runtime-producer-token --query value --output tsv --only-show-errors)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          printf 'TODO_GLOBAL_RUNTIME_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
+      - name: Validar same-SHA público
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          base = os.environ['BASE_URL'].rstrip('/')
+          expected = os.environ['EXPECTED_SHA'].lower()
+
+          def observed(path):
+              with urlopen(Request(base + path, headers={'Accept': 'application/json'}), timeout=20) as response:
+                  payload = json.loads(response.read(262144).decode('utf-8'))
+              data = payload.get('data', payload)
+              return str(data.get('build_sha') or '').lower()
+
+          if observed('/api/runtime/build-info') != expected:
+              raise SystemExit('public_api_sha_mismatch')
+          if observed('/runtime-core/api/runtime/build-info') != expected:
+              raise SystemExit('todo_runtime_sha_mismatch')
+          PY
+
+      - name: Executar ciclo público com replay e leitura independente
+        shell: bash
+        env:
+          RUNTIME_BASE: ${{ steps.locator.outputs.base_url }}/runtime-core
+        run: |
+          set -euo pipefail
+          python scripts/todo_global_hourly_cycle.py             --runtime-url "$RUNTIME_BASE"             --run-id "${{ github.run_id }}"             --run-attempt "${{ github.run_attempt }}"             --timeout-seconds 180             --poll-seconds 5             --output artifacts/pc24x7-todo-runtime/public-e2e.json
+
+      - name: Publicar evidência pública
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc24x7-todo-runtime-public-e2e-${{ github.run_id }}
+          path: artifacts/pc24x7-todo-runtime/
+          if-no-files-found: error
+          retention-days: 30
+
+  cycle:
+    name: Reconciliar TODO Global com E2E e replay
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'cycle')
+    needs: contract
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 12
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      CORRELATION_ID: todo-global-hourly-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Login Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver runtime PC24x7 DEV por locator assinado
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/todo-global-hourly
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/todo-global-hourly/locator.json
+
+      - name: Exportar superfície TODO Runtime
+        shell: bash
+        env:
+          RESOLVED_BASE_URL: ${{ steps.locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          test -n "$RESOLVED_BASE_URL"
+          case "$RESOLVED_BASE_URL" in
             https://*) ;;
-            *)
-              echo "::error::TODO_GLOBAL_RUNTIME_URL deve usar HTTPS."
-              exit 1
-              ;;
+            *) echo "::error::Locator DEV não retornou HTTPS."; exit 1 ;;
           esac
+          printf 'TODO_GLOBAL_RUNTIME_URL=%s/runtime-core\n' "${RESOLVED_BASE_URL%/}" >> "$GITHUB_ENV"
+
+      - name: Ler token de produtor no Key Vault sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-pc24x7-todo-runtime-producer-token --query value --output tsv --only-show-errors)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          printf 'TODO_GLOBAL_RUNTIME_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
+      - name: Validar runtime público no SHA corrente
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"].lower()
+
+          def build_sha(path):
+              request = Request(base + path, headers={"Accept": "application/json", "User-Agent": "TODOGlobalHourly/1.0"})
+              with urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read(262144).decode("utf-8"))
+              data = payload.get("data", payload)
+              return str(data.get("build_sha") or "").lower()
+
+          if build_sha("/api/runtime/build-info") != expected:
+              raise SystemExit("reqsys_public_api_sha_mismatch")
+          if build_sha("/runtime-core/api/runtime/build-info") != expected:
+              raise SystemExit("todo_runtime_public_sha_mismatch")
+          PY
 
       - name: Executar reconciliação e aguardar estado terminal
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/todo_global_hourly_cycle.py             --runtime-url "${TODO_GLOBAL_RUNTIME_URL}"             --run-id "${GITHUB_RUN_ID}"             --run-attempt "${GITHUB_RUN_ATTEMPT}"             --timeout-seconds "${{ inputs.timeout_seconds || '300' }}"             --output artifacts/todo-global-hourly/evidence.json
+          python scripts/todo_global_hourly_cycle.py             --runtime-url "$TODO_GLOBAL_RUNTIME_URL"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --timeout-seconds "${{ inputs.timeout_seconds || '300' }}"             --output artifacts/todo-global-hourly/evidence.json
 
       - name: Publicar resumo sanitizado
         if: always()
@@ -74,28 +327,28 @@ jobs:
         run: |
           {
             echo "## TODO Global Hourly Cycle"
-            echo "- SHA: \`${GITHUB_SHA}\`"
-            echo "- Correlation ID: \`${CORRELATION_ID}\`"
+            echo "- SHA: `$GITHUB_SHA`"
+            echo "- Correlation ID: `$CORRELATION_ID`"
             if [[ -f artifacts/todo-global-hourly/evidence.json ]]; then
               python - <<'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/todo-global-hourly/evidence.json").read_text(encoding="utf-8"))
-          print(f"- Estado terminal: \`{data['terminal_status']}\`")
-          print(f"- Leitura independente: \`{data['readback_verified']}\`")
-          print(f"- Replay sem segundo job: \`{data['replay_duplicate_event']}\`")
+          print(f"- Estado terminal: `{data['terminal_status']}`")
+          print(f"- Leitura independente: `{data['readback_verified']}`")
+          print(f"- Replay sem segundo job: `{data['replay_duplicate_event']}`")
           PY
             else
-              echo "- Estado: \`BLOQUEADO/PARCIAL\`"
+              echo "- Estado: `BLOQUEADO/PARCIAL`"
               echo "- Evidência terminal não produzida; consulte o log sem presumir sucesso."
             fi
-          } >> "${GITHUB_STEP_SUMMARY}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preservar evidência
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: todo-global-hourly-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/todo-global-hourly/evidence.json
+          path: artifacts/todo-global-hourly/
           if-no-files-found: warn
           retention-days: 30

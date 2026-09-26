@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+import hmac
+import os
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.application.services.job_service import JobService, TodoEventIdentityConflictError
 from app.domain.models.job_assincrono import AsyncJobStatusResponse
@@ -9,6 +13,27 @@ from app.infrastructure.queue.errors import QueueCapacityError
 from app.infrastructure.repositories.job_repository_memoria import JobNaoEncontradoError
 
 router = APIRouter(prefix="/api/todo-events", tags=["todo-events"])
+_bearer_optional = HTTPBearer(auto_error=False)
+
+
+def require_todo_producer_token(
+    x_service_token: str | None = Header(default=None, alias="X-Service-Token"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
+) -> bool:
+    expected = os.getenv("TODO_GLOBAL_RUNTIME_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="TODO Global runtime producer token não configurado.",
+        )
+    candidate = (x_service_token or (credentials.credentials if credentials else "")).strip()
+    if not candidate or not hmac.compare_digest(candidate, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de produtor inválido.",
+        )
+    return True
+
 
 
 def get_job_service() -> JobService:  # pragma: no cover - sobrescrito em app.main
@@ -27,6 +52,7 @@ def get_job_service() -> JobService:  # pragma: no cover - sobrescrito em app.ma
 async def publicar_todo_evento(
     event: TodoEventV1,
     response: Response,
+    _authorized: bool = Depends(require_todo_producer_token),
     service: JobService = Depends(get_job_service),
 ) -> TodoEventAcceptedResponse:
     try:
@@ -54,6 +80,7 @@ async def publicar_todo_evento(
 )
 async def consultar_todo_evento(
     event_id: str,
+    _authorized: bool = Depends(require_todo_producer_token),
     service: JobService = Depends(get_job_service),
 ) -> AsyncJobStatusResponse:
     try:

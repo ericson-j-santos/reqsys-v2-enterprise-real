@@ -142,5 +142,18 @@ class SelfHostedRunnerGovernanceTests(unittest.TestCase):
         )
 
 
+    def test_repo_policy_allowlists_pc24x7_todo_runtime_reconcile(self):
+        root = Path(__file__).resolve().parents[1]
+        policy = json.loads(
+            (root / ".github" / "self-hosted-runner-policy.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn(
+            ".github/workflows/todo-global-hourly-cycle.yml",
+            policy["approved_workflows"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -316,3 +316,22 @@ def test_concluido_sem_evidencia_e_criterio_e_rejeitado():
         TodoGlobalUpsertRequest.model_validate(
             _event(status='CONCLUÍDO', completion_criteria=None, evidence=None)
         )
+
+
+@pytest.mark.asyncio
+async def test_adapter_readiness_confirma_config_sem_expor_segredos(monkeypatch):
+    monkeypatch.setattr(adapter_api, '_notion_config', lambda: ('token-test', 'ds-test'))
+
+    result = await adapter_api.todo_global_readiness(_ctx={'kind': 'service_token'})
+
+    assert result == {
+        'ready': True,
+        'adapter': 'notion',
+        'notion_configured': True,
+        'secret_value_exposed': False,
+    }
+
+
+def test_router_readiness_exige_autenticacao():
+    response = TestClient(app).get('/api/internal/todo-global/readiness')
+    assert response.status_code == 401

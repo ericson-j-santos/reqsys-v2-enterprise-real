@@ -79,3 +79,10 @@ def test_wait_terminal_exige_readback_independente(monkeypatch):
             timeout_seconds=1,
             poll_seconds=0,
         )
+
+
+def test_resolve_runtime_url_preserva_prefixo_publico() -> None:
+    assert cycle.resolve_runtime_url(
+        "https://runtime.example/runtime-core",
+        "/api/todo-events/event-1",
+    ) == "https://runtime.example/runtime-core/api/todo-events/event-1"
