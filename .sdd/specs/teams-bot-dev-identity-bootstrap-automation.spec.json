@@ -2,7 +2,7 @@
   "feature_name": "teams-bot-dev-identity-bootstrap-automation",
   "project": "ReqSys Central IA/Teams",
   "created_at": "2026-09-24",
-  "updated_at": "2026-09-24",
+  "updated_at": "2026-09-26",
   "phase": "implementation",
   "increment_type": "gap_fix",
   "approvals": {
@@ -10,7 +10,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Automatiza a execução autorizada do bootstrap idempotente da identidade Teams Bot DEV sem ampliar privilégio do CI, consolidando a operação no workflow Teams Bot DEV Provision e usando Session Launcher + Owner Risk3 Gateway no Noteri.",
+  "description": "Mantém o workflow Teams Bot DEV Provision exclusivamente para o bootstrap idempotente da identidade Teams Bot DEV no Noteri; toda ativação e reconciliação de runtime é responsabilidade do fluxo PC24x7 canônico, sem Fly.io.",
   "environment": "GitHub Actions / Noteri DEV / Microsoft Entra / Azure Key Vault",
   "production_enabled": false,
   "risk": {
@@ -20,7 +20,9 @@
     "self_hosted_runner": "Noteri",
     "application_readwrite_all_granted": false,
     "production_touched": false,
-    "secrets_exposed": false
+    "secrets_exposed": false,
+    "legacy_fly_activation": false,
+    "runtime_activation_moved_to": "pc24x7"
   },
   "acceptance_criteria": [
     "Comando literal allowlisted e restrito ao owner/issue de operações.",
@@ -28,6 +30,9 @@
     "Mutação somente por Owner Risk3 Gateway com action_id e scope fixos e TTL máximo de 30 minutos.",
     "Tenant obtido de variável não secreta; nenhum token, senha, MFA ou client secret em comando, log ou artifact.",
     "Dry-run, execução idempotente e leitura independente confirmam o estado final.",
+    "O workflow Teams Bot DEV Provision aceita somente a operação identity-bootstrap e não possui execução agendada de ativação de runtime.",
+    "Nenhuma URL *.fly.dev, flyctl, FLY_API_TOKEN ou trust anchor Fly permanece no workflow de identidade.",
+    "A ativação/reconciliação do runtime DEV continua no workflow pc24x7-teams-token-bootstrap.yml, com same-SHA e evidência sanitizada.",
     "TEST/HML/STG/PROD não são alterados e a autorização temporária é removida mesmo em falha."
   ],
   "sdd_gate": {
@@ -44,5 +49,11 @@
     "scripts/run_teams_bot_dev_identity_bootstrap_local.py",
     "tests/test_teams_bot_dev_identity_automation.py",
     ".github/self-hosted-runner-policy.json"
-  ]
+  ],
+  "traceability": {
+    "runtime_activation_workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    "deprecation": "docs/DEPRECATIONS.md",
+    "issue_runtime_homologation": 729,
+    "issue_teams_activation": 1532
+  }
 }

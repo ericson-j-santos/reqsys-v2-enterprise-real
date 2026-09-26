@@ -329,8 +329,7 @@ jobs:
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
-              -f operation=identity-bootstrap \
-              -f force_runtime_sync=false)"
+              -f operation=identity-bootstrap)"
           else
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
