@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -309,6 +310,15 @@ async def test_adapter_upsert_converte_falha_notion_em_502(monkeypatch):
 def test_router_interno_resolve_e_exige_autenticacao():
     response = TestClient(app).post('/api/internal/todo-global/upsert', json=_event())
     assert response.status_code == 401
+
+
+def test_router_todo_global_e_registrado_uma_unica_vez():
+    backend_root = Path(__file__).resolve().parents[1]
+    main_text = (backend_root / 'app' / 'main.py').read_text(encoding='utf-8')
+    api_init_text = (backend_root / 'app' / 'api' / '__init__.py').read_text(encoding='utf-8')
+
+    assert main_text.count('app.include_router(todo_global_adapter.router)') == 1
+    assert 'monitoramento_operacional.router.routes.extend(todo_global_adapter.router.routes)' not in api_init_text
 
 
 def test_concluido_sem_evidencia_e_criterio_e_rejeitado():

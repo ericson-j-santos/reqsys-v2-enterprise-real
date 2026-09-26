@@ -50,7 +50,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: todo-global-hourly-cycle
+  group: todo-global-hourly-cycle-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'runtime' || format('{0}-{1}', github.event_name, github.ref) }}
   cancel-in-progress: false
 
 jobs:
@@ -73,7 +73,7 @@ jobs:
 
   reconcile-runtime:
     name: Materializar TODO Runtime no Desktop PC24x7
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime')
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime'
     needs: contract
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     environment: development
@@ -135,7 +135,7 @@ jobs:
 
   public-e2e:
     name: E2E público TODO Runtime + Notion
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime')
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime'
     needs: [contract, reconcile-runtime]
     runs-on: ubuntu-latest
     environment: development

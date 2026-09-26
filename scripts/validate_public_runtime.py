@@ -19,6 +19,7 @@ DEFAULT_ENDPOINTS = ("/health", "/api/runtime/health", "/api/runtime/readiness",
 OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS = (
     "/", "/runtime", "/api/runtime/contracts", "/api/runtime/version", "/api/runtime/build-info",
     "/api/runtime/dependencies", "/api/runtime/metrics", "/api/runtime/dashboard", "/api/runtime/analytics",
+    "/v1/integracoes/figma-github/config", "/v1/integracoes/figma-github/status",
 )
 DASHBOARD_ENDPOINTS = {"/runtime", "/api/runtime/dashboard"}
 INCIDENT_ENDPOINTS = {"/api/runtime/analytics", "/api/runtime/dashboard"}
