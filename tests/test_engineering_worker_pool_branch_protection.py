@@ -1,5 +1,9 @@
 from pathlib import Path
 
+import pytest
+
+from scripts import run_engineering_worker_pool_main_protection_local as protection_runner
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BRANCH_WORKFLOW = ROOT / ".github/workflows/branch-protection-audit.yml"
@@ -39,11 +43,19 @@ def test_risk3_action_is_fixed_and_secretless() -> None:
     assert "--secret" not in raw
 
 
+def test_local_protection_accepts_only_governed_execution_hosts() -> None:
+    assert protection_runner.validate_execution_host("DESKTOP-PDQK954") == "DESKTOP-PDQK954"
+    assert protection_runner.validate_execution_host("Noteri") == "NOTERI"
+    with pytest.raises(protection_runner.ProtectionError, match="unexpected_host"):
+        protection_runner.validate_execution_host("OTHER-HOST")
+
+
 def test_local_protection_is_fail_closed_and_enables_auto_merge() -> None:
     raw = RUNNER.read_text(encoding="utf-8")
     assert 'TARGET_REPOSITORY = "ericson-j-santos/engineering-worker-pool"' in raw
     assert 'TARGET_BRANCH = "main"' in raw
     assert 'REQUIRED_CHECKS = ("test",)' in raw
+    assert 'ALLOWED_EXECUTION_HOSTS = frozenset({"DESKTOP-PDQK954", "NOTERI"})' in raw
     assert 'env.pop("GH_TOKEN", None)' in raw
     assert 'env.pop("GITHUB_TOKEN", None)' in raw
     assert '"required_checks_not_green"' in raw
