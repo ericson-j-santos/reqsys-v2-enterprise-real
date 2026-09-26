@@ -5,7 +5,7 @@
   "status": "implementation",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-09-21",
-  "updated_at": "2026-09-23",
+  "updated_at": "2026-09-26",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -17,7 +17,7 @@
       "tests/test_vibe_security_gate.py",
       "frontend/src/utils/__tests__/markdownRenderer.test.js"
     ],
-    "evidence_contract": "Matriz de 12 riscos; fixtures de teste fora do scan de produção; v-html de produção sem sanitização continua bloqueador; Markdown sanitizado por DOMPurify com controles XSS positivo/negativo; no_signal nunca é prova de segurança; artifact vinculado ao HEAD. A cadeia SpecsView.vue -> markdownRenderer.js é validada explicitamente; regressão no helper restaura block."
+    "evidence_contract": "Matriz de 12 riscos; fixtures de teste fora do scan de produção; v-html de produção sem sanitização continua bloqueador; Markdown sanitizado por DOMPurify com controles XSS positivo/negativo; no_signal nunca é prova de segurança; artifact vinculado ao HEAD. A cadeia SpecsView.vue -> markdownRenderer.js é validada explicitamente; regressão no helper restaura block. Push em main aplica enforcement estrito somente ao delta before...sha e preserva snapshot scope=all report-only."
   },
   "traceability": {
     "requirements": ".sdd/specs/vibe-security-12-risk-gate.requirements.md",
@@ -45,6 +45,9 @@
     "Fixtures __tests__/*.test.*/*.spec.* do frontend não geram falso bloqueio no scan de produção.",
     "SpecsView renderiza Markdown somente após DOMPurify.sanitize e possui teste contra script, event handlers e javascript: URLs.",
     "Um sink v-html de produção sem sanitização continua enforcement=block.",
-    "Sanitização importada só é aceita quando o gate valida o consumidor exato, o helper exato e a chamada DOMPurify.sanitize; remover a sanitização volta a bloquear."
+    "Sanitização importada só é aceita quando o gate valida o consumidor exato, o helper exato e a chamada DOMPurify.sanitize; remover a sanitização volta a bloquear.",
+    "Push em main usa github.event.before...github.sha como escopo estrito para não reabrir dívida histórica.",
+    "Push em main publica snapshot completo scope=all sem --strict para manter visibilidade da postura acumulada.",
+    "Workflow dispatch continua capaz de executar auditoria manual scope=all em modo estrito."
   ]
 }
