@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "feature_name": "TODO Global Hourly Cycle via GitHub Actions",
-  "status": "implemented_pending_ci_and_runtime_e2e",
+  "status": "implementation",
   "approvals": {
     "requirements": true
   },
@@ -13,7 +13,9 @@
   },
   "traceability": {
     "workflow": ".github/workflows/todo-global-hourly-cycle.yml",
-    "executor": "scripts/todo_global_hourly_cycle.py"
+    "executor": "scripts/todo_global_hourly_cycle.py",
+    "runtime_reconcile_workflow": ".github/workflows/pc24x7-todo-runtime-reconcile.yml",
+    "runtime_locator": "scripts/resolve_pc24x7_dev_locator.mjs"
   },
   "risk": {
     "production": false,
@@ -23,11 +25,13 @@
   },
   "acceptance_criteria": [
     "O GitHub Actions executa a reconciliação horária pelo cron 3 * * * * e permite execução manual por workflow_dispatch, sem usar Work para agendamento.",
-    "A execução falha fechada quando TODO_GLOBAL_RUNTIME_URL está ausente ou não usa HTTPS.",
+    "A execução resolve exclusivamente o locator PC24x7 DEV assinado, deriva /runtime-core e rejeita runtime que não reporte o mesmo github.sha.",
     "Antes do evento válido, um payload inválido deve ser rejeitado com HTTP 400 ou 422, comprovando o controle negativo.",
     "O evento todo.reconcile.requested preserva event_id, correlation_id e idempotency_key e aguarda o job até estado terminal dentro do timeout.",
     "Conclusão exige readback_verified=true obtido na leitura do estado terminal; aceitação HTTP 2xx isolada não caracteriza sucesso.",
     "O replay do mesmo event_id deve retornar o mesmo job_id e duplicate_event=true, sem criar segundo efeito.",
-    "A evidência sanitizada é preservada como artifact vinculada ao run e ao SHA correspondente."
-  ]
+    "A evidência sanitizada é preservada como artifact vinculada ao run e ao SHA correspondente.",
+    "O token produtor é obtido do Azure Key Vault por OIDC, nunca de valor versionado ou fallback Fly."
+  ],
+  "updated_at": "2026-09-26"
 }
