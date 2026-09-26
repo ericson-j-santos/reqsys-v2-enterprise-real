@@ -141,6 +141,14 @@ def test_expensive_pr_workflows_are_guarded_before_router_or_guardrails() -> Non
         assert expected in raw
 
 
+def test_ci_enterprise_fast_has_bounded_admission_wait_budget() -> None:
+    raw = (ROOT / ".github/workflows/ci-enterprise-fast.yml").read_text(encoding="utf-8")
+    admission = raw.split("  ci-admission:", 1)[1].split("\n  guardrails:", 1)[0]
+    assert "timeout-minutes: 5" in admission
+    assert "--max-wait-seconds 240" in admission
+    assert "--poll-seconds 5" in admission
+
+
 def test_pr_evidence_gate_requires_manifest_from_current_sha() -> None:
     raw = (ROOT / ".github/workflows/pr-evidence-gate.yml").read_text(encoding="utf-8")
     assert "Pre-PR Readiness Gate" in raw
