@@ -55,7 +55,6 @@ from app.api import (
     sistema,
     specs,
     teams_gateway,
-    todo_global_adapter,
     webhooks,
     wiki,
 )
@@ -155,7 +154,6 @@ app.include_router(movimento_email.router)
 app.include_router(noteri_host_profile.router)
 app.include_router(hub_lowcode.router)
 app.include_router(teams_gateway.router)
-app.include_router(todo_global_adapter.router)
 app.include_router(agents.router)
 app.include_router(monitoramento_operacional.router)
 app.include_router(runtime_analytics.router)
