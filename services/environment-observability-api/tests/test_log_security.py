@@ -69,3 +69,21 @@ def test_json_formatter_never_emits_sensitive_values():
     assert "deployment_id" in payload
     assert "region" in payload
     assert "instance_id" in payload
+
+
+def test_json_formatter_redacts_invalid_workflow_run_id():
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="safe",
+        args=(),
+        exc_info=None,
+    )
+    record.workflow_run_id = "35999999999\\nforged"
+    output = JsonFormatter().format(record)
+    payload = json.loads(output)
+
+    assert payload["workflow_run_id"] == "[REDACTED]"
+    assert "forged" not in output

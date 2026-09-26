@@ -12,7 +12,7 @@
   "acceptance_criteria": [
     "Logs estruturados suportam correlation_id, causation_id e workflow_run_id.",
     "IDs operacionais inválidos ou com caracteres de injeção não são propagados.",
-    "Redaction existente permanece ativa e coberta por teste negativo.",
+    "Redaction existente permanece ativa; workflow_run_id numérico validado não é confundido com CPF e valores inválidos são redigidos.",
     "O contrato HTTP expõe suporte aos novos identificadores sem exigir backend pago.",
     "Pre-PR Readiness deve retornar READY_FOR_PR=passed no HEAD exato com behind_by=0."
   ],
@@ -25,12 +25,12 @@
   },
   "project": "ReqSys v2 Enterprise — Logs e Observabilidade",
   "created_at": "2026-09-23",
-  "updated_at": "2026-09-23",
+  "updated_at": "2026-09-25",
   "phase": "implementation_pending_ci",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Padroniza causation_id e workflow_run_id no contexto distribuído do Environment Observability API, preservando correlation_id, redaction e operação sem custo adicional."
+  "description": "Padroniza causation_id e workflow_run_id no contexto distribuído do Environment Observability API, preservando IDs operacionais numéricos tipados sem enfraquecer redaction de PII e mantendo operação sem custo adicional."
 }
