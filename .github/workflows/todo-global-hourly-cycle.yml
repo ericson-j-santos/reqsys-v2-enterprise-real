@@ -327,8 +327,8 @@ jobs:
         run: |
           {
             printf '%s\\n' "## TODO Global Hourly Cycle"
-            printf '%s\\n' "- SHA: \\`$GITHUB_SHA\\`"
-            printf '%s\\n' "- Correlation ID: \\`$CORRELATION_ID\\`"
+            printf '%s\\n' "- SHA: \`$GITHUB_SHA\`"
+            printf '%s\\n' "- Correlation ID: \`$CORRELATION_ID\`"
             if [[ -f artifacts/todo-global-hourly/evidence.json ]]; then
               python - <<'PY'
           import json
