@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
 
 import pytest
 
@@ -86,3 +89,15 @@ def test_resolve_runtime_url_preserva_prefixo_publico() -> None:
         "https://runtime.example/runtime-core",
         "/api/todo-events/event-1",
     ) == "https://runtime.example/runtime-core/api/todo-events/event-1"
+
+
+def test_workflow_materializacao_dev_exige_dispatch_explicito() -> None:
+    workflow_path = Path(".github/workflows/todo-global-hourly-cycle.yml")
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    jobs = workflow["jobs"]
+
+    expected = "github.event_name == 'workflow_dispatch' && inputs.operation == 'reconcile-runtime'"
+    assert jobs["reconcile-runtime"]["if"] == expected
+    assert jobs["public-e2e"]["if"] == expected
+    assert "github.event_name == 'push'" not in jobs["reconcile-runtime"]["if"]
+    assert "github.event_name == 'push'" not in jobs["public-e2e"]["if"]
