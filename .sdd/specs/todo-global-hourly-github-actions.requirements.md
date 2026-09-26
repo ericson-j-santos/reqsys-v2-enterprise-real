@@ -23,6 +23,7 @@ Substituir o agendamento do Work por um ciclo horário versionado no GitHub Acti
 - Falta de configuração, timeout, DLQ, falha ou ausência de leitura independente devem falhar fechado.
 - O modo `cycle` não executa merge, deploy, alteração administrativa ou produção.
 - A materialização do Runtime DEV só pode ocorrer por `workflow_dispatch` explícito com `operation=reconcile-runtime`; `push` e `schedule` nunca podem materializar runtime.
+- Runs de validação (`pull_request`/`push`) devem usar grupo de concorrência separado de operações (`schedule`/`workflow_dispatch`), para indisponibilidade do Desktop não bloquear CI.
 
 ## Critérios de aceite
 
