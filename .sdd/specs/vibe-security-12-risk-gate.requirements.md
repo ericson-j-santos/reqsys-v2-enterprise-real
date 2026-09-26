@@ -26,6 +26,9 @@ Consolidar os 12 riscos do guia KipperDev em um gate versionado e verificável d
 14. Sinks `v-html` de produção continuam bloqueadores quando não houver sanitização explícita; o renderer de Markdown do Specs deve sanitizar a saída com DOMPurify antes de entregá-la ao DOM.
 15. A sanitização deve possuir teste negativo para `<script>`, event handlers e protocolo `javascript:`, além de controle positivo que preserve Markdown seguro.
 16. Quando a sanitização estiver encapsulada em helper importado, o scanner só pode rebaixar o sink para revisão se validar o consumidor exato, o caminho exato do helper e a presença real da chamada de sanitização nesse helper; remover a sanitização do helper deve restaurar `enforcement=block`.
+17. Em `pull_request`, `merge_group` e `push` para `main`, o enforcement estrito deve avaliar apenas a dívida introduzida pelo delta corrente; em `push`, o intervalo deve usar `github.event.before...github.sha` para cobrir o conjunto real de commits publicado.
+18. Todo `push` em `main` deve gerar também um snapshot `scope=all` report-only, preservando visibilidade integral da dívida histórica sem convertê-la em falso bloqueio da nova versão.
+19. `workflow_dispatch` deve continuar permitindo `scope=all` + modo estrito para auditoria deliberada do repositório completo.
 
 ## Critérios de aceite
 
@@ -38,6 +41,7 @@ Consolidar os 12 riscos do guia KipperDev em um gate versionado e verificável d
 - O gate comprova a cadeia `SpecsView.vue` → `markdownRenderer.js`; regressão que remova `DOMPurify.sanitize` do helper volta a bloquear.
 - Relatório sem achados contém as 12 linhas com `no_signal` e a ressalva de garantia.
 - O controle negativo interno retorna sucesso somente quando a falha conhecida é detectada.
-- O workflow compila e executa o novo gate em modo estrito no mesmo escopo do baseline.
+- O workflow compila e executa o novo gate em modo estrito no mesmo escopo incremental do evento.
+- `push` em `main` falha por blocker novo no delta, não por blocker histórico fora do delta; o snapshot completo continua publicado como report-only.
 - O SDD Gate e o Pre-PR Readiness devem ficar verdes no HEAD exato e com `behind_by=0`.
 - Nenhum merge, deploy, produção ou mudança de segredo faz parte deste incremento.

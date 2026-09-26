@@ -212,3 +212,40 @@ def test_security_baseline_passes_changed_line_map_to_vibe_gate() -> None:
     ).read_text(encoding="utf-8")
     assert "changed-lines.json" in workflow
     assert 'args+=("--changed-files" "$CHANGED_FILES" "--changed-lines" "$CHANGED_LINES")' in workflow
+
+
+def test_security_baseline_push_enforces_only_new_delta_and_keeps_full_posture() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "security-baseline-gate.yml"
+    ).read_text(encoding="utf-8")
+
+    assert 'elif [ "$EVENT_NAME" = "push" ]; then' in workflow
+    assert 'before="${{ github.event.before }}"' in workflow
+    assert 'after="${{ github.sha }}"' in workflow
+    assert 'diff_range="${before}...${after}"' in workflow
+    assert "Snapshot full security posture (report only)" in workflow
+    assert "--output-dir artifacts/security-baseline/posture" in workflow
+    assert "--output-dir artifacts/security-baseline/posture/vibe-security" in workflow
+
+    posture = workflow.split(
+        "- name: Snapshot full security posture (report only)", maxsplit=1
+    )[1].split("- name: Publish security baseline artifact", maxsplit=1)[0]
+    assert "--scope all" in posture
+    assert "--strict" not in posture
+
+
+def test_security_baseline_manual_full_scope_stays_available() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "security-baseline-gate.yml"
+    ).read_text(encoding="utf-8")
+
+    assert 'default: "all"' in workflow
+    assert '"all"' in workflow
+    assert '"changed"' in workflow
+    assert 'STRICT_INPUT: ${{ inputs.strict || \'true\' }}' in workflow

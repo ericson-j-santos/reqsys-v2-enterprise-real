@@ -71,6 +71,14 @@ jobs:
             diff_range="origin/${{ github.base_ref }}...HEAD"
           elif [ "$EVENT_NAME" = "merge_group" ]; then
             diff_range="${{ github.event.merge_group.base_sha }}...${{ github.event.merge_group.head_sha }}"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+            if [[ "$before" =~ ^0+$ ]]; then
+              diff_range="HEAD~1...HEAD"
+            else
+              diff_range="${before}...${after}"
+            fi
           elif [ "$WORKFLOW_SCOPE" = "changed" ]; then
             diff_range="HEAD~1...HEAD"
           fi
@@ -159,6 +167,18 @@ jobs:
             args+=("--changed-files" "$CHANGED_FILES" "--changed-lines" "$CHANGED_LINES")
           fi
           python scripts/vibe_security_gate.py --strict "${args[@]}"
+
+      - name: Snapshot full security posture (report only)
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/validate_security_baseline.py \
+            --output-dir artifacts/security-baseline/posture \
+            --scope all
+          python scripts/vibe_security_gate.py \
+            --output-dir artifacts/security-baseline/posture/vibe-security \
+            --scope all
 
       - name: Publish security baseline artifact
         if: always()
