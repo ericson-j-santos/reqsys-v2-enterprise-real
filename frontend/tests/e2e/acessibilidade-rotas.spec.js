@@ -123,7 +123,15 @@ test.describe('acessibilidade: catálogo completo de rotas autenticadas', () => 
       contentType: 'application/json',
     })
 
-    expect(ROTAS_AUTENTICADAS.length, 'Catálogo autenticado deve conter exatamente 37 rotas').toBe(37)
+    const paresCanonicos = ROTAS_AUTENTICADAS.map((item) => `${item.path}|${item.testId}`)
+    expect(
+      ROTAS_AUTENTICADAS.length,
+      'Catálogo autenticado não pode regredir abaixo da baseline atual',
+    ).toBeGreaterThanOrEqual(38)
+    expect(
+      new Set(paresCanonicos).size,
+      'Catálogo autenticado deve permanecer sem duplicidades',
+    ).toBe(paresCanonicos.length)
     expect(
       violacoesPorRota,
       `Violações automatizáveis WCAG 2.2 A/AA: ${JSON.stringify(violacoesPorRota, null, 2)}`,
