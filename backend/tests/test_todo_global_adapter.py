@@ -312,16 +312,21 @@ def test_router_interno_resolve_e_exige_autenticacao():
 
 
 def test_router_todo_global_e_registrado_uma_unica_vez():
-    def walk(routes):
-        for route in routes:
-            yield route
-            nested = getattr(route, 'routes', None)
-            if nested:
-                yield from walk(nested)
+    upsert = [
+        route
+        for route in app.routes
+        if getattr(route, 'path', None) == '/api/internal/todo-global/upsert'
+        and 'POST' in (getattr(route, 'methods', None) or set())
+    ]
+    readiness = [
+        route
+        for route in app.routes
+        if getattr(route, 'path', None) == '/api/internal/todo-global/readiness'
+        and 'GET' in (getattr(route, 'methods', None) or set())
+    ]
 
-    endpoints = [getattr(route, 'endpoint', None) for route in walk(app.routes)]
-    assert endpoints.count(adapter_api.upsert_todo_global) == 1
-    assert endpoints.count(adapter_api.todo_global_readiness) == 1
+    assert len(upsert) == 1
+    assert len(readiness) == 1
 
 
 def test_concluido_sem_evidencia_e_criterio_e_rejeitado():
