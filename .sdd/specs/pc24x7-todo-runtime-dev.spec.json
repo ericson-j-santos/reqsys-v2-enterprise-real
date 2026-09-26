@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-todo-runtime-dev",
+  "project": "ReqSys v2 Enterprise / Runtime Platform",
+  "created_at": "2026-09-26",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Materializa o ReqSys Runtime assíncrono no Desktop PC24x7 DEV com Redis, adapter Notion autenticado, locator assinado, same-SHA e E2E com replay.",
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-todo-runtime-dev.requirements.md",
+    "workflow": ".github/workflows/pc24x7-todo-runtime-reconcile.yml",
+    "reconciler": "scripts/reconcile_pc24x7_todo_runtime.py",
+    "compose": "docker-compose.pc24x7-todo-runtime.yml",
+    "hourly_workflow": ".github/workflows/todo-global-hourly-cycle.yml",
+    "issues": [
+      1693,
+      715
+    ]
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_todo_runtime_reconcile.py",
+      "tests/test_todo_global_hourly_cycle.py",
+      "runtime/tests/test_todo_events.py",
+      "backend/tests/test_todo_global_adapter.py",
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ]
+  },
+  "constraints": {
+    "environment": "dev",
+    "host": "DESKTOP-PDQK954",
+    "runtime_target": "pc24x7",
+    "fly_fallback": false,
+    "redis_persistent": true,
+    "public_surface": "minimal",
+    "secrets_in_git": false,
+    "production_touched": false
+  },
+  "validation": {
+    "same_sha": true,
+    "auth_negative_control": true,
+    "invalid_payload_control": true,
+    "notion_readback": true,
+    "replay_idempotency": true,
+    "independent_public_e2e": true
+  }
+}
