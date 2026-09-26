@@ -14,7 +14,7 @@
   "traceability": {
     "workflow": ".github/workflows/todo-global-hourly-cycle.yml",
     "executor": "scripts/todo_global_hourly_cycle.py",
-    "runtime_reconcile_workflow": ".github/workflows/pc24x7-todo-runtime-reconcile.yml",
+    "runtime_reconcile_workflow": ".github/workflows/todo-global-hourly-cycle.yml",
     "runtime_locator": "scripts/resolve_pc24x7_dev_locator.mjs"
   },
   "risk": {
@@ -31,7 +31,8 @@
     "Conclusão exige readback_verified=true obtido na leitura do estado terminal; aceitação HTTP 2xx isolada não caracteriza sucesso.",
     "O replay do mesmo event_id deve retornar o mesmo job_id e duplicate_event=true, sem criar segundo efeito.",
     "A evidência sanitizada é preservada como artifact vinculada ao run e ao SHA correspondente.",
-    "O token produtor é obtido do Azure Key Vault por OIDC, nunca de valor versionado ou fallback Fly."
+    "O token produtor é obtido do Azure Key Vault por OIDC, nunca de valor versionado ou fallback Fly.",
+    "A materialização do Runtime DEV só executa por workflow_dispatch explícito com operation=reconcile-runtime; push e schedule executam apenas caminhos não-deploy."
   ],
   "updated_at": "2026-09-26"
 }
