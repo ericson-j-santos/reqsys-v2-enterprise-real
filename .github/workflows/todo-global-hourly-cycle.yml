@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: todo-global-hourly-cycle
@@ -22,10 +23,13 @@ jobs:
   reconcile:
     name: Reconciliar TODO Global com E2E e replay
     runs-on: ubuntu-latest
+    environment: development
     timeout-minutes: 12
     env:
-      TODO_GLOBAL_RUNTIME_URL: ${{ vars.TODO_GLOBAL_RUNTIME_URL }}
-      TODO_GLOBAL_RUNTIME_TOKEN: ${{ secrets.TODO_GLOBAL_RUNTIME_TOKEN }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
       CORRELATION_ID: todo-global-hourly-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
@@ -39,6 +43,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Configurar Node para locator assinado
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Validar contrato local e controle negativo
         shell: bash
         run: |
@@ -46,27 +55,72 @@ jobs:
           python -m pip install --disable-pip-version-check pytest==9.0.3
           python -m pytest -q tests/test_todo_global_hourly_cycle.py
 
-      - name: Validar configuração sem expor segredo
+      - name: Login Azure por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver runtime PC24x7 DEV por locator assinado
+        id: locator
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${TODO_GLOBAL_RUNTIME_URL}" ]]; then
-            echo "::error::A variável TODO_GLOBAL_RUNTIME_URL não está configurada."
-            exit 1
-          fi
-          case "${TODO_GLOBAL_RUNTIME_URL}" in
+          mkdir -p artifacts/todo-global-hourly
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/todo-global-hourly/locator.json
+          base="${{ steps.locator.outputs.base_url }}"
+          test -n "$base"
+          case "$base" in
             https://*) ;;
-            *)
-              echo "::error::TODO_GLOBAL_RUNTIME_URL deve usar HTTPS."
-              exit 1
-              ;;
+            *) echo "::error::Locator DEV não retornou HTTPS."; exit 1 ;;
           esac
+          printf 'TODO_GLOBAL_RUNTIME_URL=%s/runtime-core\n' "${base%/}" >> "$GITHUB_ENV"
+
+      - name: Ler token de produtor no Key Vault sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$REQSYS_KEY_VAULT_NAME"
+          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-pc24x7-todo-runtime-producer-token --query value --output tsv --only-show-errors)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          printf 'TODO_GLOBAL_RUNTIME_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
+      - name: Validar runtime público no SHA corrente
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"].lower()
+
+          def build_sha(path):
+              request = Request(base + path, headers={"Accept": "application/json", "User-Agent": "TODOGlobalHourly/1.0"})
+              with urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read(262144).decode("utf-8"))
+              data = payload.get("data", payload)
+              return str(data.get("build_sha") or "").lower()
+
+          if build_sha("/api/runtime/build-info") != expected:
+              raise SystemExit("reqsys_public_api_sha_mismatch")
+          if build_sha("/runtime-core/api/runtime/build-info") != expected:
+              raise SystemExit("todo_runtime_public_sha_mismatch")
+          PY
 
       - name: Executar reconciliação e aguardar estado terminal
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/todo_global_hourly_cycle.py             --runtime-url "${TODO_GLOBAL_RUNTIME_URL}"             --run-id "${GITHUB_RUN_ID}"             --run-attempt "${GITHUB_RUN_ATTEMPT}"             --timeout-seconds "${{ inputs.timeout_seconds || '300' }}"             --output artifacts/todo-global-hourly/evidence.json
+          python scripts/todo_global_hourly_cycle.py             --runtime-url "$TODO_GLOBAL_RUNTIME_URL"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --timeout-seconds "${{ inputs.timeout_seconds || '300' }}"             --output artifacts/todo-global-hourly/evidence.json
 
       - name: Publicar resumo sanitizado
         if: always()
@@ -74,28 +128,28 @@ jobs:
         run: |
           {
             echo "## TODO Global Hourly Cycle"
-            echo "- SHA: \`${GITHUB_SHA}\`"
-            echo "- Correlation ID: \`${CORRELATION_ID}\`"
+            echo "- SHA: `$GITHUB_SHA`"
+            echo "- Correlation ID: `$CORRELATION_ID`"
             if [[ -f artifacts/todo-global-hourly/evidence.json ]]; then
               python - <<'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/todo-global-hourly/evidence.json").read_text(encoding="utf-8"))
-          print(f"- Estado terminal: \`{data['terminal_status']}\`")
-          print(f"- Leitura independente: \`{data['readback_verified']}\`")
-          print(f"- Replay sem segundo job: \`{data['replay_duplicate_event']}\`")
+          print(f"- Estado terminal: `{data['terminal_status']}`")
+          print(f"- Leitura independente: `{data['readback_verified']}`")
+          print(f"- Replay sem segundo job: `{data['replay_duplicate_event']}`")
           PY
             else
-              echo "- Estado: \`BLOQUEADO/PARCIAL\`"
+              echo "- Estado: `BLOQUEADO/PARCIAL`"
               echo "- Evidência terminal não produzida; consulte o log sem presumir sucesso."
             fi
-          } >> "${GITHUB_STEP_SUMMARY}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preservar evidência
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: todo-global-hourly-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/todo-global-hourly/evidence.json
+          path: artifacts/todo-global-hourly/
           if-no-files-found: warn
           retention-days: 30
