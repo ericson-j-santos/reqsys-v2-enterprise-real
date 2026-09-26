@@ -112,3 +112,14 @@ def test_workflow_concorrencia_separa_validacao_de_operacao() -> None:
     assert "'runtime'" in raw
     assert "format('{0}-{1}', github.event_name, github.ref)" in raw
     assert "group: todo-global-hourly-cycle\n" not in raw
+
+
+def test_todo_global_summary_escapes_markdown_backticks() -> None:
+    raw = Path(".github/workflows/todo-global-hourly-cycle.yml").read_text(encoding="utf-8")
+
+    assert 'echo "- SHA: `$GITHUB_SHA`"' not in raw
+    assert 'echo "- Correlation ID: `$CORRELATION_ID`"' not in raw
+    assert 'echo "- Estado: `BLOQUEADO/PARCIAL`"' not in raw
+    assert "printf '%s\\n' \"- SHA: \\`$GITHUB_SHA\\`\"" in raw
+    assert "printf '%s\\n' \"- Correlation ID: \\`$CORRELATION_ID\\`\"" in raw
+    assert "printf '%s\\n' '- Estado: `BLOQUEADO/PARCIAL`'" in raw
