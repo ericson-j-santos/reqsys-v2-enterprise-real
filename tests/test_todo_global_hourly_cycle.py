@@ -101,3 +101,14 @@ def test_workflow_materializacao_dev_exige_dispatch_explicito() -> None:
     assert jobs["public-e2e"]["if"] == expected
     assert "github.event_name == 'push'" not in jobs["reconcile-runtime"]["if"]
     assert "github.event_name == 'push'" not in jobs["public-e2e"]["if"]
+
+
+def test_workflow_concorrencia_separa_validacao_de_operacao() -> None:
+    raw = Path(".github/workflows/todo-global-hourly-cycle.yml").read_text(encoding="utf-8")
+
+    assert "todo-global-hourly-cycle-${{ " in raw
+    assert "github.event_name == 'workflow_dispatch'" in raw
+    assert "github.event_name == 'schedule'" in raw
+    assert "'runtime'" in raw
+    assert "format('{0}-{1}', github.event_name, github.ref)" in raw
+    assert "group: todo-global-hourly-cycle\n" not in raw
