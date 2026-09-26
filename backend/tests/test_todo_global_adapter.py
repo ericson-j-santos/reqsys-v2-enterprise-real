@@ -319,9 +319,9 @@ def test_router_todo_global_e_registrado_uma_unica_vez():
             if nested:
                 yield from walk(nested)
 
-    paths = [getattr(route, 'path', None) for route in walk(app.routes)]
-    assert paths.count('/api/internal/todo-global/upsert') == 1
-    assert paths.count('/api/internal/todo-global/readiness') == 1
+    endpoints = [getattr(route, 'endpoint', None) for route in walk(app.routes)]
+    assert endpoints.count(adapter_api.upsert_todo_global) == 1
+    assert endpoints.count(adapter_api.todo_global_readiness) == 1
 
 
 def test_concluido_sem_evidencia_e_criterio_e_rejeitado():
