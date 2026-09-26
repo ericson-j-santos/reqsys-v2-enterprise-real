@@ -16,8 +16,9 @@ Substituir o agendamento do Work por um ciclo horário versionado no GitHub Acti
 
 ## Segurança e operação
 
-- A URL deve vir de `vars.TODO_GLOBAL_RUNTIME_URL` e usar HTTPS.
-- O token opcional deve vir de `secrets.TODO_GLOBAL_RUNTIME_TOKEN`.
+- A URL deve ser resolvida pelo locator PC24x7 DEV assinado e usar HTTPS; o consumidor deriva somente o prefixo fixo `/runtime-core`.
+- O token de produtor deve ser lido do Azure Key Vault por OIDC, sob nome fixo, sem exposição em log/artifact.
+- Ausência de locator, divergência de SHA, token ausente ou runtime indisponível devem falhar antes da publicação do evento.
 - Nenhum segredo pode ser escrito em log, artifact ou repositório.
 - Falta de configuração, timeout, DLQ, falha ou ausência de leitura independente devem falhar fechado.
 - O workflow não executa merge, deploy, alteração administrativa ou produção.
@@ -27,4 +28,4 @@ Substituir o agendamento do Work por um ciclo horário versionado no GitHub Acti
 - YAML válido;
 - testes de contrato aprovados;
 - Pre-PR Readiness com `READY_FOR_PR=passed` no HEAD exato;
-- após integração e configuração do ambiente, run horário terminal com controle negativo, leitura independente e replay idempotente.
+- após materialização do PC24x7 Runtime DEV, run horário terminal no SHA corrente com controle negativo, leitura independente e replay idempotente.
