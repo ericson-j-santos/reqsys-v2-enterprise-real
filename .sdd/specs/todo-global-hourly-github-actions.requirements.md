@@ -21,7 +21,8 @@ Substituir o agendamento do Work por um ciclo horário versionado no GitHub Acti
 - Ausência de locator, divergência de SHA, token ausente ou runtime indisponível devem falhar antes da publicação do evento.
 - Nenhum segredo pode ser escrito em log, artifact ou repositório.
 - Falta de configuração, timeout, DLQ, falha ou ausência de leitura independente devem falhar fechado.
-- O workflow não executa merge, deploy, alteração administrativa ou produção.
+- O modo `cycle` não executa merge, deploy, alteração administrativa ou produção.
+- A materialização do Runtime DEV só pode ocorrer por `workflow_dispatch` explícito com `operation=reconcile-runtime`; `push` e `schedule` nunca podem materializar runtime.
 
 ## Critérios de aceite
 
