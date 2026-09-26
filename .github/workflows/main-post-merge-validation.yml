@@ -273,41 +273,41 @@ jobs:
           git diff --name-only "$diff_range" > audit/security-post-merge/changed-files.txt
 
           python - "$diff_range" <<'PY'
-import json
-import re
-import subprocess
-import sys
-from pathlib import Path
-
-diff_range = sys.argv[1]
-output = subprocess.check_output(
-    ["git", "-c", "core.quotePath=false", "diff", "--unified=0", "--no-color", diff_range, "--"],
-    text=True,
-)
-hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
-current = None
-result = {}
-for line in output.splitlines():
-    if line.startswith("+++ "):
-        raw = line[4:].strip()
-        current = None if raw == "/dev/null" else (raw[2:] if raw.startswith("b/") else raw)
-        if current is not None:
-            result.setdefault(current, set())
-        continue
-    match = hunk.match(line)
-    if current is None or not match:
-        continue
-    start = int(match.group(1))
-    count = int(match.group(2) or "1")
-    if count > 0:
-        result[current].update(range(start, start + count))
-serializable = {path: sorted(lines) for path, lines in sorted(result.items())}
-Path("audit/security-post-merge/changed-lines.json").write_text(
-    json.dumps(serializable, ensure_ascii=False, indent=2) + "\n",
-    encoding="utf-8",
-)
-PY
-
+          import json
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+          
+          diff_range = sys.argv[1]
+          output = subprocess.check_output(
+              ["git", "-c", "core.quotePath=false", "diff", "--unified=0", "--no-color", diff_range, "--"],
+              text=True,
+          )
+          hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+          current = None
+          result = {}
+          for line in output.splitlines():
+              if line.startswith("+++ "):
+                  raw = line[4:].strip()
+                  current = None if raw == "/dev/null" else (raw[2:] if raw.startswith("b/") else raw)
+                  if current is not None:
+                      result.setdefault(current, set())
+                  continue
+              match = hunk.match(line)
+              if current is None or not match:
+                  continue
+              start = int(match.group(1))
+              count = int(match.group(2) or "1")
+              if count > 0:
+                  result[current].update(range(start, start + count))
+          serializable = {path: sorted(lines) for path, lines in sorted(result.items())}
+          Path("audit/security-post-merge/changed-lines.json").write_text(
+              json.dumps(serializable, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          
           echo "parent_sha=$parent_sha" >> "$GITHUB_OUTPUT"
           echo "validated_sha=$VALIDATED_SHA" >> "$GITHUB_OUTPUT"
 
