@@ -271,6 +271,17 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     env = os.environ.copy()
     env["REQSYS_BUILD_SHA"] = args.expected_sha
 
+    temp_dir = runtime_root / ".tmp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    sha_override = temp_dir / "todo-runtime-sha.override.yml"
+    sha_override.write_text(
+        "services:\n"
+        "  api:\n"
+        "    environment:\n"
+        f'      GITHUB_SHA: "{args.expected_sha}"\n',
+        encoding="utf-8",
+    )
+
     bootstrap_base = _compose_base(
         runtime_root,
         project,
@@ -278,6 +289,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         env_files,
         include_overlay=False,
     )
+    bootstrap_base.extend(["-f", str(sha_override)])
     public_runtime._run(
         bootstrap_base + ["up", "-d", "--no-deps", "--build", "--force-recreate", "api"],
         cwd=runtime_root,
@@ -308,6 +320,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         env_files,
         include_overlay=True,
     )
+    full_base.extend(["-f", str(sha_override)])
     public_runtime._run(full_base + ["config", "--quiet"], cwd=runtime_root, env=env, timeout=120)
     public_runtime._run(
         full_base + ["up", "-d", "--build", "reqsys-runtime-redis", "reqsys-runtime", "nginx"],
