@@ -1,0 +1,59 @@
+services:
+  api:
+    environment:
+      GITHUB_SHA: ${REQSYS_BUILD_SHA:?REQSYS_BUILD_SHA is required}
+
+  reqsys-runtime-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - reqsys-runtime-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - reqsys-net
+
+  reqsys-runtime:
+    build: ./runtime
+    restart: unless-stopped
+    environment:
+      RUNTIME_ENVIRONMENT: dev
+      ENABLE_ASYNC_WORKER: "true"
+      QUEUE_BACKEND: redis
+      STORAGE_BACKEND: redis
+      REDIS_URL: redis://reqsys-runtime-redis:6379/0
+      TODO_GLOBAL_ADAPTER_URL: http://api:8000/api/internal/todo-global/upsert
+      TODO_GLOBAL_ADAPTER_SERVICE_TOKEN: ${TODO_GLOBAL_ADAPTER_SERVICE_TOKEN:?TODO_GLOBAL_ADAPTER_SERVICE_TOKEN is required}
+      TODO_GLOBAL_RUNTIME_TOKEN: ${TODO_GLOBAL_RUNTIME_TOKEN:?TODO_GLOBAL_RUNTIME_TOKEN is required}
+      GITHUB_SHA: ${REQSYS_BUILD_SHA:?REQSYS_BUILD_SHA is required}
+    depends_on:
+      api:
+        condition: service_healthy
+      reqsys-runtime-redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - reqsys-net
+
+  nginx:
+    depends_on:
+      reqsys-runtime:
+        condition: service_healthy
+
+volumes:
+  reqsys-runtime-redis-data:
