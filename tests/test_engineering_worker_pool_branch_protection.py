@@ -1,5 +1,12 @@
 from pathlib import Path
 
+import pytest
+
+from scripts.run_engineering_worker_pool_main_protection_local import (
+    ProtectionError,
+    validate_execution_host,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BRANCH_WORKFLOW = ROOT / ".github/workflows/branch-protection-audit.yml"
@@ -57,6 +64,14 @@ def test_local_protection_is_fail_closed_and_enables_auto_merge() -> None:
     assert '"ALREADY_COMPLIANT"' in raw
     assert '"independent_readback": True' in raw
     assert '"secret_value_exposed": False' in raw
+
+
+def test_local_protection_accepts_only_governed_hosts() -> None:
+    assert validate_execution_host("DESKTOP-PDQK954") == "DESKTOP-PDQK954"
+    assert validate_execution_host("Noteri") == "NOTERI"
+    with pytest.raises(ProtectionError, match="unexpected_host"):
+        validate_execution_host("UNMANAGED-HOST")
+
 
 def test_gateway_exposes_exact_worker_pool_noteri_fallback_command() -> None:
     raw = GATEWAY_WORKFLOW.read_text(encoding="utf-8")
