@@ -160,7 +160,7 @@ export async function resolveRemote(options = {}) {
 
 function envelopeForTest(payload, privateKey) {
   const payloadB64 = Buffer.from(
-    JSON.stringify(payload, Object.keys(payload).sort()),
+    JSON.stringify(payload),
     "utf8",
   ).toString("base64");
   return JSON.stringify({
