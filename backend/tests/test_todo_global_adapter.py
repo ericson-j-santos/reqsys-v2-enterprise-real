@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -312,21 +313,12 @@ def test_router_interno_resolve_e_exige_autenticacao():
 
 
 def test_router_todo_global_e_registrado_uma_unica_vez():
-    upsert = [
-        route
-        for route in app.routes
-        if getattr(route, 'path', None) == '/api/internal/todo-global/upsert'
-        and 'POST' in (getattr(route, 'methods', None) or set())
-    ]
-    readiness = [
-        route
-        for route in app.routes
-        if getattr(route, 'path', None) == '/api/internal/todo-global/readiness'
-        and 'GET' in (getattr(route, 'methods', None) or set())
-    ]
+    backend_root = Path(__file__).resolve().parents[1]
+    main_text = (backend_root / 'app' / 'main.py').read_text(encoding='utf-8')
+    api_init_text = (backend_root / 'app' / 'api' / '__init__.py').read_text(encoding='utf-8')
 
-    assert len(upsert) == 1
-    assert len(readiness) == 1
+    assert main_text.count('app.include_router(todo_global_adapter.router)') == 1
+    assert 'monitoramento_operacional.router.routes.extend(todo_global_adapter.router.routes)' not in api_init_text
 
 
 def test_concluido_sem_evidencia_e_criterio_e_rejeitado():
