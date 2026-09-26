@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Catálogo canônico no E2E de acessibilidade",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/tests/e2e/acessibilidade-rotas.spec.js"
+    ],
+    "evidence_contract": "O teste percorre o catálogo canônico, bloqueia duplicidade e preserva a baseline sem igualdade numérica obsoleta."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/frontend-accessibility-route-catalog.requirements.md",
+    "canonical_catalog": "frontend/src/constants/rotasResponsivas.js",
+    "e2e": "frontend/tests/e2e/acessibilidade-rotas.spec.js",
+    "root_cause_pr": 1999
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  },
+  "acceptance_criteria": [
+    "O catálogo autenticado permanece com pelo menos 38 rotas.",
+    "Pares path + testId permanecem únicos.",
+    "Todas as rotas autenticadas continuam sendo avaliadas pelo Axe para WCAG 2.2 A/AA.",
+    "Nova rota canônica não exige alterar uma igualdade numérica apenas para o teste passar."
+  ]
+}
