@@ -12,7 +12,7 @@
   "description": "Materializa o ReqSys Runtime assíncrono no Desktop PC24x7 DEV com Redis, adapter Notion autenticado, locator assinado, same-SHA e E2E com replay.",
   "traceability": {
     "requirements": ".sdd/specs/pc24x7-todo-runtime-dev.requirements.md",
-    "workflow": ".github/workflows/pc24x7-todo-runtime-reconcile.yml",
+    "workflow": ".github/workflows/todo-global-hourly-cycle.yml",
     "reconciler": "scripts/reconcile_pc24x7_todo_runtime.py",
     "compose": "docker-compose.pc24x7-todo-runtime.yml",
     "hourly_workflow": ".github/workflows/todo-global-hourly-cycle.yml",
