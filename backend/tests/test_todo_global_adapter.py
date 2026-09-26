@@ -311,6 +311,12 @@ def test_router_interno_resolve_e_exige_autenticacao():
     assert response.status_code == 401
 
 
+def test_router_todo_global_e_registrado_uma_unica_vez():
+    paths = [route.path for route in app.routes if getattr(route, 'path', None)]
+    assert paths.count('/api/internal/todo-global/upsert') == 1
+    assert paths.count('/api/internal/todo-global/readiness') == 1
+
+
 def test_concluido_sem_evidencia_e_criterio_e_rejeitado():
     with pytest.raises(ValidationError):
         TodoGlobalUpsertRequest.model_validate(
