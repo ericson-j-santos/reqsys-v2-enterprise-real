@@ -11,7 +11,6 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 from urllib.error import HTTPError
-from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 TERMINAL_SUCCESS = {"completed"}
@@ -109,6 +108,13 @@ def submit(endpoint: str, event: dict[str, Any], token: str) -> dict[str, Any]:
     return body
 
 
+def resolve_runtime_url(base_url: str, path: str) -> str:
+    base = base_url.rstrip("/")
+    if not path.startswith("/"):
+        path = "/" + path
+    return base + path
+
+
 def wait_terminal(
     base_url: str,
     status_url: str,
@@ -118,7 +124,7 @@ def wait_terminal(
     poll_seconds: float,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
-    resolved = urljoin(base_url.rstrip("/") + "/", status_url)
+    resolved = resolve_runtime_url(base_url, status_url)
     last: dict[str, Any] = {}
     while time.monotonic() < deadline:
         status, last = request_json("GET", resolved, token=token)
