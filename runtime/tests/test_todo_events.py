@@ -287,36 +287,77 @@ def test_bloqueado_sem_causa_e_proxima_acao_e_rejeitado() -> None:
         _event(event_id="evt-todo-0008", status="BLOQUEADO")
 
 
-def test_api_publica_evento_com_202_location_e_correlation_id() -> None:
+def test_api_publica_evento_com_202_location_e_correlation_id(monkeypatch) -> None:
+    monkeypatch.setenv("TODO_GLOBAL_RUNTIME_TOKEN", "runtime-test-token")
     client = TestClient(app)
     event = _event(event_id="evt-todo-api-0001")
 
-    response = client.post("/api/todo-events", json=event.model_dump(mode="json"))
+    response = client.post(
+        "/api/todo-events",
+        json=event.model_dump(mode="json"),
+        headers={"X-Service-Token": "runtime-test-token"},
+    )
 
     assert response.status_code == 202
     assert response.headers["location"] == response.json()["status_url"]
     assert response.headers["x-correlation-id"] == event.correlation_id
     assert response.json()["event_id"] == event.event_id
+    assert response.json()["status_url"] == f"/api/todo-events/{event.event_id}"
 
 
-def test_api_rejeita_reuso_do_event_id_com_payload_diferente_com_409() -> None:
+def test_api_rejeita_reuso_do_event_id_com_payload_diferente_com_409(monkeypatch) -> None:
+    monkeypatch.setenv("TODO_GLOBAL_RUNTIME_TOKEN", "runtime-test-token")
     client = TestClient(app)
     first = _event(event_id="evt-todo-api-conflict-0001")
     second = _event(event_id="evt-todo-api-conflict-0001", status="EM ANDAMENTO")
 
-    assert client.post("/api/todo-events", json=first.model_dump(mode="json")).status_code == 202
-    response = client.post("/api/todo-events", json=second.model_dump(mode="json"))
+    headers = {"X-Service-Token": "runtime-test-token"}
+    assert client.post(
+        "/api/todo-events", json=first.model_dump(mode="json"), headers=headers
+    ).status_code == 202
+    response = client.post(
+        "/api/todo-events", json=second.model_dump(mode="json"), headers=headers
+    )
 
     assert response.status_code == 409
 
 
-def test_api_rejeita_conclusao_sem_evidencia_com_422() -> None:
+def test_api_rejeita_conclusao_sem_evidencia_com_422(monkeypatch) -> None:
+    monkeypatch.setenv("TODO_GLOBAL_RUNTIME_TOKEN", "runtime-test-token")
     client = TestClient(app)
     payload = _event(event_id="evt-todo-api-0002").model_dump(mode="json")
     payload["todo"]["status"] = "CONCLUÍDO"
     payload["todo"]["completion_criteria"] = None
     payload["todo"]["evidence"] = None
 
-    response = client.post("/api/todo-events", json=payload)
+    response = client.post(
+        "/api/todo-events",
+        json=payload,
+        headers={"X-Service-Token": "runtime-test-token"},
+    )
 
     assert response.status_code == 422
+
+
+def test_api_todo_events_falha_fechado_sem_token_configurado(monkeypatch) -> None:
+    monkeypatch.delenv("TODO_GLOBAL_RUNTIME_TOKEN", raising=False)
+    client = TestClient(app)
+    event = _event(event_id="evt-todo-api-auth-0001")
+
+    response = client.post("/api/todo-events", json=event.model_dump(mode="json"))
+
+    assert response.status_code == 503
+
+
+def test_api_todo_events_rejeita_token_invalido(monkeypatch) -> None:
+    monkeypatch.setenv("TODO_GLOBAL_RUNTIME_TOKEN", "runtime-test-token")
+    client = TestClient(app)
+    event = _event(event_id="evt-todo-api-auth-0002")
+
+    response = client.post(
+        "/api/todo-events",
+        json=event.model_dump(mode="json"),
+        headers={"X-Service-Token": "wrong"},
+    )
+
+    assert response.status_code == 401
