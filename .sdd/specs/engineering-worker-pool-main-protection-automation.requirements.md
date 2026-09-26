@@ -16,14 +16,14 @@ Fechar o gap de governança do repositório `ericson-j-santos/engineering-worker
 8. O alvo, branch, check e comandos não podem ser recebidos por input livre.
 9. O executor local da proteção deve aceitar somente os hosts governados `DESKTOP-PDQK954` e `Noteri`, rejeitando qualquer outro host antes de consultar ou alterar o GitHub.
 10. A autenticação GitHub deve usar somente o perfil local existente do `gh`; subprocessos removem `GH_TOKEN` e `GITHUB_TOKEN`.
-12. Antes da mutação, capturar o SHA corrente de `engineering-worker-pool/main` e exigir o check `test` como `completed/success`.
-11. A branch protection deve exigir Pull Request, `test` com `strict=true`, enforcement para administradores e bloquear force-push e exclusão.
+11. Antes da mutação, capturar o SHA corrente de `engineering-worker-pool/main` e exigir o check `test` como `completed/success`.
+12. A branch protection deve exigir Pull Request, `test` com `strict=true`, enforcement para administradores e bloquear force-push e exclusão.
 13. O repositório deve terminar com `allow_auto_merge=true`.
 14. O SHA da branch deve ser relido antes e depois da mutação e permanecer idêntico.
 15. A proteção e o estado de auto-merge devem ser relidos por API após a mutação.
 16. Se o estado já estiver correto, a execução deve ser idempotente e terminar como `ALREADY_COMPLIANT`.
 17. A autorização Risk3 temporária deve ser removida em `always()`.
-17. A evidência não pode conter credenciais e não pode tocar produção, deploy, banco ou conteúdo da branch.
+18. A evidência não pode conter credenciais e não pode tocar produção, deploy, banco ou conteúdo da branch.
 
 ## Critérios de aceite
 
