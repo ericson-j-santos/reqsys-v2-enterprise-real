@@ -41,7 +41,9 @@ def test_workflow_uses_session_launcher_owner_risk3_and_exact_noteri():
     assert "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in raw
     assert "CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}" in raw
     assert "inputs.operation == 'identity-bootstrap'" in raw
-    assert "inputs.operation == 'activate'" in raw
+    assert "inputs.operation == 'activate'" not in raw
+    assert "reqsys-api-dev.fly.dev" not in raw
+    assert "flyctl" not in raw
 
 
 def test_runner_is_idempotent_and_reads_back_without_secret_output():
