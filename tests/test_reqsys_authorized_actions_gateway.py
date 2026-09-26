@@ -33,6 +33,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.user.login == 'ericson-j-santos'" in content
     assert "github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev'" in content
     assert "github.event.comment.body == '/reqsys run fly-dev-fast-deploy'" in content
+    assert "github.event.comment.body == '/reqsys run login-dev-gate'" in content
     assert "github.event.comment.body == '/reqsys run runtime-e2e-dev'" in content
     assert "github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch'" in content
     assert "github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'" in content
@@ -57,6 +58,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
 
     assert "target='bootstrap-wsjf-m365-dev.yml'" in content
     assert "target='fly-dev-fast-deploy.yml'" in content
+    assert "target='login-multi-ambiente-gate.yml'" in content
     assert "target='runtime-e2e-continuous.yml'" in content
     assert "target='pending-development-agent-pr-permission-watch.yml'" in content
     assert "target='bacen-57-simulation-assessment.yml'" in content
@@ -76,7 +78,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert "target='teams-bot-dev-provision.yml'" in content
     assert (
-        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
+        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
         "bacen-57-simulation-assessment.yml|"
         "cofre-runtime-evidence-gate.yml|"
@@ -409,3 +411,15 @@ def test_gateway_environment_observability_build_only_is_exact_and_nonprod() -> 
     assert "steps.route.outputs.target == 'environment-observability-promotion.yml'" not in content
     assert "-f promote_to=staging" not in content
     assert "-f promote_to=production" not in content
+
+
+def test_gateway_login_dev_gate_is_exact_dev_only_and_no_production() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run login-dev-gate')" in content
+    assert "target='login-multi-ambiente-gate.yml'" in content
+    assert "mode='dev-only'" in content
+    assert 'test "$TARGET_MODE" = "dev-only"' in content
+    assert '-f environment=dev' in content
+    assert '-f environment=hml' not in content
+    assert '-f environment=prod' not in content
