@@ -50,7 +50,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: todo-global-hourly-cycle
+  group: todo-global-hourly-cycle-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'runtime' || format('{0}-{1}', github.event_name, github.ref) }}
   cancel-in-progress: false
 
 jobs:
