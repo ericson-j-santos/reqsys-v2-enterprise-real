@@ -70,13 +70,19 @@ jobs:
           mkdir -p artifacts/todo-global-hourly
           node scripts/resolve_pc24x7_dev_locator.mjs --self-test
           node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/todo-global-hourly/locator.json
-          base="${{ steps.locator.outputs.base_url }}"
-          test -n "$base"
-          case "$base" in
+
+      - name: Exportar superfície TODO Runtime
+        shell: bash
+        env:
+          RESOLVED_BASE_URL: ${{ steps.locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          test -n "$RESOLVED_BASE_URL"
+          case "$RESOLVED_BASE_URL" in
             https://*) ;;
             *) echo "::error::Locator DEV não retornou HTTPS."; exit 1 ;;
           esac
-          printf 'TODO_GLOBAL_RUNTIME_URL=%s/runtime-core\n' "${base%/}" >> "$GITHUB_ENV"
+          printf 'TODO_GLOBAL_RUNTIME_URL=%s/runtime-core\n' "${RESOLVED_BASE_URL%/}" >> "$GITHUB_ENV"
 
       - name: Ler token de produtor no Key Vault sem expor valor
         shell: bash
