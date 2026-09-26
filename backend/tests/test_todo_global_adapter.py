@@ -312,7 +312,14 @@ def test_router_interno_resolve_e_exige_autenticacao():
 
 
 def test_router_todo_global_e_registrado_uma_unica_vez():
-    paths = [route.path for route in app.routes if getattr(route, 'path', None)]
+    def walk(routes):
+        for route in routes:
+            yield route
+            nested = getattr(route, 'routes', None)
+            if nested:
+                yield from walk(nested)
+
+    paths = [getattr(route, 'path', None) for route in walk(app.routes)]
     assert paths.count('/api/internal/todo-global/upsert') == 1
     assert paths.count('/api/internal/todo-global/readiness') == 1
 
