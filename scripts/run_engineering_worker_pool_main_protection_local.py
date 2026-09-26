@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protege engineering-worker-pool/main e habilita auto-merge usando a autenticação GitHub local do PC24x7."""
+"""Protege engineering-worker-pool/main usando autenticação GitHub local em hosts DEV governados."""
 from __future__ import annotations
 
 import argparse
@@ -16,10 +16,18 @@ TARGET_REPOSITORY = "ericson-j-santos/engineering-worker-pool"
 TARGET_BRANCH = "main"
 REQUIRED_CHECKS = ("test",)
 API_VERSION = "2026-03-10"
+ALLOWED_EXECUTION_HOSTS = frozenset({"DESKTOP-PDQK954", "NOTERI"})
 
 
 class ProtectionError(RuntimeError):
     pass
+
+
+def validate_execution_host(hostname: str) -> str:
+    observed = str(hostname or "").strip().upper()
+    if observed not in ALLOWED_EXECUTION_HOSTS:
+        raise ProtectionError("unexpected_host")
+    return observed
 
 
 def _clean_env() -> dict[str, str]:
@@ -172,8 +180,7 @@ def main() -> int:
 
     target_sha: str | None = None
     try:
-        if socket.gethostname().upper() != "DESKTOP-PDQK954":
-            raise ProtectionError("unexpected_host")
+        validate_execution_host(socket.gethostname())
 
         auth = _gh(["auth", "status", "--hostname", "github.com"])
         if auth.returncode != 0:
