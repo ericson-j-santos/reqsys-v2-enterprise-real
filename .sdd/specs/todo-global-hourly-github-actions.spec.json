@@ -32,7 +32,8 @@
     "O replay do mesmo event_id deve retornar o mesmo job_id e duplicate_event=true, sem criar segundo efeito.",
     "A evidência sanitizada é preservada como artifact vinculada ao run e ao SHA correspondente.",
     "O token produtor é obtido do Azure Key Vault por OIDC, nunca de valor versionado ou fallback Fly.",
-    "A materialização do Runtime DEV só executa por workflow_dispatch explícito com operation=reconcile-runtime; push e schedule executam apenas caminhos não-deploy."
+    "A materialização do Runtime DEV só executa por workflow_dispatch explícito com operation=reconcile-runtime; push e schedule executam apenas caminhos não-deploy.",
+    "Validações de PR/push não compartilham o grupo de concorrência runtime usado por schedule/workflow_dispatch."
   ],
   "updated_at": "2026-09-26"
 }
