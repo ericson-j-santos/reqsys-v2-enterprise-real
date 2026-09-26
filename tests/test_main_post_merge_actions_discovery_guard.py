@@ -44,3 +44,33 @@ def test_main_post_merge_validation_keeps_report_only_contract() -> None:
     assert "core.warning" in workflow
     assert "if (gate.status !== 'passed')" in workflow
     assert "core.setOutput('status', gate.status)" in workflow
+
+
+def test_main_post_merge_validation_enforces_security_delta_on_exact_sha() -> None:
+    workflow = _workflow_text()
+
+    assert "Checkout validated main SHA" in workflow
+    assert "ref: ${{ steps.evidence.outputs.validated_sha }}" in workflow
+    assert 'actual_sha="$(git rev-parse HEAD)"' in workflow
+    assert 'parent_sha="$(git rev-parse "${VALIDATED_SHA}^1")"' in workflow
+    assert 'diff_range="${parent_sha}...${VALIDATED_SHA}"' in workflow
+    assert "audit/security-post-merge/changed-files.txt" in workflow
+    assert "audit/security-post-merge/changed-lines.json" in workflow
+    assert "Enforce security delta on exact main SHA" in workflow
+    assert "scripts/validate_security_baseline.py" in workflow
+    assert "scripts/vibe_security_gate.py" in workflow
+    assert "--strict" in workflow
+    assert "--scope changed" in workflow
+
+
+def test_main_post_merge_validation_keeps_full_security_posture_report_only() -> None:
+    workflow = _workflow_text()
+
+    section = workflow.split(
+        "- name: Snapshot full security posture on exact main SHA", maxsplit=1
+    )[1].split("- name: Upload main validation evidence", maxsplit=1)[0]
+
+    assert "--scope all" in section
+    assert "--strict" not in section
+    assert "audit/security-post-merge/posture/baseline" in section
+    assert "audit/security-post-merge/posture/vibe-security" in section
