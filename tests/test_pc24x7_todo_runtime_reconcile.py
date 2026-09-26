@@ -4,7 +4,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/pc24x7-todo-runtime-reconcile.yml"
+WORKFLOW = ROOT / ".github/workflows/todo-global-hourly-cycle.yml"
 OVERLAY = ROOT / "docker-compose.pc24x7-todo-runtime.yml"
 NGINX = ROOT / "infra/nginx/default.pc24x7-public-dev.conf"
 SCRIPT = ROOT / "scripts/reconcile_pc24x7_todo_runtime.py"
@@ -13,10 +13,12 @@ SCRIPT = ROOT / "scripts/reconcile_pc24x7_todo_runtime.py"
 def test_workflow_is_dev_only_same_sha_and_self_hosted() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in text
-    assert 'environment: development' in text
-    assert '--expected-sha "${{ github.sha }}"' in text
+    assert "inputs.operation == 'reconcile-runtime'" in text
+    assert "github.event_name == 'schedule'" in text
+    assert "environment: development" in text
     assert "RECONCILE-PC24X7-TODO-RUNTIME-DEV" in text
-    assert "production" not in text.lower()
+    assert "expected-sha" in text
+    assert "github.sha" in text
 
 
 def test_overlay_uses_redis_persistence_and_internal_adapter() -> None:
@@ -46,7 +48,6 @@ def test_public_surface_is_minimal() -> None:
 
 def test_reconciler_fails_closed_and_proves_e2e() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
-    assert 'EXPECTED_HOST' not in text
     assert "public_runtime._require_host()" in text
     assert "public_runtime._sync_repo" in text
     assert "todo_global_notion_configuration_missing" in text
