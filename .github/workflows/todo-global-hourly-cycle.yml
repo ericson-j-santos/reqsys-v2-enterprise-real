@@ -326,9 +326,9 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## TODO Global Hourly Cycle"
-            echo "- SHA: `$GITHUB_SHA`"
-            echo "- Correlation ID: `$CORRELATION_ID`"
+            printf '%s\\n' "## TODO Global Hourly Cycle"
+            printf '%s\\n' "- SHA: \\`$GITHUB_SHA\\`"
+            printf '%s\\n' "- Correlation ID: \\`$CORRELATION_ID\\`"
             if [[ -f artifacts/todo-global-hourly/evidence.json ]]; then
               python - <<'PY'
           import json
@@ -339,8 +339,8 @@ jobs:
           print(f"- Replay sem segundo job: `{data['replay_duplicate_event']}`")
           PY
             else
-              echo "- Estado: `BLOQUEADO/PARCIAL`"
-              echo "- Evidência terminal não produzida; consulte o log sem presumir sucesso."
+              printf '%s\\n' '- Estado: `BLOQUEADO/PARCIAL`'
+              printf '%s\\n' '- Evidência terminal não produzida; consulte o log sem presumir sucesso.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
