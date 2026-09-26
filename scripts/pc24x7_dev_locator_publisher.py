@@ -149,6 +149,12 @@ def main() -> int:
         "expires_at": now + TTL_SECONDS,
         "selected_url": urls[0] if urls else None,
         "urls": urls,
+        "runtime_contract": {
+            "version": "2.0.0",
+            "required_endpoints": list(REQUIRED_PUBLIC_ENDPOINTS),
+            "static_frontend_required": True,
+            "vite_hmr_forbidden": True,
+        },
     }
     payload_raw = json.dumps(
         payload,

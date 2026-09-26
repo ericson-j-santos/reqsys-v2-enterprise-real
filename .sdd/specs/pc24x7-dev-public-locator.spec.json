@@ -2,7 +2,7 @@
   "feature_name": "pc24x7-dev-public-locator",
   "project": "ReqSys v2 Enterprise — URL DEV estável com custo adicional zero",
   "created_at": "2026-09-20",
-  "updated_at": "2026-09-22",
+  "updated_at": "2026-09-25",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -33,7 +33,10 @@
     "legacy_dev_fly_fallback_allowed": false,
     "false_green_smoke_allowed": false,
     "study_mode_postmerge_reconcile_required": true,
-    "public_smoke_requires_environment_url_on_deployment_status": true
+    "public_smoke_requires_environment_url_on_deployment_status": true,
+    "signed_runtime_contract_v2_required": true,
+    "legacy_locator_redirect_allowed": false,
+    "authorized_gateway_pages_deploy_required": true
   },
   "sdd_gate": {
     "tests": [
@@ -42,9 +45,10 @@
       "tests/test_pc24x7_dev_runtime_supervisor.py",
       "tests/scripts/test_validate_publication_sync.py",
       "tests/test_dev_runtime_cutover.py",
-      "tests/test_executive_promotion_advisor_public_smoke_workflow.py"
+      "tests/test_executive_promotion_advisor_public_smoke_workflow.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 5 minutos e Cloudflare continua como transporte. O deploy do Pages deve ocorrer somente por workflow_dispatch explícito na main, com authorization=DEPLOY_PAGES e expected_sha completo igual ao HEAD atual de main; merge, push, schedule e workflow_run não autorizam publicação. Após qualquer Pull Request realmente mergeada em main, a Validação de Acessos Públicos deve disparar por pull_request:closed, exigir merged=true, fazer checkout do merge_commit_sha exato e falhar fechado se o SHA observado divergir. O gatilho workflow_run não é aceito para essa prova pós-merge. Consumidores CI do DEV devem resolver o mesmo locator Ed25519 vigente e falhar fechado para assinatura inválida, estado expirado ou URL fora de *.trycloudflare.com; URL Quick Tunnel estática não é evidência válida. O publisher e o supervisor devem exigir /api/health, /api/runtime/health e /api/runtime/build-info antes de publicar um locator; health básico isolado não autoriza exposição pública. O cutover DEV é considerado concluído somente quando caminhos críticos de navegação/configuração não contêm fallback para reqsys-app-dev.fly.dev/reqsys-api-dev.fly.dev, consumidores públicos resolvem o locator assinado, falha de smoke torna o workflow vermelho e o Modo ESTUDO reconcilia automaticamente no PC24x7 após merge em main. Eventos deployment_status sem environment_url pública não são alvos de smoke executivo e devem ser ignorados; quando a URL pública existe, o smoke permanece fail-closed e qualquer resultado funcional diferente de passed mantém o workflow vermelho."
+    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 5 minutos e Cloudflare continua como transporte. O deploy do Pages deve ocorrer somente por workflow_dispatch explícito na main, com authorization=DEPLOY_PAGES e expected_sha completo igual ao HEAD atual de main; merge, push, schedule e workflow_run não autorizam publicação. Após qualquer Pull Request realmente mergeada em main, a Validação de Acessos Públicos deve disparar por pull_request:closed, exigir merged=true, fazer checkout do merge_commit_sha exato e falhar fechado se o SHA observado divergir. O gatilho workflow_run não é aceito para essa prova pós-merge. Consumidores CI do DEV devem resolver o mesmo locator Ed25519 vigente e falhar fechado para assinatura inválida, estado expirado ou URL fora de *.trycloudflare.com; URL Quick Tunnel estática não é evidência válida. O publisher e o supervisor devem exigir /api/health, /api/runtime/health e /api/runtime/build-info antes de publicar um locator; health básico isolado não autoriza exposição pública. O cutover DEV é considerado concluído somente quando caminhos críticos de navegação/configuração não contêm fallback para reqsys-app-dev.fly.dev/reqsys-api-dev.fly.dev, consumidores públicos resolvem o locator assinado, falha de smoke torna o workflow vermelho e o Modo ESTUDO reconcilia automaticamente no PC24x7 após merge em main. Eventos deployment_status sem environment_url pública não são alvos de smoke executivo e devem ser ignorados; quando a URL pública existe, o smoke permanece fail-closed e qualquer resultado funcional diferente de passed mantém o workflow vermelho. O payload assinado deve incluir runtime_contract.version=2.0.0, required_endpoints completos, static_frontend_required=true e vite_hmr_forbidden=true; Pages e resolver CI rejeitam locator legado antes de qualquer redirecionamento. A publicação do Pages é acionável somente pelo comando gateway exato deploy-pages-current-main, com ref main, expected_sha capturado e authorization=DEPLOY_PAGES fixos."
   },
   "post_merge_deployment": {
     "automatic": false,
@@ -72,5 +76,8 @@
     "signature": "Ed25519",
     "max_ttl_seconds": 900,
     "fail_closed": true
+  },
+  "traceability": {
+    "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml"
   }
 }
