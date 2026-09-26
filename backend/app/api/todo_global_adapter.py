@@ -15,6 +15,19 @@ router = APIRouter(prefix='/api/internal/todo-global', tags=['TODO Global'])
 require_upsert_auth = require_admin_or_service_token('todo_global:upsert')
 
 
+@router.get('/readiness')
+async def todo_global_readiness(
+    _ctx=Depends(require_upsert_auth),
+) -> dict[str, object]:
+    _notion_config()
+    return {
+        'ready': True,
+        'adapter': 'notion',
+        'notion_configured': True,
+        'secret_value_exposed': False,
+    }
+
+
 def _notion_config() -> tuple[str, str]:
     token = (get_secret('NOTION_TODO_GLOBAL_TOKEN', prefer_vault=True) or '').strip()
     data_source_id = (get_secret('NOTION_TODO_GLOBAL_DATA_SOURCE_ID', prefer_vault=True) or '').strip()
