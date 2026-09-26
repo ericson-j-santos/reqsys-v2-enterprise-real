@@ -438,3 +438,24 @@ def test_gateway_pages_deploy_is_exact_current_main_and_explicitly_authorized() 
     assert '-f expected_sha="$EXPECTED_SHA"' in content
     assert '-f authorization=DEPLOY_PAGES' in content
     assert "producer_run_id=" not in content
+
+
+def test_gateway_todo_runtime_reconcile_is_exact_dev_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev'" in content
+    assert "'/reqsys run pc24x7-todo-runtime-reconcile-dev')" in content
+    assert "target='pc24x7-todo-runtime-reconcile.yml'" in content
+    assert "steps.route.outputs.target == 'pc24x7-todo-runtime-reconcile.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f environment=prod" not in content
+    assert "-f target_host=" not in content
+
+
+def test_gateway_todo_global_hourly_cycle_is_exact_github_hosted() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev'" in content
+    assert "'/reqsys run todo-global-hourly-cycle-dev')" in content
+    assert "target='todo-global-hourly-cycle.yml'" in content
+    assert "steps.route.outputs.target == 'todo-global-hourly-cycle.yml'" not in content
+    assert "-f runtime_url=" not in content
+    assert "-f token=" not in content
