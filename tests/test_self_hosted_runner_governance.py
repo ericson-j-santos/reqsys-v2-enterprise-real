@@ -150,7 +150,7 @@ class SelfHostedRunnerGovernanceTests(unittest.TestCase):
             )
         )
         self.assertIn(
-            ".github/workflows/pc24x7-todo-runtime-reconcile.yml",
+            ".github/workflows/todo-global-hourly-cycle.yml",
             policy["approved_workflows"],
         )
 
