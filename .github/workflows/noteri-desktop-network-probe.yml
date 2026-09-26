@@ -2,6 +2,15 @@ name: Noteri to Desktop Network Probe
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Governed operation"
+        required: false
+        default: probe
+        type: choice
+        options:
+          - probe
+          - runner-recover
   push:
     branches:
       - main
@@ -30,7 +39,7 @@ concurrency:
 jobs:
   probe:
     name: Diagnose Desktop reachability from Noteri
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref_name != 'main' && !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') && !startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.mode == 'probe' || inputs.mode == '')) || (github.ref_name != 'main' && !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') && !startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
@@ -148,7 +157,7 @@ jobs:
 
 
   orchestrator_runner_recovery:
-    if: ${{ github.event_name == 'push' && (github.ref_name == 'main' || startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'runner-recover') || (github.event_name == 'push' && (github.ref_name == 'main' || startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-'))) }}
     name: Recover Desktop runner through Engineering Orchestrator
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
