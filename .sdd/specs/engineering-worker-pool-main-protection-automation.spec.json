@@ -30,6 +30,7 @@
     "Quando o PC24x7 não adquire o job, o modo apply-engineering-worker-pool-noteri executa somente no runner Noteri allowlisted e host exato, usando o checkout imutável do run como origem do Session Launcher sem depender de clone fixo em C:\\\\dev.",
     "Authorized Actions Gateway aceita somente os comandos literais protect-engineering-worker-pool-main e protect-engineering-worker-pool-main-noteri.",
     "Ambas as rotas passam por Session Launcher e Owner Risk3 Gateway com action/scope fixos.",
+    "O executor local aceita somente DESKTOP-PDQK954 e Noteri e rejeita qualquer outro hostname antes de acessar o GitHub.",
     "O check test do SHA atual deve estar verde antes da mutação.",
     "Branch protection exige PR, test strict, admins protegidos e bloqueia force-push/exclusão.",
     "allow_auto_merge termina true e é comprovado por leitura independente.",
@@ -40,6 +41,6 @@
     "tests": [
       "tests/test_engineering_worker_pool_branch_protection.py"
     ],
-    "evidence_contract": "PC24x7 primário ou Noteri fallback exato; no Noteri, checkout imutável do run como session source; Risk3 fixo; auth gh local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
+    "evidence_contract": "PC24x7 primário ou Noteri fallback exato; executor local limitado aos dois hosts governados; no Noteri, checkout imutável do run como session source; Risk3 fixo; auth gh local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
   }
 }
