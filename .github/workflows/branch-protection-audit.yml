@@ -854,19 +854,27 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 12
     env:
-      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      TARGET_REPO: ${{ github.workspace }}
       CORRELATION_ID: engineering-worker-pool-main-protection-noteri-${{ github.run_id }}-${{ github.run_attempt }}
       ACTION_ID: reqsys.engineering-worker-pool-main-protection.dev
       ACTION_SCOPE: repo://ericson-j-santos/engineering-worker-pool/branch/main
       EVIDENCE_REL: artifacts/engineering-worker-pool-main-protection-pc24x7/evidence.json
     steps:
-      - name: Checkout regras canônicas
+      - name: Checkout ReqSys exact workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout regras canônicas no SHA exato
         uses: actions/checkout@v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
-          ref: main
+          ref: 881d9ca2f8e77025edb7298b22981109c567a730
           path: _rules
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Validar host Noteri exato
         shell: powershell

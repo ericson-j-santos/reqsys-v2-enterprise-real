@@ -2,7 +2,7 @@
   "feature_name": "engineering-worker-pool-main-protection-automation",
   "project": "Engineering Control Plane",
   "created_at": "2026-09-24",
-  "updated_at": "2026-09-24",
+  "updated_at": "2026-09-25",
   "phase": "implementation",
   "increment_type": "gap_fix",
   "approvals": {
@@ -27,7 +27,7 @@
   },
   "acceptance_criteria": [
     "Branch Protection Audit reutiliza o workflow existente e preserva o modo PC24x7 apply-engineering-worker-pool.",
-    "Quando o PC24x7 não adquire o job, o modo apply-engineering-worker-pool-noteri pode executar somente no runner Noteri allowlisted e host exato.",
+    "Quando o PC24x7 não adquire o job, o modo apply-engineering-worker-pool-noteri executa somente no runner Noteri allowlisted e host exato, usando o checkout imutável do run como origem do Session Launcher sem depender de clone fixo em C:\\\\dev.",
     "Authorized Actions Gateway aceita somente os comandos literais protect-engineering-worker-pool-main e protect-engineering-worker-pool-main-noteri.",
     "Ambas as rotas passam por Session Launcher e Owner Risk3 Gateway com action/scope fixos.",
     "O check test do SHA atual deve estar verde antes da mutação.",
@@ -40,6 +40,6 @@
     "tests": [
       "tests/test_engineering_worker_pool_branch_protection.py"
     ],
-    "evidence_contract": "PC24x7 primário ou Noteri fallback exato; Risk3 fixo; auth gh local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
+    "evidence_contract": "PC24x7 primário ou Noteri fallback exato; no Noteri, checkout imutável do run como session source; Risk3 fixo; auth gh local sem segredo; SHA estável; test verde; branch protection + auto-merge; readback independente."
   }
 }

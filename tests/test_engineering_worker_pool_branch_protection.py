@@ -76,6 +76,12 @@ def test_branch_protection_has_governed_noteri_fallback_without_removing_pc24x7(
     assert 'if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954")' in raw
     assert 'if ($env:COMPUTERNAME -ne "Noteri")' in raw
     assert '"--session-prefix", "worker-pool-protect-noteri"' in raw
+    assert "Checkout ReqSys exact workflow SHA" in raw
+    assert "TARGET_REPO: ${{ github.workspace }}" in raw
+    assert "persist-credentials: false" in raw
+    assert "881d9ca2f8e77025edb7298b22981109c567a730" in raw
+    noteri_section = raw.split("apply-engineering-worker-pool-noteri:", maxsplit=1)[1]
+    assert r"TARGET_REPO: C:\\dev\\reqsys-v2-enterprise-real" not in noteri_section
     assert "reqsys.engineering-worker-pool-main-protection.dev" in raw
     assert "repo://ericson-j-santos/engineering-worker-pool/branch/main" in raw
 
