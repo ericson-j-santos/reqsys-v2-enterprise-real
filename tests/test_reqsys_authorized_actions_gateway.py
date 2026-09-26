@@ -463,3 +463,19 @@ def test_gateway_todo_global_hourly_cycle_is_exact_github_hosted() -> None:
     assert '-f operation="$TARGET_MODE"' in content
     assert "-f runtime_url=" not in content
     assert "-f token=" not in content
+
+
+def test_gateway_main_post_merge_current_main_is_exact_and_github_hosted() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run main-post-merge-current-main'" in content
+    assert "'/reqsys run main-post-merge-current-main')" in content
+    assert "target='main-post-merge-validation.yml'" in content
+    assert "mode='exact-main'" in content
+    assert "main-post-merge-validation.yml" in content
+    assert 'test "$TARGET_MODE" = "exact-main"' in content
+    assert '-f commit_sha="$EXPECTED_SHA"' in content
+    assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in content
+    assert "steps.route.outputs.target == 'main-post-merge-validation.yml'" not in content
+    assert "-f environment=prod" not in content
+    assert "-f deploy=true" in content  # legacy route exists elsewhere; this command must not add a deploy mode.
