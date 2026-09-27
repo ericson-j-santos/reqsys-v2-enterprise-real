@@ -35,6 +35,7 @@ def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
     assert "github.event.comment.body == '/reqsys run fly-dev-fast-deploy'" in content
     assert "github.event.comment.body == '/reqsys run login-dev-gate'" in content
     assert "github.event.comment.body == '/reqsys run deploy-pages-current-main'" in content
+    assert "github.event.comment.body == '/reqsys run validate-public-access-current-main'" in content
     assert "github.event.comment.body == '/reqsys run runtime-e2e-dev'" in content
     assert "github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch'" in content
     assert "github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'" in content
@@ -61,6 +62,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='fly-dev-fast-deploy.yml'" in content
     assert "target='login-multi-ambiente-gate.yml'" in content
     assert "target='deploy-reqsys-pages-composite.yml'" in content
+    assert "target='validacao-acessos.yml'" in content
     assert "target='runtime-e2e-continuous.yml'" in content
     assert "target='pending-development-agent-pr-permission-watch.yml'" in content
     assert "target='bacen-57-simulation-assessment.yml'" in content
@@ -80,7 +82,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert "target='teams-bot-dev-provision.yml'" in content
     assert (
-        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
+        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
         "bacen-57-simulation-assessment.yml|"
         "cofre-runtime-evidence-gate.yml|"
@@ -479,3 +481,18 @@ def test_gateway_main_post_merge_current_main_is_exact_and_github_hosted() -> No
     assert "steps.route.outputs.target == 'main-post-merge-validation.yml'" not in content
     assert "-f environment=prod" not in content
     assert "-f deploy=true" in content  # legacy route exists elsewhere; this command must not add a deploy mode.
+
+
+def test_gateway_public_access_validation_is_exact_strict_current_main() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run validate-public-access-current-main'" in content
+    assert "'/reqsys run validate-public-access-current-main')" in content
+    assert "target='validacao-acessos.yml'" in content
+    assert "mode='strict-current-main'" in content
+    assert 'test "$TARGET_MODE" = "strict-current-main"' in content
+    assert '--ref main' in content
+    assert '-f fail_on_unavailable=true' in content
+    assert '-f fail_on_unavailable=false' not in content
+    assert '-f url=' not in content
+    assert '-f target=' not in content
