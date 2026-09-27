@@ -154,6 +154,7 @@ jobs:
     timeout-minutes: 5
     env:
       RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
+      RULES_PATH: _rules-${{ github.run_id }}-${{ github.run_attempt }}
       CORRELATION_ID: desktop-runner-orchestrator-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
 
@@ -177,7 +178,7 @@ jobs:
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
-          path: _rules
+          path: ${{ env.RULES_PATH }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -186,8 +187,8 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\config\command-gateway.policy.json"
           $args = @(
             "--policy", $policy,
             "--repo", $env:GITHUB_WORKSPACE,
@@ -214,8 +215,8 @@ jobs:
           SESSION_ID: ${{ steps.session.outputs.session_id }}
         run: |
           $ErrorActionPreference = "Stop"
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\config\command-gateway.policy.json"
           $script = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_orchestrator_runner_recovery.py"
           $args = @(
             "--policy", $policy,
