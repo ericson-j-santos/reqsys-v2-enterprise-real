@@ -199,4 +199,6 @@ def test_orchestrator_endpoints_falham_fechado_sem_manifesto(tmp_path: Path, mon
     assert status_response.status_code == 422
     assert readiness_response.status_code == 422
     assert cycle_response.status_code == 422
-    assert "Manifesto de readiness ausente" in status_response.json()["detail"]
+    assert status_response.json()["detail"] == "Estado do orquestrador invalido ou indisponivel."
+    assert readiness_response.json()["detail"] == "Readiness do orquestrador invalido ou indisponivel."
+    assert cycle_response.json()["detail"] == "Ciclo operacional invalido."
