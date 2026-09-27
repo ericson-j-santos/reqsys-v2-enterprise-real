@@ -156,8 +156,10 @@ boot existente; portanto o próximo incremento usa a capability permanente
 4. O script autorizado é somente
    `scripts/desktop_runner_bootstrap_via_orchestrator.py`.
 5. Se `bootstrap.v1` ainda não estiver anunciado, o próprio contrato pode usar
-   somente `host.orchestrator.refresh.v1` com SHA fixo
-   `d44c9f0e64705fa50f7798cb7ff41afbea668784`.
+   somente `host.orchestrator.refresh.v1`. O SHA alvo deve ser resolvido da
+   `main` canônica de `ericson-j-santos/reqsys-engineering-orchestrator` no
+   início da execução, validado como SHA Git completo e então usado como valor
+   exato/imutável no intake e na evidência. SHA histórico hardcoded é proibido.
 6. Evidência deve ficar em `RUNNER_TEMP`, fora do worktree governado.
 7. Sucesso local exige `DESKTOP_GITHUB_RUNNER_LOCAL_BOOTSTRAP_VERIFIED`,
    `local_listener_verified=true`, replay idempotente e
