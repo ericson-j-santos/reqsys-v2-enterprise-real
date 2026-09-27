@@ -187,3 +187,23 @@ def test_workflow_uses_governed_noteri_session_and_gateway() -> None:
     assert "python scripts/noteri_desktop_orchestrator_runner_recovery.py" not in workflow
     assert "production_touched" in workflow
     assert "reboot_performed" in workflow
+
+
+def test_workflow_exposes_governed_bootstrap_hotfix() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "noteri-desktop-network-probe.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "orchestrator_runner_bootstrap:" in workflow
+    assert "hotfix/noteri-desktop-orchestrator-runner-bootstrap-*" in workflow
+    assert "desktop_runner_bootstrap_via_orchestrator.py" in workflow
+    assert "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR" in workflow
+    assert "DESKTOP_GITHUB_RUNNER_LOCAL_BOOTSTRAP_VERIFIED" in workflow
+    assert "Materialize canonical operational rules exact SHA for bootstrap" in workflow
+    assert "RULES_BLOB_MISMATCH" in workflow
+    assert '"--risk", "2"' in workflow
+    assert "RUNNER_TEMP" in workflow
+    assert "remote shell" not in workflow.casefold()
