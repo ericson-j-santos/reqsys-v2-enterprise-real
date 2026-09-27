@@ -320,6 +320,7 @@ jobs:
       RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
       RULES_PATH: _rules-${{ github.run_id }}-${{ github.run_attempt }}
       CORRELATION_ID: desktop-runner-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+      ORCHESTRATOR_SHA: 915c790ddc18107473d9e943f7e70c877f697a9d
 
     steps:
       - name: Assert exact Noteri host for bootstrap
@@ -437,6 +438,7 @@ jobs:
             "--confirm", "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR",
             "--correlation-id", $env:CORRELATION_ID,
             "--timeout-seconds", "120",
+            "--orchestrator-sha", $env:ORCHESTRATOR_SHA,
             "--evidence-file", $env:EVIDENCE_FILE
           )
           & python $gateway @args
