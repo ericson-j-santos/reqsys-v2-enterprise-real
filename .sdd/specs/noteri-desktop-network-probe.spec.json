@@ -53,7 +53,13 @@
       "arbitrary_port": false,
       "arbitrary_url": false,
       "arbitrary_task_type": false,
-      "remote_shell": false
+      "remote_shell": false,
+      "rules_checkout": {
+        "mode": "per_run_isolated",
+        "path_pattern": "_rules-${{ github.run_id }}-${{ github.run_attempt }}",
+        "canonical_rules_ref": "881d9ca2f8e77025edb7298b22981109c567a730",
+        "stale_checkout_reuse": false
+      }
     }
   },
   "security": {
@@ -132,7 +138,7 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-25",
+  "updated_at": "2026-09-26",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -144,7 +150,8 @@
     "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
-    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente."
+    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
+    "O recovery usa checkout isolado das regras por run/attempt e não reutiliza o diretório estático _rules de execução anterior."
   ],
   "hotfix_issue": 2088
 }
