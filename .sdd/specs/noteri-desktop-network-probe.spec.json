@@ -54,6 +54,36 @@
       "arbitrary_url": false,
       "arbitrary_task_type": false,
       "remote_shell": false
+    },
+    "orchestrator_capabilities_probe": {
+      "source_host": "Noteri",
+      "target_host": "DESKTOP-PDQK954",
+      "port": 8787,
+      "methods": [
+        "GET"
+      ],
+      "paths": [
+        "/readyz",
+        "/v1/status"
+      ],
+      "client": "scripts/noteri_desktop_orchestrator_capabilities_probe.py",
+      "execution_control": "Session Launcher -> Command Gateway",
+      "reference": "OPS-GAP-1818",
+      "remote_shell": false
+    },
+    "orchestrator_rdc_recovery": {
+      "source_host": "Noteri",
+      "target_host": "DESKTOP-PDQK954",
+      "port": 8787,
+      "task_type": "host.rdc.recover.v1",
+      "client": "scripts/noteri_desktop_orchestrator_rdc_recovery.py",
+      "task": "\\\\Automation\\\\RemoteDesktopCommander",
+      "launcher": "C:\\\\RemoteDesktopCommander\\\\start-remote-desktop-commander.cmd",
+      "force_restart": true,
+      "execution_control": "Session Launcher -> Command Gateway",
+      "reference": "OPS-GAP-1818",
+      "remote_shell": false,
+      "reboot": false
     }
   },
   "security": {
@@ -117,7 +147,9 @@
       "independent_readback",
       "exact_target_host",
       "exact_task_type"
-    ]
+    ],
+    "orchestrator_capabilities_artifact": "ops-gap-1818/capabilities.json",
+    "orchestrator_rdc_recovery_artifact": "ops-gap-1818/rdc-recovery.json"
   },
   "sdd_gate": {
     "tests": [
@@ -125,14 +157,16 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_noteri_desktop_dev_http_probe.py",
-      "tests/test_noteri_desktop_orchestrator_runner_recovery.py"
+      "tests/test_noteri_desktop_orchestrator_runner_recovery.py",
+      "tests/test_noteri_desktop_orchestrator_capabilities_probe.py",
+      "tests/test_noteri_desktop_orchestrator_rdc_recovery.py"
     ],
     "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
   },
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-25",
+  "updated_at": "2026-09-27",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -144,7 +178,10 @@
     "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
-    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente."
+    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
+    "OPS-GAP-1818 observa /readyz e /v1/status de DESKTOP-PDQK954:8787 por GET antes de qualquer recuperação, sem escrever no worktree.",
+    "A recuperação RDC usa somente host.rdc.recover.v1 com target/task/launcher fixos, force_restart=true, uma tentativa, replay idempotente e leitura independente.",
+    "O resultado do Orchestrator não é tratado como prova de transporte RDC online; a disponibilidade do controlador é validada por fonte externa."
   ],
   "hotfix_issue": 2088
 }
