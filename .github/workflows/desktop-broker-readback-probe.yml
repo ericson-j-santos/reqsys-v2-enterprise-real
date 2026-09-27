@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
-      EXPECTED_COMMENT_ID: "5855749079"
+      EXPECTED_COMMENT_ID: "5861010183"
       NTFY_TOPIC: "desktop-pc24x7-runtime-readback-v1-4c7d9a21b62f4e9a"
       EXPECTED_ACTION: "recover-runner"
       EVIDENCE_FILE: "artifacts/desktop-broker-readback/evidence.json"
