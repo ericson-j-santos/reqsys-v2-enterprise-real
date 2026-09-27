@@ -104,3 +104,34 @@ control-plane-first reutiliza o Engineering Orchestrator já existente.
   `production_touched` e `reboot_performed` devem permanecer `false`.
 - Após a recuperação, um pickup GitHub Actions independente do Desktop deve ser
   observado antes de declarar o runner recuperado.
+
+
+## Hotfix — isolamento do checkout das regras no recovery
+
+Durante a revalidação física do runner Desktop, o job de recovery ficou bloqueado
+antes do bootstrap na etapa `actions/checkout` das regras canônicas usando o
+diretório estático `_rules` do runner self-hosted persistente.
+
+### Requisitos
+
+1. O job `orchestrator_runner_recovery` deve materializar
+   `chatgpt-operational-rules` em diretório único por
+   `github.run_id` + `github.run_attempt`.
+2. `session_launcher.py`, `command_gateway.py` e a policy devem ser resolvidos
+   exclusivamente a partir desse diretório isolado.
+3. O SHA das regras continua fixado e deve corresponder à `main` canônica
+   revalidada antes da execução.
+4. Não é permitido limpar, reutilizar ou sobrescrever um checkout `_rules`
+   residual de execução anterior como forma de recuperação.
+5. A mudança não amplia alvo, task type, risco, permissões, shell ou escopo do
+   recovery; permanece somente `DESKTOP-PDQK954:8787` e
+   `host.github_runner.recover.v1`.
+
+### Critério de aceite
+
+- o teste de contrato deve falhar se o recovery voltar a usar `path: _rules`
+  estático;
+- o run físico deve ultrapassar a etapa de checkout das regras e alcançar o
+  bootstrap governado;
+- sucesso final continua exigindo artifact sanitizado do recovery e pickup
+  GitHub Actions independente no Desktop.
