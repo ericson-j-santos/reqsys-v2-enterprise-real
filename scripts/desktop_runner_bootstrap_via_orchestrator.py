@@ -375,6 +375,7 @@ def execute(
     correlation_id: str,
     timeout_seconds: int,
     evidence_file: Path,
+    orchestrator_sha: str | None = None,
     source_host: str | None = None,
     platform: str | None = None,
 ) -> dict[str, Any]:
@@ -394,7 +395,11 @@ def execute(
         "target_sha": None,
     }
     if preflight["capability_present"] is not True:
-        target_sha = resolve_orchestrator_main_sha()
+        target_sha = (
+            validate_sha(orchestrator_sha)
+            if orchestrator_sha is not None
+            else resolve_orchestrator_main_sha()
+        )
         runtime_refresh = refresh_runtime_for_bootstrap(
             correlation_id,
             deadline,
@@ -447,6 +452,7 @@ def main() -> int:
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--timeout-seconds", type=int, default=90)
+    parser.add_argument("--orchestrator-sha")
     parser.add_argument(
         "--evidence-file",
         type=Path,
@@ -459,6 +465,7 @@ def main() -> int:
             correlation_id=args.correlation_id,
             timeout_seconds=args.timeout_seconds,
             evidence_file=args.evidence_file.resolve(),
+            orchestrator_sha=args.orchestrator_sha,
         )
     except (BootstrapError, OSError, ValueError) as exc:
         blocked = {
