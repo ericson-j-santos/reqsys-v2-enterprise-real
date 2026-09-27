@@ -104,3 +104,24 @@ control-plane-first reutiliza o Engineering Orchestrator já existente.
   `production_touched` e `reboot_performed` devem permanecer `false`.
 - Após a recuperação, um pickup GitHub Actions independente do Desktop deve ser
   observado antes de declarar o runner recuperado.
+
+
+## P0 Pareto — acionamento direto do recovery permanente
+
+Para evitar ciclos de bootstrap quando o runner já está registrado, a rota governada
+principal passa a expor o recovery permanente já existente.
+
+1. O workflow `.github/workflows/noteri-desktop-watchdog-recovery.yml` aceita somente
+   o novo modo enumerado `runner-recover`, sem input livre.
+2. Esse modo reutiliza exclusivamente
+   `scripts/noteri_desktop_orchestrator_runner_recovery.py` e a capability fixa
+   `host.github_runner.recover.v1`.
+3. O Authorized Actions Gateway aceita somente o comando exato
+   `/reqsys run desktop-runner-recover-via-orchestrator`, mapeado para
+   `noteri-desktop-watchdog-recovery.yml` com `mode=runner-recover`.
+4. O fluxo continua exigindo Session Launcher, Command Gateway, SHA exato,
+   replay idempotente, controle negativo 404 e leitura independente.
+5. Bootstrap permanece contingência apenas quando o recovery retornar alvo de runner
+   inexistente; ele não é pré-requisito do recovery.
+6. Sucesso terminal exige recovery local válido seguido de pickup físico independente
+   no Desktop; sucesso de transporte isolado não conclui a recuperação.

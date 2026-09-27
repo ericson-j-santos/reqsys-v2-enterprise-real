@@ -118,7 +118,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "runner-bootstrap", "runner-canary"):
+    for mode in ("watchdog", "runner-recover", "runner-bootstrap", "runner-canary"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
 
@@ -146,6 +146,14 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
     assert "$recoveryScript = Join-Path $env:TARGET_PATH" in raw
     assert "noteri_desktop_watchdog_rpc_recovery.py" in raw
+
+    # Recovery direto reutiliza o contrato permanente já instalado, sem bootstrap.
+    assert "runner-recover:" in raw
+    assert "if: ${{ inputs.mode == 'runner-recover' }}" in raw
+    assert "noteri_desktop_orchestrator_runner_recovery.py" in raw
+    assert "RECOVER-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR" in raw
+    assert "DESKTOP_GITHUB_RUNNER_RECOVERY_COMPLETED" in raw
+    assert "host.github_runner.recover.v1" in raw
 
     # Bootstrap usa somente o Noteri e o action id fixo já allowlisted no Orchestrator.
     assert "runner-bootstrap:" in raw
