@@ -10,9 +10,11 @@ from app.core.service_tokens import ServiceAuthContext
 from app.db import get_db
 from app.main import app
 from app.services.ai_conversation import (
+    AIConversationBudgetError,
     AIConversationConflictError,
     AIConversationError,
     AIConversationNotFoundError,
+    AIConversationScopeError,
     AIProviderConfigurationError,
     AIProviderExecutionError,
 )
@@ -56,19 +58,55 @@ def _turn_result(content='resposta-ok', duplicate=False):
 
 
 @pytest.mark.parametrize(
-    ('exc', 'status_code'),
+    ('exc', 'status_code', 'public_detail'),
     [
-        (AIConversationNotFoundError('não encontrada'), 404),
-        (AIConversationConflictError('conflito'), 409),
-        (AIProviderConfigurationError('sem configuração'), 503),
-        (AIProviderExecutionError('falha provider'), 502),
-        (AIConversationError('genérico'), 500),
+        (
+            AIConversationNotFoundError('INTERNAL_AI_CONVERSATION_SECRET'),
+            404,
+            'Conversa de IA não encontrada.',
+        ),
+        (
+            AIConversationScopeError('INTERNAL_AI_CONVERSATION_SECRET'),
+            403,
+            'Acesso negado à conversa de IA.',
+        ),
+        (
+            AIConversationBudgetError('INTERNAL_AI_CONVERSATION_SECRET'),
+            429,
+            'Limite de uso da conversa de IA atingido.',
+        ),
+        (
+            AIConversationConflictError('INTERNAL_AI_CONVERSATION_SECRET'),
+            409,
+            'Conflito ao processar a conversa de IA.',
+        ),
+        (
+            AIProviderConfigurationError('INTERNAL_AI_CONVERSATION_SECRET'),
+            503,
+            'Provedor de IA indisponível por configuração.',
+        ),
+        (
+            AIProviderExecutionError('INTERNAL_AI_CONVERSATION_SECRET'),
+            502,
+            'Falha ao executar o provedor de IA.',
+        ),
+        (
+            AIConversationError('INTERNAL_AI_CONVERSATION_SECRET'),
+            500,
+            'Falha interna na Central de Conversas de IA.',
+        ),
     ],
 )
-def test_http_error_mapeia_erros_de_dominio(exc, status_code):
+def test_http_error_mapeia_erros_de_dominio_sem_vazar_detalhes(
+    exc,
+    status_code,
+    public_detail,
+):
     http_error = api._http_error(exc)
 
     assert http_error.status_code == status_code
+    assert http_error.detail == public_detail
+    assert 'INTERNAL_AI_CONVERSATION_SECRET' not in str(http_error.detail)
 
 
 def test_entrega_teams_desabilitada_retorna_none():
@@ -186,14 +224,22 @@ def test_create_executa_turno_audita_e_entrega_teams(api_overrides, monkeypatch)
     assert registrar.call_count == 2
 
 
-def test_create_traduz_falha_do_provider_para_503(api_overrides, monkeypatch):
+def test_create_traduz_falha_do_provider_para_503_sem_vazar_detalhe_interno(
+    api_overrides,
+    monkeypatch,
+):
     conversa = _conversation()
     registrar = MagicMock()
+    internal_marker = 'INTERNAL_AI_PROVIDER_SECRET'
     monkeypatch.setattr(api, 'criar_conversa', lambda *args, **kwargs: conversa)
     monkeypatch.setattr(
         api,
         'executar_turno',
-        MagicMock(side_effect=AIProviderConfigurationError('provider não configurado')),
+        MagicMock(
+            side_effect=AIProviderConfigurationError(
+                f'provider não configurado: {internal_marker}'
+            )
+        ),
     )
     monkeypatch.setattr(api, 'registrar_evento', registrar)
 
@@ -208,6 +254,8 @@ def test_create_traduz_falha_do_provider_para_503(api_overrides, monkeypatch):
     )
 
     assert response.status_code == 503
+    assert response.json()['detail'] == 'Provedor de IA indisponível por configuração.'
+    assert internal_marker not in response.text
     assert registrar.call_count == 2
 
 

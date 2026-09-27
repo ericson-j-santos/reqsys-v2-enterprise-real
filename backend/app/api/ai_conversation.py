@@ -52,17 +52,17 @@ require_ai_conversation_auth = require_admin_or_service_token('teams_gateway:ai_
 
 def _http_error(exc: AIConversationError) -> HTTPException:
     if isinstance(exc, AIConversationNotFoundError):
-        return HTTPException(status_code=404, detail=str(exc))
+        return HTTPException(status_code=404, detail='Conversa de IA não encontrada.')
     if isinstance(exc, AIConversationScopeError):
-        return HTTPException(status_code=403, detail=str(exc))
+        return HTTPException(status_code=403, detail='Acesso negado à conversa de IA.')
     if isinstance(exc, AIConversationBudgetError):
-        return HTTPException(status_code=429, detail=str(exc))
+        return HTTPException(status_code=429, detail='Limite de uso da conversa de IA atingido.')
     if isinstance(exc, AIConversationConflictError):
-        return HTTPException(status_code=409, detail=str(exc))
+        return HTTPException(status_code=409, detail='Conflito ao processar a conversa de IA.')
     if isinstance(exc, AIProviderConfigurationError):
-        return HTTPException(status_code=503, detail=str(exc))
+        return HTTPException(status_code=503, detail='Provedor de IA indisponível por configuração.')
     if isinstance(exc, AIProviderExecutionError):
-        return HTTPException(status_code=502, detail=str(exc))
+        return HTTPException(status_code=502, detail='Falha ao executar o provedor de IA.')
     return HTTPException(status_code=500, detail='Falha interna na Central de Conversas de IA.')
 
 
