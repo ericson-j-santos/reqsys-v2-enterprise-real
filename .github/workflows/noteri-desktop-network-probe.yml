@@ -7,9 +7,11 @@ on:
       - main
       - "fix/noteri-desktop-network-probe-*"
       - "hotfix/noteri-desktop-orchestrator-runner-recovery-*"
+      - "hotfix/noteri-desktop-orchestrator-runner-bootstrap-*"
     paths:
       - "scripts/noteri_desktop_network_probe.py"
       - "scripts/noteri_desktop_orchestrator_runner_recovery.py"
+      - "scripts/desktop_runner_bootstrap_via_orchestrator.py"
       - "scripts/noteri_desktop_dev_http_probe.py"
       - ".github/workflows/noteri-desktop-network-probe.yml"
       - ".github/workflows/reqsys-authorized-actions-gateway.yml"
@@ -305,6 +307,174 @@ jobs:
         with:
           name: noteri-desktop-orchestrator-runner-recovery-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}/artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+
+  orchestrator_runner_bootstrap:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-bootstrap-') }}
+    name: Bootstrap registered Desktop GitHub runner through Engineering Orchestrator
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 6
+    env:
+      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
+      RULES_PATH: _rules-${{ github.run_id }}-${{ github.run_attempt }}
+      CORRELATION_ID: desktop-runner-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Assert exact Noteri host for bootstrap
+        shell: powershell
+        run: |
+          if ($env:COMPUTERNAME -ne "Noteri") {
+            throw "NOTERI_HOST_MISMATCH"
+          }
+
+      - name: Checkout immutable bootstrap source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Materialize canonical operational rules exact SHA for bootstrap
+        uses: actions/github-script@v7
+        env:
+          RULES_BLOBS_JSON: >-
+            {"scripts/session_launcher.py":"5c92d630aba43ca3524ae17137e0722ed04dae70","scripts/session_preflight.py":"d30a18e6c8f9fe7e8fce451264a076438c6dacca","scripts/session_bootstrap.py":"5299cd39eb98e90171c94cbfdbf0898ba2d0b1d6","scripts/command_gateway.py":"834a620194450d36cf612315934bb82ed812564c","config/command-gateway.policy.json":"6a7889e35bba2d12b7ca07b35a7b477f334ae26c"}
+        with:
+          script: |
+            const crypto = require('crypto');
+            const fs = require('fs');
+            const path = require('path');
+
+            const expected = JSON.parse(process.env.RULES_BLOBS_JSON);
+            const root = path.join(process.env.GITHUB_WORKSPACE, process.env.RULES_PATH);
+            for (const [relative, expectedBlob] of Object.entries(expected)) {
+              const url = [
+                'https://raw.githubusercontent.com',
+                'ericson-j-santos',
+                'chatgpt-operational-rules',
+                process.env.RULES_SHA,
+                relative,
+              ].join('/');
+              const response = await fetch(url, {
+                headers: {'User-Agent': 'reqsys-governed-rules-materializer'},
+              });
+              if (!response.ok) {
+                core.setFailed(`RULES_FETCH_FAILED:${relative}:http_${response.status}`);
+                return;
+              }
+              const data = Buffer.from(await response.arrayBuffer());
+              const header = Buffer.from(`blob ${data.length}\0`, 'utf8');
+              const observedBlob = crypto
+                .createHash('sha1')
+                .update(Buffer.concat([header, data]))
+                .digest('hex');
+              if (observedBlob !== expectedBlob) {
+                core.setFailed(
+                  `RULES_BLOB_MISMATCH:${relative}:expected=${expectedBlob}:observed=${observedBlob}`,
+                );
+                return;
+              }
+              const destination = path.join(root, ...relative.split('/'));
+              fs.mkdirSync(path.dirname(destination), {recursive: true});
+              fs.writeFileSync(destination, data);
+            }
+            core.info(
+              `RULES_MATERIALIZED sha=${process.env.RULES_SHA} files=${Object.keys(expected).length}`,
+            );
+
+      - name: Bootstrap governed Noteri session for runner bootstrap
+        id: bootstrap_session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--repo", $env:GITHUB_WORKSPACE,
+            "--session-prefix", "desktop-runner-bootstrap",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", "${{ github.sha }}",
+            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
+          )
+          $raw = & python $launcher @args
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = (@($raw)[-1] | ConvertFrom-Json)
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          $evidenceFile = Join-Path $env:RUNNER_TEMP "desktop-runner-bootstrap\evidence.json"
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "evidence_file=$evidenceFile" | Add-Content $env:GITHUB_OUTPUT
+          Write-Host "SESSION_LAUNCH_OK head=$($data.head)"
+
+      - name: Dispatch fixed runner bootstrap through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.bootstrap_session.outputs.target_path }}
+          SESSION_ID: ${{ steps.bootstrap_session.outputs.session_id }}
+          EVIDENCE_FILE: ${{ steps.bootstrap_session.outputs.evidence_file }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "$env:RULES_PATH\config\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\desktop_runner_bootstrap_via_orchestrator.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "180",
+            "--expected-head", "${{ github.sha }}",
+            "--",
+            "python", $script,
+            "--confirm", "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--timeout-seconds", "120",
+            "--evidence-file", $env:EVIDENCE_FILE
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized bootstrap evidence
+        shell: powershell
+        env:
+          EVIDENCE_FILE: ${{ steps.bootstrap_session.outputs.evidence_file }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Test-Path -LiteralPath $env:EVIDENCE_FILE)) { throw "BOOTSTRAP_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $env:EVIDENCE_FILE | ConvertFrom-Json
+          if (-not $e.ok -or $e.result -ne "DESKTOP_GITHUB_RUNNER_LOCAL_BOOTSTRAP_VERIFIED") {
+            throw "DESKTOP_RUNNER_BOOTSTRAP_NOT_VERIFIED"
+          }
+          if ($e.source_host -ne "Noteri" -or $e.target_host -ne "DESKTOP-PDQK954") {
+            throw "BOOTSTRAP_HOST_IDENTITY_MISMATCH"
+          }
+          if (-not $e.preflight.fresh -or -not $e.preflight.eligible -or -not $e.preflight.capability_present) {
+            throw "BOOTSTRAP_PREFLIGHT_NOT_READY"
+          }
+          if (-not $e.bootstrap.local_listener_verified -or -not $e.pickup_required) {
+            throw "BOOTSTRAP_LISTENER_NOT_VERIFIED"
+          }
+          if (-not $e.replay.replayed -or -not $e.replay.same_work_item -or $e.replay.redispatched) {
+            throw "BOOTSTRAP_IDEMPOTENCY_NOT_PROVEN"
+          }
+          if ($e.production_touched -or $e.secrets_read) {
+            throw "BOOTSTRAP_SAFETY_INVARIANT_FAILED"
+          }
+
+      - name: Upload sanitized bootstrap evidence
+        if: always() && steps.bootstrap_session.outputs.evidence_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runner-bootstrap-${{ github.run_id }}
+          path: ${{ steps.bootstrap_session.outputs.evidence_file }}
           if-no-files-found: error
           retention-days: 30
 
