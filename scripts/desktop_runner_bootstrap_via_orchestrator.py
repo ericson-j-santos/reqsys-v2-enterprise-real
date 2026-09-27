@@ -406,11 +406,28 @@ def execute(
     )
     if refresh_required:
         previous_instance_id = preflight.get("worker_instance_id")
+        previous_runtime_source_sha = preflight.get("runtime_source_sha")
         runtime_refresh = refresh_runtime_for_bootstrap(correlation_id, deadline)
         preflight = wait_for_bootstrap_capability(
             deadline,
             previous_instance_id=previous_instance_id,
         )
+        observed_instance_id = preflight.get("worker_instance_id")
+        runtime_refresh["readback"] = {
+            "expected_runtime_source_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+            "previous_runtime_source_sha": previous_runtime_source_sha,
+            "observed_runtime_source_sha": preflight.get("runtime_source_sha"),
+            "previous_worker_instance_id": previous_instance_id,
+            "observed_worker_instance_id": observed_instance_id,
+            "instance_changed": (
+                previous_instance_id is None
+                or observed_instance_id != previous_instance_id
+            ),
+            "capability_present": preflight.get("capability_present") is True,
+            "post_refresh_readback_verified": (
+                preflight.get("post_refresh_readback_verified") is True
+            ),
+        }
 
     intake = build_intake(correlation_id)
     status_code, submitted = request_json("POST", "/v1/intake", intake)

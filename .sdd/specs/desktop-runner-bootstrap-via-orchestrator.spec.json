@@ -28,7 +28,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Noteri -> Session Launcher -> Command Gateway risk 2 -> DESKTOP-PDQK954:8787 -> host.github_runner.bootstrap.v1 -> listener local verificado; prova terminal separada pelo modo runner-canary no runner DESKTOP-PDQK954 e SHA exato.",
+    "evidence_contract": "Noteri -> Session Launcher -> Command Gateway risk 2 -> DESKTOP-PDQK954:8787 -> refresh pinado quando runtime/capability estiver ausente ou stale -> heartbeat independente exige runtime_source_sha exato + worker_instance_id nova/presente + host.github_runner.bootstrap.v1 -> listener local verificado; conclusão isolada do work item de refresh não comprova aplicação; prova terminal separada pelo modo runner-canary no runner DESKTOP-PDQK954 e SHA exato.",
     "orchestrator_runtime_sha": "9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b",
     "evidence_location": "RUNNER_TEMP outside governed worktree"
   },
@@ -56,6 +56,7 @@
     "Nenhum modo lê segredos, toca produção, executa shell remoto arbitrário ou reinicia o host.",
     "A superfície de GitHub Actions não cresce; os modos reutilizam noteri-desktop-watchdog-recovery.yml.",
     "A evidência do bootstrap permanece fora do worktree governado e não altera o estado Git da sessão.",
-    "Refresh só é aceito após readback do runtime_source_sha exato, worker_instance_id pós-reexec e host.github_runner.bootstrap.v1."
+    "Refresh só é aceito após readback do runtime_source_sha exato, worker_instance_id pós-reexec e host.github_runner.bootstrap.v1.",
+    "A evidência do refresh registra runtime_source_sha e worker_instance_id anteriores e observados para impedir falso positivo por capability residual."
   ]
 }
