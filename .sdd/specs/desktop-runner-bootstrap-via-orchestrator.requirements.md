@@ -8,26 +8,25 @@ Recuperar o runner GitHub Actions já registrado no `DESKTOP-PDQK954` usando o E
 
 1. A origem do bootstrap é exclusivamente o host `Noteri`.
 2. O destino é fixo em `DESKTOP-PDQK954:8787`.
-3. Antes da mutação, exigir worker `desktop-pdqk954` fresco, elegível, controller >= `0.2.53` e `recovery_contract_version=1`. O runtime só é considerado atual quando o heartbeat comprova simultaneamente `runtime_source_sha=9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b`, `worker_instance_id` não vazio e `host.github_runner.bootstrap.v1` em `safe_task_types`. Se qualquer uma dessas provas estiver ausente ou divergente, exigir `host.orchestrator.refresh.v1` e despachar refresh governado pinado ao SHA `9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b`.
+3. Antes da mutação, exigir worker `desktop-pdqk954` fresco, elegível, controller >= `0.2.53` e `recovery_contract_version=1`. Se `host.github_runner.bootstrap.v1` ainda não estiver anunciado ou a identidade do runtime não corresponder ao alvo, exigir `host.orchestrator.refresh.v1`, despachar refresh governado e pinado ao SHA `9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b`, e só aceitar o refresh após readback independente de `runtime_source_sha` igual ao SHA alvo, `worker_instance_id` válido e diferente da instância anterior quando disponível, e `host.github_runner.bootstrap.v1` presente.
 4. O payload enviado ao Orchestrator contém somente `target_host=DESKTOP-PDQK954`; não aceita caminho, comando, URL, token ou segredo.
 5. O item usa risco 2, uma tentativa e timeout finito.
 6. Sucesso local exige estado `CONCLUÍDO`, handler/host/worker exatos, `local_listener_verified=true`, `pickup_required=true`, `github_connectivity_verified=false`, `production_touched=false` e `secrets_read=false`.
-7. O término do work item de refresh não é prova suficiente de aplicação. Após o refresh, exigir heartbeat independente com o SHA esperado, capability de bootstrap e uma nova `worker_instance_id` quando a instância anterior era conhecida; em runtime legado sem instance id, exigir ao menos uma instance id não vazia no readback.
-8. Repetir o mesmo evento deve retornar `replayed=true`, o mesmo work item e nenhuma nova dispatch.
-9. O bootstrap local nunca é evidência terminal de conectividade GitHub.
-10. A prova terminal é um workflow separado adquirido pelo runner exato `DESKTOP-PDQK954`, no SHA exato da execução.
-11. O canário não toca produção, não lê segredos e valida host, runner, repositório e SHA.
-12. Ambos os workflows usam Session Launcher e Command Gateway com regras canônicas em SHA imutável.
-13. O Authorized Actions Gateway aceita somente:
+7. Repetir o mesmo evento deve retornar `replayed=true`, o mesmo work item e nenhuma nova dispatch.
+8. O bootstrap local nunca é evidência terminal de conectividade GitHub.
+9. A prova terminal é um workflow separado adquirido pelo runner exato `DESKTOP-PDQK954`, no SHA exato da execução.
+10. O canário não toca produção, não lê segredos e valida host, runner, repositório e SHA.
+11. Ambos os workflows usam Session Launcher e Command Gateway com regras canônicas em SHA imutável.
+12. O Authorized Actions Gateway aceita somente:
     - `/reqsys run desktop-runner-bootstrap-via-orchestrator`;
     - `/reqsys run desktop-runner-pickup-canary`.
-14. Nenhum input arbitrário é aceito por esses dois comandos.
-15. O arquivo de evidência do bootstrap deve ser gravado em `RUNNER_TEMP`, fora do worktree validado pelo Command Gateway, para que observabilidade não produza falso `state_changed`.
+13. Nenhum input arbitrário é aceito por esses dois comandos.
+14. O arquivo de evidência do bootstrap deve ser gravado em `RUNNER_TEMP`, fora do worktree validado pelo Command Gateway, para que observabilidade não produza falso `state_changed`.
 
 ## Critérios de aceite
 
 O fluxo só é concluído quando houver evidência atual e vinculada ao mesmo ciclo operacional de:
 
-`Noteri -> Orchestrator :8787 -> refresh governado quando necessário -> readback runtime_source_sha exato + worker_instance_id nova/presente + host.github_runner.bootstrap.v1 -> bootstrap do runner -> listener local verificado -> GitHub Actions -> pickup no DESKTOP-PDQK954 -> canário concluído no SHA exato`.
+`Noteri -> Orchestrator :8787 -> refresh governado quando necessário -> readback de runtime_source_sha + nova worker_instance_id + host.github_runner.bootstrap.v1 -> bootstrap do runner -> listener local verificado -> GitHub Actions -> pickup no DESKTOP-PDQK954 -> canário concluído no SHA exato`.
 
 Listener local sem pickup mantém o estado parcial.

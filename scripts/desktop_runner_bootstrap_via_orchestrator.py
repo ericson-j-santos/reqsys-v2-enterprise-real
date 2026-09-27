@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import socket
 import time
 import uuid
@@ -22,6 +23,8 @@ ENDPOINT = "http://DESKTOP-PDQK954:8787"
 TASK_TYPE = "host.github_runner.bootstrap.v1"
 REFRESH_TASK_TYPE = "host.orchestrator.refresh.v1"
 ORCHESTRATOR_BOOTSTRAP_SHA = "9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b"
+RUNTIME_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+WORKER_INSTANCE_RE = re.compile(r"^[0-9a-f]{32}$")
 CONFIRM = "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR"
 TERMINAL = {"CONCLUÍDO", "BLOQUEADO", "CANCELADO"}
 
@@ -120,6 +123,13 @@ def worker_preflight(*, require_bootstrap: bool = True) -> dict[str, Any]:
     if require_bootstrap and not bootstrap_present:
         raise BootstrapError("desktop_runner_bootstrap_capability_missing")
 
+    runtime_source_sha = str(capabilities.get("runtime_source_sha") or "").strip().lower()
+    worker_instance_id = str(capabilities.get("worker_instance_id") or "").strip().lower()
+    if runtime_source_sha and not RUNTIME_SHA_RE.fullmatch(runtime_source_sha):
+        raise BootstrapError("desktop_runtime_source_sha_invalid")
+    if worker_instance_id and not WORKER_INSTANCE_RE.fullmatch(worker_instance_id):
+        raise BootstrapError("desktop_worker_instance_id_invalid")
+
     return {
         "worker_id": worker.get("worker_id"),
         "device_name": worker.get("device_name"),
@@ -129,19 +139,13 @@ def worker_preflight(*, require_bootstrap: bool = True) -> dict[str, Any]:
         "eligible": worker.get("eligible"),
         "capability_present": bootstrap_present,
         "refresh_capability_present": True,
-        "worker_instance_id": capabilities.get("worker_instance_id"),
-        "runtime_source_sha": capabilities.get("runtime_source_sha"),
+        "runtime_source_sha": runtime_source_sha or None,
+        "worker_instance_id": worker_instance_id or None,
+        "runtime_identity_current": (
+            runtime_source_sha == ORCHESTRATOR_BOOTSTRAP_SHA
+            and bool(worker_instance_id)
+        ),
     }
-
-
-def runtime_snapshot_current(snapshot: dict[str, Any]) -> bool:
-    instance_id = str(snapshot.get("worker_instance_id") or "").strip()
-    runtime_sha = str(snapshot.get("runtime_source_sha") or "").strip().lower()
-    return (
-        snapshot.get("capability_present") is True
-        and bool(instance_id)
-        and runtime_sha == ORCHESTRATOR_BOOTSTRAP_SHA
-    )
 
 
 def build_intake(correlation_id: str) -> dict[str, Any]:
@@ -244,6 +248,8 @@ def validate_refresh_result(item: dict[str, Any]) -> dict[str, Any]:
         "worker_id": TARGET_WORKER,
         "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
         "request_replayed": result.get("replayed") is True,
+        "worker_instance_id_before": result.get("worker_instance_id_before"),
+        "runtime_source_sha_before": result.get("runtime_source_sha_before"),
     }
 
 
@@ -298,21 +304,31 @@ def wait_for_bootstrap_capability(
         "desktop_worker_not_unique",
         "desktop_worker_not_eligible",
     )
-    previous = str(previous_instance_id or "").strip()
+    last_error = "runtime_identity_not_observed"
     while time.monotonic() < deadline:
         try:
             snapshot = worker_preflight(require_bootstrap=False)
-            current_instance = str(snapshot.get("worker_instance_id") or "").strip()
-            if runtime_snapshot_current(snapshot) and (
-                not previous or current_instance != previous
+            if snapshot["capability_present"] is not True:
+                last_error = "bootstrap_capability_missing"
+            elif snapshot.get("runtime_source_sha") != ORCHESTRATOR_BOOTSTRAP_SHA:
+                last_error = "runtime_source_sha_mismatch"
+            elif not snapshot.get("worker_instance_id"):
+                last_error = "worker_instance_id_missing"
+            elif (
+                previous_instance_id
+                and snapshot.get("worker_instance_id") == previous_instance_id
             ):
+                last_error = "worker_instance_not_reloaded"
+            else:
+                snapshot["post_refresh_readback_verified"] = True
                 return snapshot
         except BootstrapError as exc:
             code = str(exc)
             if not code.startswith(transient_prefixes):
                 raise
+            last_error = code
         time.sleep(2)
-    raise BootstrapError("desktop_orchestrator_refresh_readback_timeout")
+    raise BootstrapError(f"runtime_refresh_readback_timeout:{sanitize(last_error)}")
 
 
 def validate_result(item: dict[str, Any]) -> dict[str, Any]:
@@ -383,18 +399,23 @@ def execute(
         "performed": False,
         "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
     }
-    if not runtime_snapshot_current(preflight):
-        previous_instance_id = str(preflight.get("worker_instance_id") or "").strip() or None
-        previous_runtime_sha = str(preflight.get("runtime_source_sha") or "").strip().lower() or None
+    refresh_required = (
+        preflight["capability_present"] is not True
+        or preflight.get("runtime_source_sha") != ORCHESTRATOR_BOOTSTRAP_SHA
+        or not preflight.get("worker_instance_id")
+    )
+    if refresh_required:
+        previous_instance_id = preflight.get("worker_instance_id")
+        previous_runtime_source_sha = preflight.get("runtime_source_sha")
         runtime_refresh = refresh_runtime_for_bootstrap(correlation_id, deadline)
         preflight = wait_for_bootstrap_capability(
             deadline,
             previous_instance_id=previous_instance_id,
         )
-        observed_instance_id = str(preflight.get("worker_instance_id") or "").strip()
+        observed_instance_id = preflight.get("worker_instance_id")
         runtime_refresh["readback"] = {
             "expected_runtime_source_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
-            "previous_runtime_source_sha": previous_runtime_sha,
+            "previous_runtime_source_sha": previous_runtime_source_sha,
             "observed_runtime_source_sha": preflight.get("runtime_source_sha"),
             "previous_worker_instance_id": previous_instance_id,
             "observed_worker_instance_id": observed_instance_id,
@@ -403,6 +424,9 @@ def execute(
                 or observed_instance_id != previous_instance_id
             ),
             "capability_present": preflight.get("capability_present") is True,
+            "post_refresh_readback_verified": (
+                preflight.get("post_refresh_readback_verified") is True
+            ),
         }
 
     intake = build_intake(correlation_id)
