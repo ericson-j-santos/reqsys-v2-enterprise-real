@@ -86,11 +86,11 @@ def github_runs(
 ):
     try:
         runs = GitHubActionsClient().listar_runs(repo=repo, branch=branch, per_page=per_page)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f'Falha ao consultar GitHub Actions: {exc}',
-        ) from exc
+            detail='Falha ao consultar GitHub Actions.',
+        ) from None
 
     return ok(
         {
@@ -121,8 +121,8 @@ def catalogo_deploy_dev(user: dict = Depends(require_admin)):
 def validar_deploy_dev(body: DeployDevRequest, user: dict = Depends(require_admin)):
     try:
         operacao = preparar_deploy_dev(body.aplicacao)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError:
+        raise HTTPException(status_code=422, detail='Solicitacao de deploy DEV invalida.') from None
     return ok(operacao.__dict__)
 
 
@@ -132,13 +132,13 @@ def executar_deploy_dev_api(body: DeployDevRequest, user: dict = Depends(require
         raise HTTPException(status_code=409, detail='Confirmação explícita obrigatória para implantação em DEV.')
     try:
         resultado = executar_deploy_dev(body.aplicacao)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
+    except ValueError:
+        raise HTTPException(status_code=422, detail='Solicitacao de deploy DEV invalida.') from None
+    except Exception:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f'Falha ao acionar execução governada: {exc}',
-        ) from exc
+            detail='Falha ao acionar execucao governada.',
+        ) from None
     resultado['requested_by'] = user.get('sub')
     resultado['production_touched'] = False
     return ok(resultado)
@@ -148,16 +148,16 @@ def executar_deploy_dev_api(body: DeployDevRequest, user: dict = Depends(require
 def orchestrator_status(user: dict = Depends(require_admin)):
     try:
         return ok(_operational_orchestrator().status())
-    except (ManifestError, OperationalOrchestratorError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (ManifestError, OperationalOrchestratorError):
+        raise HTTPException(status_code=422, detail='Estado do orquestrador invalido ou indisponivel.') from None
 
 
 @router.get('/orchestrator/readiness')
 def orchestrator_readiness(user: dict = Depends(require_admin)):
     try:
         return ok(_operational_orchestrator().readiness())
-    except ManifestError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ManifestError:
+        raise HTTPException(status_code=422, detail='Readiness do orquestrador invalido ou indisponivel.') from None
 
 
 @router.get('/orchestrator/actions')
@@ -186,8 +186,8 @@ def orchestrator_evidence(
 def orchestrator_cycle(body: OrchestratorCycleRequest, user: dict = Depends(require_admin)):
     try:
         result = _operational_orchestrator().run_cycle(sha=body.sha, branch=body.branch)
-    except (ManifestError, OperationalOrchestratorError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (ManifestError, OperationalOrchestratorError):
+        raise HTTPException(status_code=422, detail='Ciclo operacional invalido.') from None
     result['requested_by'] = user.get('sub')
     return ok(result)
 
@@ -202,8 +202,8 @@ def orchestrator_execute_action(
         result = _operational_orchestrator().execute(action_id, confirm=body.confirmar)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail='Ação não encontrada.') from exc
-    except (ManifestError, OperationalOrchestratorError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (ManifestError, OperationalOrchestratorError):
+        raise HTTPException(status_code=422, detail='Execucao da acao operacional invalida.') from None
     result['requested_by'] = user.get('sub')
     return ok(result)
 
@@ -219,8 +219,8 @@ def orchestrator_ingest_workflow_run(
             project=body.project,
             environment=body.environment,
         )
-    except OperationalOrchestratorError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OperationalOrchestratorError:
+        raise HTTPException(status_code=422, detail='Workflow run invalido para ingestao.') from None
     result['requested_by'] = user.get('sub')
     return ok(result)
 
