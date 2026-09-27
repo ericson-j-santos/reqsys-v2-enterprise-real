@@ -171,6 +171,10 @@ def test_workflow_uses_governed_noteri_session_and_gateway() -> None:
 
     assert "881d9ca2f8e77025edb7298b22981109c567a730" in workflow
     assert "5d1f603241dde37a597d2b7bdc5e07425db7b451" not in workflow
+    assert "RULES_PATH: _rules-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
+    assert "path: ${{ env.RULES_PATH }}" in workflow
+    assert '$env:RULES_PATH\\scripts\\session_launcher.py' in workflow
+    assert '$env:RULES_PATH\\scripts\\command_gateway.py' in workflow
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
     assert "session_launcher.py" in workflow
     assert "command_gateway.py" in workflow
