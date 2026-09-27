@@ -53,7 +53,10 @@
       "arbitrary_port": false,
       "arbitrary_url": false,
       "arbitrary_task_type": false,
-      "remote_shell": false
+      "remote_shell": false,
+      "gateway_command": "/reqsys run desktop-runner-recover-via-orchestrator",
+      "watchdog_mode": "runner-recover",
+      "bootstrap_required": false
     }
   },
   "security": {
@@ -132,7 +135,7 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-25",
+  "updated_at": "2026-09-27",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -144,7 +147,8 @@
     "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
-    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente."
+    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
+    "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório."
   ],
   "hotfix_issue": 2088
 }
