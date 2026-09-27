@@ -28,7 +28,6 @@ jobs:
       RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
       TARGET_REPO: ${{ github.workspace }}
       CORRELATION_ID: desktop-orchestrator-capabilities-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: artifacts\noteri-desktop-orchestrator-capabilities\evidence.json
 
     steps:
       - name: Checkout immutable source SHA
@@ -106,6 +105,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          EVIDENCE_FILE: ${{ runner.temp }}\noteri-desktop-orchestrator-capabilities\evidence.json
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -135,6 +135,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: noteri-desktop-orchestrator-capabilities-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-orchestrator-capabilities\evidence.json
+          path: ${{ runner.temp }}\noteri-desktop-orchestrator-capabilities\evidence.json
           if-no-files-found: warn
           retention-days: 30
