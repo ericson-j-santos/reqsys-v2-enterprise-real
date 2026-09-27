@@ -275,6 +275,83 @@ def test_runtime_refresh_rejects_invalid_orchestrator_sha() -> None:
         subject.validate_sha("main")
 
 
+def test_execute_prefers_validated_injected_orchestrator_sha(tmp_path: Path) -> None:
+    before = {
+        "worker_id": subject.TARGET_WORKER,
+        "device_name": subject.TARGET_HOST,
+        "controller_version": "0.2.53",
+        "recovery_contract_version": 1,
+        "fresh": True,
+        "eligible": True,
+        "capability_present": False,
+        "refresh_capability_present": True,
+    }
+    after = {**before, "capability_present": True}
+    target_sha = "c" * 40
+    refresh = {
+        "required": True,
+        "performed": True,
+        "target_sha": target_sha,
+        "work_item_id": "44444444-4444-4444-8444-444444444444",
+    }
+    item_id = "55555555-5555-4555-8555-555555555555"
+    first = {
+        "item": {"id": item_id, "status": "EM ANDAMENTO"},
+        "dispatch": {"worker": {"worker_id": subject.TARGET_WORKER}},
+        "replayed": False,
+    }
+    terminal = {
+        "item": {
+            "id": item_id,
+            "status": "CONCLUÍDO",
+            "result": {
+                "handler": subject.TASK_TYPE,
+                "host": subject.TARGET_HOST,
+                "worker_id": subject.TARGET_WORKER,
+                "local_listener_verified": True,
+                "pickup_required": True,
+                "github_connectivity_verified": False,
+                "production_touched": False,
+                "secrets_read": False,
+            },
+        }
+    }
+    replay = {
+        "item": {"id": item_id, "status": "CONCLUÍDO"},
+        "dispatch": None,
+        "replayed": True,
+    }
+
+    with (
+        patch.object(subject, "worker_preflight", return_value=before),
+        patch.object(subject, "resolve_orchestrator_main_sha") as resolver,
+        patch.object(
+            subject,
+            "refresh_runtime_for_bootstrap",
+            return_value=refresh,
+        ) as refresh_call,
+        patch.object(subject, "wait_for_bootstrap_capability", return_value=after),
+        patch.object(
+            subject,
+            "request_json",
+            side_effect=[(201, first), (200, terminal), (200, replay)],
+        ),
+    ):
+        result = subject.execute(
+            confirm=subject.CONFIRM,
+            correlation_id="corr-injected-sha",
+            timeout_seconds=30,
+            evidence_file=tmp_path / "evidence.json",
+            orchestrator_sha=target_sha,
+            source_host=subject.EXPECTED_SOURCE_HOST,
+            platform="nt",
+        )
+
+    resolver.assert_not_called()
+    assert refresh_call.call_args.args[2] == target_sha
+    assert result["runtime_refresh"]["target_sha"] == target_sha
+
+
 def test_runner_bootstrap_evidence_stays_outside_governed_worktree() -> None:
     workflow = (
         Path(__file__).resolve().parents[1]
