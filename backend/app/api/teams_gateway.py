@@ -183,7 +183,7 @@ def teams_gateway_recipients_atualizar(
     try:
         item = atualizar_destinatario(db, recipient_id, payload)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
+        raise HTTPException(status_code=404, detail='Destinatario Teams nao encontrado.') from None
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail='Destinatario duplicado nesta politica.') from None
@@ -195,7 +195,7 @@ def teams_gateway_recipients_remover(recipient_id: int, db: Session = Depends(ge
     try:
         remover_destinatario(db, recipient_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
+        raise HTTPException(status_code=404, detail='Destinatario Teams nao encontrado.') from None
     return ok({'removido': True, 'id': recipient_id})
 
 
@@ -280,7 +280,7 @@ def teams_gateway_flow_bot_owners_atualizar(owner_id: int, payload: TeamsFlowBot
     try:
         item = atualizar_flow_bot_owner(db, owner_id, payload)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
+        raise HTTPException(status_code=404, detail='Dono do flow_bot nao encontrado.') from None
     return ok(_serializar_flow_bot_owner(item))
 
 
@@ -290,7 +290,7 @@ def teams_gateway_flow_bot_owners_remover(owner_id: int, db: Session = Depends(g
     try:
         remover_flow_bot_owner(db, owner_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
+        raise HTTPException(status_code=404, detail='Dono do flow_bot nao encontrado.') from None
     return ok({'removido': True, 'id': owner_id})
 
 
@@ -312,7 +312,7 @@ async def teams_gateway_flow_bot_solution_flows(solution_name: str, environment:
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=502, detail=f'Falha na Dataverse API: HTTP {exc.response.status_code}') from None
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
+        raise HTTPException(status_code=404, detail='Solution nao encontrada ou invalida.') from None
     return ok({'items': itens})
 
 
@@ -330,7 +330,7 @@ async def teams_gateway_flow_bot_clonar_flow(payload: TeamsFlowBotClonarFlowRequ
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=502, detail=f'Falha na Flow API: HTTP {exc.response.status_code}') from None
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+        raise HTTPException(status_code=422, detail='Solicitacao de clonagem do flow invalida.') from None
     return ok(resultado)
 
 
@@ -378,7 +378,7 @@ async def teams_gateway_flow_bot_promover_solution(
         )
         raise HTTPException(status_code=502, detail=f'Falha na Dataverse API: HTTP {exc.response.status_code}') from None
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+        raise HTTPException(status_code=422, detail='Solicitacao de promocao da Solution invalida.') from None
     registrar_evento(
         db, correlation_id, ctx.ator, 'TEAMS_FLOW_BOT_PROMOCAO_CONCLUIDA', 'teams_flow_bot_solution',
         payload.solution_name,
