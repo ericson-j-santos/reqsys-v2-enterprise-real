@@ -1,0 +1,132 @@
+name: Desktop Broker Readback Probe
+
+on:
+  push:
+    branches:
+      - diag/desktop-broker-readback-*-20260926
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-broker-readback-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Correlate Desktop broker readback
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      EXPECTED_COMMENT_ID: "5851897392"
+      NTFY_TOPIC: "desktop-pc24x7-runtime-readback-v1-4c7d9a21b62f4e9a"
+      EVIDENCE_FILE: "artifacts/desktop-broker-readback/evidence.json"
+    steps:
+      - name: Wait bounded for sanitized readback
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const commentId = Number(process.env.EXPECTED_COMMENT_ID);
+            const topic = process.env.NTFY_TOPIC;
+            const evidenceFile = process.env.EVIDENCE_FILE;
+            if (!Number.isInteger(commentId) || commentId <= 0) {
+              core.setFailed('EXPECTED_COMMENT_ID_INVALID');
+              return;
+            }
+            const deadline = Date.now() + 120000;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            let found = null;
+            let observations = 0;
+
+            while (Date.now() < deadline) {
+              observations += 1;
+              const response = await fetch(
+                `https://ntfy.sh/${topic}/json?poll=1&since=15m`,
+                {headers: {'User-Agent': 'ReqSys-Desktop-Broker-Readback-Probe/1.0'}},
+              );
+              if (!response.ok) {
+                core.setFailed(`NTFY_HTTP_${response.status}`);
+                return;
+              }
+              const raw = await response.text();
+              for (const line of raw.split(/\r?\n/)) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                let envelope;
+                try {
+                  envelope = JSON.parse(trimmed);
+                } catch {
+                  continue;
+                }
+                let payload;
+                try {
+                  payload = JSON.parse(String(envelope.message || ''));
+                } catch {
+                  continue;
+                }
+                if (Number(payload.comment_id || 0) !== commentId) continue;
+                found = {
+                  found: true,
+                  expected_comment_id: commentId,
+                  observed_comment_id: Number(payload.comment_id),
+                  host: String(payload.host || ''),
+                  action: String(payload.action || ''),
+                  status: String(payload.status || ''),
+                  source_sha: String(payload.source_sha || ''),
+                  generated_at: String(payload.generated_at || ''),
+                  authoritative_success: payload.authoritative_success === true,
+                  trust: String(payload.trust || ''),
+                  result: payload.result && typeof payload.result === 'object'
+                    ? payload.result
+                    : {},
+                  production_touched: payload.production_touched === true,
+                  secrets_read: payload.secrets_read === true,
+                  observations,
+                };
+                break;
+              }
+              if (found) break;
+              await sleep(15000);
+            }
+
+            const evidence = found || {
+              found: false,
+              expected_comment_id: commentId,
+              observations,
+              timed_out: true,
+            };
+            fs.mkdirSync(path.dirname(evidenceFile), {recursive: true});
+            fs.writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2) + '\n');
+
+            if (!found) {
+              core.setFailed('DESKTOP_BROKER_READBACK_NOT_OBSERVED');
+              return;
+            }
+            if (found.host !== 'DESKTOP-PDQK954') {
+              core.setFailed('DESKTOP_BROKER_HOST_MISMATCH');
+              return;
+            }
+            if (found.action !== 'status' || found.status !== 'completed') {
+              core.setFailed(
+                `DESKTOP_BROKER_STATUS_NOT_COMPLETED:action=${found.action}:status=${found.status}`,
+              );
+              return;
+            }
+            if (found.production_touched || found.secrets_read) {
+              core.setFailed('DESKTOP_BROKER_SAFETY_INVARIANT_FAILED');
+              return;
+            }
+            core.info(
+              `DESKTOP_BROKER_READBACK_OK comment_id=${commentId} source_sha=${found.source_sha}`,
+            );
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-broker-readback-${{ github.run_id }}
+          path: artifacts/desktop-broker-readback/evidence.json
+          if-no-files-found: error
+          retention-days: 30
