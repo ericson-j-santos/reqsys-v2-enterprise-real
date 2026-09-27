@@ -470,6 +470,7 @@ jobs:
             "pytest",
             "tests/test_noteri_desktop_orchestrator_capabilities_probe.py",
             "tests/test_noteri_desktop_orchestrator_rdc_recovery.py",
+            "tests/test_noteri_desktop_orchestrator_runner_recovery_diagnostic.py",
             "-q"
           )
           & python $gateway @args
@@ -506,7 +507,7 @@ jobs:
           & python $gateway @args
           exit $LASTEXITCODE
 
-      - name: Recover fixed Desktop RDC task through Orchestrator
+      - name: Diagnose historical blocked runner recovery without redispatch
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -516,23 +517,21 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $script = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_orchestrator_rdc_recovery.py"
-          $evidence = Join-Path $env:RUNNER_TEMP "ops-gap-1818\rdc-recovery.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_orchestrator_runner_recovery_diagnostic.py"
+          $evidence = Join-Path $env:RUNNER_TEMP "ops-gap-1818\runner-recovery-diagnostic.json"
           $args = @(
             "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-rdc",
+            "--correlation-id", "$env:CORRELATION_ID-runner-diagnostic",
             "run",
             "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
-            "--risk", "2",
-            "--timeout", "90",
+            "--risk", "1",
+            "--timeout", "30",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
             "python", $script,
-            "--confirm", "RECOVER-DESKTOP-RDC-VIA-ORCHESTRATOR",
-            "--correlation-id", "$env:CORRELATION_ID-rdc",
-            "--evidence-file", $evidence,
-            "--timeout-seconds", "60"
+            "--confirm", "DIAGNOSE-HISTORICAL-DESKTOP-RUNNER-RECOVERY",
+            "--evidence-file", $evidence
           )
           & python $gateway @args
           exit $LASTEXITCODE
@@ -544,6 +543,6 @@ jobs:
           name: ops-gap-1818-desktop-orchestrator-${{ github.run_id }}
           path: |
             ${{ runner.temp }}\ops-gap-1818\capabilities.json
-            ${{ runner.temp }}\ops-gap-1818\rdc-recovery.json
+            ${{ runner.temp }}\ops-gap-1818\runner-recovery-diagnostic.json
           if-no-files-found: warn
           retention-days: 30
