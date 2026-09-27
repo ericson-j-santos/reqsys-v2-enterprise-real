@@ -21,7 +21,10 @@ TARGET_WORKER = "desktop-pdqk954"
 ENDPOINT = "http://DESKTOP-PDQK954:8787"
 TASK_TYPE = "host.github_runner.bootstrap.v1"
 REFRESH_TASK_TYPE = "host.orchestrator.refresh.v1"
-ORCHESTRATOR_BOOTSTRAP_SHA = "d44c9f0e64705fa50f7798cb7ff41afbea668784"
+ORCHESTRATOR_REPOSITORY = "ericson-j-santos/reqsys-engineering-orchestrator"
+ORCHESTRATOR_MAIN_URL = (
+    f"https://api.github.com/repos/{ORCHESTRATOR_REPOSITORY}/commits/main"
+)
 CONFIRM = "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR"
 TERMINAL = {"CONCLUÍDO", "BLOQUEADO", "CANCELADO"}
 
@@ -36,6 +39,32 @@ def now_iso() -> str:
 
 def sanitize(value: Any, limit: int = 500) -> str:
     return " ".join(str(value or "").replace("\r", " ").replace("\n", " ").split())[:limit]
+
+
+def validate_sha(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if len(raw) != 40 or any(ch not in "0123456789abcdef" for ch in raw):
+        raise BootstrapError("orchestrator_main_sha_invalid")
+    return raw
+
+
+def resolve_orchestrator_main_sha(timeout: float = 10.0) -> str:
+    request = Request(
+        ORCHESTRATOR_MAIN_URL,
+        method="GET",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "ReqSys-Desktop-Runner-Bootstrap/1.0",
+        },
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, OSError, json.JSONDecodeError) as exc:
+        raise BootstrapError("orchestrator_main_resolution_failed") from exc
+    if not isinstance(payload, dict):
+        raise BootstrapError("orchestrator_main_resolution_invalid")
+    return validate_sha(payload.get("sha"))
 
 
 def require_noteri(host: str | None = None, platform: str | None = None) -> None:
@@ -147,10 +176,9 @@ def build_intake(correlation_id: str) -> dict[str, Any]:
     }
 
 
-def build_refresh_intake(correlation_id: str) -> dict[str, Any]:
-    logical = (
-        f"{REFRESH_TASK_TYPE}|{TARGET_HOST}|{ORCHESTRATOR_BOOTSTRAP_SHA}|{correlation_id}"
-    )
+def build_refresh_intake(correlation_id: str, target_sha: str) -> dict[str, Any]:
+    expected_sha = validate_sha(target_sha)
+    logical = f"{REFRESH_TASK_TYPE}|{TARGET_HOST}|{expected_sha}|{correlation_id}"
     digest = hashlib.sha256(logical.encode("utf-8")).hexdigest()
     return {
         "event_id": f"runtime-refresh-{digest}",
@@ -159,7 +187,7 @@ def build_refresh_intake(correlation_id: str) -> dict[str, Any]:
         "task_type": REFRESH_TASK_TYPE,
         "payload": {
             "target_host": TARGET_HOST,
-            "expected_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+            "expected_sha": expected_sha,
         },
         "risk": 2,
         "max_attempts": 1,
@@ -217,7 +245,7 @@ def remaining_seconds(deadline: float) -> int:
     return remaining
 
 
-def validate_refresh_result(item: dict[str, Any]) -> dict[str, Any]:
+def validate_refresh_result(item: dict[str, Any], target_sha: str) -> dict[str, Any]:
     if item.get("status") != "CONCLUÍDO":
         raise BootstrapError("runtime_refresh_terminal_failure")
     result = item.get("result")
@@ -230,7 +258,7 @@ def validate_refresh_result(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "handler": REFRESH_TASK_TYPE,
         "worker_id": TARGET_WORKER,
-        "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+        "target_sha": validate_sha(target_sha),
         "request_replayed": result.get("replayed") is True,
     }
 
@@ -238,14 +266,16 @@ def validate_refresh_result(item: dict[str, Any]) -> dict[str, Any]:
 def refresh_runtime_for_bootstrap(
     correlation_id: str,
     deadline: float,
+    target_sha: str,
 ) -> dict[str, Any]:
-    intake = build_refresh_intake(correlation_id)
+    expected_sha = validate_sha(target_sha)
+    intake = build_refresh_intake(correlation_id, expected_sha)
     status_code, submitted = request_json("POST", "/v1/intake", intake)
     if status_code != 201 or submitted.get("replayed") is not False:
         raise BootstrapError(f"runtime_refresh_intake_invalid:http={status_code}")
     item_id = validate_dispatch(submitted, operation="runtime_refresh")
     terminal = await_terminal(item_id, min(30, remaining_seconds(deadline)))
-    result = validate_refresh_result(terminal)
+    result = validate_refresh_result(terminal, expected_sha)
 
     replay_status, replay = request_json("POST", "/v1/intake", intake)
     if replay_status != 200 or replay.get("replayed") is not True:
@@ -264,7 +294,7 @@ def refresh_runtime_for_bootstrap(
         "performed": True,
         "work_item_id": item_id,
         "work_item_status": terminal.get("status"),
-        "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+        "target_sha": expected_sha,
         "result": result,
         "replay": {
             "replayed": True,
@@ -361,10 +391,15 @@ def execute(
     runtime_refresh: dict[str, Any] = {
         "required": False,
         "performed": False,
-        "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+        "target_sha": None,
     }
     if preflight["capability_present"] is not True:
-        runtime_refresh = refresh_runtime_for_bootstrap(correlation_id, deadline)
+        target_sha = resolve_orchestrator_main_sha()
+        runtime_refresh = refresh_runtime_for_bootstrap(
+            correlation_id,
+            deadline,
+            target_sha,
+        )
         preflight = wait_for_bootstrap_capability(deadline)
 
     intake = build_intake(correlation_id)
