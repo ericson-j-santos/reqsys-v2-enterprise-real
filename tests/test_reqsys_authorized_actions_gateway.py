@@ -387,6 +387,9 @@ def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None
 def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -> None:
     content = _workflow()
 
+    assert "github.event.comment.body == '/reqsys run desktop-runner-recover-via-orchestrator'" in content
+    assert "'/reqsys run desktop-runner-recover-via-orchestrator')" in content
+    assert "mode='runner-recover'" in content
     assert "github.event.comment.body == '/reqsys run desktop-runner-bootstrap-via-orchestrator'" in content
     assert "'/reqsys run desktop-runner-bootstrap-via-orchestrator')" in content
     assert "target='noteri-desktop-watchdog-recovery.yml'" in content
