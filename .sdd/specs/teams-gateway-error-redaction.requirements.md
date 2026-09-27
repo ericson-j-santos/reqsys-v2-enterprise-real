@@ -14,7 +14,7 @@ Eliminar a exposicao de mensagens internas de excecao nas respostas HTTP do Team
 6. O Vibe Security Gate deve deixar de apontar os sete blockers `risk_id=12` deste arquivo.
 7. Testes HTTP devem cobrir CRUD de destinatarios, CRUD de owners, consulta de Solution, clonagem e promocao.
 
-## Criterios de aceite
+## Acceptance Criteria
 
 - testes de regressao HTTP aprovados;
 - `tests/test_vibe_security_gate.py` aprovado;
