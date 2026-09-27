@@ -136,3 +136,37 @@ diretório estático `_rules` do runner self-hosted persistente.
   bootstrap governado;
 - sucesso final continua exigindo artifact sanitizado do recovery e pickup
   GitHub Actions independente no Desktop.
+
+
+## Hotfix — bootstrap governado do runner após recovery bloqueado
+
+Após o Desktop voltar a expor o Engineering Orchestrator em `:8787`, a
+capability `host.github_runner.recover.v1` atingiu estado terminal
+`BLOQUEADO`. O handler de recovery só aceita serviço automático ou tarefa de
+boot existente; portanto o próximo incremento usa a capability permanente
+`host.github_runner.bootstrap.v1`, já prevista no contrato do Orchestrator.
+
+### Requisitos
+
+1. Origem fixa: `Noteri`; destino fixo: `DESKTOP-PDQK954:8787`.
+2. A execução deve usar `Session Launcher -> Command Gateway`, risco 2 e SHA
+   exato do hotfix.
+3. As regras canônicas devem ser materializadas por blobs pinados, sem checkout
+   cross-repo persistente.
+4. O script autorizado é somente
+   `scripts/desktop_runner_bootstrap_via_orchestrator.py`.
+5. Se `bootstrap.v1` ainda não estiver anunciado, o próprio contrato pode usar
+   somente `host.orchestrator.refresh.v1` com SHA fixo
+   `d44c9f0e64705fa50f7798cb7ff41afbea668784`.
+6. Evidência deve ficar em `RUNNER_TEMP`, fora do worktree governado.
+7. Sucesso local exige `DESKTOP_GITHUB_RUNNER_LOCAL_BOOTSTRAP_VERIFIED`,
+   `local_listener_verified=true`, replay idempotente e
+   `pickup_required=true`.
+8. O bootstrap local não comprova conectividade GitHub; conclusão terminal exige
+   pickup físico independente no runner `DESKTOP-PDQK954`.
+
+### Critério de aceite
+
+Depois do bootstrap local, repetir somente o benchmark físico 64K do PR
+`desktop-pc24x7-runtime#27` no HEAD corrente e exigir aquisição pelo runner
+Desktop antes de considerar a recuperação concluída.
