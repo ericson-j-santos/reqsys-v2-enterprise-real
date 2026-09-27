@@ -28,7 +28,6 @@ jobs:
       RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
       TARGET_REPO: ${{ github.workspace }}
       CORRELATION_ID: desktop-rdc-orchestrator-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_FILE: ${{ runner.temp }}\desktop-orchestrator-rdc-recovery\evidence.json
 
     steps:
       - name: Checkout immutable source SHA
@@ -106,6 +105,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          EVIDENCE_FILE: ${{ runner.temp }}\desktop-orchestrator-rdc-recovery\evidence.json
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
