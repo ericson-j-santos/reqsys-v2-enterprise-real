@@ -21,7 +21,7 @@ TARGET_WORKER = "desktop-pdqk954"
 ENDPOINT = "http://DESKTOP-PDQK954:8787"
 TASK_TYPE = "host.github_runner.bootstrap.v1"
 REFRESH_TASK_TYPE = "host.orchestrator.refresh.v1"
-ORCHESTRATOR_BOOTSTRAP_SHA = "d44c9f0e64705fa50f7798cb7ff41afbea668784"
+ORCHESTRATOR_BOOTSTRAP_SHA = "9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b"
 CONFIRM = "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR"
 TERMINAL = {"CONCLUÍDO", "BLOQUEADO", "CANCELADO"}
 
@@ -129,7 +129,19 @@ def worker_preflight(*, require_bootstrap: bool = True) -> dict[str, Any]:
         "eligible": worker.get("eligible"),
         "capability_present": bootstrap_present,
         "refresh_capability_present": True,
+        "worker_instance_id": capabilities.get("worker_instance_id"),
+        "runtime_source_sha": capabilities.get("runtime_source_sha"),
     }
+
+
+def runtime_snapshot_current(snapshot: dict[str, Any]) -> bool:
+    instance_id = str(snapshot.get("worker_instance_id") or "").strip()
+    runtime_sha = str(snapshot.get("runtime_source_sha") or "").strip().lower()
+    return (
+        snapshot.get("capability_present") is True
+        and bool(instance_id)
+        and runtime_sha == ORCHESTRATOR_BOOTSTRAP_SHA
+    )
 
 
 def build_intake(correlation_id: str) -> dict[str, Any]:
@@ -274,7 +286,11 @@ def refresh_runtime_for_bootstrap(
     }
 
 
-def wait_for_bootstrap_capability(deadline: float) -> dict[str, Any]:
+def wait_for_bootstrap_capability(
+    deadline: float,
+    *,
+    previous_instance_id: str | None,
+) -> dict[str, Any]:
     transient_prefixes = (
         "control_plane_unavailable:",
         "orchestrator_not_ready",
@@ -282,17 +298,21 @@ def wait_for_bootstrap_capability(deadline: float) -> dict[str, Any]:
         "desktop_worker_not_unique",
         "desktop_worker_not_eligible",
     )
+    previous = str(previous_instance_id or "").strip()
     while time.monotonic() < deadline:
         try:
             snapshot = worker_preflight(require_bootstrap=False)
-            if snapshot["capability_present"] is True:
+            current_instance = str(snapshot.get("worker_instance_id") or "").strip()
+            if runtime_snapshot_current(snapshot) and (
+                not previous or current_instance != previous
+            ):
                 return snapshot
         except BootstrapError as exc:
             code = str(exc)
             if not code.startswith(transient_prefixes):
                 raise
         time.sleep(2)
-    raise BootstrapError("desktop_runner_bootstrap_capability_readback_timeout")
+    raise BootstrapError("desktop_orchestrator_refresh_readback_timeout")
 
 
 def validate_result(item: dict[str, Any]) -> dict[str, Any]:
@@ -363,9 +383,27 @@ def execute(
         "performed": False,
         "target_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
     }
-    if preflight["capability_present"] is not True:
+    if not runtime_snapshot_current(preflight):
+        previous_instance_id = str(preflight.get("worker_instance_id") or "").strip() or None
+        previous_runtime_sha = str(preflight.get("runtime_source_sha") or "").strip().lower() or None
         runtime_refresh = refresh_runtime_for_bootstrap(correlation_id, deadline)
-        preflight = wait_for_bootstrap_capability(deadline)
+        preflight = wait_for_bootstrap_capability(
+            deadline,
+            previous_instance_id=previous_instance_id,
+        )
+        observed_instance_id = str(preflight.get("worker_instance_id") or "").strip()
+        runtime_refresh["readback"] = {
+            "expected_runtime_source_sha": ORCHESTRATOR_BOOTSTRAP_SHA,
+            "previous_runtime_source_sha": previous_runtime_sha,
+            "observed_runtime_source_sha": preflight.get("runtime_source_sha"),
+            "previous_worker_instance_id": previous_instance_id,
+            "observed_worker_instance_id": observed_instance_id,
+            "instance_changed": (
+                previous_instance_id is None
+                or observed_instance_id != previous_instance_id
+            ),
+            "capability_present": preflight.get("capability_present") is True,
+        }
 
     intake = build_intake(correlation_id)
     status_code, submitted = request_json("POST", "/v1/intake", intake)
