@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
       CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
     steps:
@@ -275,7 +275,7 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
       CORRELATION_ID: noteri-desktop-dev-http-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-dev-http\evidence.json
     steps:
