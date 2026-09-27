@@ -92,6 +92,8 @@ def test_execute_proves_terminal_result_and_replay(tmp_path: Path) -> None:
         "eligible": True,
         "capability_present": True,
         "refresh_capability_present": True,
+        "worker_instance_id": "instance-current",
+        "runtime_source_sha": subject.ORCHESTRATOR_BOOTSTRAP_SHA,
     }
     first = {
         "item": {"id": item_id, "status": "EM ANDAMENTO"},
@@ -181,8 +183,15 @@ def test_execute_refreshes_runtime_before_bootstrap(tmp_path: Path) -> None:
         "eligible": True,
         "capability_present": False,
         "refresh_capability_present": True,
+        "worker_instance_id": "instance-old",
+        "runtime_source_sha": "d44c9f0e64705fa50f7798cb7ff41afbea668784",
     }
-    after = {**before, "capability_present": True}
+    after = {
+        **before,
+        "capability_present": True,
+        "worker_instance_id": "instance-new",
+        "runtime_source_sha": subject.ORCHESTRATOR_BOOTSTRAP_SHA,
+    }
     first = {
         "item": {"id": item_id, "status": "EM ANDAMENTO"},
         "dispatch": {"worker": {"worker_id": subject.TARGET_WORKER}},
@@ -242,11 +251,15 @@ def test_execute_refreshes_runtime_before_bootstrap(tmp_path: Path) -> None:
     refresh_call.assert_called_once()
     assert result["runtime_refresh"]["performed"] is True
     assert result["preflight"]["capability_present"] is True
+    assert result["runtime_refresh"]["readback"]["observed_runtime_source_sha"] == subject.ORCHESTRATOR_BOOTSTRAP_SHA
+    assert result["runtime_refresh"]["readback"]["previous_worker_instance_id"] == "instance-old"
+    assert result["runtime_refresh"]["readback"]["observed_worker_instance_id"] == "instance-new"
+    assert result["runtime_refresh"]["readback"]["instance_changed"] is True
 
 
 
 def test_runtime_refresh_targets_orchestrator_reexec_fix() -> None:
-    assert subject.ORCHESTRATOR_BOOTSTRAP_SHA == "d44c9f0e64705fa50f7798cb7ff41afbea668784"
+    assert subject.ORCHESTRATOR_BOOTSTRAP_SHA == "9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b"
 
 
 def test_runner_bootstrap_evidence_stays_outside_governed_worktree() -> None:
@@ -270,3 +283,107 @@ def test_runner_bootstrap_evidence_stays_outside_governed_worktree() -> None:
 def test_work_item_id_rejects_path_injection() -> None:
     with pytest.raises(subject.BootstrapError, match="work_item_id_invalid"):
         subject.validate_work_item_id("../../v1/status")
+
+
+def test_runtime_snapshot_current_requires_sha_instance_and_bootstrap_capability() -> None:
+    good = {
+        "capability_present": True,
+        "worker_instance_id": "instance-new",
+        "runtime_source_sha": subject.ORCHESTRATOR_BOOTSTRAP_SHA,
+    }
+    assert subject.runtime_snapshot_current(good) is True
+    assert subject.runtime_snapshot_current({**good, "capability_present": False}) is False
+    assert subject.runtime_snapshot_current({**good, "worker_instance_id": None}) is False
+    assert subject.runtime_snapshot_current({**good, "runtime_source_sha": "0" * 40}) is False
+
+
+def test_wait_for_bootstrap_requires_new_worker_instance_after_refresh() -> None:
+    same_instance = {
+        "capability_present": True,
+        "worker_instance_id": "instance-old",
+        "runtime_source_sha": subject.ORCHESTRATOR_BOOTSTRAP_SHA,
+    }
+    new_instance = {
+        **same_instance,
+        "worker_instance_id": "instance-new",
+    }
+    with (
+        patch.object(subject, "worker_preflight", side_effect=[same_instance, new_instance]),
+        patch.object(subject.time, "sleep", return_value=None),
+    ):
+        observed = subject.wait_for_bootstrap_capability(
+            subject.time.monotonic() + 5,
+            previous_instance_id="instance-old",
+        )
+
+    assert observed["worker_instance_id"] == "instance-new"
+
+
+def test_execute_refreshes_even_when_capability_exists_on_stale_runtime(tmp_path: Path) -> None:
+    stale = {
+        "worker_id": subject.TARGET_WORKER,
+        "device_name": subject.TARGET_HOST,
+        "controller_version": "0.2.53",
+        "recovery_contract_version": 1,
+        "fresh": True,
+        "eligible": True,
+        "capability_present": True,
+        "refresh_capability_present": True,
+        "worker_instance_id": "instance-stale",
+        "runtime_source_sha": "d44c9f0e64705fa50f7798cb7ff41afbea668784",
+    }
+    current = {
+        **stale,
+        "worker_instance_id": "instance-current",
+        "runtime_source_sha": subject.ORCHESTRATOR_BOOTSTRAP_SHA,
+    }
+    item_id = "44444444-4444-4444-8444-444444444444"
+    first = {
+        "item": {"id": item_id, "status": "EM ANDAMENTO"},
+        "dispatch": {"worker": {"worker_id": subject.TARGET_WORKER}},
+        "replayed": False,
+    }
+    terminal = {
+        "item": {
+            "id": item_id,
+            "status": "CONCLUÍDO",
+            "result": {
+                "handler": subject.TASK_TYPE,
+                "host": subject.TARGET_HOST,
+                "worker_id": subject.TARGET_WORKER,
+                "local_listener_verified": True,
+                "pickup_required": True,
+                "github_connectivity_verified": False,
+                "production_touched": False,
+                "secrets_read": False,
+            },
+        }
+    }
+    replay = {
+        "item": {"id": item_id, "status": "CONCLUÍDO"},
+        "dispatch": None,
+        "replayed": True,
+    }
+    refresh = {
+        "required": True,
+        "performed": True,
+        "target_sha": subject.ORCHESTRATOR_BOOTSTRAP_SHA,
+        "work_item_id": "55555555-5555-4555-8555-555555555555",
+    }
+    with (
+        patch.object(subject, "worker_preflight", return_value=stale),
+        patch.object(subject, "refresh_runtime_for_bootstrap", return_value=refresh) as refresh_call,
+        patch.object(subject, "wait_for_bootstrap_capability", return_value=current),
+        patch.object(subject, "request_json", side_effect=[(201, first), (200, terminal), (200, replay)]),
+    ):
+        result = subject.execute(
+            confirm=subject.CONFIRM,
+            correlation_id="corr-stale-runtime",
+            timeout_seconds=30,
+            evidence_file=tmp_path / "evidence.json",
+            source_host=subject.EXPECTED_SOURCE_HOST,
+            platform="nt",
+        )
+
+    refresh_call.assert_called_once()
+    assert result["preflight"]["runtime_source_sha"] == subject.ORCHESTRATOR_BOOTSTRAP_SHA
