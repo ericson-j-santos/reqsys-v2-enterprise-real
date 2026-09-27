@@ -27,5 +27,12 @@
     "secrets_mutation": false,
     "admin_permissions": false
   },
-  "status": "superseded"
+  "status": "superseded",
+  "acceptance_criteria": [
+    "O contrato histórico de 300 segundos permanece explicitamente superseded e não redefine o timeout vigente.",
+    "O contrato ativo preserva timeout de pickup de 60 segundos e polling de 5 segundos.",
+    "Pickup é comprovado por job com started_at preenchido e label self-hosted, mesmo quando o status agregado do run ainda estiver atrasado.",
+    "Somente ausência de evidência material de pickup até o limite produz SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY e cleanup fail-closed.",
+    "O teste tests/test_reqsys_authorized_actions_gateway.py cobre o detector por job iniciado e a evidência runner_pickup_source."
+  ]
 }
