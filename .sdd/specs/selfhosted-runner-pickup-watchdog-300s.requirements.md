@@ -29,7 +29,7 @@ A execução real `36346013726` em 2026-09-27 demonstrou um caso diferente: o ru
 - runner `Noteri` iniciou o job por volta de `2026-09-27T19:54:30Z`;
 - o gateway ainda registrou `runner_pickup_status=queued` e cancelou o target, comprovando atraso do status agregado.
 
-## Critério de aceite
+## Critérios de aceite
 
 - teste de contrato preserva 60 segundos e polling de 5 segundos;
 - teste exige consulta ao endpoint de jobs e prova por `started_at` + label `self-hosted`;
