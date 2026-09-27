@@ -173,14 +173,53 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@v4
+      - name: Materialize canonical operational rules exact SHA
+        uses: actions/github-script@v7
+        env:
+          RULES_BLOBS_JSON: >-
+            {"scripts/session_launcher.py":"5c92d630aba43ca3524ae17137e0722ed04dae70","scripts/session_preflight.py":"d30a18e6c8f9fe7e8fce451264a076438c6dacca","scripts/session_bootstrap.py":"5299cd39eb98e90171c94cbfdbf0898ba2d0b1d6","scripts/command_gateway.py":"834a620194450d36cf612315934bb82ed812564c","config/command-gateway.policy.json":"6a7889e35bba2d12b7ca07b35a7b477f334ae26c"}
         with:
-          repository: ericson-j-santos/chatgpt-operational-rules
-          ref: ${{ env.RULES_SHA }}
-          path: ${{ env.RULES_PATH }}
-          fetch-depth: 1
-          persist-credentials: false
+          script: |
+            const crypto = require('crypto');
+            const fs = require('fs');
+            const path = require('path');
+
+            const expected = JSON.parse(process.env.RULES_BLOBS_JSON);
+            const root = path.join(process.env.GITHUB_WORKSPACE, process.env.RULES_PATH);
+            for (const [relative, expectedBlob] of Object.entries(expected)) {
+              const url = [
+                'https://raw.githubusercontent.com',
+                'ericson-j-santos',
+                'chatgpt-operational-rules',
+                process.env.RULES_SHA,
+                relative,
+              ].join('/');
+              const response = await fetch(url, {
+                headers: {'User-Agent': 'reqsys-governed-rules-materializer'},
+              });
+              if (!response.ok) {
+                core.setFailed(`RULES_FETCH_FAILED:${relative}:http_${response.status}`);
+                return;
+              }
+              const data = Buffer.from(await response.arrayBuffer());
+              const header = Buffer.from(`blob ${data.length}\0`, 'utf8');
+              const observedBlob = crypto
+                .createHash('sha1')
+                .update(Buffer.concat([header, data]))
+                .digest('hex');
+              if (observedBlob !== expectedBlob) {
+                core.setFailed(
+                  `RULES_BLOB_MISMATCH:${relative}:expected=${expectedBlob}:observed=${observedBlob}`,
+                );
+                return;
+              }
+              const destination = path.join(root, ...relative.split('/'));
+              fs.mkdirSync(path.dirname(destination), {recursive: true});
+              fs.writeFileSync(destination, data);
+            }
+            core.info(
+              `RULES_MATERIALIZED sha=${process.env.RULES_SHA} files=${Object.keys(expected).length}`,
+            );
 
       - name: Bootstrap governed Noteri session
         id: session
