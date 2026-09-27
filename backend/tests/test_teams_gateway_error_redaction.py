@@ -1,6 +1,6 @@
 """Regressao: erros internos do Teams Gateway nao podem vazar para respostas HTTP."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -27,7 +27,7 @@ def _fake_promote_context():
 @pytest.fixture(autouse=True)
 def _safe_dependencies():
     def override_get_db():
-        yield object()
+        yield MagicMock()
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[require_admin] = _fake_admin
