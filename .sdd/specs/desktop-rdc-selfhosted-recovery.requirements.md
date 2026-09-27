@@ -29,7 +29,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 15. Após iniciar V4, a recuperação deve aguardar claim \`ready=true\` fresco por janela limitada; claim ausente, inválido ou stale não comprova saúde e deve cair para o launcher interativo.
 16. O fluxo deve armar o fallback interativo mesmo quando V4 estiver saudável, permitindo takeover automático se o claim V4 desaparecer.
 17. O Authorized Actions Gateway deve vincular a evidência ao \`run_id\` retornado pelo próprio \`gh workflow run\`; é proibido selecionar um run apenas por \`head_sha\`, pois múltiplas execuções podem compartilhar o mesmo SHA.
-18. Para recuperação Desktop, estados \`pending\`, \`queued\`, \`requested\` ou \`waiting\` após no máximo 60 segundos de pickup devem produzir \`SELF_HOSTED_RUNNER_UNAVAILABLE\` e falhar fechado.
+18. Para recuperação Desktop, a janela de pickup é de no máximo 60 segundos. Um job com \`started_at\` preenchido e label \`self-hosted\` comprova pickup mesmo se o status agregado do workflow run ainda estiver em \`pending\`, \`queued\`, \`requested\` ou \`waiting\`; somente ausência de qualquer evidência material de pickup ao fim da janela deve produzir \`SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\` e falhar fechado.
 19. Antes da falha terminal por ausência de pickup, o gateway deve solicitar o cancelamento do run self-hosted abandonado, aguardar confirmação `completed/cancelled` por janela limitada e registrar `target_cleanup_status`/`target_cleanup_error` na evidência. O workflow `desktop-rdc-recovery` deve usar `cancel-in-progress=true` para que um novo dispatch substitua uma execução órfã anterior. Falha na limpeza não autoriza retry automático fora desse novo dispatch explícito.
 
 ## Critérios de aceite
@@ -41,7 +41,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 - workflow usa exclusivamente o runner PC24x7;
 - gateway mantém a allowlist estática;
 - gateway comprova \`run_id\`, URL, SHA e evento do run exato disparado e recusa evidência de execução histórica;
-- recuperação permanece bloqueada quando o run exato não sai de \`pending/queued/requested/waiting\`;
+- recuperação permanece bloqueada quando, após 60 segundos, não existe job self-hosted iniciado nem outra transição material do run; atraso do status agregado não pode cancelar job que já possui \`started_at\`;
 - run self-hosted sem pickup é cancelado e o estado terminal é registrado; se o cancelamento não puder ser confirmado, a evidência registra o erro e o gateway continua falhando fechado, sem criar nova tentativa;
 - após integração, comentário exato em #1705 cria um novo workflow_dispatch no SHA atual da main;
 - recuperação só é considerada concluída após leitura independente mostrar \`DESKTOP-PDQK954\` online com \`transport_broadcast_v1=true\` e uma chamada MCP real de leitura concluir com sucesso;

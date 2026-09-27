@@ -2,14 +2,14 @@
   "feature_name": "selfhosted-runner-pickup-watchdog-300s",
   "project": "ReqSys v2 Enterprise — Authorized Actions Gateway",
   "created_at": "2026-09-23",
-  "updated_at": "2026-09-23",
+  "updated_at": "2026-09-27",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Alinha o timeout de pickup de workflows self-hosted ao watchdog canônico de 300 segundos, preservando polling de 5 segundos e cleanup fail-closed após o limite.",
+  "description": "Contrato histórico de 300s preservado para rastreabilidade. O contrato ativo usa 60s e evidencia pickup por job self-hosted iniciado, evitando falso negativo causado por atraso do status agregado do run.",
   "scope": "authorized-actions-gateway-selfhosted-pickup",
   "files": [
     ".github/workflows/reqsys-authorized-actions-gateway.yml",
@@ -19,12 +19,20 @@
     "tests": [
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Provar timeout de pickup de 300 segundos, polling de 5 segundos, ausência do limite legado de 180 segundos e preservação do cleanup fail-closed no HEAD exato."
+    "evidence_contract": "Preservar o histórico de 300s sem tratá-lo como regra ativa; o contrato vigente deve provar 60s, polling de 5s, detecção por started_at + label self-hosted e cleanup fail-closed apenas quando não houver pickup material."
   },
   "risk": {
     "production": false,
     "merge": false,
     "secrets_mutation": false,
     "admin_permissions": false
-  }
+  },
+  "status": "superseded",
+  "acceptance_criteria": [
+    "O contrato histórico de 300 segundos permanece explicitamente superseded e não redefine o timeout vigente.",
+    "O contrato ativo preserva timeout de pickup de 60 segundos e polling de 5 segundos.",
+    "Pickup é comprovado por job com started_at preenchido e label self-hosted, mesmo quando o status agregado do run ainda estiver atrasado.",
+    "Somente ausência de evidência material de pickup até o limite produz SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY e cleanup fail-closed.",
+    "O teste tests/test_reqsys_authorized_actions_gateway.py cobre o detector por job iniciado e a evidência runner_pickup_source."
+  ]
 }

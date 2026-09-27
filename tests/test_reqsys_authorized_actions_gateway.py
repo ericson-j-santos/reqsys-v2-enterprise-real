@@ -220,6 +220,17 @@ def test_gateway_self_hosted_pickup_usa_watchdog_canonico_60s() -> None:
     assert "seq 1 36" not in content
 
 
+def test_gateway_self_hosted_pickup_aceita_job_iniciado_com_status_agregado_atrasado() -> None:
+    content = _workflow()
+
+    assert 'actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100' in content
+    assert ".started_at != null" in content
+    assert 'index("self-hosted") != null' in content
+    assert "pickup_source='self_hosted_job_started_at'" in content
+    assert "runner_pickup_source" in content
+    assert "pickup_source='timeout'" in content
+
+
 def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
     content = _workflow()
 
