@@ -124,7 +124,7 @@ jobs:
             "python", $probe,
             "--confirm", "PROBE-DESKTOP-ORCHESTRATOR-CAPABILITIES",
             "--correlation-id", $env:CORRELATION_ID,
-            "--evidence-file", $env:EVIDENCE_REL,
+            "--evidence-file", $env:EVIDENCE_FILE,
             "--timeout-seconds", "5"
           )
           & python $gateway @args
