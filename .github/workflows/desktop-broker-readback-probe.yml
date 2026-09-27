@@ -18,8 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
-      EXPECTED_COMMENT_ID: "5855735084"
+      EXPECTED_COMMENT_ID: "5855749079"
       NTFY_TOPIC: "desktop-pc24x7-runtime-readback-v1-4c7d9a21b62f4e9a"
+      EXPECTED_ACTION: "recover-runner"
       EVIDENCE_FILE: "artifacts/desktop-broker-readback/evidence.json"
     steps:
       - name: Wait bounded for sanitized readback
@@ -108,9 +109,9 @@ jobs:
               core.setFailed('DESKTOP_BROKER_HOST_MISMATCH');
               return;
             }
-            if (found.action !== 'status' || found.status !== 'completed') {
+            if (found.action !== process.env.EXPECTED_ACTION || found.status !== 'completed') {
               core.setFailed(
-                `DESKTOP_BROKER_STATUS_NOT_COMPLETED:action=${found.action}:status=${found.status}`,
+                `DESKTOP_BROKER_ACTION_NOT_COMPLETED:expected=${process.env.EXPECTED_ACTION}:action=${found.action}:status=${found.status}`,
               );
               return;
             }
