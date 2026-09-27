@@ -104,3 +104,38 @@ control-plane-first reutiliza o Engineering Orchestrator já existente.
   `production_touched` e `reboot_performed` devem permanecer `false`.
 - Após a recuperação, um pickup GitHub Actions independente do Desktop deve ser
   observado antes de declarar o runner recuperado.
+
+
+## OPS-GAP-1818 — plano de controle independente
+
+O modo dedicado da branch `fix/ops-gap-1818-desktop-orchestrator-capabilities-*`
+deve usar o runner Noteri e o workflow existente
+`.github/workflows/noteri-desktop-network-probe.yml`.
+
+### Observação de capabilities
+
+- destino fixo `DESKTOP-PDQK954:8787`;
+- somente `GET /readyz` e `GET /v1/status`;
+- worker exato `desktop-pdqk954`;
+- registrar de forma sanitizada `runtime_source_sha`, `worker_instance_id`,
+  `recovery_contract_version` e `safe_task_types`;
+- sem WMI, C$, RPC Task Scheduler remoto, RDC, GUI, reboot ou segredo.
+
+### Recuperação do transporte RDC
+
+Somente após a leitura das capabilities comprovar `host.rdc.recover.v1`:
+
+- enviar apenas `host.rdc.recover.v1` ao worker Desktop;
+- target fixo `DESKTOP-PDQK954`;
+- task fixa `\Automation\RemoteDesktopCommander`;
+- launcher fixo `C:\RemoteDesktopCommander\start-remote-desktop-commander.cmd`;
+- `force_restart=true`;
+- risk 2, uma tentativa e timeout finito;
+- replay idempotente sem redispatch;
+- controle negativo de work item ausente e readback independente;
+- evidência fora do worktree.
+
+A conclusão do work item comprova somente a recuperação host-side. O transporte RDC
+online precisa ser validado independentemente pelo controlador externo antes de
+qualquer uso. RDC continua sendo apenas transporte; qualquer comando no Desktop
+exige Session Launcher → Command Gateway.
