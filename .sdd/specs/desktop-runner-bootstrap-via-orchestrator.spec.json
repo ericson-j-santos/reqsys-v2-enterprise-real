@@ -29,7 +29,7 @@
       "tests/test_self_hosted_runner_governance.py"
     ],
     "evidence_contract": "Noteri -> Session Launcher -> Command Gateway risk 2 -> DESKTOP-PDQK954:8787 -> refresh pinado quando runtime/capability estiver ausente ou stale -> heartbeat independente exige runtime_source_sha exato + worker_instance_id nova/presente + host.github_runner.bootstrap.v1 -> listener local verificado; conclusão isolada do work item de refresh não comprova aplicação; prova terminal separada pelo modo runner-canary no runner DESKTOP-PDQK954 e SHA exato.",
-    "orchestrator_runtime_sha": "9ac95e1cf2d0c5d9b01a700676bba6b1e00b371b",
+    "orchestrator_runtime_sha": "3a2ede7c8a834fbb54736aa9b3340898b0060358",
     "evidence_location": "RUNNER_TEMP outside governed worktree"
   },
   "risk": {
@@ -57,6 +57,7 @@
     "A superfície de GitHub Actions não cresce; os modos reutilizam noteri-desktop-watchdog-recovery.yml.",
     "A evidência do bootstrap permanece fora do worktree governado e não altera o estado Git da sessão.",
     "Refresh só é aceito após readback do runtime_source_sha exato, worker_instance_id pós-reexec e host.github_runner.bootstrap.v1.",
-    "A evidência do refresh registra runtime_source_sha e worker_instance_id anteriores e observados para impedir falso positivo por capability residual."
+    "A evidência do refresh registra runtime_source_sha e worker_instance_id anteriores e observados para impedir falso positivo por capability residual.",
+    "O refresh do bootstrap está pinado ao merge SHA 3a2ede7c8a834fbb54736aa9b3340898b0060358 do Engineering Orchestrator, que contém o fallback governado de recovery para o runner ReqSys registrado."
   ]
 }
