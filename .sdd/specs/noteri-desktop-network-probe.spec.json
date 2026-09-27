@@ -55,10 +55,12 @@
       "arbitrary_task_type": false,
       "remote_shell": false,
       "rules_checkout": {
-        "mode": "per_run_isolated",
+        "mode": "pinned_blob_materialization",
         "path_pattern": "_rules-${{ github.run_id }}-${{ github.run_attempt }}",
         "canonical_rules_ref": "881d9ca2f8e77025edb7298b22981109c567a730",
-        "stale_checkout_reuse": false
+        "stale_checkout_reuse": false,
+        "cross_repo_checkout": false,
+        "git_blob_sha_validation": true
       }
     }
   },
@@ -151,7 +153,7 @@
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
     "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
-    "O recovery usa checkout isolado das regras por run/attempt e não reutiliza o diretório estático _rules de execução anterior."
+    "O recovery materializa somente os arquivos canônicos necessários das regras por SHA/blob pinado, em diretório isolado por run/attempt, sem checkout cross-repo."
   ],
   "hotfix_issue": 2088
 }
