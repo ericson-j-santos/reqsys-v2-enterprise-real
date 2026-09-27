@@ -62,6 +62,12 @@
         "cross_repo_checkout": false,
         "git_blob_sha_validation": true
       }
+    },
+    "orchestrator_runner_bootstrap": {
+      "orchestrator_sha_resolution": "canonical_main_at_execution_start",
+      "orchestrator_repository": "ericson-j-santos/reqsys-engineering-orchestrator",
+      "immutable_after_resolution": true,
+      "historical_hardcoded_sha_allowed": false
     }
   },
   "security": {
@@ -140,7 +146,7 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-26",
+  "updated_at": "2026-09-27",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -153,7 +159,8 @@
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
     "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
-    "O recovery materializa somente os arquivos canônicos necessários das regras por SHA/blob pinado, em diretório isolado por run/attempt, sem checkout cross-repo."
+    "O recovery materializa somente os arquivos canônicos necessários das regras por SHA/blob pinado, em diretório isolado por run/attempt, sem checkout cross-repo.",
+    "O bootstrap resolve a main canônica do Engineering Orchestrator no início da execução, valida o SHA completo e o mantém imutável no refresh e na evidência."
   ],
   "hotfix_issue": 2088
 }
