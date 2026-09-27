@@ -442,26 +442,45 @@ jobs:
         run: |
           set -euo pipefail
           status='pending'
+          pickup_source='none'
           wait_seconds=0
           pickup_timeout_seconds=60
           poll_seconds=5
           for attempt in $(seq 1 $((pickup_timeout_seconds / poll_seconds))); do
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
+            started_self_hosted_jobs="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
+                --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null))] | length' \
+                2>/dev/null || printf '0'
+            )"
+            case "$started_self_hosted_jobs" in
+              ''|*[!0-9]*) started_self_hosted_jobs=0 ;;
+            esac
+            if [ "$started_self_hosted_jobs" -gt 0 ]; then
+              status='in_progress'
+              pickup_source='self_hosted_job_started_at'
+              break
+            fi
             case "$status" in
               pending|queued|requested|waiting)
                 sleep "$poll_seconds"
                 wait_seconds=$((wait_seconds + poll_seconds))
                 ;;
-              *) break ;;
+              *)
+                pickup_source='run_status'
+                break
+                ;;
             esac
           done
-          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
-          printf 'wait_seconds=%s\n' "$wait_seconds" >> "$GITHUB_OUTPUT"
           case "$status" in
             pending|queued|requested|waiting)
+              pickup_source='timeout'
               printf 'error=SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\n' >> "$GITHUB_OUTPUT"
               ;;
           esac
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          printf 'source=%s\n' "$pickup_source" >> "$GITHUB_OUTPUT"
+          printf 'wait_seconds=%s\n' "$wait_seconds" >> "$GITHUB_OUTPUT"
 
       - name: Cancel self-hosted run without pickup
         id: cleanup
@@ -507,6 +526,7 @@ jobs:
           TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
           TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
           RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
+          RUNNER_PICKUP_SOURCE: ${{ steps.pickup.outputs.source }}
           RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
           RUNNER_PICKUP_WAIT_SECONDS: ${{ steps.pickup.outputs.wait_seconds }}
           TARGET_CLEANUP_STATUS: ${{ steps.cleanup.outputs.status }}
@@ -529,6 +549,7 @@ jobs:
               'target_run_url': os.environ['TARGET_RUN_URL'],
               'target_run_status': os.environ['TARGET_RUN_STATUS'],
               'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
+              'runner_pickup_source': os.environ.get('RUNNER_PICKUP_SOURCE') or None,
               'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
               'runner_pickup_wait_seconds': int(os.environ.get('RUNNER_PICKUP_WAIT_SECONDS') or '0'),
               'target_cleanup_status': os.environ.get('TARGET_CLEANUP_STATUS') or None,
