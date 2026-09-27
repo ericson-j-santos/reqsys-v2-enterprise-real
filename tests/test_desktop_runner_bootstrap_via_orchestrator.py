@@ -209,15 +209,21 @@ def test_execute_refreshes_runtime_before_bootstrap(tmp_path: Path) -> None:
         "dispatch": None,
         "replayed": True,
     }
+    target_sha = "a" * 40
     refresh = {
         "required": True,
         "performed": True,
-        "target_sha": subject.ORCHESTRATOR_BOOTSTRAP_SHA,
+        "target_sha": target_sha,
         "work_item_id": "33333333-3333-4333-8333-333333333333",
     }
 
     with (
         patch.object(subject, "worker_preflight", return_value=before),
+        patch.object(
+            subject,
+            "resolve_orchestrator_main_sha",
+            return_value=target_sha,
+        ) as resolve_sha,
         patch.object(
             subject,
             "refresh_runtime_for_bootstrap",
@@ -239,14 +245,34 @@ def test_execute_refreshes_runtime_before_bootstrap(tmp_path: Path) -> None:
             platform="nt",
         )
 
+    resolve_sha.assert_called_once_with()
     refresh_call.assert_called_once()
+    assert refresh_call.call_args.args[2] == target_sha
     assert result["runtime_refresh"]["performed"] is True
     assert result["preflight"]["capability_present"] is True
 
 
 
-def test_runtime_refresh_targets_orchestrator_reexec_fix() -> None:
-    assert subject.ORCHESTRATOR_BOOTSTRAP_SHA == "d44c9f0e64705fa50f7798cb7ff41afbea668784"
+def test_runtime_refresh_resolves_current_orchestrator_main_sha() -> None:
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return b'{"sha":"' + (b"b" * 40) + b'"}'
+
+    with patch.object(subject, "urlopen", return_value=FakeResponse()):
+        observed = subject.resolve_orchestrator_main_sha()
+
+    assert observed == "b" * 40
+
+
+def test_runtime_refresh_rejects_invalid_orchestrator_sha() -> None:
+    with pytest.raises(subject.BootstrapError, match="orchestrator_main_sha_invalid"):
+        subject.validate_sha("main")
 
 
 def test_runner_bootstrap_evidence_stays_outside_governed_worktree() -> None:
