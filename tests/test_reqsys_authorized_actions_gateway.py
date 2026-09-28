@@ -110,6 +110,19 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "eval " not in content
 
 
+def test_gateway_rsm_service_case_e2e_is_exact_current_main_and_github_hosted() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run rsm-service-case-e2e-current-main'" in content
+    assert "'/reqsys run rsm-service-case-e2e-current-main')" in content
+    assert "target='rsm-service-case-e2e.yml'" in content
+    assert "runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml" in content
+    assert "--ref main" in content
+    assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in content
+    assert "steps.route.outputs.target == 'rsm-service-case-e2e.yml'" not in content
+    assert "-f environment=prod" not in content
+
+
 def test_gateway_bacen_57_permanece_somente_simulacao_nonprod() -> None:
     content = _workflow()
 
