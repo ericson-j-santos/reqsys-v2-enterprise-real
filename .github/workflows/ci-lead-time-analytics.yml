@@ -53,6 +53,7 @@ on:
       - '.github/workflows/workflow-command-center.yml'
       - 'scripts/build_ci_fixed_window_analytics.py'
       - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/enrich_ci_reliability_evidence.py'
       - 'scripts/update_ci_fixed_window_history.py'
       - 'scripts/enrich_command_center_ci_fixed_history.py'
       - 'scripts/ci_fixed_window_sustainability.py'
