@@ -46,3 +46,10 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 - após integração, comentário exato em #1705 cria um novo workflow_dispatch no SHA atual da main;
 - recuperação só é considerada concluída após leitura independente mostrar \`DESKTOP-PDQK954\` online com \`transport_broadcast_v1=true\` e uma chamada MCP real de leitura concluir com sucesso;
 - o fluxo não pode voltar a ser a única dependência de recuperação do Desktop; o watchdog autônomo é o mecanismo primário.
+
+
+## Correção de falso positivo — pickup físico
+
+O workflow `noteri-desktop-watchdog-recovery.yml` usa concorrência por modo e
+`cancel-in-progress=true`. Assim, um novo `runner-canary` substitui somente um
+canário órfão anterior e não cancela recovery/bootstrap de outro modo.
