@@ -12,13 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_ENVIRONMENTS = {
-    "DEV": "https://reqsys-app-dev.fly.dev",
+from scripts.dev_runtime_target import resolve_signed_dev_runtime
+
+NON_DEV_ENVIRONMENTS = {
     "STG": "https://reqsys-app-stg.fly.dev",
     "PROD": "https://reqsys-app.fly.dev",
 }
 REQUIRED_PATHS = (
-    "/health",
+    "/api/health",
     "/api/runtime/health",
     "/api/runtime/readiness",
     "/api/runtime/liveness",
@@ -26,10 +27,15 @@ REQUIRED_PATHS = (
 )
 
 
+def default_environments() -> dict[str, str]:
+    runtime = resolve_signed_dev_runtime()
+    return {"DEV": runtime["base_url"], **NON_DEV_ENVIRONMENTS}
+
+
 def probe(url: str, timeout: float = 12.0) -> dict[str, Any]:
     started = time.monotonic()
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-UX-Smoke/1.1"})
+        request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-UX-Smoke/1.2"})
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read(4096).decode("utf-8", errors="replace")
             status = int(response.status)
@@ -67,7 +73,7 @@ def collect(environments: dict[str, str], timeout: float = 12.0) -> dict[str, An
     complete = all(v["pass_rate"] == 100 for v in results.values())
     drift = len(set(fingerprints.values())) > 1
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "PUBLIC_UX_ENV_SYNC_OK" if complete and not drift else "PUBLIC_UX_ENV_SYNC_REVIEW",
         "environments": results,
@@ -80,6 +86,8 @@ def collect(environments: dict[str, str], timeout: float = 12.0) -> dict[str, An
         "production_blocker": False,
         "human_approval_required": True,
         "automatic_score_promotion": False,
+        "dev_runtime_provider": "pc24x7_signed_locator",
+        "legacy_dev_fly_fallback": False,
     }
 
 
@@ -89,7 +97,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=12.0)
     parser.add_argument("--environments-json")
     args = parser.parse_args()
-    environments = DEFAULT_ENVIRONMENTS
+    environments = default_environments()
     if args.environments_json:
         environments = json.loads(Path(args.environments_json).read_text(encoding="utf-8"))
     report = collect(environments, args.timeout)
