@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
-      EXPECTED_COMMENT_ID: "5861010183"
+      EXPECTED_COMMENT_ID: "5861550076"
       NTFY_TOPIC: "desktop-pc24x7-runtime-readback-v1-4c7d9a21b62f4e9a"
-      EXPECTED_ACTION: "recover-runner"
+      EXPECTED_ACTION: "status"
       EVIDENCE_FILE: "artifacts/desktop-broker-readback/evidence.json"
     steps:
       - name: Wait bounded for sanitized readback
