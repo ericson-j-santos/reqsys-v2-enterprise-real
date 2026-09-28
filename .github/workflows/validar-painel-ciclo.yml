@@ -6,6 +6,11 @@ on:
       - "docs/painel-ciclo-completo-reqsys.html"
       - "docs/ciclo-completo/**"
       - "scripts/validar_painel_ciclo.py"
+      - "scripts/generate_cycle_dashboard_state.py"
+      - "config/operational-dashboard-projects.json"
+      - "tests/test_generate_cycle_dashboard_state.py"
+      - "tests/test_validar_painel_ciclo.py"
+      - ".sdd/specs/live-cycle-dashboard.*"
       - ".github/workflows/validar-painel-ciclo.yml"
   workflow_dispatch:
 
@@ -22,8 +27,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validar painel de ciclo
-        run: python scripts/validar_painel_ciclo.py
+      - name: Instalar dependência de teste
+        run: python -m pip install --disable-pip-version-check pytest==9.0.3
+
+      - name: Validar contratos do painel
+        run: |
+          python -m pytest tests/test_generate_cycle_dashboard_state.py tests/test_validar_painel_ciclo.py -q
+          python scripts/validar_painel_ciclo.py
 
       - name: Publicar painel como artifact
         uses: actions/upload-artifact@v4
