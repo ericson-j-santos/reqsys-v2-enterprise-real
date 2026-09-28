@@ -291,6 +291,21 @@ jobs:
           python -m json.tool site/data.json >/dev/null
           python -m json.tool site/certification-status.json >/dev/null
           python -m json.tool site/global-status.json >/dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("site/global-status.json").read_text(encoding="utf-8"))
+          for item in payload.get("projects", []):
+              if item.get("visibility") != "private":
+                  continue
+              forbidden = ("repository", "html_url", "main_sha", "main_commit_url", "open_prs")
+              leaked = [key for key in forbidden if item.get(key)]
+              if leaked:
+                  raise SystemExit("private_project_metadata_leak:" + ",".join(leaked))
+              if item.get("private_redacted") is not True:
+                  raise SystemExit("private_project_without_redaction")
+          PY
           grep -Fq '"certification"' site/data.json
           python -c "
           import json, sys
