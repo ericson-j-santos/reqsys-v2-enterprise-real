@@ -58,9 +58,10 @@ Após o checkpoint terminal da rota WMI/DCOM, este incremento testa somente uma 
 5. WMI, SCM, Task Scheduler/`schtasks`, `C$` e Admin Broker ficam explicitamente fora desta execução.
 6. O job legado permanece preservado para compatibilidade, mas DEVE ser ignorado quando `github.ref_name` iniciar por `fix/noteri-desktop-network-probe-http-8083-`.
 7. A branch HTTP executa somente `scripts/noteri_desktop_dev_http_probe.py` e `tests/test_noteri_desktop_dev_http_probe.py`.
-8. A evidência aceita os estados `name_resolution_failed`, `dev_gateway_tcp_closed`, `dev_gateway_http_reachable` e `dev_gateway_tcp_reachable_http_unresponsive`.
-9. Status HTTP válido comprova somente transporte/aplicação alcançável; não comprova capacidade de recuperação até existir endpoint fixo, autenticado e allowlisted para esse fim.
-10. Erros persistidos devem ser sanitizados e nunca conter texto bruto de exceção.
+8. Em `workflow_dispatch` na `main`, a sonda HTTP DEV também DEVE executar no mesmo SHA; o diagnóstico legado pode executar em paralelo para preservar evidência independente de reachability.
+9. A evidência aceita os estados `name_resolution_failed`, `dev_gateway_tcp_closed`, `dev_gateway_http_reachable` e `dev_gateway_tcp_reachable_http_unresponsive`.
+10. Status HTTP válido comprova somente transporte/aplicação alcançável; não comprova capacidade de recuperação até existir endpoint fixo, autenticado e allowlisted para esse fim.
+11. Erros persistidos devem ser sanitizados e nunca conter texto bruto de exceção.
 
 ### Critério para avançar
 

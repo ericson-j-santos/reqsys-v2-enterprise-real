@@ -270,7 +270,7 @@ jobs:
 
   dev_http_probe:
     name: Diagnose Desktop DEV HTTP route from Noteri
-    if: ${{ startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
