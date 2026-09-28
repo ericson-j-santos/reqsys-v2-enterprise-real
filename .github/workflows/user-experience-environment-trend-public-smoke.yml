@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'scripts/smoke_user_experience_environment_trend_public.py'
+      - 'scripts/dev_runtime_target.py'
+      - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_smoke_user_experience_environment_trend_public.py'
       - '.github/workflows/user-experience-environment-trend-public-smoke.yml'
   workflow_dispatch:
@@ -22,9 +24,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - name: Validate implementation
         run: |
-          python -m py_compile scripts/smoke_user_experience_environment_trend_public.py
+          python -m py_compile scripts/dev_runtime_target.py scripts/smoke_user_experience_environment_trend_public.py
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
           python -m unittest tests/test_smoke_user_experience_environment_trend_public.py
       - name: Execute report-only public smoke
         run: |
