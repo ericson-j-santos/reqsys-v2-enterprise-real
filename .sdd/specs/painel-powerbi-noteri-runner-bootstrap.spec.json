@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "painel-powerbi-noteri-runner-bootstrap",
+  "status": "proposed",
+  "environment": "DEV",
+  "target_repository": "ericson-j-santos/painel-powerbi",
+  "target_host": "Noteri",
+  "runner_name": "Noteri-PainelPowerBI",
+  "runner_labels": [
+    "self-hosted",
+    "Windows",
+    "X64",
+    "noteri",
+    "reqsys-dev",
+    "painel-powerbi"
+  ],
+  "workflow": ".github/workflows/painel-powerbi-noteri-runner-bootstrap.yml",
+  "implementation": "scripts/bootstrap_painel_powerbi_noteri_runner.py",
+  "tests": [
+    "tests/test_painel_powerbi_noteri_runner_bootstrap.py"
+  ],
+  "evidence_contract": "Sucesso exige host Noteri, autenticação gh local da conta owner, registration-token efêmero não persistido/logado, home separado do runner ReqSys e readback GitHub online com labels completas; pickup posterior no painel-powerbi é evidência terminal independente."
+}
