@@ -129,6 +129,9 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "secrets." not in raw
     assert "persist-credentials: false" in raw
     assert "chatgpt-operational-rules" in raw
+    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in raw
+    assert 'python-version: "3.12"' in raw
+    assert "10d2489e8cac3770d1c07fac4ccfece0a0112269" in raw
     assert "session_launcher.py" in raw
     assert "SESSION_LAUNCH_OK" in raw
     assert "state_validated" in raw
@@ -186,5 +189,5 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "DESKTOP-PDQK954" in raw
 
     # Todos os modos físicos devem usar a regra canônica atual; pin legado é proibido.
-    assert raw.count("881d9ca2f8e77025edb7298b22981109c567a730") == 4
+    assert raw.count("10d2489e8cac3770d1c07fac4ccfece0a0112269") == 4
     assert "5af7b5ab6e31c24744176abd774855168c55953f" not in raw
