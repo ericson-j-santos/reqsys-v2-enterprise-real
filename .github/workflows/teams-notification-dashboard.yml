@@ -2,7 +2,7 @@ name: Teams Notification Dashboard
 
 on:
   schedule:
-    - cron: "35 12 * * *"
+    - cron: "35 * * * *"
   workflow_dispatch:
   push:
     branches:
@@ -13,11 +13,15 @@ on:
       - .github/workflows/teams-gold-certification.yml
       - .github/workflows/teams-provisional-gold-certification.yml
       - .github/workflows/teams-certification-progress-status.yml
+      - docs/painel-ciclo-completo-reqsys.html
+      - config/operational-dashboard-projects.json
+      - scripts/generate_cycle_dashboard_state.py
 
 permissions:
   actions: read
   contents: read
   issues: read
+  pull-requests: read
 
 concurrency:
   group: teams-notification-dashboard
@@ -39,7 +43,19 @@ jobs:
       STATUS_ISSUE_TITLE: "[STATUS][TEAMS] Progresso da certificação operacional"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Gerar token temporário somente leitura para fontes entre repositórios
+        id: dashboard-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-actions: read
+          permission-contents: read
+          permission-pull-requests: read
 
       - name: Calcular dados públicos do dashboard
         shell: bash
@@ -247,13 +263,34 @@ jobs:
               summary.write(f"- Evidência: `{certification_payload['evidence_sha256']}`\n")
           PY
 
+      - name: Montar painel central vivo sem perder o detalhe Teams
+        env:
+          DASHBOARD_GH_TOKEN: ${{ steps.dashboard-token.outputs.token || github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p site/teams
+          cp site/index.html site/teams/index.html
+          cp site/data.json site/teams/data.json
+          cp site/certification-status.json site/teams/certification-status.json
+          cp docs/painel-ciclo-completo-reqsys.html site/index.html
+          python scripts/generate_cycle_dashboard_state.py \
+            --projects config/operational-dashboard-projects.json \
+            --teams-certification site/certification-status.json \
+            --output site/global-status.json \
+            --token-env DASHBOARD_GH_TOKEN
+
       - name: Validar conteúdo público
         run: |
           test -s site/index.html
           test -s site/data.json
           test -s site/certification-status.json
+          test -s site/global-status.json
+          test -s site/teams/index.html
+          test -s site/teams/data.json
+          test -s site/teams/certification-status.json
           python -m json.tool site/data.json >/dev/null
           python -m json.tool site/certification-status.json >/dev/null
+          python -m json.tool site/global-status.json >/dev/null
           grep -Fq '"certification"' site/data.json
           python -c "
           import json, sys
@@ -262,10 +299,14 @@ jobs:
           sys.exit(0 if state in valid else f'estado de certificação inesperado: {state}')
           "
           grep -Fq 'evidence_sha256' site/certification-status.json
+          grep -Fq '"mode": "live"' site/global-status.json
+          grep -Fq 'TODO Global' site/index.html
+          grep -Fq 'Runtime PC24x7' site/index.html
+          grep -Fq 'Power BI' site/index.html
           ! grep -R "TEAMS_WEBHOOK_URL\|AZURE_CLIENT_SECRET" site/
 
       - name: Publicar artefato para o publicador canônico
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: teams-dashboard-site
           path: site
