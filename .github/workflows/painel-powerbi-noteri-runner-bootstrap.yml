@@ -8,6 +8,7 @@ on:
       - ".github/workflows/painel-powerbi-noteri-runner-bootstrap.yml"
       - ".github/self-hosted-runner-policy.json"
       - "scripts/bootstrap_painel_powerbi_noteri_runner.py"
+      - "scripts/bootstrap_painel_powerbi_noteri_guard_runner.py"
       - "tests/test_painel_powerbi_noteri_runner_bootstrap.py"
       - ".sdd/specs/painel-powerbi-noteri-runner-bootstrap.requirements.md"
       - ".sdd/specs/painel-powerbi-noteri-runner-bootstrap.spec.json"
@@ -45,4 +46,11 @@ jobs:
         run: >
           python scripts/bootstrap_painel_powerbi_noteri_runner.py
           --confirm REGISTER-PAINEL-POWERBI-NOTERI-RUNNER
+          --source-sha "${{ github.sha }}"
+
+      - name: Registrar e validar runner de guard
+        shell: powershell
+        run: >
+          python scripts/bootstrap_painel_powerbi_noteri_guard_runner.py
+          --confirm REGISTER-PAINEL-POWERBI-NOTERI-GUARD-RUNNER
           --source-sha "${{ github.sha }}"
