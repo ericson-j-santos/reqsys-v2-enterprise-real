@@ -111,6 +111,26 @@ Esse critério ainda não representa significância estatística nem prova causa
 
 Novos registros do histórico usam `schema_version=1.0.2` e preservam registros antigos sem migração destrutiva.
 
+
+## Confiabilidade da Merge Queue
+
+A seção `pr_efficiency.merge_queue_reliability` é observacional e `report-only`. Ela reutiliza a mesma amostra de PRs e acrescenta evidência específica do caminho nativo `merge_group`.
+
+Métricas registradas:
+
+- `canary_e2e_observed`: só é `true` quando existe workflow run real com `event=merge_group` associado a PR;
+- `queue_attempts`: quantidade de HEAD SHAs distintos de `merge_group`; vários workflows no mesmo HEAD contam como uma tentativa;
+- `queue_wait_p50_seconds` e `queue_wait_p95_seconds`: espera entre `created_at` e `run_started_at` dos workflows `merge_group`; mede espera do GitHub Actions, não permanência total na Merge Queue;
+- `green_pr_but_queue_failed_count`: PR cujo HEAD observado estava verde nos workflows bloqueantes, mas teve workflow `merge_group` falho;
+- `queue_failure_causes`: contagem por workflow e conclusão observada;
+- `requeue_pr_count`: PR associado a mais de um HEAD SHA de `merge_group`;
+- `post_merge_failed_pr_count`: PR verde, mergeada na janela, cujo `merge_commit_sha` teve workflow `push` falho.
+
+Ausência de `merge_group` é fail-closed para o canário: `available=false`, `canary_e2e_observed=false` e `observation_reason=no_merge_group_candidate_observed`. Zero eventos nunca é apresentado como canário aprovado.
+
+A coleta pós-merge consulta somente os PRs da amostra e o `merge_commit_sha` exato de cada um, evitando varredura global e evitando atribuir falha de outro commit ao PR.
+
+
 ## Governança
 
 - Permissões do analytics permanecem `actions: read` e `contents: read`.
