@@ -525,3 +525,18 @@ def test_gateway_public_access_validation_is_exact_strict_current_main() -> None
     assert '-f fail_on_unavailable=false' not in content
     assert '-f url=' not in content
     assert '-f target=' not in content
+
+
+def test_gateway_desktop_one_time_reboot_dev_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run desktop-one-time-reboot-dev'" in content
+    assert "'/reqsys run desktop-one-time-reboot-dev')" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "mode='reboot-once'" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once" in content
+    assert '-f mode="$recovery_mode"' in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f target_host=" not in content
+    assert "-f action_id=" not in content
+    assert "-f command=" not in content
