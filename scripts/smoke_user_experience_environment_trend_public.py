@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
 """Smoke público report-only do indicador de tendência ambiental de UX."""
 from __future__ import annotations
-import argparse, hashlib, json, urllib.request
+
+import argparse
+import hashlib
+import json
+import urllib.request
 from datetime import datetime, timezone
 
-ENVIRONMENTS = {
-    "dev": "https://reqsys-app-dev.fly.dev",
+from scripts.dev_runtime_target import resolve_signed_dev_runtime
+
+NON_DEV_ENVIRONMENTS = {
     "stg": "https://reqsys-app-stg.fly.dev",
     "prod": "https://reqsys-app.fly.dev",
 }
-PATHS = ("/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
+PATHS = ("/api/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
+
+
+def default_environments() -> dict[str, str]:
+    runtime = resolve_signed_dev_runtime()
+    return {"dev": runtime["base_url"], **NON_DEV_ENVIRONMENTS}
 
 
 def fetch(url: str, timeout: int = 15) -> dict:
@@ -31,10 +41,10 @@ def canonical_fingerprint(payload: dict) -> str:
 
 
 def build_report(environments: dict[str, str] | None = None) -> dict:
-    environments = environments or ENVIRONMENTS
+    environments = environments or default_environments()
     results = {}
     for name, base in environments.items():
-        checks = {path: fetch(base + path) for path in PATHS}
+        checks = {path: fetch(base.rstrip("/") + path) for path in PATHS}
         passed = sum(1 for check in checks.values() if check["ok"])
         contract = {path: {"ok": value["ok"], "status": value["status"]} for path, value in checks.items()}
         results[name] = {
@@ -47,7 +57,7 @@ def build_report(environments: dict[str, str] | None = None) -> dict:
     all_healthy = all(value["pass_rate"] == 100 for value in results.values())
     drift = len(fingerprints) > 1
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "mode": "report-only",
         "production_blocker": False,
@@ -57,6 +67,8 @@ def build_report(environments: dict[str, str] | None = None) -> dict:
         "availability_rate": round(sum(v["pass_rate"] for v in results.values()) / len(results), 2),
         "drift_detected": drift,
         "status": "UX_ENV_TREND_PUBLIC_OK" if all_healthy and not drift else "UX_ENV_TREND_PUBLIC_REVIEW",
+        "dev_runtime_provider": "pc24x7_signed_locator",
+        "legacy_dev_fly_fallback": False,
     }
 
 
