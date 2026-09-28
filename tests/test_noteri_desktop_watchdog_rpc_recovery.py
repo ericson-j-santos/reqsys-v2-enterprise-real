@@ -174,6 +174,6 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "DESKTOP_GITHUB_RUNNER_PICKUP_PROVEN" in raw
     assert "DESKTOP-PDQK954" in raw
 
-    # Os dois novos modos usam regras canônicas atuais; watchdog mantém seu pin legado
-    # até migração dedicada, sem transformar isso em requisito funcional do recovery.
-    assert "881d9ca2f8e77025edb7298b22981109c567a730" in raw
+    # Todos os modos físicos devem usar a regra canônica atual; pin legado é proibido.
+    assert raw.count("881d9ca2f8e77025edb7298b22981109c567a730") == 4
+    assert "5af7b5ab6e31c24744176abd774855168c55953f" not in raw
