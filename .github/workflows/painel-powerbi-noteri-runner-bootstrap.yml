@@ -1,0 +1,48 @@
+name: Painel Power BI Noteri Runner Bootstrap
+
+on:
+  push:
+    branches:
+      - ops/painel-powerbi-noteri-runner-bootstrap-20260928
+    paths:
+      - ".github/workflows/painel-powerbi-noteri-runner-bootstrap.yml"
+      - ".github/self-hosted-runner-policy.json"
+      - "scripts/bootstrap_painel_powerbi_noteri_runner.py"
+      - "tests/test_painel_powerbi_noteri_runner_bootstrap.py"
+      - ".sdd/specs/painel-powerbi-noteri-runner-bootstrap.requirements.md"
+      - ".sdd/specs/painel-powerbi-noteri-runner-bootstrap.spec.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: painel-powerbi-noteri-runner-bootstrap
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    name: painel-powerbi-noteri-runner-bootstrap
+    if: >-
+      github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
+      github.actor == 'ericson-j-santos' &&
+      github.ref == 'refs/heads/ops/painel-powerbi-noteri-runner-bootstrap-20260928'
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout immutable SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validar contrato focado
+        shell: powershell
+        run: python -m unittest -q tests.test_painel_powerbi_noteri_runner_bootstrap
+
+      - name: Registrar e validar runner dedicado
+        shell: powershell
+        run: >
+          python scripts/bootstrap_painel_powerbi_noteri_runner.py
+          --confirm REGISTER-PAINEL-POWERBI-NOTERI-RUNNER
+          --source-sha "${{ github.sha }}"
