@@ -3,6 +3,8 @@ from scripts.validate_dev_runtime_cutover import (
     FORBIDDEN_DEV_RUNTIME_URLS,
     ROOT,
     STABLE_DEV_ENTRYPOINT,
+    STATIC_DEV_RUNTIME_VARIABLES,
+    WSJF_ACCEPTANCE_WORKFLOW,
     validate,
 )
 
@@ -36,6 +38,16 @@ def test_public_smokes_fail_closed_instead_of_false_green():
         assert "Runtime legado Fly.io rejeitado" in raw
         assert "sucesso verde" in raw.lower()
 
+
+def test_wsjf_acceptance_uses_signed_locator_same_origin_without_static_urls():
+    raw = (ROOT / WSJF_ACCEPTANCE_WORKFLOW).read_text(encoding="utf-8")
+    assert "resolve_pc24x7_dev_locator.mjs" in raw
+    assert "steps.dev_runtime.outputs.base_url" in raw
+    assert "steps.dev_runtime.outputs.frontend_url" in raw
+    assert 'echo "API_URL=$resolved_url" >> "$GITHUB_ENV"' in raw
+    assert 'echo "FRONTEND_URL=$resolved_url" >> "$GITHUB_ENV"' in raw
+    for variable in STATIC_DEV_RUNTIME_VARIABLES:
+        assert variable not in raw
 
 def test_study_mode_reconciles_on_main_after_merge():
     raw = (ROOT / ".github/workflows/noteri-study-mode-dev-reconcile.yml").read_text(encoding="utf-8")
