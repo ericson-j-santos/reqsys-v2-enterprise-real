@@ -2,7 +2,7 @@
   "feature_name": "noteri-desktop-watchdog-recovery",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-21",
-  "updated_at": "2026-09-24",
+  "updated_at": "2026-09-27",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -49,6 +49,24 @@
     "O script de recuperação é resolvido a partir do target_path retornado pela sessão e executado exclusivamente pelo Command Gateway risco 2.",
     "Nenhum clone persistente C:\\dev\\reqsys-v2-enterprise-real é requisito do Noteri; o único destino de execução é o worktree governado.",
     "O RPC permanece limitado a Query+Run da tarefa watchdog existente; criação/alteração de tarefa, segredo, credencial e produção são proibidos.",
-    "Após sucesso do RPC, pickup real do runner Desktop continua sendo a prova terminal."
-  ]
+    "Após sucesso do RPC, pickup real do runner Desktop continua sendo a prova terminal.",
+    "Todos os modos físicos usam o SHA canônico atual das regras operacionais.",
+    "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."
+  ],
+  "operational_rules": {
+    "repository": "ericson-j-santos/chatgpt-operational-rules",
+    "sha": "881d9ca2f8e77025edb7298b22981109c567a730",
+    "applies_to_modes": [
+      "watchdog",
+      "runner-recover",
+      "runner-bootstrap",
+      "runner-canary"
+    ],
+    "stale_pin_allowed": false
+  },
+  "workflow_action_immutability": {
+    "checkout_sha": "11d5960a326750d5838078e36cf38b85af677262",
+    "upload_artifact_sha": "ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "mutable_major_tags_allowed": false
+  }
 }
