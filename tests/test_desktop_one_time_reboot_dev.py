@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github" / "workflows" / "desktop-one-time-reboot-dev.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "noteri-desktop-watchdog-recovery.yml"
 
 
 def _raw() -> str:
@@ -11,6 +11,8 @@ def _raw() -> str:
 
 def test_one_time_reboot_is_fixed_to_noteri_desktop_and_dev() -> None:
     raw = _raw()
+    assert "- reboot-once" in raw
+    assert "if: ${{ inputs.mode == 'reboot-once' }}" in raw
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
     assert "TARGET_HOST: DESKTOP-PDQK954" in raw
     assert 'environment = "dev"' in raw
@@ -30,11 +32,11 @@ def test_one_time_reboot_is_consumable_and_has_negative_replay_control() -> None
     assert "authorization_revoked = $true" in raw
 
 
-def test_one_time_reboot_has_no_arbitrary_inputs_or_production_path() -> None:
+def test_one_time_reboot_has_no_arbitrary_reboot_inputs_or_production_path() -> None:
     raw = _raw()
     assert "workflow_dispatch:" in raw
-    assert "inputs:" not in raw
-    assert "${{ inputs." not in raw
+    assert "target_host:" not in raw
+    assert "action_id:" not in raw
     assert '"--target-host", $env:TARGET_HOST' in raw
     assert "arbitrary_target_supported = $false" in raw
     assert "arbitrary_command_supported = $false" in raw
