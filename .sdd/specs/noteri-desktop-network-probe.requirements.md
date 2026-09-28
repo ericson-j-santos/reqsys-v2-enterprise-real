@@ -126,3 +126,11 @@ principal passa a expor o recovery permanente já existente.
    inexistente; ele não é pré-requisito do recovery.
 6. Sucesso terminal exige recovery local válido seguido de pickup físico independente
    no Desktop; sucesso de transporte isolado não conclui a recuperação.
+
+## Prevenção P0 — runtime Python determinístico no Noteri
+
+1. Todo job de diagnóstico/recovery desta frente que execute `Session Launcher` no runner Noteri deve preparar Python 3.12 explicitamente com `actions/setup-python` fixado por SHA completo antes de invocar `python`.
+2. O fluxo não pode depender da instalação Python persistente do host, pois PATH/local launcher quebrado não deve transformar recovery automatizável em ação manual.
+3. Os workflows devem consumir o SHA corrente aprovado de `chatgpt-operational-rules` para Session Launcher/Command Gateway.
+4. Falha no bootstrap Python continua fail-closed e não autoriza shell direto, GUI, RDC ou bypass do Gateway.
+5. Após integração, repetir o probe Noteri → Desktop no SHA corrente; se o transporte/orquestrador estiver alcançável, executar o recovery de runner e exigir pickup físico independente.
