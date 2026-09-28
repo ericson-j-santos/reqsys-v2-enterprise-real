@@ -19,19 +19,22 @@ A implementação reutiliza o `CI Lead Time Analytics` e sua amostra de PRs. Nã
 7. Registrar requeue quando o mesmo PR estiver associado a mais de um HEAD SHA de `merge_group`.
 8. Para falha pós-merge, consultar somente o `merge_commit_sha` exato de PRs da amostra que tenham sido mergeadas dentro da janela.
 9. Falha pós-merge é sinal observacional e não deve ser apresentada como prova causal da mudança.
-10. Todas as métricas permanecem `report-only` e `creates_gate=false`.
+10. Workflow pós-merge com conclusão `cancelled` deve permanecer observável, mas não pode incrementar `post_merge_failure_runs` nem `post_merge_failed_pr_count`.
+11. Todas as métricas permanecem `report-only` e `creates_gate=false`.
 
 ## Controles negativos
 
 - Nenhum `merge_group` observado não pode produzir canário aprovado.
 - Workflow `push` de SHA diferente do `merge_commit_sha` da PR não participa da métrica pós-merge.
 - Vários workflows no mesmo HEAD `merge_group` não podem inflar `queue_attempts`.
+- Workflow pós-merge cancelado deve ser reportado separadamente e não pode ser rotulado como falha.
 
 ## Critérios de aceite
 
 - Teste positivo detecta PR verde com falha de fila e requeue.
 - Teste negativo mantém canário não observado quando a amostra não contém `merge_group`.
 - Teste de coleta prova consulta pós-merge pelo SHA exato.
+- Teste negativo prova que `cancelled` pós-merge fica visível sem ser contado como falha.
 - Schema documenta `merge_queue_reliability`.
 - `CI Lead Time Analytics` continua report-only.
 - Pre-PR Readiness fica verde no HEAD final com `behind_by=0`.
