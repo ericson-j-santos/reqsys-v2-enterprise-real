@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Painel central vivo do ciclo ReqSys",
+  "status": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_generate_cycle_dashboard_state.py",
+      "tests/test_validar_painel_ciclo.py",
+      "tests/test_pages_single_writer_guard.py"
+    ],
+    "evidence_contract": "global-status.json no SHA/run corrente; fontes inacessíveis fail-closed; TODO Global apenas como projeção; painel Teams preservado; sem deploy neste incremento. Pages Single Writer deve contar somente entradas uses reais e ignorar referências textuais de validação."
+  }
+}

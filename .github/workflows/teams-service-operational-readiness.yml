@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Validar componentes obrigatórios
         shell: bash
@@ -75,16 +75,16 @@ jobs:
           grep -Fq 'SLO_TARGET' .github/workflows/teams-notification-slo.yml
 
           # Contrato Pages: Teams produz o artefato; somente o composto publica.
-          grep -Fq 'actions/upload-artifact@v4' "$producer"
+          grep -Fq 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$producer"
           grep -Fq 'teams-dashboard-site' "$producer"
-          ! grep -Fq 'deploy-pages@v4' "$producer"
+          ! grep -Fq 'actions/deploy-pages@' "$producer"
           grep -Fq 'workflow_dispatch:' "$publisher"
           grep -Fq 'expected_sha:' "$publisher"
           grep -Fq 'authorization:' "$publisher"
           grep -Fq 'DEPLOY_PAGES' "$publisher"
           ! grep -Fq 'workflow_run:' "$publisher"
           grep -Fq 'teams-dashboard-site' "$publisher"
-          grep -Fq 'deploy-pages@v4' "$publisher"
+          grep -Fq 'actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e' "$publisher"
 
           # Contrato de concorrência: novos disparos aguardam; não cancelam o produtor ativo.
           grep -Fq 'group: teams-notification-dashboard' "$producer"

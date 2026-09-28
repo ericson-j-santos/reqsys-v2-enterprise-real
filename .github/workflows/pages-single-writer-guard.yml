@@ -20,19 +20,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Validar publicador canônico
         shell: bash
         run: |
           set -euo pipefail
           canonical='.github/workflows/deploy-reqsys-pages-composite.yml'
-          guard='.github/workflows/pages-single-writer-guard.yml'
+          deploy_uses_pattern='^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*actions/deploy-pages@'
+          pages_write_pattern='^[[:space:]]*pages:[[:space:]]*write([[:space:]]*#.*)?$'
 
           mapfile -t publishers < <(
-            grep -RIl --include='*.yml' --include='*.yaml' 'actions/deploy-pages@' .github/workflows \
-              | grep -vFx "$guard" \
-              | sort
+            grep -RIlE --include='*.yml' --include='*.yaml' "$deploy_uses_pattern" .github/workflows |
+              sort
           )
 
           printf 'Publicadores encontrados (%s):\n' "${#publishers[@]}"
@@ -48,9 +48,8 @@ jobs:
             exit 1
           fi
 
-          if grep -RIl --include='*.yml' --include='*.yaml' 'pages:[[:space:]]*write' .github/workflows \
-            | grep -vFx "$canonical" \
-            | grep -vFx "$guard"; then
+          if grep -RIlE --include='*.yml' --include='*.yaml' "$pages_write_pattern" .github/workflows |
+            grep -vFx "$canonical"; then
             echo 'Workflow não canônico possui permissão pages: write.' >&2
             exit 1
           fi

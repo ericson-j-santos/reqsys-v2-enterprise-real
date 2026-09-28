@@ -24,8 +24,9 @@ env:
   BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}
 
 concurrency:
-  # push e pull_request do mesmo HEAD compartilham a branch e não disputam dois runners.
-  group: pre-pr-readiness-${{ github.event.pull_request.head.ref || github.ref_name }}
+  # Eventos do mesmo tipo cancelam versões obsoletas da branch; push e pull_request
+  # ficam isolados para não se cancelarem mutuamente no mesmo SHA.
+  group: pre-pr-readiness-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

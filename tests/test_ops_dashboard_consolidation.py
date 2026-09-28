@@ -55,7 +55,7 @@ def test_pages_publisher_is_explicit_and_sha_bound() -> None:
     assert "commits/main" in content
     assert "teams-notification-dashboard.yml/runs?status=success" in content
     assert "Execução produtora fora da janela de 48h" in content
-    assert content.count("actions/deploy-pages@v4") == 1
+    assert content.count("actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e") == 1
 
 
 def test_pages_publisher_validates_same_contract_as_public_smoke() -> None:
