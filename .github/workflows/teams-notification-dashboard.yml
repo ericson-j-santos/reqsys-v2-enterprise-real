@@ -43,12 +43,12 @@ jobs:
       STATUS_ISSUE_TITLE: "[STATUS][TEAMS] Progresso da certificação operacional"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Gerar token temporário somente leitura para fontes entre repositórios
         id: dashboard-token
         continue-on-error: true
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
@@ -306,7 +306,7 @@ jobs:
           ! grep -R "TEAMS_WEBHOOK_URL\|AZURE_CLIENT_SECRET" site/
 
       - name: Publicar artefato para o publicador canônico
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: teams-dashboard-site
           path: site
