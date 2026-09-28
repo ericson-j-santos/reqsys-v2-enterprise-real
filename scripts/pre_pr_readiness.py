@@ -25,6 +25,7 @@ CORE_PREVENTIVE_INVARIANTS = (
     "sdd:contract",
     "security:changed-diff",
     "workflow:surface-budget",
+    "workflow:action-immutability",
     "workflow:regression-contracts",
 )
 
@@ -382,6 +383,7 @@ def operational_fast_checks(root: Path) -> list[CheckResult]:
         "scripts/auto_rerun_governed.py",
         "scripts/workflow_inventory_audit.py",
         "scripts/workflow_inventory_decision_gate.py",
+        "scripts/validate_action_immutability.py",
     ]
     tests = [
         "tests/test_pr_ci_watch.py",
@@ -389,6 +391,7 @@ def operational_fast_checks(root: Path) -> list[CheckResult]:
         "tests/test_auto_rerun_governed.py",
         "tests/test_workflow_inventory_audit.py",
         "tests/test_workflow_inventory_decision_gate.py",
+        "tests/test_validate_action_immutability.py",
     ]
     results: list[CheckResult] = []
     existing_scripts = [item for item in scripts if (root / item).is_file()]
@@ -519,6 +522,22 @@ def main() -> int:
                 "config/workflow-governance-registry.json",
                 "--output",
                 "artifacts/pre-pr-readiness/workflow-surface-budget.json",
+            ],
+            cwd=root,
+        )
+    )
+    checks.append(
+        _timed_check(
+            "workflow:action-immutability",
+            [
+                sys.executable,
+                "scripts/validate_action_immutability.py",
+                "--base-ref",
+                args.base_ref,
+                "--scope",
+                "changed",
+                "--report",
+                "artifacts/pre-pr-readiness/action-immutability.json",
             ],
             cwd=root,
         )
