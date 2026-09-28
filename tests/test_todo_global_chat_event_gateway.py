@@ -220,6 +220,7 @@ def test_workflow_is_owner_scoped_same_sha_and_never_executes_comment_body() -> 
     assert "eval " not in text
     assert "TODO_GLOBAL_RUNTIME_TOKEN" in text
     assert "publish-todo-event:" in text
+    assert "pytest==9.0.3 PyYAML==6.0.3" in text
     assert "todo-global-chat-event-" in text
 
 
