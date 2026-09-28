@@ -10,7 +10,11 @@
       "tests/test_todo_global_chat_event_gateway.py",
       "tests/test_todo_global_hourly_cycle.py"
     ],
-    "evidence_contract": "Issue #1705 + owner + prefix exato; TodoEvent v1 strict allowlist; same-SHA público; controle negativo; readback independente; replay do mesmo event_id sem segundo job; nenhum segredo persistido."
+    "evidence_contract": "Issue #1705 + owner + prefix exato; TodoEvent v1 strict allowlist; self-tests com pytest e PyYAML fixados; same-SHA público; controle negativo; readback independente; replay do mesmo event_id sem segundo job; nenhum segredo persistido.",
+    "self_test_dependencies": [
+      "pytest==9.0.3",
+      "PyYAML==6.0.3"
+    ]
   },
   "traceability": {
     "requirements": ".sdd/specs/todo-global-chat-event-gateway.requirements.md",
