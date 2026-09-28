@@ -21,6 +21,7 @@ on:
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/build_ci_fixed_window_analytics.py'
       - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/enrich_ci_reliability_evidence.py'
       - 'scripts/compare_ci_process_baseline.py'
       - 'scripts/annotate_ci_window_comparability.py'
       - 'scripts/update_ci_process_history.py'
@@ -32,6 +33,7 @@ on:
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
       - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
+      - 'tests/scripts/test_enrich_ci_reliability_evidence.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
       - 'tests/scripts/test_annotate_ci_window_comparability.py'
       - 'tests/scripts/test_update_ci_process_history.py'
@@ -102,6 +104,7 @@ jobs:
           python tests/scripts/test_build_ci_process_improvement_analytics.py
           python tests/scripts/test_build_ci_fixed_window_analytics.py
           python tests/scripts/test_enrich_ci_pr_efficiency.py
+          python tests/scripts/test_enrich_ci_reliability_evidence.py
           python tests/scripts/test_compare_ci_process_baseline.py
           python tests/scripts/test_annotate_ci_window_comparability.py
           python tests/scripts/test_update_ci_process_history.py
@@ -129,6 +132,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: python scripts/enrich_ci_pr_efficiency.py
+
+      - name: Enrich artifact with CI reliability evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python scripts/enrich_ci_reliability_evidence.py
 
       - name: Update fixed-window process improvement history
         run: python scripts/update_ci_fixed_window_history.py
