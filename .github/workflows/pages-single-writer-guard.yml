@@ -28,10 +28,11 @@ jobs:
           set -euo pipefail
           canonical='.github/workflows/deploy-reqsys-pages-composite.yml'
           deploy_uses_pattern='^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*actions/deploy-pages@'
+          pages_write_pattern='^[[:space:]]*pages:[[:space:]]*write([[:space:]]*#.*)?$'
 
           mapfile -t publishers < <(
-            grep -RIlE --include='*.yml' --include='*.yaml' "$deploy_uses_pattern" .github/workflows \
-              | sort
+            grep -RIlE --include='*.yml' --include='*.yaml' "$deploy_uses_pattern" .github/workflows |
+              sort
           )
 
           printf 'Publicadores encontrados (%s):\n' "${#publishers[@]}"
@@ -47,13 +48,8 @@ jobs:
             exit 1
           fi
 
-          if grep -RIlE --include='*.yml' --include='*.yaml' '^[[:space:]]*pages:[[:space:]]*write([[:space:]]*#.*)?            echo 'Workflow não canônico possui permissão pages: write.' >&2
-            exit 1
-          fi
-
-          echo "Proprietário único validado: $canonical"
- .github/workflows \
-            | grep -vFx "$canonical"; then
+          if grep -RIlE --include='*.yml' --include='*.yaml' "$pages_write_pattern" .github/workflows |
+            grep -vFx "$canonical"; then
             echo 'Workflow não canônico possui permissão pages: write.' >&2
             exit 1
           fi
