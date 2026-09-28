@@ -627,7 +627,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check pytest==9.0.3
+          python -m pip install --disable-pip-version-check pytest==9.0.3 PyYAML==6.0.3
           python -m py_compile scripts/todo_global_chat_event_gateway.py scripts/todo_global_hourly_cycle.py
           python -m pytest -q tests/test_todo_global_chat_event_gateway.py tests/test_todo_global_hourly_cycle.py
 
