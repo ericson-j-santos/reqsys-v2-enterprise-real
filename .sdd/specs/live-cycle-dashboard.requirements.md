@@ -34,6 +34,9 @@ fonte canônica.
    preservar compatibilidade e investigação operacional.
 10. A publicação em GitHub Pages continua separada da implementação e exige o
     gate/autorização existente; esta mudança não deve disparar deploy.
+11. O produtor deve executar também após um merge realizado pelo `Governed PR Automation`,
+    mesmo quando o `GITHUB_TOKEN` do merge não gerar um novo evento `push`, e deve
+    vincular `source.sha` ao SHA realmente presente no checkout da `main`.
 
 ## Critérios de aceite
 
@@ -54,3 +57,7 @@ fonte canônica.
    `behind_by=0` antes da abertura da PR.
 8. Após merge, uma execução nova do produtor deve gerar evidência no SHA corrente.
    Até essa execução ocorrer, o estado funcional permanece parcial.
+9. O gatilho `workflow_run` deve aceitar apenas conclusão `success` do caminho de
+   auto-merge do `Governed PR Automation` e não deve conceder permissão de deploy.
+10. O `global-status.json` produzido deve registrar como `source.sha` o SHA do
+    checkout da `main`, não o SHA do workflow que disparou o evento.
