@@ -19,12 +19,14 @@ jobs:
       github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
       github.ref == 'refs/heads/ops/probe-email-report-e2e-transport-20260928'
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 7
+    timeout-minutes: 10
     env:
       EMAIL_REPORT_EXPECTED_HEAD: f045cdc03a52239738cfde769f51404f949ac8c2
       EMAIL_REPORT_SOURCE: C:\dev\chatgpt-workers\email-report-bootstrap-${{ github.run_id }}
       CORRELATION_ID: email-report-e2e-probe-${{ github.run_id }}-${{ github.run_attempt }}
       GIT_TERMINAL_PROMPT: "0"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
 
     steps:
       - name: Checkout immutable ReqSys probe source
@@ -161,7 +163,7 @@ jobs:
             '--cwd', $env:EMAIL_TARGET_PATH,
             '--session-id', $env:EMAIL_SESSION_ID,
             '--risk', '1',
-            '--timeout', '120',
+            '--timeout', '240',
             '--expected-head', $env:EMAIL_REPORT_EXPECTED_HEAD,
             '--',
             $nodeExe, $npxCli, '--yes', '@google/clasp@3.4.1', '--version'
@@ -193,7 +195,7 @@ jobs:
             '--cwd', $env:EMAIL_TARGET_PATH,
             '--session-id', $env:EMAIL_SESSION_ID,
             '--risk', '1',
-            '--timeout', '120',
+            '--timeout', '240',
             '--expected-head', $env:EMAIL_REPORT_EXPECTED_HEAD,
             '--',
             $nodeExe, $npxCli, '--yes', '@google/clasp@3.4.1', 'show-authorized-user', '--json'
