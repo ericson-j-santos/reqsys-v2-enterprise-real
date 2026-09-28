@@ -5,7 +5,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from build_ci_fixed_window_analytics import fetch_runs_for_window
 from build_ci_process_improvement_analytics import github_api, parse_dt, percentile
@@ -247,6 +247,37 @@ def fetch_recent_pr_sample(
         "max_age_days": max(1, max_age_days),
         "selected_pr_numbers": selected_pr_numbers,
     }
+
+
+def resolve_pr_sample_runs(
+    raw_runs: list[dict[str, Any]],
+    *,
+    collection_complete: bool,
+    fixed_start_at: datetime,
+    end_at: datetime,
+    min_sample_prs: int,
+    max_lookback_minutes: int,
+    fallback_loader: Callable[
+        [], tuple[list[dict[str, Any]], dict[str, Any]]
+    ],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if not collection_complete:
+        return fallback_loader()
+
+    sample_window = select_pr_sample_window(
+        raw_runs,
+        fixed_start_at=fixed_start_at,
+        end_at=end_at,
+        min_sample_prs=min_sample_prs,
+        max_lookback_minutes=max_lookback_minutes,
+    )
+    if sample_window["target_met"]:
+        return raw_runs, sample_window
+
+    fallback_runs, fallback_window = fallback_loader()
+    if fallback_window["observed_prs"] > sample_window["observed_prs"]:
+        return fallback_runs, fallback_window
+    return raw_runs, sample_window
 
 
 def _latest_by_workflow(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -936,19 +967,14 @@ def main() -> int:
         start_at=fetch_start_at,
         max_pages=max(1, int(os.environ.get("MAX_FETCH_PAGES", "20"))),
     )
-    if not meta.get("collection_complete"):
-        raise RuntimeError("coleta de workflow runs incompleta para a janela fixa")
-
-    sample_window = select_pr_sample_window(
+    sample_runs, sample_window = resolve_pr_sample_runs(
         raw_runs,
+        collection_complete=bool(meta.get("collection_complete")),
         fixed_start_at=start_at,
         end_at=end_at,
         min_sample_prs=min_sample_prs,
         max_lookback_minutes=max_lookback_minutes,
-    )
-    sample_runs = raw_runs
-    if not sample_window["target_met"]:
-        fallback_runs, fallback_window = fetch_recent_pr_sample(
+        fallback_loader=lambda: fetch_recent_pr_sample(
             owner,
             name,
             token,
@@ -956,10 +982,8 @@ def main() -> int:
             end_at=end_at,
             min_sample_prs=min_sample_prs,
             max_age_days=max(1, int(os.environ.get("PR_SAMPLE_MAX_AGE_DAYS", "7"))),
-        )
-        if fallback_window["observed_prs"] > sample_window["observed_prs"]:
-            sample_runs = fallback_runs
-            sample_window = fallback_window
+        ),
+    )
 
     effective_start_at = parse_dt(sample_window["effective_start_at"])
     if effective_start_at is None:
