@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""Diagnóstico read-only da disponibilidade e autenticação do ReqSys DEV.
-
-Executa probes públicos repetidos, compara o runtime com a configuração Fly
-versionada e produz somente evidência sanitizada. Nenhum secret, tenant id,
-client id, token, UPN ou corpo arbitrário de resposta é persistido.
-"""
-
+"""Diagnóstico read-only da disponibilidade e autenticação do ReqSys DEV PC24x7."""
 from __future__ import annotations
 
 import argparse
 import json
 import math
 import time
-import tomllib
 import urllib.error
 import urllib.request
 import uuid
@@ -20,15 +13,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-
-TARGETS = {
-    "frontend": "https://reqsys-app-dev.fly.dev/",
-    "health": "https://reqsys-api-dev.fly.dev/health",
-    "runtime_health": "https://reqsys-api-dev.fly.dev/api/runtime/health",
-    "readiness": "https://reqsys-api-dev.fly.dev/api/runtime/readiness",
-    "liveness": "https://reqsys-api-dev.fly.dev/api/runtime/liveness",
-    "auth_config": "https://reqsys-api-dev.fly.dev/v1/auth/config",
-}
+from scripts.dev_runtime_target import (
+    build_dev_targets,
+    resolve_signed_dev_runtime,
+    validate_runtime_base,
+)
 
 SAFE_AUTH_FIELDS = (
     "azure_enabled",
@@ -50,7 +39,6 @@ def _percentile(values: list[int], percentile: float) -> int | None:
 
 
 def sanitize_auth_payload(payload: Any) -> dict[str, Any]:
-    """Mantém apenas metadados públicos necessários ao diagnóstico."""
     if not isinstance(payload, dict):
         return {}
     data = payload.get("data", payload)
@@ -59,34 +47,26 @@ def sanitize_auth_payload(payload: Any) -> dict[str, Any]:
     return {key: data.get(key) for key in SAFE_AUTH_FIELDS if key in data}
 
 
-def load_static_fly_state(repo_root: Path) -> dict[str, Any]:
-    backend_path = repo_root / "backend" / "fly.dev.toml"
-    frontend_path = repo_root / "frontend" / "fly.dev.toml"
-
-    with backend_path.open("rb") as handle:
-        backend = tomllib.load(handle)
-    with frontend_path.open("rb") as handle:
-        frontend = tomllib.load(handle)
-
-    backend_http = backend.get("http_service", {})
-    frontend_http = frontend.get("http_service", {})
-    backend_env = backend.get("env", {})
-
+def load_static_runtime_state(repo_root: Path) -> dict[str, Any]:
+    manifest = repo_root / "infra" / "public-access-urls.json"
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("dev_runtime_manifest_invalid") from exc
+    dev = payload.get("runtime_discovery", {}).get("dev", {})
+    if (
+        dev.get("runtime_target") != "pc24x7"
+        or dev.get("stable_url_status") != "signed_runtime_locator"
+        or dev.get("locator_channel") != "ntfy_signed_ed25519"
+        or dev.get("cost_policy") != "zero_additional_cost"
+    ):
+        raise RuntimeError("dev_runtime_manifest_contract_mismatch")
     return {
-        "backend": {
-            "app": backend.get("app"),
-            "auto_stop_machines": backend_http.get("auto_stop_machines"),
-            "auto_start_machines": backend_http.get("auto_start_machines"),
-            "min_machines_running": backend_http.get("min_machines_running"),
-            "allow_demo_login_declared": str(backend_env.get("ALLOW_DEMO_LOGIN", "")).lower() == "true",
-            "public_environment_declared": backend_env.get("PUBLIC_ENVIRONMENT"),
-        },
-        "frontend": {
-            "app": frontend.get("app"),
-            "auto_stop_machines": frontend_http.get("auto_stop_machines"),
-            "auto_start_machines": frontend_http.get("auto_start_machines"),
-            "min_machines_running": frontend_http.get("min_machines_running"),
-        },
+        "runtime_target": "pc24x7",
+        "stable_url_target": dev.get("stable_url_target"),
+        "locator_channel": dev.get("locator_channel"),
+        "cost_policy": dev.get("cost_policy"),
+        "legacy_dev_fly_fallback": False,
     }
 
 
@@ -95,7 +75,7 @@ def probe_url(name: str, url: str, timeout_seconds: float) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "ReqSysDevRuntimeAuthDiagnostics/1.0",
+            "User-Agent": "ReqSysDevRuntimeAuthDiagnostics/2.0",
             "Cache-Control": "no-cache",
         },
     )
@@ -128,7 +108,7 @@ def probe_url(name: str, url: str, timeout_seconds: float) -> dict[str, Any]:
             "correlation_id": exc.headers.get("x-correlation-id") if exc.headers else None,
             "error": f"http_{exc.code}",
         }
-    except Exception as exc:  # noqa: BLE001 - evidência deve capturar falhas operacionais
+    except Exception as exc:  # noqa: BLE001
         return {
             "ok": False,
             "status_code": None,
@@ -164,20 +144,32 @@ def aggregate_probes(probes: dict[str, list[dict[str, Any]]], attempts: int) -> 
 
 def classify(aggregate: dict[str, Any], auth: dict[str, Any], static_state: dict[str, Any]) -> dict[str, Any]:
     suspected_causes: list[str] = []
-    critical_targets = ("frontend", "health", "runtime_health", "readiness", "liveness")
-
-    intermittent = any(0 < aggregate[name]["success_count"] < aggregate[name]["attempts"] for name in critical_targets)
+    critical_targets = (
+        "frontend",
+        "health",
+        "runtime_health",
+        "readiness",
+        "liveness",
+        "build_info",
+    )
+    intermittent = any(
+        0 < aggregate[name]["success_count"] < aggregate[name]["attempts"]
+        for name in critical_targets
+    )
     unavailable = any(aggregate[name]["success_count"] == 0 for name in critical_targets)
     if intermittent:
         suspected_causes.append("runtime_or_network_intermitency")
     if unavailable:
         suspected_causes.append("runtime_endpoint_unavailable")
 
-    backend_min = static_state["backend"].get("min_machines_running")
-    frontend_min = static_state["frontend"].get("min_machines_running")
-    min_running_ok = backend_min is not None and backend_min >= 1 and frontend_min is not None and frontend_min >= 1
-    if not min_running_ok:
-        suspected_causes.append("cold_start_configuration_risk")
+    runtime_contract_ok = (
+        static_state.get("runtime_target") == "pc24x7"
+        and static_state.get("locator_channel") == "ntfy_signed_ed25519"
+        and static_state.get("cost_policy") == "zero_additional_cost"
+        and static_state.get("legacy_dev_fly_fallback") is False
+    )
+    if not runtime_contract_ok:
+        suspected_causes.append("runtime_contract_drift")
 
     auth_available = bool(
         auth.get("azure_enabled")
@@ -187,21 +179,15 @@ def classify(aggregate: dict[str, Any], auth: dict[str, Any], static_state: dict
     if auth and not auth_available:
         suspected_causes.append("all_login_methods_disabled_at_runtime")
 
-    demo_expected = bool(static_state["backend"].get("allow_demo_login_declared")) and str(
-        static_state["backend"].get("public_environment_declared") or ""
-    ).lower() not in {"production", "producao"}
-    if auth and demo_expected and not auth.get("demo_login_enabled"):
-        suspected_causes.append("runtime_configuration_drift_demo_login")
-
     missing_fields = auth.get("missing_fields") or []
     if auth and not auth.get("azure_enabled") and missing_fields:
         suspected_causes.append("azure_runtime_configuration_missing")
 
     fully_stable = all(aggregate[name]["failure_count"] == 0 for name in critical_targets)
-    if fully_stable and auth_available:
+    if fully_stable and auth_available and runtime_contract_ok:
         status = "ready"
         risk = "low"
-    elif unavailable or not auth_available:
+    elif unavailable or not auth_available or not runtime_contract_ok:
         status = "degraded"
         risk = "high"
     else:
@@ -212,21 +198,34 @@ def classify(aggregate: dict[str, Any], auth: dict[str, Any], static_state: dict
         "status": status,
         "operational_risk": risk,
         "auth_available": auth_available,
-        "minimum_running_configuration_ok": min_running_ok,
+        "runtime_contract_ok": runtime_contract_ok,
         "suspected_causes": suspected_causes,
         "production_touched": False,
     }
 
 
-def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_seconds: float) -> dict[str, Any]:
-    static_state = load_static_fly_state(repo_root)
-    probes: dict[str, list[dict[str, Any]]] = {name: [] for name in TARGETS}
+def diagnose(
+    repo_root: Path,
+    attempts: int,
+    timeout_seconds: float,
+    interval_seconds: float,
+    *,
+    runtime_base: str | None = None,
+) -> dict[str, Any]:
+    static_state = load_static_runtime_state(repo_root)
+    resolved = (
+        {"base_url": validate_runtime_base(runtime_base), "signature_verified": False}
+        if runtime_base
+        else resolve_signed_dev_runtime(repo_root=repo_root)
+    )
+    targets = build_dev_targets(resolved["base_url"])
+    probes: dict[str, list[dict[str, Any]]] = {name: [] for name in targets}
 
     for attempt in range(1, attempts + 1):
-        with ThreadPoolExecutor(max_workers=len(TARGETS)) as executor:
+        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
             futures = {
                 executor.submit(probe_url, name, url, timeout_seconds): name
-                for name, url in TARGETS.items()
+                for name, url in targets.items()
             }
             for future in as_completed(futures):
                 probes[futures[future]].append(future.result())
@@ -234,23 +233,32 @@ def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_se
             time.sleep(interval_seconds)
 
     aggregate = aggregate_probes(probes, attempts)
-    auth_samples = [row.get("auth") for row in probes["auth_config"] if row.get("ok") and row.get("auth")]
+    auth_samples = [
+        row.get("auth")
+        for row in probes["auth_config"]
+        if row.get("ok") and row.get("auth")
+    ]
     auth = auth_samples[-1] if auth_samples else {}
     classification = classify(aggregate, auth, static_state)
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "contract": "dev-runtime-auth-diagnostics",
         "correlation_id": str(uuid.uuid4()),
         "generated_at_epoch": int(time.time()),
         "environment": "development",
         "attempts_per_target": attempts,
         "timeout_seconds": timeout_seconds,
-        "targets": TARGETS,
-        "static_fly_configuration": static_state,
+        "targets": targets,
+        "static_runtime_configuration": static_state,
         "runtime_auth": auth,
         "probe_summary": aggregate,
         "classification": classification,
+        "runtime_resolution": {
+            "provider": "pc24x7",
+            "signed_locator_required": runtime_base is None,
+            "legacy_dev_fly_fallback": False,
+        },
         "guardrails": {
             "read_only": True,
             "secrets_collected": False,
@@ -266,6 +274,7 @@ def main() -> int:
     parser.add_argument("--attempts", type=int, default=10)
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
     parser.add_argument("--interval-seconds", type=float, default=0.5)
+    parser.add_argument("--base-url", default="")
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
@@ -273,7 +282,13 @@ def main() -> int:
         parser.error("--attempts deve estar entre 1 e 50")
 
     repo_root = Path(__file__).resolve().parents[1]
-    payload = diagnose(repo_root, args.attempts, args.timeout_seconds, args.interval_seconds)
+    payload = diagnose(
+        repo_root,
+        args.attempts,
+        args.timeout_seconds,
+        args.interval_seconds,
+        runtime_base=args.base_url or None,
+    )
     output = repo_root / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
