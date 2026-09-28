@@ -35,3 +35,11 @@ Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indispo
 - AtStartup + S4U são comprovados;
 - `/Run` retorna sucesso;
 - novo workflow self-hosted do Desktop faz pickup.
+
+
+## Regras canônicas atuais
+
+O workflow deve usar o SHA canônico atual
+`881d9ca2f8e77025edb7298b22981109c567a730` em todos os modos
+`watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary`.
+Pin histórico de regras é bloqueio de execução física.

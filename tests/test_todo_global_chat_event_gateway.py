@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import shlex
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts import todo_global_chat_event_gateway as gateway
 
@@ -230,3 +235,51 @@ def test_workflow_actions_are_immutable() -> None:
     assert "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020" in text
     assert "azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6" in text
     assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in text
+
+
+def _contract_test_dependencies(workflow_text: str) -> set[str]:
+    workflow = yaml.safe_load(workflow_text)
+    steps = workflow["jobs"]["publish-todo-event"]["steps"]
+    contract_steps = [
+        step["run"]
+        for step in steps
+        if "tests/test_todo_global_hourly_cycle.py" in step.get("run", "")
+    ]
+    assert len(contract_steps) == 1
+    install_commands = [
+        shlex.split(line.strip())
+        for line in contract_steps[0].splitlines()
+        if line.strip().startswith("python -m pip install ")
+    ]
+    assert len(install_commands) == 1
+    return {value.split("==", 1)[0] for value in install_commands[0][4:]}
+
+
+def test_contract_bootstrap_installs_test_import_dependencies() -> None:
+    packages = _contract_test_dependencies(WORKFLOW.read_text(encoding="utf-8"))
+    assert {"pytest", "PyYAML"} <= packages
+
+
+def test_contract_bootstrap_negative_control_rejects_missing_yaml() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    missing_yaml = text.replace(" PyYAML==6.0.2", "")
+    assert missing_yaml != text
+    assert "PyYAML" not in _contract_test_dependencies(missing_yaml)
+
+
+def test_workflow_module_entrypoint_starts_without_inherited_pythonpath() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "python -m scripts.todo_global_chat_event_gateway" in text
+    env = dict(os.environ)
+    env.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.todo_global_chat_event_gateway", "--help"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--github-event-path" in result.stdout

@@ -32,7 +32,7 @@ A entrada governada é um comentário na issue operacional #1705 com o prefixo
 14. O fluxo é DEV e não toca produção.
 15. As Actions usadas pelo novo workflow devem ser fixadas por SHA completo.
 
-## Critérios de aceite
+16. O bootstrap do contrato deve instalar explicitamente pytest e PyYAML, incluindo\n    as dependências dos dois módulos de teste executados no job isolado.\n17. O produtor deve iniciar por módulo Python a partir da raiz do repositório, sem\n    depender de PYTHONPATH herdado para importar o pacote scripts.\n\n## Critérios de aceite
 
 - teste positivo valida extração e publicação de um evento autorizado;
 - ator ou issue divergente falham fechado;
@@ -44,3 +44,12 @@ A entrada governada é um comentário na issue operacional #1705 com o prefixo
 - `Pre-PR Readiness Gate` retorna `READY_FOR_PR=passed` no HEAD exato;
 - E2E pós-merge publica um TodoEvent real, confirma estado terminal,
   leitura independente e replay sem segundo job.
+
+## Regressão pós-merge de 2026-09-28
+
+O run 36421507066, no SHA fa8eef53ff50075cc8949a050434b470b0dda28f,
+falhou antes de autenticar: os testes do ciclo horário importam yaml, mas o
+job do chat instalava apenas pytest. O gate pré-PR possuía PyYAML no ambiente
+e não detectou essa diferença. A correção declara a dependência no próprio
+job, testa a ausência de YAML e valida o ponto de entrada sem PYTHONPATH.
+O E2E externo continua pendente até locator e runtime no mesmo SHA.

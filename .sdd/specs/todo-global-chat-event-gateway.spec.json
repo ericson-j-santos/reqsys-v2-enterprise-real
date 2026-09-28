@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "feature_name": "Governed ChatGPT TodoEvent gateway",
-  "status": "ready_for_validation",
+  "status": "implemented_pending_ci",
   "approvals": {
     "requirements": true
   },
@@ -10,7 +10,7 @@
       "tests/test_todo_global_chat_event_gateway.py",
       "tests/test_todo_global_hourly_cycle.py"
     ],
-    "evidence_contract": "Issue #1705 + owner + prefix exato; TodoEvent v1 strict allowlist; same-SHA público; controle negativo; readback independente; replay do mesmo event_id sem segundo job; nenhum segredo persistido."
+    "evidence_contract": "Issue #1705 + owner + prefix exato; TodoEvent v1 strict allowlist; same-SHA público; controle negativo; readback independente; replay do mesmo event_id sem segundo job; nenhum segredo persistido. Bootstrap explícito de pytest/PyYAML, controle negativo sem YAML e CLI por módulo sem PYTHONPATH herdado; E2E externo mantém locator e SHA estritos."
   },
   "traceability": {
     "requirements": ".sdd/specs/todo-global-chat-event-gateway.requirements.md",

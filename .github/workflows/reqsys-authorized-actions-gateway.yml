@@ -618,7 +618,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check pytest==9.0.3
+          python -m pip install --disable-pip-version-check pytest==9.0.3 PyYAML==6.0.2
           python -m py_compile scripts/todo_global_chat_event_gateway.py scripts/todo_global_hourly_cycle.py
           python -m pytest -q tests/test_todo_global_chat_event_gateway.py tests/test_todo_global_hourly_cycle.py
 
@@ -697,7 +697,7 @@ jobs:
           RUNTIME_BASE: ${{ steps.locator.outputs.base_url }}/runtime-core
         run: |
           set -euo pipefail
-          python scripts/todo_global_chat_event_gateway.py \
+          python -m scripts.todo_global_chat_event_gateway \
             --github-event-path "$GITHUB_EVENT_PATH" \
             --runtime-url "$RUNTIME_BASE" \
             --timeout-seconds 180 \
