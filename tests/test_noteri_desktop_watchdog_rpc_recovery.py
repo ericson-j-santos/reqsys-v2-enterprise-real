@@ -118,7 +118,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "runner-recover", "runner-bootstrap", "runner-canary"):
+    for mode in ("watchdog", "runner-recover", "runner-bootstrap", "runner-canary", "reboot-once"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
 
@@ -141,8 +141,8 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 8
-    assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 4
+    assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 10
+    assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 5
 
     # Modo watchdog legado continua restrito ao Noteri e à tarefa fixa existente.
     assert "if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}" in raw
@@ -150,6 +150,13 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "DESKTOP_WATCHDOG_RECOVERY_NOT_CONFIRMED" in raw
     assert "$recoveryScript = Join-Path $env:TARGET_PATH" in raw
     assert "noteri_desktop_watchdog_rpc_recovery.py" in raw
+
+    # Reboot one-shot usa a exceção canônica separada e consumível, somente no Noteri.
+    assert "reboot-once:" in raw
+    assert "if: ${{ inputs.mode == 'reboot-once' }}" in raw
+    assert "owner_remote_host_power_once.py" in raw
+    assert "REMOTE_REBOOT_REPLAY_WAS_NOT_BLOCKED" in raw
+    assert "authorization_revoked = $true" in raw
 
     # Recovery direto reutiliza o contrato permanente já instalado, sem bootstrap.
     assert "runner-recover:" in raw
