@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app.core.security import get_current_user, require_admin
@@ -44,6 +45,20 @@ def notification_db():
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(require_admin, None)
         session.close()
+
+
+def test_control_center_router_registra_superficies_operacionais():
+    paths = {
+        route.path
+        for route in app.routes
+        if isinstance(route, APIRoute)
+    }
+    assert {
+        '/v1/teams-gateway/notificacoes/dashboard',
+        '/v1/teams-gateway/notificacoes/fila',
+        '/v1/teams-gateway/notificacoes/dlq',
+        '/v1/teams-gateway/notificacoes/logs',
+    } <= paths
 
 
 def test_endpoints_exigem_autenticacao():
