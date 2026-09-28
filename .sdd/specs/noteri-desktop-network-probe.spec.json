@@ -38,7 +38,8 @@
         "/api/runtime/health"
       ],
       "branch_prefix": "fix/noteri-desktop-network-probe-http-8083-",
-      "legacy_job_skipped_on_http_branch": true
+      "legacy_job_skipped_on_http_branch": true,
+      "workflow_dispatch_on_main": true
     },
     "orchestrator_runner_recovery": {
       "source_host": "Noteri",
@@ -135,7 +136,7 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-27",
+  "updated_at": "2026-09-28",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -144,6 +145,7 @@
     "A execução física produz artifact vinculado ao correlation_id e SHA atuais, com remote_shell_used=false, credentials_supplied=false, production_touched=false e secrets_read=false.",
     "Pre-PR Readiness retorna READY_FOR_PR=passed no HEAD exato e behind_by=0 antes de qualquer PR.",
     "Na branch fix/noteri-desktop-network-probe-http-8083-*, o job legado é ignorado e somente a sonda HTTP DEV executa.",
+    "Em workflow_dispatch na main, a sonda HTTP DEV executa no mesmo SHA; a sonda legada pode executar em paralelo como evidência independente.",
     "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
