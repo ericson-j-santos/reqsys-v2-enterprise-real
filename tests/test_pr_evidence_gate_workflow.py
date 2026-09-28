@@ -92,7 +92,8 @@ def test_pr_evidence_gate_reports_deferred_but_fails_closed():
     text = read_workflow()
 
     assert "status: 'deferred'" in text
-    assert "deferred_reason: 'required_workflows_not_completed_within_wait_window'" in text
+    assert "deferredReason = 'required_workflows_not_completed_within_wait_window'" in text
+    assert 'deferred_reason: deferredReason' in text
     assert "deferred_reason: rateLimited ? 'github_api_rate_limit' : null" in text
     assert 'Evidence build deferred due to GitHub API rate limit.' in text
     enforce = text.split("- name: Enforce evidence gate result", 1)[1]
