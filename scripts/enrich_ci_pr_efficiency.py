@@ -493,6 +493,283 @@ def build_pr_efficiency(
     }
 
 
+
+def _associated_pr_numbers(run: dict[str, Any]) -> list[int]:
+    numbers: list[int] = []
+    for item in run.get("pull_requests") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            number = int(item.get("number"))
+        except (TypeError, ValueError):
+            continue
+        if number > 0 and number not in numbers:
+            numbers.append(number)
+    return numbers
+
+
+def _queue_wait_seconds(run: dict[str, Any]) -> float:
+    created_at = parse_dt(run.get("created_at"))
+    started_at = parse_dt(run.get("run_started_at")) or created_at
+    if created_at is None or started_at is None:
+        return 0.0
+    return max(0.0, (started_at - created_at).total_seconds())
+
+
+def fetch_event_runs_for_window(
+    owner: str,
+    name: str,
+    token: str,
+    *,
+    event: str,
+    start_at: datetime,
+    end_at: datetime,
+    max_pages: int = 20,
+    api_get=github_api,
+) -> list[dict[str, Any]]:
+    if end_at <= start_at:
+        raise ValueError("janela de evento inválida")
+
+    collected: list[dict[str, Any]] = []
+    complete = False
+    per_page = 100
+    for page in range(1, max(1, max_pages) + 1):
+        payload = api_get(
+            f"/repos/{owner}/{name}/actions/runs?event={event}&per_page={per_page}&page={page}",
+            token,
+        )
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"resposta inválida ao listar runs de evento {event}")
+        batch = payload.get("workflow_runs") or []
+        if not isinstance(batch, list):
+            raise RuntimeError(f"workflow_runs inválido para evento {event}")
+        if not batch:
+            complete = True
+            break
+
+        valid_created: list[datetime] = []
+        for raw in batch:
+            if not isinstance(raw, dict):
+                continue
+            created_at = parse_dt(raw.get("created_at"))
+            if created_at is None:
+                continue
+            valid_created.append(created_at)
+            if start_at <= created_at < end_at:
+                collected.append(raw)
+
+        if valid_created and min(valid_created) < start_at:
+            complete = True
+            break
+        if len(batch) < per_page:
+            complete = True
+            break
+
+    if not complete:
+        raise RuntimeError(f"coleta incompleta de runs de evento {event}")
+    return collected
+
+
+def fetch_post_merge_runs_for_prs(
+    owner: str,
+    name: str,
+    token: str,
+    *,
+    pr_numbers: list[int],
+    start_at: datetime,
+    end_at: datetime,
+    api_get=github_api,
+) -> list[dict[str, Any]]:
+    observed: list[dict[str, Any]] = []
+    for pr_number in sorted(set(pr_numbers)):
+        detail = api_get(f"/repos/{owner}/{name}/pulls/{pr_number}", token)
+        if not isinstance(detail, dict):
+            raise RuntimeError(f"resposta inválida ao consultar PR #{pr_number}")
+        merged_at = parse_dt(detail.get("merged_at"))
+        merge_sha = str(detail.get("merge_commit_sha") or "").strip()
+        if (
+            merged_at is None
+            or not merge_sha
+            or not (start_at <= merged_at < end_at)
+        ):
+            continue
+
+        payload = api_get(
+            f"/repos/{owner}/{name}/actions/runs?head_sha={merge_sha}&event=push&per_page=100",
+            token,
+        )
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"resposta inválida ao listar push pós-merge da PR #{pr_number}")
+        runs = payload.get("workflow_runs") or []
+        if not isinstance(runs, list):
+            raise RuntimeError(f"workflow_runs inválido para push pós-merge da PR #{pr_number}")
+
+        for raw in runs:
+            if not isinstance(raw, dict):
+                continue
+            created_at = parse_dt(raw.get("created_at"))
+            if (
+                raw.get("event") != "push"
+                or raw.get("status") != "completed"
+                or created_at is None
+                or not (merged_at <= created_at < end_at)
+            ):
+                continue
+            item = dict(raw)
+            item["pull_requests"] = [{"number": pr_number}]
+            item["merge_commit_sha"] = merge_sha
+            observed.append(item)
+    return observed
+
+
+def _failure_causes(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[tuple[str, str], int] = {}
+    for run in runs:
+        conclusion = str(run.get("conclusion") or "unknown")
+        if conclusion not in FAILED_CONCLUSIONS:
+            continue
+        name = str(run.get("name") or "unknown")
+        key = (name, conclusion)
+        counts[key] = counts.get(key, 0) + 1
+    return [
+        {"workflow": name, "conclusion": conclusion, "count": count}
+        for (name, conclusion), count in sorted(
+            counts.items(), key=lambda item: (-item[1], item[0][0], item[0][1])
+        )
+    ]
+
+
+def build_merge_queue_reliability(
+    pr_metrics: dict[str, Any],
+    merge_group_runs: list[dict[str, Any]],
+    post_merge_runs: list[dict[str, Any]],
+    *,
+    start_at: datetime,
+    end_at: datetime,
+) -> dict[str, Any]:
+    green_prs = {
+        int(row["pr_number"])
+        for row in pr_metrics.get("prs") or []
+        if isinstance(row, dict)
+        and row.get("latest_head_green")
+        and row.get("pr_number") is not None
+    }
+
+    queue_runs: list[dict[str, Any]] = []
+    queue_waits: list[float] = []
+    attempt_keys: set[str] = set()
+    attempts_by_pr: dict[int, set[str]] = {}
+    failed_queue_prs: set[int] = set()
+
+    for run in merge_group_runs:
+        created_at = parse_dt(run.get("created_at"))
+        if (
+            run.get("event") != "merge_group"
+            or run.get("status") != "completed"
+            or created_at is None
+            or not (start_at <= created_at < end_at)
+        ):
+            continue
+
+        queue_runs.append(run)
+        queue_waits.append(_queue_wait_seconds(run))
+        head_sha = str(run.get("head_sha") or "").strip()
+        run_id = str(run.get("id") or "").strip()
+        attempt_key = head_sha or f"run:{run_id}"
+        if attempt_key:
+            attempt_keys.add(attempt_key)
+
+        for pr_number in _associated_pr_numbers(run):
+            attempts_by_pr.setdefault(pr_number, set()).add(attempt_key)
+            if str(run.get("conclusion") or "") in FAILED_CONCLUSIONS:
+                failed_queue_prs.add(pr_number)
+
+    requeue_prs = sorted(
+        pr_number for pr_number, attempts in attempts_by_pr.items()
+        if len(attempts) > 1
+    )
+    extra_attempts = sum(
+        max(0, len(attempts) - 1)
+        for attempts in attempts_by_pr.values()
+    )
+    green_pr_but_queue_failed_prs = sorted(green_prs & failed_queue_prs)
+
+    post_merge_completed = [
+        run for run in post_merge_runs
+        if run.get("event") == "push" and run.get("status") == "completed"
+    ]
+    failed_post_merge_runs = [
+        run for run in post_merge_completed
+        if str(run.get("conclusion") or "") in FAILED_CONCLUSIONS
+    ]
+    post_merge_failed_prs: set[int] = set()
+    for run in failed_post_merge_runs:
+        post_merge_failed_prs.update(green_prs & set(_associated_pr_numbers(run)))
+
+    canary_observed = bool(attempt_keys and attempts_by_pr)
+    return {
+        "available": canary_observed,
+        "mode": "report-only",
+        "creates_gate": False,
+        "canary_e2e_observed": canary_observed,
+        "observation_reason": (
+            "merge_group_candidate_observed"
+            if canary_observed
+            else "no_merge_group_candidate_observed"
+        ),
+        "observed_merge_group_workflow_runs": len(queue_runs),
+        "queue_attempts": len(attempt_keys),
+        "queue_prs": len(attempts_by_pr),
+        "queue_wait_p50_seconds": (
+            round(percentile(queue_waits, 0.50), 2) if queue_waits else 0.0
+        ),
+        "queue_wait_p95_seconds": (
+            round(percentile(queue_waits, 0.95), 2) if queue_waits else 0.0
+        ),
+        "queue_failure_runs": sum(
+            1
+            for run in queue_runs
+            if str(run.get("conclusion") or "") in FAILED_CONCLUSIONS
+        ),
+        "queue_failure_causes": _failure_causes(queue_runs),
+        "green_pr_but_queue_failed_count": len(green_pr_but_queue_failed_prs),
+        "green_pr_but_queue_failed_prs": green_pr_but_queue_failed_prs,
+        "requeue_pr_count": len(requeue_prs),
+        "requeue_prs": requeue_prs,
+        "requeue_extra_attempts": extra_attempts,
+        "post_merge_observed_runs": len(post_merge_completed),
+        "post_merge_failure_runs": len(failed_post_merge_runs),
+        "post_merge_failure_causes": _failure_causes(failed_post_merge_runs),
+        "post_merge_failed_pr_count": len(post_merge_failed_prs),
+        "post_merge_failed_prs": sorted(post_merge_failed_prs),
+        "sample_window": {
+            "start_at": start_at.isoformat(),
+            "end_at": end_at.isoformat(),
+        },
+        "semantics": {
+            "queue_attempt": (
+                "HEAD SHA distinto observado em workflow run com event=merge_group; "
+                "vários workflows do mesmo HEAD contam como uma tentativa"
+            ),
+            "queue_wait": (
+                "created_at até run_started_at dos workflows merge_group; mede espera "
+                "do GitHub Actions, não o tempo total de permanência na Merge Queue"
+            ),
+            "green_pr_but_queue_failed": (
+                "PR cujo HEAD observado estava verde nos workflows bloqueantes e que "
+                "teve workflow merge_group concluído em estado de falha"
+            ),
+            "requeue": (
+                "PR associado a mais de um HEAD SHA merge_group distinto na janela"
+            ),
+            "post_merge_failure": (
+                "workflow push falho no merge_commit_sha de PR verde e mergeada dentro "
+                "da janela; é sinal operacional, não prova causalidade da mudança"
+            ),
+        },
+    }
+
+
 def render_markdown(metrics: dict[str, Any]) -> str:
     lines = [
         SECTION_MARKER,
@@ -561,6 +838,37 @@ def render_markdown(metrics: dict[str, Any]) -> str:
             "> O proxy de commit corretivo é observacional e não prova causalidade.",
         ]
     )
+    queue = metrics.get("merge_queue_reliability")
+    if isinstance(queue, dict):
+        lines.extend(
+            [
+                "",
+                "## Confiabilidade da Merge Queue",
+                f"- Canário E2E merge_group observado: `{'sim' if queue['canary_e2e_observed'] else 'não'}`",
+                f"- Tentativas de fila: `{queue['queue_attempts']}`",
+                f"- P50 espera Actions no merge_group: `{queue['queue_wait_p50_seconds']}s`",
+                f"- P95 espera Actions no merge_group: `{queue['queue_wait_p95_seconds']}s`",
+                f"- PR verde mas fila falhou: `{queue['green_pr_but_queue_failed_count']}`",
+                f"- PRs com requeue: `{queue['requeue_pr_count']}`",
+                f"- PRs verdes com falha pós-merge: `{queue['post_merge_failed_pr_count']}`",
+                f"- Motivo de disponibilidade: `{queue['observation_reason']}`",
+            ]
+        )
+        queue_causes = queue.get("queue_failure_causes") or []
+        if queue_causes:
+            lines.append("### Falhas da fila por causa observada")
+            lines.extend(
+                f"- {item['workflow']} / {item['conclusion']}: {item['count']}"
+                for item in queue_causes
+            )
+        post_causes = queue.get("post_merge_failure_causes") or []
+        if post_causes:
+            lines.append("### Falhas pós-merge por causa observada")
+            lines.extend(
+                f"- {item['workflow']} / {item['conclusion']}: {item['count']}"
+                for item in post_causes
+            )
+
     return "\n".join(lines) + "\n"
 
 
@@ -648,6 +956,34 @@ def main() -> int:
         start_at=effective_start_at,
         end_at=end_at,
         sample_window=sample_window,
+    )
+    merge_group_runs = fetch_event_runs_for_window(
+        owner,
+        name,
+        token,
+        event="merge_group",
+        start_at=effective_start_at,
+        end_at=end_at,
+        max_pages=max(1, int(os.environ.get("MAX_FETCH_PAGES", "20"))),
+    )
+    post_merge_runs = fetch_post_merge_runs_for_prs(
+        owner,
+        name,
+        token,
+        pr_numbers=[
+            int(row["pr_number"])
+            for row in metrics.get("prs") or []
+            if isinstance(row, dict) and row.get("pr_number") is not None
+        ],
+        start_at=effective_start_at,
+        end_at=end_at,
+    )
+    metrics["merge_queue_reliability"] = build_merge_queue_reliability(
+        metrics,
+        merge_group_runs,
+        post_merge_runs,
+        start_at=effective_start_at,
+        end_at=end_at,
     )
     enrich_files(analytics_path, markdown_path, metrics)
     print(json.dumps(metrics, indent=2, ensure_ascii=False))
