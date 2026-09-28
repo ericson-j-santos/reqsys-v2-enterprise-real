@@ -82,7 +82,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert "target='teams-bot-dev-provision.yml'" in content
     assert (
-        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
+        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
         "bacen-57-simulation-assessment.yml|"
         "cofre-runtime-evidence-gate.yml|"
