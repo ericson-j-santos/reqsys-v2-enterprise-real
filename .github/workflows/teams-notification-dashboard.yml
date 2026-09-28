@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "35 * * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Governed PR Automation
+    types:
+      - completed
   push:
     branches:
       - main
@@ -30,6 +35,12 @@ concurrency:
 jobs:
   build:
     name: Gerar dashboard executivo
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'workflow_run'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -44,6 +55,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Confirmar SHA fonte no checkout atual
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          test -n "$source_sha"
+          printf 'sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
 
       - name: Gerar token temporário somente leitura para fontes entre repositórios
         id: dashboard-token
@@ -277,7 +297,8 @@ jobs:
             --projects config/operational-dashboard-projects.json \
             --teams-certification site/certification-status.json \
             --output site/global-status.json \
-            --token-env DASHBOARD_GH_TOKEN
+            --token-env DASHBOARD_GH_TOKEN \
+            --source-sha "${{ steps.source.outputs.sha }}"
 
       - name: Validar conteúdo público
         run: |
