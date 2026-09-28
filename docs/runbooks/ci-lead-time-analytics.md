@@ -124,11 +124,12 @@ Métricas registradas:
 - `green_pr_but_queue_failed_count`: PR cujo HEAD observado estava verde nos workflows bloqueantes, mas teve workflow `merge_group` falho;
 - `queue_failure_causes`: contagem por workflow e conclusão observada;
 - `requeue_pr_count`: PR associado a mais de um HEAD SHA de `merge_group`;
-- `post_merge_failed_pr_count`: PR verde, mergeada na janela, cujo `merge_commit_sha` teve workflow `push` falho.
+- `post_merge_failed_pr_count`: PR verde, mergeada na janela, cujo `merge_commit_sha` teve workflow `push` com `failure`, `timed_out`, `action_required` ou `startup_failure`;
+- `post_merge_cancelled_runs`: workflows `push` cancelados no `merge_commit_sha`, observados separadamente e sem serem classificados como falha.
 
 Ausência de `merge_group` é fail-closed para o canário: `available=false`, `canary_e2e_observed=false` e `observation_reason=no_merge_group_candidate_observed`. Zero eventos nunca é apresentado como canário aprovado.
 
-A coleta pós-merge consulta somente os PRs da amostra e o `merge_commit_sha` exato de cada um, evitando varredura global e evitando atribuir falha de outro commit ao PR.
+A coleta pós-merge consulta somente os PRs da amostra e o `merge_commit_sha` exato de cada um, evitando varredura global e evitando atribuir falha de outro commit ao PR. Cancelamentos permanecem visíveis para diagnóstico, mas não elevam `post_merge_failure_runs` nem `post_merge_failed_pr_count`.
 
 
 ## Governança
