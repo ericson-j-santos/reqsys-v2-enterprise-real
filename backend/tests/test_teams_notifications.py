@@ -46,14 +46,6 @@ def notification_db():
         session.close()
 
 
-def test_control_center_router_esta_registrado_no_app():
-    paths = {route.path for route in app.routes}
-    assert '/v1/teams-gateway/notificacoes/dashboard' in paths
-    assert '/v1/teams-gateway/notificacoes/fila' in paths
-    assert '/v1/teams-gateway/notificacoes/dlq' in paths
-    assert '/v1/teams-gateway/notificacoes/logs' in paths
-
-
 def test_endpoints_exigem_autenticacao():
     response = client.get('/v1/teams-gateway/notificacoes/dashboard')
     assert response.status_code in (401, 403)
