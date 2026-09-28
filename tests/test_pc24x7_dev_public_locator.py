@@ -40,7 +40,7 @@ def test_pages_composite_publishes_stable_dev_path():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert "cp -a docs/public-dev-locator/. site/dev/" in raw
     assert "test -s site/dev/index.html" in raw
-    assert "actions/deploy-pages@v4" in raw
+    assert "actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e" in raw
 
 
 def test_supervisor_uses_cloudflare_and_signed_locator_only():
