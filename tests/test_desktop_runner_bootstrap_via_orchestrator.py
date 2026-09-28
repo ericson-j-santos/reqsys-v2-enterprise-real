@@ -271,7 +271,7 @@ def test_execute_refreshes_runtime_before_bootstrap(tmp_path: Path) -> None:
 
 
 def test_runtime_refresh_targets_orchestrator_reexec_fix() -> None:
-    assert subject.ORCHESTRATOR_BOOTSTRAP_SHA == "3a2ede7c8a834fbb54736aa9b3340898b0060358"
+    assert subject.ORCHESTRATOR_BOOTSTRAP_SHA == "56eaf11b4294bbfe3dcf85cd797cffc6d5aecdbc"
 
 
 def test_wait_for_bootstrap_capability_requires_new_worker_and_exact_runtime() -> None:
