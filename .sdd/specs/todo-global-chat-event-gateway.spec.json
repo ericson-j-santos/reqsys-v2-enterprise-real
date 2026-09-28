@@ -14,7 +14,7 @@
   },
   "traceability": {
     "requirements": ".sdd/specs/todo-global-chat-event-gateway.requirements.md",
-    "workflow": ".github/workflows/todo-global-chat-event-gateway.yml",
+    "workflow": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "producer": "scripts/todo_global_chat_event_gateway.py",
     "runtime_api": "runtime/app/api/todo_events.py",
     "runtime_model": "runtime/app/domain/models/todo_event.py"
