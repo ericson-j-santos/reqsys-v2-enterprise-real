@@ -827,6 +827,7 @@
         "queue_wait_p95_seconds",
         "green_pr_but_queue_failed_count",
         "requeue_pr_count",
+        "post_merge_cancelled_runs",
         "post_merge_failed_pr_count"
       ],
       "properties": {
@@ -929,6 +930,10 @@
           "items": {
             "$ref": "#/$defs/reliability_failure_cause"
           }
+        },
+        "post_merge_cancelled_runs": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
