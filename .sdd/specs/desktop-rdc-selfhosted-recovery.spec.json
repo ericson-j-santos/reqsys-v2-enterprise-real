@@ -52,10 +52,19 @@
     "runner_pickup_evidence": {
       "timeout_seconds": 60,
       "poll_seconds": 5,
-      "primary": "self_hosted_job_started_at",
+      "primary": "self_hosted_runner_assigned",
       "fallback": "workflow_run_status",
-      "timeout_error": "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY"
-    }
+      "timeout_error": "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY",
+      "required_fields": [
+        "started_at",
+        "runner_name",
+        "self-hosted label"
+      ],
+      "rejected_conclusions": [
+        "skipped"
+      ]
+    },
+    "mode_scoped_concurrency": true
   },
   "sdd_gate": {
     "tests": [
@@ -63,7 +72,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_desktop_control_plane_watchdog.py"
     ],
-    "evidence_contract": "External recovery remains fail-closed and exact-run-bound; pickup is proven by a started self-hosted job even when aggregate run status lags, while truly unpicked runs are cancelled after 60s and cleanup outcome is evidenced."
+    "evidence_contract": "External recovery remains fail-closed and exact-run-bound; pickup requires a non-skipped self-hosted job with a concrete runner_name, and stale runs are superseded per mode."
   },
   "traceability": {
     "requirements": ".sdd/specs/desktop-rdc-selfhosted-recovery.requirements.md",

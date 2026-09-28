@@ -450,7 +450,7 @@ jobs:
             status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
             started_self_hosted_jobs="$(
               gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
-                --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null))] | length' \
+                --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
                 2>/dev/null || printf '0'
             )"
             case "$started_self_hosted_jobs" in
@@ -458,7 +458,7 @@ jobs:
             esac
             if [ "$started_self_hosted_jobs" -gt 0 ]; then
               status='in_progress'
-              pickup_source='self_hosted_job_started_at'
+              pickup_source='self_hosted_runner_assigned'
               break
             fi
             case "$status" in
