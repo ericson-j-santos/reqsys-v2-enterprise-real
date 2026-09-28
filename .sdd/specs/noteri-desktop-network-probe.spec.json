@@ -58,7 +58,17 @@
       "gateway_command": "/reqsys run desktop-runner-recover-via-orchestrator",
       "watchdog_mode": "runner-recover",
       "bootstrap_required": false
-    }
+    },
+    "python_bootstrap": {
+      "version": "3.12",
+      "action": "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+      "host_python_required": false,
+      "applies_to": [
+        "noteri-desktop-network-probe.yml",
+        "noteri-desktop-watchdog-recovery.yml"
+      ]
+    },
+    "canonical_rules_sha": "10d2489e8cac3770d1c07fac4ccfece0a0112269"
   },
   "security": {
     "arbitrary_target": false,
@@ -150,7 +160,9 @@
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
     "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
-    "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório."
+    "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório.",
+    "Jobs Noteri que usam Session Launcher preparam Python 3.12 deterministicamente antes do bootstrap e não dependem do Python persistente do host.",
+    "Após merge, o probe físico é reexecutado e, quando aplicável, o runner Desktop é recuperado pelo Orchestrator com pickup independente."
   ],
   "hotfix_issue": 2088
 }
