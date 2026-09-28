@@ -82,7 +82,7 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
     assert "target='teams-bot-dev-provision.yml'" in content
     assert (
-        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
+        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
         "pending-development-agent-pr-permission-watch.yml|"
         "bacen-57-simulation-assessment.yml|"
         "cofre-runtime-evidence-gate.yml|"
@@ -108,6 +108,19 @@ def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
     ) in content
     assert 'gh workflow run "$TARGET_WORKFLOW"' in content
     assert "eval " not in content
+
+
+def test_gateway_rsm_service_case_e2e_is_exact_current_main_and_github_hosted() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run rsm-service-case-e2e-current-main'" in content
+    assert "'/reqsys run rsm-service-case-e2e-current-main')" in content
+    assert "target='rsm-service-case-e2e.yml'" in content
+    assert "runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml" in content
+    assert "--ref main" in content
+    assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in content
+    assert "steps.route.outputs.target == 'rsm-service-case-e2e.yml'" not in content
+    assert "-f environment=prod" not in content
 
 
 def test_gateway_bacen_57_permanece_somente_simulacao_nonprod() -> None:
