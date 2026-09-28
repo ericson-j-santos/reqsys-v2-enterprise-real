@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Governed ChatGPT TodoEvent gateway",
+  "status": "ready_for_validation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_todo_global_chat_event_gateway.py",
+      "tests/test_todo_global_hourly_cycle.py"
+    ],
+    "evidence_contract": "Issue #1705 + owner + prefix exato; TodoEvent v1 strict allowlist; same-SHA público; controle negativo; readback independente; replay do mesmo event_id sem segundo job; nenhum segredo persistido."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/todo-global-chat-event-gateway.requirements.md",
+    "workflow": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "producer": "scripts/todo_global_chat_event_gateway.py",
+    "runtime_api": "runtime/app/api/todo_events.py",
+    "runtime_model": "runtime/app/domain/models/todo_event.py"
+  },
+  "scope": {
+    "environment": "dev",
+    "target_ref": "main",
+    "authorized_issue": 1705,
+    "authorized_actor": "ericson-j-santos",
+    "producer": "chatgpt",
+    "production_touched": false,
+    "arbitrary_command_allowed": false,
+    "arbitrary_workflow_allowed": false
+  }
+}

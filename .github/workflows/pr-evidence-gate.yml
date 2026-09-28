@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: evidence-router
     if: needs.evidence-router.outputs.run_gate == 'true'
-    timeout-minutes: 12
+    timeout-minutes: 17
     env:
       STRICT_WORKFLOW_NAMES: |
         CI — ReqSys v2 Enterprise
@@ -81,7 +81,8 @@ jobs:
         Governança Padrão Ouro
       OPTIONAL_WORKFLOW_NAMES: |
         NGINX Security Profile
-      MAX_WAIT_SECONDS: '300'
+      STALL_AFTER_SECONDS: '300'
+      MAX_TOTAL_WAIT_SECONDS: '900'
       POLL_SECONDS: '15'
     steps:
       - name: Resolver contexto
@@ -158,7 +159,7 @@ jobs:
       - name: Build audit evidence
         id: evidence
         if: steps.ctx.outputs.enabled == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const fs = require('fs');
@@ -351,7 +352,10 @@ jobs:
                 failure.startsWith('Strict workflow has no run on current head SHA:');
             }
 
-            function deferTransientState(gate) {
+            function deferTransientState(
+              gate,
+              deferredReason = 'required_workflows_not_completed_within_wait_window',
+            ) {
               const transientFailures = (gate.failures || []).filter(isTransientFailure);
               const blockingFailures = (gate.failures || []).filter((failure) => !isTransientFailure(failure));
 
@@ -361,10 +365,24 @@ jobs:
               return {
                 ...gate,
                 status: 'deferred',
-                deferred_reason: 'required_workflows_not_completed_within_wait_window',
+                deferred_reason: deferredReason,
                 failures: [],
                 pending: [...new Set([...(gate.pending || []), ...transientFailures])],
               };
+            }
+
+            function progressFingerprint(runSummaries) {
+              return runSummaries
+                .filter((run) => relevantWorkflowNames.has(run.name))
+                .map((run) => [
+                  run.name,
+                  run.id,
+                  run.status,
+                  run.conclusion || '',
+                  run.updated_at || '',
+                ].join(':'))
+                .sort()
+                .join('|');
             }
 
             let audit;
@@ -382,9 +400,14 @@ jobs:
                 ...governedWorkflowNames,
                 ...optionalWorkflowNames,
               ]);
-              const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '180');
+              const stallAfterSeconds = Number(process.env.STALL_AFTER_SECONDS || '300');
+              const maxTotalWaitSeconds = Number(process.env.MAX_TOTAL_WAIT_SECONDS || '900');
               const pollSeconds = Number(process.env.POLL_SECONDS || '15');
-              const deadline = Date.now() + maxWaitSeconds * 1000;
+              const startedAt = Date.now();
+              const totalDeadline = startedAt + maxTotalWaitSeconds * 1000;
+              let lastMaterialProgressAt = startedAt;
+              let lastFingerprint = '';
+              let deferredReason = 'required_workflows_not_completed_within_wait_window';
 
               let runSummaries = [];
               let gate = null;
@@ -392,12 +415,33 @@ jobs:
               do {
                 runSummaries = await listRuns(headSha, false);
                 gate = evaluate({ headSha, runSummaries, strictWorkflowNames, governedWorkflowNames, optionalWorkflowNames });
+
+                const fingerprint = progressFingerprint(runSummaries);
+                if (fingerprint !== lastFingerprint) {
+                  lastFingerprint = fingerprint;
+                  lastMaterialProgressAt = Date.now();
+                  core.info('Material workflow progress observed; stall watchdog reset.');
+                }
+
                 if (!shouldKeepPolling(gate)) break;
+
+                const now = Date.now();
+                if (now - lastMaterialProgressAt >= stallAfterSeconds * 1000) {
+                  deferredReason = 'required_workflows_stalled_without_material_progress';
+                  core.warning(`Evidence dependencies made no material progress for ${stallAfterSeconds}s.`);
+                  break;
+                }
+                if (now >= totalDeadline) {
+                  deferredReason = 'required_workflows_exceeded_total_wait_cap';
+                  core.warning(`Evidence dependencies exceeded total wait cap of ${maxTotalWaitSeconds}s.`);
+                  break;
+                }
+
                 core.info(`Evidence still pending. Waiting ${pollSeconds}s before rechecking.`);
                 await sleep(pollSeconds * 1000);
-              } while (Date.now() < deadline);
+              } while (true);
 
-              gate = deferTransientState(gate);
+              gate = deferTransientState(gate, deferredReason);
 
               if (gate.status === 'passed') {
                 const artifactRuns = await listRuns(headSha, true);
@@ -587,7 +631,7 @@ jobs:
 
       - name: Upload audit evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pr-evidence-gate-${{ steps.evidence.outputs.head_sha || steps.ctx.outputs.head_sha || github.sha }}
           path: audit/

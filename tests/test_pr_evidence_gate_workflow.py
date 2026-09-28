@@ -15,13 +15,18 @@ def test_pr_evidence_gate_has_router_job_always_active():
     assert "needs.evidence-router.outputs.run_gate == 'true'" in text
 
 
-def test_pr_evidence_gate_keeps_full_wait_window_after_fast_poll_change():
+def test_pr_evidence_gate_uses_progress_watchdog_with_bounded_total_wait():
     text = read_workflow()
 
-    assert "MAX_WAIT_SECONDS: '300'" in text
+    assert "STALL_AFTER_SECONDS: '300'" in text
+    assert "MAX_TOTAL_WAIT_SECONDS: '900'" in text
     assert "POLL_SECONDS: '15'" in text
-    assert "MAX_WAIT_SECONDS: '45'" not in text
-    assert "POLL_SECONDS: '5'" not in text
+    assert 'function progressFingerprint(runSummaries)' in text
+    assert "lastMaterialProgressAt = Date.now();" in text
+    assert "fingerprint !== lastFingerprint" in text
+    assert "required_workflows_stalled_without_material_progress" in text
+    assert "required_workflows_exceeded_total_wait_cap" in text
+    assert "MAX_WAIT_SECONDS:" not in text
 
 
 def test_pr_evidence_gate_lists_artifacts_only_after_gate_passes():
@@ -87,7 +92,8 @@ def test_pr_evidence_gate_reports_deferred_but_fails_closed():
     text = read_workflow()
 
     assert "status: 'deferred'" in text
-    assert "deferred_reason: 'required_workflows_not_completed_within_wait_window'" in text
+    assert "deferredReason = 'required_workflows_not_completed_within_wait_window'" in text
+    assert 'deferred_reason: deferredReason' in text
     assert "deferred_reason: rateLimited ? 'github_api_rate_limit' : null" in text
     assert 'Evidence build deferred due to GitHub API rate limit.' in text
     enforce = text.split("- name: Enforce evidence gate result", 1)[1]
