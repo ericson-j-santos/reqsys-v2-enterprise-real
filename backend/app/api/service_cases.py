@@ -256,6 +256,35 @@ def _active_service(db: Session, service_id: str) -> ServicoTI:
     return service
 
 
+def _same_creation_intent(
+    record: ServiceCaseRecord,
+    payload: ServiceCaseCreateRequest,
+) -> bool:
+    """Confirma que a chave idempotente representa a mesma intenção lógica.
+
+    event_id e correlation_id pertencem à tentativa de transporte e podem mudar
+    entre replays. Os campos funcionais de criação precisam permanecer iguais.
+    """
+    return (
+        record.case_type == payload.case_type.value
+        and record.service_id == payload.service_id
+        and record.requester == payload.requester.strip()
+        and record.impact == payload.impact.value
+        and record.urgency == payload.urgency.value
+        and record.source == payload.source
+    )
+
+
+def _assert_same_creation_intent(
+    record: ServiceCaseRecord,
+    payload: ServiceCaseCreateRequest,
+) -> None:
+    if not _same_creation_intent(record, payload):
+        raise ServiceCaseConflictError(
+            'idempotency_key já utilizada por outra intenção'
+        )
+
+
 def create_service_case(
     db: Session,
     payload: ServiceCaseCreateRequest,
@@ -269,6 +298,7 @@ def create_service_case(
         .first()
     )
     if existing is not None:
+        _assert_same_creation_intent(existing, payload)
         logger.info(
             'rsm_case_replay case_id=%s correlation_id=%s source=%s',
             _safe_log_value(existing.case_id),
@@ -322,6 +352,7 @@ def create_service_case(
             .first()
         )
         if existing is not None:
+            _assert_same_creation_intent(existing, payload)
             return existing, True
         raise ServiceCaseConflictError('event_id ou identidade já utilizada') from exc
     db.refresh(record)

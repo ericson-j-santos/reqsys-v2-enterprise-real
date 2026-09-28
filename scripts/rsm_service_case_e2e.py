@@ -43,7 +43,7 @@ def _db_read(database_url: str, idempotency_key: str) -> dict:
     with psycopg2.connect(_sql_url(database_url)) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                'SELECT case_id, state, version, correlation_id '
+                'SELECT case_id, state, version, correlation_id, requester '
                 'FROM rsm_service_cases WHERE idempotency_key = %s',
                 (idempotency_key,),
             )
@@ -64,6 +64,7 @@ def _db_read(database_url: str, idempotency_key: str) -> dict:
                 'state': row[1],
                 'version': int(row[2]),
                 'correlation_id': row[3],
+                'requester': row[4],
                 'case_count': case_count,
                 'event_count': event_count,
             }
@@ -184,8 +185,38 @@ def run(base_url: str, database_url: str, expected_sha: str) -> dict:
     replay_db = _db_read(database_url, idempotency_key)
     _assert(replay_db['case_count'] == 1, 'replay criou caso adicional')
     _assert(replay_db['state'] == 'CLOSED', 'replay alterou estado terminal')
+    _assert(
+        replay_db['requester'] == create_payload['requester'],
+        'replay alterou a intenção persistida',
+    )
 
-    events_before_negative = replay_db['event_count']
+    events_before_intent_conflict = replay_db['event_count']
+    conflicting_replay = dict(create_payload)
+    conflicting_replay['event_id'] = str(uuid4())
+    conflicting_replay['requester'] = 'rsm-e2e-outra-intencao'
+    conflict = _post(
+        session,
+        base_url.rstrip('/') + '/v1/service-cases',
+        json_body=conflicting_replay,
+        correlation_id=f'{correlation_id}-conflict',
+    )
+    _assert(
+        conflict.status_code == 409,
+        f'reuso divergente da idempotency_key retornou HTTP {conflict.status_code}',
+    )
+    conflict_db = _db_read(database_url, idempotency_key)
+    _assert(conflict_db['case_id'] == case['case_id'], 'conflito trocou o case_id persistido')
+    _assert(conflict_db['case_count'] == 1, 'conflito criou caso adicional')
+    _assert(
+        conflict_db['event_count'] == events_before_intent_conflict,
+        'conflito persistiu evento adicional',
+    )
+    _assert(
+        conflict_db['requester'] == create_payload['requester'],
+        'conflito alterou a intenção persistida',
+    )
+
+    events_before_negative = conflict_db['event_count']
     invalid = _post(
         session,
         base_url.rstrip('/') + f"/v1/service-cases/{case['case_id']}/transitions",
@@ -224,17 +255,19 @@ def run(base_url: str, database_url: str, expected_sha: str) -> dict:
         'idempotency_key': idempotency_key,
         'case_id': case['case_id'],
         'input': create_payload,
-        'expected': 'CLOSED, replay sem duplicidade e transição inválida sem efeito',
+        'expected': 'CLOSED, replay idêntico sem duplicidade, intenção divergente rejeitada e transição inválida sem efeito',
         'observed': {
             'transitions': transitions,
             'terminal': terminal_db,
             'replay': replay_db,
+            'divergent_replay_control': conflict_db,
         },
         'independent_readback': 'postgresql',
         'positive': 'passed',
         'negative_control': 'passed',
         'stale_version_control': stale_version_control,
         'replay': 'passed',
+        'divergent_idempotency_intent_control': 'passed',
         'test_of_test': 'passed',
         'async_applicable': False,
         'external_blockers': [
