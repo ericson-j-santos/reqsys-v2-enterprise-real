@@ -11,8 +11,11 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from enrich_ci_pr_efficiency import (  # noqa: E402
     SECTION_MARKER,
+    build_merge_queue_reliability,
     build_pr_efficiency,
     enrich_files,
+    fetch_event_runs_for_window,
+    fetch_post_merge_runs_for_prs,
     fetch_recent_pr_sample,
     load_blocking_workflows,
     select_pr_sample_window,
@@ -310,6 +313,155 @@ class CiPrEfficiencyTests(unittest.TestCase):
         self.assertEqual(result["total_observed_ci_run_minutes"], 3.0)
         self.assertEqual(result["prs"][0]["observed_ci_run_minutes"], 3.0)
         self.assertEqual(result["rerun_rate_percent"], 50.0)
+
+    def test_merge_queue_reliability_detects_green_pr_queue_failure_and_requeue(self):
+        pr_metrics = {
+            "prs": [
+                {"pr_number": 70, "latest_head_green": True},
+                {"pr_number": 71, "latest_head_green": False},
+            ]
+        }
+        queue_runs = [
+            run(
+                70,
+                pr=70,
+                name="CI Merge Group Adapter",
+                sha="queue-a",
+                created="2026-09-22T15:10:00Z",
+                updated="2026-09-22T15:12:00Z",
+                conclusion="failure",
+                event="merge_group",
+            ),
+            run(
+                71,
+                pr=70,
+                name="PR Evidence Merge Group Adapter",
+                sha="queue-b",
+                created="2026-09-22T15:20:00Z",
+                updated="2026-09-22T15:21:00Z",
+                event="merge_group",
+            ),
+        ]
+        queue_runs[0]["run_started_at"] = "2026-09-22T15:10:10Z"
+        queue_runs[1]["run_started_at"] = "2026-09-22T15:20:30Z"
+        post_merge_runs = [
+            run(
+                72,
+                pr=70,
+                name="Post Merge Smoke",
+                sha="merge-70",
+                created="2026-09-22T15:30:00Z",
+                updated="2026-09-22T15:31:00Z",
+                conclusion="failure",
+                event="push",
+            )
+        ]
+
+        result = build_merge_queue_reliability(
+            pr_metrics,
+            queue_runs,
+            post_merge_runs,
+            start_at=START,
+            end_at=END,
+        )
+
+        self.assertTrue(result["canary_e2e_observed"])
+        self.assertEqual(result["queue_attempts"], 2)
+        self.assertEqual(result["green_pr_but_queue_failed_prs"], [70])
+        self.assertEqual(result["requeue_prs"], [70])
+        self.assertEqual(result["requeue_extra_attempts"], 1)
+        self.assertEqual(result["post_merge_failed_prs"], [70])
+        self.assertEqual(result["queue_wait_p50_seconds"], 20.0)
+        self.assertEqual(result["queue_wait_p95_seconds"], 29.0)
+        self.assertEqual(
+            result["queue_failure_causes"][0]["workflow"],
+            "CI Merge Group Adapter",
+        )
+
+    def test_merge_queue_reliability_fails_closed_without_real_merge_group(self):
+        result = build_merge_queue_reliability(
+            {"prs": [{"pr_number": 80, "latest_head_green": True}]},
+            [],
+            [],
+            start_at=START,
+            end_at=END,
+        )
+
+        self.assertFalse(result["available"])
+        self.assertFalse(result["canary_e2e_observed"])
+        self.assertEqual(
+            result["observation_reason"],
+            "no_merge_group_candidate_observed",
+        )
+        self.assertEqual(result["queue_attempts"], 0)
+        self.assertEqual(result["green_pr_but_queue_failed_count"], 0)
+
+    def test_merge_group_fetch_is_window_bounded_and_post_merge_fetch_is_exact_sha(self):
+        seen: list[str] = []
+
+        def fake_api(path: str, token: str):
+            self.assertEqual(token, "token")
+            seen.append(path)
+            if "event=merge_group" in path:
+                return {
+                    "workflow_runs": [
+                        run(
+                            90,
+                            pr=90,
+                            name="CI Merge Group Adapter",
+                            sha="queue-90",
+                            created="2026-09-22T15:20:00Z",
+                            updated="2026-09-22T15:21:00Z",
+                            event="merge_group",
+                        )
+                    ]
+                }
+            if path.endswith("/pulls/90"):
+                return {
+                    "number": 90,
+                    "merged_at": "2026-09-22T15:30:00Z",
+                    "merge_commit_sha": "merge-90",
+                }
+            if "head_sha=merge-90&event=push" in path:
+                return {
+                    "workflow_runs": [
+                        run(
+                            91,
+                            pr=None,
+                            name="Post Merge",
+                            sha="merge-90",
+                            created="2026-09-22T15:31:00Z",
+                            updated="2026-09-22T15:32:00Z",
+                            event="push",
+                        )
+                    ]
+                }
+            raise AssertionError(path)
+
+        queue = fetch_event_runs_for_window(
+            "owner",
+            "repo",
+            "token",
+            event="merge_group",
+            start_at=START,
+            end_at=END,
+            api_get=fake_api,
+        )
+        post = fetch_post_merge_runs_for_prs(
+            "owner",
+            "repo",
+            "token",
+            pr_numbers=[90],
+            start_at=START,
+            end_at=END,
+            api_get=fake_api,
+        )
+
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(post[0]["pull_requests"], [{"number": 90}])
+        self.assertTrue(
+            any("head_sha=merge-90&event=push" in path for path in seen)
+        )
 
     def test_enrichment_is_idempotent_and_registry_is_validated(self):
         with tempfile.TemporaryDirectory() as temp:
