@@ -40,10 +40,10 @@ jobs:
       image_digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
           cache: pip
@@ -65,10 +65,10 @@ jobs:
         run: echo "ref=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Authenticate to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -76,7 +76,7 @@ jobs:
 
       - name: Build and publish once
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ${{ env.SERVICE_DIR }}
           file: ${{ env.SERVICE_DIR }}/Dockerfile
@@ -113,7 +113,7 @@ jobs:
           PY
 
       - name: Upload build evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: environment-observability-build-evidence
           path: evidence/build.json
@@ -136,14 +136,14 @@ jobs:
       CONFIG_FILE: services/environment-observability-api/fly.dev.toml
       IMAGE_REF: ${{ needs.validate-and-publish.outputs.image_ref }}@${{ needs.validate-and-publish.outputs.image_digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Require environment-scoped token
         shell: bash
         run: test -n "$FLY_API_TOKEN"
 
       - name: Set up Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master pinned 2026-09-27
 
       - name: Deploy immutable image
         run: flyctl deploy --config "$CONFIG_FILE" --app "$APP_NAME" --image "$IMAGE_REF" --strategy rolling --yes
@@ -157,7 +157,7 @@ jobs:
         run: scripts/write_environment_observability_evidence.sh development "$PUBLIC_URL" "$APP_NAME" "$IMAGE_REF"
 
       - name: Upload development evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: environment-observability-development-evidence
           path: evidence/development.json
@@ -182,14 +182,14 @@ jobs:
       CONFIG_FILE: services/environment-observability-api/fly.stg.toml
       IMAGE_REF: ${{ needs.validate-and-publish.outputs.image_ref }}@${{ needs.validate-and-publish.outputs.image_digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Require environment-scoped token
         shell: bash
         run: test -n "$FLY_API_TOKEN"
 
       - name: Set up Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master pinned 2026-09-27
 
       - name: Deploy same immutable image
         run: flyctl deploy --config "$CONFIG_FILE" --app "$APP_NAME" --image "$IMAGE_REF" --strategy rolling --yes
@@ -203,7 +203,7 @@ jobs:
         run: scripts/write_environment_observability_evidence.sh staging "$PUBLIC_URL" "$APP_NAME" "$IMAGE_REF"
 
       - name: Upload staging evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: environment-observability-staging-evidence
           path: evidence/staging.json
@@ -229,14 +229,14 @@ jobs:
       CONFIG_FILE: services/environment-observability-api/fly.prod.toml
       IMAGE_REF: ${{ needs.validate-and-publish.outputs.image_ref }}@${{ needs.validate-and-publish.outputs.image_digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Require environment-scoped token
         shell: bash
         run: test -n "$FLY_API_TOKEN"
 
       - name: Set up Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master pinned 2026-09-27
 
       - name: Deploy same immutable image
         run: flyctl deploy --config "$CONFIG_FILE" --app "$APP_NAME" --image "$IMAGE_REF" --strategy rolling --yes
@@ -250,7 +250,7 @@ jobs:
         run: scripts/write_environment_observability_evidence.sh production "$PUBLIC_URL" "$APP_NAME" "$IMAGE_REF"
 
       - name: Upload production evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: environment-observability-production-evidence
           path: evidence/production.json
