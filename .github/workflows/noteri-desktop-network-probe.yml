@@ -40,14 +40,14 @@ jobs:
       EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
@@ -166,14 +166,14 @@ jobs:
           }
 
       - name: Checkout immutable source SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload sanitized recovery evidence
         if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: noteri-desktop-orchestrator-runner-recovery-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}/artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
@@ -280,14 +280,14 @@ jobs:
       EVIDENCE_REL: artifacts\noteri-desktop-dev-http\evidence.json
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
