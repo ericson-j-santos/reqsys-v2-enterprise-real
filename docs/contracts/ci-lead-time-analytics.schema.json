@@ -806,6 +806,155 @@
               }
             }
           }
+        },
+        "merge_queue_reliability": {
+          "$ref": "#/$defs/merge_queue_reliability"
+        }
+      }
+    },
+    "merge_queue_reliability": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "available",
+        "mode",
+        "creates_gate",
+        "canary_e2e_observed",
+        "observation_reason",
+        "observed_merge_group_workflow_runs",
+        "queue_attempts",
+        "queue_wait_p50_seconds",
+        "queue_wait_p95_seconds",
+        "green_pr_but_queue_failed_count",
+        "requeue_pr_count",
+        "post_merge_cancelled_runs",
+        "post_merge_failed_pr_count"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "mode": {
+          "const": "report-only"
+        },
+        "creates_gate": {
+          "const": false
+        },
+        "canary_e2e_observed": {
+          "type": "boolean"
+        },
+        "observation_reason": {
+          "type": "string",
+          "enum": [
+            "merge_group_candidate_observed",
+            "no_merge_group_candidate_observed"
+          ]
+        },
+        "observed_merge_group_workflow_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queue_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queue_prs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queue_wait_p50_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "queue_wait_p95_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "queue_failure_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "green_pr_but_queue_failed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "green_pr_but_queue_failed_prs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "requeue_pr_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requeue_prs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "requeue_extra_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_observed_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_failure_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_failed_pr_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_failed_prs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "queue_failure_causes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reliability_failure_cause"
+          }
+        },
+        "post_merge_failure_causes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reliability_failure_cause"
+          }
+        },
+        "post_merge_cancelled_runs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "reliability_failure_cause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow",
+        "conclusion",
+        "count"
+      ],
+      "properties": {
+        "workflow": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     }

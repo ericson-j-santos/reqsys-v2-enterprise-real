@@ -37,7 +37,7 @@ jobs:
 
       - name: Gerar token temporário de branch sync
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
@@ -46,7 +46,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar PR atual com proteção por HEAD
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
@@ -250,7 +250,10 @@ jobs:
               return;
             }
 
-            const baseSha = current.base.sha;
+            const { data: baseBranch } = await github.rest.repos.getBranch({
+              owner, repo, branch: current.base.ref,
+            });
+            const baseSha = baseBranch.commit.sha;
             const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
               owner, repo, basehead: baseSha + '...' + expectedHeadSha,
             });
@@ -303,7 +306,7 @@ jobs:
 
       - name: Gerar token temporário de branch sync
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
@@ -312,7 +315,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar branches com proteção por HEAD
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           MAX_BRANCH_SYNCS: "3"
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -530,7 +533,10 @@ jobs:
                 continue;
               }
 
-              const baseSha = current.base.sha;
+              const { data: baseBranch } = await github.rest.repos.getBranch({
+                owner, repo, branch: current.base.ref,
+              });
+              const baseSha = baseBranch.commit.sha;
               const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
                 owner, repo, basehead: baseSha + '...' + expectedHeadSha,
               });

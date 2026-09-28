@@ -28,7 +28,9 @@ def test_builtin_token_is_read_only_and_app_token_is_contents_write_only() -> No
     assert "contents: write" not in header
     assert "pull-requests: write" not in header
 
-    assert "actions/create-github-app-token@v2" in text
+    assert "actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349" in text
+    assert "actions/create-github-app-token@v2" not in text
+    assert "actions/github-script@v7" not in text
     assert "app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}" in text
     assert "private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}" in text
     assert "permission-contents: write" in text
@@ -60,6 +62,15 @@ def test_agent_limits_ci_fanout() -> None:
     assert 'MAX_BRANCH_SYNCS: "3"' in text
     assert "updatesStarted >= maxSyncs" in text
     assert "branch_sync_budget_exhausted" in text
+
+
+def test_agent_reads_current_base_branch_sha_instead_of_pr_snapshot_sha() -> None:
+    text = _text()
+
+    assert text.count("github.rest.repos.getBranch") == 2
+    assert "branch: current.base.ref" in text
+    assert "const baseSha = baseBranch.commit.sha;" in text
+    assert "const baseSha = current.base.sha;" not in text
 
 
 def test_agent_fails_closed_before_sync() -> None:
