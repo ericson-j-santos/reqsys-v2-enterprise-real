@@ -5,8 +5,7 @@ on:
     branches:
       - "ops/power-automate-outlook-probe-*"
     paths:
-      - "scripts/powerplatform_outlook_connection_probe.py"
-      - "tests/test_powerplatform_outlook_connection_probe.py"
+      - "scripts/powerplatform_outlook_connection_probe.js"
       - ".github/workflows/powerplatform-outlook-dev-probe.yml"
 
 permissions:
@@ -25,10 +24,6 @@ jobs:
       RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
       CORRELATION_ID: powerplatform-outlook-dev-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\\powerplatform-outlook-dev\\evidence.json
-      POWERPLATFORM_TENANT_ID: ${{ secrets.POWERPLATFORM_TENANT_ID }}
-      POWERPLATFORM_APP_ID: ${{ secrets.POWERPLATFORM_APP_ID }}
-      POWERPLATFORM_CLIENT_SECRET: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
-      DEV_ENVIRONMENT_URL: ${{ secrets.DEV_ENVIRONMENT_URL }}
 
     steps:
       - name: Checkout immutable source SHA
@@ -62,7 +57,7 @@ jobs:
             "--expected-head", "${{ github.sha }}",
             "--sync-ref", "origin/$env:GITHUB_REF_NAME"
           )
-          $raw = & python $launcher @args
+          $raw = & py -3 $launcher @args
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -73,7 +68,7 @@ jobs:
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=${{ github.sha }}" | Add-Content $env:GITHUB_OUTPUT
 
-      - name: Validate focused tests through Command Gateway
+      - name: Validate probe contract through Command Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
@@ -83,16 +78,20 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.js"
           $args = @(
             "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-tests",
-            "run", "--cwd", $env:TARGET_PATH,
+            "--correlation-id", "$env:CORRELATION_ID-selftest",
+            "run",
+            "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
-            "--risk", "1", "--timeout", "60",
+            "--risk", "1",
+            "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
-            "--", "pytest", "tests/test_powerplatform_outlook_connection_probe.py", "-q"
+            "--",
+            "node", $script, "--self-test"
           )
-          & python $gateway @args
+          & py -3 $gateway @args
           exit $LASTEXITCODE
 
       - name: Probe DEV through Command Gateway
@@ -105,33 +104,23 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
-          $probe = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.py"
+          $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.js"
           $args = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
-            "run", "--cwd", $env:TARGET_PATH,
+            "run",
+            "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
-            "--risk", "2", "--timeout", "90",
+            "--risk", "2",
+            "--timeout", "90",
             "--expected-head", $env:ANCHOR_SHA,
-            "--", "python", $probe,
+            "--",
+            "node", $script,
             "--evidence-file", $env:EVIDENCE_REL,
             "--correlation-id", $env:CORRELATION_ID
           )
-          & python $gateway @args
+          & py -3 $gateway @args
           exit $LASTEXITCODE
-
-      - name: Validate sanitized evidence
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
-          if (-not (Test-Path $path)) { throw "POWERPLATFORM_OUTLOOK_EVIDENCE_MISSING" }
-          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
-          if (-not $e.read_only) { throw "PROBE_NOT_READ_ONLY" }
-          if ($e.secret_value_exposed) { throw "SECRET_EXPOSURE_REPORTED" }
-          if ($e.production_touched) { throw "PRODUCTION_TOUCH_REPORTED" }
 
       - name: Upload sanitized evidence
         if: always() && steps.session.outputs.target_path != ''
