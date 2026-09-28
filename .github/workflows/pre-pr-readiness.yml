@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout completo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.EVALUATED_SHA }}
           fetch-depth: 0
@@ -58,13 +58,13 @@ jobs:
           fi
 
       - name: Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
       - name: Node 20 para validação condicional de frontend
         if: steps.scope.outputs.not_applicable != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: npm
@@ -109,8 +109,9 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          python -m pytest tests/test_pre_pr_readiness.py tests/test_ci_admission_control.py tests/test_vibe_security_gate.py tests/test_dev_runtime_cutover.py -q
+          python -m pytest tests/test_pre_pr_readiness.py tests/test_ci_admission_control.py tests/test_vibe_security_gate.py tests/test_dev_runtime_cutover.py tests/test_validate_action_immutability.py -q
           python scripts/pre_pr_readiness.py --self-test-negative
+          python scripts/validate_action_immutability.py --self-test-negative
           python scripts/vibe_security_gate.py --self-test-negative
           python scripts/validate_dev_runtime_cutover.py
 
@@ -141,7 +142,7 @@ jobs:
 
       - name: Publicar evidência READY_FOR_PR
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pre-pr-readiness-${{ env.EVALUATED_SHA }}
           path: artifacts/pre-pr-readiness/
@@ -150,7 +151,7 @@ jobs:
 
       - name: Publicar manifesto de admissão do SHA
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ci-admission-${{ env.EVALUATED_SHA }}
           path: artifacts/admission/${{ env.EVALUATED_SHA }}.json
@@ -237,6 +238,7 @@ jobs:
               "sdd:contract",
               "security:changed-diff",
               "workflow:surface-budget",
+              "workflow:action-immutability",
               "workflow:regression-contracts",
           }
           invariants = {
