@@ -226,7 +226,9 @@ def test_gateway_self_hosted_pickup_aceita_job_iniciado_com_status_agregado_atra
     assert 'actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100' in content
     assert ".started_at != null" in content
     assert 'index("self-hosted") != null' in content
-    assert "pickup_source='self_hosted_job_started_at'" in content
+    assert '(.runner_name // "") != ""' in content
+    assert '(.conclusion // "") != "skipped"' in content
+    assert "pickup_source='self_hosted_runner_assigned'" in content
     assert "runner_pickup_source" in content
     assert "pickup_source='timeout'" in content
 
