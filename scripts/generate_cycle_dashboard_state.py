@@ -144,11 +144,34 @@ def repository_snapshot(client: RequestClient, spec: dict[str, Any]) -> dict[str
                 commit_date = committer.get("date")
 
     errors = [value for value in (commit_error, pulls_error, runs_error) if value]
+    visibility = str(meta.get("visibility") or "")
+    source_status = "available" if not errors else "partial"
+    if visibility == "private":
+        latest = _latest_run(runs)
+        return {
+            **base,
+            "repository": None,
+            "source_status": source_status,
+            "visibility": "private",
+            "private_redacted": True,
+            "open_pr_count": len(open_prs) if isinstance(pulls, list) else None,
+            "latest_ci": (
+                {
+                    "status": latest.get("status"),
+                    "conclusion": latest.get("conclusion"),
+                    "updated_at": latest.get("updated_at"),
+                }
+                if latest
+                else None
+            ),
+            "errors": errors,
+        }
+
     return {
         **base,
-        "source_status": "available" if not errors else "partial",
+        "source_status": source_status,
         "html_url": meta.get("html_url"),
-        "visibility": meta.get("visibility"),
+        "visibility": visibility,
         "default_branch": branch,
         "main_sha": sha,
         "main_commit_url": commit_url,
