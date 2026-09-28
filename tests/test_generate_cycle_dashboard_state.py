@@ -157,3 +157,34 @@ def test_build_state_keeps_todo_global_as_projection_not_source_of_truth():
     assert len(state["runtime_pc24x7"]["workflows"]) == len(
         dashboard.RUNTIME_WORKFLOWS
     )
+
+
+def test_private_repository_redacts_titles_links_and_sha():
+    repository = "ericson-j-santos/private-project"
+    mapping = repo_mapping(repository)
+    mapping[f"/repos/{repository}"]["visibility"] = "private"
+    client = FakeClient(mapping)
+
+    result = dashboard.repository_snapshot(
+        client,
+        {
+            "repository": repository,
+            "label": "Projeto privado",
+            "group": "produto",
+            "priority": "P1",
+        },
+    )
+
+    assert result["source_status"] == "available"
+    assert result["visibility"] == "private"
+    assert result["private_redacted"] is True
+    assert result["repository"] is None
+    assert result["open_pr_count"] == 1
+    assert "open_prs" not in result
+    assert "main_sha" not in result
+    assert "html_url" not in result
+    assert result["latest_ci"] == {
+        "status": "completed",
+        "conclusion": "success",
+        "updated_at": "2026-09-28T17:02:00Z",
+    }
