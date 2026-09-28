@@ -167,9 +167,7 @@ jobs:
           test -s teams-dashboard-site/data.json
           test -s teams-dashboard-site/certification-status.json
 
-          cp teams-dashboard-site/index.html site/index.html
-          cp teams-dashboard-site/data.json site/data.json
-          cp teams-dashboard-site/certification-status.json site/certification-status.json
+          cp -a teams-dashboard-site/. site/
           cp -a docs/public-showcase/reqsys-linkedin/. site/showcase/
           cp -a tools/codex-local-online/. site/codex-local-online/
           cp -a docs/public-dev-locator/. site/dev/
@@ -183,6 +181,10 @@ jobs:
           test -s site/index.html
           test -s site/data.json
           test -s site/certification-status.json
+          test -s site/global-status.json
+          test -s site/teams/index.html
+          test -s site/teams/data.json
+          test -s site/teams/certification-status.json
           test -s site/showcase/index.html
           test -s site/showcase/assets/styles.css
           test -s site/codex-local-online/index.html
@@ -258,9 +260,11 @@ jobs:
         run: |
           {
             echo '### ReqSys Pages Composite'
-            echo '- `/`: dashboard SLO GitHub → Teams'
-            echo '- `/data.json`: contrato dinâmico do dashboard Teams'
-            echo '- `/certification-status.json`: evidência de certificação'
+            echo '- `/`: painel central de andamentos'
+            echo '- `/global-status.json`: projeção viva GitHub/PR/CI/TODO/Teams/Runtime/projetos'
+            echo '- `/teams/`: dashboard detalhado GitHub → Teams'
+            echo '- `/data.json`: contrato dinâmico compatível do dashboard Teams'
+            echo '- `/certification-status.json`: evidência de certificação Teams'
             echo '- `/showcase/`: showcase público ReqSys'
             echo '- `/docs/`: documentação MkDocs'
             echo '- `/codex-local-online/`: interface Codex Local Online'
