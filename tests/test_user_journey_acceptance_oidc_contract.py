@@ -27,10 +27,15 @@ def test_business_probe_usa_graph_oidc_e_nao_secret():
 
 def test_acceptance_usa_runtime_pc24x7_e_bloqueia_fly():
     text = _workflow()
-    assert "PC24X7_DEV_BASE_URL" in text
-    assert "PC24X7_DEV_FRONTEND_URL" in text
+    assert "resolve_pc24x7_dev_locator.mjs" in text
+    assert "steps.dev_runtime.outputs.base_url" in text
+    assert "steps.dev_runtime.outputs.frontend_url" in text
+    assert 'echo "API_URL=$resolved_url" >> "$GITHUB_ENV"' in text
+    assert 'echo "FRONTEND_URL=$resolved_url" >> "$GITHUB_ENV"' in text
+    assert "PC24X7_DEV_BASE_URL" not in text
+    assert "PC24X7_DEV_FRONTEND_URL" not in text
     assert "/api/runtime/health" in text
-    assert "Fly.io está descontinuado" in text
+    assert "Runtime legado Fly.io rejeitado" in text
     assert "reqsys-api-dev.fly.dev" not in text
     assert "reqsys-app-dev.fly.dev" not in text
     assert "flyctl" not in text

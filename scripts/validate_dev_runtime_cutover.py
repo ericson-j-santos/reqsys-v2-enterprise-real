@@ -16,6 +16,11 @@ FORBIDDEN_DEV_RUNTIME_URLS = (
     "https://reqsys-app-dev.fly.dev",
     "https://reqsys-api-dev.fly.dev",
 )
+WSJF_ACCEPTANCE_WORKFLOW = ".github/workflows/user-journey-acceptance-dev.yml"
+STATIC_DEV_RUNTIME_VARIABLES = (
+    "PC24X7_DEV_BASE_URL",
+    "PC24X7_DEV_FRONTEND_URL",
+)
 
 CRITICAL_FILES = (
     "frontend/src/constants/ambientesOperacionais.js",
@@ -25,6 +30,7 @@ CRITICAL_FILES = (
     ".github/workflows/executive-public-smoke-confirmation.yml",
     ".github/workflows/executive-final-sync-history-public-smoke-trend-public.yml",
     ".github/workflows/noteri-study-mode-dev-reconcile.yml",
+    WSJF_ACCEPTANCE_WORKFLOW,
     "docs/public-dev-locator/index.html",
 )
 
@@ -75,6 +81,18 @@ def validate() -> list[str]:
         if "sucesso verde" not in raw.lower():
             errors.append(f"false_green_enforcement_missing:{relative}")
 
+    wsjf = read(WSJF_ACCEPTANCE_WORKFLOW)
+    if "resolve_pc24x7_dev_locator.mjs" not in wsjf:
+        errors.append("wsjf_signed_locator_resolution_missing")
+    for variable in STATIC_DEV_RUNTIME_VARIABLES:
+        if variable in wsjf:
+            errors.append(f"wsjf_static_runtime_variable_forbidden:{variable}")
+    if "steps.dev_runtime.outputs.base_url" not in wsjf or "steps.dev_runtime.outputs.frontend_url" not in wsjf:
+        errors.append("wsjf_signed_locator_outputs_missing")
+    if 'echo "API_URL=$resolved_url" >> "$GITHUB_ENV"' not in wsjf:
+        errors.append("wsjf_api_same_origin_export_missing")
+    if 'echo "FRONTEND_URL=$resolved_url" >> "$GITHUB_ENV"' not in wsjf:
+        errors.append("wsjf_frontend_same_origin_export_missing")
     study = read(".github/workflows/noteri-study-mode-dev-reconcile.yml")
     trigger = study.split("permissions:", 1)[0]
     if "push:" not in trigger or "- main" not in trigger:
