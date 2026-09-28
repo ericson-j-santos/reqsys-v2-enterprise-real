@@ -1,0 +1,16 @@
+{
+  "feature_name": "ci-reliability-baseline",
+  "project": "ReqSys v2 Enterprise — CI/CD Governance",
+  "created_at": "2026-09-27",
+  "updated_at": "2026-09-27",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Enriquece o CI Lead Time Analytics com baseline report-only para FLAKY_UNRESOLVED, SHA_DIVERGENT e PICKUP_UNPROVEN, consumindo o contrato de evidência do Engineering Control Plane sem criar novo gate bloqueante.",
+  "sdd_gate": {
+    "tests": [
+      "tests/scripts/test_enrich_ci_reliability_evidence.py",
+      ".github/workflows/ci-lead-time-analytics.yml"
+    ],
+    "evidence_contract": "A mudança só pode ser considerada pronta para revisão quando o enriquecimento for idempotente, falhar fechado em coleta incompleta, preservar creates_gate=false, vincular findings aos SHAs/runs reais e o Pre-PR Readiness retornar READY_FOR_PR=passed no HEAD exato."
+  }
+}
