@@ -24,12 +24,12 @@ jobs:
       EXPECTED_HOST: Noteri
       PORTAL_REPO: ericson-j-santos/portal-portabilidade-2025
       PORTAL_PR: '54'
-      EXPECTED_PORTAL_HEAD: 5630b03e81f289023616c406fad9554c19da4f9b
+      EXPECTED_PORTAL_HEAD: ae11659d2a61b62c4a1c893d62dca220f4aa3ef7
       VERCEL_SCOPE: ericsons-projects-2dc94fbf
       VERCEL_ORG_ID: team_o4wyHrN2sFJBZ79KKrtkIVE9
       VERCEL_PROJECT_ID: prj_GcQEm3O9AlURnthV1iwC7c99Q289
       RESOURCE_NAME: portal-portabilidade-2025-preview
-      SOURCE_PREVIEW_URL: https://portal-portabilidade-2025-gsn7ia47l-ericsons-projects-2dc94fbf.vercel.app
+      SOURCE_PREVIEW_URL: https://portal-portabilidade-2025-an16k4b0m-ericsons-projects-2dc94fbf.vercel.app
       EVIDENCE_FILE: artifacts/portal-p0-upstash-noteri/evidence.json
 
     steps:
