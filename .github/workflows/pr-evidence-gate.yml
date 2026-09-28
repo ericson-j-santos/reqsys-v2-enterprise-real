@@ -511,6 +511,80 @@ jobs:
             core.setOutput('status', audit.gate.status);
             core.setOutput('head_sha', audit.pr ? audit.pr.head_sha : headSha);
 
+      - name: Checkout admission validator
+        if: steps.ctx.outputs.enabled == 'true' && steps.evidence.outputs.status == 'passed'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ steps.evidence.outputs.head_sha }}
+          fetch-depth: 1
+
+      - name: Validate admission manifest content
+        id: admission_content
+        if: steps.ctx.outputs.enabled == 'true' && steps.evidence.outputs.status == 'passed'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.inputs.pr_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from scripts.ci_admission_guard import AdmissionGuardError, github_json, wait_for_admission
+
+          repository = os.environ["REPOSITORY"].strip()
+          token = os.environ["GITHUB_TOKEN"].strip()
+          pr_number = os.environ["PR_NUMBER"].strip()
+          output = Path("audit/pr-evidence-admission-validation.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+
+          if not pr_number.isdigit():
+              output.write_text(json.dumps({
+                  "status": "failed",
+                  "reason": "pr_number_invalid",
+                  "pr_number": pr_number,
+              }, indent=2) + "\n", encoding="utf-8")
+              raise SystemExit("PR_EVIDENCE_ADMISSION_PR_INVALID")
+
+          pr = github_json(repository, f"pulls/{pr_number}", token)
+          head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+          base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
+          head_sha = str(head.get("sha") or "").lower()
+          base_ref = str(base.get("ref") or "main")
+
+          try:
+              result = wait_for_admission(
+                  repository,
+                  head_sha,
+                  base_ref,
+                  token,
+                  max_wait_seconds=0,
+                  poll_seconds=1,
+              )
+          except AdmissionGuardError as exc:
+              output.write_text(json.dumps({
+                  "status": "failed",
+                  "pr_number": int(pr_number),
+                  "head_sha": head_sha,
+                  "base_ref": base_ref,
+                  "reason": str(exc),
+              }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+              raise SystemExit(f"PR_EVIDENCE_ADMISSION_BLOCKED:{exc}")
+
+          output.write_text(json.dumps({
+              "status": "passed",
+              "pr_number": int(pr_number),
+              "head_sha": head_sha,
+              "base_ref": base_ref,
+              "admission": result,
+          }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(f"PR_EVIDENCE_ADMISSION_ACCEPTED head={head_sha}")
+          PY
+
       - name: Upload audit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -530,7 +604,12 @@ jobs:
             exit 0
           fi
           status='${{ steps.evidence.outputs.status }}'
-          if [[ "$status" == "passed" || "$status" == "deferred" ]]; then
+          if [[ "$status" == "passed" ]]; then
+            admission_outcome='${{ steps.admission_content.outcome }}'
+            if [[ "$admission_outcome" != "success" ]]; then
+              echo "Admission content validation outcome: ${admission_outcome:-unknown}"
+              exit 1
+            fi
             echo "PR Evidence Gate completed with status: ${status}"
             exit 0
           fi
