@@ -155,3 +155,18 @@ O `Pre-PR Readiness Gate` trata exclusivamente `HEAD == origin/main`, `behind_by
 ### Semântica de duração em reruns
 
 Para `run_attempt=1`, minutos observados usam `created_at → updated_at`. Em `run_attempt>1`, usam `run_started_at → updated_at`. O GitHub mantém `created_at` do disparo original quando um workflow é reexecutado; usar esse timestamp em reruns contabilizaria indevidamente o intervalo parado entre tentativas como tempo ativo de CI. A taxa de rerun continua sendo derivada de `run_attempt>1`.
+
+## Baseline observacional de confiabilidade do CI
+
+O artifact `audit/ci-lead-time-analytics.json` passa a incluir `ci_reliability_evidence`, mantendo `mode=report-only` e `creates_gate=false`. A coleta reutiliza exatamente os PRs selecionados em `pr_efficiency` e consulta somente os workflows bloqueantes do HEAD observado.
+
+São publicados três sinais adicionais:
+
+- `FLAKY_UNRESOLVED`: o mesmo `run_id` apresentou conclusões terminais diferentes entre tentativas; rerun verde não apaga a instabilidade observada;
+- `SHA_DIVERGENT`: o `latest_head_sha` usado pela amostra difere do `head.sha` atual do PR;
+- `PICKUP_UNPROVEN`: a leitura independente da API de jobs não encontrou job iniciado com `runner_name` preenchido.
+
+A coleta falha explicitamente quando a lista de jobs estiver incompleta ou quando uma tentativa consultada não estiver terminal. Nenhum desses sinais bloqueia merge neste incremento. O gate canônico permanece no Engineering Control Plane; o ReqSys atua apenas como consumidor de baseline.
+
+O enriquecimento é idempotente e eleva a versão aditiva do artifact para `1.0.6`. O schema continua compatível porque aceita propriedades adicionais e versões `1.0.x`.
+

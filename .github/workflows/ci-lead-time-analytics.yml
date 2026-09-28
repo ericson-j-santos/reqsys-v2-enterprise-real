@@ -21,6 +21,7 @@ on:
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/build_ci_fixed_window_analytics.py'
       - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/enrich_ci_reliability_evidence.py'
       - 'scripts/compare_ci_process_baseline.py'
       - 'scripts/annotate_ci_window_comparability.py'
       - 'scripts/update_ci_process_history.py'
@@ -32,6 +33,7 @@ on:
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
       - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
+      - 'tests/scripts/test_enrich_ci_reliability_evidence.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
       - 'tests/scripts/test_annotate_ci_window_comparability.py'
       - 'tests/scripts/test_update_ci_process_history.py'
@@ -51,6 +53,7 @@ on:
       - '.github/workflows/workflow-command-center.yml'
       - 'scripts/build_ci_fixed_window_analytics.py'
       - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/enrich_ci_reliability_evidence.py'
       - 'scripts/update_ci_fixed_window_history.py'
       - 'scripts/enrich_command_center_ci_fixed_history.py'
       - 'scripts/ci_fixed_window_sustainability.py'
@@ -90,7 +93,7 @@ jobs:
       CI_PROCESS_HISTORY_PATH: 'audit/history/ci-process-improvement-history.jsonl'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Restore process improvement history from main artifact
         env:
@@ -102,6 +105,7 @@ jobs:
           python tests/scripts/test_build_ci_process_improvement_analytics.py
           python tests/scripts/test_build_ci_fixed_window_analytics.py
           python tests/scripts/test_enrich_ci_pr_efficiency.py
+          python tests/scripts/test_enrich_ci_reliability_evidence.py
           python tests/scripts/test_compare_ci_process_baseline.py
           python tests/scripts/test_annotate_ci_window_comparability.py
           python tests/scripts/test_update_ci_process_history.py
@@ -130,12 +134,18 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: python scripts/enrich_ci_pr_efficiency.py
 
+      - name: Enrich artifact with CI reliability evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python scripts/enrich_ci_reliability_evidence.py
+
       - name: Update fixed-window process improvement history
         run: python scripts/update_ci_fixed_window_history.py
 
       - name: Upload CI lead time analytics evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ci-lead-time-analytics-${{ github.run_id }}
           path: audit/
