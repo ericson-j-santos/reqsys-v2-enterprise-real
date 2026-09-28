@@ -31,6 +31,7 @@ A entrada governada é um comentário na issue operacional #1705 com o prefixo
     sanitizados; nenhum segredo.
 14. O fluxo é DEV e não toca produção.
 15. As Actions usadas pelo novo workflow devem ser fixadas por SHA completo.
+16. As dependências Python exigidas pelos self-tests do gateway devem ser instaladas explicitamente e com versão fixada; `PyYAML` é obrigatória porque o ciclo TODO importa `yaml` durante a coleta dos testes.
 
 ## Critérios de aceite
 
@@ -41,6 +42,7 @@ A entrada governada é um comentário na issue operacional #1705 com o prefixo
 - controle negativo, readback e replay idempotente são obrigatórios;
 - o workflow não usa `pull_request_target`, `eval` ou conteúdo do comentário
   como shell;
+- os self-tests executam após instalar `pytest` e `PyYAML` explicitamente, sem depender de pacote residual da imagem do runner;
 - `Pre-PR Readiness Gate` retorna `READY_FOR_PR=passed` no HEAD exato;
 - E2E pós-merge publica um TodoEvent real, confirma estado terminal,
   leitura independente e replay sem segundo job.
