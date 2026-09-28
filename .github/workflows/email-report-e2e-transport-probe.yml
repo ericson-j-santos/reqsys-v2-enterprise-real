@@ -137,6 +137,64 @@ jobs:
           & python $gateway @gatewayArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Probe pinned clasp runtime through Command Gateway
+        shell: powershell
+        env:
+          EMAIL_SESSION_ID: ${{ steps.email.outputs.session_id }}
+          EMAIL_TARGET_PATH: ${{ steps.email.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $gatewayArgs = @(
+            '--policy', $policy,
+            '--correlation-id', $env:CORRELATION_ID,
+            'run',
+            '--cwd', $env:EMAIL_TARGET_PATH,
+            '--session-id', $env:EMAIL_SESSION_ID,
+            '--risk', '1',
+            '--timeout', '120',
+            '--expected-head', $env:EMAIL_REPORT_EXPECTED_HEAD,
+            '--',
+            'npx', '--yes', '@google/clasp@3.4.1', '--version'
+          )
+          $captured = & python $gateway @gatewayArgs 2>&1
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            Write-Host 'CLASP_RUNTIME_AVAILABLE=false'
+            throw 'CLASP_RUNTIME_UNAVAILABLE'
+          }
+          Write-Host 'CLASP_RUNTIME_AVAILABLE=true'
+
+      - name: Probe existing clasp authorization without exposing identity
+        shell: powershell
+        env:
+          EMAIL_SESSION_ID: ${{ steps.email.outputs.session_id }}
+          EMAIL_TARGET_PATH: ${{ steps.email.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $gatewayArgs = @(
+            '--policy', $policy,
+            '--correlation-id', $env:CORRELATION_ID,
+            'run',
+            '--cwd', $env:EMAIL_TARGET_PATH,
+            '--session-id', $env:EMAIL_SESSION_ID,
+            '--risk', '1',
+            '--timeout', '120',
+            '--expected-head', $env:EMAIL_REPORT_EXPECTED_HEAD,
+            '--',
+            'npx', '--yes', '@google/clasp@3.4.1', 'show-authorized-user', '--json'
+          )
+          $captured = & python $gateway @gatewayArgs 2>&1
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            Write-Host 'CLASP_AUTHORIZED=false'
+            throw 'CLASP_AUTH_REQUIRED'
+          }
+          Write-Host 'CLASP_AUTHORIZED=true'
+
       - name: Summary
         if: always()
         shell: powershell
