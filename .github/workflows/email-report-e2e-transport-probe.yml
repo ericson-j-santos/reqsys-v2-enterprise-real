@@ -14,18 +14,26 @@ concurrency:
 
 jobs:
   governed-session-probe:
-    name: Prove Noteri transport to governed email-report workspace
+    name: Materialize governed email-report workspace on Noteri
     if: >-
       github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real' &&
       github.ref == 'refs/heads/ops/probe-email-report-e2e-transport-20260928'
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 7
     env:
       EMAIL_REPORT_EXPECTED_HEAD: f045cdc03a52239738cfde769f51404f949ac8c2
-      TARGET_REPO: C:\dev\chatgpt-workers\email-report
+      EMAIL_REPORT_SOURCE: C:\dev\chatgpt-workers\email-report-bootstrap-${{ github.run_id }}
       CORRELATION_ID: email-report-e2e-probe-${{ github.run_id }}-${{ github.run_attempt }}
+      GIT_TERMINAL_PROMPT: "0"
 
     steps:
+      - name: Checkout immutable ReqSys probe source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Checkout canonical operational rules
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -35,8 +43,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Bootstrap governed email-report session
-        id: session
+      - name: Bootstrap governed transport session
+        id: transport
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -44,32 +52,89 @@ jobs:
           $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
           $launcherArgs = @(
             '--policy', $policy,
-            '--repo', $env:TARGET_REPO,
-            '--session-prefix', 'email-report-e2e',
+            '--repo', $env:GITHUB_WORKSPACE,
+            '--session-prefix', 'email-report-transport',
             '--correlation-id', $env:CORRELATION_ID,
-            '--expected-head', $env:EMAIL_REPORT_EXPECTED_HEAD,
-            '--sync-ref', 'origin/main'
+            '--expected-head', '${{ github.sha }}',
+            '--sync-ref', 'origin/ops/probe-email-report-e2e-transport-20260928'
           )
           $raw = & python $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne 'SESSION_LAUNCH_OK' -or $data.state_validated -ne $true) {
-            throw 'SESSION_LAUNCH_BLOCKED'
+            throw 'TRANSPORT_SESSION_LAUNCH_BLOCKED'
           }
-          if ($data.head -ne $env:EMAIL_REPORT_EXPECTED_HEAD) { throw 'SESSION_HEAD_MISMATCH' }
+          if ($data.head -ne '${{ github.sha }}') { throw 'TRANSPORT_SESSION_HEAD_MISMATCH' }
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Clone email-report through Command Gateway
+        shell: powershell
+        env:
+          TRANSPORT_SESSION_ID: ${{ steps.transport.outputs.session_id }}
+          TRANSPORT_TARGET_PATH: ${{ steps.transport.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $gatewayArgs = @(
+            '--policy', $policy,
+            '--correlation-id', $env:CORRELATION_ID,
+            'run',
+            '--cwd', $env:TRANSPORT_TARGET_PATH,
+            '--session-id', $env:TRANSPORT_SESSION_ID,
+            '--risk', '2',
+            '--timeout', '120',
+            '--expected-head', '${{ github.sha }}',
+            '--',
+            'git', 'clone', '--no-tags', '--single-branch', '--branch', 'main',
+            'https://github.com/ericson-j-santos/email-report.git',
+            $env:EMAIL_REPORT_SOURCE
+          )
+          & python $gateway @gatewayArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Bootstrap governed email-report session
+        id: email
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $launcher = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\session_launcher.py'
+          $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
+          $launcherArgs = @(
+            '--policy', $policy,
+            '--repo', $env:EMAIL_REPORT_SOURCE,
+            '--session-prefix', 'email-report-e2e',
+            '--correlation-id', $env:CORRELATION_ID,
+            '--expected-head', $env:EMAIL_REPORT_EXPECTED_HEAD
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne 'SESSION_LAUNCH_OK' -or $data.state_validated -ne $true) {
+            throw 'EMAIL_REPORT_SESSION_LAUNCH_BLOCKED'
+          }
+          if ($data.head -ne $env:EMAIL_REPORT_EXPECTED_HEAD) { throw 'EMAIL_REPORT_SESSION_HEAD_MISMATCH' }
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Inspect exact email-report SHA through Command Gateway
         shell: powershell
         env:
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          EMAIL_SESSION_ID: ${{ steps.email.outputs.session_id }}
+          EMAIL_TARGET_PATH: ${{ steps.email.outputs.target_path }}
         run: |
           $ErrorActionPreference = 'Stop'
           $gateway = Join-Path $env:GITHUB_WORKSPACE '_rules\scripts\command_gateway.py'
           $policy = Join-Path $env:GITHUB_WORKSPACE '_rules\config\command-gateway.policy.json'
-          & python $gateway --policy $policy --correlation-id $env:CORRELATION_ID inspect --cwd $env:TARGET_PATH --session-id $env:SESSION_ID
+          $gatewayArgs = @(
+            '--policy', $policy,
+            '--correlation-id', $env:CORRELATION_ID,
+            'inspect',
+            '--cwd', $env:EMAIL_TARGET_PATH,
+            '--session-id', $env:EMAIL_SESSION_ID
+          )
+          & python $gateway @gatewayArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Summary
@@ -79,6 +144,7 @@ jobs:
           "## Email Report E2E Transport Probe" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Expected email-report SHA: $env:EMAIL_REPORT_EXPECTED_HEAD" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Host lane: Noteri / self-hosted" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Runtime mutation: none" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Secrets read: none by probe" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Clone path: governed C:\dev\chatgpt-workers namespace" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Gmail/Drive mutation: none" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Secrets intentionally read by probe: none" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
