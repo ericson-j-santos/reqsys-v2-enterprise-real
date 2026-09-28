@@ -396,6 +396,32 @@ class CiPrEfficiencyTests(unittest.TestCase):
         self.assertEqual(result["queue_attempts"], 0)
         self.assertEqual(result["green_pr_but_queue_failed_count"], 0)
 
+    def test_post_merge_cancelled_is_visible_but_not_failure(self):
+        result = build_merge_queue_reliability(
+            {"prs": [{"pr_number": 73, "latest_head_green": True}]},
+            [],
+            [
+                run(
+                    73,
+                    pr=73,
+                    name="Pre-PR Readiness Gate",
+                    sha="merge-73",
+                    created="2026-09-22T15:30:00Z",
+                    updated="2026-09-22T15:31:00Z",
+                    conclusion="cancelled",
+                    event="push",
+                )
+            ],
+            start_at=START,
+            end_at=END,
+        )
+
+        self.assertEqual(result["post_merge_observed_runs"], 1)
+        self.assertEqual(result["post_merge_cancelled_runs"], 1)
+        self.assertEqual(result["post_merge_failure_runs"], 0)
+        self.assertEqual(result["post_merge_failed_pr_count"], 0)
+        self.assertEqual(result["post_merge_failed_prs"], [])
+
     def test_merge_group_fetch_is_window_bounded_and_post_merge_fetch_is_exact_sha(self):
         seen: list[str] = []
 
