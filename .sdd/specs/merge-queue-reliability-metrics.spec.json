@@ -23,7 +23,7 @@
     "tests": [
       "tests/scripts/test_enrich_ci_pr_efficiency.py"
     ],
-    "evidence_contract": "Provar que merge_group real é condição necessária para canary_e2e_observed, tentativas são deduplicadas por HEAD SHA, PR verde com falha de fila/requeue é detectada, pós-merge usa merge_commit_sha exato, cancelled permanece observável sem ser classificado como falha e ausência de merge_group falha fechado como indisponível."
+    "evidence_contract": "Provar que merge_group real é condição necessária para canary_e2e_observed, tentativas são deduplicadas por HEAD SHA, PR verde com falha de fila/requeue é detectada, pós-merge usa merge_commit_sha exato, cancelled permanece observável sem ser classificado como falha, paginação global incompleta aciona recent_prs_fallback bounded e ausência de merge_group falha fechado como indisponível."
   },
   "risk": {
     "production": false,
@@ -41,6 +41,7 @@
     "Falha pós-merge usa workflow push do merge_commit_sha exato.",
     "Workflow pós-merge cancelled é reportado separadamente e não incrementa contadores de falha.",
     "Métricas permanecem report-only e creates_gate=false.",
+    "Paginação global incompleta usa recent_prs_fallback bounded sem varredura ilimitada.",
     "Pre-PR Readiness verde no HEAD final e behind_by=0."
   ]
 }
