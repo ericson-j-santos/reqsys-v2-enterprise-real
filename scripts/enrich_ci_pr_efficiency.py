@@ -20,6 +20,12 @@ FAILED_CONCLUSIONS = {
     "action_required",
     "startup_failure",
 }
+POST_MERGE_FAILURE_CONCLUSIONS = {
+    "failure",
+    "timed_out",
+    "action_required",
+    "startup_failure",
+}
 SECTION_MARKER = "## Eficiência por Pull Request"
 
 
@@ -700,7 +706,11 @@ def build_merge_queue_reliability(
     ]
     failed_post_merge_runs = [
         run for run in post_merge_completed
-        if str(run.get("conclusion") or "") in FAILED_CONCLUSIONS
+        if str(run.get("conclusion") or "") in POST_MERGE_FAILURE_CONCLUSIONS
+    ]
+    cancelled_post_merge_runs = [
+        run for run in post_merge_completed
+        if str(run.get("conclusion") or "") == "cancelled"
     ]
     post_merge_failed_prs: set[int] = set()
     for run in failed_post_merge_runs:
@@ -739,6 +749,7 @@ def build_merge_queue_reliability(
         "requeue_extra_attempts": extra_attempts,
         "post_merge_observed_runs": len(post_merge_completed),
         "post_merge_failure_runs": len(failed_post_merge_runs),
+        "post_merge_cancelled_runs": len(cancelled_post_merge_runs),
         "post_merge_failure_causes": _failure_causes(failed_post_merge_runs),
         "post_merge_failed_pr_count": len(post_merge_failed_prs),
         "post_merge_failed_prs": sorted(post_merge_failed_prs),
@@ -763,8 +774,10 @@ def build_merge_queue_reliability(
                 "PR associado a mais de um HEAD SHA merge_group distinto na janela"
             ),
             "post_merge_failure": (
-                "workflow push falho no merge_commit_sha de PR verde e mergeada dentro "
-                "da janela; é sinal operacional, não prova causalidade da mudança"
+                "workflow push com conclusion failure/timed_out/action_required/startup_failure "
+                "no merge_commit_sha de PR verde e mergeada dentro da janela; cancelled é "
+                "reportado separadamente e não conta como falha; é sinal operacional, não "
+                "prova causalidade da mudança"
             ),
         },
     }
@@ -851,6 +864,7 @@ def render_markdown(metrics: dict[str, Any]) -> str:
                 f"- PR verde mas fila falhou: `{queue['green_pr_but_queue_failed_count']}`",
                 f"- PRs com requeue: `{queue['requeue_pr_count']}`",
                 f"- PRs verdes com falha pós-merge: `{queue['post_merge_failed_pr_count']}`",
+                f"- Runs pós-merge cancelados (não contam como falha): `{queue['post_merge_cancelled_runs']}`",
                 f"- Motivo de disponibilidade: `{queue['observation_reason']}`",
             ]
         )
