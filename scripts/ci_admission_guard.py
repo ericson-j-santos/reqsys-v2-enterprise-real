@@ -23,6 +23,7 @@ MANIFEST_SCHEMA_VERSION = "1.1.0"
 REQUIRED_PREVENTIVE_INVARIANTS = {
     "sdd:contract",
     "security:changed-diff",
+    "workflow:surface-budget",
     "workflow:regression-contracts",
 }
 RETRYABLE_REASONS = {
