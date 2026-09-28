@@ -18,6 +18,7 @@ from enrich_ci_pr_efficiency import (  # noqa: E402
     fetch_post_merge_runs_for_prs,
     fetch_recent_pr_sample,
     load_blocking_workflows,
+    resolve_pr_sample_runs,
     select_pr_sample_window,
 )
 
@@ -270,6 +271,51 @@ class CiPrEfficiencyTests(unittest.TestCase):
         self.assertTrue(meta["target_met"])
         self.assertEqual(meta["selected_pr_numbers"], [103, 102, 101])
         self.assertEqual({item["pull_requests"][0]["number"] for item in runs}, {101, 102, 103})
+
+    def test_incomplete_global_collection_uses_bounded_recent_pr_fallback(self):
+        fallback_runs = [
+            run(
+                45,
+                pr=45,
+                name="Required A",
+                sha="sha-45",
+                created="2026-09-22T15:10:00Z",
+                updated="2026-09-22T15:11:00Z",
+            )
+        ]
+        fallback_window = {
+            "mode": "recent_prs_fallback",
+            "fixed_start_at": START.isoformat(),
+            "effective_start_at": START.isoformat(),
+            "end_at": END.isoformat(),
+            "effective_duration_minutes": 60,
+            "target_min_prs": 1,
+            "observed_prs": 1,
+            "target_met": True,
+            "max_lookback_minutes": 10080,
+            "selected_pr_numbers": [45],
+        }
+        calls = 0
+
+        def fallback_loader():
+            nonlocal calls
+            calls += 1
+            return fallback_runs, fallback_window
+
+        selected_runs, selected_window = resolve_pr_sample_runs(
+            [],
+            collection_complete=False,
+            fixed_start_at=START,
+            end_at=END,
+            min_sample_prs=1,
+            max_lookback_minutes=360,
+            fallback_loader=fallback_loader,
+        )
+
+        self.assertEqual(calls, 1)
+        self.assertEqual(selected_runs, fallback_runs)
+        self.assertEqual(selected_window["mode"], "recent_prs_fallback")
+        self.assertTrue(selected_window["target_met"])
 
     def test_rerun_rate_is_explicit_and_per_pr(self):
         raw = [
