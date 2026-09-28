@@ -46,8 +46,17 @@ def notification_db():
         session.close()
 
 
-def test_endpoints_exigem_autenticacao():
-    response = client.get('/v1/teams-gateway/notificacoes/dashboard')
+@pytest.mark.parametrize(
+    'path',
+    [
+        '/v1/teams-gateway/notificacoes/dashboard',
+        '/v1/teams-gateway/notificacoes/fila',
+        '/v1/teams-gateway/notificacoes/dlq',
+        '/v1/teams-gateway/notificacoes/logs',
+    ],
+)
+def test_endpoints_operacionais_estao_registrados_e_exigem_autenticacao(path):
+    response = client.get(path)
     assert response.status_code in (401, 403)
 
 
