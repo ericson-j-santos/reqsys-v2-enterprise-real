@@ -250,7 +250,10 @@ jobs:
               return;
             }
 
-            const baseSha = current.base.sha;
+            const { data: baseBranch } = await github.rest.repos.getBranch({
+              owner, repo, branch: current.base.ref,
+            });
+            const baseSha = baseBranch.commit.sha;
             const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
               owner, repo, basehead: baseSha + '...' + expectedHeadSha,
             });
