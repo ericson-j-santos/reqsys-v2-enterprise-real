@@ -131,6 +131,8 @@ Ausência de `merge_group` é fail-closed para o canário: `available=false`, `c
 
 A coleta pós-merge consulta somente os PRs da amostra e o `merge_commit_sha` exato de cada um, evitando varredura global e evitando atribuir falha de outro commit ao PR. Cancelamentos permanecem visíveis para diagnóstico, mas não elevam `post_merge_failure_runs` nem `post_merge_failed_pr_count`.
 
+Quando a coleta global de workflow runs para a janela ampliada de PRs atinge o limite de paginação antes de alcançar o início da janela, o enriquecimento não tenta ampliar uma varredura global nem falha antes da contingência. Ele usa diretamente o `recent_prs_fallback`, limitado aos PRs recentes, seus commits e runs por `head_sha`. Se essa coleta bounded também não produzir a amostra mínima, `baseline_sample_valid=false`; como o analytics é report-only, a insuficiência permanece evidenciada sem inventar completude.
+
 
 ## Governança
 
