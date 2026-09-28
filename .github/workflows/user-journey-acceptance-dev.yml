@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/user-journey-acceptance-dev.yml"
+      - "scripts/resolve_pc24x7_dev_locator.mjs"
+      - "scripts/validate_dev_runtime_cutover.py"
+      - "tests/test_dev_runtime_cutover.py"
       - "scripts/wsjf_business_effect_probe.py"
       - "scripts/wsjf_business_effect_gate.py"
       - "scripts/user_journey_acceptance_gate.py"
@@ -29,8 +32,6 @@ permissions:
 
 env:
   FEATURE: wsjf_planner_excel_simples
-  FRONTEND_URL: ${{ vars.PC24X7_DEV_FRONTEND_URL }}
-  API_URL: ${{ vars.PC24X7_DEV_BASE_URL }}
   EVIDENCE_DIR: audit/user-journey/wsjf-planner-excel-dev
 
 concurrency:
@@ -45,33 +46,53 @@ jobs:
     environment: reqsys-power-platform-dev
     timeout-minutes: 160
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Validar configuração PC24x7 DEV
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Resolver runtime PC24x7 DEV pelo locator assinado
+        id: dev_runtime
         shell: bash
         run: |
           set -euo pipefail
-          for pair in "PC24X7_DEV_BASE_URL:$API_URL" "PC24X7_DEV_FRONTEND_URL:$FRONTEND_URL"; do
-            name="${pair%%:*}"
-            value="${pair#*:}"
-            if [ -z "$value" ]; then
-              echo "::error::$name não configurada."
-              exit 1
-            fi
-            case "$value" in
-              https://*) ;;
-              *) echo "::error::$name deve usar HTTPS."; exit 1 ;;
-            esac
-            case "${value,,}" in
-              *fly.io*|*fly.dev*) echo "::error::Fly.io está descontinuado; $name deve apontar para PC24x7."; exit 1 ;;
-            esac
-          done
-          curl --fail --silent --show-error --max-time 20 "$API_URL/api/runtime/health" >/dev/null
-          curl --fail --silent --show-error --max-time 20 "$FRONTEND_URL/" >/dev/null
+          mkdir -p "$EVIDENCE_DIR"
+          node scripts/resolve_pc24x7_dev_locator.mjs \
+            --output "$EVIDENCE_DIR/signed-locator.json" >/dev/null
 
+      - name: Validar runtime resolvido e fixar same-origin
+        shell: bash
+        env:
+          RESOLVED_API_URL: ${{ steps.dev_runtime.outputs.base_url }}
+          RESOLVED_FRONTEND_URL: ${{ steps.dev_runtime.outputs.frontend_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RESOLVED_API_URL" ] || [ -z "$RESOLVED_FRONTEND_URL" ]; then
+            echo "::error::Locator assinado não produziu URL DEV utilizável."
+            exit 2
+          fi
+          if [ "$RESOLVED_API_URL" != "$RESOLVED_FRONTEND_URL" ]; then
+            echo "::error::Contrato DEV exige API e frontend same-origin."
+            exit 2
+          fi
+          resolved_url="$RESOLVED_API_URL"
+          case "$resolved_url" in
+            https://*.trycloudflare.com) ;;
+            *) echo "::error::Runtime DEV fora do domínio governado: $resolved_url"; exit 2 ;;
+          esac
+          case "${resolved_url,,}" in
+            *fly.io*|*fly.dev*) echo "::error::Runtime legado Fly.io rejeitado: $resolved_url"; exit 2 ;;
+          esac
+          echo "API_URL=$resolved_url" >> "$GITHUB_ENV"
+          echo "FRONTEND_URL=$resolved_url" >> "$GITHUB_ENV"
+          curl --fail --silent --show-error --max-time 20 "$resolved_url/api/runtime/health" >/dev/null
+          curl --fail --silent --show-error --max-time 20 "$resolved_url/" >/dev/null
       - name: Resolver SHA do teste e SHA realmente publicado
         id: target
         env:
@@ -105,17 +126,11 @@ jobs:
           echo "Código dos testes: $source_sha"
           echo "Código publicado em DEV: $expected_sha"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Preparar diretório de evidências
         run: mkdir -p "$EVIDENCE_DIR"
@@ -205,7 +220,7 @@ jobs:
       - name: Autenticar integrações Microsoft por OIDC
         id: microsoft_oidc
         continue-on-error: true
-        uses: azure/login@v2
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
@@ -380,7 +395,7 @@ jobs:
 
       - name: Publicar evidências da jornada real
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: user-journey-acceptance-dev-wsjf-${{ github.run_id }}
           path: |
