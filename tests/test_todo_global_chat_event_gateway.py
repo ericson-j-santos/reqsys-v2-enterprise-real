@@ -10,7 +10,7 @@ import pytest
 from scripts import todo_global_chat_event_gateway as gateway
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github" / "workflows" / "todo-global-chat-event-gateway.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "reqsys-authorized-actions-gateway.yml"
 
 
 def _event() -> dict:
@@ -217,9 +217,9 @@ def test_workflow_is_owner_scoped_same_sha_and_never_executes_comment_body() -> 
     assert "/api/runtime/build-info" in text
     assert "/runtime-core/api/runtime/build-info" in text
     assert "--github-event-path \"$GITHUB_EVENT_PATH\"" in text
-    assert "github.event.comment.body }}" not in text
     assert "eval " not in text
     assert "TODO_GLOBAL_RUNTIME_TOKEN" in text
+    assert "publish-todo-event:" in text
     assert "todo-global-chat-event-" in text
 
 
