@@ -18,8 +18,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: noteri-desktop-watchdog-recovery
-  cancel-in-progress: false
+  group: noteri-desktop-watchdog-recovery-${{ inputs.mode }}
+  cancel-in-progress: true
 
 jobs:
   recover:
