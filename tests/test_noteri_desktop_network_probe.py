@@ -223,6 +223,9 @@ def test_workflow_is_noteri_only_inputless_and_governed() -> None:
     assert "workflow_dispatch:" in content
     assert "inputs:" not in content
     assert "fix/noteri-desktop-network-probe-*" in content
+    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in content
+    assert 'python-version: "3.12"' in content
+    assert "10d2489e8cac3770d1c07fac4ccfece0a0112269" in content
     assert "session_launcher.py" in content
     assert "command_gateway.py" in content
     assert '"--risk", "2"' in content
