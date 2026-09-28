@@ -136,6 +136,42 @@ def test_create_and_replay_converge_without_duplicate(service_id):
         db.close()
 
 
+def test_create_rejects_same_idempotency_key_for_different_intent(service_id):
+    payload = _create_payload(service_id, f'intent-conflict-{uuid4()}')
+    first = client.post(
+        '/v1/service-cases',
+        json=payload,
+        headers={'X-Correlation-ID': 'rsm-intent-first'},
+    )
+    assert first.status_code == 200
+    case_id = first.json()['data']['case']['case_id']
+
+    conflicting = dict(payload)
+    conflicting['requester'] = 'rsm-other-requester'
+    conflicting['event_id'] = str(uuid4())
+    second = client.post(
+        '/v1/service-cases',
+        json=conflicting,
+        headers={'X-Correlation-ID': 'rsm-intent-conflict'},
+    )
+
+    assert second.status_code == 409
+
+    db = TestingSession()
+    try:
+        rows = (
+            db.query(ServiceCaseRecord)
+            .filter_by(idempotency_key=payload['idempotency_key'])
+            .all()
+        )
+        assert len(rows) == 1
+        assert rows[0].case_id == case_id
+        assert rows[0].requester == payload['requester']
+        assert db.query(ServiceCaseEventRecord).filter_by(case_id=case_id).count() == 1
+    finally:
+        db.close()
+
+
 def test_terminal_flow_negative_control_and_independent_state(service_id):
     payload = _create_payload(service_id, f'terminal-{uuid4()}')
     created = client.post(

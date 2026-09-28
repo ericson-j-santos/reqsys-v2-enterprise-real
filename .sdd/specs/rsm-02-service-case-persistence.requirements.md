@@ -7,7 +7,7 @@ E2E parcial: #1788
 O ReqSys deve persistir ServiceCase e CaseEvent sem criar catálogo paralelo. service_id referencia gestao_ti_servicos.servico_id.
 
 ## Requisito 2 — idempotência persistente
-idempotency_key deve possuir unicidade no banco. Repetição da mesma identidade lógica deve retornar o mesmo case_id sem segundo caso nem segundo efeito de criação.
+idempotency_key deve possuir unicidade no banco. Repetição da mesma identidade lógica e da mesma intenção funcional deve retornar o mesmo case_id sem segundo caso nem segundo efeito de criação. Reuso da mesma idempotency_key com campos funcionais divergentes (case_type, service_id, requester, impact, urgency ou source) deve retornar conflito e preservar integralmente o registro original. event_id e correlation_id identificam a tentativa e podem variar entre replays equivalentes.
 
 ## Requisito 3 — histórico append-only
 Criação e transições válidas devem adicionar CaseEvent com event_id único, correlation_id e estados anterior/novo quando aplicável.
@@ -36,3 +36,4 @@ O harness deve iniciar a API real contra PostgreSQL real, chamar a API por HTTP 
 9. O E2E usa PostgreSQL e HTTP reais; mocks/stubs não contam como integração.
 10. Teams real permanece bloqueio externo explícito e não é apresentado como validado.
 11. Pre-PR Readiness deve retornar READY_FOR_PR=passed no HEAD exato antes da abertura de PR.
+12. Reuso da mesma idempotency_key com requester divergente retorna 409; leitura PostgreSQL independente confirma COUNT(*)=1, mesmo case_id, requester original e nenhum CaseEvent adicional.
