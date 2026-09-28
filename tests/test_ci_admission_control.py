@@ -155,6 +155,11 @@ def test_pr_evidence_gate_requires_manifest_from_current_sha() -> None:
     assert "Admission manifest missing for current head SHA" in raw
     assert "artifact.name === admissionArtifactName" in raw
     assert "head_sha: headSha" in raw
+    assert "Validate admission manifest content" in raw
+    assert "scripts.ci_admission_guard" in raw
+    enforce = raw.split("- name: Enforce evidence gate result", 1)[1]
+    assert 'if [[ "$status" == "passed" ]]' in enforce
+    assert '|| "$status" == "deferred"' not in enforce
 
 
 def test_manifest_blocks_when_required_preventive_invariant_is_missing() -> None:
@@ -187,6 +192,22 @@ def test_guard_validates_manifest_content_not_only_artifact_name() -> None:
         assert "invariants_failed" in str(exc)
     else:
         raise AssertionError("manifesto com invariante falho deveria ser rejeitado")
+
+
+def test_guard_rejects_manifest_missing_workflow_surface_budget() -> None:
+    head = "a" * 40
+    base = "b" * 40
+    payload = manifest.build_manifest(readiness(), head)
+    payload["preventive_invariants"] = [
+        item for item in payload["preventive_invariants"]
+        if item["name"] != "workflow:surface-budget"
+    ]
+    try:
+        guard.validate_manifest_payload(payload, head, base)
+    except guard.AdmissionGuardError as exc:
+        assert "workflow:surface-budget" in str(exc)
+    else:
+        raise AssertionError("manifesto sem workflow:surface-budget deveria ser rejeitado")
 
 
 def test_guard_rejects_manifest_with_wrong_base_sha() -> None:
