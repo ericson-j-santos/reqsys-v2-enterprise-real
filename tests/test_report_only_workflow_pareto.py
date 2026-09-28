@@ -150,10 +150,11 @@ class ReportOnlyWorkflowParetoTest(unittest.TestCase):
         self.assertIn("opened, reopened, closed", trigger)
         self.assertNotIn("synchronize", trigger)
 
-    def test_pre_pr_push_and_pull_request_share_concurrency_group(self):
+    def test_pre_pr_push_and_pull_request_do_not_cancel_each_other(self):
         text = (WORKFLOWS / "pre-pr-readiness.yml").read_text(encoding="utf-8")
         self.assertIn(
-            "pre-pr-readiness-${{ github.event.pull_request.head.ref || github.ref_name }}",
+            "pre-pr-readiness-${{ github.event_name }}-"
+            "${{ github.event.pull_request.head.ref || github.ref_name }}",
             text,
         )
         self.assertIn("cancel-in-progress: true", text)
