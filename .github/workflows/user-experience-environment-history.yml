@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'scripts/smoke_user_experience_environments.py'
+      - 'scripts/dev_runtime_target.py'
+      - 'scripts/resolve_pc24x7_dev_locator.mjs'
       - 'tests/test_smoke_user_experience_environments.py'
       - '.github/workflows/user-experience-environment-history.yml'
   push:
@@ -26,10 +28,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Validate implementation
         run: |
-          python -m py_compile scripts/smoke_user_experience_environments.py
+          python -m py_compile scripts/dev_runtime_target.py scripts/smoke_user_experience_environments.py
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
           python -m unittest tests/test_smoke_user_experience_environments.py
 
       - name: Execute DEV STG PROD report-only smoke
