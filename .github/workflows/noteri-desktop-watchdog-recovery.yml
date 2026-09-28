@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 8
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5af7b5ab6e31c24744176abd774855168c55953f
+      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
       CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
 
