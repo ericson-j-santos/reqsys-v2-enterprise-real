@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
       CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
     steps:
@@ -54,6 +54,11 @@ jobs:
           path: _rules
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Python 3.12 deterministic bootstrap
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
 
       - name: Bootstrap mandatory governed session
         id: session
@@ -153,7 +158,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
-      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
+      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
       CORRELATION_ID: desktop-runner-orchestrator-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
 
@@ -180,6 +185,11 @@ jobs:
           path: _rules
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Python 3.12 deterministic bootstrap
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
 
       - name: Bootstrap governed Noteri session
         id: session
@@ -275,7 +285,7 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
       CORRELATION_ID: noteri-desktop-dev-http-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-dev-http\evidence.json
     steps:
@@ -294,6 +304,11 @@ jobs:
           path: _rules
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Python 3.12 deterministic bootstrap
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
 
       - name: Bootstrap mandatory governed session
         id: session
