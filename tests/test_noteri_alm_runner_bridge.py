@@ -101,7 +101,7 @@ def test_workflow_exposes_only_fixed_alm_bridge_mode() -> None:
     assert "ENABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE" in raw
     assert "DISABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE" in raw
     assert "owner_risk3_gateway.py" in raw
-    assert "noteri_alm_runner_bridge.py" in raw
+    assert "configure_noteri_alm_runner_bridge_risk3.py" in raw
     assert "TARGET_ALM_HEAD: 96966d8decc210a98eefa7f0ca437052e8bd5a21" in raw
     assert "ALM_RUNNER_BRIDGE_NOT_READY" in raw
 
