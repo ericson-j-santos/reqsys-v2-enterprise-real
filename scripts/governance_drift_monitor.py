@@ -109,9 +109,54 @@ def _github_get(url: str, token: str) -> Any:
         raise CollectionError(f"github_api_read_failed:{url}:{exc}") from exc
 
 
+def _github_post_json(url: str, token: str, payload: dict[str, Any]) -> Any:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+            "User-Agent": "reqsys-governance-drift-monitor",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        raise CollectionError(f"github_api_write_query_failed:{url}:{exc}") from exc
+
+
+def _graphql_auto_merge(repository: str, token: str) -> bool:
+    owner, name = repository.split("/", 1)
+    payload = {
+        "query": (
+            "query($owner:String!,$name:String!){"
+            "repository(owner:$owner,name:$name){autoMergeAllowed}"
+            "}"
+        ),
+        "variables": {"owner": owner, "name": name},
+    }
+    response = _github_post_json("https://api.github.com/graphql", token, payload)
+    if response.get("errors"):
+        raise CollectionError("auto_merge_graphql_errors")
+    value = ((response.get("data") or {}).get("repository") or {}).get(
+        "autoMergeAllowed"
+    )
+    if not isinstance(value, bool):
+        raise CollectionError("auto_merge_state_unobservable")
+    return value
+
+
 def collect_live_state(repository: str, token: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     base = f"https://api.github.com/repos/{repository}"
     repository_payload = _github_get(base, token)
+    # O REST pode omitir/nullificar allow_auto_merge para GITHUB_TOKEN de PR.
+    # GraphQL autoMergeAllowed é usado como leitura explícita; valor não observável
+    # falha a coleta em vez de virar falso drift.
+    repository_payload["allow_auto_merge"] = _graphql_auto_merge(repository, token)
     summaries = _github_get(f"{base}/rulesets?per_page=100", token)
     if not isinstance(summaries, list):
         raise CollectionError("ruleset_collection_invalid")
