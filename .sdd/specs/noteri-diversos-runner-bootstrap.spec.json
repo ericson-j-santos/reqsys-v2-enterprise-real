@@ -1,0 +1,26 @@
+{
+  "feature_name": "noteri-diversos-runner-bootstrap",
+  "project": "Runtime Platform / PC24x7 — Noteri",
+  "created_at": "2026-09-28",
+  "updated_at": "2026-09-28",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Provisiona de forma idempotente e governada um runner GitHub Actions repo-scoped para ericson-j-santos/diversos no Noteri, usando Risk3 temporário e autenticação local do GitHub sem persistir token de registro.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_diversos_runner_bootstrap.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Host/repository/runner/labels fixos; runner oficial 2.337.0 validado por SHA-256; sessão governada; owner_risk3_gateway com ação e escopo fixos; token de registro somente em memória; readback GitHub online; replay idempotente; produção e reboot não tocados."
+  },
+  "risk": {
+    "production": false,
+    "environment": "dev",
+    "administrative_change": true,
+    "explicit_authorization_ref": "chat-20260928-diversos-noteri-dev"
+  }
+}
