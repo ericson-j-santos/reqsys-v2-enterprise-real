@@ -126,46 +126,40 @@ jobs:
         if: always()
         continue-on-error: true
         shell: bash
+        env:
+          APPLY_OUTCOME: ${{ steps.apply.outcome }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.apply.outcome }}" = "success" ]; then
-            python - <<'PY'
-            import json
-            import os
-            from pathlib import Path
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-            evidence = json.loads(
-                Path("audit/powerautomate-outlook/evidence.json").read_text(encoding="utf-8")
-            )
-            cleanup = json.loads(
-                Path("audit/powerautomate-outlook/cleanup.json").read_text(encoding="utf-8")
-            )
-            assert evidence["source_sha"] == os.environ["GITHUB_SHA"], evidence
-            assert evidence["environment"] == "dev", evidence
-            assert evidence["dataverse_url"] == "https://orge9b920f1.crm2.dynamics.com", evidence
-            assert evidence["auth_mode"] == "github_oidc", evidence
-            assert evidence["static_client_secret_used"] is False, evidence
-            assert evidence["production_touched"] is False, evidence
-            assert evidence["two_successful_runs"] is True, evidence
-            assert evidence["cleanup"]["deactivated"] is True, evidence
-            assert cleanup["cleanup"]["deactivated"] is True, cleanup
-            print("POWER_AUTOMATE_OUTLOOK_E2E_EVIDENCE_OK")
-            PY
-          else
-            test -f "$EVIDENCE_DIR/evidence.json"
-            python - <<'PY'
-            import json
-            from pathlib import Path
+          outcome = os.environ.get("APPLY_OUTCOME", "")
+          evidence_path = Path("audit/powerautomate-outlook/evidence.json")
+          cleanup_path = Path("audit/powerautomate-outlook/cleanup.json")
 
-            evidence = json.loads(
-                Path("audit/powerautomate-outlook/evidence.json").read_text(encoding="utf-8")
-            )
-            assert evidence["production_touched"] is False, evidence
-            if evidence.get("cleanup"):
-                assert evidence["cleanup"].get("deactivated") is True, evidence
-            print("POWER_AUTOMATE_OUTLOOK_E2E_FAILURE_EVIDENCE_PRESERVED")
-            PY
-          fi
+          if outcome == "success":
+              evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+              cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
+              assert evidence["source_sha"] == os.environ["GITHUB_SHA"], evidence
+              assert evidence["environment"] == "dev", evidence
+              assert evidence["dataverse_url"] == "https://orge9b920f1.crm2.dynamics.com", evidence
+              assert evidence["auth_mode"] == "github_oidc", evidence
+              assert evidence["static_client_secret_used"] is False, evidence
+              assert evidence["production_touched"] is False, evidence
+              assert evidence["two_successful_runs"] is True, evidence
+              assert evidence["cleanup"]["deactivated"] is True, evidence
+              assert cleanup["cleanup"]["deactivated"] is True, cleanup
+              print("POWER_AUTOMATE_OUTLOOK_E2E_EVIDENCE_OK")
+          else:
+              if evidence_path.exists():
+                  evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+                  assert evidence["production_touched"] is False, evidence
+                  if evidence.get("cleanup"):
+                      assert evidence["cleanup"].get("deactivated") is True, evidence
+              print("POWER_AUTOMATE_OUTLOOK_E2E_FAILURE_EVIDENCE_PRESERVED")
+          PY
 
       - name: Upload sanitized evidence
         if: always()
