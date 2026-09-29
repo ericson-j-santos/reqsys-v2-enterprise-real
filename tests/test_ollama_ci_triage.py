@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -242,6 +243,22 @@ def test_worker_pool_target_branch_is_retrocompatible_and_idempotent(tmp_path: P
     preserved = store.get_task(task["task_id"])
     assert preserved["base_sha"] == "a" * 40
     assert preserved["branch"] == "fix/ci-1890"
+
+    with sqlite3.connect(store.db_path) as independent:
+        rows = independent.execute(
+            "SELECT task_id, base_sha, branch, priority, max_attempts "
+            "FROM tasks WHERE idempotency_key=?",
+            (task["idempotency_key"],),
+        ).fetchall()
+    assert rows == [
+        (
+            task["task_id"],
+            "a" * 40,
+            "fix/ci-1890",
+            task["priority"],
+            task["max_attempts"],
+        )
+    ]
 
 
 def test_worker_pool_rejects_protected_target_branch(tmp_path: Path) -> None:
