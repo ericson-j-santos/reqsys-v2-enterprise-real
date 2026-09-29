@@ -391,7 +391,7 @@ jobs:
 
   orchestrator_status_readback:
     name: Read Desktop Orchestrator status from Noteri
-    if: ${{ github.event_name == 'push' && (github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' || startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' || startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-'))) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
