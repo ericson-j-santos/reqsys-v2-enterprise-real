@@ -4,10 +4,12 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
+from app.core.security import get_current_user
 from app.db import get_db
 from app.models.agile_runtime import AgileWorkItem
 from app.models.requisito import Requisito
 from app.models.vinculo_git import VinculoGit
+from app.services.traceability_graph import TraceabilityGraphService
 
 router = APIRouter(prefix='/v1/rastreabilidade', tags=['Rastreabilidade Git'])
 
@@ -50,6 +52,19 @@ def vinculos_por_requisito(requisito_id: int, db: Session = Depends(get_db)):
         .all()
     )
     return ok({'requisito_id': requisito_id, 'total': len(vinculos), 'vinculos': [_serializar(v) for v in vinculos]})
+
+
+@router.get('/requisitos/{requisito_id}/grafo')
+def grafo_rastreabilidade_requisito(
+    requisito_id: int,
+    _user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Projeta requisito → engenharia → CI → runtime sem duplicar fontes canônicas."""
+    graph = TraceabilityGraphService(db).build_for_requirement(requisito_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail='Requisito não encontrado.')
+    return ok(graph)
 
 
 @router.get('/buscar')
