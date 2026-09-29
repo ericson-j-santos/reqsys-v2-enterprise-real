@@ -217,3 +217,23 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - `merge-queue-gate` continua dependendo de `current-sha-stability` e falha fechado quando um workflow obrigatório estiver ausente, incompleto ou não verde.
 - Nenhum workflow novo é criado; produção, deploy, secrets, branch protection e permissões administrativas permanecem intocados.
 - Após integração, uma nova medição do `CI Lead Time Analytics` deve comparar o tempo do `Governed Merge Queue` e os minutos totais por PR contra o baseline de 158,37 minutos observado no incremento anterior.
+
+
+## Incremento Pareto — monitor de saúde CI/CD em 14 dias
+
+61. O monitor deve ser incorporado ao `CI Lead Time Analytics` existente, sem criar novo workflow ativo.
+62. A janela móvel deve cobrir 14 dias e comparar 7 dias anteriores com os 7 dias mais recentes para tempo até primeira falha e taxa de rerun.
+63. Tempo até primeira falha só é regressão material com pelo menos 3 amostras em cada metade, aumento absoluto de pelo menos 120 segundos e aumento relativo de pelo menos 25%.
+64. Rerun sem mudança só é regressão material com pelo menos 20 runs em cada metade, aumento de pelo menos 5 pontos percentuais e aumento relativo de pelo menos 25%; `run_attempt>1` deve permanecer vinculado ao mesmo run/HEAD.
+65. Falso verde pós-merge só pode ser atribuído quando o HEAD exato do PR estava verde nos workflows bloqueantes e o `merge_commit_sha` exato possui run `push` concluído em falha; cancelamento não conta como falha pós-merge.
+66. Divergência de SHA deve comparar o `head.sha` atual do PR com evidência verde anterior, nunca promover SHA antigo a estado corrente, ignorar os primeiros 30 minutos após atualização do PR e suprimir alerta enquanto houver run do HEAD atual em fila ou execução.
+67. O monitor deve falhar fechado quando a coleta de runs ou PRs da janela não for completa.
+68. O alerta deve ser deduplicado por episódio material e conter tendência, evidência atual, impacto, risco e menor correção sistêmica segura e idempotente.
+
+### Critérios de aceite — monitor de saúde
+
+- Nenhum arquivo novo permanece em `.github/workflows`; o orçamento de superfície não cresce.
+- `tests/test_ci_health_regression_watch.py` cobre regressão material e controles negativos de variação pequena, HEAD recém-alterado e HEAD ainda em execução.
+- O artifact `audit/ci-health-regression-watch/report.json` registra `source_sha`, janela, métricas, alertas e evidência por run/SHA.
+- O job de alerta não executa em `pull_request`; em `main`, issue só é criada/atualizada quando `material_regression=true`.
+- Repetir a mesma regressão material sem mudança de assinatura não cria nova issue nem comentário.
