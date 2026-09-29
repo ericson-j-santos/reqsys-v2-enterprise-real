@@ -10,11 +10,11 @@ from typing import Any, Callable
 
 from build_ci_process_improvement_analytics import github_api, parse_dt
 
-FAILED_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required", "startup_failure"}
+FAILED_CONCLUSIONS = {"failure", "timed_out", "action_required", "startup_failure"}
 POST_MERGE_FAILURE_CONCLUSIONS = {"failure", "timed_out", "action_required", "startup_failure"}
 MARKER = "<!-- reqsys-ci-health-regression-watch -->"
 DEFAULT_LOOKBACK_DAYS = 14
-DEFAULT_MAX_RUN_PAGES = 50
+DEFAULT_MAX_RUN_PAGES = 100
 DEFAULT_MAX_PULL_PAGES = 10
 SHA_DIVERGENCE_GRACE_MINUTES = 30
 
@@ -535,7 +535,7 @@ def render_markdown(report: dict[str, Any]) -> str:
 def main() -> int:
     repository = os.environ["REPOSITORY"]
     token = os.environ["GITHUB_TOKEN"]
-    source_sha = os.environ.get("GITHUB_SHA", "")
+    source_sha = os.environ.get("EVALUATED_SHA") or os.environ.get("GITHUB_SHA", "")
     if len(source_sha) != 40:
         raise SystemExit("GITHUB_SHA_INVALID")
     owner, name = repository.split("/", 1)
@@ -564,7 +564,7 @@ def main() -> int:
         "pull_requests": pulls_meta,
     }
 
-    out_dir = Path("artifacts/ci-health-regression-watch")
+    out_dir = Path("audit/ci-health-regression-watch")
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "report.json"
     md_path = out_dir / "report.md"
