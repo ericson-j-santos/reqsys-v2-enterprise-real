@@ -11,6 +11,7 @@ on:
       - "scripts/noteri_desktop_network_probe.py"
       - "scripts/noteri_desktop_orchestrator_runner_recovery.py"
       - "scripts/noteri_desktop_dev_http_probe.py"
+      - "scripts/noteri_desktop_orchestrator_status_probe.py"
       - ".github/workflows/noteri-desktop-network-probe.yml"
       - ".github/workflows/reqsys-authorized-actions-gateway.yml"
       - ".github/self-hosted-runner-policy.json"
@@ -19,6 +20,7 @@ on:
       - "tests/test_noteri_desktop_network_probe.py"
       - "tests/test_noteri_desktop_orchestrator_runner_recovery.py"
       - "tests/test_noteri_desktop_dev_http_probe.py"
+      - "tests/test_noteri_desktop_orchestrator_status_probe.py"
 
 permissions:
   contents: read
@@ -30,7 +32,7 @@ concurrency:
 jobs:
   probe:
     name: Diagnose Desktop reachability from Noteri
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref_name != 'main' && !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') && !startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref_name != 'main' && github.ref_name != 'fix/noteri-desktop-network-probe-status-8787-20260929' && !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') && !startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
@@ -105,7 +107,7 @@ jobs:
             "--",
             "pytest", "tests/test_noteri_desktop_network_probe.py", "-q"
           )
-          & python $gateway @args
+          & "$env:REQSYS_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
       - name: Probe fixed Desktop target through Command Gateway
@@ -196,7 +198,7 @@ jobs:
             "--expected-head", "${{ github.sha }}",
             "--sync-ref", "origin/$env:GITHUB_REF_NAME"
           )
-          $raw = & python $launcher @args
+          $raw = & "$env:REQSYS_PYTHON" $launcher @args
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = (@($raw)[-1] | ConvertFrom-Json)
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -384,4 +386,129 @@ jobs:
           name: noteri-desktop-dev-http-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-dev-http\evidence.json
           if-no-files-found: warn
+          retention-days: 30
+
+  orchestrator_status_readback:
+    name: Read Desktop Orchestrator status from Noteri
+    if: ${{ github.event_name == 'push' && github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' }}
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: 641bd1df60befa7310db9200aebc95221bdbee12
+      CORRELATION_ID: desktop-orchestrator-status-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_REL: artifacts\\noteri-desktop-orchestrator-status\\evidence.json
+
+    steps:
+      - name: Checkout immutable diagnostic SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
+          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_sha256_mismatch:$observedHash" }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed Noteri session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) { Add-Content -LiteralPath $pth -Value $rulesScripts }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $args = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "desktop-orchestrator-status",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
+          )
+          $raw = & $env:REQSYS_PYTHON $launcher @args
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Read fixed Desktop :8787 status through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\\noteri_desktop_orchestrator_status_probe.py"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "1",
+            "--timeout", "30",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $script,
+            "--confirm", "PROBE-DESKTOP-ORCHESTRATOR-STATUS",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--evidence-file", $env:EVIDENCE_REL,
+            "--timeout-seconds", "5"
+          )
+          & $env:REQSYS_PYTHON $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Upload sanitized status evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-desktop-orchestrator-status-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\\artifacts\\noteri-desktop-orchestrator-status\\evidence.json
+          if-no-files-found: error
           retention-days: 30
