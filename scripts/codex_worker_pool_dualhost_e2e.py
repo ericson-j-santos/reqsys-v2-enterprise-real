@@ -8,6 +8,7 @@ fora do banco temporário.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import socket
 import sys
@@ -18,10 +19,16 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVICE_ROOT = ROOT / "services" / "codex-worker-pool"
-if str(SERVICE_ROOT) not in sys.path:
-    sys.path.insert(0, str(SERVICE_ROOT))
+STORE_PATH = SERVICE_ROOT / "app" / "store.py"
+STORE_MODULE_NAME = "_reqsys_codex_worker_pool_store"
 
-from app.store import WorkerPoolStore  # noqa: E402
+_store_spec = importlib.util.spec_from_file_location(STORE_MODULE_NAME, STORE_PATH)
+if _store_spec is None or _store_spec.loader is None:
+    raise RuntimeError("worker_pool_store_import_unavailable")
+_store_module = importlib.util.module_from_spec(_store_spec)
+sys.modules[STORE_MODULE_NAME] = _store_module
+_store_spec.loader.exec_module(_store_module)
+WorkerPoolStore = _store_module.WorkerPoolStore
 
 
 MAX_MESSAGE = 4096

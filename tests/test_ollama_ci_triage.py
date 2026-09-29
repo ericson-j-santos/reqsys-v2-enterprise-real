@@ -16,9 +16,15 @@ triage = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(triage)
 
 SERVICE_ROOT = ROOT / "services" / "codex-worker-pool"
-if str(SERVICE_ROOT) not in sys.path:
-    sys.path.insert(0, str(SERVICE_ROOT))
-from app.store import ConflictError, WorkerPoolStore  # noqa: E402
+STORE_PATH = SERVICE_ROOT / "app" / "store.py"
+STORE_MODULE_NAME = "_reqsys_ollama_ci_triage_worker_pool_store"
+STORE_SPEC = importlib.util.spec_from_file_location(STORE_MODULE_NAME, STORE_PATH)
+assert STORE_SPEC and STORE_SPEC.loader
+store_module = importlib.util.module_from_spec(STORE_SPEC)
+sys.modules[STORE_MODULE_NAME] = store_module
+STORE_SPEC.loader.exec_module(store_module)
+ConflictError = store_module.ConflictError
+WorkerPoolStore = store_module.WorkerPoolStore
 
 
 def technical(confidence: float = 0.9) -> dict[str, Any]:
