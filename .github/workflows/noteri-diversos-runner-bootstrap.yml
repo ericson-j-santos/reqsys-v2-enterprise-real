@@ -56,6 +56,7 @@ jobs:
             if (Test-Path -LiteralPath $root) {
               $entries = @(Get-ChildItem -LiteralPath $root -Force -ErrorAction Stop)
               if ($entries.Count -gt 0) { throw "portable_python_root_nonempty_without_runtime" }
+              Remove-Item -LiteralPath $root -Force
             }
             $parent = Split-Path -Parent $root
             New-Item -ItemType Directory -Force $parent | Out-Null
