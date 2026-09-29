@@ -6,7 +6,7 @@ Executar `Public Runtime Evidence Gate` para o DEV PC24x7 após a validação p�
 
 ## Quando executa
 
-1. Automaticamente somente quando `Main Post-Merge Validation` concluir `success` em `main` e o upstream tiver sido acionado por `workflow_dispatch`.
+1. Automaticamente somente quando `Main Post-Merge Validation` concluir `success`, tiver sido acionado por `workflow_dispatch` e o SHA validado for exatamente o SHA atual da `main`.
 2. Manualmente por `workflow_dispatch`, quando necessário.
 
 Runs agendados/report-only do `Main Post-Merge Validation` não disparam esta cadeia.
