@@ -227,7 +227,7 @@ def _register_slot(gh: Path, archive: Path, root: Path, slot: int) -> tuple[Path
             check=False,
         )
     finally:
-        token = ""
+        del token
     if cp.returncode != 0 or not (home / ".runner").is_file():
         raise BridgeError("runner_registration_failed", f"registro do slot {slot} falhou")
     return home, name

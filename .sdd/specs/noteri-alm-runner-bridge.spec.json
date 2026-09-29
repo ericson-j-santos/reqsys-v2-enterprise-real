@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Cria ponte efêmera, específica e fail-closed no Noteri para executar os dois checks do reqsys-powerplatform-alm PR #7 no HEAD exato, sem reduzir gates nem usar minutos hospedados pagos.",
+  "description": "Cria ponte efêmera, específica e fail-closed no Noteri para executar os dois checks do reqsys-powerplatform-alm PR #7 no HEAD exato, usando Python portátil pinado com caminho explícito para os módulos canônicos das regras, sem reduzir gates nem usar minutos hospedados pagos.",
   "scope": {
     "environment": "dev",
     "host": "Noteri",
@@ -29,6 +29,6 @@
       "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Alvo fixo PR #7/HEAD exato; runner oficial 2.337.0 validado por SHA-256; registro efêmero via Owner Risk3; token não persistido/impresso; ambos os workflows exigidos em completed/success; readback independente e replay ALREADY_COMPLIANT."
+    "evidence_contract": "Alvo fixo PR #7/HEAD exato; Python portátil pinado expõe explicitamente _rules/scripts via python312._pth; runner oficial 2.337.0 validado por SHA-256; registro efêmero via Owner Risk3; token não persistido/impresso; cleanup é idempotente quando a sessão não materializa; ambos os workflows exigidos em completed/success; readback independente e replay ALREADY_COMPLIANT."
   }
 }
