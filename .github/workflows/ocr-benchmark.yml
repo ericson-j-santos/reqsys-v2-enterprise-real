@@ -34,8 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
       - name: Instalar dependências mínimas do contrato OCR
@@ -66,10 +66,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout ReqSys
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
@@ -97,7 +97,7 @@ jobs:
 
       - name: Identificar instalação governada do ReqSys
         id: reqsys-app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
@@ -113,7 +113,7 @@ jobs:
 
       - name: Emitir token temporário somente leitura
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
@@ -124,7 +124,7 @@ jobs:
           permission-contents: read
 
       - name: Checkout do OCR privado no SHA pinado
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: ericson-j-santos/ocr-evidence-engine
           ref: ${{ env.OCR_ENGINE_SHA }}
@@ -172,10 +172,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout ReqSys
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
@@ -239,8 +239,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
       - name: Instalar runtime OCR
@@ -252,7 +252,7 @@ jobs:
           python scripts/ocr_benchmark.py --output artifacts/ocr-benchmark.json synthetic --workdir artifacts/ocr-work
       - name: Publicar evidência do benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ocr-benchmark
           path: artifacts/ocr-benchmark.json
@@ -261,8 +261,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
       - name: Instalar runtime do Evidence Gate v2
@@ -277,7 +277,7 @@ jobs:
             --workdir artifacts/ocr-evidence-v2-work
       - name: Publicar evidência sem texto OCR bruto
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ocr-evidence-v2
           path: artifacts/ocr-evidence-v2.json
