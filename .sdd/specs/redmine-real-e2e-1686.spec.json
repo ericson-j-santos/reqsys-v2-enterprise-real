@@ -12,7 +12,8 @@
   "description": "Harness governado para provar o ciclo real ReqSys <-> Redmine DEV da issue #1686 sem persistir segredos na evidência.",
   "sdd_gate": {
     "tests": [
-      "scripts/redmine_lifecycle_real_e2e.py"
+      "scripts/redmine_lifecycle_real_e2e.py",
+      "backend/tests/test_redmine_lifecycle_sync.py"
     ]
   },
   "traceability": {
