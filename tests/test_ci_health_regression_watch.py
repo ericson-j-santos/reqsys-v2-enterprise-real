@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "ci_health_regression_monitor.py"
-WORKFLOW = ROOT / ".github" / "workflows" / "ci-health-regression-watch.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "ci-lead-time-analytics.yml"
 
 SPEC = importlib.util.spec_from_file_location("ci_health_regression_monitor", SCRIPT)
 assert SPEC and SPEC.loader
@@ -197,6 +197,54 @@ class CiHealthRegressionMonitorTests(unittest.TestCase):
         self.assertEqual(evidence["current_head_sha"], current)
         self.assertEqual(evidence["stale_green_head_sha"], stale)
 
+    def test_recent_head_change_does_not_alert_sha_divergence(self):
+        stale = "stale-green"
+        current = "current-head"
+        created = NOW - timedelta(hours=2)
+        rows = [
+            run(451, pr=451, name="CI", sha=stale, created=created),
+            run(452, pr=451, name="Governance", sha=stale, created=created),
+        ]
+        pulls = [
+            pull(
+                451,
+                state="open",
+                head_sha=current,
+                updated=NOW - timedelta(minutes=10),
+            )
+        ]
+        report = self.analyze(rows, pulls)
+        self.assertNotIn("sha_divergence", {item["metric"] for item in report["alerts"]})
+
+    def test_in_progress_current_head_does_not_alert_sha_divergence(self):
+        stale = "stale-green"
+        current = "current-head"
+        created = NOW - timedelta(hours=2)
+        pending = run(
+            463,
+            pr=461,
+            name="CI",
+            sha=current,
+            created=created + timedelta(minutes=30),
+        )
+        pending["status"] = "in_progress"
+        pending["conclusion"] = None
+        rows = [
+            run(461, pr=461, name="CI", sha=stale, created=created),
+            run(462, pr=461, name="Governance", sha=stale, created=created),
+            pending,
+        ]
+        pulls = [
+            pull(
+                461,
+                state="open",
+                head_sha=current,
+                updated=NOW - timedelta(hours=1),
+            )
+        ]
+        report = self.analyze(rows, pulls)
+        self.assertNotIn("sha_divergence", {item["metric"] for item in report["alerts"]})
+
     def test_small_variation_does_not_alert(self):
         rows = []
         for idx in range(3):
@@ -226,18 +274,18 @@ class CiHealthRegressionMonitorTests(unittest.TestCase):
         self.assertFalse(report["material_regression"])
         self.assertEqual(report["alerts"], [])
 
-    def test_workflow_contract_is_scheduled_read_only_on_pr_and_pins_actions(self):
+    def test_workflow_contract_reuses_existing_analytics_and_pins_new_actions(self):
         raw = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("cron: '17 */6 * * *'", raw)
+        self.assertIn("cron: '45 * * * *'", raw)
         self.assertIn("pull_request:", raw)
+        self.assertIn("scripts/ci_health_regression_monitor.py", raw)
+        self.assertIn("tests/test_ci_health_regression_watch.py", raw)
         self.assertIn("issues: write", raw)
         self.assertIn("if: github.event_name != 'pull_request'", raw)
         self.assertIn("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", raw)
-        self.assertIn("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065", raw)
         self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", raw)
         self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", raw)
         self.assertIn("actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b", raw)
-        self.assertNotIn("actions/github-script@v7", raw)
         self.assertIn("reqsys-ci-health-regression-watch", raw)
 
 
