@@ -220,11 +220,28 @@ def test_worker_pool_target_branch_is_retrocompatible_and_idempotent(tmp_path: P
     assert replay_created is False
     assert replay["task_id"] == task["task_id"]
 
-    with pytest.raises(ConflictError, match="target_branch divergente"):
+    with pytest.raises(
+        ConflictError,
+        match="idempotency_key_reused_with_different_task_intent",
+    ):
         store.enqueue_task(
             repository="owner/repo", issue_number=1890, request_id="ci-pr",
             correlation_id="bad-replay", base_sha="a" * 40, target_branch="fix/other",
         )
+
+    with pytest.raises(
+        ConflictError,
+        match="idempotency_key_reused_with_different_task_intent",
+    ):
+        store.enqueue_task(
+            repository="owner/repo", issue_number=1890, request_id="ci-pr",
+            correlation_id="stale-base-replay", base_sha="b" * 40,
+            target_branch="fix/ci-1890",
+        )
+
+    preserved = store.get_task(task["task_id"])
+    assert preserved["base_sha"] == "a" * 40
+    assert preserved["branch"] == "fix/ci-1890"
 
 
 def test_worker_pool_rejects_protected_target_branch(tmp_path: Path) -> None:
