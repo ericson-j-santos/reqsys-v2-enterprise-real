@@ -368,7 +368,7 @@ def find_outlook_reference(
         params={
             "$select": (
                 "connectionreferenceid,connectionreferencelogicalname,"
-                "connectionid,connectorid,displayname,statecode"
+                "connectionid,connectorid,connectionreferencedisplayname,statecode"
             )
         },
     )
@@ -716,7 +716,7 @@ def run_apply(args: argparse.Namespace) -> int:
                 "logical_name": str(
                     ref.get("connectionreferencelogicalname") or ""
                 ),
-                "display_name": str(ref.get("displayname") or ""),
+                "display_name": str(ref.get("connectionreferencedisplayname") or ""),
                 "connector_id": str(ref.get("connectorid") or ""),
                 "bound": bool(ref.get("connectionid")),
             }
