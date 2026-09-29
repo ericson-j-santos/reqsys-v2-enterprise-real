@@ -126,3 +126,40 @@ principal passa a expor o recovery permanente já existente.
    inexistente; ele não é pré-requisito do recovery.
 6. Sucesso terminal exige recovery local válido seguido de pickup físico independente
    no Desktop; sucesso de transporte isolado não conclui a recuperação.
+
+## P0 29/09/2026 — readback somente leitura do Orchestrator `:8787`
+
+Para separar indisponibilidade de rede de ausência de listener/capability sem repetir
+recovery cego, o diagnóstico passa a incluir um readback fixo do Engineering
+Orchestrator já instalado no Desktop.
+
+1. A execução física DEVE ocorrer somente no `Noteri`, no SHA exato, por
+   `Session Launcher → Command Gateway`.
+2. O destino é fixo em `http://DESKTOP-PDQK954:8787`; não há input de host,
+   porta, URL, worker ou task type.
+3. A sonda usa somente `GET /readyz` e `GET /v1/status`, sem corpo mutante,
+   credenciais fornecidas, shell remoto ou leitura de segredos.
+4. O worker alvo é exatamente `desktop-pdqk954`; zero ou múltiplas
+   correspondências não podem ser tratadas como identidade válida.
+5. A evidência registra `ready`, status HTTP, identidade do worker,
+   `fresh`, `eligible`, versão do controller, perfil, capabilities,
+   `runtime_source_sha` e `worker_instance_id`, sem persistir payload bruto.
+6. O SHA esperado do runtime do Orchestrator é fixado no SHA corrente
+   `313f5da4bb0ee9dd70937c238c7cfdf4e3514602`.
+7. O workflow usa Python portátil 3.12.10 fixado por SHA-256 para evitar
+   dependência do Python global do runner e deve chamar Session Launcher e
+   Command Gateway explicitamente por esse interpretador.
+8. A sonda é somente diagnóstico: `ready=true` ou presença de capability não
+   conclui recovery; pickup físico independente do Desktop continua obrigatório.
+9. Falha de conexão/status deve produzir evidência sanitizada e nunca autorizar
+   fallback por WMI, SCM, schtasks, C$, Admin Broker, RDC, SSH, WinRM ou GUI.
+10. O teste `tests/test_noteri_desktop_orchestrator_status_probe.py` deve
+    cobrir identidade fixa, leitura positiva, worker duplicado e contrato do
+    workflow com o Python portátil.
+
+### Critério para avançar
+
+Somente readback atual e inequívoco do `:8787`, no SHA corrente, permite escolher
+entre recovery e bootstrap. Depois da ação escolhida, o critério terminal permanece
+pickup físico independente do runner Desktop, versão/registro/listener comprovados
+e replay idempotente sem nova mutação.
