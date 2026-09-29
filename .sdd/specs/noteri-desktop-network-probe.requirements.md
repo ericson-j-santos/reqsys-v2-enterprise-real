@@ -158,6 +158,9 @@ Orchestrator já instalado no Desktop.
 11. O teste `tests/test_noteri_desktop_orchestrator_status_probe.py` deve
     cobrir identidade fixa, leitura positiva, worker duplicado e contrato do
     workflow com o Python portátil.
+12. O job genérico de network probe DEVE ser ignorado nas branches
+    `fix/noteri-desktop-orchestrator-status-*` para impedir contenção do mesmo
+    runner Noteri e falso `SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY`.
 
 ### Critério para avançar
 
