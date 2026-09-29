@@ -448,7 +448,11 @@ async function createOrUpdateAndActivate(evidenceFile, correlationId) {
   console.log("statecode=1");
 }
 
-async function deactivate(evidenceFile, correlationId) {
+async function deactivate(evidenceFile, correlationId, delaySeconds = 0) {
+  if (delaySeconds > 0) {
+    console.log(`PA_OUTLOOK_E2E_BOUNDED_WAIT seconds=${delaySeconds}`);
+    await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+  }
   const ctx = await context();
   const flow = await findFlow(ctx);
   if (!flow) throw new Error("FLOW_NOT_FOUND_FOR_DEACTIVATION");
@@ -474,6 +478,7 @@ async function deactivate(evidenceFile, correlationId) {
     statecode: readback.statecode,
     production_touched: false,
     secrets_exposed: false,
+    bounded_wait_seconds: delaySeconds,
   };
   fs.mkdirSync(path.dirname(path.resolve(evidenceFile)), { recursive: true });
   fs.writeFileSync(path.resolve(evidenceFile), JSON.stringify(evidence, null, 2) + "\n", "utf8");
@@ -492,7 +497,11 @@ async function main() {
   const correlationId = arg("--correlation-id");
   if (!evidenceFile || !correlationId) throw new Error("REQUIRED_ARGUMENT_MISSING");
   if (mode === "apply") return createOrUpdateAndActivate(evidenceFile, correlationId);
-  if (mode === "deactivate") return deactivate(evidenceFile, correlationId);
+  if (mode === "deactivate") {
+    const delaySeconds = Number(arg("--delay-seconds", "0"));
+    if (!Number.isInteger(delaySeconds) || delaySeconds < 0 || delaySeconds > 600) throw new Error("INVALID_DELAY_SECONDS");
+    return deactivate(evidenceFile, correlationId, delaySeconds);
+  }
   throw new Error(`UNKNOWN_MODE ${mode}`);
 }
 
