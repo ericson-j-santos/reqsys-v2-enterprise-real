@@ -11,6 +11,12 @@ on:
         options:
           - codex-e2e
           - mcp-ingress
+          - change-impact-pr2144
+      target_sha:
+        description: "SHA exato resolvido pelo gateway somente para change-impact-pr2144"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -89,6 +95,137 @@ jobs:
           "- Provider: ollama_gateway" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Primário: gemma4:31b-cloud" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Fallback: gemma4:26b-q8-code" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Deploy executado: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  change-impact-pr2144:
+    name: CHANGE impact benchmark PR #2144 via Ollama on PC24x7 DEV
+    if: inputs.mode == 'change-impact-pr2144'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 25
+    env:
+      CORRELATION_ID: change-impact-pr2144-${{ github.run_id }}-${{ github.run_attempt }}
+      BENCHMARK_FILE: artifacts/change-impact/benchmark-pr2144.json
+      EVIDENCE_FILE: artifacts/change-impact/runtime-evidence-pr2144.json
+    steps:
+      - name: Resolve exact allowed PR head before checkout
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_SHA: ${{ inputs.target_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:REQUESTED_SHA -notmatch "^[0-9a-f]{40}$") { throw "TARGET_SHA_INVALID" }
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2026-03-10"
+            "User-Agent" = "reqsys-change-impact-pr2144"
+          }
+          $pr = Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/pulls/2144" -Headers $headers
+          if ($pr.state -ne "open") { throw "PR2144_NOT_OPEN" }
+          if ($pr.base.ref -ne "main") { throw "PR2144_BASE_NOT_MAIN" }
+          if ($pr.head.repo.full_name -ne $env:GITHUB_REPOSITORY) { throw "PR2144_HEAD_REPOSITORY_MISMATCH" }
+          if ($pr.head.ref -ne "copilot/change-impact-benchmark-20260928") { throw "PR2144_HEAD_BRANCH_MISMATCH" }
+          if ($pr.head.sha -ne $env:REQUESTED_SHA) { throw "PR2144_HEAD_SHA_MISMATCH" }
+          "TARGET_SHA=$env:REQUESTED_SHA" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout exact PR #2144 SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact PR SHA and DEV host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") { throw "UNEXPECTED_HOST" }
+          $observed = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observed -ne $env:TARGET_SHA) { throw "TARGET_SHA_CHECKOUT_MISMATCH" }
+
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
+
+      - name: Install isolated benchmark dependencies
+        shell: powershell
+        run: |
+          & "$env:REQSYS_PYTHON" -m pip install --disable-pip-version-check -r backend/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Execute CHANGE impact benchmark with configured Ollama
+        shell: powershell
+        run: |
+          & "$env:REQSYS_PYTHON" scripts/change_impact_benchmark.py `
+            --output "$env:BENCHMARK_FILE" `
+            --llm-mode configured `
+            --provider ollama_gateway `
+            --require-llm `
+            --correlation-id "$env:CORRELATION_ID"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate benchmark evidence independently
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Test-Path -LiteralPath $env:BENCHMARK_FILE)) { throw "BENCHMARK_ARTIFACT_MISSING" }
+          $payload = Get-Content -Raw -Encoding UTF8 $env:BENCHMARK_FILE | ConvertFrom-Json
+          if ($payload.llm_mode -ne "configured") { throw "BENCHMARK_LLM_MODE_MISMATCH" }
+          if ($payload.llm_used_for_all_cases -ne $true) { throw "BENCHMARK_LLM_NOT_USED_FOR_ALL_CASES" }
+          $hybrid = @($payload.cases | Where-Object { $_.strategy -eq "hybrid_rag_llm" })
+          if ($hybrid.Count -eq 0) { throw "BENCHMARK_HYBRID_CASES_MISSING" }
+          if (@($hybrid | Where-Object { $_.llm_status -ne "used" }).Count -ne 0) { throw "BENCHMARK_HYBRID_NOT_USED" }
+          $observed = (git rev-parse HEAD).Trim()
+          if ($observed -ne $env:TARGET_SHA) { throw "BENCHMARK_SHA_DRIFT" }
+          $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $env:BENCHMARK_FILE).Hash.ToLowerInvariant()
+          $evidence = [ordered]@{
+            schema_version = "1.0.0"
+            status = "passed"
+            target_pr = 2144
+            target_sha = $env:TARGET_SHA
+            observed_sha = $observed
+            correlation_id = $env:CORRELATION_ID
+            llm_mode = $payload.llm_mode
+            llm_used_for_all_cases = [bool]$payload.llm_used_for_all_cases
+            benchmark_sha256 = $digest
+            production_touched = $false
+            deploy_performed = $false
+            secrets_emitted = $false
+          }
+          $directory = Split-Path -Parent $env:EVIDENCE_FILE
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $evidence | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 $env:EVIDENCE_FILE
+
+      - name: Upload sanitized CHANGE impact evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: change-impact-pr2144-${{ github.run_id }}
+          path: |
+            artifacts/change-impact/benchmark-pr2144.json
+            artifacts/change-impact/runtime-evidence-pr2144.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: CHANGE impact summary
+        if: always()
+        shell: powershell
+        run: |
+          "## CHANGE impact benchmark PR #2144" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Target SHA: $env:TARGET_SHA" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Provider: ollama_gateway" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Deploy executado: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
