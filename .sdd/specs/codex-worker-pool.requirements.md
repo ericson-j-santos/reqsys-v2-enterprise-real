@@ -35,6 +35,7 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 27. O pool deve rastrear `last_material_progress_at` separado de heartbeat/lease; heartbeat, polling e renovação de lease não podem atualizar esse marcador. Após o limite configurado sem progresso, deve liberar a capacidade: rerotear quando existir worker alternativo elegível, bloquear quando não existir alternativa e enviar para quarentena ao esgotar tentativas.
 28. A recuperação do arquivo de autenticação DEV deve ser acionada por comando inputless e modo interno fixo `restore` no workflow já existente, sem criar workflow adicional, e ser restrita ao PC24x7 allowlisted; exige bootstrap de sessão no SHA vigente e Owner Risk3 Gateway. Deve reutilizar arquivo válido existente e só gerar novo valor local quando o arquivo estiver ausente ou vazio, sem publicar caminho ou conteúdo do segredo.
 29. O timeout padrão de ausência de progresso material deve ser 300 segundos, alinhado à regra canônica `progress-watchdog`; qualquer valor diferente exige exceção de projeto explícita e testada. Runtime, compose e documentação operacional devem permanecer consistentes com esse default.
+30. Replay pela mesma identidade `repository + issue_number + request_id` só pode convergir para a task existente quando a intenção de enqueue também for idêntica em `priority`, `base_sha`, branch efetiva e `max_attempts`; divergência deve falhar fechado com conflito, sem alterar nem duplicar a task original. `correlation_id` é rastreabilidade e pode variar entre replays equivalentes.
 
 ## Requisitos de qualidade
 
@@ -54,7 +55,8 @@ Consolidar o mecanismo operacional das issues #1767, #1768, #1769, #1770 e #1771
 - teste concorrente entrega uma task para exatamente um Builder;
 - lease expirado volta à fila e pode ser adquirido por outro Builder;
 - falha permanente cria quarentena;
-- replay não cria nova task;
+- replay equivalente não cria nova task e pode usar novo `correlation_id`;
+- replay com a mesma identidade e intenção divergente retorna conflito, mantém exatamente uma task persistida e preserva `priority`, `base_sha`, branch e `max_attempts` originais;
 - Builder/Validator diferentes fecham o fluxo pelo mesmo `produced_sha`;
 - leitura HTTP independente confirma estado final;
 - `lease_token` não aparece em leitura normal/snapshot;
