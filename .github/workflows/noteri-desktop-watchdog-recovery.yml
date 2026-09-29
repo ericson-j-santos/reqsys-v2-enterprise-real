@@ -986,21 +986,7 @@ jobs:
             if ($e.host -ne "Noteri") { throw "HOST_MISMATCH" }
             if ($e.target_repository -ne "ericson-j-santos/reqsys-powerplatform-alm") { throw "TARGET_REPOSITORY_MISMATCH" }
             if ($e.target_pr -ne 7) { throw "TARGET_PR_MISMATCH" }
-            if ($e.expected_head -notmatch '^[0-9a-f]{40}            if (-not $e.independent_readback) { throw "INDEPENDENT_READBACK_MISSING" }
-            if (-not $e.replay_idempotent) { throw "IDEMPOTENCY_MISSING" }
-            if ($e.production_touched -or $e.secrets_read -or $e.token_exposed) { throw "SAFETY_INVARIANT_FAILED" }
-            if ($e.registration_token_persisted -or $e.registration_token_logged) { throw "TOKEN_HANDLING_INVARIANT_FAILED" }
-
-        - name: Upload sanitized ALM bridge evidence
-          if: always() && steps.session.outputs.target_path != ''
-          uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-          with:
-            name: noteri-alm-runner-bridge-${{ github.run_id }}
-            path: ${{ runner.temp }}\\noteri-alm-runner-bridge-${{ github.run_id }}.json
-            if-no-files-found: error
-            retention-days: 30
-
-) { throw "TARGET_HEAD_INVALID" }
+            if ($e.expected_head -notmatch '^[0-9a-f]{40}$') { throw "TARGET_HEAD_INVALID" }
             if ($e.target_branch -ne "diag/outlook-connection-probe-20260928") { throw "TARGET_BRANCH_MISMATCH" }
             if ($e.observed_head_before -ne $e.expected_head -or $e.observed_head_after -ne $e.expected_head) { throw "TARGET_HEAD_MISMATCH" }
             if (-not $e.independent_readback) { throw "INDEPENDENT_READBACK_MISSING" }
