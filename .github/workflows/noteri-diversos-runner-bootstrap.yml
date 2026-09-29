@@ -1,0 +1,183 @@
+name: Noteri Diversos Runner Bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-diversos-runner-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Register repo-scoped diversos runner on Noteri
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      RULES_SHA: 647645855481d4fbe3606fdfa6fbb92d308e25ca
+      CORRELATION_ID: noteri-diversos-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      ACTION_ID: reqsys.noteri-diversos-runner-bootstrap.dev
+      ACTION_SCOPE: repo://ericson-j-santos/diversos/actions/runner/noteri-diversos
+      EVIDENCE_REL: artifacts/noteri-diversos-runner/evidence.json
+      PORTABLE_PYTHON_VERSION: "3.12.10"
+      PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+      PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Assert exact Noteri host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "Noteri") { throw "NOTERI_HOST_MISMATCH:$env:COMPUTERNAME" }
+
+      - name: Prepare stable pinned portable Python
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:LOCALAPPDATA ("ReqSys\PortablePython\" + $env:PORTABLE_PYTHON_VERSION)
+          $python = Join-Path $root "python.exe"
+          $marker = Join-Path $root ".source-sha256"
+          if (Test-Path -LiteralPath $python) {
+            if (-not (Test-Path -LiteralPath $marker)) { throw "portable_python_marker_missing" }
+            $recorded = (Get-Content -Raw -Encoding UTF8 $marker).Trim().ToLowerInvariant()
+            if ($recorded -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_marker_mismatch" }
+            $version = (& $python --version 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $version -ne "Python $env:PORTABLE_PYTHON_VERSION") { throw "portable_python_version_mismatch:$version" }
+          } else {
+            if (Test-Path -LiteralPath $root) {
+              $entries = @(Get-ChildItem -LiteralPath $root -Force -ErrorAction Stop)
+              if ($entries.Count -gt 0) { throw "portable_python_root_nonempty_without_runtime" }
+            }
+            $parent = Split-Path -Parent $root
+            New-Item -ItemType Directory -Force $parent | Out-Null
+            $tempRoot = Join-Path $env:RUNNER_TEMP ("noteri-diversos-python-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+            $zip = "$tempRoot.zip"
+            if (Test-Path -LiteralPath $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force }
+            if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+            New-Item -ItemType Directory -Force $tempRoot | Out-Null
+            Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
+            $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($hash -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_sha256_mismatch:$hash" }
+            Expand-Archive -LiteralPath $zip -DestinationPath $tempRoot -Force
+            $tempPython = Join-Path $tempRoot "python.exe"
+            if (-not (Test-Path -LiteralPath $tempPython)) { throw "portable_python_executable_missing" }
+            $version = (& $tempPython --version 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $version -ne "Python $env:PORTABLE_PYTHON_VERSION") { throw "portable_python_version_mismatch:$version" }
+            Move-Item -LiteralPath $tempRoot -Destination $root
+            [System.IO.File]::WriteAllText($marker, $env:PORTABLE_PYTHON_SHA256 + "`n", [System.Text.UTF8Encoding]::new($false))
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--repo", $env:GITHUB_WORKSPACE,
+            "--session-prefix", "noteri-diversos",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", "${{ github.sha }}",
+            "--require-runner-version-preflight",
+            "--sync-ref", "origin/main"
+          )
+          $raw = & "$env:REQSYS_PYTHON" $launcher @args
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) { throw "SESSION_LAUNCH_BLOCKED" }
+          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Install exact temporary Risk3 authorization
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Push-Location $env:TARGET_PATH
+          try {
+            & "$env:REQSYS_PYTHON" scripts/configure_noteri_diversos_runner_risk3.py --enable --ttl-minutes 30 --confirm ENABLE-NOTERI-DIVERSOS-RUNNER-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+
+      - name: Register and validate runner through Owner Risk3 Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\owner_risk3_gateway.py"
+          $args = @(
+            "--action-id", $env:ACTION_ID,
+            "--scope", $env:ACTION_SCOPE,
+            "--cwd", $env:TARGET_PATH,
+            "--timeout", "420",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          & "$env:REQSYS_PYTHON" $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Remove temporary Risk3 authorization
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+          Push-Location $env:TARGET_PATH
+          try {
+            & "$env:REQSYS_PYTHON" scripts/configure_noteri_diversos_runner_risk3.py --disable --confirm DISABLE-NOTERI-DIVERSOS-RUNNER-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+
+      - name: Validate sanitized physical evidence
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_EVIDENCE" }
+          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          if (-not (Test-Path -LiteralPath $path)) { throw "RUNNER_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+          if (-not $e.ok -or $e.result -ne "NOTERI_DIVERSOS_RUNNER_READY") { throw "RUNNER_NOT_READY" }
+          if ($e.environment -ne "dev") { throw "ENVIRONMENT_MISMATCH" }
+          if ($e.host -ne "Noteri") { throw "HOST_MISMATCH" }
+          if ($e.repository -ne "ericson-j-santos/diversos") { throw "REPOSITORY_MISMATCH" }
+          if ($e.runner_name -ne "Noteri-diversos") { throw "RUNNER_NAME_MISMATCH" }
+          if (-not $e.replay_idempotent) { throw "IDEMPOTENCY_MISSING" }
+          if (-not $e.replay.registry.online) { throw "INDEPENDENT_READBACK_NOT_ONLINE" }
+          if ($e.registration_token_persisted -or $e.registration_token_logged) { throw "REGISTRATION_TOKEN_LEAK_REPORTED" }
+          if ($e.production_touched -or $e.reboot_performed) { throw "SAFETY_INVARIANT_FAILED" }
+
+      - name: Upload sanitized runner evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-diversos-runner-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-diversos-runner\evidence.json
+          if-no-files-found: error
+          retention-days: 30
