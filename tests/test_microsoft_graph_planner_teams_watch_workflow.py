@@ -1,7 +1,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github" / "workflows" / "microsoft-graph-planner-teams-watch.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "scheduled-operational-watch.yml"
 
 
 def text() -> str:
@@ -10,10 +10,12 @@ def text() -> str:
 
 def test_monitor_reuses_existing_operational_schedule_without_new_cron() -> None:
     raw = text()
-    assert "workflow_run:" in raw
-    assert "Scheduled Operational Watch" in raw
-    assert "schedule:" not in raw
-    assert "cron:" not in raw
+    assert "name: Scheduled Operational Watch" in raw
+    assert raw.count("schedule:") == 1
+    assert raw.count("cron:") == 1
+    assert "cron: '0 */4 * * *'" in raw
+    assert "operational-watch:" in raw
+    assert "microsoft-graph-planner-teams-watch:" in raw
 
 
 def test_monitor_scopes_to_official_graph_surfaces_and_state_issue() -> None:

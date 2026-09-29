@@ -12,7 +12,7 @@
   "description": "Monitor oficial e idempotente via GitHub Actions para mudanças materiais do Microsoft Graph que afetem o E2E Planner→Teams.",
   "scope": "planner-teams-microsoft-graph-monitoring",
   "files": [
-    ".github/workflows/microsoft-graph-planner-teams-watch.yml",
+    ".github/workflows/scheduled-operational-watch.yml",
     "tests/test_microsoft_graph_planner_teams_watch_workflow.py",
     ".sdd/specs/microsoft-graph-planner-teams-watch.spec.json",
     ".sdd/specs/microsoft-graph-planner-teams-watch.requirements.md"
@@ -24,7 +24,7 @@
     "tests": [
       "tests/test_microsoft_graph_planner_teams_watch_workflow.py"
     ],
-    "evidence_contract": "No HEAD exato, o workflow reutiliza Scheduled Operational Watch por workflow_run, usa somente fontes oficiais, persiste baseline/deduplicação na issue #2165, não comenta na primeira coleta ou por erro isolado, alerta apenas em mudança material e usa SHAs imutáveis nas Actions externas."
+    "evidence_contract": "No HEAD exato, o monitor está incorporado ao Scheduled Operational Watch e preserva seu único cron de 4 horas, usa somente fontes oficiais, persiste baseline/deduplicação na issue #2165, não comenta na primeira coleta ou por erro isolado, alerta apenas em mudança material e usa SHAs imutáveis nas Actions externas."
   },
   "risk": {
     "production": false,
@@ -34,7 +34,7 @@
     "reboot": false
   },
   "acceptance_criteria": [
-    "Nenhum novo cron é criado.",
+    "Nenhum novo workflow ou cron é criado; o Scheduled Operational Watch existente permanece como superfície canônica.",
     "Primeira coleta sem baseline não gera alerta.",
     "Mudança relevante futura gera comentário único com impacto, risco e adaptação segura.",
     "Erro isolado de fonte não gera alerta material.",

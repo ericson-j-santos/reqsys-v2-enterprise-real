@@ -6,7 +6,7 @@ Monitorar por GitHub Actions, sem custo adicional, mudanças oficiais do Microso
 
 ## Requisitos
 
-1. Reutilizar a cadência do `Scheduled Operational Watch` por `workflow_run`; não criar novo cron.
+1. Incorporar o monitor ao próprio `Scheduled Operational Watch`, preservando o cron existente de 4 horas; não criar novo workflow nem novo cron.
 2. Consultar apenas Microsoft Learn e Microsoft Graph changelog oficiais.
 3. Persistir baseline e deduplicação na issue #2165.
 4. A primeira coleta deve semear baseline sem comentário de alerta.
@@ -20,7 +20,7 @@ Monitorar por GitHub Actions, sem custo adicional, mudanças oficiais do Microso
 
 ## Critérios de aceite
 
-- Testes contratuais provam ausência de novo cron, fontes oficiais, issue durável, fail-closed para alertas e SHAs imutáveis.
+- Testes contratuais provam ausência de novo workflow/cron, preservação do monitor operacional existente, fontes oficiais, issue durável, fail-closed para alertas e SHAs imutáveis.
 - O workflow real sem mudança material semeia/atualiza estado sem comentário de alerta.
 - Uma mudança material futura produz um único comentário na issue #2165.
 - `READY_FOR_PR=passed` deve pertencer ao HEAD exato e a branch deve estar `behind_by=0` antes da abertura da PR.
