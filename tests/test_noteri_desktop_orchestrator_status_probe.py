@@ -20,6 +20,7 @@ def test_contract_is_fixed_and_read_only() -> None:
     assert probe.ENDPOINT == "http://DESKTOP-PDQK954:8787"
     assert probe.TARGET_WORKER == "desktop-pdqk954"
     assert probe.TARGET_RUNTIME_SHA == "313f5da4bb0ee9dd70937c238c7cfdf4e3514602"
+    assert probe.RECOVERY_CORRELATION_PREFIX == "desktop-runner-orchestrator-"
 
     source = SCRIPT.read_text(encoding="utf-8")
     assert 'method="GET"' in source
@@ -76,6 +77,7 @@ def test_positive_readback_is_sanitized_and_current(monkeypatch) -> None:
     assert result["ready"] is True
     assert result["worker_match_count"] == 1
     assert result["runtime_identity_current"] is True
+    assert result["latest_runner_recovery_blocker"] is None
     assert result["refresh_capability_present"] is True
     assert result["bootstrap_capability_present"] is True
     assert "host.github_runner.recover.v1" in result["safe_task_types"]
@@ -84,6 +86,51 @@ def test_positive_readback_is_sanitized_and_current(monkeypatch) -> None:
     assert result["secrets_read"] is False
     assert result["production_touched"] is False
     assert "workers" not in result
+
+
+
+def test_latest_runner_recovery_blocker_is_sanitized(monkeypatch) -> None:
+    monkeypatch.setattr(probe, "require_noteri", lambda: None)
+
+    def fake_request(path: str, timeout_seconds: float):
+        if path == "/readyz":
+            return 200, {"ready": True}
+        return 200, {
+            "workers": {"workers": []},
+            "blockers": [
+                {
+                    "id": "work-1",
+                    "correlation_id": "desktop-runner-orchestrator-36637195975-1",
+                    "target_worker": "builder",
+                    "attempts": 1,
+                    "last_error": (
+                        "MaintenanceError: registered github runner home invalid; "
+                        "missing: C:\\Users\\erics\\runner\\.runner"
+                    ),
+                },
+                {
+                    "id": "other",
+                    "correlation_id": "unrelated-control-plane-1",
+                    "attempts": 2,
+                    "last_error": "unrelated",
+                },
+            ],
+        }
+
+    monkeypatch.setattr(probe, "request_json", fake_request)
+    result = probe.probe(
+        confirm=probe.CONFIRM,
+        correlation_id="desktop-status-blocker-001",
+        timeout_seconds=5.0,
+    )
+
+    blocker = result["latest_runner_recovery_blocker"]
+    assert blocker["work_item_id"] == "work-1"
+    assert blocker["correlation_id"] == "desktop-runner-orchestrator-36637195975-1"
+    assert blocker["attempts"] == 1
+    assert "MaintenanceError" in blocker["last_error"]
+    assert "C:\\Users" not in blocker["last_error"]
+    assert "<path>" in blocker["last_error"]
 
 
 def test_duplicate_worker_is_not_accepted_as_identity(monkeypatch) -> None:
