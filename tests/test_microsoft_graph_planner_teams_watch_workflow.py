@@ -36,9 +36,9 @@ def test_monitor_scopes_to_official_graph_surfaces_and_state_issue() -> None:
 def test_monitor_is_fail_closed_for_alerts_and_idempotent() -> None:
     raw = text()
     assert "if (changes.length)" in raw
-    assert "if (next.rss_initialized)" in raw
+    assert "if (next.rss_initialized && previousWatermark > 0)" in raw
     assert "if (!old) seeded.push(source.id)" in raw
-    assert "if (!seen.has(entry.id))" in raw
+    assert "const recentIds = new Set(next.rss_recent_ids)" in raw
     assert "Source errors detected; no alert is emitted from errors alone." in raw
     assert "Não conceder permissão automaticamente." in raw
     assert "replay sem duplicidade" in raw
@@ -71,3 +71,31 @@ def test_manual_graph_watch_dispatch_is_exact_issue_scoped_and_inputless() -> No
     assert "target='scheduled-operational-watch.yml'" in gateway
     assert "main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml" in gateway
     assert "-f graph_watch" not in gateway
+
+
+def test_rss_replay_uses_watermark_instead_of_truncated_historical_ids() -> None:
+    raw = text()
+    assert "rss_latest_published_ms" in raw
+    assert "rss_recent_ids" in raw
+    assert "previousWatermark > 0" in raw
+    assert "entry.publishedMs > previousWatermark" in raw
+    assert "entry.publishedMs === previousWatermark && !recentIds.has(entry.id)" in raw
+    assert "Migration/baseline: seed the current feed without replaying historical entries." in raw
+    assert "seen_rss_ids.slice(-200)" not in raw
+
+
+def test_rss_material_filter_requires_graph_teams_context_for_authentication() -> None:
+    raw = text()
+    assert "function rssEntryIsMaterial(entry)" in raw
+    assert "const appAuthChange = hasAny(authSignals) && hasAny(graphContextSignals);" in raw
+    assert "'authentication', 'teams'" not in raw
+    assert "'client credential', 'client credentials', 'service principal'" in raw
+    assert "'channelmessage.read', 'channelmessage.send'" in raw
+
+
+def test_rss_state_migration_is_bounded_and_idempotent() -> None:
+    raw = text()
+    assert "schema_version: '1.1'" in raw
+    assert "currentWatermark - (30 * 24 * 60 * 60 * 1000)" in raw
+    assert ").slice(0, 200);" in raw
+    assert "if (next.rss_initialized && previousWatermark > 0)" in raw
