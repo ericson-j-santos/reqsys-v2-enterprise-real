@@ -2,11 +2,6 @@
 name: Fly Automatic Environment Promotion
 
 on:
-  workflow_run:
-    workflows: ["Post-merge Main Runtime Validator"]
-    types: [completed]
-  schedule:
-    - cron: "23 * * * *"
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -37,66 +32,29 @@ jobs:
       should_run: ${{ steps.resolve.outputs.should_run }}
       expected_sha: ${{ steps.resolve.outputs.expected_sha }}
       promote_prod: ${{ steps.resolve.outputs.promote_prod }}
-      dev_provider: ${{ steps.resolve.outputs.dev_provider }}
       reason: ${{ steps.resolve.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Resolve current main, provider and source event
+      - name: Resolve current main and manual request
         id: resolve
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
-          WORKFLOW_EVENT: ${{ github.event.workflow_run.event || '' }}
-          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch || '' }}
-          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha || '' }}
           INPUT_SHA: ${{ inputs.expected_sha || '' }}
           INPUT_PROMOTE_PROD: ${{ inputs.promote_prod }}
-          CONFIGURED_DEV_PROVIDER: ${{ vars.REQSYS_DEV_RUNTIME_PROVIDER || 'fly' }}
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
           current_sha="$(git rev-parse origin/main)"
-          candidate_sha="$current_sha"
-          promote_prod="true"
-          dev_provider="${CONFIGURED_DEV_PROVIDER,,}"
-          reason="current_main"
-
-          case "$dev_provider" in
-            fly|pc24x7) ;;
-            *)
-              echo "::error::REQSYS_DEV_RUNTIME_PROVIDER deve ser fly ou pc24x7; recebido: $dev_provider"
-              exit 1
-              ;;
-          esac
-
-          if [ "$EVENT_NAME" = "workflow_run" ]; then
-            if [ "$WORKFLOW_CONCLUSION" != "success" ] || [ "$WORKFLOW_EVENT" != "push" ] || [ "$WORKFLOW_BRANCH" != "main" ]; then
-              echo "should_run=false" >> "$GITHUB_OUTPUT"
-              echo "expected_sha=$current_sha" >> "$GITHUB_OUTPUT"
-              echo "promote_prod=true" >> "$GITHUB_OUTPUT"
-              echo "dev_provider=$dev_provider" >> "$GITHUB_OUTPUT"
-              echo "reason=source_workflow_not_eligible" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            candidate_sha="$WORKFLOW_SHA"
-            reason="successful_post_merge_validator"
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            candidate_sha="${INPUT_SHA:-$current_sha}"
-            promote_prod="${INPUT_PROMOTE_PROD:-true}"
-            reason="manual_governed_dispatch"
-          else
-            reason="scheduled_reconciliation"
-          fi
+          candidate_sha="${INPUT_SHA:-$current_sha}"
+          promote_prod="${INPUT_PROMOTE_PROD:-true}"
 
           if [ "$candidate_sha" != "$current_sha" ]; then
             echo "should_run=false" >> "$GITHUB_OUTPUT"
             echo "expected_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
             echo "promote_prod=$promote_prod" >> "$GITHUB_OUTPUT"
-            echo "dev_provider=$dev_provider" >> "$GITHUB_OUTPUT"
             echo "reason=stale_sha_superseded_by_main" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -104,36 +62,13 @@ jobs:
           echo "should_run=true" >> "$GITHUB_OUTPUT"
           echo "expected_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
           echo "promote_prod=$promote_prod" >> "$GITHUB_OUTPUT"
-          echo "dev_provider=$dev_provider" >> "$GITHUB_OUTPUT"
-          echo "reason=$reason" >> "$GITHUB_OUTPUT"
-
-  capture-dev:
-    name: Capture DEV via Fly
-    needs: resolve
-    if: needs.resolve.outputs.should_run == 'true' && needs.resolve.outputs.dev_provider == 'fly'
-    uses: ./.github/workflows/fly-environment-evidence-capture.yml
-    with:
-      environment: dev
-      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
-      phase: read_only
-      strict: false
-    secrets: inherit
-
-  promote-dev:
-    name: Promote DEV via Fly when drifted
-    needs: [resolve, capture-dev]
-    if: needs.resolve.outputs.should_run == 'true' && needs.resolve.outputs.dev_provider == 'fly' && needs.capture-dev.outputs.ready != 'true'
-    uses: ./.github/workflows/fly-environment-promotion-stage.yml
-    with:
-      environment: dev
-      expected_sha: ${{ needs.resolve.outputs.expected_sha }}
-    secrets: inherit
+          echo "reason=manual_legacy_stg_prod_promotion" >> "$GITHUB_OUTPUT"
 
   validate-dev-pc24x7:
     name: Validate DEV via PC24x7 public tunnel
     runs-on: ubuntu-latest
     needs: resolve
-    if: needs.resolve.outputs.should_run == 'true' && needs.resolve.outputs.dev_provider == 'pc24x7'
+    if: needs.resolve.outputs.should_run == 'true'
     outputs:
       ready: ${{ steps.verified.outputs.ready }}
       decision: ${{ steps.verified.outputs.decision }}
@@ -247,9 +182,9 @@ jobs:
           retention-days: 90
 
   dev-result:
-    name: DEV promotion result
+    name: DEV validation result
     runs-on: ubuntu-latest
-    needs: [resolve, capture-dev, promote-dev, validate-dev-pc24x7]
+    needs: [resolve, validate-dev-pc24x7]
     if: always() && needs.resolve.outputs.should_run == 'true'
     outputs:
       ready: ${{ steps.result.outputs.ready }}
@@ -258,36 +193,17 @@ jobs:
       - id: result
         shell: bash
         env:
-          DEV_PROVIDER: ${{ needs.resolve.outputs.dev_provider }}
-          CAPTURE_READY: ${{ needs.capture-dev.outputs.ready || 'false' }}
-          PROMOTION_RESULT: ${{ needs.promote-dev.result }}
-          PROMOTION_READY: ${{ needs.promote-dev.outputs.ready || 'false' }}
           PC24X7_RESULT: ${{ needs.validate-dev-pc24x7.result }}
           PC24X7_READY: ${{ needs.validate-dev-pc24x7.outputs.ready || 'false' }}
         run: |
           set -euo pipefail
-          if [ "$DEV_PROVIDER" = "pc24x7" ]; then
-            if [ "$PC24X7_RESULT" = "success" ] && [ "$PC24X7_READY" = "true" ]; then
-              echo "ready=true" >> "$GITHUB_OUTPUT"
-              echo "decision=pc24x7_externally_verified" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "decision=pc24x7_validation_failed" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-          if [ "$CAPTURE_READY" = "true" ]; then
+          if [ "$PC24X7_RESULT" = "success" ] && [ "$PC24X7_READY" = "true" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "decision=already_synchronized" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "$PROMOTION_RESULT" = "success" ] && [ "$PROMOTION_READY" = "true" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "decision=promoted_and_verified" >> "$GITHUB_OUTPUT"
+            echo "decision=pc24x7_externally_verified" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "ready=false" >> "$GITHUB_OUTPUT"
-          echo "decision=dev_promotion_failed" >> "$GITHUB_OUTPUT"
+          echo "decision=pc24x7_validation_failed" >> "$GITHUB_OUTPUT"
           exit 1
 
   capture-stg:
@@ -420,7 +336,7 @@ jobs:
           exit 1
 
   summary:
-    name: Automatic promotion evidence summary
+    name: Legacy promotion evidence summary
     runs-on: ubuntu-latest
     needs: [resolve, dev-result, stg-result, bacen-production, prod-result]
     if: always()
@@ -430,7 +346,7 @@ jobs:
           SHOULD_RUN: ${{ needs.resolve.outputs.should_run || 'false' }}
           REASON: ${{ needs.resolve.outputs.reason || 'unknown' }}
           EXPECTED_SHA: ${{ needs.resolve.outputs.expected_sha || '' }}
-          DEV_PROVIDER: ${{ needs.resolve.outputs.dev_provider || 'unknown' }}
+          DEV_PROVIDER: pc24x7
           DEV_RESULT: ${{ needs.dev-result.result }}
           DEV_DECISION: ${{ needs.dev-result.outputs.decision || 'not_run' }}
           STG_RESULT: ${{ needs.stg-result.result }}
@@ -462,7 +378,7 @@ jobs:
                   "prod": {"job_result": os.environ["PROD_RESULT"], "decision": os.environ["PROD_DECISION"]},
               },
               "bacen_production_allowed": os.environ["BACEN_ALLOWED"] == "true",
-              "automatic_order": ["dev", "hml", "prod"],
+              "promotion_order": ["dev:pc24x7", "hml:fly-legacy", "prod:fly-legacy"],
               "stale_sha_promotion_allowed": False,
               "production_gate_bypass_allowed": False,
           }
@@ -470,7 +386,7 @@ jobs:
           path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           PY
           {
-            echo "## Fly Automatic Environment Promotion"
+            echo "## Fly Automatic Environment Promotion — manual legacy STG/PROD only"
             echo "- SHA: \`$EXPECTED_SHA\`"
             echo "- Resolver: \`$REASON\`"
             echo "- DEV provider: \`$DEV_PROVIDER\`"
