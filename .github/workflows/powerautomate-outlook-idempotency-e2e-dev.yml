@@ -5,25 +5,29 @@ on:
     branches:
       - "ops/powerautomate-outlook-e2e-dev-20260929"
     paths:
-      - "backend/scripts/powerautomate_outlook_idempotency_e2e.py"
+      - "scripts/powerautomate_outlook_idempotency_e2e_oidc.py"
       - ".github/workflows/powerautomate-outlook-idempotency-e2e-dev.yml"
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: powerautomate-outlook-idempotency-e2e-dev
   cancel-in-progress: true
 
 jobs:
-  recover-runner:
-    name: Recover PC24x7 runner from Noteri control plane
-    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+  e2e:
+    name: Power Automate -> Outlook idempotency via GitHub OIDC
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 9
     env:
-      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
-      CORRELATION_ID: pa-outlook-desktop-recovery-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: artifacts\noteri-desktop-orchestrator-runner-recovery\evidence.json
+      POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      POWER_PLATFORM_DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
+      EVIDENCE_DIR: audit/powerautomate-outlook
+      CORRELATION_ID: pa-outlook-oidc-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout immutable source SHA
@@ -33,334 +37,156 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
         with:
-          repository: ericson-j-santos/chatgpt-operational-rules
-          ref: ${{ env.RULES_SHA }}
-          path: _rules
-          fetch-depth: 1
-          persist-credentials: false
+          python-version: "3.12"
 
-      - name: Bootstrap governed Noteri session
-        id: session
-        shell: powershell
+      - name: Install minimal runtime dependency
+        shell: bash
         run: |
-          $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $args = @(
-            "--policy", $policy,
-            "--repo", $env:GITHUB_WORKSPACE,
-            "--session-prefix", "pa-outlook-recover",
-            "--correlation-id", "$env:CORRELATION_ID-bootstrap",
-            "--expected-head", "${{ github.sha }}",
-            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
-          )
-          $raw = & py -3 $launcher @args
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $data = @($raw)[-1] | ConvertFrom-Json
-          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
-            throw "SESSION_LAUNCH_BLOCKED"
-          }
-          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
-          if ([string]$data.host -ne "Noteri") { throw "UNEXPECTED_SOURCE_HOST:$($data.host)" }
-          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
-          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
-          "anchor_sha=${{ github.sha }}" | Add-Content $env:GITHUB_OUTPUT
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check httpx
 
-      - name: Recover Desktop GitHub runner through Command Gateway
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+      - name: Validate immutable implementation contract
+        shell: bash
         run: |
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $script = Join-Path $env:TARGET_PATH "scripts\noteri_desktop_orchestrator_runner_recovery.py"
-          $args = @(
-            "--policy", $policy,
-            "--correlation-id", $env:CORRELATION_ID,
-            "run", "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "2", "--timeout", "120",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "python", $script,
-            "--confirm", "RECOVER-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR",
-            "--correlation-id", $env:CORRELATION_ID,
-            "--evidence-file", $env:EVIDENCE_REL,
-            "--timeout-seconds", "75"
-          )
-          & py -3 $gateway @args
-          exit $LASTEXITCODE
+          set -euo pipefail
+          python -m py_compile scripts/powerautomate_outlook_idempotency_e2e_oidc.py
+          python scripts/powerautomate_outlook_idempotency_e2e_oidc.py --mode self-test
 
-      - name: Upload sanitized runner recovery evidence
-        if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - name: Authenticate ReqSys DEV identity by GitHub OIDC
+        uses: azure/login@v2
         with:
-          name: pa-outlook-desktop-runner-recovery-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\${{ env.EVIDENCE_REL }}
-          if-no-files-found: warn
-          retention-days: 14
+          client-id: ${{ env.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ env.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
 
-  e2e:
-    needs: recover-runner
-    name: Power Automate -> Outlook idempotency on PC24x7 DEV
-    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
-    timeout-minutes: 12
-    env:
-      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
-      CANONICAL_REPO: C:\dev\reqsys-v2-enterprise-real
-      CORRELATION_ID: pa-outlook-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-
-    steps:
-      - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: ericson-j-santos/chatgpt-operational-rules
-          ref: ${{ env.RULES_SHA }}
-          path: _rules
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Bootstrap governed ReqSys session
-        id: session
-        shell: powershell
+      - name: Resolve ephemeral Dataverse token and attest app identity
+        shell: bash
         run: |
-          $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $args = @(
-            "--policy", $policy,
-            "--repo", $env:CANONICAL_REPO,
-            "--session-prefix", "pa-outlook-e2e",
-            "--correlation-id", "$env:CORRELATION_ID-bootstrap",
-            "--expected-head", "${{ github.sha }}",
-            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
-          )
-          $raw = & python $launcher @args
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $data = @($raw)[-1] | ConvertFrom-Json
-          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
-            throw "SESSION_LAUNCH_BLOCKED"
-          }
-          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
-          if ([string]$data.host -ne "DESKTOP-PDQK954") { throw "UNEXPECTED_HOST:$($data.host)" }
-          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
-          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
-          "anchor_sha=${{ github.sha }}" | Add-Content $env:GITHUB_OUTPUT
+          set -euo pipefail
+          token="$(az account get-access-token --resource "$POWER_PLATFORM_DATAVERSE_URL/" --query accessToken -o tsv)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          TOKEN="$token" python - <<'PY'
+          import base64
+          import json
+          import os
 
-      - name: Resolve exact DEV API container through Command Gateway
-        id: container
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $args = @(
-            "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-container",
-            "run", "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "1", "--timeout", "60",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "docker", "ps",
-            "--filter", "label=com.docker.compose.service=api",
-            "--filter", "status=running",
-            "--format", "{{.ID}}|{{.Names}}"
-          )
-          $raw = & python $gateway @args
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $result = @($raw)[-1] | ConvertFrom-Json
-          if ($result.result -ne "command_succeeded") { throw "DOCKER_PS_GATEWAY_FAILED" }
-          $lines = @(([string]$result.stdout).Trim().Split([Environment]::NewLine, [System.StringSplitOptions]::RemoveEmptyEntries))
-          if ($lines.Count -ne 1) { throw "DEV_API_CONTAINER_AMBIGUOUS:$($lines.Count)" }
-          $parts = $lines[0].Split("|", 2)
-          if ($parts.Count -ne 2 -or -not $parts[0] -or -not $parts[1]) { throw "DEV_API_CONTAINER_INVALID" }
-          if ($parts[1].ToLowerInvariant().Contains("prod")) { throw "PRODUCTION_CONTAINER_FORBIDDEN" }
-          "container_id=$($parts[0])" | Add-Content $env:GITHUB_OUTPUT
-          "container_name=$($parts[1])" | Add-Content $env:GITHUB_OUTPUT
+          raw = os.environ["TOKEN"].split(".")[1]
+          raw += "=" * (-len(raw) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(raw).decode("utf-8"))
+          actual = claims.get("appid") or claims.get("azp")
+          expected = os.environ["POWER_PLATFORM_CLIENT_ID"]
+          if actual != expected:
+              raise SystemExit("oidc_app_identity_mismatch")
+          print("OIDC_APP_ID_MATCH=true")
+          PY
+          printf 'POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
 
-      - name: Copy immutable executor into DEV API container
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
-          CONTAINER_ID: ${{ steps.container.outputs.container_id }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $source = Join-Path $env:TARGET_PATH "backend\scripts\powerautomate_outlook_idempotency_e2e.py"
-          $dest = "${env:CONTAINER_ID}:/tmp/reqsys_pa_outlook_e2e.py"
-          $args = @(
-            "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-copy",
-            "run", "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "2", "--timeout", "60",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "docker", "cp", $source, $dest
-          )
-          & python $gateway @args
-          exit $LASTEXITCODE
-
-      - name: Self-test executor inside DEV API container
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
-          CONTAINER_ID: ${{ steps.container.outputs.container_id }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $args = @(
-            "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-selftest",
-            "run", "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "1", "--timeout", "60",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "docker", "exec",
-            "-e", "PYTHONPATH=/app",
-            "-w", "/app",
-            $env:CONTAINER_ID,
-            "python", "/tmp/reqsys_pa_outlook_e2e.py",
-            "--mode", "self-test"
-          )
-          & python $gateway @args
-          exit $LASTEXITCODE
-
-      - name: Execute authorized Power Automate DEV E2E
+      - name: Execute authorized DEV E2E
         id: apply
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
-          CONTAINER_ID: ${{ steps.container.outputs.container_id }}
+        continue-on-error: true
+        shell: bash
         run: |
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $args = @(
-            "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-apply",
-            "run", "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "2", "--timeout", "270",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "docker", "exec",
-            "-e", "PYTHONPATH=/app",
-            "-w", "/app",
-            $env:CONTAINER_ID,
-            "python", "/tmp/reqsys_pa_outlook_e2e.py",
-            "--mode", "apply",
-            "--correlation-id", $env:CORRELATION_ID,
-            "--source-sha", $env:ANCHOR_SHA,
-            "--evidence-file", "/tmp/reqsys-pa-e2e/evidence.json",
-            "--wait-seconds", "180"
-          )
-          & python $gateway @args
-          $code = $LASTEXITCODE
-          "exit_code=$code" | Add-Content $env:GITHUB_OUTPUT
-          if ($code -ne 0) {
-            Write-Host "E2E apply falhou; cleanup governado sera executado antes do job falhar."
-          }
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python scripts/powerautomate_outlook_idempotency_e2e_oidc.py \
+            --mode apply \
+            --dataverse-url "$POWER_PLATFORM_DATAVERSE_URL" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$CORRELATION_ID" \
+            --output "$EVIDENCE_DIR/evidence.json" \
+            --wait-seconds 180
 
-      - name: Force final flow deactivation through Command Gateway
+      - name: Force final flow deactivation
         id: cleanup
-        if: always() && steps.session.outputs.target_path != '' && steps.container.outputs.container_id != ''
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
-          CONTAINER_ID: ${{ steps.container.outputs.container_id }}
+        if: always()
+        continue-on-error: true
+        shell: bash
         run: |
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $args = @(
-            "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-cleanup",
-            "run", "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "2", "--timeout", "90",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "docker", "exec",
-            "-e", "PYTHONPATH=/app",
-            "-w", "/app",
-            $env:CONTAINER_ID,
-            "python", "/tmp/reqsys_pa_outlook_e2e.py",
-            "--mode", "deactivate-only",
-            "--correlation-id", "$env:CORRELATION_ID-cleanup",
-            "--source-sha", $env:ANCHOR_SHA,
-            "--evidence-file", "/tmp/reqsys-pa-e2e/cleanup.json",
-            "--wait-seconds", "60"
-          )
-          & python $gateway @args
-          $code = $LASTEXITCODE
-          "exit_code=$code" | Add-Content $env:GITHUB_OUTPUT
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          if [ -z "${POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN:-}" ]; then
+            echo "Dataverse OIDC token unavailable; no authenticated mutation can have occurred in this run."
+            exit 0
+          fi
+          python scripts/powerautomate_outlook_idempotency_e2e_oidc.py \
+            --mode deactivate-only \
+            --dataverse-url "$POWER_PLATFORM_DATAVERSE_URL" \
+            --source-sha "$GITHUB_SHA" \
+            --correlation-id "$CORRELATION_ID-cleanup" \
+            --output "$EVIDENCE_DIR/cleanup.json" \
+            --wait-seconds 120
 
-      - name: Copy sanitized E2E evidence back to isolated worktree
+      - name: Validate sanitized evidence
         id: evidence
-        if: always() && steps.session.outputs.target_path != '' && steps.container.outputs.container_id != ''
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-          SESSION_ID: ${{ steps.session.outputs.session_id }}
-          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
-          CONTAINER_ID: ${{ steps.container.outputs.container_id }}
+        if: always()
+        continue-on-error: true
+        shell: bash
         run: |
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
-          $dest = Join-Path $env:TARGET_PATH "artifacts"
-          $source = "${env:CONTAINER_ID}:/tmp/reqsys-pa-e2e"
-          $args = @(
-            "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-evidence",
-            "run", "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "2", "--timeout", "60",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "docker", "cp", $source, $dest
-          )
-          & python $gateway @args
-          $code = $LASTEXITCODE
-          "exit_code=$code" | Add-Content $env:GITHUB_OUTPUT
+          set -euo pipefail
+          if [ "${{ steps.apply.outcome }}" = "success" ]; then
+            python - <<'PY'
+            import json
+            import os
+            from pathlib import Path
+
+            evidence = json.loads(
+                Path("audit/powerautomate-outlook/evidence.json").read_text(encoding="utf-8")
+            )
+            cleanup = json.loads(
+                Path("audit/powerautomate-outlook/cleanup.json").read_text(encoding="utf-8")
+            )
+            assert evidence["source_sha"] == os.environ["GITHUB_SHA"], evidence
+            assert evidence["environment"] == "dev", evidence
+            assert evidence["dataverse_url"] == "https://orge9b920f1.crm2.dynamics.com", evidence
+            assert evidence["auth_mode"] == "github_oidc", evidence
+            assert evidence["static_client_secret_used"] is False, evidence
+            assert evidence["production_touched"] is False, evidence
+            assert evidence["two_successful_runs"] is True, evidence
+            assert evidence["cleanup"]["deactivated"] is True, evidence
+            assert cleanup["cleanup"]["deactivated"] is True, cleanup
+            print("POWER_AUTOMATE_OUTLOOK_E2E_EVIDENCE_OK")
+            PY
+          else
+            test -f "$EVIDENCE_DIR/evidence.json"
+            python - <<'PY'
+            import json
+            from pathlib import Path
+
+            evidence = json.loads(
+                Path("audit/powerautomate-outlook/evidence.json").read_text(encoding="utf-8")
+            )
+            assert evidence["production_touched"] is False, evidence
+            if evidence.get("cleanup"):
+                assert evidence["cleanup"].get("deactivated") is True, evidence
+            print("POWER_AUTOMATE_OUTLOOK_E2E_FAILURE_EVIDENCE_PRESERVED")
+            PY
+          fi
 
       - name: Upload sanitized evidence
-        if: always() && steps.session.outputs.target_path != ''
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: powerautomate-outlook-idempotency-e2e-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\artifacts\reqsys-pa-e2e\*.json
+          path: audit/powerautomate-outlook/
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Enforce E2E and cleanup result
+      - name: Clear Azure session
         if: always()
-        shell: powershell
-        env:
-          APPLY_EXIT: ${{ steps.apply.outputs.exit_code }}
-          CLEANUP_EXIT: ${{ steps.cleanup.outputs.exit_code }}
-          EVIDENCE_EXIT: ${{ steps.evidence.outputs.exit_code }}
+        shell: bash
+        run: az account clear || true
+
+      - name: Enforce E2E and cleanup gates
+        if: always()
+        shell: bash
         run: |
-          if ($env:APPLY_EXIT -ne "0") { throw "POWER_AUTOMATE_E2E_FAILED:$env:APPLY_EXIT" }
-          if ($env:CLEANUP_EXIT -ne "0") { throw "POWER_AUTOMATE_CLEANUP_FAILED:$env:CLEANUP_EXIT" }
-          if ($env:EVIDENCE_EXIT -ne "0") { throw "POWER_AUTOMATE_EVIDENCE_COPY_FAILED:$env:EVIDENCE_EXIT" }
-          Write-Host "POWER_AUTOMATE_OUTLOOK_E2E_GOVERNED_OK"
+          set -euo pipefail
+          test "${{ steps.apply.outcome }}" = "success"
+          test "${{ steps.cleanup.outcome }}" = "success"
+          test "${{ steps.evidence.outcome }}" = "success"
+          echo "POWER_AUTOMATE_OUTLOOK_E2E_GOVERNED_OK"
