@@ -14,6 +14,7 @@ from app.services.actions_runtime_monitor import (
 from app.services.operational_deploy import executar_deploy_dev, preparar_deploy_dev
 from app.services.operational_orchestrator import (
     ManifestError,
+    OperationalActionIdentityConflictError,
     OperationalOrchestrator,
     OperationalOrchestratorError,
 )
@@ -186,6 +187,11 @@ def orchestrator_evidence(
 def orchestrator_cycle(body: OrchestratorCycleRequest, user: dict = Depends(require_admin)):
     try:
         result = _operational_orchestrator().run_cycle(sha=body.sha, branch=body.branch)
+    except OperationalActionIdentityConflictError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Chave idempotente reutilizada para outra intenção operacional.',
+        ) from None
     except (ManifestError, OperationalOrchestratorError):
         raise HTTPException(status_code=422, detail='Ciclo operacional invalido.') from None
     result['requested_by'] = user.get('sub')
@@ -219,6 +225,11 @@ def orchestrator_ingest_workflow_run(
             project=body.project,
             environment=body.environment,
         )
+    except OperationalActionIdentityConflictError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Chave idempotente reutilizada para outra intenção operacional.',
+        ) from None
     except OperationalOrchestratorError:
         raise HTTPException(status_code=422, detail='Workflow run invalido para ingestao.') from None
     result['requested_by'] = user.get('sub')

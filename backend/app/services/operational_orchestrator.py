@@ -31,6 +31,10 @@ class ManifestError(OperationalOrchestratorError):
     """Manifesto de readiness inválido."""
 
 
+class OperationalActionIdentityConflictError(OperationalOrchestratorError):
+    """A mesma chave idempotente foi reutilizada para outra intenção operacional."""
+
+
 @dataclass(frozen=True)
 class OperationalAction:
     action_id: str
@@ -86,6 +90,61 @@ def _canonical_json(value: Any) -> str:
 
 def _sha256(value: Any) -> str:
     return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _action_intent(
+    *,
+    source: str,
+    project: str,
+    environment: str,
+    action_type: str,
+    repository: str | None,
+    branch: str | None,
+    sha: str | None,
+    risk: str,
+    executor: str,
+    next_action: str,
+    validation: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "source": source,
+        "project": project,
+        "environment": environment,
+        "action_type": action_type,
+        "repository": repository,
+        "branch": branch,
+        "sha": sha,
+        "risk": risk,
+        "executor": executor,
+        "next_action": next_action,
+        "validation": validation,
+        "payload": payload,
+    }
+
+
+def _persisted_action_intent(action: OperationalAction) -> dict[str, Any]:
+    return _action_intent(
+        source=action.source,
+        project=action.project,
+        environment=action.environment,
+        action_type=action.action_type,
+        repository=action.repository,
+        branch=action.branch,
+        sha=action.sha,
+        risk=action.risk,
+        executor=action.executor,
+        next_action=action.next_action,
+        validation=action.validation,
+        payload=action.payload,
+    )
+
+
+def _assert_same_action_intent(existing: OperationalAction, incoming: dict[str, Any]) -> None:
+    if _persisted_action_intent(existing) != incoming:
+        raise OperationalActionIdentityConflictError(
+            "idempotency_key_reused_with_different_action_intent"
+        )
 
 
 def _assert_safe_metadata(value: Any, *, path: str = "payload") -> None:
@@ -331,6 +390,20 @@ class OperationalStore:
             "payload": payload,
         }
         key = _sha256(material)
+        intent = _action_intent(
+            source=source,
+            project=project,
+            environment=environment,
+            action_type=action_type,
+            repository=repository,
+            branch=branch,
+            sha=sha,
+            risk=risk,
+            executor=executor,
+            next_action=next_action,
+            validation=validation,
+            payload=payload,
+        )
         action_id = f"ACT-{key[:20]}"
         correlation_id = f"REQSYS-ACT-{key[:16]}"
         initial_status = "ready" if risk == "green" else ("awaiting_approval" if risk == "yellow" else "blocked")
@@ -341,7 +414,9 @@ class OperationalStore:
                 "SELECT * FROM actions WHERE idempotency_key = ?", (key,)
             ).fetchone()
             if existing:
-                return self._action_from_row(existing), False
+                existing_action = self._action_from_row(existing)
+                _assert_same_action_intent(existing_action, intent)
+                return existing_action, False
 
             conn.execute(
                 """
