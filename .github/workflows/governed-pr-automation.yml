@@ -352,6 +352,17 @@ jobs:
               return;
             }
 
+            await github.rest.repos.createDispatchEvent({
+              owner,
+              repo,
+              event_type: 'governed_post_merge_validation',
+              client_payload: {
+                pr_number: prNumber,
+                head_sha: triggerHeadSha,
+                merge_sha: result.data.sha,
+              },
+            });
+
             await core.summary
               .addHeading('Governed PR Automation — CI-driven merge')
               .addRaw(
@@ -536,7 +547,7 @@ jobs:
             }
             const headSha = '${{ steps.validate.outputs.head_sha }}';
             const { owner, repo } = context.repo;
-            await github.rest.pulls.merge({
+            const result = await github.rest.pulls.merge({
               owner,
               repo,
               pull_number: prNumber,
@@ -544,4 +555,18 @@ jobs:
               sha: headSha,
               commit_title: `chore: governed merge PR #${prNumber}`,
               commit_message: 'Merge executado por Governed PR Automation apos validacao de gates obrigatorios.',
+            });
+            if (!result.data.merged) {
+              core.setFailed(`GitHub recusou o merge: ${result.data.message || 'sem mensagem'}`);
+              return;
+            }
+            await github.rest.repos.createDispatchEvent({
+              owner,
+              repo,
+              event_type: 'governed_post_merge_validation',
+              client_payload: {
+                pr_number: prNumber,
+                head_sha: headSha,
+                merge_sha: result.data.sha,
+              },
             });
