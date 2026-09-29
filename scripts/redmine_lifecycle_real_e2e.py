@@ -108,9 +108,24 @@ def run() -> dict:
         db.commit()
         db.refresh(req)
         mark("reqsys_put")
-        out1 = sincronizar_requisito_redmine(
-            db, requisito=req, correlation_id=f"{correlation}:put", actor="e2e"
-        )
+        try:
+            out1 = sincronizar_requisito_redmine(
+                db, requisito=req, correlation_id=f"{correlation}:put", actor="e2e"
+            )
+        except Exception as exc:
+            if type(exc).__name__ == "RedmineLifecycleSyncError":
+                desired_diag = montar_campos_requisito_redmine(req)
+                actual_diag = obter_issue_redmine(iid, incluir_journals=False)
+                print(
+                    "REQSYS_REDMINE_E2E_DIAG stage=reqsys_put "
+                    f"subject_match={actual_diag.get('subject') == desired_diag['subject']} "
+                    f"description_match={actual_diag.get('description') == desired_diag['description']} "
+                    f"subject_expected_len={len(desired_diag['subject'])} "
+                    f"subject_actual_len={len(str(actual_diag.get('subject') or ''))} "
+                    f"description_expected_len={len(desired_diag['description'])} "
+                    f"description_actual_len={len(str(actual_diag.get('description') or ''))}"
+                )
+            raise
         assert out1["reqsys_to_redmine"]["applied"]
         mark("reqsys_readback")
         expected = montar_campos_requisito_redmine(req)
