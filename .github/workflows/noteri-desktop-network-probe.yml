@@ -33,7 +33,7 @@ concurrency:
 jobs:
   probe:
     name: Diagnose Desktop reachability from Noteri
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref_name != 'main' && github.ref_name != 'fix/noteri-desktop-network-probe-status-8787-20260929' && !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') && !startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref_name != 'main' && github.ref_name != 'fix/noteri-desktop-network-probe-status-8787-20260929' && !startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-') && !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') && !startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
