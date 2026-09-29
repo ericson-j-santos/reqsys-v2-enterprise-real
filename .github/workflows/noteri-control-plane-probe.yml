@@ -43,6 +43,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Configure Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
       - name: Prove exact host and active runner
         shell: powershell
         run: python scripts/noteri_control_plane_probe.py --confirm PROBE-NOTERI-CONTROL-PLANE --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"

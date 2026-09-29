@@ -62,6 +62,7 @@ A autenticação interativa do GitHub pode exigir ação humana por consentiment
 - governance de self-hosted runner verde;
 - Gateway continua com allowlist estática;
 - workflow sem inputs arbitrários;
+- o probe físico deve provisionar Python 3.12 pinado por SHA imutável antes do primeiro script Python, sem depender da instalação local residual do host;
 - CI do PR verde no SHA atual.
 - E2E físico pré-merge verde no mesmo SHA da branch quando o workflow/probe/watchdog forem alterados; o gatilho deve ser `push` canônico do owner e nunca `pull_request`.
 

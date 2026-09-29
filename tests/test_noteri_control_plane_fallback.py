@@ -170,6 +170,8 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
     assert "--confirm PROBE-NOTERI-CONTROL-PLANE" in workflow
     assert "shell: powershell" in workflow
+    assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in workflow
+    assert 'python-version: "3.12"' in workflow
     assert "shell: pwsh" not in workflow
     assert "workflow_dispatch:" in workflow
     assert "push:" in workflow
