@@ -59,10 +59,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
 
@@ -165,7 +165,7 @@ jobs:
 
       - name: Comentar bloqueio no PR
         if: steps.gate.outputs.exit_code != '0' && hashFiles('artifacts/governed-pr-increment-gate/decision.json') != ''
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const fs = require('fs');
@@ -205,7 +205,7 @@ jobs:
 
       - name: Publicar artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: governed-pr-increment-gate-evidence
           path: artifacts/governed-pr-increment-gate
@@ -229,7 +229,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Revalidar SHA, gates e executar squash merge
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const pullRequests = context.payload.workflow_run.pull_requests || [];
@@ -352,6 +352,17 @@ jobs:
               return;
             }
 
+            await github.rest.repos.createDispatchEvent({
+              owner,
+              repo,
+              event_type: 'governed_post_merge_validation',
+              client_payload: {
+                pr_number: prNumber,
+                head_sha: triggerHeadSha,
+                merge_sha: result.data.sha,
+              },
+            });
+
             await core.summary
               .addHeading('Governed PR Automation — CI-driven merge')
               .addRaw(
@@ -372,10 +383,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
 
@@ -423,7 +434,7 @@ jobs:
 
       - name: Validate PR gates
         id: validate
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
           EXECUTE_MERGE_INPUT: ${{ github.event.inputs.execute_merge }}
@@ -525,7 +536,7 @@ jobs:
 
       - name: Merge PR when explicitly authorized
         if: steps.validate.outputs.eligible == 'true' && steps.validate.outputs.execute_merge == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}
         with:
@@ -536,7 +547,7 @@ jobs:
             }
             const headSha = '${{ steps.validate.outputs.head_sha }}';
             const { owner, repo } = context.repo;
-            await github.rest.pulls.merge({
+            const result = await github.rest.pulls.merge({
               owner,
               repo,
               pull_number: prNumber,
@@ -544,4 +555,18 @@ jobs:
               sha: headSha,
               commit_title: `chore: governed merge PR #${prNumber}`,
               commit_message: 'Merge executado por Governed PR Automation apos validacao de gates obrigatorios.',
+            });
+            if (!result.data.merged) {
+              core.setFailed(`GitHub recusou o merge: ${result.data.message || 'sem mensagem'}`);
+              return;
+            }
+            await github.rest.repos.createDispatchEvent({
+              owner,
+              repo,
+              event_type: 'governed_post_merge_validation',
+              client_payload: {
+                pr_number: prNumber,
+                head_sha: headSha,
+                merge_sha: result.data.sha,
+              },
             });

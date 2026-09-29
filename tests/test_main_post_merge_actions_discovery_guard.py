@@ -37,12 +37,16 @@ def test_main_post_merge_validation_publishes_navigable_evidence_artifact() -> N
     assert "retention-days: 30" in workflow
 
 
-def test_main_post_merge_validation_keeps_report_only_contract() -> None:
+def test_main_post_merge_validation_is_report_only_except_explicit_dispatch() -> None:
     workflow = _workflow_text()
 
-    assert "mode: 'report_only'" in workflow
+    assert "context.eventName === 'workflow_dispatch'" in workflow
+    assert "'blocking_dispatch'" in workflow
+    assert "'report_only'" in workflow
+    assert "Enforce dispatched post-merge gate" in workflow
+    assert "MAIN_POST_MERGE_GATE_NOT_PASSED" in workflow
+    assert "if: always() && github.event_name == 'workflow_dispatch'" in workflow
     assert "core.warning" in workflow
-    assert "if (gate.status !== 'passed')" in workflow
     assert "core.setOutput('status', gate.status)" in workflow
 
 
