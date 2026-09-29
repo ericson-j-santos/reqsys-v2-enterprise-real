@@ -18,6 +18,9 @@ Monitorar por GitHub Actions, sem custo adicional, mudanças oficiais do Microso
 10. Cada execução deve publicar artifact sanitizado.
 11. O alerta deve exigir validação E2E em DEV com `correlation_id` único, caso negativo, caso positivo, readback independente e replay sem duplicidade.
 12. O disparo manual de validação deve usar exclusivamente o Authorized Actions Gateway na issue #1705 com o comando exato `/reqsys run microsoft-graph-planner-teams-watch`, mapeado sem inputs ao `scheduled-operational-watch.yml` em `main`; nenhum workflow, ref ou parâmetro arbitrário pode vir do comentário.
+13. A deduplicação do RSS deve usar watermark de publicação e IDs recentes limitados; truncar uma lista histórica de IDs não pode fazer entradas antigas reaparecerem como novas.
+14. A migração do estado RSS legado deve semear o watermark atual sem alerta; o replay do mesmo feed deve permanecer sem comentário.
+15. Mudanças genéricas de método de autenticação de usuário não são materiais por si só; alterações de autenticação só entram no alerta quando houver contexto de Microsoft Graph/Teams, credenciais de aplicação, service principal, token/OAuth, consentimento ou permissões relevantes.
 
 ## Critérios de aceite
 
