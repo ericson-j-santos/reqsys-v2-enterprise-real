@@ -12,8 +12,9 @@ DEV é sempre validado no PC24x7 pelo locator assinado. Fly não é permitido em
 2. Confirme que `Validate DEV via PC24x7 public tunnel` terminou verde.
 3. Consulte a decisão do estágio HML/PROD interrompido.
 4. Baixe o artifact `fly-environment-evidence-<ambiente>-<fase>` quando HML/PROD forem executados.
-5. Corrija somente a causa raiz indicada.
-6. Reexecute manualmente com o SHA atual da `main`.
+5. Inspecione `decision.json` e `blocking_issues`; o diagnóstico continua artifact-driven e fail-closed.
+6. Corrija somente a causa raiz indicada.
+7. Reexecute manualmente com o SHA atual da `main`.
 
 ## Bloqueios esperados
 
