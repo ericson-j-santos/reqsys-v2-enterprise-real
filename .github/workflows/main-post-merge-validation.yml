@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: Build main post-merge evidence
         id: evidence
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const fs = require('fs');
@@ -192,15 +192,19 @@ jobs:
               gate.status = 'pending_timeout';
             }
 
+            const mode = context.eventName === 'workflow_dispatch'
+              ? 'blocking_dispatch'
+              : 'report_only';
+
             const audit = {
-              schema_version: '1.3.0',
+              schema_version: '1.4.0',
               generated_at: new Date().toISOString(),
               repository: `${owner}/${repo}`,
               branch: 'main',
               validated_sha: mainSha,
               event_name: context.eventName,
               run_id: context.runId,
-              mode: 'report_only',
+              mode,
               gate,
               workflow_runs: runs,
             };
@@ -229,9 +233,9 @@ jobs:
               gate.warnings.length ? gate.warnings.map((warning) => `- ${warning}`).join('\n') : '- None',
               '',
               '## Policy',
-              '- Report-only monitor: evidence gaps are surfaced in artifacts without breaking this workflow.',
-              '- Blocking remains delegated to explicit required CI and quality gates.',
-              '- Pending timeout is evidence-only and does not block merge when required CI remains delegated.',
+              `- Execution mode: ${mode}.`,
+              '- Push and schedule remain report-only monitors.',
+              '- workflow_dispatch is fail-closed when the evidence gate is not passed.',
             ].join('\n'));
 
             core.setOutput('validated_sha', mainSha);
@@ -242,14 +246,14 @@ jobs:
             }
 
       - name: Checkout validated main SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ steps.evidence.outputs.validated_sha }}
           fetch-depth: 2
           persist-credentials: false
 
       - name: Setup Python for exact-SHA security validation
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
 
@@ -342,9 +346,21 @@ jobs:
 
       - name: Upload main validation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: main-post-merge-validation-${{ steps.evidence.outputs.validated_sha || github.sha }}
           path: audit/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Enforce dispatched post-merge gate
+        if: always() && github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GATE_STATUS: ${{ steps.evidence.outputs.status }}
+        run: |
+          set -euo pipefail
+          if [[ "$GATE_STATUS" != "passed" ]]; then
+            echo "::error::MAIN_POST_MERGE_GATE_NOT_PASSED status=$GATE_STATUS"
+            exit 1
+          fi
