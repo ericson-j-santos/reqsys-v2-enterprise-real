@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: powerautomate-outlook-idempotency-e2e-dev
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   recover-runner:
