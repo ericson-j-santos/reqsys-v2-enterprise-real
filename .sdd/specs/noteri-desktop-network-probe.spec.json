@@ -58,6 +58,22 @@
       "gateway_command": "/reqsys run desktop-runner-recover-via-orchestrator",
       "watchdog_mode": "runner-recover",
       "bootstrap_required": false
+    },
+    "orchestrator_status_readback": {
+      "source_host": "Noteri",
+      "target_host": "DESKTOP-PDQK954",
+      "endpoint": "http://DESKTOP-PDQK954:8787",
+      "methods": [
+        "GET /readyz",
+        "GET /v1/status"
+      ],
+      "target_worker": "desktop-pdqk954",
+      "expected_runtime_sha": "313f5da4bb0ee9dd70937c238c7cfdf4e3514602",
+      "script": "scripts/noteri_desktop_orchestrator_status_probe.py",
+      "execution_control": "Session Launcher -> Command Gateway",
+      "python_runtime": "portable Python 3.12.10 pinned by SHA-256",
+      "mutating": false,
+      "arbitrary_target": false
     }
   },
   "security": {
@@ -83,7 +99,9 @@
       "schtasks",
       "c$",
       "admin_broker"
-    ]
+    ],
+    "orchestrator_status_mutation": false,
+    "orchestrator_status_credentials": false
   },
   "evidence_contract": {
     "states": [
@@ -121,6 +139,17 @@
       "independent_readback",
       "exact_target_host",
       "exact_task_type"
+    ],
+    "orchestrator_status_artifact": "artifacts/noteri-desktop-orchestrator-status/evidence.json",
+    "orchestrator_status_required": [
+      "ready_http_status",
+      "ready",
+      "status_http_status",
+      "worker_match_count",
+      "runtime_source_sha",
+      "worker_instance_id",
+      "safe_task_types",
+      "runtime_identity_current"
     ]
   },
   "sdd_gate": {
@@ -129,14 +158,15 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py",
       "tests/test_noteri_desktop_dev_http_probe.py",
-      "tests/test_noteri_desktop_orchestrator_runner_recovery.py"
+      "tests/test_noteri_desktop_orchestrator_runner_recovery.py",
+      "tests/test_noteri_desktop_orchestrator_status_probe.py"
     ],
     "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
   },
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-28",
+  "updated_at": "2026-09-29",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -150,7 +180,8 @@
     "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
     "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
-    "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório."
+    "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório.",
+    "O readback do Orchestrator usa apenas GET /readyz e GET /v1/status no DESKTOP-PDQK954:8787, fixa worker e runtime SHA, executa pelo Python portátil pinado e nunca substitui o pickup físico independente do Desktop."
   ],
   "hotfix_issue": 2088
 }
