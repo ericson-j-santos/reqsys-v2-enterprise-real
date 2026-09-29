@@ -45,12 +45,6 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Prepare Python 3.12 for governed bootstrap
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
       - name: Bootstrap mandatory governed session
         id: session
         shell: powershell
@@ -58,6 +52,8 @@ jobs:
           $ErrorActionPreference = "Stop"
           $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $pythonExe = "C:\Users\erics\AppData\Local\ReqSys\NoteriGitHubRunner\_work\_tool\Python\3.12.10\x64\python.exe"
+          if (-not (Test-Path -LiteralPath $pythonExe)) { throw "GOVERNED_PYTHON_UNAVAILABLE" }
           $anchorSha = "${{ github.sha }}"
           $launcherArgs = @(
             "--policy", $policy,
@@ -67,7 +63,7 @@ jobs:
             "--expected-head", $anchorSha,
             "--sync-ref", "origin/$env:GITHUB_REF_NAME"
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & $pythonExe $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -77,6 +73,7 @@ jobs:
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+          "governed_python=$pythonExe" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Validate implementation contract through Command Gateway
         shell: powershell
@@ -84,6 +81,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          GOVERNED_PYTHON: ${{ steps.session.outputs.governed_python }}
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -98,9 +96,9 @@ jobs:
             "--timeout", "90",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "pytest", "tests/test_ia_que_trabalha_neural_tts.py", "-q"
+            $env:GOVERNED_PYTHON, "tests/test_ia_que_trabalha_neural_tts.py"
           )
-          & python $gateway @args
+          & "$env:GOVERNED_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
       - name: Generate neural voice candidates through Command Gateway
@@ -109,6 +107,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          GOVERNED_PYTHON: ${{ steps.session.outputs.governed_python }}
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -126,13 +125,13 @@ jobs:
             "--timeout", "850",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $script,
+            $env:GOVERNED_PYTHON, $script,
             "--confirm", "GENERATE-IA-QUE-TRABALHA-NEURAL-TTS",
             "--expected-sha", $env:ANCHOR_SHA,
             "--output-root", $output,
             "--evidence", $evidence
           )
-          & python $gateway @args
+          & "$env:GOVERNED_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
       - name: Independent readback through Command Gateway
@@ -141,6 +140,7 @@ jobs:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+          GOVERNED_PYTHON: ${{ steps.session.outputs.governed_python }}
         run: |
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
@@ -158,12 +158,12 @@ jobs:
             "--timeout", "120",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $validator,
+            $env:GOVERNED_PYTHON, $validator,
             "--expected-sha", $env:ANCHOR_SHA,
             "--output-root", $output,
             "--evidence", $evidence
           )
-          & python $gateway @args
+          & "$env:GOVERNED_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
       - name: Upload neural TTS artifact
