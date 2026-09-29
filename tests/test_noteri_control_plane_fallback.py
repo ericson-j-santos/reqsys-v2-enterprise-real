@@ -199,6 +199,7 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "REQSYS_PYTHON" in workflow
     assert '& "$env:REQSYS_PYTHON" scripts/noteri_control_plane_probe.py' in workflow
     assert '& "$env:REQSYS_PYTHON" "$env:GITHUB_WORKSPACE\\noteri-runtime-source\\scripts\\noteri_runtime_isolated_e2e.py"' in workflow
+    assert 'python "$env:GITHUB_WORKSPACE\\noteri-runtime-source\\scripts\\noteri_runtime_isolated_e2e.py"' not in workflow
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-control-plane-probe.yml" in policy["approved_workflows"]
 
