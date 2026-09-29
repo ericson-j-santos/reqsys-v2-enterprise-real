@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Noteri ALM Runner Bridge",
+  "status": "implemented_pending_ci",
+  "owner": "Runtime Platform / PC24x7",
+  "scope": {
+    "environment": "dev",
+    "host": "Noteri",
+    "repository": "ericson-j-santos/reqsys-powerplatform-alm",
+    "pull_request": 7,
+    "expected_head": "96966d8decc210a98eefa7f0ca437052e8bd5a21"
+  },
+  "implementation": [
+    "scripts/noteri_alm_runner_bridge.py",
+    "scripts/configure_noteri_alm_runner_bridge_risk3.py",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml"
+  ],
+  "tests": [
+    "tests/test_noteri_alm_runner_bridge.py",
+    "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
+    "tests/test_reqsys_authorized_actions_gateway.py"
+  ],
+  "evidence_contract": {
+    "exact_target": true,
+    "ephemeral_runner": true,
+    "independent_readback": true,
+    "replay_idempotent": true,
+    "registration_token_persisted": false,
+    "registration_token_logged": false,
+    "production_touched": false
+  },
+  "acceptance_criteria": [
+    "Pre-PR Readiness retorna READY_FOR_PR=passed no HEAD exato e behind_by=0.",
+    "O bootstrap físico executa no Noteri via Session Launcher e Owner Risk3 Gateway.",
+    "Os dois workflows do PR #7 concluem success no HEAD exato.",
+    "Replay já conforme retorna ALREADY_COMPLIANT sem novo registro."
+  ]
+}
