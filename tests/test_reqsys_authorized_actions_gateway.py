@@ -540,3 +540,15 @@ def test_gateway_desktop_one_time_reboot_dev_is_exact_inputless_and_fail_closed(
     assert "-f target_host=" not in content
     assert "-f action_id=" not in content
     assert "-f command=" not in content
+
+
+def test_gateway_noteri_diversos_runner_bootstrap_is_exact_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run noteri-diversos-runner-bootstrap'" in content
+    assert "'/reqsys run noteri-diversos-runner-bootstrap')" in content
+    assert "target='noteri-diversos-runner-bootstrap.yml'" in content
+    assert "noteri-diversos-runner-bootstrap.yml|main-post-merge-validation.yml" in content
+    assert "steps.route.outputs.target == 'noteri-diversos-runner-bootstrap.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f repository=diversos" not in content
+    assert "-f runner=Noteri-diversos" not in content
