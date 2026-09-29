@@ -7,6 +7,7 @@ on:
 permissions:
   actions: write
   contents: read
+  pull-requests: read
 
 concurrency:
   group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}
@@ -39,6 +40,7 @@ jobs:
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap' ||
         github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e' ||
         github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
+        github.event.comment.body == '/reqsys run change-impact-benchmark-pr2144' ||
         github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
         github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev' ||
@@ -143,6 +145,10 @@ jobs:
             '/reqsys run codex-ollama-e2e-dev')
               target='codex-ollama-e2e-dev.yml'
               mode='codex-e2e'
+              ;;
+            '/reqsys run change-impact-benchmark-pr2144')
+              target='codex-ollama-e2e-dev.yml'
+              mode='change-impact-pr2144'
               ;;
             '/reqsys run github-copilot-ollama-mcp-ingress-dev')
               target='codex-ollama-e2e-dev.yml'
@@ -264,6 +270,36 @@ jobs:
           test -n "$sha"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve exact PR #2144 workload SHA
+        id: change_impact_target
+        if: steps.route.outputs.mode == 'change-impact-pr2144'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/2144")"
+          PR_JSON="$pr_json" python - <<'PY'
+          import json, os, re
+          pr = json.loads(os.environ["PR_JSON"])
+          if pr.get("state") != "closed":
+              raise SystemExit("change_impact_pr2144_not_closed")
+          if pr.get("merged") is not True:
+              raise SystemExit("change_impact_pr2144_not_merged")
+          if (pr.get("base") or {}).get("ref") != "main":
+              raise SystemExit("change_impact_pr2144_base_mismatch")
+          head = pr.get("head") or {}
+          if ((head.get("repo") or {}).get("full_name")) != os.environ["GITHUB_REPOSITORY"]:
+              raise SystemExit("change_impact_pr2144_repo_mismatch")
+          if head.get("ref") != "copilot/change-impact-benchmark-20260928":
+              raise SystemExit("change_impact_pr2144_branch_mismatch")
+          sha = str(pr.get("merge_commit_sha") or "")
+          if not re.fullmatch(r"[0-9a-f]{40}", sha):
+              raise SystemExit("change_impact_pr2144_merge_sha_invalid")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"sha={sha}\n")
+          PY
+
       - name: Dispatch fixed workflow on main
         id: dispatch
         shell: bash
@@ -272,6 +308,7 @@ jobs:
           TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
           TARGET_MODE: ${{ steps.route.outputs.mode }}
           EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          CHANGE_IMPACT_TARGET_SHA: ${{ steps.change_impact_target.outputs.sha }}
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
@@ -317,13 +354,25 @@ jobs:
               -f timeout_seconds=20)"
           elif [ "$TARGET_WORKFLOW" = "codex-ollama-e2e-dev.yml" ]; then
             case "$TARGET_MODE" in
-              codex-e2e|mcp-ingress) ;;
+              codex-e2e|mcp-ingress)
+                run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --ref main \
+                  -f mode="$TARGET_MODE")"
+                ;;
+              change-impact-pr2144)
+                case "$CHANGE_IMPACT_TARGET_SHA" in
+                  ''|*[!0-9a-f]*) echo 'change_impact_target_sha_invalid' >&2; exit 3 ;;
+                esac
+                [ "${#CHANGE_IMPACT_TARGET_SHA}" -eq 40 ] || { echo 'change_impact_target_sha_invalid_length' >&2; exit 3; }
+                run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --ref main \
+                  -f mode="$TARGET_MODE" \
+                  -f target_sha="$CHANGE_IMPACT_TARGET_SHA")"
+                ;;
               *) echo 'codex_ollama_mode_not_allowlisted' >&2; exit 3 ;;
             esac
-            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
-              --repo "$GITHUB_REPOSITORY" \
-              --ref main \
-              -f mode="$TARGET_MODE")"
           elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "restore" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
@@ -536,6 +585,7 @@ jobs:
           TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
           TARGET_MODE: ${{ steps.route.outputs.mode }}
           EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          CHANGE_IMPACT_TARGET_SHA: ${{ steps.change_impact_target.outputs.sha }}
           TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
           TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
           TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
@@ -559,6 +609,7 @@ jobs:
               'target_mode': os.environ.get('TARGET_MODE') or 'default',
               'target_ref': 'main',
               'target_sha': os.environ['EXPECTED_SHA'],
+              'workload_sha': os.environ.get('CHANGE_IMPACT_TARGET_SHA') or None,
               'target_run_id': int(os.environ['TARGET_RUN_ID']),
               'target_run_url': os.environ['TARGET_RUN_URL'],
               'target_run_status': os.environ['TARGET_RUN_STATUS'],

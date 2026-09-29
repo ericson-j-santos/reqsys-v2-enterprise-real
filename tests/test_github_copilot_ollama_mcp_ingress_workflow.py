@@ -15,10 +15,12 @@ def test_canonical_workflow_reuses_dev_runner_with_closed_mcp_mode() -> None:
     assert 'default: "codex-e2e"' in raw
     assert "- codex-e2e" in raw
     assert "- mcp-ingress" in raw
+    assert "- change-impact-pr2144" in raw
     assert "if: inputs.mode == 'mcp-ingress'" in raw
+    assert "if: inputs.mode == 'change-impact-pr2144'" in raw
     assert "runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]" in raw
     assert "actions/setup-python@" not in raw
-    assert raw.count("Get-Command python -CommandType Application -ErrorAction Stop") == 2
+    assert raw.count("Get-Command python -CommandType Application -ErrorAction Stop") == 3
     assert 'REQSYS_PYTHON=$pythonExe' in raw
     assert '& "$env:REQSYS_PYTHON" scripts/pc24x7_ollama_mcp_funnel.py' in raw
     assert "pc24x7_ollama_mcp_funnel.py" in raw
