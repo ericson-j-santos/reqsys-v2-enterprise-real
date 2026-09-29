@@ -2,7 +2,7 @@
   "feature_name": "github-copilot-ollama-mcp-ingress",
   "project": "ReqSys v2 Enterprise — Codex Local / Ollama",
   "created_at": "2026-09-23",
-  "updated_at": "2026-09-23",
+  "updated_at": "2026-09-28",
   "phase": "implementation_pending_physical_e2e",
   "increment_type": "gap_fix",
   "approvals": {
@@ -18,7 +18,7 @@
     "Consentimento de Funnel ausente é classificado sem interação automática.",
     "A CLI do Tailscale é resolvida sem depender do PATH interativo: caminho explícito válido, descoberta no PATH do serviço ou diretórios locais conhecidos; ausência resulta em TAILSCALE_CLI_NOT_FOUND.",
     "Caminho explícito TAILSCALE_CLI_PATH inexistente falha fechado e não permite fallback silencioso.",
-    "O workflow canônico codex-ollama-e2e-dev.yml preserva codex-e2e e aceita apenas codex-e2e ou mcp-ingress, sem criar novo workflow.",
+    "O workflow canônico codex-ollama-e2e-dev.yml preserva codex-e2e e mcp-ingress e aceita adicionalmente somente change-impact-pr2144, sem criar novo workflow e sem permitir modo/SHA arbitrário.",
     "No runner self-hosted PC24x7, o workflow reutiliza o Python provisionado, valida o executável antes do uso e não usa actions/setup-python para instalar ou alterar o runtime do host.",
     "Os testes de workflow impedem a reintrodução de actions/setup-python e comprovam o uso de REQSYS_PYTHON nos caminhos codex-e2e e mcp-ingress.",
     "O Authorized Actions Gateway mapeia o comando exato de MCP ingress para o modo mcp-ingress e mantém pickup/cancelamento fail-closed.",
