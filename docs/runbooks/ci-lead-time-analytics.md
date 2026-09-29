@@ -178,3 +178,19 @@ O `Pre-PR Readiness Gate` trata exclusivamente `HEAD == origin/main`, `behind_by
 ### Semântica de duração em reruns
 
 Para `run_attempt=1`, minutos observados usam `created_at → updated_at`. Em `run_attempt>1`, usam `run_started_at → updated_at`. O GitHub mantém `created_at` do disparo original quando um workflow é reexecutado; usar esse timestamp em reruns contabilizaria indevidamente o intervalo parado entre tentativas como tempo ativo de CI. A taxa de rerun continua sendo derivada de `run_attempt>1`.
+
+
+## Monitor de regressão material — janela móvel de 14 dias
+
+O próprio `CI Lead Time Analytics` executa `scripts/ci_health_regression_monitor.py`; não existe workflow adicional para o monitor. A coleta usa uma janela móvel de 14 dias, dividida em 7 dias anteriores e 7 dias recentes.
+
+Sinais monitorados:
+
+- tempo até primeira falha nos workflows bloqueantes: alerta somente com pelo menos 3 amostras por metade, piora de pelo menos 120 segundos e 25%;
+- reruns no mesmo run/HEAD (`run_attempt > 1`): alerta somente com pelo menos 20 runs por metade, piora de pelo menos 5 pontos percentuais e 25% relativo;
+- falso verde pós-merge: exige HEAD exato do PR verde e falha real no `merge_commit_sha` exato; cancelamento não é falha pós-merge;
+- divergência de SHA: compara o HEAD atual do PR com SHA verde anterior, mas não alerta nos primeiros 30 minutos após atualização nem enquanto houver run do HEAD atual em fila ou execução.
+
+A coleta falha fechada quando não consegue cobrir toda a janela dentro dos limites configurados. O relatório é persistido em `audit/ci-health-regression-watch/` junto ao artifact já existente do analytics.
+
+Em `main`, uma issue marcada por `reqsys-ci-health-regression-watch` representa o episódio ativo. Ela é criada apenas quando existe regressão material, é atualizada apenas quando a assinatura do episódio muda e é fechada sem comentário quando todos os sinais materiais desaparecem. Cada alerta contém tendência, evidência atual por run/SHA, impacto, risco e a menor correção sistêmica segura e idempotente.
