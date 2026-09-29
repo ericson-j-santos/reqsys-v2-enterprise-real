@@ -50,6 +50,7 @@ jobs:
         github.event.comment.body == '/reqsys run desktop-one-time-reboot-dev' ||
         github.event.comment.body == '/reqsys run desktop-runner-recover-via-orchestrator' ||
         github.event.comment.body == '/reqsys run desktop-runner-bootstrap-via-orchestrator' ||
+        github.event.comment.body == '/reqsys run noteri-alm-runner-bootstrap' ||
         github.event.comment.body == '/reqsys run desktop-runner-pickup-canary' ||
         github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev' ||
         github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
@@ -182,6 +183,10 @@ jobs:
             '/reqsys run desktop-runner-bootstrap-via-orchestrator')
               target='noteri-desktop-watchdog-recovery.yml'
               mode='runner-bootstrap'
+              ;;
+            '/reqsys run noteri-alm-runner-bootstrap')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='alm-runner-bootstrap'
               ;;
             '/reqsys run desktop-runner-pickup-canary')
               target='noteri-desktop-watchdog-recovery.yml'
@@ -344,7 +349,7 @@ jobs:
           elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
             case "$TARGET_MODE" in
               default) recovery_mode='watchdog' ;;
-              runner-recover|runner-bootstrap|runner-canary|reboot-once) recovery_mode="$TARGET_MODE" ;;
+              runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
               *) echo 'desktop_runner_recovery_mode_not_allowlisted' >&2; exit 3 ;;
             esac
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
