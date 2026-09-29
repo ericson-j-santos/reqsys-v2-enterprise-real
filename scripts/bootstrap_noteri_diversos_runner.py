@@ -177,9 +177,11 @@ def runner_config_matches(root: Path) -> bool:
     lowered = {str(key).casefold(): value for key, value in data.items()}
     url = str(lowered.get("githuburl") or "").rstrip("/")
     name = str(lowered.get("agentname") or "")
-    if url and url.casefold() != REPOSITORY_URL.casefold():
+    if not url or not name:
+        raise BootstrapError("runner_config_identity_missing")
+    if url.casefold() != REPOSITORY_URL.casefold():
         raise BootstrapError("runner_registered_to_other_repository")
-    if name and name.casefold() != RUNNER_NAME.casefold():
+    if name.casefold() != RUNNER_NAME.casefold():
         raise BootstrapError("runner_name_mismatch")
     return True
 
