@@ -17,10 +17,11 @@ Monitorar por GitHub Actions, sem custo adicional, mudanças oficiais do Microso
 9. Actions externas devem usar SHA imutável.
 10. Cada execução deve publicar artifact sanitizado.
 11. O alerta deve exigir validação E2E em DEV com `correlation_id` único, caso negativo, caso positivo, readback independente e replay sem duplicidade.
+12. O disparo manual de validação deve usar exclusivamente o Authorized Actions Gateway na issue #1705 com o comando exato `/reqsys run microsoft-graph-planner-teams-watch`, mapeado sem inputs ao `scheduled-operational-watch.yml` em `main`; nenhum workflow, ref ou parâmetro arbitrário pode vir do comentário.
 
 ## Critérios de aceite
 
 - Testes contratuais provam ausência de novo workflow/cron, preservação do monitor operacional existente, fontes oficiais, issue durável, fail-closed para alertas e SHAs imutáveis.
-- O workflow real sem mudança material semeia/atualiza estado sem comentário de alerta.
+- O workflow real sem mudança material semeia/atualiza estado sem comentário de alerta; o mesmo caminho pode ser disparado de forma governada pelo comando exato da issue #1705.
 - Uma mudança material futura produz um único comentário na issue #2165.
 - `READY_FOR_PR=passed` deve pertencer ao HEAD exato e a branch deve estar `behind_by=0` antes da abertura da PR.
