@@ -26,11 +26,11 @@ Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indispo
 17. A evidência produzida no worktree deve ser validada antes do upload: origem Noteri, destino DESKTOP-PDQK954, `EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED`, sem criação/alteração de tarefa, segredo, credencial ou produção.
 18. No Noteri, `${{ github.workspace }}` é somente a fonte transitória exata do Session Launcher; as regras ficam em `_rules` e a execução técnica deve ser materializada pelo launcher em worktree governado sob `C:\\dev\\chatgpt-workers`, sem depender de clone persistente `C:\\dev\\reqsys-v2-enterprise-real`.
 19. O script de recuperação deve ser resolvido a partir do `target_path` retornado pelo Session Launcher, não da raiz do workspace.
-20. Antes de qualquer invocação Python, cada modo físico deve validar o interpretador Python pré-instalado (`Get-Command python`, caminho existente e execução bem-sucedida) e deve falhar fechado se ele estiver indisponível; `actions/setup-python` é proibido nesses runners para evitar mutação/instalação do host durante recovery.\n21. Os modos `watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary` devem usar `session_launcher.py --require-runner-version-preflight`, registrando a versão real do GitHub Actions runner antes do Command Gateway.
+20. Antes de qualquer invocação Python, cada modo físico deve preparar CPython 3.12.10 embeddable x64 oficial em `RUNNER_TEMP`, baixado de `python.org`, validado pelo SHA-256 `4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3` antes da extração e executado diretamente sem instalador, registro, toolcache, UAC ou dependência do PATH do host. `actions/setup-python` permanece proibido nesses runners de recovery.\n21. Os modos `watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary` devem usar `session_launcher.py --require-runner-version-preflight`, registrando a versão real do GitHub Actions runner antes do Command Gateway.
 
 ## Critérios de aceite
 
-- workflow valida o Python pré-instalado sem instalar runtime no host e executa no Noteri após sessão válida, por Command Gateway risco 2;
+- workflow usa Python 3.12.10 embeddable oficial validado por SHA-256, sem instalar runtime no host, e executa no Noteri após sessão válida, por Command Gateway risco 2;
 - checkout transitório aceito somente como fonte do bootstrap, com execução posterior no worktree governado e sem dependência de `C:\\dev\\reqsys-v2-enterprise-real` no Noteri;
 - consulta encontra a tarefa exata;
 - AtStartup + S4U são comprovados;
