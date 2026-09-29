@@ -74,6 +74,8 @@ def test_change_impact_pr2144_mode_is_pr_bound_and_fail_closed() -> None:
 
     assert "- change-impact-pr2144" in raw
     assert "target_sha:" in raw
+    assert "actions/checkout@v4" not in raw
+    assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 3
     assert "pull-requests: read" in raw
     assert "pulls/2144" in raw
     assert 'copilot/change-impact-benchmark-20260928' in raw
