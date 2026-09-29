@@ -317,8 +317,9 @@ def build_clientdata(logical_name: str) -> dict[str, Any]:
 def self_test() -> None:
     payload = build_clientdata("reqsys_sharedoffice365_test")
     actions = payload["properties"]["definition"]["actions"]
+    create_action = actions["Pass1_create_if_missing"]["actions"]["Create_event_V4"]
     assert (
-        actions["Create_event_V4"]["inputs"]["host"]["operationId"]
+        create_action["inputs"]["host"]["operationId"]
         == "V4CalendarPostItem"
     )
     assert (
