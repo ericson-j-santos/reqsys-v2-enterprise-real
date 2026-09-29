@@ -149,6 +149,9 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 6
     assert raw.count("Get-FileHash -LiteralPath $zip -Algorithm SHA256") == 6
     assert raw.count("REQSYS_PYTHON=$python") == 6
+    assert raw.count("python312._pth") == 6
+    assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 6
+    assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 6
     assert raw.count("--require-runner-version-preflight") == 5
     assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 6
 
