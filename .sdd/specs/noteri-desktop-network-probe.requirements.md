@@ -149,11 +149,13 @@ Orchestrator já instalado no Desktop.
 7. O workflow usa Python portátil 3.12.10 fixado por SHA-256 para evitar
    dependência do Python global do runner e deve chamar Session Launcher e
    Command Gateway explicitamente por esse interpretador.
-8. A sonda é somente diagnóstico: `ready=true` ou presença de capability não
+8. A execução no Command Gateway usa risco 2 exclusivamente porque a sonda grava
+   o artifact sanitizado no worktree; a operação remota permanece somente leitura.
+9. A sonda é somente diagnóstico: `ready=true` ou presença de capability não
    conclui recovery; pickup físico independente do Desktop continua obrigatório.
-9. Falha de conexão/status deve produzir evidência sanitizada e nunca autorizar
+10. Falha de conexão/status deve produzir evidência sanitizada e nunca autorizar
    fallback por WMI, SCM, schtasks, C$, Admin Broker, RDC, SSH, WinRM ou GUI.
-10. O teste `tests/test_noteri_desktop_orchestrator_status_probe.py` deve
+11. O teste `tests/test_noteri_desktop_orchestrator_status_probe.py` deve
     cobrir identidade fixa, leitura positiva, worker duplicado e contrato do
     workflow com o Python portátil.
 
