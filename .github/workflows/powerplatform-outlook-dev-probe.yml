@@ -6,6 +6,7 @@ on:
       - "ops/power-automate-outlook-probe-*"
     paths:
       - "scripts/powerplatform_outlook_connection_probe.cjs"
+      - "scripts/powerautomate_outlook_idempotency_e2e.cjs"
       - ".github/workflows/powerplatform-outlook-dev-probe.yml"
 
 permissions:
@@ -17,13 +18,13 @@ concurrency:
 
 jobs:
   probe:
-    name: Probe Outlook connection reference via governed Noteri
+    name: Validate Outlook/Power Automate DEV prerequisites via governed Noteri
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 8
     env:
       RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
       CORRELATION_ID: powerplatform-outlook-dev-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: artifacts\\powerplatform-outlook-dev\\evidence.json
+      PROBE_EVIDENCE_REL: .tmp\\powerplatform-outlook-dev\\probe.json
 
     steps:
       - name: Checkout immutable source SHA
@@ -68,65 +69,70 @@ jobs:
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=${{ github.sha }}" | Add-Content $env:GITHUB_OUTPUT
 
-      - name: Validate probe contract through Command Gateway
+      - name: Self-test Outlook connection probe through Command Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
         run: |
-          $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
           $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.cjs"
           $args = @(
-            "--policy", $policy,
-            "--correlation-id", "$env:CORRELATION_ID-selftest",
-            "run",
-            "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "1",
-            "--timeout", "60",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "node", $script, "--self-test"
+            "--policy", $policy, "--correlation-id", "$env:CORRELATION_ID-probe-selftest",
+            "run", "--cwd", $env:TARGET_PATH, "--session-id", $env:SESSION_ID,
+            "--risk", "1", "--timeout", "60", "--expected-head", $env:ANCHOR_SHA,
+            "--", "node", $script, "--self-test"
           )
           & py -3 $gateway @args
           exit $LASTEXITCODE
 
-      - name: Probe DEV through Command Gateway
+      - name: Self-test Power Automate E2E definition through Command Gateway
         shell: powershell
         env:
           TARGET_PATH: ${{ steps.session.outputs.target_path }}
           SESSION_ID: ${{ steps.session.outputs.session_id }}
           ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
         run: |
-          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\\powerautomate_outlook_idempotency_e2e.cjs"
+          $args = @(
+            "--policy", $policy, "--correlation-id", "$env:CORRELATION_ID-flow-selftest",
+            "run", "--cwd", $env:TARGET_PATH, "--session-id", $env:SESSION_ID,
+            "--risk", "1", "--timeout", "60", "--expected-head", $env:ANCHOR_SHA,
+            "--", "node", $script, "--mode", "self-test"
+          )
+          & py -3 $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Probe Power Platform DEV through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
           $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.cjs"
           $args = @(
-            "--policy", $policy,
-            "--correlation-id", $env:CORRELATION_ID,
-            "run",
-            "--cwd", $env:TARGET_PATH,
-            "--session-id", $env:SESSION_ID,
-            "--risk", "2",
-            "--timeout", "90",
-            "--expected-head", $env:ANCHOR_SHA,
-            "--",
-            "node", $script,
-            "--evidence-file", $env:EVIDENCE_REL,
+            "--policy", $policy, "--correlation-id", $env:CORRELATION_ID,
+            "run", "--cwd", $env:TARGET_PATH, "--session-id", $env:SESSION_ID,
+            "--risk", "1", "--timeout", "90", "--expected-head", $env:ANCHOR_SHA,
+            "--", "node", $script,
+            "--evidence-file", $env:PROBE_EVIDENCE_REL,
             "--correlation-id", $env:CORRELATION_ID
           )
           & py -3 $gateway @args
           exit $LASTEXITCODE
 
-      - name: Upload sanitized evidence
+      - name: Upload sanitized prerequisite evidence
         if: always() && steps.session.outputs.target_path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: powerplatform-outlook-dev-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\\artifacts\\powerplatform-outlook-dev\\evidence.json
+          name: powerplatform-outlook-dev-prerequisites-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\\.tmp\\powerplatform-outlook-dev\\probe.json
           if-no-files-found: warn
           retention-days: 14
