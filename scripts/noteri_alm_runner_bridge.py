@@ -322,7 +322,7 @@ def main() -> int:
                 "status": "ALREADY_COMPLIANT",
                 "independent_readback": True,
                 "replay_idempotent": True,
-                "observed_head_after": before,
+                "observed_head_after": expected_head,
                 "workflow_state_after": initial,
             })
             _write_evidence(evidence_path, evidence)
