@@ -38,7 +38,7 @@ def test_external_ocr_dependency_is_pinned_to_immutable_sha() -> None:
 def test_governed_app_requests_only_read_access_to_exact_repositories() -> None:
     token_step = _step("app-token")
 
-    assert token_step["uses"] == "actions/create-github-app-token@v2"
+    assert token_step["uses"] == "actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349"
     assert token_step["with"]["permission-contents"] == "read"
     assert token_step["with"]["repositories"].splitlines() == [
         "reqsys-v2-enterprise-real",
