@@ -253,3 +253,54 @@ def test_sync_detecta_falso_positivo_quando_put_nao_persiste(db_session, monkeyp
             correlation_id='corr-redmine-false-positive',
             actor='tester',
         )
+
+def test_sync_normaliza_crlf_do_redmine_e_mantem_replay_idempotente(
+    db_session,
+    monkeypatch,
+):
+    requisito = _requisito_com_redmine(db_session, 'REQ-168600006')
+    stale = _remote_issue(requisito, atualizado=False)
+    normalized = _remote_issue(requisito, atualizado=True)
+    normalized['description'] = normalized['description'].replace('\n', '\r\n')
+    reads = [stale, normalized]
+    updates = []
+
+    monkeypatch.setattr(
+        sync,
+        'obter_issue_redmine',
+        lambda *_args, **_kwargs: reads.pop(0),
+    )
+    monkeypatch.setattr(
+        sync,
+        'atualizar_issue_redmine',
+        lambda issue_id, campos: updates.append((issue_id, campos.copy())) or campos,
+    )
+
+    first = sync.sincronizar_requisito_redmine(
+        db_session,
+        requisito=requisito,
+        correlation_id='corr-redmine-crlf-first',
+        actor='tester',
+    )
+
+    assert first['reqsys_to_redmine']['applied'] is True
+    assert sorted(first['reqsys_to_redmine']['changed_fields']) == ['description', 'subject']
+    assert len(updates) == 1
+
+    monkeypatch.setattr(
+        sync,
+        'obter_issue_redmine',
+        lambda *_args, **_kwargs: normalized,
+    )
+    second = sync.sincronizar_requisito_redmine(
+        db_session,
+        requisito=requisito,
+        correlation_id='corr-redmine-crlf-replay',
+        actor='tester',
+    )
+
+    assert second['reqsys_to_redmine']['planned'] is False
+    assert second['reqsys_to_redmine']['applied'] is False
+    assert second['mutation_count'] == 0
+    assert len(updates) == 1
+
