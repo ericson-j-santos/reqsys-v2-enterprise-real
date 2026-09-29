@@ -112,6 +112,35 @@ def test_worker_must_advertise_recovery_capability() -> None:
         recovery.require_desktop_worker(requester)
 
 
+def test_terminal_failure_uses_allowlisted_error_code() -> None:
+    with pytest.raises(
+        recovery.RecoveryError,
+        match=(
+            "runner_recovery_terminal_BLOQUEADO:"
+            "github_runner_recovery_target_not_found"
+        ),
+    ):
+        recovery.validate_completed(
+            {
+                "status": "BLOQUEADO",
+                "last_error": "MaintenanceError: github runner recovery target not found",
+            }
+        )
+
+
+def test_terminal_failure_does_not_persist_arbitrary_error_text() -> None:
+    with pytest.raises(
+        recovery.RecoveryError,
+        match="runner_recovery_terminal_BLOQUEADO:terminal_error_unclassified",
+    ):
+        recovery.validate_completed(
+            {
+                "status": "BLOQUEADO",
+                "last_error": "unexpected local diagnostic detail",
+            }
+        )
+
+
 def test_positive_recovery_replay_and_independent_readback(tmp_path: Path) -> None:
     requester = FakeControlPlane()
     evidence = tmp_path / "evidence.json"
