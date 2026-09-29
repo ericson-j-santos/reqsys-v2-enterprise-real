@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 SCRIPT = ROOT / "scripts" / "ci_health_regression_monitor.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "ci-lead-time-analytics.yml"
 
