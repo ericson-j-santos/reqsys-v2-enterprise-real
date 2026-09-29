@@ -11,12 +11,18 @@ import json
 from collections import deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from app.services.ai_provider_router import AIProviderRouter
 from app.services.rag_governado import DocumentoRAG, recuperar_fontes_semanticas
 
 LlmGenerate = Callable[[str, str], str]
+
+
+class ImpactChange(Protocol):
+    change_id: str
+    query: str
+    seed_artifact_ids: tuple[str, ...]
 
 
 class ChangeImpactValidationError(ValueError):
@@ -64,6 +70,29 @@ class HistoricalChange:
             raise ChangeImpactValidationError("ground_truth não pode ser vazio")
         object.__setattr__(self, "seed_artifact_ids", seeds)
         object.__setattr__(self, "ground_truth", truth)
+
+
+@dataclass(frozen=True, slots=True)
+class LiveChange:
+    """Mudança operacional avaliada sobre a rastreabilidade viva."""
+
+    change_id: str
+    query: str
+    seed_artifact_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.change_id.strip() or not self.query.strip():
+            raise ChangeImpactValidationError("change_id e query devem ser informados")
+        seeds = tuple(
+            dict.fromkeys(
+                str(item).strip()
+                for item in self.seed_artifact_ids
+                if str(item).strip()
+            )
+        )
+        if not seeds:
+            raise ChangeImpactValidationError("ao menos um seed_artifact_id é obrigatório")
+        object.__setattr__(self, "seed_artifact_ids", seeds)
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,8 +165,168 @@ def validate_dataset(
     return artifact_tuple, change_tuple
 
 
+def _traceability_graph_uri(graph: dict[str, Any]) -> str:
+    requirement = graph.get("requirement")
+    if not isinstance(requirement, dict):
+        raise ChangeImpactValidationError("grafo sem requirement válido")
+    requirement_id = requirement.get("id")
+    if requirement_id is None:
+        raise ChangeImpactValidationError("grafo sem requirement.id")
+    return f"/v1/rastreabilidade/requisitos/{requirement_id}/grafo"
+
+
+def artifacts_from_traceability_graph(
+    graph: dict[str, Any],
+    *,
+    include_rejected_evidence: bool = False,
+) -> tuple[ImpactArtifact, ...]:
+    """Converte o grafo vivo em artefatos consumíveis pelo Impact Engine.
+
+    Por padrão, arestas rejeitadas ficam fora do conjunto operacional para que
+    evidência inválida continue diagnosticável no grafo sem validar impacto.
+    """
+
+    if graph.get("graph_type") != "functional_traceability_graph":
+        raise ChangeImpactValidationError("graph_type incompatível")
+    nodes = graph.get("nodes")
+    edges = graph.get("edges")
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        raise ChangeImpactValidationError("grafo exige nodes[] e edges[]")
+
+    node_map: dict[str, dict[str, Any]] = {}
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise ChangeImpactValidationError("node inválido no grafo")
+        node_id = str(node.get("id") or "").strip()
+        if not node_id:
+            raise ChangeImpactValidationError("node sem id")
+        if node_id in node_map:
+            raise ChangeImpactValidationError(f"node id duplicado: {node_id}")
+        node_map[node_id] = node
+
+    links_by_source: dict[str, list[str]] = {node_id: [] for node_id in node_map}
+    included_ids: set[str] = set()
+    accepted_statuses = {"reference", "verified"}
+    if include_rejected_evidence:
+        accepted_statuses.add("rejected")
+
+    for edge in edges:
+        if not isinstance(edge, dict):
+            raise ChangeImpactValidationError("edge inválida no grafo")
+        source = str(edge.get("source") or "").strip()
+        target = str(edge.get("target") or "").strip()
+        relation = str(edge.get("relation") or "").strip()
+        status = str(edge.get("evidence_status") or "").strip().lower()
+        if not source or not target or not relation:
+            raise ChangeImpactValidationError("edge sem source, target ou relation")
+        if source not in node_map or target not in node_map:
+            raise ChangeImpactValidationError(
+                f"edge referencia node inexistente: {source}->{target}"
+            )
+        if status not in {"reference", "verified", "rejected"}:
+            raise ChangeImpactValidationError(
+                f"evidence_status inválido: {status or 'missing'}"
+            )
+        if status not in accepted_statuses:
+            continue
+        included_ids.update((source, target))
+        links_by_source[source].append(target)
+
+    requirement = graph.get("requirement") or {}
+    requirement_code = str(requirement.get("code") or "").strip()
+    requirement_node_id = f"requirement:{requirement_code}" if requirement_code else ""
+    if requirement_node_id in node_map:
+        included_ids.add(requirement_node_id)
+
+    graph_uri = _traceability_graph_uri(graph)
+    artifacts: list[ImpactArtifact] = []
+    for node_id in sorted(included_ids):
+        node = node_map[node_id]
+        metadata = node.get("metadata")
+        if metadata is None:
+            metadata = {}
+        if not isinstance(metadata, dict):
+            raise ChangeImpactValidationError(f"metadata inválido em {node_id}")
+        kind = str(node.get("type") or "").strip()
+        label = str(node.get("label") or "").strip()
+        if not kind or not label:
+            raise ChangeImpactValidationError(f"node incompleto: {node_id}")
+        source_uri = str(node.get("source_uri") or "").strip() or graph_uri
+        text = json.dumps(
+            {
+                "id": node_id,
+                "type": kind,
+                "label": label,
+                "metadata": metadata,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
+        artifacts.append(
+            ImpactArtifact(
+                artifact_id=node_id,
+                kind=kind,
+                text=text,
+                source_uri=source_uri,
+                links=tuple(sorted(set(links_by_source[node_id]))),
+            )
+        )
+    if not artifacts:
+        raise ChangeImpactValidationError("grafo não possui rastreabilidade elegível")
+    return tuple(artifacts)
+
+
+def analyze_live_change(
+    graph: dict[str, Any],
+    *,
+    change_id: str,
+    query: str,
+    llm_generate: LlmGenerate | None,
+    seed_artifact_ids: Iterable[str] | None = None,
+    graph_depth: int = 2,
+    semantic_top_k: int = 6,
+    correlation_id: str | None = None,
+) -> tuple[StrategyResult, StrategyResult, StrategyResult]:
+    """Executa análise de impacto usando apenas candidatos do grafo vivo."""
+
+    artifacts = artifacts_from_traceability_graph(graph)
+    known = {artifact.artifact_id for artifact in artifacts}
+
+    if seed_artifact_ids is None:
+        requirement = graph.get("requirement") or {}
+        requirement_code = str(requirement.get("code") or "").strip()
+        seeds = (f"requirement:{requirement_code}",) if requirement_code else ()
+    else:
+        seeds = tuple(seed_artifact_ids)
+
+    change = LiveChange(
+        change_id=change_id,
+        query=query,
+        seed_artifact_ids=seeds,
+    )
+    missing_seeds = sorted(set(change.seed_artifact_ids) - known)
+    if missing_seeds:
+        raise ChangeImpactValidationError(
+            "seeds ausentes da rastreabilidade viva: " + ", ".join(missing_seeds)
+        )
+
+    return (
+        graph_candidates(change, artifacts, max_depth=graph_depth),
+        semantic_candidates(change, artifacts, top_k=semantic_top_k),
+        hybrid_candidates(
+            change,
+            artifacts,
+            llm_generate=llm_generate,
+            graph_depth=graph_depth,
+            semantic_top_k=semantic_top_k,
+            correlation_id=correlation_id,
+        ),
+    )
+
+
 def graph_candidates(
-    change: HistoricalChange,
+    change: ImpactChange,
     artifacts: Iterable[ImpactArtifact],
     *,
     max_depth: int = 2,
@@ -179,7 +368,7 @@ def graph_candidates(
 
 
 def semantic_candidates(
-    change: HistoricalChange,
+    change: ImpactChange,
     artifacts: Iterable[ImpactArtifact],
     *,
     top_k: int = 6,
@@ -329,7 +518,7 @@ def _parse_llm_candidates(
 
 
 def hybrid_candidates(
-    change: HistoricalChange,
+    change: ImpactChange,
     artifacts: Iterable[ImpactArtifact],
     *,
     llm_generate: LlmGenerate | None,
