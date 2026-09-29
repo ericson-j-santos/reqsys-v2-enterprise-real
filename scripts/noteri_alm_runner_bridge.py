@@ -292,6 +292,7 @@ def main() -> int:
     }
     processes: list[subprocess.Popen[bytes]] = []
     runtime_root: Path | None = None
+    evidence_path: Path | None = None
     try:
         evidence_path = _resolve_evidence_path()
         evidence["host"] = _validate_host()
@@ -359,7 +360,8 @@ def main() -> int:
         evidence["status"] = "BLOCKED"
         evidence["reason"] = exc.state
         evidence["error"] = str(exc)[:500]
-        _write_evidence(evidence_path, evidence)
+        if evidence_path is not None:
+            _write_evidence(evidence_path, evidence)
         _emit({"ok": False, "status": "BLOCKED", "reason": exc.state})
         return 5
     except Exception as exc:
@@ -367,7 +369,8 @@ def main() -> int:
         evidence["reason"] = "unexpected_error"
         evidence["error_type"] = type(exc).__name__
         evidence["error"] = str(exc)[:500]
-        _write_evidence(evidence_path, evidence)
+        if evidence_path is not None:
+            _write_evidence(evidence_path, evidence)
         _emit({"ok": False, "status": "BLOCKED", "reason": "unexpected_error"})
         return 2
     finally:
