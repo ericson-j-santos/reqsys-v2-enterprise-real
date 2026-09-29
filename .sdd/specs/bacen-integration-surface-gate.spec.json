@@ -16,7 +16,8 @@
     "scripts/validate_bacen_integration_surfaces.py",
     "scripts/pre_pr_readiness.py",
     "tests/test_validate_bacen_integration_surfaces.py",
-    ".sdd/specs/bacen-integration-surface-gate.spec.json"
+    ".sdd/specs/bacen-integration-surface-gate.spec.json",
+    ".sdd/specs/bacen-integration-surface-gate.requirements.md"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
