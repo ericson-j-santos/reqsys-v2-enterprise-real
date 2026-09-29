@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,9 +17,15 @@ triage = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(triage)
 
 SERVICE_ROOT = ROOT / "services" / "codex-worker-pool"
-if str(SERVICE_ROOT) not in sys.path:
-    sys.path.insert(0, str(SERVICE_ROOT))
-from app.store import ConflictError, WorkerPoolStore  # noqa: E402
+STORE_PATH = SERVICE_ROOT / "app" / "store.py"
+STORE_MODULE_NAME = "_reqsys_ollama_ci_triage_worker_pool_store"
+STORE_SPEC = importlib.util.spec_from_file_location(STORE_MODULE_NAME, STORE_PATH)
+assert STORE_SPEC and STORE_SPEC.loader
+store_module = importlib.util.module_from_spec(STORE_SPEC)
+sys.modules[STORE_MODULE_NAME] = store_module
+STORE_SPEC.loader.exec_module(store_module)
+ConflictError = store_module.ConflictError
+WorkerPoolStore = store_module.WorkerPoolStore
 
 
 def technical(confidence: float = 0.9) -> dict[str, Any]:
@@ -214,11 +221,44 @@ def test_worker_pool_target_branch_is_retrocompatible_and_idempotent(tmp_path: P
     assert replay_created is False
     assert replay["task_id"] == task["task_id"]
 
-    with pytest.raises(ConflictError, match="target_branch divergente"):
+    with pytest.raises(
+        ConflictError,
+        match="idempotency_key_reused_with_different_task_intent",
+    ):
         store.enqueue_task(
             repository="owner/repo", issue_number=1890, request_id="ci-pr",
             correlation_id="bad-replay", base_sha="a" * 40, target_branch="fix/other",
         )
+
+    with pytest.raises(
+        ConflictError,
+        match="idempotency_key_reused_with_different_task_intent",
+    ):
+        store.enqueue_task(
+            repository="owner/repo", issue_number=1890, request_id="ci-pr",
+            correlation_id="stale-base-replay", base_sha="b" * 40,
+            target_branch="fix/ci-1890",
+        )
+
+    preserved = store.get_task(task["task_id"])
+    assert preserved["base_sha"] == "a" * 40
+    assert preserved["branch"] == "fix/ci-1890"
+
+    with sqlite3.connect(store.db_path) as independent:
+        rows = independent.execute(
+            "SELECT task_id, base_sha, branch, priority, max_attempts "
+            "FROM tasks WHERE idempotency_key=?",
+            (task["idempotency_key"],),
+        ).fetchall()
+    assert rows == [
+        (
+            task["task_id"],
+            "a" * 40,
+            "fix/ci-1890",
+            task["priority"],
+            task["max_attempts"],
+        )
+    ]
 
 
 def test_worker_pool_rejects_protected_target_branch(tmp_path: Path) -> None:

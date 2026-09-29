@@ -367,36 +367,77 @@ class WorkerPoolStore:
                correlation_id, worker_id))
         return self.get_worker(worker_id)
 
+    @staticmethod
+    def _assert_same_enqueue_intent(
+        row: sqlite3.Row,
+        *,
+        repository: str,
+        issue_number: int,
+        request_id: str,
+        priority: int,
+        base_sha: str | None,
+        max_attempts: int,
+        task_branch: str,
+    ) -> None:
+        same_intent = (
+            str(row["repository"]).strip().casefold() == repository.strip().casefold()
+            and int(row["issue_number"]) == int(issue_number)
+            and str(row["request_id"]).strip() == request_id.strip()
+            and int(row["priority"]) == int(priority)
+            and (str(row["base_sha"]).lower() if row["base_sha"] else None) == base_sha
+            and int(row["max_attempts"]) == int(max_attempts)
+            and str(row["branch"]) == task_branch
+        )
+        if not same_intent:
+            raise ConflictError("idempotency_key_reused_with_different_task_intent")
+
     def enqueue_task(
         self, *, repository: str, issue_number: int, request_id: str,
         correlation_id: str, priority: int = 100, base_sha: str | None = None,
         max_attempts: int | None = None, target_branch: str | None = None,
     ) -> tuple[dict[str, Any], bool]:
-        if "/" not in repository or issue_number < 1 or not request_id.strip() or not correlation_id.strip():
+        repository = repository.strip()
+        request_id = request_id.strip()
+        correlation_id = correlation_id.strip()
+        if "/" not in repository or issue_number < 1 or not request_id or not correlation_id:
             raise ValueError("identidade da task inválida")
-        if base_sha and not SHA40.fullmatch(base_sha.lower()):
+        normalized_base_sha = base_sha.lower() if base_sha else None
+        if normalized_base_sha and not SHA40.fullmatch(normalized_base_sha):
             raise ValueError("base_sha inválido")
-        task_branch = validate_target_branch(target_branch) if target_branch is not None else branch(issue_number, request_id)
+        task_branch = (
+            validate_target_branch(target_branch)
+            if target_branch is not None
+            else branch(issue_number, request_id)
+        )
         key, stamp = identity(repository, issue_number, request_id), iso(self.clock())
         tid, attempts = task_id(key), int(max_attempts or self.default_max_attempts)
         if attempts < 1:
             raise ValueError("max_attempts inválido")
         with self._tx() as db:
-            self._ensure_repository_lane(db, repository.strip())
+            self._ensure_repository_lane(db, repository)
             row = db.execute("SELECT * FROM tasks WHERE idempotency_key=?", (key,)).fetchone()
             created = row is None
-            if not created and target_branch is not None and row["branch"] != task_branch:
-                raise ConflictError("target_branch divergente no replay")
+            if not created:
+                self._assert_same_enqueue_intent(
+                    row,
+                    repository=repository,
+                    issue_number=issue_number,
+                    request_id=request_id,
+                    priority=priority,
+                    base_sha=normalized_base_sha,
+                    max_attempts=attempts,
+                    task_branch=task_branch,
+                )
             if created:
                 db.execute("""INSERT INTO tasks(
                   task_id,repository,issue_number,request_id,idempotency_key,state,priority,
                   branch,workspace_key,base_sha,max_attempts,correlation_id,created_at,updated_at,
                   last_material_progress_at)
                   VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?)""",
-                  (tid, repository.strip(), issue_number, request_id.strip(), key, int(priority),
+                  (tid, repository, issue_number, request_id, key, int(priority),
                    task_branch, workspace(repository, tid),
-                   base_sha.lower() if base_sha else None, attempts,
-                   correlation_id.strip(), stamp, stamp, stamp))
+                   normalized_base_sha, attempts,
+                   correlation_id, stamp, stamp, stamp))
                 row = db.execute("SELECT * FROM tasks WHERE task_id=?", (tid,)).fetchone()
         return self._d(row), created
 

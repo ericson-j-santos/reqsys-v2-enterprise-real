@@ -12,6 +12,19 @@ RULES_SHA = "a" * 40
 REQSYS_SHA = "b" * 40
 
 
+def test_import_does_not_claim_global_app_namespace() -> None:
+    import sys
+
+    loaded = sys.modules.get("app")
+    if loaded is None:
+        assert "app" not in sys.modules
+    else:
+        module_file = str(getattr(loaded, "__file__", "") or "")
+        module_path = str(getattr(loaded, "__path__", "") or "")
+        assert "services/codex-worker-pool/app" not in module_file.replace("\\", "/")
+        assert "services/codex-worker-pool/app" not in module_path.replace("\\", "/")
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))

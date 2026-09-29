@@ -7,7 +7,7 @@ Serviço local/DEV para coordenar workers Codex em múltiplos hosts sem comparti
 - registro de worker com `host`, `role`, `profile`, versão do controlador, SHA das regras e estado do Gateway;
 - readiness fail-closed quando o SHA canônico esperado das regras não estiver configurado ou o worker anunciar SHA divergente;
 - heartbeat e distinção entre worker ocioso, `ESTUDO`, degradado e offline;
-- fila SQLite persistente com transação `BEGIN IMMEDIATE`, idempotência e aquisição exclusiva;
+- fila SQLite persistente com transação `BEGIN IMMEDIATE`, idempotência fail-closed por intenção completa de enqueue e aquisição exclusiva;
 - lanes lógicas por repositório com `max_in_flight`, pausa (`enabled=false`) e fairness determinístico;
 - afinidade opcional de worker por repositório, mantendo pool compartilhado quando não configurada;
 - lease renovável e recuperação automática após timeout;
@@ -47,7 +47,7 @@ O `/health` fica `503/not_ready` quando o arquivo de token não está disponíve
 python -m pytest services/codex-worker-pool/tests -q
 ```
 
-A suíte cobre replay idempotente, concorrência, lease expirado, quarentena, perfis `NORMAL/ESTUDO`, bloqueio externo, separação Builder/Validator, leitura independente, fairness entre repositórios, `max_in_flight`, afinidade, watchdog sem falso progresso e fluxo HTTP completo.
+A suíte cobre replay idempotente, conflito quando a mesma identidade é reutilizada com `base_sha`, prioridade, branch ou tentativas divergentes, preservação independente da task original, concorrência, lease expirado, quarentena, perfis `NORMAL/ESTUDO`, bloqueio externo, separação Builder/Validator, leitura independente, fairness entre repositórios, `max_in_flight`, afinidade, watchdog sem falso progresso e fluxo HTTP completo.
 
 ## PC24x7
 

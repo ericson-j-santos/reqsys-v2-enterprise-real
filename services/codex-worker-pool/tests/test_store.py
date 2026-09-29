@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 import threading
 from datetime import datetime, timedelta, timezone
@@ -116,6 +117,78 @@ def test_enqueue_is_idempotent(store: WorkerPoolStore) -> None:
     assert first["idempotency_key"] == build_idempotency_key(
         "ericson-j-santos/reqsys-v2-enterprise-real", 1769, "req-1"
     )
+
+
+def test_enqueue_replay_allows_new_correlation_id_for_same_intent(store: WorkerPoolStore) -> None:
+    first, created_first = enqueue(store)
+    second, created_second = store.enqueue_task(
+        repository=first["repository"],
+        issue_number=first["issue_number"],
+        request_id=first["request_id"],
+        correlation_id="corr-replay-new-trace",
+        priority=first["priority"],
+        base_sha=first["base_sha"],
+        max_attempts=first["max_attempts"],
+        target_branch=first["branch"],
+    )
+
+    assert created_first is True
+    assert created_second is False
+    assert second["task_id"] == first["task_id"]
+    assert second["correlation_id"] == first["correlation_id"]
+
+
+@pytest.mark.parametrize(
+    ("override", "expected_field"),
+    [
+        ({"priority": 99}, "priority"),
+        ({"base_sha": "2" * 40}, "base_sha"),
+        ({"max_attempts": 3}, "max_attempts"),
+        ({"target_branch": "codex/issue-1769-outra-intencao"}, "branch"),
+    ],
+)
+def test_enqueue_rejects_divergent_intent_and_preserves_original(
+    store: WorkerPoolStore,
+    override: dict,
+    expected_field: str,
+) -> None:
+    original, created = enqueue(store)
+    assert created is True
+
+    replay = {
+        "repository": original["repository"],
+        "issue_number": original["issue_number"],
+        "request_id": original["request_id"],
+        "correlation_id": "corr-divergent-replay",
+        "priority": original["priority"],
+        "base_sha": original["base_sha"],
+        "max_attempts": original["max_attempts"],
+        "target_branch": original["branch"],
+    }
+    replay.update(override)
+
+    with pytest.raises(
+        ConflictError,
+        match="idempotency_key_reused_with_different_task_intent",
+    ):
+        store.enqueue_task(**replay)
+
+    observed = store.get_task(original["task_id"])
+    assert observed["task_id"] == original["task_id"]
+    assert observed["priority"] == original["priority"]
+    assert observed["base_sha"] == original["base_sha"]
+    assert observed["max_attempts"] == original["max_attempts"]
+    assert observed["branch"] == original["branch"]
+
+    with sqlite3.connect(store.db_path) as independent:
+        independent.row_factory = sqlite3.Row
+        rows = independent.execute(
+            "SELECT * FROM tasks WHERE idempotency_key=?",
+            (original["idempotency_key"],),
+        ).fetchall()
+    assert len(rows) == 1
+    assert rows[0]["task_id"] == original["task_id"]
+    assert rows[0][expected_field] == original[expected_field]
 
 
 def test_concurrent_claim_assigns_exactly_once(store: WorkerPoolStore) -> None:

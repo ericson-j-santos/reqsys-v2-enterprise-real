@@ -160,6 +160,55 @@ def test_api_e2e_builder_validator_replay(tmp_path: Path, monkeypatch) -> None:
     assert final_replay.json()["created"] is False
 
 
+def test_api_rejects_divergent_idempotent_intent_and_preserves_original(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _module, client, headers = load_app(tmp_path, monkeypatch)
+    payload = {
+        "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+        "issue_number": 2141,
+        "request_id": "api-idempotency-intent",
+        "correlation_id": "api-idempotency-original",
+        "priority": 10,
+        "base_sha": "1" * 40,
+        "target_branch": "codex/issue-2141-idempotency-intent",
+        "max_attempts": 2,
+    }
+
+    first = client.post("/v1/tasks", headers=headers, json=payload)
+    assert first.status_code == 201
+    task_id = first.json()["task"]["task_id"]
+
+    replay = client.post(
+        "/v1/tasks",
+        headers=headers,
+        json={**payload, "correlation_id": "api-idempotency-replay"},
+    )
+    assert replay.status_code == 200
+    assert replay.json()["created"] is False
+    assert replay.json()["task"]["task_id"] == task_id
+
+    conflict = client.post(
+        "/v1/tasks",
+        headers=headers,
+        json={
+            **payload,
+            "correlation_id": "api-idempotency-conflict",
+            "base_sha": "2" * 40,
+        },
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"] == "idempotency_key_reused_with_different_task_intent"
+
+    independent = client.get(f"/v1/tasks/{task_id}", headers=headers)
+    assert independent.status_code == 200
+    observed = independent.json()
+    assert observed["base_sha"] == "1" * 40
+    assert observed["priority"] == 10
+    assert observed["max_attempts"] == 2
+    assert observed["branch"] == "codex/issue-2141-idempotency-intent"
+
+
 def test_task_requires_base_sha(tmp_path: Path, monkeypatch) -> None:
     _module, client, headers = load_app(tmp_path, monkeypatch)
 
