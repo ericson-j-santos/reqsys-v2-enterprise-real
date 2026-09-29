@@ -37,7 +37,7 @@ jobs:
       EVIDENCE_FILE: artifacts/codex-ollama-e2e-dev/evidence.json
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -133,7 +133,7 @@ jobs:
           "TARGET_SHA=$env:REQUESTED_SHA" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout exact PR #2144 SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ inputs.target_sha }}
           fetch-depth: 1
@@ -241,7 +241,7 @@ jobs:
       CORRELATION_ID: ollama-mcp-ingress-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
