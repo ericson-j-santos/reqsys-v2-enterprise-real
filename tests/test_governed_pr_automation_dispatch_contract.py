@@ -99,3 +99,13 @@ def test_ci_driven_automerge_revalida_estado_e_sha_imediatamente_antes_do_merge(
     assert 'Estado mudou antes do merge' in block
     assert "github.rest.pulls.merge({" in block
     assert block.index("currentLabelNames.includes('merge-queue:eligible')") < block.index("github.rest.pulls.merge({")
+
+
+def test_governed_merge_materializa_validacao_pos_merge_nos_dois_caminhos() -> None:
+    text = _text()
+
+    assert text.count("github.rest.repos.createDispatchEvent({") == 2
+    assert text.count("event_type: 'governed_post_merge_validation'") == 2
+    assert "merge_sha: result.data.sha" in text
+    assert "head_sha: triggerHeadSha" in text
+    assert "head_sha: headSha" in text
