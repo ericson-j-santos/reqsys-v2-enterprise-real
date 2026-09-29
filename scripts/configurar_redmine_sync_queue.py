@@ -57,6 +57,11 @@ from app.services.redmine_sync_queue import (  # noqa: E402
     TABELA_AUDITLOG,
     TABELA_REDMINE_QUEUE,
 )
+from redmine_version_gate import (  # noqa: E402
+    RedmineVersionError,
+    evaluate_redmine_version,
+    format_version,
+)
 
 ENV_FILE = _ROOT / '.env'
 
@@ -65,7 +70,11 @@ VARIAVEIS: list[tuple[str, bool, str, str]] = [
     ('AZURE_TENANT_ID', False, 'Tenant ID do Azure AD', 'mesmo já usado por Teams Gateway/hub_lowcode — az account show'),
     ('AZURE_CLIENT_ID', False, 'Client ID do App Registration', '"ReqSys Enterprise" ou equivalente no Entra ID'),
     ('AZURE_CLIENT_SECRET', True, 'Client secret do App Registration', 'Entra ID > App Registration > Certificates & secrets'),
-    ('REDMINE_BASE_URL', False, 'URL base do Redmine', 'ex.: https://redmine-c5i6.onrender.com'),
+    ('REDMINE_BASE_URL', False, 'URL base do Redmine', 'ex.: https://redmine.example.com'),
+    (
+        'REDMINE_VERSION', False, 'Versão exata do Redmine (MAJOR.MINOR.PATCH)',
+        'Administration > Information ou lib/redmine/version.rb no servidor Redmine',
+    ),
     ('REDMINE_API_KEY', True, 'API Key do Redmine', 'scripts/verificar-redmine.ps1 captura automaticamente via login'),
     ('REDMINE_PROJECT_ID', False, 'ID numérico do projeto padrão no Redmine', 'GET /projects.json'),
     (
@@ -278,16 +287,55 @@ async def _verificar_dataverse(cfg: Settings, erros: list[str]) -> None:
                 _linha(f'    [OK]             cr85a_correlationid MaxLength={max_length} (>= 36)')
 
 
-def _verificar_redmine(cfg: Settings, erros: list[str], criar_issue_teste: bool) -> None:
+def _verificar_redmine(
+    cfg: Settings,
+    erros: list[str],
+    criar_issue_teste: bool,
+    redmine_version_override: str | None = None,
+) -> None:
     _titulo('4) Redmine (REDMINE_BASE_URL / REDMINE_API_KEY / REDMINE_PROJECT_ID)')
     base_url = os.environ.get('REDMINE_BASE_URL', '').strip()
     api_key = os.environ.get('REDMINE_API_KEY', '').strip()
     project_id = os.environ.get('REDMINE_PROJECT_ID', '').strip()
+    redmine_version = (
+        redmine_version_override or os.environ.get('REDMINE_VERSION', '')
+    ).strip()
 
     if not (base_url and api_key and project_id):
         _linha('  [FALTA] REDMINE_BASE_URL/REDMINE_API_KEY/REDMINE_PROJECT_ID incompleto(s).')
         erros.append('redmine_incompleto')
         return
+
+    if not redmine_version:
+        _linha('  [FALTA] REDMINE_VERSION não informado; a REST API do Redmine não expõe a versão de forma confiável.')
+        _linha('          Confirme em Administration > Information ou lib/redmine/version.rb.')
+        erros.append('redmine_version_ausente')
+        return
+
+    try:
+        decision = evaluate_redmine_version(redmine_version)
+    except RedmineVersionError as exc:
+        _linha(f'  [BLOQUEADO] {exc}')
+        erros.append('redmine_version_invalida')
+        return
+
+    if not decision.allowed:
+        detalhe_minimo = (
+            f'; mínimo homologado={format_version(decision.minimum)}'
+            if decision.minimum is not None
+            else ''
+        )
+        _linha(
+            f'  [BLOQUEADO] Redmine {format_version(decision.version)}: '
+            f'{decision.reason}{detalhe_minimo}'
+        )
+        erros.append(decision.reason)
+        return
+
+    _linha(
+        f'  [OK] Versão Redmine {format_version(decision.version)} '
+        f'atende à baseline mínima {format_version(decision.minimum)}.'
+    )
 
     try:
         quem = _get_redmine_json(base_url, '/users/current.json', api_key)
@@ -333,7 +381,12 @@ def cmd_verificar(args: argparse.Namespace) -> int:
     erros: list[str] = []
 
     asyncio.run(_verificar_dataverse(cfg, erros))
-    _verificar_redmine(cfg, erros, criar_issue_teste=args.criar_issue_teste)
+    _verificar_redmine(
+        cfg,
+        erros,
+        criar_issue_teste=args.criar_issue_teste,
+        redmine_version_override=args.redmine_version,
+    )
 
     _titulo('Resumo')
     if erros:
@@ -352,9 +405,12 @@ def cmd_tudo(args: argparse.Namespace) -> int:
         return codigo
     # processo novo garante Settings()/dotenv carregando o .env recém-gravado,
     # em vez de depender de invalidar singletons já importados neste processo.
-    resultado = subprocess.run([sys.executable, str(Path(__file__).resolve()), 'verificar'] + (
-        ['--criar-issue-teste'] if args.criar_issue_teste else []
-    ))
+    verificar_args = [sys.executable, str(Path(__file__).resolve()), 'verificar']
+    if args.criar_issue_teste:
+        verificar_args.append('--criar-issue-teste')
+    if args.redmine_version:
+        verificar_args.extend(['--redmine-version', args.redmine_version])
+    resultado = subprocess.run(verificar_args)
     return resultado.returncode
 
 
@@ -375,6 +431,11 @@ def main() -> int:
     p_verificar.add_argument(
         '--criar-issue-teste', action='store_true',
         help='Também cria uma issue REAL de teste no Redmine (efeito colateral real — off por padrão).',
+    )
+    p_verificar.add_argument(
+        '--redmine-version',
+        default=None,
+        help='Versão Redmine confirmada (ex.: 7.0.1); sobrescreve REDMINE_VERSION somente nesta verificação.',
     )
     p_verificar.set_defaults(func=cmd_verificar)
 
