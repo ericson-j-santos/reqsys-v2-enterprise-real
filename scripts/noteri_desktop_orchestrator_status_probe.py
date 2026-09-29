@@ -198,3 +198,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# diagnostic-trigger: 2026-09-29 runner recovery readback
