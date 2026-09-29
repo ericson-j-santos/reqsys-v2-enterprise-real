@@ -25,7 +25,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; each physical mode validates the preinstalled Python runtime without actions/setup-python; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
+    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
   },
   "risk": {
     "production": false,
@@ -46,7 +46,7 @@
   "acceptance_criteria": [
     "O workflow executa somente no runner Noteri allowlisted e host esperado.",
     "`${ github.workspace }` é somente a fonte transitória do bootstrap; a execução ocorre no worktree governado retornado pelo Session Launcher.",
-    "Cada modo físico valida o Python pré-instalado e falha fechado quando indisponível; actions/setup-python não é usado em self-hosted recovery.",
+    "Cada modo físico usa CPython 3.12.10 embeddable x64 oficial em RUNNER_TEMP, validado por SHA-256 antes da extração; actions/setup-python e dependência do PATH do host são proibidos.",
     "O Session Launcher exige SESSION_LAUNCH_OK e state_validated=true no SHA exato.",
     "O script de recuperação é resolvido a partir do target_path retornado pela sessão e executado exclusivamente pelo Command Gateway risco 2.",
     "Nenhum clone persistente C:\\dev\\reqsys-v2-enterprise-real é requisito do Noteri; o único destino de execução é o worktree governado.",
@@ -70,6 +70,17 @@
     "checkout_sha": "11d5960a326750d5838078e36cf38b85af677262",
     "upload_artifact_sha": "ea165f8d65b6e75b540449e92b4886f43607fa02",
     "mutable_major_tags_allowed": false,
-    "python_runtime_strategy": "preinstalled-validated"
+    "python_runtime_strategy": "portable-embedded-sha256-validated",
+    "python_runtime": {
+      "version": "3.12.10",
+      "distribution": "windows_embeddable_x64",
+      "source": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+      "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+      "install_required": false,
+      "registry_required": false,
+      "toolcache_required": false,
+      "admin_required": false,
+      "runtime_location": "RUNNER_TEMP_per_run"
+    }
   }
 }
