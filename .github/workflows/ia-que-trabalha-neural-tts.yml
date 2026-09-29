@@ -1,0 +1,170 @@
+name: IA Que Trabalha Neural TTS Trial
+
+on:
+  push:
+    branches:
+      - "work/ia-que-trabalha-neural-tts-20260928"
+    paths:
+      - "scripts/ia_que_trabalha_neural_tts.py"
+      - "scripts/validate_ia_que_trabalha_neural_tts.py"
+      - "tests/test_ia_que_trabalha_neural_tts.py"
+      - ".github/workflows/ia-que-trabalha-neural-tts.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ia-que-trabalha-neural-tts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  neural-tts:
+    name: Generate PT-BR neural TTS on governed Noteri
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 20
+    env:
+      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
+      CORRELATION_ID: ia-que-trabalha-tts-${{ github.run_id }}-${{ github.run_attempt }}
+      OUTPUT_REL: .tmp\ia-que-trabalha-neural-tts
+      EVIDENCE_REL: .tmp\ia-que-trabalha-neural-tts\evidence.json
+
+    steps:
+      - name: Checkout immutable source SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:GITHUB_WORKSPACE,
+            "--session-prefix", "ia-que-trabalha-tts",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Validate implementation contract through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-tests",
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "1",
+            "--timeout", "90",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "pytest", "tests/test_ia_que_trabalha_neural_tts.py", "-q"
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Generate neural voice candidates through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\ia_que_trabalha_neural_tts.py"
+          $output = Join-Path $env:TARGET_PATH $env:OUTPUT_REL
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", $env:CORRELATION_ID,
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2",
+            "--timeout", "850",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $script,
+            "--confirm", "GENERATE-IA-QUE-TRABALHA-NEURAL-TTS",
+            "--expected-sha", $env:ANCHOR_SHA,
+            "--output-root", $output,
+            "--evidence", $evidence
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Independent readback through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $validator = Join-Path $env:TARGET_PATH "scripts\validate_ia_que_trabalha_neural_tts.py"
+          $output = Join-Path $env:TARGET_PATH $env:OUTPUT_REL
+          $evidence = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-readback",
+            "run",
+            "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "1",
+            "--timeout", "120",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--",
+            "python", $validator,
+            "--expected-sha", $env:ANCHOR_SHA,
+            "--output-root", $output,
+            "--evidence", $evidence
+          )
+          & python $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Upload neural TTS artifact
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ia-que-trabalha-neural-tts-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\.tmp\ia-que-trabalha-neural-tts
+          if-no-files-found: warn
+          retention-days: 7
