@@ -38,7 +38,7 @@ def test_monitor_is_fail_closed_for_alerts_and_idempotent() -> None:
     assert "if (changes.length)" in raw
     assert "if (next.rss_initialized && previousWatermark > 0)" in raw
     assert "if (!old) seeded.push(source.id)" in raw
-    assert "if (!seen.has(entry.id))" in raw
+    assert "const recentIds = new Set(next.rss_recent_ids)" in raw
     assert "Source errors detected; no alert is emitted from errors alone." in raw
     assert "Não conceder permissão automaticamente." in raw
     assert "replay sem duplicidade" in raw
