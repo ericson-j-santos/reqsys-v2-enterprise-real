@@ -156,9 +156,27 @@ def build_request(correlation_id: str) -> dict[str, Any]:
     }
 
 
+def classify_terminal_error(value: Any) -> str:
+    text = str(value or "").casefold()
+    categories = (
+        ("github runner recovery target not found", "github_runner_recovery_target_not_found"),
+        ("multiple automatic github runner services found", "multiple_runner_services"),
+        ("multiple github runner boot tasks found", "multiple_runner_boot_tasks"),
+        ("target_host does not match local host", "target_host_mismatch"),
+        ("github runner recovery readback failed", "runner_readback_failed"),
+        ("github runner recovery registered target invalid", "registered_target_invalid"),
+    )
+    for marker, code in categories:
+        if marker in text:
+            return code
+    return "terminal_error_unclassified"
+
+
 def validate_completed(item: dict[str, Any]) -> dict[str, Any]:
     if item.get("status") != "CONCLUÍDO":
-        raise RecoveryError(f"runner_recovery_terminal_{item.get('status') or 'unknown'}")
+        status = item.get("status") or "unknown"
+        error_code = classify_terminal_error(item.get("last_error"))
+        raise RecoveryError(f"runner_recovery_terminal_{status}:{error_code}")
     result = item.get("result")
     if not isinstance(result, dict):
         raise RecoveryError("runner_recovery_result_missing")
