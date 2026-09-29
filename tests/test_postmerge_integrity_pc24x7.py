@@ -213,12 +213,18 @@ def test_bacen_workflow_uses_policy_dates_instead_of_fixed_historical_date():
     assert 'today <= date.fromisoformat(evidence["valid_until"])' in workflow
 
 
-def test_automatic_promotion_routes_dev_provider_without_self_hosted_runner():
+def test_legacy_promotion_validates_dev_only_on_pc24x7_without_self_hosted_runner():
     workflow = (ROOT / ".github/workflows/fly-automatic-environment-promotion.yml").read_text(
         encoding="utf-8"
     )
-    assert "REQSYS_DEV_RUNTIME_PROVIDER" in workflow
+    trigger = workflow.split("permissions:", 1)[0]
+    assert "workflow_dispatch:" in trigger
+    assert "workflow_run:" not in trigger
+    assert "schedule:" not in trigger
+    assert "REQSYS_DEV_RUNTIME_PROVIDER" not in workflow
     assert "validate-dev-pc24x7:" in workflow
+    assert "Capture DEV via Fly" not in workflow
+    assert "Promote DEV via Fly" not in workflow
     assert "resolve_pc24x7_dev_locator.mjs" in workflow
     assert "signed-locator.json" in workflow
     assert "steps.locator.outputs.base_url" in workflow
@@ -227,8 +233,6 @@ def test_automatic_promotion_routes_dev_provider_without_self_hosted_runner():
     assert "vars.PC24X7_DEV_FRONTEND_URL" not in pc24x7_job
     assert "runs-on: ubuntu-latest" in workflow
     assert "runs-on: self-hosted" not in workflow
-    assert "dev_provider == 'pc24x7'" in workflow
-    assert "dev_provider == 'fly'" in workflow
     assert '"health_path": "/api/health"' in workflow
     assert "/api/runtime/health" in workflow
     assert "pc24x7_externally_verified" in workflow
