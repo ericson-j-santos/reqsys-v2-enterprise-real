@@ -657,162 +657,6 @@ jobs:
           retention-days: 30
 
 
-  alm-runner-bootstrap:
-    if: ${{ inputs.mode == 'alm-runner-bootstrap' }}
-    name: Bootstrap ephemeral Noteri runners for ALM PR7
-    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 22
-    env:
-      TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 647645855481d4fbe3606fdfa6fbb92d308e25ca
-      CORRELATION_ID: noteri-alm-runner-${{ github.run_id }}-${{ github.run_attempt }}
-      TARGET_ALM_HEAD: 96966d8decc210a98eefa7f0ca437052e8bd5a21
-      ACTION_ID: reqsys.noteri-alm-runner-bridge.dev
-      ACTION_SCOPE: repo://ericson-j-santos/reqsys-powerplatform-alm/actions/runner/dev/pr7
-      EVIDENCE_REL: artifacts\\noteri-alm-runner-bridge\\evidence.json
-
-    steps:
-      - name: Checkout immutable workflow SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Prepare pinned portable Python 3.12
-        shell: powershell
-        env:
-          PORTABLE_PYTHON_VERSION: "3.12.10"
-          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
-          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
-        run: |
-          $ErrorActionPreference = "Stop"
-          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
-          $zip = "$root.zip"
-          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
-          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-          New-Item -ItemType Directory -Force $root | Out-Null
-          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
-          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
-            throw "portable_python_sha256_mismatch:$observedHash"
-          }
-          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
-          $python = Join-Path $root "python.exe"
-          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
-          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
-          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
-            throw "portable_python_version_mismatch:$observedVersion"
-          }
-          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
-          $root | Add-Content $env:GITHUB_PATH
-
-      - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: ericson-j-santos/chatgpt-operational-rules
-          ref: ${{ env.RULES_SHA }}
-          path: _rules
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Bootstrap mandatory governed Noteri session
-        id: session
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          if ($env:COMPUTERNAME -ne "NOTERI") { throw "UNEXPECTED_HOST:$env:COMPUTERNAME" }
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
-          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
-          $anchorSha = "${{ github.sha }}"
-          $args = @(
-            "--policy", $policy,
-            "--repo", $env:TARGET_REPO,
-            "--session-prefix", "noteri-alm-runner",
-            "--correlation-id", $env:CORRELATION_ID,
-            "--expected-head", $anchorSha,
-            "--require-runner-version-preflight",
-            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
-          )
-          $raw = & "$env:REQSYS_PYTHON" $launcher @args
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $data = @($raw)[-1] | ConvertFrom-Json
-          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
-            throw "SESSION_LAUNCH_BLOCKED"
-          }
-          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
-          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
-          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
-
-      - name: Install exact temporary Risk3 authorization
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $script = Join-Path $env:TARGET_PATH "scripts\\configure_noteri_alm_runner_bridge_risk3.py"
-          & "$env:REQSYS_PYTHON" $script --enable --ttl-minutes 30 --confirm ENABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE
-          exit $LASTEXITCODE
-
-      - name: Run ALM runner bridge through Owner Risk3 Gateway
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\owner_risk3_gateway.py"
-          $args = @(
-            "--action-id", $env:ACTION_ID,
-            "--scope", $env:ACTION_SCOPE,
-            "--cwd", $env:TARGET_PATH,
-            "--timeout", "960",
-            "--correlation-id", $env:CORRELATION_ID
-          )
-          & "$env:REQSYS_PYTHON" $gateway @args
-          exit $LASTEXITCODE
-
-      - name: Remove temporary Risk3 authorization
-        if: always()
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
-          $script = Join-Path $env:TARGET_PATH "scripts\\configure_noteri_alm_runner_bridge_risk3.py"
-          & "$env:REQSYS_PYTHON" $script --disable --confirm DISABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE
-          exit $LASTEXITCODE
-
-      - name: Validate sanitized ALM bridge evidence
-        if: always()
-        shell: powershell
-        env:
-          TARGET_PATH: ${{ steps.session.outputs.target_path }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_EVIDENCE" }
-          $path = Join-Path $env:TARGET_PATH $env:EVIDENCE_REL
-          if (-not (Test-Path -LiteralPath $path)) { throw "ALM_RUNNER_BRIDGE_EVIDENCE_MISSING" }
-          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
-          if ($e.status -notin @("READY", "ALREADY_COMPLIANT")) { throw "ALM_RUNNER_BRIDGE_NOT_READY" }
-          if ($e.host -ne "Noteri") { throw "HOST_MISMATCH" }
-          if ($e.target_repository -ne "ericson-j-santos/reqsys-powerplatform-alm") { throw "TARGET_REPOSITORY_MISMATCH" }
-          if ($e.target_pr -ne 7) { throw "TARGET_PR_MISMATCH" }
-          if ($e.expected_head -ne $env:TARGET_ALM_HEAD -or $e.observed_head_after -ne $env:TARGET_ALM_HEAD) { throw "TARGET_HEAD_MISMATCH" }
-          if (-not $e.independent_readback) { throw "INDEPENDENT_READBACK_MISSING" }
-          if (-not $e.replay_idempotent) { throw "IDEMPOTENCY_MISSING" }
-          if ($e.production_touched -or $e.secrets_read -or $e.token_exposed) { throw "SAFETY_INVARIANT_FAILED" }
-          if ($e.registration_token_persisted -or $e.registration_token_logged) { throw "TOKEN_HANDLING_INVARIANT_FAILED" }
-
-      - name: Upload sanitized ALM bridge evidence
-        if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: noteri-alm-runner-bridge-${{ github.run_id }}
-          path: ${{ steps.session.outputs.target_path }}\\artifacts\\noteri-alm-runner-bridge\\evidence.json
-          if-no-files-found: error
-          retention-days: 30
-
   runner-canary:
     if: ${{ inputs.mode == 'runner-canary' }}
     name: Prove physical GitHub Actions pickup on DESKTOP-PDQK954
@@ -949,3 +793,161 @@ jobs:
           path: ${{ steps.session.outputs.target_path }}\artifacts\desktop-runner-pickup\evidence.json
           if-no-files-found: error
           retention-days: 30
+alm-runner-bootstrap:
+    if: ${{ inputs.mode == 'alm-runner-bootstrap' }}
+    name: Bootstrap ephemeral Noteri runners for ALM PR7
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 22
+    env:
+      TARGET_REPO: ${{ github.workspace }}
+      RULES_SHA: 647645855481d4fbe3606fdfa6fbb92d308e25ca
+      CORRELATION_ID: noteri-alm-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      TARGET_ALM_HEAD: 96966d8decc210a98eefa7f0ca437052e8bd5a21
+      ACTION_ID: reqsys.noteri-alm-runner-bridge.dev
+      ACTION_SCOPE: repo://ericson-j-santos/reqsys-powerplatform-alm/actions/runner/dev/pr7
+      EVIDENCE_NAME: noteri-alm-runner-bridge-${{ github.run_id }}.json
+
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
+          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) {
+            throw "portable_python_sha256_mismatch:$observedHash"
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+          $root | Add-Content $env:GITHUB_PATH
+          $evidenceFile = Join-Path $env:RUNNER_TEMP $env:EVIDENCE_NAME
+          "REQSYS_ALM_RUNNER_EVIDENCE_FILE=$evidenceFile" | Add-Content $env:GITHUB_ENV
+
+      - name: Checkout canonical operational rules exact SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: ${{ env.RULES_SHA }}
+          path: _rules
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bootstrap mandatory governed Noteri session
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "NOTERI") { throw "UNEXPECTED_HOST:$env:COMPUTERNAME" }
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
+          $anchorSha = "${{ github.sha }}"
+          $args = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "noteri-alm-runner",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", $anchorSha,
+            "--require-runner-version-preflight",
+            "--sync-ref", "origin/$env:GITHUB_REF_NAME"
+          )
+          $raw = & "$env:REQSYS_PYTHON" $launcher @args
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = @($raw)[-1] | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne $anchorSha) { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+          "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Install exact temporary Risk3 authorization
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $script = Join-Path $env:TARGET_PATH "scripts\\configure_noteri_alm_runner_bridge_risk3.py"
+          & "$env:REQSYS_PYTHON" $script --enable --ttl-minutes 30 --confirm ENABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE
+          exit $LASTEXITCODE
+
+      - name: Run ALM runner bridge through Owner Risk3 Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\owner_risk3_gateway.py"
+          $args = @(
+            "--action-id", $env:ACTION_ID,
+            "--scope", $env:ACTION_SCOPE,
+            "--cwd", $env:TARGET_PATH,
+            "--timeout", "960",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          & "$env:REQSYS_PYTHON" $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Remove temporary Risk3 authorization
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+          $script = Join-Path $env:TARGET_PATH "scripts\\configure_noteri_alm_runner_bridge_risk3.py"
+          & "$env:REQSYS_PYTHON" $script --disable --confirm DISABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE
+          exit $LASTEXITCODE
+
+      - name: Validate sanitized ALM bridge evidence
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_EVIDENCE" }
+          $path = $env:REQSYS_ALM_RUNNER_EVIDENCE_FILE
+          if (-not $path -or -not (Test-Path -LiteralPath $path)) { throw "ALM_RUNNER_BRIDGE_EVIDENCE_MISSING" }
+          $e = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+          if ($e.status -notin @("READY", "ALREADY_COMPLIANT")) { throw "ALM_RUNNER_BRIDGE_NOT_READY" }
+          if ($e.host -ne "Noteri") { throw "HOST_MISMATCH" }
+          if ($e.target_repository -ne "ericson-j-santos/reqsys-powerplatform-alm") { throw "TARGET_REPOSITORY_MISMATCH" }
+          if ($e.target_pr -ne 7) { throw "TARGET_PR_MISMATCH" }
+          if ($e.expected_head -ne $env:TARGET_ALM_HEAD -or $e.observed_head_after -ne $env:TARGET_ALM_HEAD) { throw "TARGET_HEAD_MISMATCH" }
+          if (-not $e.independent_readback) { throw "INDEPENDENT_READBACK_MISSING" }
+          if (-not $e.replay_idempotent) { throw "IDEMPOTENCY_MISSING" }
+          if ($e.production_touched -or $e.secrets_read -or $e.token_exposed) { throw "SAFETY_INVARIANT_FAILED" }
+          if ($e.registration_token_persisted -or $e.registration_token_logged) { throw "TOKEN_HANDLING_INVARIANT_FAILED" }
+
+      - name: Upload sanitized ALM bridge evidence
+        if: always() && steps.session.outputs.target_path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: noteri-alm-runner-bridge-${{ github.run_id }}
+          path: ${{ runner.temp }}\\noteri-alm-runner-bridge-${{ github.run_id }}.json
+          if-no-files-found: error
+          retention-days: 30
+
