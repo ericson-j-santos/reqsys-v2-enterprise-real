@@ -860,7 +860,15 @@ jobs:
           run: |
             $ErrorActionPreference = "Stop"
             if ($env:COMPUTERNAME -ne "NOTERI") { throw "UNEXPECTED_HOST:$env:COMPUTERNAME" }
-            $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\session_launcher.py"
+            $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts"
+            $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+            $pth = Join-Path $pythonRoot "python312._pth"
+            if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+            $pthLines = @(Get-Content -LiteralPath $pth)
+            if ($pthLines -notcontains $rulesScripts) {
+              Add-Content -LiteralPath $pth -Value $rulesScripts
+            }
+            $launcher = Join-Path $rulesScripts "session_launcher.py"
             $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
             $anchorSha = "${{ github.sha }}"
             $args = @(
@@ -916,7 +924,10 @@ jobs:
             TARGET_PATH: ${{ steps.session.outputs.target_path }}
           run: |
             $ErrorActionPreference = "Stop"
-            if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+            if (-not $env:TARGET_PATH) {
+              Write-Host "RISK3_CLEANUP_NOT_REQUIRED session_not_materialized"
+              exit 0
+            }
             $script = Join-Path $env:TARGET_PATH "scripts\\configure_noteri_alm_runner_bridge_risk3.py"
             & "$env:REQSYS_PYTHON" $script --disable --confirm DISABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE
             exit $LASTEXITCODE
