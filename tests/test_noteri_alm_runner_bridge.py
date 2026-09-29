@@ -111,6 +111,12 @@ def test_workflow_exposes_only_fixed_alm_bridge_mode() -> None:
     assert "ALM_RUNNER_BRIDGE_NOT_READY" in raw
 
 
+def test_alm_workflow_risk3_timeout_respects_gateway_contract() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    alm_block = raw.split("  alm-runner-bootstrap:", 1)[1]
+    assert '"--timeout", "900",' in alm_block
+    assert '"--timeout", "960",' not in alm_block
+
 def test_authorized_gateway_maps_exact_command_to_existing_workflow_mode() -> None:
     raw = GATEWAY.read_text(encoding="utf-8")
     assert "github.event.comment.body == '/reqsys run noteri-alm-runner-bootstrap'" in raw
