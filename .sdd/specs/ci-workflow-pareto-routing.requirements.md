@@ -237,3 +237,21 @@ Reverter apenas os commits deste incremento de roteamento. Não há efeito em ru
 - O artifact `audit/ci-health-regression-watch/report.json` registra `source_sha`, janela, métricas, alertas e evidência por run/SHA.
 - O job de alerta não executa em `pull_request`; em `main`, issue só é criada/atualizada quando `material_regression=true`.
 - Repetir a mesma regressão material sem mudança de assinatura não cria nova issue nem comentário.
+
+## Incremento Pareto — monitor de governança material
+
+69. O monitor de governança deve reutilizar o `CI Lead Time Analytics` horário existente e não criar novo arquivo em `.github/workflows`.
+70. Somente estes desvios são materiais: remoção de CI, Governance, Settings Hardening Evidence ou PR Evidence Gate; alteração da proteção administrativa; liberação de force-push ou exclusão da branch padrão; `allow_auto_merge=false`; ou enfraquecimento do contrato equivalente a `expected_head_sha`.
+71. O nome lógico `Settings Hardening Evidence` deve mapear explicitamente para o controle versionado atual `Branch Protection Audit`, evitando falso positivo por diferença de nomenclatura.
+72. A leitura de settings deve usar o estado vivo do repositório/ruleset: ruleset ativo na default branch, bypass vazio, regras `non_fast_forward` e `deletion`, e `allow_auto_merge=true`.
+73. O contrato de `expected_head_sha` deve exigir captura do SHA avaliado, comparação inicial, releitura imediatamente antes da mutação e envio do SHA esperado na chamada de merge.
+74. Falha de coleta deve impedir afirmar conformidade, mas não pode abrir issue de desvio material sem evidência positiva do desvio.
+75. O alerta deve usar uma única issue por episódio, ser idempotente e conter evidência atual, impacto, risco e menor correção segura/idempotente.
+
+### Critérios de aceite — monitor de governança
+
+- `tests/test_governance_drift_monitor.py` cobre baseline conforme e controles negativos para remoção de workflow, bypass administrativo, force-push, exclusão, auto-merge desligado e enfraquecimento do SHA esperado.
+- Alterar qualquer um dos workflows críticos dispara o workflow de monitoramento na PR; mudança somente em settings/ruleset é detectada pela agenda horária.
+- O relatório `audit/governance-drift-monitor/report.json` permanece vinculado ao SHA avaliado.
+- Em PR o monitor é somente leitura; em `main`, issue é criada/atualizada apenas quando `material_drift=true`.
+- Repetir o mesmo episódio sem mudança de evidência não gera nova issue nem comentário.
