@@ -138,8 +138,15 @@ def analisar_impacto_requisito(
             llm_generate=llm_generate,
             correlation_id=correlation_id,
         )
-    except ChangeImpactValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except ChangeImpactValidationError:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'code': 'CHANGE_IMPACT_INVALID',
+                'message': 'Parâmetros de análise de impacto inválidos.',
+                'correlation_id': correlation_id,
+            },
+        ) from None
 
     return ok(
         {
