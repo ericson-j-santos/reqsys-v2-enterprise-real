@@ -562,3 +562,27 @@ def test_gateway_change_impact_pr2144_is_exact_and_has_no_user_sha_input() -> No
     assert '-f target_sha="$CHANGE_IMPACT_TARGET_SHA"' in content
     assert "workload_sha" in content
     assert "/reqsys run change-impact-benchmark-pr2144 " not in content
+
+
+def test_gateway_post_merge_runtime_controls_are_fixed_and_nonprod() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run post-merge-replay-control'" in content
+    assert "github.event.comment.body == '/reqsys run post-merge-negative-missing-control'" in content
+    assert "'/reqsys run post-merge-replay-control')" in content
+    assert "'/reqsys run post-merge-negative-missing-control')" in content
+    assert "target='actions-dispatcher.yml'" in content
+    assert "mode='post-merge-replay-control'" in content
+    assert "mode='post-merge-negative-missing-control'" in content
+    assert "actions-dispatcher.yml" in content
+    assert "-f mode=post-merge" in content
+    assert "-f merge_sha=2a7f113a1f0677a0ecd27c69c7c3f8a7a5fe5f58" in content
+    assert "-f pr_number=2157" in content
+    assert "-f head_sha=da23ddec0f0afba4fdf123c9e80ab4d831ffc133" in content
+    assert "test_case='replay'" in content
+    assert "test_case='missing-required-workflow'" in content
+    assert '-f test_case="$test_case"' in content
+    assert "-f merge_sha=$" not in content
+    assert "-f pr_number=$" not in content
+    assert "-f head_sha=$" not in content
+    assert "'production_touched': False" in content

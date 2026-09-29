@@ -18,6 +18,10 @@ Eliminar falso verde após merge governado executado com `GITHUB_TOKEN`, materia
 10. O dispatcher deve oferecer recuperação manual por `mode=post-merge` sem duplicar o caminho automático.
 11. Todas as Actions externas tocadas devem estar pinadas por SHA completo.
 12. Nenhum deploy, promoção, segredo novo, PAT, force-push ou escrita direta em `main` pertence a este incremento.
+13. O Authorized Actions Gateway deve expor somente os comandos exatos `/reqsys run post-merge-replay-control` e `/reqsys run post-merge-negative-missing-control` para os controles de runtime.
+14. Ambos os comandos devem usar exclusivamente a PR #2157, `merge_sha=2a7f113a1f0677a0ecd27c69c7c3f8a7a5fe5f58` e `head_sha=da23ddec0f0afba4fdf123c9e80ab4d831ffc133`, sem aceitar parâmetros do comentário.
+15. O replay deve registrar `dispatches_created=[]` e reutilizar os run IDs terminais já existentes do mesmo merge SHA.
+16. O controle negativo deve adicionar apenas um workflow sintético inexistente, registrar `NEGATIVE_CONTROL_REQUIRED_WORKFLOW_MISSING`, terminar em failure e remover a ref temporária.
 
 ## Controles negativos
 
@@ -27,6 +31,8 @@ Eliminar falso verde após merge governado executado com `GITHUB_TOKEN`, materia
 - Timeout de materialização falha fechado.
 - `workflow_dispatch` do Main Post-Merge Validation com evidência incompleta termina em failure.
 - Limpeza não remove ref cujo SHA mudou durante a execução.
+- O comando de replay não pode criar novos runs dos quatro workflows já materializados para a PR #2157.
+- O controle negativo por workflow obrigatório ausente deve terminar vermelho mesmo sendo uma falha esperada do teste.
 
 ## Critérios de aceite
 
@@ -38,3 +44,6 @@ Eliminar falso verde após merge governado executado com `GITHUB_TOKEN`, materia
 - `workflow:action-immutability` verde para todos os workflows alterados.
 - Teste pós-merge posterior comprova os três workflows obrigatórios e o Main Post-Merge Validation no mesmo `merge_sha`.
 - Replay do mesmo `merge_sha` não cria novas execuções quando evidência terminal válida já existe.
+- Artifact do replay aponta para os mesmos run IDs originais de CI, Governance Quality Gates, Governança Padrão Ouro e Main Post-Merge Validation.
+- Caso negativo real em GitHub Actions termina em failure com `NEGATIVE_CONTROL_REQUIRED_WORKFLOW_MISSING`, publica artifact sanitizado e comprova cleanup da ref temporária.
+- `tests/test_reqsys_authorized_actions_gateway.py` verde para os dois comandos exatos.
