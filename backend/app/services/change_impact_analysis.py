@@ -232,13 +232,13 @@ def artifacts_from_traceability_graph(
         included_ids.update((source, target))
         links_by_source[source].append(target)
 
-    requirement = graph.get("requirement") or {}
+    graph_uri = _traceability_graph_uri(graph)
+    requirement = graph["requirement"]
     requirement_code = str(requirement.get("code") or "").strip()
     requirement_node_id = f"requirement:{requirement_code}" if requirement_code else ""
     if requirement_node_id in node_map:
         included_ids.add(requirement_node_id)
 
-    graph_uri = _traceability_graph_uri(graph)
     artifacts: list[ImpactArtifact] = []
     for node_id in sorted(included_ids):
         node = node_map[node_id]
