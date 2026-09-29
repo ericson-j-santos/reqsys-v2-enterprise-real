@@ -438,7 +438,7 @@ def test_live_impact_operational_api_excludes_rejected_runtime_evidence():
     assert data["graph_summary"]["rejected_evidence_count"] == 1
 
 
-def test_live_impact_operational_api_rejects_unknown_seed():
+def test_live_impact_operational_api_rejects_unknown_seed_without_leaking_details():
     requisito_id, _ = _seed_graph()
 
     response = client.post(
@@ -448,10 +448,17 @@ def test_live_impact_operational_api_rejects_unknown_seed():
             "query": "avaliar impacto",
             "seed_artifact_ids": ["unknown:seed"],
         },
+        headers={"X-Correlation-Id": "live-impact-invalid-seed"},
     )
 
     assert response.status_code == 422
-    assert "seeds ausentes da rastreabilidade viva" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail == {
+        "code": "CHANGE_IMPACT_INVALID",
+        "message": "Parâmetros de análise de impacto inválidos.",
+        "correlation_id": "live-impact-invalid-seed",
+    }
+    assert "unknown:seed" not in response.text
 
 
 def test_live_impact_operational_api_requirement_not_found():
