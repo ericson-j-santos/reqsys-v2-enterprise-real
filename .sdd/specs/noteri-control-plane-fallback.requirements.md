@@ -120,3 +120,4 @@ A partir de 2026-09-29, o runtime auto watch também observa o Worker Pool do En
 - Alertas são publicados somente na transição para acionável e na recuperação; o comentário de estado permanece deduplicado.
 - O workflow físico usa CPython 3.12.10 embeddable x64 oficial validado pelo SHA-256 pinado; o Python instalado no host não é dependência.
 - O monitor não executa produção, segredo, reboot, GUI, shell remoto ou mutação do Worker Pool.
+- O Pre-PR deve ser revalidado contra a main corrente; se a base avançar, sincronizar por merge não destrutivo e exigir novo E2E físico no SHA resultante antes da PR.
