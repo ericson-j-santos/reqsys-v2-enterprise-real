@@ -46,6 +46,7 @@ def test_monitor_is_fail_closed_for_alerts_and_idempotent() -> None:
     assert "### Estado atual evidenciado" in raw
     assert "### Critérios de aceite" in raw
     assert "### Declaração de rastreabilidade" in raw
+    assert "- [x] Issue canônica de estado do monitor" in raw
 
 
 def test_monitor_uses_minimum_permissions_and_immutable_actions() -> None:

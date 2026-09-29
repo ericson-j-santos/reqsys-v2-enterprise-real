@@ -395,7 +395,7 @@ jobs:
               'P1 — confiabilidade do E2E Planner→Teams.',
               '',
               '### Declaração de rastreabilidade',
-              'Issue canônica de estado do monitor Microsoft Graph ↔ E2E Planner→Teams ↔ PR #2166.',
+              '- [x] Issue canônica de estado do monitor Microsoft Graph ↔ E2E Planner→Teams ↔ PR #2166.',
               '',
               markerStart + stateJson + markerEnd
             ].join('\n');
