@@ -83,3 +83,20 @@ def test_validator_rejects_false_positive_payload(tmp_path: Path) -> None:
     errors = module.validate_evidence(evidence, tmp_path, "b" * 40)
     assert any(item.startswith("file_count_mismatch") for item in errors)
     assert "voice_segment_matrix_incomplete" in errors
+
+
+def run_all() -> None:
+    import tempfile
+
+    test_narration_contract_preserves_ten_timed_segments()
+    test_generator_has_zero_cost_and_fail_closed_markers()
+    test_workflow_uses_governed_session_and_gateway_only()
+    with tempfile.TemporaryDirectory() as raw:
+        test_validator_rejects_missing_evidence(Path(raw))
+    with tempfile.TemporaryDirectory() as raw:
+        test_validator_rejects_false_positive_payload(Path(raw))
+
+
+if __name__ == "__main__":
+    run_all()
+    print("IA_QUE_TRABALHA_TTS_CONTRACT_OK")
