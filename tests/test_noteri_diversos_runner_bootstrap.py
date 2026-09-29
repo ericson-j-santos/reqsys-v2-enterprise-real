@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "scripts" / "bootstrap_noteri_diversos_runner.py"
 CONFIG = ROOT / "scripts" / "configure_noteri_diversos_runner_risk3.py"
-WORKFLOW = ROOT / ".github" / "workflows" / "noteri-diversos-runner-bootstrap.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "noteri-desktop-watchdog-recovery.yml"
 GATEWAY = ROOT / ".github" / "workflows" / "reqsys-authorized-actions-gateway.yml"
 
 
@@ -60,6 +60,8 @@ def test_risk3_action_is_exact_temporary_and_dev_only() -> None:
 
 def test_workflow_uses_governed_session_risk3_and_pinned_runtime() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
+    assert "- diversos-runner-bootstrap" in text
+    assert "if: ${{ inputs.mode == 'diversos-runner-bootstrap' }}" in text
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in text
     assert "session_launcher.py" in text
     assert "SESSION_LAUNCH_OK" in text
@@ -78,8 +80,9 @@ def test_gateway_exposes_only_exact_diversos_runner_command() -> None:
     text = GATEWAY.read_text(encoding="utf-8")
     assert "github.event.comment.body == '/reqsys run noteri-diversos-runner-bootstrap'" in text
     assert "'/reqsys run noteri-diversos-runner-bootstrap')" in text
-    assert "target='noteri-diversos-runner-bootstrap.yml'" in text
-    assert "steps.route.outputs.target == 'noteri-diversos-runner-bootstrap.yml'" in text
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in text
+    assert "mode='diversos-runner-bootstrap'" in text
+    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once|diversos-runner-bootstrap" in text
     assert "-f repository=diversos" not in text
     assert "-f runner=" not in text
 
