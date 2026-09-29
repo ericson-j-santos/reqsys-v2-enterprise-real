@@ -1,17 +1,35 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.core.correlation import obter_correlation_id
 from app.core.envelope import ok
 from app.core.security import get_current_user
 from app.db import get_db
 from app.models.agile_runtime import AgileWorkItem
 from app.models.requisito import Requisito
 from app.models.vinculo_git import VinculoGit
+from app.services.change_impact_analysis import (
+    ChangeImpactValidationError,
+    StrategyResult,
+    analyze_live_change,
+    build_configured_llm_generator,
+)
 from app.services.traceability_graph import TraceabilityGraphService
 
 router = APIRouter(prefix='/v1/rastreabilidade', tags=['Rastreabilidade Git'])
+
+
+class ImpactoRequisitoIn(BaseModel):
+    change_id: str = Field(min_length=1, max_length=200)
+    query: str = Field(min_length=1, max_length=4000)
+    seed_artifact_ids: list[str] | None = None
+    graph_depth: int = Field(default=2, ge=1, le=5)
+    semantic_top_k: int = Field(default=6, ge=1, le=20)
+    llm_enabled: bool = False
+    provider: str | None = Field(default=None, max_length=80)
+    model: str = Field(default='', max_length=200)
 
 
 class VinculoManualIn(BaseModel):
@@ -23,6 +41,26 @@ class VinculoManualIn(BaseModel):
     titulo: str | None = None
     autor: str | None = None
     ambiente: str | None = None  # dev | staging | prod
+
+
+def _serializar_resultado_impacto(result: StrategyResult) -> dict:
+    return {
+        'strategy': result.strategy,
+        'llm_status': result.llm_status,
+        'provider': result.provider,
+        'model': result.model,
+        'candidates': [
+            {
+                'artifact_id': candidate.artifact_id,
+                'relation': candidate.relation,
+                'confidence': candidate.confidence,
+                'evidence': list(candidate.evidence),
+                'reason': candidate.reason,
+                'strategy': candidate.strategy,
+            }
+            for candidate in result.candidates
+        ],
+    }
 
 
 def _serializar(v: VinculoGit) -> dict:
@@ -65,6 +103,66 @@ def grafo_rastreabilidade_requisito(
     if graph is None:
         raise HTTPException(status_code=404, detail='Requisito não encontrado.')
     return ok(graph)
+
+
+@router.post('/requisitos/{requisito_id}/impacto')
+def analisar_impacto_requisito(
+    requisito_id: int,
+    payload: ImpactoRequisitoIn,
+    _user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Analisa impacto operacional somente sobre a rastreabilidade viva do requisito."""
+    graph = TraceabilityGraphService(db).build_for_requirement(requisito_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail='Requisito não encontrado.')
+
+    correlation_id = obter_correlation_id()
+    llm_generate = (
+        build_configured_llm_generator(
+            provider=payload.provider,
+            model=payload.model,
+        )
+        if payload.llm_enabled
+        else None
+    )
+
+    try:
+        results = analyze_live_change(
+            graph,
+            change_id=payload.change_id,
+            query=payload.query,
+            seed_artifact_ids=payload.seed_artifact_ids,
+            graph_depth=payload.graph_depth,
+            semantic_top_k=payload.semantic_top_k,
+            llm_generate=llm_generate,
+            correlation_id=correlation_id,
+        )
+    except ChangeImpactValidationError:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'code': 'CHANGE_IMPACT_INVALID',
+                'message': 'Parâmetros de análise de impacto inválidos.',
+                'correlation_id': correlation_id,
+            },
+        ) from None
+
+    return ok(
+        {
+            'change_id': payload.change_id,
+            'requirement': graph['requirement'],
+            'source': 'live_traceability_graph',
+            'historical_dataset_used': False,
+            'read_only': True,
+            'graph_summary': graph['summary'],
+            'strategies': [
+                _serializar_resultado_impacto(result)
+                for result in results
+            ],
+        },
+        correlation_id=correlation_id,
+    )
 
 
 @router.get('/buscar')

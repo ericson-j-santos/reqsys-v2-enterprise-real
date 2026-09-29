@@ -336,3 +336,157 @@ def test_live_change_impact_excludes_rejected_runtime_and_filters_llm_hallucinat
     assert [candidate.artifact_id for candidate in hybrid.candidates] == [
         valid_candidate
     ]
+
+
+
+def test_live_impact_operational_api_e2e_is_read_only_and_replay_stable():
+    requisito_id, _ = _seed_graph()
+    payload = {
+        "change_id": "CHANGE-OPERATIONAL-TRACE-1",
+        "query": "avaliar impacto operacional da mudança usando rastreabilidade viva",
+        "llm_enabled": False,
+    }
+    headers = {"X-Correlation-Id": "live-impact-operational-e2e"}
+
+    db = TestingSession()
+    try:
+        before_evidence = db.query(ChangeEvidenceRecord).count()
+        before_links = db.query(VinculoGit).count()
+        before_items = db.query(AgileWorkItem).count()
+    finally:
+        db.close()
+
+    graph_response = client.get(
+        f"/v1/rastreabilidade/requisitos/{requisito_id}/grafo",
+        headers=headers,
+    )
+    first = client.post(
+        f"/v1/rastreabilidade/requisitos/{requisito_id}/impacto",
+        json=payload,
+        headers=headers,
+    )
+    second = client.post(
+        f"/v1/rastreabilidade/requisitos/{requisito_id}/impacto",
+        json=payload,
+        headers=headers,
+    )
+
+    assert graph_response.status_code == 200
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["data"] == second.json()["data"]
+    assert first.json()["meta"]["correlation_id"] == "live-impact-operational-e2e"
+
+    data = first.json()["data"]
+    assert data["change_id"] == payload["change_id"]
+    assert data["source"] == "live_traceability_graph"
+    assert data["historical_dataset_used"] is False
+    assert data["read_only"] is True
+    assert data["requirement"]["code"] == "REQ-TRACE-0001"
+
+    strategies = {item["strategy"]: item for item in data["strategies"]}
+    assert set(strategies) == {"graph", "semantic", "hybrid_rag_llm"}
+    assert strategies["graph"]["candidates"]
+    assert strategies["hybrid_rag_llm"]["llm_status"] == "disabled"
+
+    graph_node_ids = {
+        node["id"]
+        for node in graph_response.json()["data"]["nodes"]
+    }
+    for strategy in strategies.values():
+        assert all(
+            candidate["artifact_id"] in graph_node_ids
+            for candidate in strategy["candidates"]
+        )
+        assert all(
+            candidate["evidence"]
+            for candidate in strategy["candidates"]
+        )
+
+    db = TestingSession()
+    try:
+        assert db.query(ChangeEvidenceRecord).count() == before_evidence == 1
+        assert db.query(VinculoGit).count() == before_links == 2
+        assert db.query(AgileWorkItem).count() == before_items == 1
+    finally:
+        db.close()
+
+
+def test_live_impact_operational_api_excludes_rejected_runtime_evidence():
+    requisito_id, event_id = _seed_graph(runtime_sha="d" * 40)
+
+    response = client.post(
+        f"/v1/rastreabilidade/requisitos/{requisito_id}/impacto",
+        json={
+            "change_id": "CHANGE-OPERATIONAL-NEGATIVE",
+            "query": "avaliar impacto sem promover evidência runtime rejeitada",
+        },
+        headers={"X-Correlation-Id": "live-impact-operational-negative"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    candidate_ids = {
+        candidate["artifact_id"]
+        for strategy in data["strategies"]
+        for candidate in strategy["candidates"]
+    }
+
+    assert f"runtime_evidence:{event_id}" not in candidate_ids
+    assert "ci_run:36520000001" not in candidate_ids
+    assert "deployment:github-actions:traceability-dev" not in candidate_ids
+    assert data["graph_summary"]["rejected_evidence_count"] == 1
+
+
+def test_live_impact_operational_api_rejects_unknown_seed_without_leaking_details():
+    requisito_id, _ = _seed_graph()
+
+    response = client.post(
+        f"/v1/rastreabilidade/requisitos/{requisito_id}/impacto",
+        json={
+            "change_id": "CHANGE-OPERATIONAL-BAD-SEED",
+            "query": "avaliar impacto",
+            "seed_artifact_ids": ["unknown:seed"],
+        },
+        headers={"X-Correlation-Id": "live-impact-invalid-seed"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail == {
+        "code": "CHANGE_IMPACT_INVALID",
+        "message": "Parâmetros de análise de impacto inválidos.",
+        "correlation_id": "live-impact-invalid-seed",
+    }
+    assert "unknown:seed" not in response.text
+
+
+def test_live_impact_operational_api_requirement_not_found():
+    response = client.post(
+        "/v1/rastreabilidade/requisitos/999999/impacto",
+        json={
+            "change_id": "CHANGE-OPERATIONAL-NOT-FOUND",
+            "query": "avaliar impacto",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Requisito não encontrado."
+
+
+def test_live_impact_operational_api_requires_authenticated_user():
+    requisito_id, _ = _seed_graph()
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        response = client.post(
+            f"/v1/rastreabilidade/requisitos/{requisito_id}/impacto",
+            json={
+                "change_id": "CHANGE-OPERATIONAL-AUTH",
+                "query": "avaliar impacto",
+            },
+        )
+    finally:
+        app.dependency_overrides[get_current_user] = _user_override
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Token não fornecido"
