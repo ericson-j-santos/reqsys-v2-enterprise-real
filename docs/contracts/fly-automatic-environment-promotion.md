@@ -1,52 +1,35 @@
 # Fly Automatic Environment Promotion
 
+> Estado atual: **legado manual-only**. O nome do workflow foi preservado por compatibilidade histórica. Fly não é permitido em DEV.
+
 ## Objetivo
 
-Promover o mesmo SHA imutável da `main` em sequência `DEV → STG → PROD`, usando evidências coletadas antes e depois de cada estágio.
+Permitir, somente por `workflow_dispatch`, a validação de DEV no PC24x7 e a promoção legada de HML/PROD em Fly quando explicitamente solicitada e autorizada.
 
 ## Gatilhos
 
-- conclusão bem-sucedida do `Post-merge Main Runtime Validator` em `push` da `main`;
-- reconciliação horária;
-- execução manual governada.
-
-## Contratos de evidência
-
-Cada ambiente produz e correlaciona:
-
-- estado sanitizado dos apps Fly;
-- máquinas e regiões ativas;
-- configuração crítica local e remota;
-- nomes e estado de implantação dos secrets obrigatórios, nunca seus valores;
-- release e checks do Fly;
-- smoke dos endpoints públicos;
-- readiness da API e runtime;
-- SHA publicado;
-- validação de login e redirect Azure.
-
-A decisão é `promotion_stage_ready` apenas quando todos os contratos estão íntegros, o ambiente é o esperado, o SHA observado coincide com o SHA alvo e não existem bloqueios.
+- somente `workflow_dispatch`;
+- não existe `schedule`;
+- não existe `workflow_run` automático;
+- SHA diferente da `main` corrente é recusado antes de qualquer promoção.
 
 ## Fluxo
 
-1. Resolver o SHA atual da `main`.
-2. Rejeitar execução obsoleta quando a `main` avançar.
-3. Capturar DEV.
-4. Implantar DEV apenas se houver drift e validar novamente em modo estrito.
-5. Repetir a mesma política para STG somente após DEV verde.
-6. Consultar o BACEN Production Hard Gate.
-7. Capturar PROD.
-8. Implantar PROD somente quando houver drift, STG estiver verde e o gate BACEN autorizar.
-9. Validar PROD novamente em modo estrito.
-10. Publicar relatório imutável de toda a cadeia.
+1. Resolver o SHA atual da `main` e rejeitar SHA obsoleto.
+2. Validar DEV exclusivamente pelo locator assinado PC24x7, incluindo health e same-SHA.
+3. Somente após DEV verde, capturar/promover HML no Fly legado.
+4. Consultar o BACEN Production Hard Gate.
+5. Capturar/promover PROD somente quando HML estiver verde e o gate BACEN autorizar.
+6. Publicar relatório imutável da cadeia.
 
 ## Guard rails
 
-- fail-closed para artifact ausente, JSON inválido, command failure, secret ausente, check degradado, login inválido ou SHA divergente;
+- Fly não é permitido em DEV e não existe fallback por `REQSYS_DEV_RUNTIME_PROVIDER`;
+- execução automática de Fly por horário ou pós-merge é proibida;
+- fail-closed para locator ausente, runtime PC24x7 indisponível, SHA divergente, artifact ausente, JSON inválido, command failure, secret ausente ou check degradado;
 - nenhuma persistência de valores de secrets;
 - nenhum bypass do ambiente GitHub ou do BACEN Production Hard Gate;
-- somente o SHA atual da `main` pode ser implantado;
-- estágios sequenciais e sem paralelismo entre ambientes;
-- produção pode permanecer bloqueada sem transformar a decisão regulatória em aprovação automática;
+- somente o SHA atual da `main` pode ser promovido;
 - artifacts de ambiente retidos por 90 dias e resumo da cadeia por 365 dias.
 
 ## Rollback

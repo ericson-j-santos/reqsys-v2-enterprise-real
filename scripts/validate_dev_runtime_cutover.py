@@ -17,6 +17,8 @@ FORBIDDEN_DEV_RUNTIME_URLS = (
     "https://reqsys-api-dev.fly.dev",
 )
 WSJF_ACCEPTANCE_WORKFLOW = ".github/workflows/user-journey-acceptance-dev.yml"
+FLY_AUTOMATIC_PROMOTION_WORKFLOW = ".github/workflows/fly-automatic-environment-promotion.yml"
+AUTO_PUBLIC_RUNTIME_EVIDENCE_WORKFLOW = ".github/workflows/auto-public-runtime-evidence.yml"
 STATIC_DEV_RUNTIME_VARIABLES = (
     "PC24X7_DEV_BASE_URL",
     "PC24X7_DEV_FRONTEND_URL",
@@ -31,6 +33,8 @@ CRITICAL_FILES = (
     ".github/workflows/executive-final-sync-history-public-smoke-trend-public.yml",
     ".github/workflows/noteri-study-mode-dev-reconcile.yml",
     WSJF_ACCEPTANCE_WORKFLOW,
+    FLY_AUTOMATIC_PROMOTION_WORKFLOW,
+    AUTO_PUBLIC_RUNTIME_EVIDENCE_WORKFLOW,
     "docs/public-dev-locator/index.html",
 )
 
@@ -93,6 +97,41 @@ def validate() -> list[str]:
         errors.append("wsjf_api_same_origin_export_missing")
     if 'echo "FRONTEND_URL=$resolved_url" >> "$GITHUB_ENV"' not in wsjf:
         errors.append("wsjf_frontend_same_origin_export_missing")
+    fly_promotion = read(FLY_AUTOMATIC_PROMOTION_WORKFLOW)
+    fly_trigger = fly_promotion.split("permissions:", 1)[0]
+    if "workflow_dispatch:" not in fly_trigger:
+        errors.append("fly_legacy_manual_dispatch_missing")
+    if "schedule:" in fly_trigger or "workflow_run:" in fly_trigger:
+        errors.append("fly_legacy_automatic_trigger_forbidden")
+    for marker in (
+        "REQSYS_DEV_RUNTIME_PROVIDER",
+        "Capture DEV via Fly",
+        "Promote DEV via Fly",
+        "needs.resolve.outputs.dev_provider",
+    ):
+        if marker in fly_promotion:
+            errors.append(f"fly_dev_fallback_forbidden:{marker}")
+    if "Validate DEV via PC24x7 public tunnel" not in fly_promotion:
+        errors.append("fly_legacy_pc24x7_dev_validation_missing")
+
+    auto_public = read(AUTO_PUBLIC_RUNTIME_EVIDENCE_WORKFLOW)
+    auto_trigger = auto_public.split("permissions:", 1)[0]
+    if "Main Post-Merge Validation" not in auto_trigger:
+        errors.append("auto_public_main_post_merge_upstream_missing")
+    if "Fly Automatic Environment Promotion" in auto_public:
+        errors.append("auto_public_fly_upstream_forbidden")
+    if "github.event.workflow_run.event" not in auto_public or "workflow_dispatch" not in auto_public:
+        errors.append("auto_public_fail_closed_upstream_event_missing")
+    if "resolve_pc24x7_dev_locator.mjs" not in auto_public:
+        errors.append("auto_public_signed_locator_missing")
+    for variable in (*STATIC_DEV_RUNTIME_VARIABLES, "REQSYS_DEV_RUNTIME_PROVIDER"):
+        if variable in auto_public:
+            errors.append(f"auto_public_static_or_provider_fallback_forbidden:{variable}")
+    if "reqsys-api.fly.dev" in auto_public or "reqsys-app-dev.fly.dev" in auto_public:
+        errors.append("auto_public_legacy_fly_url_forbidden")
+    if "Runtime DEV legado Fly.io rejeitado" not in auto_public:
+        errors.append("auto_public_fly_fail_closed_missing")
+
     study = read(".github/workflows/noteri-study-mode-dev-reconcile.yml")
     trigger = study.split("permissions:", 1)[0]
     if "push:" not in trigger or "- main" not in trigger:

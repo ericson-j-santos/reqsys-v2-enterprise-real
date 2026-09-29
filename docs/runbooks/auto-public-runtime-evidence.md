@@ -2,63 +2,34 @@
 
 ## Objetivo
 
-Automatizar a execução do `Public Runtime Evidence Gate` após a validação/promoção governada do runtime em `main`, sem depender de PAT ou acionamento manual por CLI.
-
-## Workflow
-
-```text
-.github/workflows/auto-public-runtime-evidence.yml
-```
+Executar `Public Runtime Evidence Gate` para o DEV PC24x7 após a validação pós-merge fail-closed do SHA atual, sem PAT e sem fallback Fly.
 
 ## Quando executa
 
-1. Automaticamente quando `Fly Automatic Environment Promotion` concluir com sucesso em `main`.
+1. Automaticamente somente quando `Main Post-Merge Validation` concluir `success`, tiver sido acionado por `workflow_dispatch` e o SHA validado for exatamente o SHA atual da `main`.
 2. Manualmente por `workflow_dispatch`, quando necessário.
+
+Runs agendados/report-only do `Main Post-Merge Validation` não disparam esta cadeia.
+
+## Roteamento DEV
+
+- o runtime é resolvido por `scripts/resolve_pc24x7_dev_locator.mjs`;
+- a URL deve ser HTTPS sob `*.trycloudflare.com`;
+- `fly.io` e `fly.dev` são rejeitados de forma fail-closed;
+- não são usados `REQSYS_DEV_RUNTIME_PROVIDER`, `PC24X7_DEV_BASE_URL` ou `PC24X7_DEV_FRONTEND_URL` como fallback estático.
 
 ## Credencial
 
-O fluxo usa somente o `GITHUB_TOKEN` efêmero do próprio job, com permissões mínimas:
-
-```text
-actions: write
-contents: read
-```
-
-Não requer `GH_PAT_ACTIONS`, App ID ou chave privada da GitHub App.
-
-## Roteamento automático DEV
-
-O provider é lido de:
-
-```text
-vars.REQSYS_DEV_RUNTIME_PROVIDER
-```
-
-Valores aceitos:
-
-- `fly`: usa `https://reqsys-api.fly.dev`;
-- `pc24x7`: usa `vars.PC24X7_DEV_BASE_URL`, obrigatoriamente HTTPS.
-
-Provider inválido, URL PC24x7 ausente ou URL sem HTTPS bloqueiam o dispatch.
+O fluxo usa somente `GITHUB_TOKEN` efêmero, com `actions: write` e `contents: read`. Não usa PAT nem chave de GitHub App.
 
 ## Comportamento automático
 
-O workflow dispara `public-runtime-evidence.yml` com:
-
-```text
-strict=true
-publish_comment=false
-ref=main
-```
-
-`publish_comment=false` evita dependência de issue/PR para produzir o artifact operacional.
+O dispatch para `public-runtime-evidence.yml` usa `strict=true`, `publish_comment=false`, `ref=main` e provider efetivo `pc24x7`.
 
 ## Critério de aceite
 
-O aceite operacional final exige:
-
-- `Auto Public Runtime Evidence` em `success`;
-- `Public Runtime Evidence Gate` disparado no `main`;
-- artifact `public-runtime-evidence`;
-- endpoints strict em sucesso;
-- nenhum segredo de longa duração usado pelo despachante.
+- upstream fail-closed no SHA atual;
+- locator assinado resolvido;
+- URL PC24x7 validada e Fly rejeitado;
+- `Public Runtime Evidence Gate` disparado;
+- nenhum segredo de longa duração usado.
