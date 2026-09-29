@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,6 +110,15 @@ def test_workflow_exposes_only_fixed_alm_bridge_mode() -> None:
     assert "RISK3_CLEANUP_NOT_REQUIRED session_not_materialized" in raw
     assert "TARGET_ALM_HEAD: 96966d8decc210a98eefa7f0ca437052e8bd5a21" in raw
     assert "ALM_RUNNER_BRIDGE_NOT_READY" in raw
+
+
+def test_alm_workflow_risk3_timeout_respects_gateway_contract() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    alm_block = raw.split("  alm-runner-bootstrap:", 1)[1]
+    match = re.search(r'"--timeout", "(\\d+)"', alm_block)
+    assert match is not None
+    timeout_seconds = int(match.group(1))
+    assert 1 <= timeout_seconds <= 900
 
 
 def test_authorized_gateway_maps_exact_command_to_existing_workflow_mode() -> None:
