@@ -95,8 +95,12 @@ def fetch_runs(
     rows: list[dict[str, Any]] = []
     complete = False
     pages = 0
+    created_filter = cutoff.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     for page in range(1, max(1, max_pages) + 1):
-        payload = api_get(f"/repos/{owner}/{name}/actions/runs?per_page=100&page={page}", token)
+        payload = api_get(
+            f"/repos/{owner}/{name}/actions/runs?created=%3E%3D{created_filter}&per_page=100&page={page}",
+            token,
+        )
         if not isinstance(payload, dict):
             raise RuntimeError("resposta inválida ao listar workflow runs")
         batch = payload.get("workflow_runs") or []
