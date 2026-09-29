@@ -4,6 +4,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.core.envelope import ok
+from app.core.security import get_current_user
 from app.db import get_db
 from app.models.agile_runtime import AgileWorkItem
 from app.models.requisito import Requisito
@@ -56,6 +57,7 @@ def vinculos_por_requisito(requisito_id: int, db: Session = Depends(get_db)):
 @router.get('/requisitos/{requisito_id}/grafo')
 def grafo_rastreabilidade_requisito(
     requisito_id: int,
+    _user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Projeta requisito → engenharia → CI → runtime sem duplicar fontes canônicas."""

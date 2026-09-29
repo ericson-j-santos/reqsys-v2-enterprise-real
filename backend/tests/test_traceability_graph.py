@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.change_evidence import ChangeEvidenceRecord
+from app.core.security import get_current_user
 from app.db import Base, get_db
 from app.main import app
 from app.models.agile_runtime import AgileWorkItem
@@ -25,6 +26,10 @@ TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 client = TestClient(app)
 
 
+def _user_override():
+    return {"sub": "traceability-test", "papel": "admin"}
+
+
 def _db_override():
     db = TestingSession()
     try:
@@ -38,8 +43,10 @@ def _isolated_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = _db_override
+    app.dependency_overrides[get_current_user] = _user_override
     yield
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def _seed_graph(*, runtime_sha: str | None = None, status: str = "PASSED") -> tuple[int, str]:
@@ -235,3 +242,15 @@ def test_traceability_graph_requirement_not_found():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Requisito não encontrado."
+
+
+def test_traceability_graph_requires_authenticated_user():
+    requisito_id, _ = _seed_graph()
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        response = client.get(f"/v1/rastreabilidade/requisitos/{requisito_id}/grafo")
+    finally:
+        app.dependency_overrides[get_current_user] = _user_override
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Token não fornecido"
