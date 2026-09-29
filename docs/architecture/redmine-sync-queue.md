@@ -137,6 +137,7 @@ AZURE_TENANT_ID=...          # já usado por hub_lowcode/teams_gateway
 AZURE_CLIENT_ID=...
 AZURE_CLIENT_SECRET=...
 REDMINE_BASE_URL=...
+REDMINE_VERSION=...           # ex.: 7.0.1; não é segredo
 REDMINE_API_KEY=...
 REDMINE_PROJECT_ID=...
 REDMINE_SYNC_DATAVERSE_URL=https://orga258f260.crm2.dynamics.com   # ambiente onde vivem as tabelas cr85a_*
@@ -149,6 +150,27 @@ REDMINE_SYNC_MAX_TENTATIVAS=5
 `REDMINE_SYNC_DATAVERSE_URL` (mesmo procedimento já documentado em
 `docs/architecture/teams-messaging-gateway.md`: `pac admin application
 register` + `pac admin assign-user --role "System Customizer"`).
+
+## Gate de versão e segurança do Redmine
+
+O Redmine não publica a versão do servidor pela REST API de forma confiável. A
+fonte oficial orienta consultar **Administration > Information** ou
+`lib/redmine/version.rb` na instalação. Por isso o preflight falha fechado em
+vez de tentar inferir a versão por comportamento de endpoints.
+
+A versão confirmada pode ser informada por `REDMINE_VERSION` ou apenas para uma
+execução com `verificar --redmine-version X.Y.Z`. Política homologada atual:
+
+- 6.0.x: mínimo 6.0.11;
+- 6.1.x: mínimo 6.1.4;
+- 7.0.x: mínimo 7.0.1;
+- 5.x ou anterior: bloqueado como EOL;
+- outras séries: bloqueadas até homologação explícita.
+
+Referências oficiais:
+- https://www.redmine.org/projects/redmine/wiki/Security_Advisories
+- https://www.redmine.org/projects/redmine/wiki/RedmineAdminInformation
+- https://www.redmine.org/projects/redmine/wiki/HowTo_find_out_the_redmine_version_number_you_are_using
 
 ## Script de captura + verificação: `scripts/configurar_redmine_sync_queue.py`
 
@@ -165,8 +187,8 @@ cd backend && .venv\Scripts\python.exe ..\scripts\configurar_redmine_sync_queue.
 #   -> pergunta interativamente (getpass para segredos) cada variável que falta
 #      e grava em .env; aceita também --redmine-base-url etc. para uso não interativo
 
-.venv\Scripts\python.exe ..\scripts\configurar_redmine_sync_queue.py verificar
-#   -> testa AO VIVO: aquisição de token Azure AD/Dataverse, Application User
+.venv\Scripts\python.exe ..\scripts\configurar_redmine_sync_queue.py verificar --redmine-version 7.0.1
+#   -> valida primeiro a baseline de versão e depois testa AO VIVO: aquisição de token Azure AD/Dataverse, Application User
 #      do AZURE_CLIENT_ID no ambiente, schema real de cr85a_redminequeue/
 #      cr85a_agilesync/cr85a_auditlog contra o que o código assume (inclui o
 #      diagnóstico do bloqueador cr85a_correlationid), e conectividade de
