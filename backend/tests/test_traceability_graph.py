@@ -155,7 +155,10 @@ def test_traceability_graph_e2e_projects_requirement_to_runtime_and_replay_is_st
     assert first.json() == second.json()
 
     graph = first.json()["data"]
+    assert graph["graph_type"] == "functional_traceability_graph"
+    assert graph["schema_version"] == "1.1.0"
     assert graph["requirement"]["code"] == "REQ-TRACE-0001"
+    assert "REQUIREMENT" in {node["type"] for node in graph["nodes"]}
     assert graph["summary"]["valid_evidence_count"] == 1
     assert graph["summary"]["rejected_evidence_count"] == 0
 

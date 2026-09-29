@@ -16,6 +16,7 @@ Expor uma projeção read-only da rastreabilidade já persistida pelo ReqSys, se
 8. `FAILED` deve permanecer visível apenas como diagnóstico rejeitado e nunca como evidência válida.
 9. Requisito inexistente deve retornar 404.
 10. Este incremento não executa merge, deploy, promoção, alteração de segredo, criação de infraestrutura ou mutação em produção.
+11. A saída deve estender o contrato histórico `functional_traceability_graph` já existente na Product Intelligence, preservando `graph_type`, `nodes[].id`, `nodes[].type`, `nodes[].label`, `edges[].source`, `edges[].target` e `edges[].relation`; metadados runtime podem ser adicionados de forma compatível.
 
 ## Controles negativos
 

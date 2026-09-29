@@ -276,7 +276,8 @@ class TraceabilityGraphService:
         rejected_evidence.sort(key=lambda item: item["event_id"])
 
         return {
-            "schema_version": "1.0.0",
+            "graph_type": "functional_traceability_graph",
+            "schema_version": "1.1.0",
             "requirement": {
                 "id": requisito.id,
                 "code": requisito.codigo,
@@ -316,7 +317,7 @@ class TraceabilityGraphService:
     ) -> None:
         candidate = {
             "id": node_id,
-            "kind": kind,
+            "type": kind,
             "label": label,
             "source_uri": source_uri,
             "metadata": metadata,
