@@ -197,6 +197,8 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "PORTABLE_PYTHON_VERSION: \"3.12.10\"" in workflow
     assert "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3" in workflow
     assert "REQSYS_PYTHON" in workflow
+    assert '& "$env:REQSYS_PYTHON" scripts/noteri_control_plane_probe.py' in workflow
+    assert '& "$env:REQSYS_PYTHON" "$env:GITHUB_WORKSPACE\\noteri-runtime-source\\scripts\\noteri_runtime_isolated_e2e.py"' in workflow
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-control-plane-probe.yml" in policy["approved_workflows"]
 

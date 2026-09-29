@@ -106,7 +106,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          python "$env:GITHUB_WORKSPACE\noteri-runtime-source\scripts\noteri_runtime_isolated_e2e.py" --expected-sha "${{ steps.noteri_runtime.outputs.sha }}" --correlation-id "$env:RUNTIME_CORRELATION_ID" --evidence-path "$env:RUNTIME_EVIDENCE_FILE"
+          & "$env:REQSYS_PYTHON" "$env:GITHUB_WORKSPACE\noteri-runtime-source\scripts\noteri_runtime_isolated_e2e.py" --expected-sha "${{ steps.noteri_runtime.outputs.sha }}" --correlation-id "$env:RUNTIME_CORRELATION_ID" --evidence-path "$env:RUNTIME_EVIDENCE_FILE"
 
       - name: Validate independent noteri-runtime evidence
         shell: powershell
