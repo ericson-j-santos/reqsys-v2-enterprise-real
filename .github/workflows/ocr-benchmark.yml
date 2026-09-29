@@ -28,7 +28,7 @@ concurrency:
   group: ocr-benchmark-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
-  OCR_ENGINE_SHA: '15209941c4ddbf52da62cedc866510592b3172ee'
+  OCR_ENGINE_SHA: '4329781d38c25787882676f1cd29009303fcd44c'
 jobs:
   contract:
     runs-on: ubuntu-latest
