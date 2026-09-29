@@ -194,3 +194,23 @@ Sinais monitorados:
 A coleta falha fechada quando não consegue cobrir toda a janela dentro dos limites configurados. O relatório é persistido em `audit/ci-health-regression-watch/` junto ao artifact já existente do analytics.
 
 Em `main`, uma issue marcada por `reqsys-ci-health-regression-watch` representa o episódio ativo. Ela é criada apenas quando existe regressão material, é atualizada apenas quando a assinatura do episódio muda e é fechada sem comentário quando todos os sinais materiais desaparecem. Cada alerta contém tendência, evidência atual por run/SHA, impacto, risco e a menor correção sistêmica segura e idempotente.
+
+## Monitor de governança material
+
+O mesmo `CI Lead Time Analytics` executa `scripts/governance_drift_monitor.py` na agenda horária e quando os controles versionados relevantes mudam. Não é criado um workflow adicional.
+
+O alerta é restrito aos desvios solicitados:
+
+- ausência de `CI — ReqSys v2 Enterprise`;
+- ausência de `Governance Quality Gates`;
+- ausência de `Branch Protection Audit`, que é o equivalente versionado atual do nome lógico **Settings Hardening Evidence**;
+- ausência de `PR Evidence Gate`;
+- ruleset ativo da branch padrão ausente ou com bypass actors, tratado como alteração da proteção administrativa;
+- ausência da regra `non_fast_forward`, tratada como force-push liberado;
+- ausência da regra `deletion`, tratada como exclusão da branch liberada;
+- `allow_auto_merge` diferente de `true`;
+- perda de qualquer parte do contrato de SHA esperado no `Governed PR Automation`: captura do SHA avaliado, comparação inicial, releitura imediatamente antes do merge e `sha: triggerHeadSha` na mutação.
+
+O monitor lê o estado do repositório e dos rulesets pela API do GitHub e falha fechado se a coleta não puder ser comprovada. Falha de coleta não cria issue de drift, pois não é evidência de um desvio material.
+
+A evidência é gravada em `audit/governance-drift-monitor/report.json` e `report.md`. O summary do workflow sempre recebe o relatório quando ele existe. Em `main`, uma única issue marcada por `reqsys-governance-drift-monitor` representa o episódio ativo: ela só é criada/atualizada quando `material_drift=true`, não muda quando a assinatura de evidência permanece igual e é fechada sem comentário quando a conformidade retorna.
