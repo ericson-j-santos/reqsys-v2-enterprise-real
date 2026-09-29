@@ -1,0 +1,24 @@
+{
+  "feature_name": "redmine-version-security-gate",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-28",
+  "updated_at": "2026-09-28",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Adiciona ao preflight Redmine um gate fail-closed de versão declarada, sem tentar inferir a versão por comportamento da REST API.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_redmine_version_gate.py"
+    ]
+  },
+  "traceability": {
+    "issue": "#1686",
+    "preflight": "scripts/configurar_redmine_sync_queue.py",
+    "policy_module": "scripts/redmine_version_gate.py",
+    "official_source": "https://www.redmine.org/projects/redmine/wiki/Security_Advisories"
+  }
+}
