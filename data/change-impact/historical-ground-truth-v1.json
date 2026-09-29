@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0.0",
+  "source_sha": "c25b21b2f61e3f115f5e158ae8eaffdc71b27893",
+  "description": "Ground truth inicial derivado de incrementos RSM-07 e RSM-08 já implementados no ReqSys. O dataset é pequeno e serve para baseline, não para alegar generalização.",
+  "artifacts": [
+    {
+      "artifact_id": "REQ-1789",
+      "kind": "REQUIREMENT",
+      "source_uri": ".sdd/specs/rsm-07-change-traceability.requirements.md",
+      "text": "CHANGE deve manter rastreabilidade requisito SDD PR, CI e runtime no mesmo SHA completo; fechamento falha fechado sem evidência; FAILED exige rollback completo; replay por event_id não duplica.",
+      "links": ["SDD-RSM-07", "DOMAIN-CHANGE-EVIDENCE", "API-CHANGE-EVIDENCE"]
+    },
+    {
+      "artifact_id": "SDD-RSM-07",
+      "kind": "SDD",
+      "source_uri": ".sdd/specs/rsm-07-change-traceability.spec.json",
+      "text": "Especificação RSM-07 Change Evidence Loop, testes de domínio, API e E2E para build_sha, runtime_sha, rollback e idempotência.",
+      "links": ["DOMAIN-CHANGE-EVIDENCE", "API-CHANGE-EVIDENCE", "TEST-CHANGE-EVIDENCE", "E2E-RSM-07"]
+    },
+    {
+      "artifact_id": "DOMAIN-CHANGE-EVIDENCE",
+      "kind": "CODE",
+      "source_uri": "backend/app/domain/change_evidence.py",
+      "text": "Domínio de evidência de execução CHANGE valida runtime SHA, status PASSED FAILED ROLLED_BACK, evidência pós-deploy e fechamento seguro.",
+      "links": ["TEST-CHANGE-EVIDENCE", "API-CHANGE-EVIDENCE"]
+    },
+    {
+      "artifact_id": "API-CHANGE-EVIDENCE",
+      "kind": "API",
+      "source_uri": "backend/app/api/change_evidence.py",
+      "text": "API change-evidence persiste evidência de CHANGE, valida SHA e idempotência por event_id, expõe leitura canônica e rejeita casos inválidos.",
+      "links": ["TEST-CHANGE-EVIDENCE", "E2E-RSM-07"]
+    },
+    {
+      "artifact_id": "TEST-CHANGE-EVIDENCE",
+      "kind": "TEST",
+      "source_uri": "backend/tests/test_change_evidence_api.py",
+      "text": "Testes de CHANGE cobrem runtime SHA divergente sem persistência, PASSED, FAILED, ROLLED_BACK, replay idempotente e bloqueio de fechamento.",
+      "links": ["E2E-RSM-07"]
+    },
+    {
+      "artifact_id": "E2E-RSM-07",
+      "kind": "E2E",
+      "source_uri": "scripts/rsm_change_evidence_e2e.py",
+      "text": "E2E RSM-07 executa API real e banco real, confirma SHA esperado, leitura independente, replay e rollback sem falso positivo.",
+      "links": []
+    },
+    {
+      "artifact_id": "REQ-2055",
+      "kind": "REQUIREMENT",
+      "source_uri": ".sdd/specs/rsm-08-incident-problem.requirements.md",
+      "text": "INCIDENT deve relacionar PROBLEM canônico, persistir causa raiz auditável com evidência, idempotência e leitura de related_cases sem criar grafo paralelo.",
+      "links": ["SDD-RSM-08", "DOMAIN-SERVICE-MANAGEMENT", "API-INCIDENT-PROBLEM"]
+    },
+    {
+      "artifact_id": "SDD-RSM-08",
+      "kind": "SDD",
+      "source_uri": ".sdd/specs/rsm-08-incident-problem.spec.json",
+      "text": "Especificação RSM-08 para relação INCIDENT PROBLEM, causa raiz auditável, replay sem duplicidade, API real e PostgreSQL.",
+      "links": ["DOMAIN-SERVICE-MANAGEMENT", "API-INCIDENT-PROBLEM", "TEST-INCIDENT-PROBLEM", "E2E-RSM-08"]
+    },
+    {
+      "artifact_id": "DOMAIN-SERVICE-MANAGEMENT",
+      "kind": "CODE",
+      "source_uri": "backend/app/domain/service_management.py",
+      "text": "Domínio ServiceCase contém IncidentProblemRelation, ProblemRootCause, validações de tipos INCIDENT e PROBLEM, evidência e correlation_id.",
+      "links": ["API-INCIDENT-PROBLEM", "TEST-INCIDENT-PROBLEM"]
+    },
+    {
+      "artifact_id": "API-INCIDENT-PROBLEM",
+      "kind": "API",
+      "source_uri": "backend/app/api/service_cases.py",
+      "text": "API de INCIDENT para PROBLEM persiste relação causal e causa raiz, mantém respostas sanitizadas e leitura canônica dos vínculos.",
+      "links": ["TEST-INCIDENT-PROBLEM", "E2E-RSM-08"]
+    },
+    {
+      "artifact_id": "TEST-INCIDENT-PROBLEM",
+      "kind": "TEST",
+      "source_uri": "backend/tests/test_incident_problem_api.py",
+      "text": "Testes cobrem INCIDENT PROBLEM, causa raiz, controle negativo sem mutação, replay por event_id e identidade lógica.",
+      "links": ["E2E-RSM-08"]
+    },
+    {
+      "artifact_id": "E2E-RSM-08",
+      "kind": "E2E",
+      "source_uri": "scripts/rsm_incident_problem_e2e.py",
+      "text": "E2E RSM-08 executa HTTP real e PostgreSQL, confirma relação, causa raiz, leitura independente, controle negativo e teste do teste.",
+      "links": []
+    }
+  ],
+  "changes": [
+    {
+      "change_id": "RSM-07-RUNTIME-SHA-ROLLBACK",
+      "query": "Alterar a regra de CHANGE para runtime SHA exato, evidência pós-deploy, falha e rollback idempotente. Quais artefatos devem ser revisados?",
+      "seed_artifact_ids": ["REQ-1789"],
+      "ground_truth": ["SDD-RSM-07", "DOMAIN-CHANGE-EVIDENCE", "API-CHANGE-EVIDENCE", "TEST-CHANGE-EVIDENCE", "E2E-RSM-07"]
+    },
+    {
+      "change_id": "RSM-08-ROOT-CAUSE",
+      "query": "Alterar a relação INCIDENT para PROBLEM e causa raiz auditável com evidência, idempotência e leitura canônica. Quais artefatos devem ser revisados?",
+      "seed_artifact_ids": ["REQ-2055"],
+      "ground_truth": ["SDD-RSM-08", "DOMAIN-SERVICE-MANAGEMENT", "API-INCIDENT-PROBLEM", "TEST-INCIDENT-PROBLEM", "E2E-RSM-08"]
+    }
+  ]
+}
