@@ -15,7 +15,8 @@
     ".github/workflows/scheduled-operational-watch.yml",
     "tests/test_microsoft_graph_planner_teams_watch_workflow.py",
     ".sdd/specs/microsoft-graph-planner-teams-watch.spec.json",
-    ".sdd/specs/microsoft-graph-planner-teams-watch.requirements.md"
+    ".sdd/specs/microsoft-graph-planner-teams-watch.requirements.md",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
@@ -24,7 +25,7 @@
     "tests": [
       "tests/test_microsoft_graph_planner_teams_watch_workflow.py"
     ],
-    "evidence_contract": "No HEAD exato, o monitor está incorporado ao Scheduled Operational Watch e preserva seu único cron de 4 horas, usa somente fontes oficiais, persiste baseline/deduplicação na issue #2165, não comenta na primeira coleta ou por erro isolado, alerta apenas em mudança material e usa SHAs imutáveis nas Actions externas. O corpo persistente da issue #2165 preserva os títulos exigidos pelo validador de governança."
+    "evidence_contract": "No HEAD exato, o monitor está incorporado ao Scheduled Operational Watch e preserva seu único cron de 4 horas, usa somente fontes oficiais, persiste baseline/deduplicação na issue #2165, não comenta na primeira coleta ou por erro isolado, alerta apenas em mudança material e usa SHAs imutáveis nas Actions externas. O corpo persistente da issue #2165 preserva os títulos exigidos pelo validador de governança. O disparo manual usa somente o Authorized Actions Gateway da issue #1705, com comando exato e target fixo `scheduled-operational-watch.yml` em `main`, sem inputs arbitrários."
   },
   "risk": {
     "production": false,
@@ -39,6 +40,7 @@
     "Mudança relevante futura gera comentário único com impacto, risco e adaptação segura.",
     "Erro isolado de fonte não gera alerta material.",
     "Workflow usa permissões mínimas e Actions fixadas por SHA.",
-    "A issue #2165 permanece válida no contrato de governança após cada atualização do monitor."
+    "A issue #2165 permanece válida no contrato de governança após cada atualização do monitor.",
+    "O disparo manual governado aceita somente `/reqsys run microsoft-graph-planner-teams-watch` na issue #1705 e fixa `scheduled-operational-watch.yml` em `main` sem inputs."
   ]
 }
