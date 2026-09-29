@@ -143,8 +143,12 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "actions/upload-artifact@v4" not in raw
     assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 10
     assert "actions/setup-python@" not in raw
-    assert raw.count("Get-Command python -CommandType Application -ErrorAction Stop") == 5
-    assert raw.count("REQSYS_PYTHON=$pythonExe") == 5
+    assert "Get-Command python" not in raw
+    assert raw.count("Prepare pinned portable Python 3.12") == 5
+    assert raw.count("python-3.12.10-embed-amd64.zip") == 5
+    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 5
+    assert raw.count("Get-FileHash -LiteralPath $zip -Algorithm SHA256") == 5
+    assert raw.count("REQSYS_PYTHON=$python") == 5
     assert raw.count("--require-runner-version-preflight") == 4
     assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 5
 
