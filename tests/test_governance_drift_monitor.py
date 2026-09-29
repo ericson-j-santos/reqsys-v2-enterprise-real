@@ -4,6 +4,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "governance_drift_monitor.py"
@@ -148,6 +149,46 @@ class GovernanceDriftMonitorTests(unittest.TestCase):
             report = self.analyze(root, repo=repo)
 
         self.assertIn("auto_merge_disabled", report["active_drifts"])
+
+    def test_collect_live_state_uses_graphql_when_rest_omits_auto_merge(self):
+        repository = "ericson-j-santos/reqsys-v2-enterprise-real"
+        rest_repo = {"full_name": repository, "allow_auto_merge": None}
+        summaries = [{"id": 17998541}]
+        detail = compliant_rulesets()[0]
+
+        with (
+            patch.object(
+                monitor,
+                "_github_get",
+                side_effect=[rest_repo, summaries, detail],
+            ),
+            patch.object(monitor, "_graphql_auto_merge", return_value=True),
+        ):
+            repo, rulesets = monitor.collect_live_state(repository, "token")
+
+        self.assertTrue(repo["allow_auto_merge"])
+        self.assertEqual(rulesets, [detail])
+
+    def test_unobservable_graphql_auto_merge_fails_collection(self):
+        with patch.object(
+            monitor,
+            "_github_post_json",
+            return_value={
+                "data": {
+                    "repository": {
+                        "autoMergeAllowed": None,
+                    }
+                }
+            },
+        ):
+            with self.assertRaisesRegex(
+                monitor.CollectionError,
+                "auto_merge_state_unobservable",
+            ):
+                monitor._graphql_auto_merge(
+                    "ericson-j-santos/reqsys-v2-enterprise-real",
+                    "token",
+                )
 
     def test_expected_head_sha_contract_requires_pre_merge_read_and_sha_guard(self):
         with tempfile.TemporaryDirectory() as tmp:
