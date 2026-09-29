@@ -25,7 +25,7 @@
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
-    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; each physical mode prepares Python 3.12 with actions/setup-python pinned by immutable SHA; operational rules in _rules pinned to 10d2489e8cac3770d1c07fac4ccfece0a0112269; isolated governed worktree under C:\\dev\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
+    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; each physical mode validates the preinstalled Python runtime without actions/setup-python; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
   },
   "risk": {
     "production": false,
@@ -40,23 +40,24 @@
     "session_launcher_required": true,
     "command_gateway_required": true,
     "command_gateway_risk": 2,
-    "rules_sha": "10d2489e8cac3770d1c07fac4ccfece0a0112269"
+    "rules_sha": "562fc4274aff24f7058cb135f27a509aa69031c1",
+    "runner_version_preflight_required": true
   },
   "acceptance_criteria": [
     "O workflow executa somente no runner Noteri allowlisted e host esperado.",
     "`${ github.workspace }` é somente a fonte transitória do bootstrap; a execução ocorre no worktree governado retornado pelo Session Launcher.",
-    "Cada modo físico prepara Python 3.12 por action fixada em SHA antes de executar Session Launcher ou scripts Python, sem depender do Python persistente do host.",
+    "Cada modo físico valida o Python pré-instalado e falha fechado quando indisponível; actions/setup-python não é usado em self-hosted recovery.",
     "O Session Launcher exige SESSION_LAUNCH_OK e state_validated=true no SHA exato.",
     "O script de recuperação é resolvido a partir do target_path retornado pela sessão e executado exclusivamente pelo Command Gateway risco 2.",
     "Nenhum clone persistente C:\\dev\\reqsys-v2-enterprise-real é requisito do Noteri; o único destino de execução é o worktree governado.",
     "O RPC permanece limitado a Query+Run da tarefa watchdog existente; criação/alteração de tarefa, segredo, credencial e produção são proibidos.",
     "Após sucesso do RPC, pickup real do runner Desktop continua sendo a prova terminal.",
-    "Todos os modos físicos usam o SHA canônico atual das regras operacionais.",
+    "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
     "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."
   ],
   "operational_rules": {
     "repository": "ericson-j-santos/chatgpt-operational-rules",
-    "sha": "10d2489e8cac3770d1c07fac4ccfece0a0112269",
+    "sha": "562fc4274aff24f7058cb135f27a509aa69031c1",
     "applies_to_modes": [
       "watchdog",
       "runner-recover",
@@ -69,6 +70,6 @@
     "checkout_sha": "11d5960a326750d5838078e36cf38b85af677262",
     "upload_artifact_sha": "ea165f8d65b6e75b540449e92b4886f43607fa02",
     "mutable_major_tags_allowed": false,
-    "setup_python_sha": "a26af69be951a213d495a4c3e4e4022e16d87065"
+    "python_runtime_strategy": "preinstalled-validated"
   }
 }
