@@ -142,6 +142,8 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
     assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 10
+    assert raw.count("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065") == 5
+    assert raw.count('python-version: "3.12"') == 5
     assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 5
 
     # Modo watchdog legado continua restrito ao Noteri e à tarefa fixa existente.
@@ -185,6 +187,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "DESKTOP_GITHUB_RUNNER_PICKUP_PROVEN" in raw
     assert "DESKTOP-PDQK954" in raw
 
-    # Todos os modos físicos devem usar a regra canônica atual; pin legado é proibido.
-    assert raw.count("881d9ca2f8e77025edb7298b22981109c567a730") == 4
+    # Todos os modos físicos não ligados à exceção de reboot usam a main canônica atual.
+    assert raw.count("10d2489e8cac3770d1c07fac4ccfece0a0112269") == 4
+    assert "881d9ca2f8e77025edb7298b22981109c567a730" not in raw
     assert "5af7b5ab6e31c24744176abd774855168c55953f" not in raw
