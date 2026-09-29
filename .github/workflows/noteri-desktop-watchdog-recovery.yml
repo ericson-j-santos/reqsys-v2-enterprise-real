@@ -84,7 +84,15 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $anchorSha = "${{ github.sha }}"
           $launcherArgs = @(
@@ -255,7 +263,15 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $args = @(
             "--policy", $policy,
@@ -430,7 +446,15 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $args = @(
             "--policy", $policy,
@@ -572,7 +596,15 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $anchorSha = "${{ github.sha }}"
           $launcherArgs = @(
@@ -716,7 +748,15 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pythonRoot = Split-Path -Parent $env:REQSYS_PYTHON
+          $pth = Join-Path $pythonRoot "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          $pthLines = @(Get-Content -LiteralPath $pth)
+          if ($pthLines -notcontains $rulesScripts) {
+            Add-Content -LiteralPath $pth -Value $rulesScripts
+          }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $anchorSha = "${{ github.sha }}"
           $launcherArgs = @(
