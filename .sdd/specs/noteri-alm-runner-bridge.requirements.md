@@ -7,7 +7,7 @@ Restaurar CI de custo adicional zero para o PR #7 de `ericson-j-santos/reqsys-po
 ## Requisitos
 
 1. A execução deve ocorrer somente no host `Noteri`, Windows x64, em DEV.
-2. O alvo é fixo: repositório `ericson-j-santos/reqsys-powerplatform-alm`, PR #7 e HEAD `96966d8decc210a98eefa7f0ca437052e8bd5a21`.
+2. O alvo é fixo: repositório `ericson-j-santos/reqsys-powerplatform-alm`, PR #7, base `main` e branch `diag/outlook-connection-probe-20260928`; o HEAD deve ser resolvido pela API no início de cada execução, validado como SHA completo e congelado como `expected_head` para todo o E2E.
 3. O workflow deve reutilizar `.github/workflows/noteri-desktop-watchdog-recovery.yml` com modo `alm-runner-bootstrap`; nenhum workflow novo deve ser criado.
 4. O Authorized Actions Gateway deve aceitar somente o comando literal `/reqsys run noteri-alm-runner-bootstrap`.
 5. O job deve usar o runner Noteri já registrado para executar o bootstrap, Session Launcher no SHA exato e regras canônicas pinadas.
@@ -17,7 +17,7 @@ Restaurar CI de custo adicional zero para o PR #7 de `ericson-j-santos/reqsys-po
 9. Os runners efêmeros devem usar labels `noteri,reqsys-dev,alm-pr7`, `--ephemeral` e `--disableupdate`.
 10. Registration token deve existir somente em memória durante `config.cmd`; não pode ser impresso, persistido ou enviado a artifact.
 11. `GH_TOKEN` e `GITHUB_TOKEN` devem ser removidos dos subprocessos que usam o perfil local `gh`.
-12. O script deve recusar execução se o HEAD do PR mudar antes, durante ou depois da ponte.
+12. O script deve recusar PR fechado, base/repositório/branch divergentes ou SHA inválido; depois de resolver o HEAD atual, deve recusar qualquer mudança desse HEAD durante ou antes do readback final.
 13. O aceite exige os dois workflows do PR no mesmo HEAD em `completed/success`: `Build and Deploy to Test` e `Power Platform Outlook Connection Read-only Probe`.
 14. O readback final deve ser independente pela API GitHub e o replay no estado já verde deve retornar `ALREADY_COMPLIANT` sem novo registro.
 15. Timeout é obrigatório; ausência de conclusão ou falha de qualquer check mantém o estado bloqueado.

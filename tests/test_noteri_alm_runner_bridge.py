@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,12 +20,15 @@ def _load(path: Path, name: str):
     return module
 
 
-def test_bridge_is_fixed_to_noteri_alm_pr7_and_exact_head() -> None:
+def test_bridge_is_fixed_to_noteri_alm_pr7_and_resolves_exact_head() -> None:
     raw = BRIDGE.read_text(encoding="utf-8")
     assert 'EXPECTED_HOST = "Noteri"' in raw
     assert 'TARGET_REPOSITORY = "ericson-j-santos/reqsys-powerplatform-alm"' in raw
     assert "TARGET_PR = 7" in raw
-    assert 'EXPECTED_HEAD = "96966d8decc210a98eefa7f0ca437052e8bd5a21"' in raw
+    assert 'TARGET_BRANCH = "diag/outlook-connection-probe-20260928"' in raw
+    assert "EXPECTED_HEAD" not in raw
+    assert "target_pr_head_invalid" in raw
+    assert "target_head_changed_during_run" in raw
     assert 'RUNNER_LABELS = "noteri,reqsys-dev,alm-pr7"' in raw
     assert "RUNNER_SLOTS = 2" in raw
     assert "--ephemeral" in raw
@@ -45,27 +50,56 @@ def test_bridge_pins_runner_asset_and_never_reports_registration_token() -> None
     assert "del token" in raw
 
 
+def test_bridge_resolves_current_pr7_head_and_rejects_target_drift(monkeypatch) -> None:
+    module = _load(BRIDGE, "noteri_alm_runner_bridge_target")
+    target_head = "a" * 40
+
+    def valid_target(_gh, _endpoint):
+        return {
+            "state": "open",
+            "base": {"ref": "main"},
+            "head": {
+                "ref": module.TARGET_BRANCH,
+                "sha": target_head,
+                "repo": {"full_name": module.TARGET_REPOSITORY},
+            },
+        }
+
+    monkeypatch.setattr(module, "_gh_json", valid_target)
+    assert module._pr_target(Path("gh")) == target_head
+
+    def wrong_branch(_gh, _endpoint):
+        payload = valid_target(_gh, _endpoint)
+        payload["head"]["ref"] = "unexpected"
+        return payload
+
+    monkeypatch.setattr(module, "_gh_json", wrong_branch)
+    with pytest.raises(module.BridgeError, match="branch do PR #7 divergiu"):
+        module._pr_target(Path("gh"))
+
+
 def test_bridge_requires_both_target_workflows_and_independent_readback() -> None:
     module = _load(BRIDGE, "noteri_alm_runner_bridge")
+    target_head = "b" * 40
     success = {
         name: {
             "status": "completed",
             "conclusion": "success",
-            "head_sha": module.EXPECTED_HEAD,
+            "head_sha": target_head,
         }
         for name in module.REQUIRED_WORKFLOWS
     }
     assert module._all_terminal(success)
-    assert module._all_success(success)
+    assert module._all_success(success, target_head)
 
     failed = dict(success)
     failed[module.REQUIRED_WORKFLOWS[0]] = {
         "status": "completed",
         "conclusion": "failure",
-        "head_sha": module.EXPECTED_HEAD,
+        "head_sha": target_head,
     }
     assert module._all_terminal(failed)
-    assert not module._all_success(failed)
+    assert not module._all_success(failed, target_head)
 
     stale = dict(success)
     stale[module.REQUIRED_WORKFLOWS[1]] = {
@@ -73,7 +107,7 @@ def test_bridge_requires_both_target_workflows_and_independent_readback() -> Non
         "conclusion": "success",
         "head_sha": "0" * 40,
     }
-    assert not module._all_success(stale)
+    assert not module._all_success(stale, target_head)
 
 
 def test_risk3_action_is_exact_temporary_and_dev_only(tmp_path: Path) -> None:
@@ -107,7 +141,9 @@ def test_workflow_exposes_only_fixed_alm_bridge_mode() -> None:
     assert "python312._pth" in raw
     assert '$rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\\\\scripts"' in raw
     assert "RISK3_CLEANUP_NOT_REQUIRED session_not_materialized" in raw
-    assert "TARGET_ALM_HEAD: 96966d8decc210a98eefa7f0ca437052e8bd5a21" in raw
+    assert "TARGET_ALM_HEAD:" not in raw
+    assert "TARGET_BRANCH_MISMATCH" in raw
+    assert "TARGET_HEAD_INVALID" in raw
     assert "ALM_RUNNER_BRIDGE_NOT_READY" in raw
 
 
