@@ -67,3 +67,45 @@ def test_self_hosted_policy_and_sdd_explicitly_allowlist_ollama_e2e() -> None:
     assert policy["required_adr"] == "docs/adr/ADR-046-pc24x7-substituicao-flyio.md"
     assert ".github/workflows/codex-ollama-e2e-dev.yml" in spec["runtime_validation"]["workflow"]
     assert "tests/test_codex_ollama_e2e_selfhosted.py" in spec["sdd_gate"]["tests"]
+
+
+def test_change_impact_pr2144_mode_is_pr_bound_and_fail_closed() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "- change-impact-pr2144" in raw
+    assert "target_sha:" in raw
+    assert "pull-requests: read" in raw
+    assert "pulls/2144" in raw
+    assert 'copilot/change-impact-benchmark-20260928' in raw
+    assert "PR2144_NOT_OPEN" in raw
+    assert "PR2144_BASE_NOT_MAIN" in raw
+    assert "PR2144_HEAD_REPOSITORY_MISMATCH" in raw
+    assert "PR2144_HEAD_BRANCH_MISMATCH" in raw
+    assert "PR2144_HEAD_SHA_MISMATCH" in raw
+    assert 'ref: ${{ inputs.target_sha }}' in raw
+    assert "TARGET_SHA_CHECKOUT_MISMATCH" in raw
+    assert "scripts/change_impact_benchmark.py" in raw
+    assert "--llm-mode configured" in raw
+    assert "--provider ollama_gateway" in raw
+    assert "--require-llm" in raw
+    assert "BENCHMARK_LLM_NOT_USED_FOR_ALL_CASES" in raw
+    assert "BENCHMARK_HYBRID_NOT_USED" in raw
+    assert "benchmark_sha256" in raw
+    assert "production_touched = $false" in raw
+    assert "deploy_performed = $false" in raw
+
+
+def test_authorized_gateway_binds_change_impact_command_to_pr2144_head() -> None:
+    raw = GATEWAY.read_text(encoding="utf-8")
+
+    assert "github.event.comment.body == '/reqsys run change-impact-benchmark-pr2144'" in raw
+    assert "'/reqsys run change-impact-benchmark-pr2144')" in raw
+    assert "mode='change-impact-pr2144'" in raw
+    assert 'gh api "repos/${GITHUB_REPOSITORY}/pulls/2144"' in raw
+    assert "change_impact_pr2144_not_open" in raw
+    assert "change_impact_pr2144_base_mismatch" in raw
+    assert "change_impact_pr2144_repo_mismatch" in raw
+    assert "change_impact_pr2144_branch_mismatch" in raw
+    assert "change_impact_pr2144_sha_invalid" in raw
+    assert '-f target_sha="$CHANGE_IMPACT_TARGET_SHA"' in raw
+    assert "'workload_sha': os.environ.get('CHANGE_IMPACT_TARGET_SHA') or None" in raw
