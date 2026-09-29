@@ -1,0 +1,202 @@
+name: Bootstrap diversos runner on Noteri
+
+on:
+  push:
+    branches:
+      - ops/noteri-diversos-runner-bootstrap-pr12-20260928
+    paths:
+      - '.github/workflows/noteri-diversos-runner-bootstrap.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noteri-diversos-runner-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Provision repo-scoped diversos runner
+    runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      TARGET_REPO: ericson-j-santos/diversos
+      TARGET_URL: https://github.com/ericson-j-santos/diversos
+      RUNNER_NAME: Noteri-diversos
+      RUNNER_LABELS: noteri,diversos-dev
+      RUNNER_VERSION: 2.337.0
+      RUNNER_ASSET_SHA256: 1150692afa94e71f872017e254ea55b6eece1eece3fe7e3a6d4c93d0a1b85cfc
+      PYTHON_VERSION: 3.12.10
+      PYTHON_ASSET_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+      PYTHON_ASSET_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+      GH_ADMIN_TOKEN: ${{ secrets.GH_PAT_ACTIONS }}
+
+    steps:
+      - name: Assert exact host and authorization surface
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'Noteri') { throw 'NOTERI_HOST_MISMATCH' }
+          if ([string]::IsNullOrWhiteSpace($env:GH_ADMIN_TOKEN)) { throw 'GH_PAT_ACTIONS_MISSING' }
+          Write-Host 'HOST_OK=Noteri'
+          Write-Host 'TARGET_REPO_OK=ericson-j-santos/diversos'
+
+      - name: Ensure pinned portable Python
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:LOCALAPPDATA "ReqSys\PythonPortable\$env:PYTHON_VERSION"
+          $python = Join-Path $root 'python.exe'
+          if (-not (Test-Path -LiteralPath $python)) {
+            if ((Test-Path -LiteralPath $root) -and (Get-ChildItem -LiteralPath $root -Force | Select-Object -First 1)) {
+              throw 'PYTHON_PORTABLE_ROOT_NONEMPTY_INCOMPLETE'
+            }
+            New-Item -ItemType Directory -Force -Path $root | Out-Null
+            $archive = Join-Path $env:RUNNER_TEMP "python-$env:PYTHON_VERSION-embed-amd64.zip"
+            Invoke-WebRequest -UseBasicParsing -Uri $env:PYTHON_ASSET_URL -OutFile $archive
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+            if ($hash -ne $env:PYTHON_ASSET_SHA256) { throw "PYTHON_SHA256_MISMATCH:$hash" }
+            Expand-Archive -LiteralPath $archive -DestinationPath $root -Force
+          }
+          if (-not (Test-Path -LiteralPath $python)) { throw 'PYTHON_PORTABLE_MISSING' }
+          $version = (& $python -c "import sys; print('.'.join(map(str, sys.version_info[:3])))").Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne $env:PYTHON_VERSION) { throw "PYTHON_PORTABLE_UNUSABLE:$version" }
+          & $python -c "import unittest, py_compile; print('PYTHON_STDLIB_OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'PYTHON_STDLIB_INVALID' }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+          Write-Host "PYTHON_PORTABLE_OK=$version"
+
+      - name: Ensure pinned GitHub runner binaries
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:LOCALAPPDATA 'ReqSys\DiversosGitHubRunner'
+          $listener = Join-Path $root 'bin\Runner.Listener.exe'
+          $config = Join-Path $root 'config.cmd'
+          if (-not (Test-Path -LiteralPath $listener) -or -not (Test-Path -LiteralPath $config)) {
+            if ((Test-Path -LiteralPath $root) -and (Get-ChildItem -LiteralPath $root -Force | Select-Object -First 1)) {
+              throw 'DIVERSOS_RUNNER_ROOT_NONEMPTY_INCOMPLETE'
+            }
+            New-Item -ItemType Directory -Force -Path $root | Out-Null
+            $archive = Join-Path $env:RUNNER_TEMP "actions-runner-win-x64-$env:RUNNER_VERSION.zip"
+            $url = "https://github.com/actions/runner/releases/download/v$env:RUNNER_VERSION/actions-runner-win-x64-$env:RUNNER_VERSION.zip"
+            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $archive
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+            if ($hash -ne $env:RUNNER_ASSET_SHA256) { throw "RUNNER_SHA256_MISMATCH:$hash" }
+            Expand-Archive -LiteralPath $archive -DestinationPath $root -Force
+          }
+          if (-not (Test-Path -LiteralPath $listener) -or -not (Test-Path -LiteralPath $config)) {
+            throw 'DIVERSOS_RUNNER_BINARIES_MISSING'
+          }
+          $version = (& $listener --version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne $env:RUNNER_VERSION) { throw "RUNNER_VERSION_MISMATCH:$version" }
+          "DIVERSOS_RUNNER_HOME=$root" | Add-Content $env:GITHUB_ENV
+          Write-Host "RUNNER_BINARIES_OK=$version"
+
+      - name: Register fixed target repository
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = $env:DIVERSOS_RUNNER_HOME
+          $runnerFile = Join-Path $root '.runner'
+          if (Test-Path -LiteralPath $runnerFile) {
+            $existing = Get-Content -Raw -Encoding UTF8 $runnerFile | ConvertFrom-Json
+            if ([string]$existing.gitHubUrl -ne $env:TARGET_URL) { throw 'RUNNER_EXISTING_TARGET_MISMATCH' }
+            if ([string]$existing.agentName -ne $env:RUNNER_NAME) { throw 'RUNNER_EXISTING_NAME_MISMATCH' }
+            Write-Host 'RUNNER_REGISTRATION_REUSED=true'
+            exit 0
+          }
+
+          $headers = @{
+            Authorization = "Bearer $env:GH_ADMIN_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $uri = "https://api.github.com/repos/$env:TARGET_REPO/actions/runners/registration-token"
+          $registration = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers
+          $token = [string]$registration.token
+          if ([string]::IsNullOrWhiteSpace($token) -or $token.Length -lt 20) { throw 'RUNNER_REGISTRATION_TOKEN_INVALID' }
+          try {
+            & (Join-Path $root 'config.cmd') --unattended --url $env:TARGET_URL --token $token --name $env:RUNNER_NAME --labels $env:RUNNER_LABELS --work '_work' --replace
+            if ($LASTEXITCODE -ne 0) { throw 'RUNNER_CONFIG_FAILED' }
+          }
+          finally {
+            $token = ''
+            $registration = $null
+          }
+          if (-not (Test-Path -LiteralPath $runnerFile)) { throw 'RUNNER_LOCAL_REGISTRATION_MISSING' }
+          $created = Get-Content -Raw -Encoding UTF8 $runnerFile | ConvertFrom-Json
+          if ([string]$created.gitHubUrl -ne $env:TARGET_URL) { throw 'RUNNER_TARGET_READBACK_MISMATCH' }
+          if ([string]$created.agentName -ne $env:RUNNER_NAME) { throw 'RUNNER_NAME_READBACK_MISMATCH' }
+          Write-Host 'RUNNER_REGISTRATION_OK=true'
+
+      - name: Start dedicated listener without workflow tracking
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = $env:DIVERSOS_RUNNER_HOME
+          $escaped = [Regex]::Escape($root)
+          $existing = Get-CimInstance Win32_Process -Filter "Name='Runner.Listener.exe'" |
+            Where-Object { [string]$_.CommandLine -match $escaped } |
+            Select-Object -First 1
+          if (-not $existing) {
+            $tracking = $env:RUNNER_TRACKING_ID
+            Remove-Item Env:RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+            try {
+              Start-Process -FilePath (Join-Path $root 'run.cmd') -WorkingDirectory $root -WindowStyle Hidden | Out-Null
+            }
+            finally {
+              if ($null -ne $tracking) { $env:RUNNER_TRACKING_ID = $tracking }
+            }
+          }
+          Start-Sleep -Seconds 3
+          $listener = Get-CimInstance Win32_Process -Filter "Name='Runner.Listener.exe'" |
+            Where-Object { [string]$_.CommandLine -match $escaped } |
+            Select-Object -First 1
+          if (-not $listener) { throw 'DIVERSOS_RUNNER_LISTENER_NOT_ACTIVE' }
+          Write-Host "RUNNER_LISTENER_OK=$($listener.ProcessId)"
+
+      - name: Verify independent GitHub readback
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{
+            Authorization = "Bearer $env:GH_ADMIN_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $uri = "https://api.github.com/repos/$env:TARGET_REPO/actions/runners"
+          $observed = $null
+          for ($attempt = 1; $attempt -le 15; $attempt++) {
+            $payload = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $observed = @($payload.runners | Where-Object { $_.name -eq $env:RUNNER_NAME }) | Select-Object -First 1
+            if ($observed -and $observed.status -eq 'online') { break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $observed) { throw 'RUNNER_GITHUB_READBACK_MISSING' }
+          if ($observed.status -ne 'online') { throw "RUNNER_GITHUB_NOT_ONLINE:$($observed.status)" }
+          $labels = @($observed.labels | ForEach-Object { $_.name })
+          foreach ($required in @('self-hosted','Windows','X64','noteri','diversos-dev')) {
+            if ($labels -notcontains $required) { throw "RUNNER_LABEL_MISSING:$required" }
+          }
+          Write-Host "RUNNER_GITHUB_ONLINE=$($observed.name)"
+          Write-Host "RUNNER_GITHUB_BUSY=$($observed.busy)"
+
+      - name: Validate portable Python independently
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & $env:REQSYS_PYTHON -c "import sys, unittest, py_compile; assert sys.version_info[:3] == (3, 12, 10); print('PYTHON_RUNTIME_VERIFIED')"
+          if ($LASTEXITCODE -ne 0) { throw 'PYTHON_RUNTIME_FINAL_VALIDATION_FAILED' }
+
+      - name: Summary
+        shell: powershell
+        run: |
+          "## Noteri diversos runner bootstrap" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host: Noteri" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Target: ericson-j-santos/diversos" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Runner: Noteri-diversos" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Labels: self-hosted, Windows, X64, noteri, diversos-dev" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Python: 3.12.10 portable, SHA-256 pinned" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Secrets logged: no" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Production touched: no" | Add-Content $env:GITHUB_STEP_SUMMARY
