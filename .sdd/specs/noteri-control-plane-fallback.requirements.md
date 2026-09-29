@@ -106,3 +106,17 @@ O workflow deve:
 - o probe operacional deve consultar a tarefa por `schtasks /Query /XML` sem elevação e publicar `headless_ready`, `exists`, `enabled`, `trigger_at_startup` e `logon_type`, além de diagnóstico sanitizado da última ativação, sem registrar identidade/principal ou segredos.
 
 A autorização do UAC pode exigir clique humano local por regra do Windows; fora esse consentimento, a operação é automatizada.
+
+## Extensão — Worker Pool Watch pelo GitHub Actions
+
+A partir de 2026-09-29, o runtime auto watch também observa o Worker Pool do Engineering Orchestrator sem criar novo workflow.
+
+- O probe físico do Noteri consulta somente GET http://DESKTOP-PDQK954:8787/v1/status.
+- A evidência persiste apenas contagens por status e métricas agregadas de workers.
+- O auto watch compara snapshots consecutivos do ciclo de 10 minutos; ausência de progresso entre snapshots implica estagnação superior ao limite operacional de 5 minutos.
+- Progresso material é terminalização, redução de trabalho não terminal ou novo dispatch.
+- Heartbeat, renovação de lease e polling isolados não contam como progresso.
+- PENDENTE persistente sem executor elegível, registry stale sem elegível ou endpoint indisponível geram sinal acionável.
+- Alertas são publicados somente na transição para acionável e na recuperação; o comentário de estado permanece deduplicado.
+- O workflow físico usa CPython 3.12.10 embeddable x64 oficial validado pelo SHA-256 pinado; o Python instalado no host não é dependência.
+- O monitor não executa produção, segredo, reboot, GUI, shell remoto ou mutação do Worker Pool.

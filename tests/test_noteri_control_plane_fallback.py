@@ -79,6 +79,7 @@ def test_probe_proves_runner_without_rdc(monkeypatch) -> None:
             "elevated": {"exists": False},
         },
     )
+    monkeypatch.setattr(probe, "engineering_worker_pool_snapshot", lambda: {"ok": True, "state": "observed", "by_status": {"PENDENTE": 0, "EM ANDAMENTO": 0, "BLOQUEADO": 0, "CONCLUÍDO": 1, "CANCELADO": 0}, "workers": {"total": 2, "eligible": 1, "stale": 0, "dispatch_events": 1}, "observed_at": "2026-09-29T00:00:00+00:00"})
     monkeypatch.setenv("RUNNER_NAME", "noteri-reqsys-dev")
     monkeypatch.setenv("RUNNER_OS", "Windows")
     monkeypatch.setenv("RUNNER_ARCH", "X64")
@@ -92,6 +93,8 @@ def test_probe_proves_runner_without_rdc(monkeypatch) -> None:
     assert result["rdc_required"] is False
     assert result["production_touched"] is False
     assert result["secrets_read"] is False
+    assert result["worker_pool"]["ok"] is True
+    assert result["worker_pool"]["workers"]["eligible"] == 1
 
 
 def test_probe_sanitizes_activation_diagnostics(monkeypatch, tmp_path: Path) -> None:
@@ -190,6 +193,10 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "noteri_runtime_idempotency_missing" in workflow
     assert "noteri_runtime_negative_control_missing" in workflow
     assert "persist-credentials: false" in workflow
+    assert "Prepare pinned portable Python 3.12" in workflow
+    assert "PORTABLE_PYTHON_VERSION: \"3.12.10\"" in workflow
+    assert "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3" in workflow
+    assert "REQSYS_PYTHON" in workflow
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     assert ".github/workflows/noteri-control-plane-probe.yml" in policy["approved_workflows"]
 
@@ -512,3 +519,27 @@ def test_probe_runner_registry_reports_access_denied_without_secret_leak(monkeyp
         "state": "runner_registry_access_denied",
         "http_hint": "forbidden_or_missing_permission",
     }
+
+def test_worker_pool_snapshot_is_sanitized(monkeypatch) -> None:
+    class Response:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self):
+            return json.dumps({"by_status": {"PENDENTE": 2, "EM ANDAMENTO": 1, "BLOQUEADO": 0, "CONCLUÍDO": 5, "CANCELADO": 0}, "workers": {"total": 2, "eligible": 1, "stale": 1, "dispatch_events": 9, "workers": [{"worker_id": "must-not-leak"}]}, "blockers": [{"last_error": "must-not-leak"}]}).encode("utf-8")
+    monkeypatch.setattr(probe, "urlopen", lambda *args, **kwargs: Response())
+    result = probe.engineering_worker_pool_snapshot()
+    assert result["ok"] is True
+    assert result["by_status"]["PENDENTE"] == 2
+    assert result["workers"]["dispatch_events"] == 9
+    assert "blockers" not in result
+    assert "workers" not in result["workers"]
+
+def test_worker_pool_snapshot_failure_is_sanitized(monkeypatch) -> None:
+    from urllib.error import URLError
+    monkeypatch.setattr(probe, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(URLError(ConnectionRefusedError("sensitive"))))
+    result = probe.engineering_worker_pool_snapshot()
+    assert result["ok"] is False
+    assert result["state"] == "endpoint_unavailable"
+    assert result["error_type"] == "ConnectionRefusedError"
+    assert "sensitive" not in json.dumps(result)

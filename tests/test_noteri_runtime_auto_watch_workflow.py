@@ -32,6 +32,12 @@ def test_noteri_runtime_auto_watch_contract() -> None:
     assert "Restart-Computer" not in raw
     assert "shutdown /r" not in raw
     assert "secrets." not in raw
+    assert "worker_pool_json" in raw
+    assert "reqsys-worker-pool:" in raw
+    assert "no_material_progress_over_5m" in raw
+    assert "pending_without_eligible_executor" in raw
+    assert "worker_registry_stale" in raw
+    assert "heartbeat e lease isolados não contam como progresso" in raw
 
 
 def test_noteri_runtime_auto_watch_is_fail_closed_on_identity() -> None:

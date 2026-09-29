@@ -11,6 +11,8 @@ import socket
 import subprocess
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,8 @@ TASK_NAME = r"\Automation\ReqSysNoteriControlPlaneWatchdog"
 RUNTIME_DIR = Path("ReqSys") / "NoteriControlPlaneWatchdog"
 INTERACTIVE_RESULT = "interactive-launch-result.json"
 ELEVATED_RESULT = "elevated-install-result.json"
+ENGINEERING_ORCHESTRATOR_STATUS_URL = "http://DESKTOP-PDQK954:8787/v1/status"
+WORK_STATUSES = ("PENDENTE", "EM ANDAMENTO", "BLOQUEADO", "CONCLUÍDO", "CANCELADO")
 
 
 class ProbeError(RuntimeError):
@@ -276,6 +280,43 @@ def github_runner_registry_probe() -> dict[str, Any]:
     }
 
 
+def engineering_worker_pool_snapshot(timeout: float = 4.0) -> dict[str, Any]:
+    """Read a sanitized aggregate snapshot from the Engineering Orchestrator."""
+    request = Request(ENGINEERING_ORCHESTRATOR_STATUS_URL, headers={"Accept": "application/json"})
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            if response.status != 200:
+                return {"ok": False, "state": "unexpected_http_status", "http_status": int(response.status), "observed_at": now_iso()}
+            raw = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        return {"ok": False, "state": "http_error", "http_status": int(exc.code), "observed_at": now_iso()}
+    except URLError as exc:
+        return {"ok": False, "state": "endpoint_unavailable", "error_type": type(exc.reason).__name__, "observed_at": now_iso()}
+    except (OSError, TimeoutError, json.JSONDecodeError, UnicodeError) as exc:
+        return {"ok": False, "state": "endpoint_unavailable", "error_type": type(exc).__name__, "observed_at": now_iso()}
+
+    if not isinstance(raw, dict):
+        return {"ok": False, "state": "invalid_payload", "observed_at": now_iso()}
+    raw_status = raw.get("by_status") if isinstance(raw.get("by_status"), dict) else {}
+    raw_workers = raw.get("workers") if isinstance(raw.get("workers"), dict) else {}
+
+    def metric(source: dict[str, Any], key: str) -> int:
+        value = source.get(key, 0)
+        return int(value) if isinstance(value, int) and not isinstance(value, bool) else 0
+
+    return {
+        "ok": True,
+        "state": "observed",
+        "by_status": {status: metric(raw_status, status) for status in WORK_STATUSES},
+        "workers": {
+            "total": metric(raw_workers, "total"),
+            "eligible": metric(raw_workers, "eligible"),
+            "stale": metric(raw_workers, "stale"),
+            "dispatch_events": metric(raw_workers, "dispatch_events"),
+        },
+        "observed_at": now_iso(),
+    }
+
 def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
     if confirm != CONFIRM:
         raise ProbeError("confirmação inválida")
@@ -305,6 +346,7 @@ def probe(confirm: str, correlation_id: str) -> dict[str, Any]:
         "headless_ready": task_headless_ready(task),
         "activation_diagnostic": activation_diagnostic(),
         "github_runner_registry": github_runner_registry_probe(),
+        "worker_pool": engineering_worker_pool_snapshot(),
         "correlation_id": correlation_id,
         "rdc_required": False,
         "production_touched": False,

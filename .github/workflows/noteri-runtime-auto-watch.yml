@@ -179,6 +179,7 @@ jobs:
               out.write(f"headless_ready={str(headless).lower()}\n")
               out.write(f"runner_listener_detected={str(listener).lower()}\n")
               out.write(f"rdc_required={str(payload.get('rdc_required')).lower()}\n")
+              out.write("worker_pool_json=" + json.dumps(worker_pool, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n")
           PY
 
       - name: Build monitor evidence
@@ -193,6 +194,7 @@ jobs:
           HEADLESS_READY: ${{ steps.evidence.outputs.headless_ready }}
           RUNNER_LISTENER: ${{ steps.evidence.outputs.runner_listener_detected }}
           RDC_REQUIRED: ${{ steps.evidence.outputs.rdc_required }}
+          WORKER_POOL_JSON: ${{ steps.evidence.outputs.worker_pool_json }}
           TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
           TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
           TARGET_SHA: ${{ steps.main.outputs.sha }}
@@ -224,6 +226,7 @@ jobs:
               "headless_ready": os.environ.get("HEADLESS_READY") or None,
               "runner_listener_detected": os.environ.get("RUNNER_LISTENER") or None,
               "rdc_required": os.environ.get("RDC_REQUIRED") or False,
+              "worker_pool": json.loads(os.environ.get("WORKER_POOL_JSON") or "{}"),
               "production_touched": False,
               "secrets_read": False,
               "reboot_performed": False,
@@ -250,54 +253,84 @@ jobs:
           RDC_REQUIRED: ${{ steps.evidence.outputs.rdc_required }}
         with:
           script: |
+            const fs = require("fs");
             const marker = process.env.MARKER;
-            const state = process.env.STATE || 'unknown';
-            const headless = process.env.HEADLESS_READY || 'unknown';
-            const listener = process.env.RUNNER_LISTENER || 'unknown';
-            const rdc = process.env.RDC_REQUIRED || 'false';
-            const conclusion = process.env.PROBE_CONCLUSION || (state === 'runner_unavailable' ? 'cancelled' : 'unknown');
-            const body = [
-              marker,
-              '## Noteri — runtime auto watch',
-              '',
-              `- estado: \`${state}\`;`,
-              `- SHA observado: \`${process.env.TARGET_SHA}\`;`,
-              `- pickup: \`${process.env.PICKUP_STATUS || 'unknown'}\`;`,
-              `- conclusão do probe: \`${conclusion}\`;`,
-              `- \`headless_ready\`: \`${headless}\`;`,
-              `- \`Runner.Listener.exe\`: \`${listener}\`;`,
-              `- \`rdc_required\`: \`${rdc}\`;`,
-              `- run: ${process.env.TARGET_RUN_URL}.`,
-              '',
-              'O monitor é somente leitura; não executa reboot, deploy, produção, GUI ou bypass de UAC.'
-            ].join('\n');
-
+            const state = process.env.STATE || "unknown";
+            const headless = process.env.HEADLESS_READY || "unknown";
+            const listener = process.env.RUNNER_LISTENER || "unknown";
+            const rdc = process.env.RDC_REQUIRED || "false";
+            const conclusion = process.env.PROBE_CONCLUSION || (state === "runner_unavailable" ? "cancelled" : "unknown");
             const issue_number = Number(process.env.ISSUE_NUMBER);
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number,
-              per_page: 100,
-            });
+            const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number, per_page: 100 });
             const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              if (existing.body !== body) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                  body,
-                });
+            const monitorPath = "noteri-runtime-auto-watch.json";
+            const monitor = JSON.parse(fs.readFileSync(monitorPath, "utf8"));
+            const current = monitor.worker_pool && typeof monitor.worker_pool === "object" ? monitor.worker_pool : { ok: false, state: "missing" };
+            let previous = null;
+            if (existing && existing.body) {
+              const match = existing.body.match(/<!-- reqsys-worker-pool:([0-9,]+) -->/);
+              if (match) {
+                const values = match[1].split(",").map(Number);
+                if (values.length === 10 && values.every(Number.isFinite)) {
+                  previous = { epoch: values[0], pending: values[1], inProgress: values[2], blocked: values[3], completed: values[4], cancelled: values[5], dispatch: values[6], eligible: values[7], stale: values[8], actionable: values[9] === 1 };
+                }
               }
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number,
-                body,
-              });
             }
-
+            const by = current.by_status && typeof current.by_status === "object" ? current.by_status : {};
+            const wk = current.workers && typeof current.workers === "object" ? current.workers : {};
+            const n = (obj, key) => Number.isInteger(obj[key]) ? obj[key] : 0;
+            const nowEpoch = Math.floor(Date.parse(current.observed_at || "") / 1000);
+            const pending = n(by, "PENDENTE");
+            const inProgress = n(by, "EM ANDAMENTO");
+            const blocked = n(by, "BLOQUEADO");
+            const completed = n(by, "CONCLUÍDO");
+            const cancelled = n(by, "CANCELADO");
+            const dispatch = n(wk, "dispatch_events");
+            const eligible = n(wk, "eligible");
+            const stale = n(wk, "stale");
+            const signals = [];
+            if (current.ok !== true) signals.push("control_plane_unreachable");
+            if (current.ok === true && previous) {
+              const elapsed = nowEpoch - previous.epoch;
+              const currentNonterminal = pending + inProgress;
+              const previousNonterminal = previous.pending + previous.inProgress;
+              const currentTerminal = blocked + completed + cancelled;
+              const previousTerminal = previous.blocked + previous.completed + previous.cancelled;
+              const progressed = currentTerminal > previousTerminal || currentNonterminal < previousNonterminal || dispatch > previous.dispatch;
+              if (elapsed >= 300 && currentNonterminal > 0 && !progressed) signals.push("no_material_progress_over_5m");
+              if (elapsed >= 300 && pending > 0 && previous.pending > 0 && eligible === 0 && previous.eligible === 0) signals.push("pending_without_eligible_executor");
+              if (elapsed >= 300 && stale > 0 && eligible === 0) signals.push("worker_registry_stale");
+            }
+            const actionable = signals.length > 0;
+            monitor.worker_pool = { ...current, actionable, signals };
+            fs.writeFileSync(monitorPath, JSON.stringify(monitor, null, 2) + "\n", "utf8");
+            const compactMarker = "<!-- reqsys-worker-pool:" + [nowEpoch, pending, inProgress, blocked, completed, cancelled, dispatch, eligible, stale, actionable ? 1 : 0].join(",") + " -->";
+            const workerLine = actionable ? "- Worker Pool: actionable - " + signals.join(", ") + ";" : "- Worker Pool: " + (current.state || "unknown") + ", sem mudança acionável;";
+            const body = [
+              marker, compactMarker,
+              "## Noteri — runtime auto watch", "",
+              "- estado: " + state + ";",
+              "- SHA observado: " + process.env.TARGET_SHA + ";",
+              "- pickup: " + (process.env.PICKUP_STATUS || "unknown") + ";",
+              "- conclusão do probe: " + conclusion + ";",
+              "- headless_ready: " + headless + ";",
+              "- Runner.Listener.exe: " + listener + ";",
+              "- rdc_required: " + rdc + ";",
+              workerLine,
+              "- run: " + process.env.TARGET_RUN_URL + ".",
+              "", "Monitor somente leitura; heartbeat e lease isolados não contam como progresso do Worker Pool."
+            ].join("\n");
+            if (existing) {
+              if (existing.body !== body) await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number, body });
+            }
+            const wasActionable = previous && previous.actionable === true;
+            if (actionable && !wasActionable) {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number, body: "Worker Pool Watch — mudança acionável. SHA " + process.env.TARGET_SHA + "; sinais: " + signals.join(", ") + "; run: " + process.env.TARGET_RUN_URL + ". Próximo passo: recuperação governada do control plane/runner e readback de readiness/pickup." });
+            } else if (!actionable && wasActionable) {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number, body: "Worker Pool Watch — recuperação observada no SHA " + process.env.TARGET_SHA + "." });
+            }
       - name: Upload monitor evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
