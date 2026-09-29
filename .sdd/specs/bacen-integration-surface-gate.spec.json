@@ -1,0 +1,46 @@
+{
+  "feature_name": "bacen-integration-surface-gate",
+  "project": "ReqSys v2 Enterprise — BACEN",
+  "created_at": "2026-09-29",
+  "updated_at": "2026-09-29",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Gate determinístico de compatibilidade por superfície BACEN consumida. Mantém SGS/CDI ativo e bloqueia a introdução de consumidores DICT, Pix ou Open Finance enquanto o contrato, referência oficial e testes não forem declarados.",
+  "scope": "bacen-integration-compatibility",
+  "files": [
+    "governance/bacen/integration-surfaces.yaml",
+    "scripts/validate_bacen_integration_surfaces.py",
+    "scripts/pre_pr_readiness.py",
+    "tests/test_validate_bacen_integration_surfaces.py",
+    ".sdd/specs/bacen-integration-surface-gate.spec.json"
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_validate_bacen_integration_surfaces.py"
+    ],
+    "tests": [
+      "tests/test_validate_bacen_integration_surfaces.py",
+      "tests/test_pre_pr_readiness.py"
+    ],
+    "evidence_contract": "No HEAD exato, SGS/CDI deve permanecer declarado como active com endpoint oficial da série 12, campos data/valor e persistência idempotente por reference_date+source. DICT, Pix e Open Finance permanecem dormant enquanto não houver cliente executável. Se um marcador de consumidor surgir em backend/app, runtime/app ou services, READY_FOR_PR deve falhar até a superfície ser ativada com contract_version, official_reference, consumer_paths e contract_tests. A mesma entrada deve produzir a mesma decisão e input_sha256."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  },
+  "acceptance_criteria": [
+    "SGS/CDI é detectado como superfície ativa e o cliente atual contém URL oficial, campos data/valor e chave idempotente reference_date+source.",
+    "Ausência de cliente DICT, Pix ou Open Finance não bloqueia o gate.",
+    "Adicionar um pix_client executável sem ativar a superfície torna o gate inválido.",
+    "Ativar uma superfície exige versão de contrato, referência oficial, caminhos consumidores e testes existentes.",
+    "O Pre-PR Readiness executa bacen:integration-surfaces em toda branch com diff real.",
+    "O gate gera artifact determinístico vinculado ao conteúdo escaneado e não usa rede nem custo adicional."
+  ]
+}
