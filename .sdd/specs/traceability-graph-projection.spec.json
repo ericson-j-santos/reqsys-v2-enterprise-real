@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Projeta read-only requisito, SDD, PR/SHA, CI, deploy e evidência runtime a partir das fontes canônicas existentes, com fail-closed para evidência de SHA divergente ou status não satisfatório.",
+  "description": "Estende o functional_traceability_graph histórico com projeção runtime read-only de requisito, SDD, PR/SHA, CI, deploy e evidência a partir das fontes canônicas, com fail-closed para SHA divergente ou status não satisfatório.",
   "sdd_gate": {
     "tests": [
       "backend/tests/test_traceability_graph.py"
