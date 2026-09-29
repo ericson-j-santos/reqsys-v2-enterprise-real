@@ -550,8 +550,11 @@ def test_gateway_change_impact_pr2144_is_exact_and_has_no_user_sha_input() -> No
     assert "target='codex-ollama-e2e-dev.yml'" in content
     assert "mode='change-impact-pr2144'" in content
     assert 'gh api "repos/${GITHUB_REPOSITORY}/pulls/2144"' in content
+    assert "change_impact_pr2144_not_closed" in content
+    assert "change_impact_pr2144_not_merged" in content
     assert 'head.get("ref") != "copilot/change-impact-benchmark-20260928"' in content
-    assert "change_impact_pr2144_sha_invalid" in content
+    assert 'pr.get("merge_commit_sha")' in content
+    assert "change_impact_pr2144_merge_sha_invalid" in content
     assert '-f target_sha="$CHANGE_IMPACT_TARGET_SHA"' in content
     assert "workload_sha" in content
     assert "/reqsys run change-impact-benchmark-pr2144 " not in content
