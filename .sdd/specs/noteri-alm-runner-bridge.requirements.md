@@ -24,7 +24,7 @@ Restaurar CI de custo adicional zero para o PR #7 de `ericson-j-santos/reqsys-po
 16. Nenhuma produção, HML/STG, branch protection, segredo ou billing pode ser alterado.
 17. Antes de abrir PR no ReqSys, o Pre-PR Readiness deve retornar `READY_FOR_PR=passed` no HEAD exato e `behind_by=0`.
 
-## Critério de aceite
+## Critérios de aceite
 
 - testes contratuais positivos, negativos e de idempotência aprovados;
 - SDD Gate verde;
