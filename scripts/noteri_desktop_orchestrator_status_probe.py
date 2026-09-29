@@ -20,6 +20,7 @@ TARGET_RUNTIME_SHA = "313f5da4bb0ee9dd70937c238c7cfdf4e3514602"
 REFRESH_TASK = "host.orchestrator.refresh.v1"
 BOOTSTRAP_TASK = "host.github_runner.bootstrap.v1"
 CONFIRM = "PROBE-DESKTOP-ORCHESTRATOR-STATUS"
+RECOVERY_CORRELATION_PREFIX = "desktop-runner-orchestrator-"
 
 
 class ProbeError(RuntimeError):
@@ -58,6 +59,41 @@ def request_json(path: str, timeout_seconds: float) -> tuple[int | None, dict[st
     return status, payload if isinstance(payload, dict) else {}
 
 
+def sanitize_last_error(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    # Keep the diagnostic reason while preventing local Windows paths from
+    # becoming durable evidence.
+    parts = []
+    for token in text.split():
+        if len(token) >= 3 and token[1:3] in {":\\", ":/"}:
+            parts.append("<path>")
+        else:
+            parts.append(token)
+    return " ".join(parts)[:240]
+
+
+def latest_runner_recovery_blocker(status: dict[str, Any]) -> dict[str, Any] | None:
+    blockers = status.get("blockers")
+    if not isinstance(blockers, list):
+        return None
+    matches = [
+        item for item in blockers
+        if isinstance(item, dict)
+        and str(item.get("correlation_id") or "").startswith(RECOVERY_CORRELATION_PREFIX)
+    ]
+    if not matches:
+        return None
+    item = matches[0]
+    return {
+        "work_item_id": str(item.get("id") or "") or None,
+        "correlation_id": str(item.get("correlation_id") or "") or None,
+        "attempts": item.get("attempts"),
+        "last_error": sanitize_last_error(item.get("last_error")),
+    }
+
+
 def probe(*, confirm: str, correlation_id: str, timeout_seconds: float) -> dict[str, Any]:
     if confirm != CONFIRM:
         raise ProbeError("confirmation_invalid")
@@ -83,6 +119,7 @@ def probe(*, confirm: str, correlation_id: str, timeout_seconds: float) -> dict[
     safe_tasks = sorted(str(item) for item in safe_tasks if isinstance(item, str)) if isinstance(safe_tasks, list) else []
     runtime_source_sha = str(capabilities.get("runtime_source_sha") or "").strip().lower() or None
     worker_instance_id = str(capabilities.get("worker_instance_id") or "").strip().lower() or None
+    recovery_blocker = latest_runner_recovery_blocker(status)
 
     return {
         "schema_version": "1",
@@ -111,6 +148,7 @@ def probe(*, confirm: str, correlation_id: str, timeout_seconds: float) -> dict[
         "bootstrap_capability_present": BOOTSTRAP_TASK in safe_tasks,
         "target_runtime_sha": TARGET_RUNTIME_SHA,
         "runtime_identity_current": runtime_source_sha == TARGET_RUNTIME_SHA,
+        "latest_runner_recovery_blocker": recovery_blocker,
         "production_touched": False,
         "secrets_read": False,
         "remote_shell_used": False,
