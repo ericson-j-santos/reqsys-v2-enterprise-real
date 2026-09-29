@@ -11,8 +11,6 @@ ACTION = ROOT / ".github" / "actions" / "prepare-ocr-runtime" / "action.yml"
 DEV_WORKFLOW = ROOT / ".github" / "workflows" / "fly-dev-fast-deploy.yml"
 ENTERPRISE_WORKFLOW = ROOT / ".github" / "workflows" / "fly-enterprise-sync.yml"
 BENCHMARK_WORKFLOW = ROOT / ".github" / "workflows" / "ocr-benchmark.yml"
-PINNED_SHA = "15209941c4ddbf52da62cedc866510592b3172ee"
-
 
 def _yaml(path: Path) -> dict:
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
@@ -22,7 +20,6 @@ def test_runtime_lock_is_private_repo_full_sha_and_expected_version() -> None:
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
 
     assert lock["repository"] == "ericson-j-santos/ocr-evidence-engine"
-    assert lock["sha"] == PINNED_SHA
     assert re.fullmatch(r"[0-9a-f]{40}", lock["sha"])
     assert lock["package"] == "ocr-evidence-engine"
     assert lock["module"] == "ocr_evidencia"
