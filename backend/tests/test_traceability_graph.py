@@ -11,6 +11,10 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.change_evidence import ChangeEvidenceRecord
 from app.core.security import get_current_user
+from app.services.change_impact_analysis import (
+    analyze_live_change,
+    artifacts_from_traceability_graph,
+)
 from app.db import Base, get_db
 from app.main import app
 from app.models.agile_runtime import AgileWorkItem
@@ -254,3 +258,81 @@ def test_traceability_graph_requires_authenticated_user():
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Token não fornecido"
+
+
+
+def test_traceability_graph_feeds_live_change_impact_without_historical_dataset():
+    requisito_id, _ = _seed_graph()
+
+    response = client.get(f"/v1/rastreabilidade/requisitos/{requisito_id}/grafo")
+
+    assert response.status_code == 200
+    graph = response.json()["data"]
+    results = analyze_live_change(
+        graph,
+        change_id="CHANGE-LIVE-TRACE-1",
+        query="avaliar impacto da mudança na rastreabilidade e evidência runtime",
+        llm_generate=None,
+        correlation_id="live-traceability-impact-e2e",
+    )
+
+    by_strategy = {result.strategy: result for result in results}
+    assert set(by_strategy) == {"graph", "semantic", "hybrid_rag_llm"}
+    assert by_strategy["graph"].candidates
+    assert by_strategy["hybrid_rag_llm"].llm_status == "disabled"
+
+    graph_node_ids = {node["id"] for node in graph["nodes"]}
+    for result in results:
+        assert all(
+            candidate.artifact_id in graph_node_ids
+            for candidate in result.candidates
+        )
+        assert all(candidate.evidence for candidate in result.candidates)
+
+
+def test_live_change_impact_excludes_rejected_runtime_and_filters_llm_hallucination():
+    requisito_id, event_id = _seed_graph(runtime_sha="d" * 40)
+
+    response = client.get(f"/v1/rastreabilidade/requisitos/{requisito_id}/grafo")
+
+    assert response.status_code == 200
+    graph = response.json()["data"]
+    artifacts = artifacts_from_traceability_graph(graph)
+    artifact_ids = {artifact.artifact_id for artifact in artifacts}
+
+    assert f"runtime_evidence:{event_id}" not in artifact_ids
+    assert "ci_run:36520000001" not in artifact_ids
+    assert "deployment:github-actions:traceability-dev" not in artifact_ids
+
+    valid_candidate = (
+        "git:github:ericson-j-santos/reqsys-v2-enterprise-real:pr:2161"
+    )
+    assert valid_candidate in artifact_ids
+
+    def fake_llm(prompt: str, correlation_id: str) -> str:
+        assert correlation_id == "live-impact-negative-control"
+        assert f"runtime_evidence:{event_id}" not in prompt
+        return (
+            '{"candidates":['
+            '{"artifact_id":"'
+            + valid_candidate
+            + '","relation":"TRACEABLE_CHANGE","confidence":0.94,'
+            '"reason":"candidato presente no grafo vivo"},'
+            '{"artifact_id":"UNKNOWN-HALLUCINATION","relation":"MADE_UP",'
+            '"confidence":1.0,"reason":"não existe"}'
+            ']}'
+        )
+
+    results = analyze_live_change(
+        graph,
+        change_id="CHANGE-LIVE-TRACE-NEGATIVE",
+        query="avaliar impacto sem aceitar evidência runtime rejeitada",
+        llm_generate=fake_llm,
+        correlation_id="live-impact-negative-control",
+    )
+    hybrid = next(result for result in results if result.strategy == "hybrid_rag_llm")
+
+    assert hybrid.llm_status == "used"
+    assert [candidate.artifact_id for candidate in hybrid.candidates] == [
+        valid_candidate
+    ]
