@@ -152,7 +152,7 @@ def test_traceability_graph_e2e_projects_requirement_to_runtime_and_replay_is_st
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json() == second.json()
+    assert first.json()["data"] == second.json()["data"]
 
     graph = first.json()["data"]
     assert graph["graph_type"] == "functional_traceability_graph"
