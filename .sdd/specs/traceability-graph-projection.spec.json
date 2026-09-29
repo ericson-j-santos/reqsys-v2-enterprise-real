@@ -1,0 +1,22 @@
+{
+  "feature_name": "traceability-graph-projection",
+  "project": "ReqSys Produto",
+  "created_at": "2026-09-29",
+  "updated_at": "2026-09-29",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Projeta read-only requisito, SDD, PR/SHA, CI, deploy e evidência runtime a partir das fontes canônicas existentes, com fail-closed para evidência de SHA divergente ou status não satisfatório.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_traceability_graph.py"
+    ],
+    "pre_pr_tests": [
+      "backend/tests/test_traceability_graph.py"
+    ],
+    "evidence_contract": "API real + SQLite real de teste; positivo, SHA divergente, FAILED, replay idempotente e leitura independente comprovando ausência de mutação."
+  }
+}
