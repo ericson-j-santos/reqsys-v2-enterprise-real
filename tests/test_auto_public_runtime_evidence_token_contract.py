@@ -41,13 +41,17 @@ def test_blocking_main_post_merge_is_the_automatic_upstream(raw: str) -> None:
     assert "ReqSys Fly Runtime P0" not in raw
 
 
-def test_automatic_trigger_requires_blocking_dispatch_event(steps: list[dict]) -> None:
+def test_automatic_trigger_requires_blocking_dispatch_and_current_main_sha(steps: list[dict]) -> None:
     resolver = _step(steps, "Resolve trigger context")
     body = resolver["run"]
-    assert "github.event.workflow_run.conclusion" in body
-    assert "github.event.workflow_run.head_branch" in body
-    assert "github.event.workflow_run.event" in body
-    assert '"workflow_dispatch"' in body
+    assert resolver["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert "github.event.workflow_run.head_sha" in str(resolver["env"])
+    assert "github.event.workflow_run.conclusion" in str(resolver["env"])
+    assert "github.event.workflow_run.event" in str(resolver["env"])
+    assert 'commits/main' in body
+    assert 'UPSTREAM_SHA' in body
+    assert 'UPSTREAM_EVENT' in body
+    assert 'workflow_dispatch' in body
 
 
 def test_long_lived_or_app_credentials_are_not_referenced(raw: str) -> None:
