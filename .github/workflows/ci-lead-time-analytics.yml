@@ -21,6 +21,7 @@ on:
       - 'scripts/build_ci_process_improvement_analytics.py'
       - 'scripts/build_ci_fixed_window_analytics.py'
       - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/ci_health_regression_monitor.py'
       - 'scripts/compare_ci_process_baseline.py'
       - 'scripts/annotate_ci_window_comparability.py'
       - 'scripts/update_ci_process_history.py'
@@ -32,6 +33,7 @@ on:
       - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
       - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
       - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
+      - 'tests/test_ci_health_regression_watch.py'
       - 'tests/scripts/test_compare_ci_process_baseline.py'
       - 'tests/scripts/test_annotate_ci_window_comparability.py'
       - 'tests/scripts/test_update_ci_process_history.py'
@@ -51,11 +53,13 @@ on:
       - '.github/workflows/workflow-command-center.yml'
       - 'scripts/build_ci_fixed_window_analytics.py'
       - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/ci_health_regression_monitor.py'
       - 'scripts/update_ci_fixed_window_history.py'
       - 'scripts/enrich_command_center_ci_fixed_history.py'
       - 'scripts/ci_fixed_window_sustainability.py'
       - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
       - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
+      - 'tests/test_ci_health_regression_watch.py'
       - 'tests/scripts/test_update_ci_fixed_window_history.py'
       - 'tests/scripts/test_ci_fixed_window_sustainability.py'
       - 'docs/runbooks/ci-lead-time-analytics.md'
@@ -90,7 +94,7 @@ jobs:
       CI_PROCESS_HISTORY_PATH: 'audit/history/ci-process-improvement-history.jsonl'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Restore process improvement history from main artifact
         env:
@@ -109,6 +113,7 @@ jobs:
           python tests/scripts/test_restore_ci_process_history.py
           python tests/scripts/test_enrich_command_center_ci_history.py
           python tests/scripts/test_ci_fixed_window_sustainability.py
+          python tests/test_ci_health_regression_watch.py
 
       - name: Build fixed-hour analytics artifact
         env:
@@ -132,6 +137,15 @@ jobs:
 
       - name: Update fixed-window process improvement history
         run: python scripts/update_ci_fixed_window_history.py
+
+      - name: Analyze rolling 14-day CI health
+        id: ci_health
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          LOOKBACK_DAYS: '14'
+        run: python scripts/ci_health_regression_monitor.py
 
       - name: Upload CI lead time analytics evidence
         if: always()
