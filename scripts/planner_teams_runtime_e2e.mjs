@@ -111,11 +111,49 @@ export function evaluatePlannerCard(message, taskId) {
   }
 }
 
-export function evaluateContract({ normalFound, e2eFound, cardPassed }) {
+export function evaluateContract({ normalFound, e2eFound, cardPassed, normalCount = normalFound ? 1 : 0 }) {
   if (e2eFound) return { passed: false, reason: 'ct01_e2e_message_observed' }
   if (!normalFound) return { passed: false, reason: 'ct02_normal_message_not_observed' }
   if (!cardPassed) return { passed: false, reason: 'ct03_card_contract_not_satisfied' }
+  if (normalCount !== 1) return { passed: false, reason: 'ct04_duplicate_normal_messages' }
   return { passed: true, reason: 'contract_satisfied' }
+}
+
+export function graphRecoveryDecision({
+  method,
+  status = null,
+  transportError = false,
+  attempt = 1,
+  maxAttempts = 3,
+  retryAfterSeconds = null,
+}) {
+  const normalizedMethod = String(method || 'GET').toUpperCase()
+  const explicitTransient = [429, 502, 503, 504].includes(Number(status))
+  const permanent = [400, 401, 403].includes(Number(status))
+  const canRetry = attempt < maxAttempts
+
+  if (transportError) {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(normalizedMethod) && canRetry) {
+      return { action: 'retry', reason: 'transport_transient', wait_seconds: Math.min(8, 2 ** (attempt - 1)) }
+    }
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(normalizedMethod)) {
+      return { action: 'unknown_outcome', reason: 'non_idempotent_transport_failure', wait_seconds: 0 }
+    }
+    return { action: 'fail', reason: 'transport_retry_exhausted', wait_seconds: 0 }
+  }
+
+  if (explicitTransient) {
+    if (!canRetry) return { action: 'fail', reason: `http_${status}_retry_exhausted`, wait_seconds: 0 }
+    const retryAfter = Number(retryAfterSeconds)
+    return {
+      action: 'retry',
+      reason: `http_${status}_transient`,
+      wait_seconds: Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : Math.min(8, 2 ** (attempt - 1)),
+    }
+  }
+
+  if (permanent) return { action: 'fail', reason: `http_${status}_permanent`, wait_seconds: 0 }
+  return { action: 'fail', reason: `http_${status}_unclassified`, wait_seconds: 0 }
 }
 
 export function filterMessagesSince(messages, startedAt) {
@@ -156,15 +194,50 @@ export function selectPlannerCandidate(candidates) {
 async function graph(method, path, token, body, allowed = [200]) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
-  const response = await fetch(`${GRAPH}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (response.status === 403 && path.includes('/messages')) {
-    throw new Error('graph_teams_read_forbidden:conceder_ChannelMessage.Read.Group_ou_ChannelMessage.Read.All_ao_app_de_teste')
+  const maxAttempts = 3
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response
+    try {
+      response = await fetch(`${GRAPH}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+    } catch (error) {
+      const decision = graphRecoveryDecision({ method, transportError: true, attempt, maxAttempts })
+      if (decision.action === 'retry') {
+        await sleep(decision.wait_seconds * 1000)
+        continue
+      }
+      if (decision.action === 'unknown_outcome') {
+        throw new Error(`graph_unknown_outcome:${method}:${path.split('?')[0]}:${String(error?.message || error).slice(0, 300)}`)
+      }
+      throw error
+    }
+
+    if (allowed.includes(response.status)) return checkedJson(response, `graph:${method}:${path.split('?')[0]}`, allowed)
+
+    if (response.status === 403 && path.includes('/messages')) {
+      throw new Error('graph_teams_read_forbidden:conceder_ChannelMessage.Read.Group_ou_ChannelMessage.Read.All_ao_app_de_teste')
+    }
+
+    const retryAfterSeconds = response.headers.get('retry-after')
+    const decision = graphRecoveryDecision({
+      method,
+      status: response.status,
+      attempt,
+      maxAttempts,
+      retryAfterSeconds,
+    })
+    if (decision.action === 'retry') {
+      await sleep(decision.wait_seconds * 1000)
+      continue
+    }
+    return checkedJson(response, `graph:${method}:${path.split('?')[0]}`, allowed)
   }
-  return checkedJson(response, `graph:${method}:${path.split('?')[0]}`, allowed)
+
+  throw new Error(`graph_retry_loop_exhausted:${method}:${path.split('?')[0]}`)
 }
 
 async function discoverPlannerTarget(token) {
@@ -270,24 +343,47 @@ async function observeContract({ token, teamId, channelId, startedAt, e2eTitle, 
   while (Date.now() <= deadline) {
     polls += 1
     const messages = await listChannelMessages(token, teamId, channelId, startedAt)
-    e2eMessage = messages.find((message) => messageContainsTitle(message, e2eTitle)) || null
-    normalMessage = messages.find((message) => messageContainsTitle(message, normalTitle)) || null
+    const e2eMatches = messages.filter((message) => messageContainsTitle(message, e2eTitle))
+    const normalMatches = messages.filter((message) => messageContainsTitle(message, normalTitle))
+    e2eMessage = e2eMatches[0] || null
+    normalMessage = normalMatches[0] || null
 
     if (e2eMessage) {
-      return { polls, normalMessage, e2eMessage, normalObservedAt: normalMessage ? iso() : null, settlePolls: 0 }
+      return {
+        polls,
+        normalMessage,
+        e2eMessage,
+        normalCount: normalMatches.length,
+        e2eCount: e2eMatches.length,
+        normalObservedAt: normalMessage ? iso() : null,
+        settlePolls: 0,
+      }
     }
 
     if (normalMessage) {
       const settleDeadline = Date.now() + settleSeconds * 1000
       let settlePolls = 0
+      let settledNormalMatches = normalMatches
+      let settledE2eMatches = e2eMatches
       while (Date.now() < settleDeadline) {
         settlePolls += 1
         await sleep(Math.min(pollMs, Math.max(1, settleDeadline - Date.now())))
         const settledMessages = await listChannelMessages(token, teamId, channelId, startedAt)
-        e2eMessage = settledMessages.find((message) => messageContainsTitle(message, e2eTitle)) || null
-        if (e2eMessage) break
+        settledE2eMatches = settledMessages.filter((message) => messageContainsTitle(message, e2eTitle))
+        settledNormalMatches = settledMessages.filter((message) => messageContainsTitle(message, normalTitle))
+        e2eMessage = settledE2eMatches[0] || null
+        normalMessage = settledNormalMatches[0] || normalMessage
+        if (e2eMessage || settledNormalMatches.length > 1) break
       }
-      return { polls, normalMessage, e2eMessage, normalObservedAt: iso(), settlePolls }
+      return {
+        polls,
+        normalMessage,
+        e2eMessage,
+        normalCount: settledNormalMatches.length,
+        e2eCount: settledE2eMatches.length,
+        normalObservedAt: iso(),
+        settlePolls,
+      }
     }
 
     const remaining = deadline - Date.now()
@@ -295,7 +391,7 @@ async function observeContract({ token, teamId, channelId, startedAt, e2eTitle, 
     await sleep(Math.min(pollMs, remaining))
   }
 
-  return { polls, normalMessage, e2eMessage, normalObservedAt: null, settlePolls: 0 }
+  return { polls, normalMessage, e2eMessage, normalCount: 0, e2eCount: 0, normalObservedAt: null, settlePolls: 0 }
 }
 
 async function main() {
@@ -338,6 +434,7 @@ async function main() {
       ct01: 'tarefa REQSYS-E2E-* nao pode produzir mensagem no Teams',
       ct02: 'tarefa normal deve produzir mensagem no Teams',
       ct03: 'cartao da tarefa normal deve usar contrato atual: Progresso/Vencimento, sem Plano bruto e com Abrir no Planner',
+      ct04: 'uma tarefa normal deve produzir exatamente uma mensagem no Teams, sem duplicidade',
       positive_control_required: true,
     },
     timing: {
@@ -405,6 +502,8 @@ async function main() {
         created_at: String(observed.e2eMessage.createdDateTime || ''),
       } : null,
       normal_card: normalCard.summary,
+      normal_message_count: observed.normalCount,
+      e2e_message_count: observed.e2eCount,
       normal_observed_at: observed.normalObservedAt,
     }
 
@@ -417,6 +516,7 @@ async function main() {
       normalFound: Boolean(observed.normalMessage),
       e2eFound: Boolean(observed.e2eMessage),
       cardPassed: normalCard.passed,
+      normalCount: observed.normalCount,
     })
     evidence.contract = contract
     if (!contract.passed) throw new Error(contract.reason)
