@@ -6,6 +6,7 @@ import {
   evaluateContract,
   evaluatePlannerCard,
   filterMessagesSince,
+  graphRecoveryDecision,
   messageContainsTitle,
   resolveGraphAuth,
   selectPlannerCandidate,
@@ -187,3 +188,51 @@ test('aceita janela de 900 s para atravessar o polling real do Planner', () => {
 test('rejeita janela acima do teto operacional', () => {
   assert.throws(() => validatePollTimeout('1201'), /poll_timeout_invalido:1201/)
 })
+
+test('reprova quando a mesma tarefa normal produz duas mensagens no Teams', () => {
+  assert.deepEqual(
+    evaluateContract({ normalFound: true, e2eFound: false, cardPassed: true, normalCount: 2 }),
+    { passed: false, reason: 'ct04_duplicate_normal_messages' },
+  )
+})
+
+test('429 e 503 explícitos são retentáveis com limite', () => {
+  assert.deepEqual(
+    graphRecoveryDecision({ method: 'POST', status: 429, attempt: 1, maxAttempts: 3, retryAfterSeconds: '7' }),
+    { action: 'retry', reason: 'http_429_transient', wait_seconds: 7 },
+  )
+  assert.deepEqual(
+    graphRecoveryDecision({ method: 'POST', status: 503, attempt: 2, maxAttempts: 3 }),
+    { action: 'retry', reason: 'http_503_transient', wait_seconds: 2 },
+  )
+  assert.deepEqual(
+    graphRecoveryDecision({ method: 'POST', status: 503, attempt: 3, maxAttempts: 3 }),
+    { action: 'fail', reason: 'http_503_retry_exhausted', wait_seconds: 0 },
+  )
+})
+
+test('403 é falha permanente e não entra em retry cego', () => {
+  assert.deepEqual(
+    graphRecoveryDecision({ method: 'POST', status: 403, attempt: 1, maxAttempts: 3 }),
+    { action: 'fail', reason: 'http_403_permanent', wait_seconds: 0 },
+  )
+})
+
+test('timeout de POST é resultado ambíguo e não é repetido automaticamente', () => {
+  assert.deepEqual(
+    graphRecoveryDecision({ method: 'POST', transportError: true, attempt: 1, maxAttempts: 3 }),
+    { action: 'unknown_outcome', reason: 'non_idempotent_transport_failure', wait_seconds: 0 },
+  )
+})
+
+test('falha de transporte em GET pode ser repetida de forma limitada', () => {
+  assert.deepEqual(
+    graphRecoveryDecision({ method: 'GET', transportError: true, attempt: 1, maxAttempts: 3 }),
+    { action: 'retry', reason: 'transport_transient', wait_seconds: 1 },
+  )
+  assert.deepEqual(
+    graphRecoveryDecision({ method: 'GET', transportError: true, attempt: 3, maxAttempts: 3 }),
+    { action: 'fail', reason: 'transport_retry_exhausted', wait_seconds: 0 },
+  )
+})
+
