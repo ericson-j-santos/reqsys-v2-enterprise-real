@@ -10,6 +10,7 @@ from app.core.envelope import ok
 from app.core.operational_queue import (
     OperationalQueueUnavailableError,
     OperationalTask,
+    OperationalTaskIdentityConflictError,
     OperationalTaskType,
     operational_queue,
 )
@@ -42,6 +43,11 @@ async def enqueue_operational_task(body: EnqueueOperationalTaskRequest, request:
     )
     try:
         queued = await operational_queue.enqueue(task)
+    except OperationalTaskIdentityConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Idempotency-Key já utilizada para outra intenção operacional',
+        ) from exc
     except OperationalQueueUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return ok(

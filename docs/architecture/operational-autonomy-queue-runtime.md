@@ -30,6 +30,10 @@ Exemplos de uso futuro:
 | Testes | `backend/tests/test_operational_queue.py` | Validar fila, idempotência, retry e DLQ |
 | Testes | `backend/tests/test_operational_worker.py` | Validar processamento controlado pelo worker |
 
+## Semântica de idempotência
+
+Quando `idempotency_key` é informada, ela identifica uma única intenção operacional composta por `task_type + payload + max_attempts`. Replays equivalentes podem usar outro `correlation_id` e retornam a tarefa já persistida. Reutilizar a mesma chave com tipo, payload ou política de tentativas diferente falha com HTTP 409 e não cria nem altera tarefa.
+
 ## Endpoints
 
 ### Enfileirar tarefa

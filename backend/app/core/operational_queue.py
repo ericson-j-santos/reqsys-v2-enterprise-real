@@ -20,6 +20,10 @@ class OperationalQueueUnavailableError(RuntimeError):
     """Indica que o provider configurado não está disponível."""
 
 
+class OperationalTaskIdentityConflictError(ValueError):
+    """A mesma idempotency_key foi reutilizada para outra intenção operacional."""
+
+
 class OperationalTaskStatus(StrEnum):
     PENDING = 'pending'
     RUNNING = 'running'
@@ -117,6 +121,25 @@ def _retry_delay_seconds(base_seconds: float, attempts: int) -> float:
     return max(0.0, base_seconds) * (2 ** max(0, attempts - 1))
 
 
+def _same_task_intent(existing: OperationalTask, incoming: OperationalTask) -> bool:
+    """Compara apenas a intenção funcional protegida pela chave idempotente.
+
+    correlation_id e task_id identificam tentativas/transporte e podem variar.
+    """
+    return (
+        existing.task_type == incoming.task_type
+        and existing.payload == incoming.payload
+        and existing.max_attempts == incoming.max_attempts
+    )
+
+
+def _assert_same_task_intent(existing: OperationalTask, incoming: OperationalTask) -> None:
+    if not _same_task_intent(existing, incoming):
+        raise OperationalTaskIdentityConflictError(
+            'idempotency_key_reused_with_different_task_intent'
+        )
+
+
 class OperationalQueue:
     """Provider em memória, permitido somente para DEV e testes."""
 
@@ -134,7 +157,9 @@ class OperationalQueue:
         async with self._lock:
             if task.idempotency_key and task.idempotency_key in self._idempotency_index:
                 existing_id = self._idempotency_index[task.idempotency_key]
-                return self._tasks[existing_id]
+                existing = self._tasks[existing_id]
+                _assert_same_task_intent(existing, task)
+                return existing
 
             self._tasks[task.task_id] = task
             if task.idempotency_key:
@@ -295,6 +320,7 @@ class RedisStreamsOperationalQueue:
                     existing_id = await self._redis.get(idempotency_key)
                     existing = await self.get(existing_id)
                     if existing is not None:
+                        _assert_same_task_intent(existing, task)
                         return existing
                     raise OperationalQueueUnavailableError('Índice de idempotência inconsistente no Redis')
 
@@ -311,7 +337,7 @@ class RedisStreamsOperationalQueue:
                 task.correlation_id,
             )
             return task
-        except OperationalQueueUnavailableError:
+        except (OperationalQueueUnavailableError, OperationalTaskIdentityConflictError):
             raise
         except Exception as exc:
             raise OperationalQueueUnavailableError(f'Falha ao enfileirar no Redis Streams: {exc}') from exc

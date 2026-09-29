@@ -5,6 +5,7 @@ import pytest
 from app.core.operational_queue import (
     OperationalQueue,
     OperationalTask,
+    OperationalTaskIdentityConflictError,
     OperationalTaskStatus,
     OperationalTaskType,
 )
@@ -32,17 +33,17 @@ async def test_enqueue_dequeue_and_complete_task():
 
 
 @pytest.mark.asyncio
-async def test_idempotency_key_returns_existing_task():
+async def test_idempotency_key_returns_existing_task_for_same_intent():
     queue = OperationalQueue()
     first = OperationalTask(
         task_type=OperationalTaskType.GENERIC,
-        payload={'action': 'first'},
+        payload={'action': 'same'},
         correlation_id='corr-001',
         idempotency_key='same-key',
     )
     second = OperationalTask(
         task_type=OperationalTaskType.GENERIC,
-        payload={'action': 'second'},
+        payload={'action': 'same'},
         correlation_id='corr-002',
         idempotency_key='same-key',
     )
@@ -51,6 +52,7 @@ async def test_idempotency_key_returns_existing_task():
     queued_second = await queue.enqueue(second)
 
     assert queued_first.task_id == queued_second.task_id
+    assert queued_second.correlation_id == 'corr-001'
     snapshot = await queue.snapshot()
     assert snapshot['total_tasks'] == 1
     assert snapshot['queued_items'] == 1
@@ -60,6 +62,60 @@ async def test_idempotency_key_returns_existing_task():
     assert snapshot['processing_items'] == 0
     assert snapshot['dlq_items'] == 0
     assert snapshot['oldest_message_age_seconds'] is not None
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_rejects_different_intent_without_mutating_original_task():
+    queue = OperationalQueue()
+    original = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'action': 'original', 'nested': {'value': 1}},
+        correlation_id='corr-original',
+        idempotency_key='intent-key',
+        max_attempts=3,
+    )
+    queued = await queue.enqueue(original)
+
+    divergent = [
+        OperationalTask(
+            task_type=OperationalTaskType.GENERIC,
+            payload={'action': 'different', 'nested': {'value': 1}},
+            correlation_id='corr-payload',
+            idempotency_key='intent-key',
+            max_attempts=3,
+        ),
+        OperationalTask(
+            task_type=OperationalTaskType.EMAIL_REPORT,
+            payload={'action': 'original', 'nested': {'value': 1}},
+            correlation_id='corr-type',
+            idempotency_key='intent-key',
+            max_attempts=3,
+        ),
+        OperationalTask(
+            task_type=OperationalTaskType.GENERIC,
+            payload={'action': 'original', 'nested': {'value': 1}},
+            correlation_id='corr-attempts',
+            idempotency_key='intent-key',
+            max_attempts=4,
+        ),
+    ]
+
+    for candidate in divergent:
+        with pytest.raises(
+            OperationalTaskIdentityConflictError,
+            match='idempotency_key_reused_with_different_task_intent',
+        ):
+            await queue.enqueue(candidate)
+
+    persisted = await queue.get(queued.task_id)
+    assert persisted is not None
+    assert persisted.task_type == OperationalTaskType.GENERIC
+    assert persisted.payload == {'action': 'original', 'nested': {'value': 1}}
+    assert persisted.max_attempts == 3
+    assert persisted.correlation_id == 'corr-original'
+    snapshot = await queue.snapshot()
+    assert snapshot['total_tasks'] == 1
+    assert snapshot['queued_items'] == 1
 
 
 @pytest.mark.asyncio
