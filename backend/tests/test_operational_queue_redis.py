@@ -9,6 +9,7 @@ from app.core.operational_queue import (
     OperationalQueue,
     OperationalQueueUnavailableError,
     OperationalTask,
+    OperationalTaskIdentityConflictError,
     OperationalTaskStatus,
     OperationalTaskType,
     RedisStreamsOperationalQueue,
@@ -182,13 +183,34 @@ async def test_redis_streams_preserves_idempotency_retry_and_dlq():
     )
     duplicate = OperationalTask(
         task_type=OperationalTaskType.GENERIC,
-        payload={'action': 'duplicate'},
+        payload={'force_error': True},
         correlation_id='corr-redis-002',
         idempotency_key='redis-same-key',
+        max_attempts=2,
+    )
+    divergent = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'force_error': False},
+        correlation_id='corr-redis-conflict',
+        idempotency_key='redis-same-key',
+        max_attempts=2,
     )
 
     queued = await queue.enqueue(first)
     assert (await queue.enqueue(duplicate)).task_id == queued.task_id
+    with pytest.raises(
+        OperationalTaskIdentityConflictError,
+        match='idempotency_key_reused_with_different_task_intent',
+    ):
+        await queue.enqueue(divergent)
+
+    persisted = await queue.get(queued.task_id)
+    assert persisted is not None
+    assert persisted.payload == {'force_error': True}
+    assert persisted.max_attempts == 2
+    pre_health = await queue.snapshot()
+    assert pre_health['total_tasks'] == 1
+    assert pre_health['queued_items'] == 1
 
     attempt_one = await queue.dequeue()
     assert attempt_one is not None
