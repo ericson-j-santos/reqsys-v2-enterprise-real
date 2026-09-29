@@ -41,6 +41,8 @@ def test_bridge_pins_runner_asset_and_never_reports_registration_token() -> None
     assert '"token_exposed": False' in raw
     assert "print(token)" not in raw
     assert '_emit({"token"' not in raw
+    assert 'token = ""' not in raw
+    assert "del token" in raw
 
 
 def test_bridge_requires_both_target_workflows_and_independent_readback() -> None:
@@ -102,6 +104,9 @@ def test_workflow_exposes_only_fixed_alm_bridge_mode() -> None:
     assert "DISABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE" in raw
     assert "owner_risk3_gateway.py" in raw
     assert "configure_noteri_alm_runner_bridge_risk3.py" in raw
+    assert "python312._pth" in raw
+    assert '$rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\\\\scripts"' in raw
+    assert "RISK3_CLEANUP_NOT_REQUIRED session_not_materialized" in raw
     assert "TARGET_ALM_HEAD: 96966d8decc210a98eefa7f0ca437052e8bd5a21" in raw
     assert "ALM_RUNNER_BRIDGE_NOT_READY" in raw
 
