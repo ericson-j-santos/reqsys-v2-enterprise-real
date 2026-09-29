@@ -42,6 +42,10 @@ def test_monitor_is_fail_closed_for_alerts_and_idempotent() -> None:
     assert "Source errors detected; no alert is emitted from errors alone." in raw
     assert "Não conceder permissão automaticamente." in raw
     assert "replay sem duplicidade" in raw
+    assert "### Descrição do problema" in raw
+    assert "### Estado atual evidenciado" in raw
+    assert "### Critérios de aceite" in raw
+    assert "### Declaração de rastreabilidade" in raw
 
 
 def test_monitor_uses_minimum_permissions_and_immutable_actions() -> None:

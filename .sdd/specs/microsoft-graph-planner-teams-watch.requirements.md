@@ -8,7 +8,7 @@ Monitorar por GitHub Actions, sem custo adicional, mudanças oficiais do Microso
 
 1. Incorporar o monitor ao próprio `Scheduled Operational Watch`, preservando o cron existente de 4 horas; não criar novo workflow nem novo cron.
 2. Consultar apenas Microsoft Learn e Microsoft Graph changelog oficiais.
-3. Persistir baseline e deduplicação na issue #2165.
+3. Persistir baseline e deduplicação na issue #2165 preservando o contrato de governança da issue (descrição, estados, causa raiz, aceite, riscos, dependências, evidências, PR, responsável, prioridade e rastreabilidade).
 4. A primeira coleta deve semear baseline sem comentário de alerta.
 5. Mudança relevante deve registrar fonte oficial, evidência SHA-256, efeito no bloqueio, risco e menor adaptação segura/idempotente.
 6. Novo item relevante do changelog deve alertar uma única vez; replay não pode duplicar comentário.
