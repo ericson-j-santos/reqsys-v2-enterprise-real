@@ -10,18 +10,25 @@ def text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_automatic_pipeline_is_post_merge_and_hourly() -> None:
+def test_fly_promotion_is_manual_only_and_dev_is_pc24x7_only() -> None:
     workflow = text(AUTO)
-    assert 'workflows: ["Post-merge Main Runtime Validator"]' in workflow
-    assert 'cron: "23 * * * *"' in workflow
-    assert "WORKFLOW_CONCLUSION" in workflow
-    assert "source_workflow_not_eligible" in workflow
+    trigger = workflow.split("permissions:", 1)[0]
+
+    assert "workflow_dispatch:" in trigger
+    assert "workflow_run:" not in trigger
+    assert "schedule:" not in trigger
+    assert "Validate DEV via PC24x7 public tunnel" in workflow
+    assert "REQSYS_DEV_RUNTIME_PROVIDER" not in workflow
+    assert "Capture DEV via Fly" not in workflow
+    assert "Promote DEV via Fly" not in workflow
+    assert "needs.resolve.outputs.dev_provider" not in workflow
+    assert "manual_legacy_stg_prod_promotion" in workflow
     assert "stale_sha_superseded_by_main" in workflow
 
 
-def test_promotion_order_is_strictly_sequential() -> None:
+def test_manual_promotion_order_requires_pc24x7_dev_before_legacy_stg_prod() -> None:
     workflow = text(AUTO)
-    assert workflow.index("\n  capture-dev:\n") < workflow.index("\n  promote-dev:\n")
+    assert workflow.index("\n  validate-dev-pc24x7:\n") < workflow.index("\n  dev-result:\n")
     assert workflow.index("\n  dev-result:\n") < workflow.index("\n  capture-stg:\n")
     assert workflow.index("\n  stg-result:\n") < workflow.index("\n  capture-prod:\n")
     assert "needs.dev-result.result == 'success'" in workflow
@@ -40,7 +47,7 @@ def test_production_requires_bacen_and_has_no_bypass() -> None:
     assert "environment == 'prod'" in stage
 
 
-def test_automatic_pipeline_grants_reusable_workflow_permissions() -> None:
+def test_manual_pipeline_grants_reusable_workflow_permissions() -> None:
     workflow = text(AUTO)
     stage = text(STAGE)
     assert "pull-requests: read" in stage
@@ -62,17 +69,20 @@ def test_capture_collects_fly_runtime_publication_and_login() -> None:
 
 def test_stage_deploys_exact_current_main_sha_and_verifies() -> None:
     workflow = text(STAGE)
-    assert 'ref: ${{ inputs.expected_sha }}' in workflow
+    assert "ref: ${{ inputs.expected_sha }}" in workflow
     assert 'test "$(git rev-parse origin/main)" = "$TARGET_SHA"' in workflow
-    assert "--build-arg \"GITHUB_SHA=$TARGET_SHA\"" in workflow
+    assert '--build-arg "GITHUB_SHA=$TARGET_SHA"' in workflow
     assert "Deploy frontend exact source" in workflow
     assert "uses: ./.github/workflows/fly-environment-evidence-capture.yml" in workflow
     assert "strict: true" in workflow
     assert "if: always() && needs.deploy.result == 'success'" in workflow
 
 
-def test_contract_documents_fail_closed_and_rollback_policy() -> None:
+def test_contract_documents_manual_only_dev_pc24x7_and_rollback_policy() -> None:
     contract = text(CONTRACT)
+    assert "manual-only" in contract
+    assert "PC24x7" in contract
+    assert "Fly não é permitido em DEV" in contract
     assert "fail-closed" in contract
     assert "nenhum bypass" in contract
     assert "rollback destrutivo automático" in contract
