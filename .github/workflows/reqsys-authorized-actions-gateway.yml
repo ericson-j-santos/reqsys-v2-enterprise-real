@@ -69,6 +69,7 @@ jobs:
         github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main-noteri' ||
         github.event.comment.body == '/reqsys run protect-e2e-platform-main' ||
         github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset' ||
+        github.event.comment.body == '/reqsys run microsoft-graph-planner-teams-watch' ||
         github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset-noteri'
       )
     runs-on: ubuntu-latest
@@ -229,6 +230,9 @@ jobs:
               target='main-post-merge-validation.yml'
               mode='exact-main'
               ;;
+            '/reqsys run microsoft-graph-planner-teams-watch')
+              target='scheduled-operational-watch.yml'
+              ;;
             '/reqsys run post-merge-replay-control')
               target='actions-dispatcher.yml'
               mode='post-merge-replay-control'
@@ -322,7 +326,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_WORKFLOW" in
-            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|todo-global-hourly-cycle.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|main-post-merge-validation.yml|actions-dispatcher.yml|branch-protection-audit.yml) ;;
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|todo-global-hourly-cycle.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml|branch-protection-audit.yml) ;;
             *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
           esac
           if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then

@@ -57,3 +57,17 @@ def test_monitor_uses_minimum_permissions_and_immutable_actions() -> None:
     assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in raw
     assert "actions/github-script@v" not in raw
     assert "actions/upload-artifact@v" not in raw
+
+
+def test_manual_graph_watch_dispatch_is_exact_issue_scoped_and_inputless() -> None:
+    gateway = (ROOT / ".github" / "workflows" / "reqsys-authorized-actions-gateway.yml").read_text(
+        encoding="utf-8"
+    )
+    command = "/reqsys run microsoft-graph-planner-teams-watch"
+    assert "github.event.issue.number == 1705" in gateway
+    assert "github.event.comment.user.login == 'ericson-j-santos'" in gateway
+    assert ("github.event.comment.body == '" + command + "'") in gateway
+    assert ("'" + command + "')") in gateway
+    assert "target='scheduled-operational-watch.yml'" in gateway
+    assert "main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml" in gateway
+    assert "-f graph_watch" not in gateway
