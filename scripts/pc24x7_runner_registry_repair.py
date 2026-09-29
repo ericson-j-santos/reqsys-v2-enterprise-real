@@ -131,6 +131,8 @@ def write_evidence(path: Path, result: dict[str, Any]) -> None:
         "before": result.get("before"),
         "after": result.get("after"),
         "mutated": bool(result.get("mutated")),
+        "http_status": result.get("http_status"),
+        "error_type": result.get("error_type"),
         "custom_labels_target": list(CUSTOM_LABELS),
         "production_touched": False,
         "reboot_performed": False,
@@ -156,10 +158,26 @@ def main() -> int:
 
     try:
         result = repair(token)
-    except (RegistryRepairError, urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError):
+    except urllib.error.HTTPError as exc:
+        result = {
+            "ok": False,
+            "state": "runner_registry_http_error",
+            "http_status": int(exc.code),
+            "error_type": type(exc).__name__,
+            "mutated": False,
+        }
+    except urllib.error.URLError as exc:
+        result = {
+            "ok": False,
+            "state": "runner_registry_network_error",
+            "error_type": type(exc).__name__,
+            "mutated": False,
+        }
+    except (RegistryRepairError, OSError, json.JSONDecodeError) as exc:
         result = {
             "ok": False,
             "state": "runner_registry_probe_failed",
+            "error_type": type(exc).__name__,
             "mutated": False,
         }
     write_evidence(args.evidence_file, result)
