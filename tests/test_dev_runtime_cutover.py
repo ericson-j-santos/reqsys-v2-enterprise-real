@@ -1,5 +1,7 @@
 from scripts.validate_dev_runtime_cutover import (
+    AUTO_PUBLIC_RUNTIME_EVIDENCE_WORKFLOW,
     CRITICAL_FILES,
+    FLY_AUTOMATIC_PROMOTION_WORKFLOW,
     FORBIDDEN_DEV_RUNTIME_URLS,
     ROOT,
     STABLE_DEV_ENTRYPOINT,
@@ -63,3 +65,31 @@ def test_backend_catalog_uses_stable_entrypoint_and_same_origin_api():
     assert "reqsys-app-dev.fly.dev" not in raw
     assert "reqsys-api-dev.fly.dev" not in raw
 
+
+
+def test_legacy_fly_promotion_is_manual_only_and_never_routes_dev_to_fly():
+    raw = (ROOT / FLY_AUTOMATIC_PROMOTION_WORKFLOW).read_text(encoding="utf-8")
+    trigger = raw.split("permissions:", 1)[0]
+    assert "workflow_dispatch:" in trigger
+    assert "workflow_run:" not in trigger
+    assert "schedule:" not in trigger
+    assert "Validate DEV via PC24x7 public tunnel" in raw
+    assert "REQSYS_DEV_RUNTIME_PROVIDER" not in raw
+    assert "Capture DEV via Fly" not in raw
+    assert "Promote DEV via Fly" not in raw
+    assert "needs.resolve.outputs.dev_provider" not in raw
+
+
+def test_auto_public_runtime_evidence_is_pc24x7_only_after_blocking_post_merge():
+    raw = (ROOT / AUTO_PUBLIC_RUNTIME_EVIDENCE_WORKFLOW).read_text(encoding="utf-8")
+    trigger = raw.split("permissions:", 1)[0]
+    assert "Main Post-Merge Validation" in trigger
+    assert "Fly Automatic Environment Promotion" not in raw
+    assert "resolve_pc24x7_dev_locator.mjs" in raw
+    assert "github.event.workflow_run.event" in raw
+    assert "workflow_dispatch" in raw
+    assert "Runtime DEV legado Fly.io rejeitado" in raw
+    assert "REQSYS_DEV_RUNTIME_PROVIDER" not in raw
+    assert "PC24X7_DEV_BASE_URL" not in raw
+    assert "PC24X7_DEV_FRONTEND_URL" not in raw
+    assert "reqsys-api.fly.dev" not in raw
