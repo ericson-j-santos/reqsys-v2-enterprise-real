@@ -79,11 +79,11 @@ def test_change_impact_pr2144_mode_is_pr_bound_and_fail_closed() -> None:
     assert "pull-requests: read" in raw
     assert "pulls/2144" in raw
     assert 'copilot/change-impact-benchmark-20260928' in raw
-    assert "PR2144_NOT_OPEN" in raw
+    assert "PR2144_NOT_CLOSED" in raw\n    assert "PR2144_NOT_MERGED" in raw
     assert "PR2144_BASE_NOT_MAIN" in raw
     assert "PR2144_HEAD_REPOSITORY_MISMATCH" in raw
     assert "PR2144_HEAD_BRANCH_MISMATCH" in raw
-    assert "PR2144_HEAD_SHA_MISMATCH" in raw
+    assert "PR2144_MERGE_SHA_MISMATCH" in raw
     assert 'ref: ${{ inputs.target_sha }}' in raw
     assert "TARGET_SHA_CHECKOUT_MISMATCH" in raw
     assert "scripts/change_impact_benchmark.py" in raw
@@ -97,17 +97,17 @@ def test_change_impact_pr2144_mode_is_pr_bound_and_fail_closed() -> None:
     assert "deploy_performed = $false" in raw
 
 
-def test_authorized_gateway_binds_change_impact_command_to_pr2144_head() -> None:
+def test_authorized_gateway_binds_change_impact_command_to_pr2144_merge_commit() -> None:
     raw = GATEWAY.read_text(encoding="utf-8")
 
     assert "github.event.comment.body == '/reqsys run change-impact-benchmark-pr2144'" in raw
     assert "'/reqsys run change-impact-benchmark-pr2144')" in raw
     assert "mode='change-impact-pr2144'" in raw
     assert 'gh api "repos/${GITHUB_REPOSITORY}/pulls/2144"' in raw
-    assert "change_impact_pr2144_not_open" in raw
+    assert "change_impact_pr2144_not_closed" in raw\n    assert "change_impact_pr2144_not_merged" in raw
     assert "change_impact_pr2144_base_mismatch" in raw
     assert "change_impact_pr2144_repo_mismatch" in raw
     assert "change_impact_pr2144_branch_mismatch" in raw
-    assert "change_impact_pr2144_sha_invalid" in raw
+    assert "change_impact_pr2144_merge_sha_invalid" in raw
     assert '-f target_sha="$CHANGE_IMPACT_TARGET_SHA"' in raw
     assert "'workload_sha': os.environ.get('CHANGE_IMPACT_TARGET_SHA') or None" in raw
