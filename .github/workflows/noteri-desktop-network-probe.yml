@@ -386,7 +386,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-orchestrator_status_readback:
+  orchestrator_status_readback:
     name: Read Desktop Orchestrator status from Noteri
     if: ${{ github.event_name == 'push' && github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
