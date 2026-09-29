@@ -36,7 +36,6 @@ RUNNER_LABELS = "noteri,reqsys-dev,alm-pr7"
 RUNNER_SLOTS = 2
 POLL_SECONDS = 10
 TIMEOUT_SECONDS = 900
-EVIDENCE_PATH = Path("artifacts/noteri-alm-runner-bridge/evidence.json")
 
 
 class BridgeError(RuntimeError):
@@ -256,9 +255,21 @@ def _stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
                 process.kill()
 
 
-def _write_evidence(payload: dict[str, Any]) -> None:
-    EVIDENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    EVIDENCE_PATH.write_text(
+def _resolve_evidence_path() -> Path:
+    raw = (os.environ.get("REQSYS_ALM_RUNNER_EVIDENCE_FILE") or "").strip()
+    temp_raw = (os.environ.get("RUNNER_TEMP") or "").strip()
+    if not raw or not temp_raw:
+        raise BridgeError("evidence_path_missing", "RUNNER_TEMP/evidence path ausente")
+    path = Path(raw).resolve()
+    temp_root = Path(temp_raw).resolve()
+    if path.parent != temp_root or path.suffix.casefold() != ".json":
+        raise BridgeError("evidence_path_invalid", "evidência deve permanecer diretamente em RUNNER_TEMP")
+    return path
+
+
+def _write_evidence(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -282,6 +293,7 @@ def main() -> int:
     processes: list[subprocess.Popen[bytes]] = []
     runtime_root: Path | None = None
     try:
+        evidence_path = _resolve_evidence_path()
         evidence["host"] = _validate_host()
         gh = _find_gh()
         _validate_identity(gh)
@@ -300,7 +312,7 @@ def main() -> int:
                 "observed_head_after": before,
                 "workflow_state_after": initial,
             })
-            _write_evidence(evidence)
+            _write_evidence(evidence_path, evidence)
             _emit({"ok": True, "status": "ALREADY_COMPLIANT"})
             return 0
 
@@ -334,20 +346,20 @@ def main() -> int:
             raise BridgeError("target_checks_timeout", "checks do PR #7 não chegaram a estado terminal")
         if not _all_success(final):
             evidence["status"] = "TARGET_CHECK_FAILED"
-            _write_evidence(evidence)
+            _write_evidence(evidence_path, evidence)
             _emit({"ok": False, "status": "TARGET_CHECK_FAILED"})
             return 6
 
         evidence["status"] = "READY"
         evidence["replay_idempotent"] = True
-        _write_evidence(evidence)
+        _write_evidence(evidence_path, evidence)
         _emit({"ok": True, "status": "READY"})
         return 0
     except BridgeError as exc:
         evidence["status"] = "BLOCKED"
         evidence["reason"] = exc.state
         evidence["error"] = str(exc)[:500]
-        _write_evidence(evidence)
+        _write_evidence(evidence_path, evidence)
         _emit({"ok": False, "status": "BLOCKED", "reason": exc.state})
         return 5
     except Exception as exc:
@@ -355,7 +367,7 @@ def main() -> int:
         evidence["reason"] = "unexpected_error"
         evidence["error_type"] = type(exc).__name__
         evidence["error"] = str(exc)[:500]
-        _write_evidence(evidence)
+        _write_evidence(evidence_path, evidence)
         _emit({"ok": False, "status": "BLOCKED", "reason": "unexpected_error"})
         return 2
     finally:
