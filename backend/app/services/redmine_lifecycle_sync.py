@@ -95,11 +95,17 @@ def _load_sync_state(link: VinculoGit | None) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _owned_remote_content(issue: dict[str, Any]) -> dict[str, str]:
+def _normalize_owned_content(content: dict[str, Any]) -> dict[str, str]:
+    """Canonicaliza somente diferenças de fim de linha controladas pelo Redmine."""
+    description = str(content.get('description') or '')
     return {
-        'subject': str(issue.get('subject') or ''),
-        'description': str(issue.get('description') or ''),
+        'subject': str(content.get('subject') or ''),
+        'description': description.replace('\r\n', '\n').replace('\r', '\n'),
     }
+
+
+def _owned_remote_content(issue: dict[str, Any]) -> dict[str, str]:
+    return _normalize_owned_content(issue)
 
 
 def _execution_snapshot(issue: dict[str, Any]) -> dict[str, Any]:
@@ -201,7 +207,7 @@ def sincronizar_requisito_redmine(
     state_before = _load_sync_state(state_link)
     last_journal_id = int(state_before.get('last_journal_id') or 0)
 
-    desired = montar_campos_requisito_redmine(requisito)
+    desired = _normalize_owned_content(montar_campos_requisito_redmine(requisito))
     reqsys_fingerprint = _fingerprint(desired)
 
     issue_before = obter_issue_redmine(issue_id, incluir_journals=True)
