@@ -461,7 +461,7 @@ jobs:
             "--expected-head", $anchorSha,
             "--sync-ref", "origin/$env:GITHUB_REF_NAME"
           )
-          $raw = & python $launcher @args
+          $raw = & $env:REQSYS_PYTHON $launcher @args
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -499,7 +499,7 @@ jobs:
             "--evidence-file", $env:EVIDENCE_REL,
             "--timeout-seconds", "5"
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Upload sanitized status evidence
