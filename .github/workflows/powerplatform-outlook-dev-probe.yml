@@ -5,7 +5,7 @@ on:
     branches:
       - "ops/power-automate-outlook-probe-*"
     paths:
-      - "scripts/powerplatform_outlook_connection_probe.js"
+      - "scripts/powerplatform_outlook_connection_probe.cjs"
       - ".github/workflows/powerplatform-outlook-dev-probe.yml"
 
 permissions:
@@ -78,7 +78,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
-          $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.js"
+          $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.cjs"
           $args = @(
             "--policy", $policy,
             "--correlation-id", "$env:CORRELATION_ID-selftest",
@@ -104,7 +104,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\\scripts\\command_gateway.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\\config\\command-gateway.policy.json"
-          $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.js"
+          $script = Join-Path $env:TARGET_PATH "scripts\\powerplatform_outlook_connection_probe.cjs"
           $args = @(
             "--policy", $policy,
             "--correlation-id", $env:CORRELATION_ID,
