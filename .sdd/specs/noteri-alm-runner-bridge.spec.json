@@ -9,13 +9,14 @@
     "design": true,
     "tasks": true
   },
-  "description": "Cria ponte efêmera, específica e fail-closed no Noteri para executar os dois checks do reqsys-powerplatform-alm PR #7 no HEAD exato, usando Python portátil pinado com caminho explícito para os módulos canônicos das regras, sem reduzir gates nem usar minutos hospedados pagos.",
+  "description": "Cria ponte efêmera, específica e fail-closed no Noteri para executar os dois checks do reqsys-powerplatform-alm PR #7 no HEAD atual resolvido pela API e congelado por execução, usando Python portátil pinado com caminho explícito para os módulos canônicos das regras, sem reduzir gates nem usar minutos hospedados pagos.",
   "scope": {
     "environment": "dev",
     "host": "Noteri",
     "repository": "ericson-j-santos/reqsys-powerplatform-alm",
     "pull_request": 7,
-    "expected_head": "96966d8decc210a98eefa7f0ca437052e8bd5a21"
+    "expected_head": "resolved_at_runtime_and_frozen",
+    "branch": "diag/outlook-connection-probe-20260928"
   },
   "implementation": [
     "scripts/noteri_alm_runner_bridge.py",
@@ -29,6 +30,6 @@
       "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Alvo fixo PR #7/HEAD exato; Python portátil pinado expõe explicitamente _rules/scripts via python312._pth; runner oficial 2.337.0 validado por SHA-256; registro efêmero via Owner Risk3; token não persistido/impresso; cleanup é idempotente quando a sessão não materializa; ambos os workflows exigidos em completed/success; readback independente e replay ALREADY_COMPLIANT; Owner Risk3 Gateway usa timeout de no máximo 900 segundos, compatível com o contrato do gateway; teste de contrato bloqueia regressão para 960 segundos ou outro valor fora do limite."
+    "evidence_contract": "Alvo fixo repositório/PR/base/branch; HEAD resolvido pela API no início, validado como SHA-40 e congelado por execução; mudança do HEAD durante o bridge falha fechado; Python portátil pinado expõe explicitamente _rules/scripts via python312._pth; runner oficial 2.337.0 validado por SHA-256; registro efêmero via Owner Risk3; token não persistido/impresso; cleanup idempotente; ambos os workflows exigidos em completed/success no mesmo expected_head; readback independente e replay ALREADY_COMPLIANT; Owner Risk3 Gateway usa timeout de no máximo 900 segundos."
   }
 }

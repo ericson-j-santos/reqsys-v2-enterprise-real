@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -21,7 +22,7 @@ EXPECTED_LOGIN = "ericson-j-santos"
 TARGET_REPOSITORY = "ericson-j-santos/reqsys-powerplatform-alm"
 TARGET_REPOSITORY_URL = f"https://github.com/{TARGET_REPOSITORY}"
 TARGET_PR = 7
-EXPECTED_HEAD = "96966d8decc210a98eefa7f0ca437052e8bd5a21"
+TARGET_BRANCH = "diag/outlook-connection-probe-20260928"
 REQUIRED_WORKFLOWS = (
     "Build and Deploy to Test",
     "Power Platform Outlook Connection Read-only Probe",
@@ -111,15 +112,27 @@ def _validate_identity(gh: Path) -> None:
         raise BridgeError("github_identity_mismatch", "perfil local gh não pertence ao owner esperado")
 
 
-def _pr_head(gh: Path) -> str:
+def _pr_target(gh: Path) -> str:
     payload = _gh_json(gh, f"repos/{TARGET_REPOSITORY}/pulls/{TARGET_PR}")
-    return str(((payload.get("head") or {}).get("sha") or "")).strip().lower()
+    if payload.get("state") != "open":
+        raise BridgeError("target_pr_not_open", "PR #7 precisa permanecer aberta durante a execução")
+    if str((payload.get("base") or {}).get("ref") or "") != "main":
+        raise BridgeError("target_base_mismatch", "PR #7 não aponta para main")
+    head = payload.get("head") or {}
+    if str(head.get("ref") or "") != TARGET_BRANCH:
+        raise BridgeError("target_branch_mismatch", "branch do PR #7 divergiu do alvo governado")
+    if str((head.get("repo") or {}).get("full_name") or "") != TARGET_REPOSITORY:
+        raise BridgeError("target_repository_mismatch", "repositório head do PR #7 divergiu do alvo governado")
+    sha = str(head.get("sha") or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise BridgeError("target_pr_head_invalid", "HEAD atual do PR #7 é inválido")
+    return sha
 
 
-def _workflow_state(gh: Path) -> dict[str, dict[str, Any]]:
+def _workflow_state(gh: Path, expected_head: str) -> dict[str, dict[str, Any]]:
     payload = _gh_json(
         gh,
-        f"repos/{TARGET_REPOSITORY}/actions/runs?head_sha={EXPECTED_HEAD}&per_page=100",
+        f"repos/{TARGET_REPOSITORY}/actions/runs?head_sha={expected_head}&per_page=100",
     )
     selected: dict[str, dict[str, Any]] = {}
     for item in payload.get("workflow_runs") or []:
@@ -137,11 +150,11 @@ def _workflow_state(gh: Path) -> dict[str, dict[str, Any]]:
     return selected
 
 
-def _all_success(state: dict[str, dict[str, Any]]) -> bool:
+def _all_success(state: dict[str, dict[str, Any]], expected_head: str) -> bool:
     return all(
         state.get(name, {}).get("status") == "completed"
         and state.get(name, {}).get("conclusion") == "success"
-        and state.get(name, {}).get("head_sha") == EXPECTED_HEAD
+        and state.get(name, {}).get("head_sha") == expected_head
         for name in REQUIRED_WORKFLOWS
     )
 
@@ -280,7 +293,6 @@ def main() -> int:
         "schema": "reqsys-noteri-alm-runner-bridge/v1",
         "target_repository": TARGET_REPOSITORY,
         "target_pr": TARGET_PR,
-        "expected_head": EXPECTED_HEAD,
         "production_touched": False,
         "secrets_read": False,
         "token_exposed": False,
@@ -298,14 +310,14 @@ def main() -> int:
         evidence["host"] = _validate_host()
         gh = _find_gh()
         _validate_identity(gh)
-        before = _pr_head(gh)
-        evidence["observed_head_before"] = before
-        if before != EXPECTED_HEAD:
-            raise BridgeError("target_head_changed", "PR #7 mudou de HEAD; execução recusada")
+        expected_head = _pr_target(gh)
+        evidence["expected_head"] = expected_head
+        evidence["target_branch"] = TARGET_BRANCH
+        evidence["observed_head_before"] = expected_head
 
-        initial = _workflow_state(gh)
+        initial = _workflow_state(gh, expected_head)
         evidence["workflow_state_before"] = initial
-        if _all_success(initial):
+        if _all_success(initial, expected_head):
             evidence.update({
                 "status": "ALREADY_COMPLIANT",
                 "independent_readback": True,
@@ -330,22 +342,22 @@ def main() -> int:
         deadline = time.monotonic() + TIMEOUT_SECONDS
         final = initial
         while time.monotonic() < deadline:
-            if _pr_head(gh) != EXPECTED_HEAD:
+            if _pr_target(gh) != expected_head:
                 raise BridgeError("target_head_changed_during_run", "PR #7 mudou durante a execução")
-            final = _workflow_state(gh)
+            final = _workflow_state(gh, expected_head)
             if _all_terminal(final):
                 break
             time.sleep(POLL_SECONDS)
 
-        after = _pr_head(gh)
+        after = _pr_target(gh)
         evidence["observed_head_after"] = after
         evidence["workflow_state_after"] = final
-        evidence["independent_readback"] = after == EXPECTED_HEAD and _all_terminal(final)
-        if after != EXPECTED_HEAD:
+        evidence["independent_readback"] = after == expected_head and _all_terminal(final)
+        if after != expected_head:
             raise BridgeError("target_head_changed_after_run", "PR #7 mudou antes do readback final")
         if not _all_terminal(final):
             raise BridgeError("target_checks_timeout", "checks do PR #7 não chegaram a estado terminal")
-        if not _all_success(final):
+        if not _all_success(final, expected_head):
             evidence["status"] = "TARGET_CHECK_FAILED"
             _write_evidence(evidence_path, evidence)
             _emit({"ok": False, "status": "TARGET_CHECK_FAILED"})
