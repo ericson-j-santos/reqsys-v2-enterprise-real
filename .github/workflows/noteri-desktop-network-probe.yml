@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - "fix/noteri-desktop-network-probe-*"
+      - "fix/noteri-desktop-orchestrator-status-*"
       - "hotfix/noteri-desktop-orchestrator-runner-recovery-*"
     paths:
       - "scripts/noteri_desktop_network_probe.py"
@@ -390,7 +391,7 @@ jobs:
 
   orchestrator_status_readback:
     name: Read Desktop Orchestrator status from Noteri
-    if: ${{ github.event_name == 'push' && github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' }}
+    if: ${{ github.event_name == 'push' && (github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' || startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-')) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
@@ -491,7 +492,7 @@ jobs:
             "run",
             "--cwd", $env:TARGET_PATH,
             "--session-id", $env:SESSION_ID,
-            "--risk", "1",
+            "--risk", "2",
             "--timeout", "30",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
