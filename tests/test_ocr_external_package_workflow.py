@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import yaml
@@ -5,7 +6,11 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ocr-benchmark.yml"
-PINNED_SHA = "15209941c4ddbf52da62cedc866510592b3172ee"
+LOCK = ROOT / "config" / "ocr-engine-lock.json"
+
+
+def _pinned_sha() -> str:
+    return str(json.loads(LOCK.read_text(encoding="utf-8"))["sha"])
 
 
 def _workflow() -> dict:
@@ -24,7 +29,7 @@ def _step(step_id: str) -> dict:
 def test_external_ocr_dependency_is_pinned_to_immutable_sha() -> None:
     workflow = _workflow()
 
-    assert workflow["env"]["OCR_ENGINE_SHA"] == PINNED_SHA
+    assert workflow["env"]["OCR_ENGINE_SHA"] == _pinned_sha()
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "ocr-evidence-engine.git@main" not in text
     assert "ref: ${{ env.OCR_ENGINE_SHA }}" in text
