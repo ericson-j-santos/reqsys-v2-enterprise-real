@@ -277,8 +277,10 @@ jobs:
           PR_JSON="$pr_json" python - <<'PY'
           import json, os, re
           pr = json.loads(os.environ["PR_JSON"])
-          if pr.get("state") != "open":
-              raise SystemExit("change_impact_pr2144_not_open")
+          if pr.get("state") != "closed":
+              raise SystemExit("change_impact_pr2144_not_closed")
+          if pr.get("merged") is not True:
+              raise SystemExit("change_impact_pr2144_not_merged")
           if (pr.get("base") or {}).get("ref") != "main":
               raise SystemExit("change_impact_pr2144_base_mismatch")
           head = pr.get("head") or {}
@@ -286,9 +288,9 @@ jobs:
               raise SystemExit("change_impact_pr2144_repo_mismatch")
           if head.get("ref") != "copilot/change-impact-benchmark-20260928":
               raise SystemExit("change_impact_pr2144_branch_mismatch")
-          sha = str(head.get("sha") or "")
+          sha = str(pr.get("merge_commit_sha") or "")
           if not re.fullmatch(r"[0-9a-f]{40}", sha):
-              raise SystemExit("change_impact_pr2144_sha_invalid")
+              raise SystemExit("change_impact_pr2144_merge_sha_invalid")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
               fh.write(f"sha={sha}\n")
           PY
