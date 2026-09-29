@@ -9,14 +9,14 @@
     "design": true,
     "tasks": true
   },
-  "description": "Cria ponte efêmera, específica e fail-closed no Noteri para executar os dois checks do reqsys-powerplatform-alm PR #7 no HEAD atual resolvido pela API e congelado por execução, usando Python portátil pinado com caminho explícito para os módulos canônicos das regras, sem reduzir gates nem usar minutos hospedados pagos.",
+  "description": "Cria ponte efêmera, genérica e fail-closed no Noteri para executar jobs self-hosted de PRs abertas do reqsys-powerplatform-alm sem acoplamento a número de PR, branch ou label temporário. Seleciona deterministicamente a PR elegível mais antiga, congela o HEAD, cancela somente runs obsoletos da mesma branch, registra runners efêmeros com labels estáveis e comprova pickup físico por readback independente.",
   "scope": {
     "environment": "dev",
     "host": "Noteri",
     "repository": "ericson-j-santos/reqsys-powerplatform-alm",
-    "pull_request": 7,
+    "pull_request": "lowest_open_pr_with_unassigned_noteri_job",
     "expected_head": "resolved_at_runtime_and_frozen",
-    "branch": "diag/outlook-connection-probe-20260928"
+    "branch": "resolved_from_selected_pr"
   },
   "implementation": [
     "scripts/noteri_alm_runner_bridge.py",
@@ -30,6 +30,6 @@
       "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "Alvo fixo repositório/PR/base/branch; HEAD resolvido pela API no início, validado como SHA-40 e congelado por execução; mudança do HEAD durante o bridge falha fechado; Python portátil pinado expõe explicitamente _rules/scripts via python312._pth; runner oficial 2.337.0 validado por SHA-256; registro efêmero via Owner Risk3; token não persistido/impresso; cleanup idempotente; ambos os workflows exigidos em completed/success no mesmo expected_head; readback independente e replay ALREADY_COMPLIANT; Owner Risk3 Gateway usa timeout de no máximo 900 segundos."
+    "evidence_contract": "Repositório/base/host fixos; seleção determinística da PR aberta mais antiga com job Noteri queued sem runner; PR/branch/HEAD congelados por execução; stale runs apenas da mesma branch e SHA anterior cancelados antes do registro; Python portátil pinado expõe _rules/scripts via python312._pth; runner oficial 2.337.0 validado por SHA-256; labels estáveis noteri,reqsys-dev; registro efêmero via Owner Risk3 com scope repo DEV; token não persistido/impresso; cleanup idempotente; pickup físico comprovado por runner_id/runner_name; workflow runs do HEAD chegam a terminal; sucesso funcional da PR registrado separadamente; readback independente e replay sem job Noteri não atribuído; Owner Risk3 Gateway usa timeout de no máximo 900 segundos."
   }
 }

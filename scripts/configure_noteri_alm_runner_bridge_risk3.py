@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Autoriza temporariamente a ponte governada Noteri -> reqsys-powerplatform-alm PR #7."""
+"""Autoriza temporariamente a ponte governada Noteri -> reqsys-powerplatform-alm."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ACTION_ID = "reqsys.noteri-alm-runner-bridge.dev"
-SCOPE = "repo://ericson-j-santos/reqsys-powerplatform-alm/actions/runner/dev/pr7"
+SCOPE = "repo://ericson-j-santos/reqsys-powerplatform-alm/actions/runner/dev"
 MANAGED_BY = "noteri-alm-runner-bridge-once"
 ENABLE_CONFIRM = "ENABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE"
 DISABLE_CONFIRM = "DISABLE-NOTERI-ALM-RUNNER-BRIDGE-ONCE"

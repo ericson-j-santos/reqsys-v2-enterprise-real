@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ponte efêmera e governada do Noteri para CI do reqsys-powerplatform-alm PR #7."""
+"""Ponte efêmera e governada do Noteri para CI do reqsys-powerplatform-alm."""
 from __future__ import annotations
 
 import hashlib
@@ -16,24 +16,21 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 EXPECTED_HOST = "Noteri"
 EXPECTED_LOGIN = "ericson-j-santos"
 TARGET_REPOSITORY = "ericson-j-santos/reqsys-powerplatform-alm"
 TARGET_REPOSITORY_URL = f"https://github.com/{TARGET_REPOSITORY}"
-TARGET_PR = 7
-TARGET_BRANCH = "diag/outlook-connection-probe-20260928"
-REQUIRED_WORKFLOWS = (
-    "Build and Deploy to Test",
-    "Power Platform Outlook Connection Read-only Probe",
-)
+TARGET_BASE = "main"
+TARGET_JOB_LABELS = frozenset({"self-hosted", "Windows", "X64", "noteri", "reqsys-dev"})
 RUNNER_VERSION = "2.337.0"
 RUNNER_ASSET_URL = (
     "https://github.com/actions/runner/releases/download/"
     f"v{RUNNER_VERSION}/actions-runner-win-x64-{RUNNER_VERSION}.zip"
 )
 RUNNER_ASSET_SHA256 = "1150692afa94e71f872017e254ea55b6eece1eece3fe7e3a6d4c93d0a1b85cfc"
-RUNNER_LABELS = "noteri,reqsys-dev,alm-pr7"
+RUNNER_LABELS = "noteri,reqsys-dev"
 RUNNER_SLOTS = 2
 POLL_SECONDS = 10
 TIMEOUT_SECONDS = 900
@@ -82,16 +79,30 @@ def _run_gh(gh: Path, args: list[str], *, timeout: int = 30) -> subprocess.Compl
     )
 
 
-def _gh_json(gh: Path, endpoint: str) -> dict[str, Any]:
+def _gh_value(gh: Path, endpoint: str) -> Any:
     cp = _run_gh(gh, ["api", endpoint])
     if cp.returncode != 0:
-        raise BridgeError("github_api_failed", f"GitHub API falhou para endpoint governado: {endpoint.split('?')[0]}")
+        raise BridgeError(
+            "github_api_failed",
+            f"GitHub API falhou para endpoint governado: {endpoint.split('?')[0]}",
+        )
     try:
-        value = json.loads(cp.stdout)
+        return json.loads(cp.stdout)
     except json.JSONDecodeError as exc:
         raise BridgeError("github_api_invalid_json", "GitHub API retornou JSON inválido") from exc
+
+
+def _gh_json(gh: Path, endpoint: str) -> dict[str, Any]:
+    value = _gh_value(gh, endpoint)
     if not isinstance(value, dict):
         raise BridgeError("github_api_invalid_shape", "GitHub API retornou formato inesperado")
+    return value
+
+
+def _gh_list(gh: Path, endpoint: str) -> list[dict[str, Any]]:
+    value = _gh_value(gh, endpoint)
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise BridgeError("github_api_invalid_shape", "GitHub API retornou lista inesperada")
     return value
 
 
@@ -112,55 +123,177 @@ def _validate_identity(gh: Path) -> None:
         raise BridgeError("github_identity_mismatch", "perfil local gh não pertence ao owner esperado")
 
 
-def _pr_target(gh: Path) -> str:
-    payload = _gh_json(gh, f"repos/{TARGET_REPOSITORY}/pulls/{TARGET_PR}")
-    if payload.get("state") != "open":
-        raise BridgeError("target_pr_not_open", "PR #7 precisa permanecer aberta durante a execução")
-    if str((payload.get("base") or {}).get("ref") or "") != "main":
-        raise BridgeError("target_base_mismatch", "PR #7 não aponta para main")
-    head = payload.get("head") or {}
-    if str(head.get("ref") or "") != TARGET_BRANCH:
-        raise BridgeError("target_branch_mismatch", "branch do PR #7 divergiu do alvo governado")
-    if str((head.get("repo") or {}).get("full_name") or "") != TARGET_REPOSITORY:
-        raise BridgeError("target_repository_mismatch", "repositório head do PR #7 divergiu do alvo governado")
-    sha = str(head.get("sha") or "").strip().lower()
+def _valid_head_sha(value: Any) -> str:
+    sha = str(value or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
-        raise BridgeError("target_pr_head_invalid", "HEAD atual do PR #7 é inválido")
+        raise BridgeError("target_pr_head_invalid", "HEAD atual da PR alvo é inválido")
     return sha
 
 
-def _workflow_state(gh: Path, expected_head: str) -> dict[str, dict[str, Any]]:
+def _workflow_runs(gh: Path, expected_head: str) -> list[dict[str, Any]]:
     payload = _gh_json(
         gh,
-        f"repos/{TARGET_REPOSITORY}/actions/runs?head_sha={expected_head}&per_page=100",
+        f"repos/{TARGET_REPOSITORY}/actions/runs?head_sha={expected_head}&event=pull_request&per_page=100",
     )
-    selected: dict[str, dict[str, Any]] = {}
-    for item in payload.get("workflow_runs") or []:
-        name = str(item.get("name") or "")
-        if name not in REQUIRED_WORKFLOWS:
+    runs = payload.get("workflow_runs") or []
+    if not isinstance(runs, list):
+        raise BridgeError("github_api_invalid_shape", "workflow_runs inválido")
+    return [item for item in runs if isinstance(item, dict)]
+
+
+def _workflow_runs_for_branch(gh: Path, branch: str) -> list[dict[str, Any]]:
+    payload = _gh_json(
+        gh,
+        f"repos/{TARGET_REPOSITORY}/actions/runs?branch={quote(branch, safe='')}&event=pull_request&per_page=100",
+    )
+    runs = payload.get("workflow_runs") or []
+    if not isinstance(runs, list):
+        raise BridgeError("github_api_invalid_shape", "workflow_runs de branch inválido")
+    return [item for item in runs if isinstance(item, dict)]
+
+
+def _jobs_for_run(gh: Path, run_id: int) -> list[dict[str, Any]]:
+    payload = _gh_json(
+        gh,
+        f"repos/{TARGET_REPOSITORY}/actions/runs/{run_id}/jobs?filter=latest&per_page=100",
+    )
+    jobs = payload.get("jobs") or []
+    if not isinstance(jobs, list):
+        raise BridgeError("github_api_invalid_shape", "jobs inválido")
+    return [item for item in jobs if isinstance(item, dict)]
+
+
+def _job_targets_noteri(job: dict[str, Any]) -> bool:
+    labels = {str(value) for value in (job.get("labels") or [])}
+    return TARGET_JOB_LABELS.issubset(labels)
+
+
+def _target_job_state(gh: Path, expected_head: str) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    for run in _workflow_runs(gh, expected_head):
+        run_id = int(run.get("id") or 0)
+        if run_id <= 0:
             continue
-        current = selected.get(name)
-        if current is None or int(item.get("id") or 0) > int(current.get("id") or 0):
-            selected[name] = {
-                "id": int(item.get("id") or 0),
-                "status": str(item.get("status") or ""),
-                "conclusion": item.get("conclusion"),
-                "head_sha": str(item.get("head_sha") or "").lower(),
-            }
+        for job in _jobs_for_run(gh, run_id):
+            if not _job_targets_noteri(job):
+                continue
+            selected.append(
+                {
+                    "id": int(job.get("id") or 0),
+                    "run_id": run_id,
+                    "workflow": str(run.get("name") or ""),
+                    "name": str(job.get("name") or ""),
+                    "status": str(job.get("status") or ""),
+                    "conclusion": job.get("conclusion"),
+                    "runner_id": job.get("runner_id"),
+                    "runner_name": job.get("runner_name"),
+                    "labels": [str(value) for value in (job.get("labels") or [])],
+                }
+            )
     return selected
 
 
-def _all_success(state: dict[str, dict[str, Any]], expected_head: str) -> bool:
-    return all(
-        state.get(name, {}).get("status") == "completed"
-        and state.get(name, {}).get("conclusion") == "success"
-        and state.get(name, {}).get("head_sha") == expected_head
-        for name in REQUIRED_WORKFLOWS
+def _pull_request_snapshot(payload: dict[str, Any]) -> dict[str, Any] | None:
+    number = int(payload.get("number") or 0)
+    if number <= 0 or payload.get("state") != "open":
+        return None
+    if str((payload.get("base") or {}).get("ref") or "") != TARGET_BASE:
+        return None
+    head = payload.get("head") or {}
+    if str((head.get("repo") or {}).get("full_name") or "") != TARGET_REPOSITORY:
+        return None
+    branch = str(head.get("ref") or "").strip()
+    if not branch:
+        return None
+    try:
+        sha = _valid_head_sha(head.get("sha"))
+    except BridgeError:
+        return None
+    return {
+        "number": number,
+        "branch": branch,
+        "head": sha,
+        "draft": bool(payload.get("draft")),
+    }
+
+
+def _select_target_pr(gh: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    pulls = _gh_list(
+        gh,
+        f"repos/{TARGET_REPOSITORY}/pulls?state=open&base={TARGET_BASE}&per_page=100",
     )
+    candidates: list[tuple[int, dict[str, Any], list[dict[str, Any]]]] = []
+    for payload in pulls:
+        snapshot = _pull_request_snapshot(payload)
+        if snapshot is None:
+            continue
+        jobs = _target_job_state(gh, snapshot["head"])
+        waiting = [
+            job
+            for job in jobs
+            if job.get("status") == "queued" and not job.get("runner_id")
+        ]
+        if waiting:
+            candidates.append((snapshot["number"], snapshot, jobs))
+    if not candidates:
+        raise BridgeError(
+            "no_eligible_alm_pr",
+            "nenhuma PR aberta possui job Noteri aguardando runner no HEAD atual",
+        )
+    candidates.sort(key=lambda item: item[0])
+    _, snapshot, jobs = candidates[0]
+    return snapshot, jobs
 
 
-def _all_terminal(state: dict[str, dict[str, Any]]) -> bool:
-    return all(state.get(name, {}).get("status") == "completed" for name in REQUIRED_WORKFLOWS)
+def _pr_target(gh: Path, target_pr: int, target_branch: str) -> str:
+    payload = _gh_json(gh, f"repos/{TARGET_REPOSITORY}/pulls/{target_pr}")
+    snapshot = _pull_request_snapshot(payload)
+    if snapshot is None:
+        raise BridgeError("target_pr_invalid", f"PR #{target_pr} deixou de ser alvo elegível")
+    if snapshot["branch"] != target_branch:
+        raise BridgeError("target_branch_changed", f"branch da PR #{target_pr} mudou durante a execução")
+    return str(snapshot["head"])
+
+
+def _cancel_stale_runs(
+    gh: Path,
+    *,
+    target_pr: int,
+    target_branch: str,
+    expected_head: str,
+) -> list[int]:
+    cancelled: list[int] = []
+    active = {"queued", "pending", "in_progress", "waiting", "requested"}
+    for run in _workflow_runs_for_branch(gh, target_branch):
+        run_id = int(run.get("id") or 0)
+        head_sha = str(run.get("head_sha") or "").strip().lower()
+        status = str(run.get("status") or "")
+        if run_id <= 0 or head_sha == expected_head or status not in active:
+            continue
+        linked = {
+            int(item.get("number") or 0)
+            for item in (run.get("pull_requests") or [])
+            if isinstance(item, dict)
+        }
+        if linked and target_pr not in linked:
+            continue
+        cp = _run_gh(
+            gh,
+            ["api", "--method", "POST", f"repos/{TARGET_REPOSITORY}/actions/runs/{run_id}/cancel"],
+        )
+        if cp.returncode != 0:
+            raise BridgeError("stale_run_cancel_failed", f"falha ao cancelar run obsoleto {run_id}")
+        cancelled.append(run_id)
+    return cancelled
+
+
+def _all_runs_terminal(runs: list[dict[str, Any]]) -> bool:
+    return bool(runs) and all(str(run.get("status") or "") == "completed" for run in runs)
+
+
+def _all_runs_success(runs: list[dict[str, Any]]) -> bool:
+    accepted = {"success", "skipped", "neutral"}
+    return _all_runs_terminal(runs) and all(str(run.get("conclusion") or "") in accepted for run in runs)
 
 
 def _sha256(path: Path) -> str:
@@ -175,7 +308,7 @@ def _download_runner(root: Path) -> Path:
     archive = root / f"actions-runner-{RUNNER_VERSION}.zip"
     request = urllib.request.Request(
         RUNNER_ASSET_URL,
-        headers={"User-Agent": "ReqSys-Noteri-ALM-Runner-Bridge/1.0"},
+        headers={"User-Agent": "ReqSys-Noteri-ALM-Runner-Bridge/2.0"},
     )
     with urllib.request.urlopen(request, timeout=120) as response, archive.open("wb") as output:
         shutil.copyfileobj(response, output)
@@ -217,7 +350,7 @@ def _register_slot(gh: Path, archive: Path, root: Path, slot: int) -> tuple[Path
     home = root / f"slot-{slot}"
     _extract_runner(archive, home)
     token = _registration_token(gh)
-    name = f"Noteri-ALM-PR7-{os.environ.get('GITHUB_RUN_ID', 'manual')}-{slot}"
+    name = f"Noteri-ALM-{os.environ.get('GITHUB_RUN_ID', 'manual')}-{slot}"
     try:
         cp = subprocess.run(
             [
@@ -290,9 +423,11 @@ def _write_evidence(path: Path, payload: dict[str, Any]) -> None:
 
 def main() -> int:
     evidence: dict[str, Any] = {
-        "schema": "reqsys-noteri-alm-runner-bridge/v1",
+        "schema": "reqsys-noteri-alm-runner-bridge/v2",
         "target_repository": TARGET_REPOSITORY,
-        "target_pr": TARGET_PR,
+        "target_base": TARGET_BASE,
+        "selection_policy": "lowest_open_pr_with_unassigned_noteri_job",
+        "runner_labels": RUNNER_LABELS.split(","),
         "production_touched": False,
         "secrets_read": False,
         "token_exposed": False,
@@ -300,7 +435,9 @@ def main() -> int:
         "registration_token_logged": False,
         "independent_readback": False,
         "replay_idempotent": False,
+        "pickup_verified": False,
         "runner_slots": RUNNER_SLOTS,
+        "stale_runs_cancelled": [],
     }
     processes: list[subprocess.Popen[bytes]] = []
     runtime_root: Path | None = None
@@ -310,24 +447,28 @@ def main() -> int:
         evidence["host"] = _validate_host()
         gh = _find_gh()
         _validate_identity(gh)
-        expected_head = _pr_target(gh)
-        evidence["expected_head"] = expected_head
-        evidence["target_branch"] = TARGET_BRANCH
-        evidence["observed_head_before"] = expected_head
 
-        initial = _workflow_state(gh, expected_head)
-        evidence["workflow_state_before"] = initial
-        if _all_success(initial, expected_head):
-            evidence.update({
-                "status": "ALREADY_COMPLIANT",
-                "independent_readback": True,
-                "replay_idempotent": True,
-                "observed_head_after": expected_head,
-                "workflow_state_after": initial,
-            })
-            _write_evidence(evidence_path, evidence)
-            _emit({"ok": True, "status": "ALREADY_COMPLIANT"})
-            return 0
+        target, jobs_before = _select_target_pr(gh)
+        target_pr = int(target["number"])
+        target_branch = str(target["branch"])
+        expected_head = str(target["head"])
+        evidence["target_pr"] = target_pr
+        evidence["target_branch"] = target_branch
+        evidence["target_draft"] = bool(target["draft"])
+        evidence["expected_head"] = expected_head
+        evidence["observed_head_before"] = expected_head
+        evidence["target_jobs_before"] = jobs_before
+
+        cancelled = _cancel_stale_runs(
+            gh,
+            target_pr=target_pr,
+            target_branch=target_branch,
+            expected_head=expected_head,
+        )
+        evidence["stale_runs_cancelled"] = cancelled
+
+        if _pr_target(gh, target_pr, target_branch) != expected_head:
+            raise BridgeError("target_head_changed_before_registration", "HEAD mudou antes do registro do runner")
 
         base = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
         runtime_root = Path(tempfile.mkdtemp(prefix="reqsys-alm-bridge-", dir=str(base)))
@@ -340,33 +481,74 @@ def main() -> int:
         evidence["runner_names"] = names
 
         deadline = time.monotonic() + TIMEOUT_SECONDS
-        final = initial
+        final_jobs = jobs_before
+        final_runs = _workflow_runs(gh, expected_head)
         while time.monotonic() < deadline:
-            if _pr_target(gh) != expected_head:
-                raise BridgeError("target_head_changed_during_run", "PR #7 mudou durante a execução")
-            final = _workflow_state(gh, expected_head)
-            if _all_terminal(final):
+            if _pr_target(gh, target_pr, target_branch) != expected_head:
+                raise BridgeError("target_head_changed_during_run", f"PR #{target_pr} mudou durante a execução")
+            final_jobs = _target_job_state(gh, expected_head)
+            final_runs = _workflow_runs(gh, expected_head)
+            pickups = [
+                job for job in final_jobs
+                if job.get("runner_id") and str(job.get("runner_name") or "") in names
+            ]
+            if pickups and _all_runs_terminal(final_runs):
                 break
             time.sleep(POLL_SECONDS)
 
-        after = _pr_target(gh)
+        after = _pr_target(gh, target_pr, target_branch)
+        final_jobs = _target_job_state(gh, expected_head)
+        final_runs = _workflow_runs(gh, expected_head)
+        pickups = [
+            job for job in final_jobs
+            if job.get("runner_id") and str(job.get("runner_name") or "") in names
+        ]
         evidence["observed_head_after"] = after
-        evidence["workflow_state_after"] = final
-        evidence["independent_readback"] = after == expected_head and _all_terminal(final)
-        if after != expected_head:
-            raise BridgeError("target_head_changed_after_run", "PR #7 mudou antes do readback final")
-        if not _all_terminal(final):
-            raise BridgeError("target_checks_timeout", "checks do PR #7 não chegaram a estado terminal")
-        if not _all_success(final, expected_head):
-            evidence["status"] = "TARGET_CHECK_FAILED"
-            _write_evidence(evidence_path, evidence)
-            _emit({"ok": False, "status": "TARGET_CHECK_FAILED"})
-            return 6
+        evidence["target_jobs_after"] = final_jobs
+        evidence["workflow_runs_after"] = [
+            {
+                "id": int(run.get("id") or 0),
+                "name": str(run.get("name") or ""),
+                "status": str(run.get("status") or ""),
+                "conclusion": run.get("conclusion"),
+                "head_sha": str(run.get("head_sha") or "").lower(),
+            }
+            for run in final_runs
+        ]
+        evidence["pickup_jobs"] = pickups
+        evidence["pickup_verified"] = bool(pickups)
+        evidence["target_runs_terminal"] = _all_runs_terminal(final_runs)
+        evidence["target_runs_success"] = _all_runs_success(final_runs)
+        evidence["independent_readback"] = (
+            after == expected_head
+            and bool(pickups)
+            and _all_runs_terminal(final_runs)
+        )
+        evidence["replay_idempotent"] = (
+            evidence["independent_readback"]
+            and not any(
+                job.get("status") == "queued" and not job.get("runner_id")
+                for job in final_jobs
+            )
+        )
 
-        evidence["status"] = "READY"
-        evidence["replay_idempotent"] = True
+        if after != expected_head:
+            raise BridgeError("target_head_changed_after_run", f"PR #{target_pr} mudou antes do readback final")
+        if not evidence["pickup_verified"]:
+            raise BridgeError("runner_pickup_timeout", "nenhum job do HEAD atual comprovou pickup nos runners efêmeros")
+        if not evidence["target_runs_terminal"]:
+            raise BridgeError("target_checks_timeout", "runs do HEAD atual não chegaram a estado terminal")
+
+        evidence["status"] = "PICKUP_VERIFIED"
         _write_evidence(evidence_path, evidence)
-        _emit({"ok": True, "status": "READY"})
+        _emit(
+            {
+                "ok": True,
+                "status": "PICKUP_VERIFIED",
+                "target_pr": target_pr,
+                "target_runs_success": evidence["target_runs_success"],
+            }
+        )
         return 0
     except BridgeError as exc:
         evidence["status"] = "BLOCKED"
