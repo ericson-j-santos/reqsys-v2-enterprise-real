@@ -549,6 +549,18 @@ def main() -> int:
             cwd=root,
         )
     )
+    checks.append(
+        _timed_check(
+            "bacen:integration-surfaces",
+            [
+                sys.executable,
+                "scripts/validate_bacen_integration_surfaces.py",
+                "--output",
+                "artifacts/pre-pr-readiness/bacen-integration-surfaces.json",
+            ],
+            cwd=root,
+        )
+    )
 
     targeted = candidate_pytests(files, root)
     if targeted:
