@@ -16,6 +16,7 @@ MARKER = "<!-- reqsys-ci-health-regression-watch -->"
 DEFAULT_LOOKBACK_DAYS = 14
 DEFAULT_MAX_RUN_PAGES = 50
 DEFAULT_MAX_PULL_PAGES = 10
+SHA_DIVERGENCE_GRACE_MINUTES = 30
 
 
 def _iso(value: datetime) -> str:
@@ -317,9 +318,23 @@ def analyze(
         updated_at = parse_dt(pull.get("updated_at"))
         if updated_at is None or updated_at < cutoff:
             continue
+        if now - updated_at < timedelta(minutes=SHA_DIVERGENCE_GRACE_MINUTES):
+            continue
         head = pull.get("head") if isinstance(pull.get("head"), dict) else {}
         current_sha = str((head or {}).get("sha") or "").strip()
         if not current_sha:
+            continue
+        current_all_runs = [
+            run
+            for run in runs
+            if run.get("event") == "pull_request"
+            and _pr_number(run) == pr
+            and str(run.get("head_sha") or "") == current_sha
+        ]
+        if any(
+            str(run.get("status") or "") in {"queued", "in_progress", "pending", "waiting", "requested"}
+            for run in current_all_runs
+        ):
             continue
         current_runs = by_pr_sha.get((pr, current_sha), [])
         if _head_green(current_runs, blocking_workflows):
