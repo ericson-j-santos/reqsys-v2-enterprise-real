@@ -64,7 +64,7 @@
       "tests/test_activate_noteri_free_control_plane.py",
       "tests/test_noteri_runtime_auto_watch_workflow.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted. O probe físico usa CPython 3.12.10 embeddable x64 oficial validado por SHA-256 e executado a partir de RUNNER_TEMP, sem depender do toolcache ou de instalação Python persistente no host."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -183,6 +183,18 @@
         "actor": "ericson-j-santos",
         "forbidden_trigger": "pull_request",
         "exact_branch_sha": true
+      },
+      "python_runtime": {
+        "version": "3.12.10",
+        "distribution": "windows_embeddable_x64",
+        "source": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+        "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+        "integrity_check": "sha256_before_extract",
+        "install_required": false,
+        "registry_required": false,
+        "toolcache_required": false,
+        "admin_required": false,
+        "runtime_location": "RUNNER_TEMP_per_run"
       }
     },
     "auto_watch": {
@@ -205,5 +217,5 @@
       "secrets_read": false
     }
   },
-  "updated_at": "2026-09-23"
+  "updated_at": "2026-09-28"
 }
