@@ -1,0 +1,34 @@
+{
+  "feature_name": "noteri-alm-runner-bridge",
+  "project": "ReqSys v2 Enterprise — Runtime Platform / Noteri",
+  "created_at": "2026-09-28",
+  "updated_at": "2026-09-28",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Cria ponte efêmera, específica e fail-closed no Noteri para executar os dois checks do reqsys-powerplatform-alm PR #7 no HEAD exato, sem reduzir gates nem usar minutos hospedados pagos.",
+  "scope": {
+    "environment": "dev",
+    "host": "Noteri",
+    "repository": "ericson-j-santos/reqsys-powerplatform-alm",
+    "pull_request": 7,
+    "expected_head": "96966d8decc210a98eefa7f0ca437052e8bd5a21"
+  },
+  "implementation": [
+    "scripts/noteri_alm_runner_bridge.py",
+    "scripts/configure_noteri_alm_runner_bridge_risk3.py",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_alm_runner_bridge.py",
+      "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Alvo fixo PR #7/HEAD exato; runner oficial 2.337.0 validado por SHA-256; registro efêmero via Owner Risk3; token não persistido/impresso; ambos os workflows exigidos em completed/success; readback independente e replay ALREADY_COMPLIANT."
+  }
+}

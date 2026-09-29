@@ -118,7 +118,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "mode:" in raw
     assert "type: choice" in raw
     assert "default: watchdog" in raw
-    for mode in ("watchdog", "runner-recover", "runner-bootstrap", "runner-canary", "reboot-once"):
+    for mode in ("watchdog", "runner-recover", "runner-bootstrap", "runner-canary", "alm-runner-bootstrap", "reboot-once"):
         assert f"- {mode}" in raw
     assert raw.count("description: 'Bounded recovery mode'") == 1
 
@@ -141,16 +141,16 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 10
+    assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 12
     assert "actions/setup-python@" not in raw
     assert "Get-Command python" not in raw
-    assert raw.count("Prepare pinned portable Python 3.12") == 5
-    assert raw.count("python-3.12.10-embed-amd64.zip") == 5
-    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 5
-    assert raw.count("Get-FileHash -LiteralPath $zip -Algorithm SHA256") == 5
-    assert raw.count("REQSYS_PYTHON=$python") == 5
-    assert raw.count("--require-runner-version-preflight") == 4
-    assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 5
+    assert raw.count("Prepare pinned portable Python 3.12") == 6
+    assert raw.count("python-3.12.10-embed-amd64.zip") == 6
+    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 6
+    assert raw.count("Get-FileHash -LiteralPath $zip -Algorithm SHA256") == 6
+    assert raw.count("REQSYS_PYTHON=$python") == 6
+    assert raw.count("--require-runner-version-preflight") == 5
+    assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 6
 
     # Modo watchdog legado continua restrito ao Noteri e à tarefa fixa existente.
     assert "if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}" in raw
