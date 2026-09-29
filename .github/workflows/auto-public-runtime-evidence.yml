@@ -46,15 +46,27 @@ jobs:
     steps:
       - name: Resolve trigger context
         id: ctx
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          UPSTREAM_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          UPSTREAM_EVENT: ${{ github.event.workflow_run.event || '' }}
         run: |
+          set -euo pipefail
           should_dispatch=false
           skip_reason=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             should_dispatch=true
-          elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ] && [ "${{ github.event.workflow_run.head_branch }}" = "main" ] && [ "${{ github.event.workflow_run.event }}" = "workflow_dispatch" ]; then
-            should_dispatch=true
+          elif [ "$UPSTREAM_CONCLUSION" = "success" ] && [ "$UPSTREAM_EVENT" = "workflow_dispatch" ]; then
+            main_sha="$(gh api "repos/${REPOSITORY}/commits/main" --jq '.sha')"
+            if [ "$UPSTREAM_SHA" = "$main_sha" ]; then
+              should_dispatch=true
+            else
+              skip_reason="Skip esperado: upstream SHA não é a main atual."
+            fi
           else
-            skip_reason="Skip esperado: workflow_run upstream nao concluiu com success em main."
+            skip_reason="Skip esperado: upstream não é Main Post-Merge Validation fail-closed."
           fi
           echo "should_dispatch=${should_dispatch}" >> "$GITHUB_OUTPUT"
           echo "skip_reason=${skip_reason}" >> "$GITHUB_OUTPUT"
