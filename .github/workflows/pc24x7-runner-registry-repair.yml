@@ -2,6 +2,12 @@ name: PC24x7 Runner Registry Repair
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "fix/pc24x7-runner-registry-probe-20260929"
+    paths:
+      - ".github/workflows/pc24x7-runner-registry-repair.yml"
+      - "scripts/pc24x7_runner_registry_repair.py"
 
 permissions:
   actions: write
@@ -30,7 +36,7 @@ jobs:
           fi
 
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -44,7 +50,7 @@ jobs:
 
       - name: Upload sanitized evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pc24x7-runner-registry-repair-${{ github.run_id }}
           path: artifacts/pc24x7-runner-registry-repair/evidence.json
