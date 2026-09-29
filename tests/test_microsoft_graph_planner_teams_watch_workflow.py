@@ -36,7 +36,7 @@ def test_monitor_scopes_to_official_graph_surfaces_and_state_issue() -> None:
 def test_monitor_is_fail_closed_for_alerts_and_idempotent() -> None:
     raw = text()
     assert "if (changes.length)" in raw
-    assert "if (next.rss_initialized)" in raw
+    assert "if (next.rss_initialized && previousWatermark > 0)" in raw
     assert "if (!old) seeded.push(source.id)" in raw
     assert "if (!seen.has(entry.id))" in raw
     assert "Source errors detected; no alert is emitted from errors alone." in raw
