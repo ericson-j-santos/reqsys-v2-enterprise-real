@@ -31,6 +31,13 @@ from app.services.redmine_lifecycle_sync import (
 from scripts.redmine_version_gate import evaluate_redmine_version
 
 OUT = ROOT / "artifacts" / "redmine-e2e" / "evidence.json"
+STAGE = "init"
+
+
+def mark(stage: str) -> None:
+    global STAGE
+    STAGE = stage
+    print(f"REQSYS_REDMINE_E2E_STAGE stage={stage}")
 
 
 def save(data: dict) -> None:
@@ -49,17 +56,20 @@ def state(db, rid: int, iid: int) -> dict:
 
 
 def run() -> dict:
+    mark("version_gate")
     version = os.environ["REDMINE_VERSION"]
     project_id = int(os.environ["REDMINE_PROJECT_ID"])
     reqsys_sha = os.environ["REQSYS_E2E_SHA"]
     decision = evaluate_redmine_version(version)
     assert decision.allowed, decision.reason
 
+    mark("auth")
     base_url, key = _redmine_config()
     headers = {"X-Redmine-API-Key": key}
     current = _request_json("GET", f"{base_url}/users/current.json", headers=headers)["user"]
     user_id = int(current["id"])
 
+    mark("db_init")
     Base.metadata.create_all(bind=engine, tables=[
         Requisito.__table__, VinculoGit.__table__, AuditoriaEvento.__table__
     ])
@@ -75,6 +85,7 @@ def run() -> dict:
         db.add(req)
         db.commit()
         db.refresh(req)
+        mark("create_issue")
         initial = montar_campos_requisito_redmine(req)
         created = criar_issue_generica(
             subject=initial["subject"], description=initial["description"], project_id=project_id
@@ -87,6 +98,7 @@ def run() -> dict:
         ))
         db.commit()
 
+        mark("get_journals")
         first_get = obter_issue_redmine(iid, incluir_journals=True)
         assert isinstance(first_get.get("journals"), list)
 
@@ -95,15 +107,18 @@ def run() -> dict:
         db.add(req)
         db.commit()
         db.refresh(req)
+        mark("reqsys_put")
         out1 = sincronizar_requisito_redmine(
             db, requisito=req, correlation_id=f"{correlation}:put", actor="e2e"
         )
         assert out1["reqsys_to_redmine"]["applied"]
+        mark("reqsys_readback")
         expected = montar_campos_requisito_redmine(req)
         readback = obter_issue_redmine(iid, incluir_journals=True)
         assert readback["subject"] == expected["subject"]
         assert readback["description"] == expected["description"]
 
+        mark("remote_transition")
         rich = _request_json(
             "GET", f"{base_url}/issues/{iid}.json?include=journals,allowed_statuses", headers=headers
         )["issue"]
@@ -121,6 +136,7 @@ def run() -> dict:
         journal_ids = [int(j["id"]) for j in remote.get("journals", []) if j.get("notes") == note]
         assert journal_ids
 
+        mark("remote_import")
         out2 = sincronizar_requisito_redmine(
             db, requisito=req, correlation_id=f"{correlation}:import", actor="e2e"
         )
@@ -131,6 +147,7 @@ def run() -> dict:
         assert int(snapshot["execution"]["assignee_id"]) == user_id
         assert int(snapshot["execution"]["done_ratio"]) == 40
 
+        mark("replay")
         audits_before = db.query(AuditoriaEvento).filter(
             AuditoriaEvento.entidade_id == str(req.id)
         ).count()
@@ -145,6 +162,7 @@ def run() -> dict:
         assert audits_after == audits_before
         assert json.dumps(state(db, req.id, iid), sort_keys=True) == state_before
 
+        mark("failure_retry_quarantine")
         bad = Requisito(
             codigo=f"REQ-E2E-F-{suffix}", titulo="Falha E2E", descricao="Quarentena E2E",
             urgencia="media", area="Engenharia", sistema="ReqSys",
@@ -188,6 +206,7 @@ def run() -> dict:
         assert int(control["attempts"]) == 2 and control["quarantined"]
         assert not evaluate_redmine_version("6.1.3").allowed
 
+        mark("complete")
         return {
             "status": "passed", "environment": "DEV-isolated-render", "reqsys_sha": reqsys_sha,
             "redmine": {"base_url": base_url, "version": version, "project_id": project_id,
@@ -216,6 +235,7 @@ if __name__ == "__main__":
             "status": "failed",
             "error_type": type(exc).__name__,
             "error_ref": "redmine_e2e_runtime_failure",
+            "stage": STAGE,
             "secret_values_in_evidence": False,
         })
         print(f"REQSYS_REDMINE_E2E_FAILED type={type(exc).__name__}")
