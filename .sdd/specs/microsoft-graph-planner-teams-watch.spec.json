@@ -1,0 +1,43 @@
+{
+  "feature_name": "microsoft-graph-planner-teams-watch",
+  "project": "ReqSys v2 Enterprise — Planner→Teams",
+  "created_at": "2026-09-29",
+  "updated_at": "2026-09-29",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Monitor oficial e idempotente via GitHub Actions para mudanças materiais do Microsoft Graph que afetem o E2E Planner→Teams.",
+  "scope": "planner-teams-microsoft-graph-monitoring",
+  "files": [
+    ".github/workflows/microsoft-graph-planner-teams-watch.yml",
+    "tests/test_microsoft_graph_planner_teams_watch_workflow.py",
+    ".sdd/specs/microsoft-graph-planner-teams-watch.spec.json",
+    ".sdd/specs/microsoft-graph-planner-teams-watch.requirements.md"
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_microsoft_graph_planner_teams_watch_workflow.py"
+    ],
+    "tests": [
+      "tests/test_microsoft_graph_planner_teams_watch_workflow.py"
+    ],
+    "evidence_contract": "No HEAD exato, o workflow reutiliza Scheduled Operational Watch por workflow_run, usa somente fontes oficiais, persiste baseline/deduplicação na issue #2165, não comenta na primeira coleta ou por erro isolado, alerta apenas em mudança material e usa SHAs imutáveis nas Actions externas."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  },
+  "acceptance_criteria": [
+    "Nenhum novo cron é criado.",
+    "Primeira coleta sem baseline não gera alerta.",
+    "Mudança relevante futura gera comentário único com impacto, risco e adaptação segura.",
+    "Erro isolado de fonte não gera alerta material.",
+    "Workflow usa permissões mínimas e Actions fixadas por SHA."
+  ]
+}
