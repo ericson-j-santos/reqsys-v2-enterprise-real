@@ -546,9 +546,9 @@ def test_gateway_noteri_diversos_runner_bootstrap_is_exact_and_fail_closed() -> 
     content = _workflow()
     assert "github.event.comment.body == '/reqsys run noteri-diversos-runner-bootstrap'" in content
     assert "'/reqsys run noteri-diversos-runner-bootstrap')" in content
-    assert "target='noteri-diversos-runner-bootstrap.yml'" in content
-    assert "noteri-diversos-runner-bootstrap.yml|main-post-merge-validation.yml" in content
-    assert "steps.route.outputs.target == 'noteri-diversos-runner-bootstrap.yml'" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "mode='diversos-runner-bootstrap'" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once|diversos-runner-bootstrap" in content
     assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
     assert "-f repository=diversos" not in content
     assert "-f runner=Noteri-diversos" not in content
