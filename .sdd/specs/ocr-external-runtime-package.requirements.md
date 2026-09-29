@@ -19,7 +19,7 @@ No modo externo obrigatório, o wheel deve ser instalado e `/app/ocr_evidencia` 
 `backend/ocr_evidencia` permanece versionado no repositório para rollback e desenvolvimento local. Sua remoção física só pode ocorrer depois de o build de imagem externo e o E2E aplicável ficarem verdes no mesmo SHA.
 
 ## Requisito 7 — caminhos canônicos
-`fly-dev-fast-deploy.yml` e `fly-enterprise-sync.yml` devem preparar o pacote externo antes do deploy da API e passar `OCR_EXTERNAL_PACKAGE_REQUIRED=1`, SHA e versão ao build. Assim, qualquer deploy futuro desses caminhos falha fechado se o pacote privado não puder ser preparado.
+`fly-dev-fast-deploy.yml` e `fly-enterprise-sync.yml` devem preparar o pacote externo antes do deploy da API e passar `OCR_EXTERNAL_PACKAGE_REQUIRED=1`, SHA e versão ao build. O `OCR Benchmark Gate` deve usar o mesmo SHA declarado no lock, e o contrato automatizado deve bloquear divergência entre essas duas fontes. Assim, qualquer deploy futuro desses caminhos falha fechado se o pacote privado não puder ser preparado.
 
 ## Requisito 8 — validação sem deploy
 A PR deve construir a imagem real com o modo externo obrigatório e executar um processo independente dentro dela que confirme origem em `site-packages`, versão e ausência de `/app/ocr_evidencia`. Antes disso, um controle negativo deve comprovar que o build obrigatório sem wheel falha.
@@ -28,7 +28,7 @@ A PR deve construir a imagem real com o modo externo obrigatório e executar um 
 Este incremento não autoriza deploy, promoção, produção, rotação de segredo nem alteração administrativa. O rollback operacional é o SHA anterior do ReqSys; o rollback da dependência é feito por alteração explícita do lock para outro SHA já validado.
 
 ## Critérios de aceite
-1. Lock aponta para `15209941c4ddbf52da62cedc866510592b3172ee`, versão `1.2.0`.
+1. Lock e OCR Benchmark Gate apontam para `4329781d38c25787882676f1cd29009303fcd44c`, versão `1.2.0`, sem divergência entre as duas fontes.
 2. Token temporário mantém `contents: read` e escopo mínimo.
 3. Wheel e proveniência têm SHA-256 e não carregam credencial.
 4. Controle negativo sem wheel falha.
