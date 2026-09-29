@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 8
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
+      RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1
       CORRELATION_ID: noteri-desktop-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-watchdog-recovery\evidence.json
 
@@ -42,10 +42,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Setup governed Python 3.12
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -70,9 +78,10 @@ jobs:
             "--session-prefix", "noteri-desktop-watchdog",
             "--correlation-id", $env:CORRELATION_ID,
             "--expected-head", $anchorSha,
+            "--require-runner-version-preflight",
             "--sync-ref", "origin/main"
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & "$env:REQSYS_PYTHON" $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -108,7 +117,7 @@ jobs:
             "--confirm", "RUN-EXISTING-DESKTOP-WATCHDOG",
             "--evidence-file", $env:EVIDENCE_REL
           )
-          & python $gateway @gatewayArgs
+          & "$env:REQSYS_PYTHON" $gateway @gatewayArgs
           exit $LASTEXITCODE
 
       - name: Validate sanitized recovery evidence
@@ -190,10 +199,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Setup governed Python 3.12
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -219,7 +236,7 @@ jobs:
             "--expected-head", "${{ github.sha }}",
             "--sync-ref", "origin/$env:GITHUB_REF_NAME"
           )
-          $raw = & python $launcher @args
+          $raw = & "$env:REQSYS_PYTHON" $launcher @args
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -231,7 +248,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          & python -m unittest -v _rules/tests/test_owner_remote_host_power_once.py
+          & "$env:REQSYS_PYTHON" -m unittest -v _rules/tests/test_owner_remote_host_power_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Authorize submit deny replay and revoke
@@ -251,7 +268,7 @@ jobs:
             "--authorization-ref", $env:AUTHORIZATION_REF,
             "--confirm", "AUTHORIZE-ONE-TIME-REMOTE-REBOOT"
           )
-          $authorizeRaw = & python $script @authorizeArgs
+          $authorizeRaw = & "$env:REQSYS_PYTHON" $script @authorizeArgs
           if ($LASTEXITCODE -ne 0) { throw "REMOTE_REBOOT_AUTHORIZATION_FAILED" }
           $authorize = @($authorizeRaw)[-1] | ConvertFrom-Json
           if (-not $authorize.ok -or $authorize.target_host -ne $env:TARGET_HOST) {
@@ -265,7 +282,7 @@ jobs:
             "--delay-seconds", "30",
             "--confirm", "EXECUTE-ONE-TIME-REMOTE-REBOOT"
           )
-          $executeRaw = & python $script @executeArgs
+          $executeRaw = & "$env:REQSYS_PYTHON" $script @executeArgs
           if ($LASTEXITCODE -ne 0) { throw "REMOTE_REBOOT_SUBMISSION_FAILED" }
           $execute = @($executeRaw)[-1] | ConvertFrom-Json
           if (-not $execute.ok -or -not $execute.consumed -or $execute.target_host -ne $env:TARGET_HOST) {
@@ -279,10 +296,10 @@ jobs:
             "--delay-seconds", "30",
             "--confirm", "EXECUTE-ONE-TIME-REMOTE-REBOOT"
           )
-          $replayRaw = & python $script @replayArgs 2>&1
+          $replayRaw = & "$env:REQSYS_PYTHON" $script @replayArgs 2>&1
           if ($LASTEXITCODE -eq 0) { throw "REMOTE_REBOOT_REPLAY_WAS_NOT_BLOCKED" }
 
-          $revokeRaw = & python $script revoke --confirm "REVOKE-ONE-TIME-REMOTE-REBOOT"
+          $revokeRaw = & "$env:REQSYS_PYTHON" $script revoke --confirm "REVOKE-ONE-TIME-REMOTE-REBOOT"
           if ($LASTEXITCODE -ne 0) { throw "REMOTE_REBOOT_REVOKE_FAILED" }
           $revoke = @($revokeRaw)[-1] | ConvertFrom-Json
           if (-not $revoke.ok -or -not $revoke.revoked) { throw "REMOTE_REBOOT_REVOKE_READBACK_FAILED" }
@@ -324,7 +341,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
-      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
+      RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1
       CORRELATION_ID: desktop-runner-orchestrator-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
 
@@ -343,10 +360,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Setup governed Python 3.12
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -370,9 +395,10 @@ jobs:
             "--session-prefix", "desktop-runner",
             "--correlation-id", $env:CORRELATION_ID,
             "--expected-head", "${{ github.sha }}",
+            "--require-runner-version-preflight",
             "--sync-ref", "origin/$env:GITHUB_REF_NAME"
           )
-          $raw = & python $launcher @args
+          $raw = & "$env:REQSYS_PYTHON" $launcher @args
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = (@($raw)[-1] | ConvertFrom-Json)
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -409,7 +435,7 @@ jobs:
             "--evidence-file", $env:EVIDENCE_REL,
             "--timeout-seconds", "75"
           )
-          & python $gateway @args
+          & "$env:REQSYS_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
       - name: Validate sanitized physical evidence
@@ -452,7 +478,7 @@ jobs:
     timeout-minutes: 6
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
+      RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1
       CORRELATION_ID: desktop-runner-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout immutable workflow SHA
@@ -462,10 +488,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Setup governed Python 3.12
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -490,9 +524,10 @@ jobs:
             "--session-prefix", "desktop-runner-bootstrap",
             "--correlation-id", $env:CORRELATION_ID,
             "--expected-head", $anchorSha,
+            "--require-runner-version-preflight",
             "--sync-ref", "origin/main"
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & "$env:REQSYS_PYTHON" $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -533,7 +568,7 @@ jobs:
             "--timeout-seconds", "90",
             "--evidence-file", $env:EVIDENCE_FILE
           )
-          & python $gateway @args
+          & "$env:REQSYS_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
       - name: Validate sanitized bootstrap evidence
@@ -571,7 +606,7 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 10d2489e8cac3770d1c07fac4ccfece0a0112269
+      RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1
       CORRELATION_ID: desktop-runner-pickup-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\desktop-runner-pickup\evidence.json
     steps:
@@ -582,10 +617,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Setup governed Python 3.12
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
+      - name: Validate preinstalled Python runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pythonCommand = Get-Command python -CommandType Application -ErrorAction Stop
+          $pythonExe = [string]$pythonCommand.Source
+          if ([string]::IsNullOrWhiteSpace($pythonExe) -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "PYTHON_RUNTIME_UNAVAILABLE"
+          }
+          & $pythonExe -c "import sys; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw "PYTHON_RUNTIME_UNUSABLE" }
+          "REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -610,9 +653,10 @@ jobs:
             "--session-prefix", "desktop-runner-pickup",
             "--correlation-id", $env:CORRELATION_ID,
             "--expected-head", $anchorSha,
+            "--require-runner-version-preflight",
             "--sync-ref", "origin/main"
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & "$env:REQSYS_PYTHON" $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -648,7 +692,7 @@ jobs:
             "--confirm", "PROVE-DESKTOP-GITHUB-RUNNER-PICKUP",
             "--evidence-file", $env:EVIDENCE_REL
           )
-          & python $gateway @args
+          & "$env:REQSYS_PYTHON" $gateway @args
           exit $LASTEXITCODE
 
       - name: Validate independent pickup evidence
