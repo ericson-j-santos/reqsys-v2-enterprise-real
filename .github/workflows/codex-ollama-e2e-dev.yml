@@ -125,11 +125,12 @@ jobs:
             "User-Agent" = "reqsys-change-impact-pr2144"
           }
           $pr = Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/pulls/2144" -Headers $headers
-          if ($pr.state -ne "open") { throw "PR2144_NOT_OPEN" }
+          if ($pr.state -ne "closed") { throw "PR2144_NOT_CLOSED" }
+          if ($pr.merged -ne $true) { throw "PR2144_NOT_MERGED" }
           if ($pr.base.ref -ne "main") { throw "PR2144_BASE_NOT_MAIN" }
           if ($pr.head.repo.full_name -ne $env:GITHUB_REPOSITORY) { throw "PR2144_HEAD_REPOSITORY_MISMATCH" }
           if ($pr.head.ref -ne "copilot/change-impact-benchmark-20260928") { throw "PR2144_HEAD_BRANCH_MISMATCH" }
-          if ($pr.head.sha -ne $env:REQUESTED_SHA) { throw "PR2144_HEAD_SHA_MISMATCH" }
+          if ($pr.merge_commit_sha -ne $env:REQUESTED_SHA) { throw "PR2144_MERGE_SHA_MISMATCH" }
           "TARGET_SHA=$env:REQUESTED_SHA" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout exact PR #2144 SHA
