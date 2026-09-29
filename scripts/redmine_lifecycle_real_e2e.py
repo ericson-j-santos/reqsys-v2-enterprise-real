@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 from __future__ import annotations
 
 import json
@@ -18,8 +19,15 @@ from app.models.requisito import Requisito
 from app.models.vinculo_git import VinculoGit
 from app.services import redmine_lifecycle_batch as batch
 from app.services.github_redmine import _request_json, criar_issue_generica
-from app.services.redmine_api import _redmine_config, montar_campos_requisito_redmine, obter_issue_redmine
-from app.services.redmine_lifecycle_sync import SYNC_STATE_TYPE, sincronizar_requisito_redmine
+from app.services.redmine_api import (
+    _redmine_config,
+    montar_campos_requisito_redmine,
+    obter_issue_redmine,
+)
+from app.services.redmine_lifecycle_sync import (
+    SYNC_STATE_TYPE,
+    sincronizar_requisito_redmine,
+)
 from scripts.redmine_version_gate import evaluate_redmine_version
 
 OUT = ROOT / "artifacts" / "redmine-e2e" / "evidence.json"
@@ -64,7 +72,9 @@ def run() -> dict:
             urgencia="media", area="Engenharia", sistema="ReqSys",
             solicitante="E2E automatizado", status="recebido", impacto_regulatorio=False,
         )
-        db.add(req); db.commit(); db.refresh(req)
+        db.add(req)
+        db.commit()
+        db.refresh(req)
         initial = montar_campos_requisito_redmine(req)
         created = criar_issue_generica(
             subject=initial["subject"], description=initial["description"], project_id=project_id
@@ -74,14 +84,17 @@ def run() -> dict:
             requisito_codigo=req.codigo, requisito_id=req.id, tipo="issue", provedor="redmine",
             repo="redmine", referencia=str(iid), url=f"{base_url}/issues/{iid}",
             titulo="ReqSys E2E", autor="e2e", ambiente="dev",
-        )); db.commit()
+        ))
+        db.commit()
 
         first_get = obter_issue_redmine(iid, incluir_journals=True)
         assert isinstance(first_get.get("journals"), list)
 
         req.titulo = f"Atualizado {suffix}"
         req.descricao = f"Descrição atualizada {suffix}"
-        db.add(req); db.commit(); db.refresh(req)
+        db.add(req)
+        db.commit()
+        db.refresh(req)
         out1 = sincronizar_requisito_redmine(
             db, requisito=req, correlation_id=f"{correlation}:put", actor="e2e"
         )
@@ -137,13 +150,16 @@ def run() -> dict:
             urgencia="media", area="Engenharia", sistema="ReqSys",
             solicitante="E2E automatizado", status="recebido", impacto_regulatorio=False,
         )
-        db.add(bad); db.commit(); db.refresh(bad)
+        db.add(bad)
+        db.commit()
+        db.refresh(bad)
         impossible = 999999999
         db.add(VinculoGit(
             requisito_codigo=bad.codigo, requisito_id=bad.id, tipo="issue", provedor="redmine",
             repo="redmine", referencia=str(impossible), url=f"{base_url}/issues/{impossible}",
             titulo="Falha E2E", autor="e2e", ambiente="dev",
-        )); db.commit()
+        ))
+        db.commit()
 
         t0 = datetime.now(timezone.utc)
         f1 = batch.reconciliar_requisito(
@@ -196,8 +212,12 @@ if __name__ == "__main__":
     try:
         evidence = run()
     except Exception as exc:
-        save({"status": "failed", "error_type": type(exc).__name__,
-              "error": str(exc)[:300], "secret_values_in_evidence": False})
+        save({
+            "status": "failed",
+            "error_type": type(exc).__name__,
+            "error_ref": "redmine_e2e_runtime_failure",
+            "secret_values_in_evidence": False,
+        })
         print(f"REQSYS_REDMINE_E2E_FAILED type={type(exc).__name__}")
         raise SystemExit(1)
     save(evidence)
