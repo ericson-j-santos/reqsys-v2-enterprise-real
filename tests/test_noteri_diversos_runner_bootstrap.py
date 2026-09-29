@@ -82,3 +82,12 @@ def test_gateway_exposes_only_exact_diversos_runner_command() -> None:
     assert "steps.route.outputs.target == 'noteri-diversos-runner-bootstrap.yml'" in text
     assert "-f repository=diversos" not in text
     assert "-f runner=" not in text
+
+
+def test_runner_config_requires_exact_nonempty_identity(tmp_path: Path) -> None:
+    module = load_bootstrap()
+    root = tmp_path / "runner"
+    root.mkdir()
+    (root / ".runner").write_text("{}", encoding="utf-8")
+    with pytest.raises(module.BootstrapError, match="runner_config_identity_missing"):
+        module.runner_config_matches(root)
