@@ -951,7 +951,7 @@ jobs:
               "--action-id", $env:ACTION_ID,
               "--scope", $env:ACTION_SCOPE,
               "--cwd", $env:TARGET_PATH,
-              "--timeout", "960",
+              "--timeout", "900",
               "--correlation-id", $env:CORRELATION_ID
             )
             & "$env:REQSYS_PYTHON" $gateway @args
