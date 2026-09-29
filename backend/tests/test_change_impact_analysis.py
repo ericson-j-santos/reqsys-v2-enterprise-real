@@ -7,6 +7,9 @@ from app.services.change_impact_analysis import (
     ChangeImpactValidationError,
     HistoricalChange,
     ImpactArtifact,
+    LiveChange,
+    analyze_live_change,
+    artifacts_from_traceability_graph,
     graph_candidates,
     hybrid_candidates,
     load_dataset,
@@ -147,3 +150,266 @@ def test_dataset_rejects_unknown_ground_truth():
 
     with pytest.raises(ChangeImpactValidationError, match="artefatos inexistentes"):
         validate_dataset(artifacts, changes)
+
+
+
+def _live_traceability_graph_payload():
+    return {
+        "graph_type": "functional_traceability_graph",
+        "schema_version": "1.1.0",
+        "requirement": {"id": 7, "code": "REQ-LIVE-7", "status": "aprovado"},
+        "nodes": [
+            {
+                "id": "requirement:REQ-LIVE-7",
+                "type": "REQUIREMENT",
+                "label": "REQ-LIVE-7",
+                "source_uri": None,
+                "metadata": None,
+            },
+            {
+                "id": "runtime_evidence:rejected-1",
+                "type": "RUNTIME_EVIDENCE",
+                "label": "rejected-1",
+                "source_uri": "urn:reqsys:runtime:rejected-1",
+                "metadata": {"status": "FAILED"},
+            },
+        ],
+        "edges": [
+            {
+                "source": "requirement:REQ-LIVE-7",
+                "target": "runtime_evidence:rejected-1",
+                "relation": "observed_as",
+                "evidence_status": "rejected",
+                "reasons": ["runtime_status_not_satisfactory"],
+            }
+        ],
+        "rejected_evidence": [],
+        "summary": {
+            "node_count": 2,
+            "edge_count": 1,
+            "valid_evidence_count": 0,
+            "rejected_evidence_count": 1,
+        },
+    }
+
+
+def test_live_graph_adapter_excludes_rejected_by_default_and_allows_diagnostic_opt_in():
+    graph = _live_traceability_graph_payload()
+
+    operational = artifacts_from_traceability_graph(graph)
+    diagnostic = artifacts_from_traceability_graph(
+        graph,
+        include_rejected_evidence=True,
+    )
+
+    assert [item.artifact_id for item in operational] == [
+        "requirement:REQ-LIVE-7"
+    ]
+    assert operational[0].source_uri == "/v1/rastreabilidade/requisitos/7/grafo"
+    assert '"metadata": {}' in operational[0].text
+
+    diagnostic_map = {item.artifact_id: item for item in diagnostic}
+    assert set(diagnostic_map) == {
+        "requirement:REQ-LIVE-7",
+        "runtime_evidence:rejected-1",
+    }
+    assert diagnostic_map["requirement:REQ-LIVE-7"].links == (
+        "runtime_evidence:rejected-1",
+    )
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (
+            {"graph_type": "other", "nodes": [], "edges": []},
+            "graph_type incompatível",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": {},
+                "edges": [],
+            },
+            r"nodes\[\] e edges\[\]",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": ["invalid"],
+                "edges": [],
+            },
+            "node inválido",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [{"id": ""}],
+                "edges": [],
+            },
+            "node sem id",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [{"id": "n"}, {"id": "n"}],
+                "edges": [],
+            },
+            "node id duplicado",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [
+                    {"id": "n", "type": "X", "label": "n", "metadata": {}}
+                ],
+                "edges": ["invalid"],
+            },
+            "edge inválida",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [
+                    {"id": "n", "type": "X", "label": "n", "metadata": {}}
+                ],
+                "edges": [
+                    {
+                        "source": "n",
+                        "target": "n",
+                        "evidence_status": "reference",
+                    }
+                ],
+            },
+            "edge sem source, target ou relation",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [
+                    {"id": "n", "type": "X", "label": "n", "metadata": {}}
+                ],
+                "edges": [
+                    {
+                        "source": "n",
+                        "target": "missing",
+                        "relation": "related_to",
+                        "evidence_status": "reference",
+                    }
+                ],
+            },
+            "edge referencia node inexistente",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [
+                    {"id": "n", "type": "X", "label": "n", "metadata": {}}
+                ],
+                "edges": [
+                    {
+                        "source": "n",
+                        "target": "n",
+                        "relation": "related_to",
+                        "evidence_status": "unknown",
+                    }
+                ],
+            },
+            "evidence_status inválido",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": "invalid",
+                "nodes": [],
+                "edges": [],
+            },
+            "grafo sem requirement válido",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"code": "REQ-1"},
+                "nodes": [],
+                "edges": [],
+            },
+            "grafo sem requirement.id",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [
+                    {
+                        "id": "requirement:REQ-1",
+                        "type": "REQUIREMENT",
+                        "label": "REQ-1",
+                        "metadata": "invalid",
+                    }
+                ],
+                "edges": [],
+            },
+            "metadata inválido",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [
+                    {
+                        "id": "requirement:REQ-1",
+                        "type": "",
+                        "label": "REQ-1",
+                        "metadata": {},
+                    }
+                ],
+                "edges": [],
+            },
+            "node incompleto",
+        ),
+        (
+            {
+                "graph_type": "functional_traceability_graph",
+                "requirement": {"id": 1, "code": "REQ-1"},
+                "nodes": [],
+                "edges": [],
+            },
+            "grafo não possui rastreabilidade elegível",
+        ),
+    ],
+)
+def test_live_graph_adapter_fails_closed_on_invalid_contract(payload, message):
+    with pytest.raises(ChangeImpactValidationError, match=message):
+        artifacts_from_traceability_graph(payload)
+
+
+def test_live_change_rejects_unknown_explicit_seed():
+    graph = _live_traceability_graph_payload()
+
+    with pytest.raises(
+        ChangeImpactValidationError,
+        match="seeds ausentes da rastreabilidade viva",
+    ):
+        analyze_live_change(
+            graph,
+            change_id="CHANGE-LIVE-INVALID-SEED",
+            query="mudança rastreável",
+            seed_artifact_ids=("unknown:seed",),
+            llm_generate=None,
+        )
+
+
+def test_live_change_validates_required_fields():
+    with pytest.raises(ChangeImpactValidationError, match="change_id e query"):
+        LiveChange(change_id="", query="mudança", seed_artifact_ids=("REQ-1",))
+
+    with pytest.raises(ChangeImpactValidationError, match="seed_artifact_id"):
+        LiveChange(change_id="CHANGE-1", query="mudança", seed_artifact_ids=())
