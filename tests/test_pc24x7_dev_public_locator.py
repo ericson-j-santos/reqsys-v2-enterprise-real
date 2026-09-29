@@ -174,3 +174,24 @@ def test_signed_locator_contract_v2_is_required_by_pages_and_ci_resolver():
     assert "self_test_legacy_locator_accepted" in resolver
     assert "reqsys-app-dev.fly.dev" not in html
     assert "reqsys-api-dev.fly.dev" not in html
+
+
+def test_public_access_validation_resolves_locator_and_smokes_real_dev_same_sha():
+    workflow = (ROOT / ".github" / "workflows" / "validacao-acessos.yml").read_text(encoding="utf-8")
+    assert "resolve_pc24x7_dev_locator.mjs --self-test" in workflow
+    assert "--output reports/pc24x7-dev/signed-locator.json" in workflow
+    assert "steps.dev_locator.outputs.base_url" in workflow
+    for endpoint in (
+        "/api/health",
+        "/api/runtime/health",
+        "/api/runtime/readiness",
+        "/api/runtime/build-info",
+    ):
+        assert endpoint in workflow
+    assert "build_sha_mismatch" in workflow
+    assert 'get("/task-console")' in workflow
+    assert 'get("/@vite/client")' in workflow
+    assert "frontend_not_static" in workflow
+    assert "vite_hmr_exposed" in workflow
+    assert "runtime-smoke.json" in workflow
+    assert "path: reports/" in workflow
