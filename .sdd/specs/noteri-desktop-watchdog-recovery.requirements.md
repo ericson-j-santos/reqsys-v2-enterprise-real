@@ -26,11 +26,11 @@ Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indispo
 17. A evidência produzida no worktree deve ser validada antes do upload: origem Noteri, destino DESKTOP-PDQK954, `EXISTING_DESKTOP_WATCHDOG_RUN_REQUESTED`, sem criação/alteração de tarefa, segredo, credencial ou produção.
 18. No Noteri, `${{ github.workspace }}` é somente a fonte transitória exata do Session Launcher; as regras ficam em `_rules` e a execução técnica deve ser materializada pelo launcher em worktree governado sob `C:\\dev\\chatgpt-workers`, sem depender de clone persistente `C:\\dev\\reqsys-v2-enterprise-real`.
 19. O script de recuperação deve ser resolvido a partir do `target_path` retornado pelo Session Launcher, não da raiz do workspace.
-20. Antes de qualquer invocação Python, cada modo físico deve preparar Python 3.12 por `actions/setup-python` fixado em SHA imutável, para não depender do interpretador persistente do host nem de virtualenv quebrado.
+20. Antes de qualquer invocação Python, cada modo físico deve validar o interpretador Python pré-instalado (`Get-Command python`, caminho existente e execução bem-sucedida) e deve falhar fechado se ele estiver indisponível; `actions/setup-python` é proibido nesses runners para evitar mutação/instalação do host durante recovery.\n21. Os modos `watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary` devem usar `session_launcher.py --require-runner-version-preflight`, registrando a versão real do GitHub Actions runner antes do Command Gateway.
 
 ## Critérios de aceite
 
-- workflow prepara Python 3.12 governado antes do Session Launcher e executa no Noteri após sessão válida, por Command Gateway risco 2;
+- workflow valida o Python pré-instalado sem instalar runtime no host e executa no Noteri após sessão válida, por Command Gateway risco 2;
 - checkout transitório aceito somente como fonte do bootstrap, com execução posterior no worktree governado e sem dependência de `C:\\dev\\reqsys-v2-enterprise-real` no Noteri;
 - consulta encontra a tarefa exata;
 - AtStartup + S4U são comprovados;
@@ -41,6 +41,6 @@ Quando o DESKTOP-PDQK954 estiver com RDC e runner GitHub simultaneamente indispo
 ## Regras canônicas atuais
 
 O workflow deve usar o SHA canônico atual
-`10d2489e8cac3770d1c07fac4ccfece0a0112269` em todos os modos
+`562fc4274aff24f7058cb135f27a509aa69031c1` em todos os modos
 `watchdog`, `runner-recover`, `runner-bootstrap` e `runner-canary`.
 Pin histórico de regras é bloqueio de execução física.
