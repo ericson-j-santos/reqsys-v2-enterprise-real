@@ -124,6 +124,71 @@ def test_orchestrator_ingest_ci_failure_cria_acao_amarela(tmp_path: Path, monkey
     assert action["executor"] == "github_agent"
 
 
+def test_orchestrator_ingest_rejeita_run_idempotente_com_intencao_divergente(tmp_path: Path, monkeypatch):
+    orchestrator = _build_orchestrator(tmp_path)
+    monkeypatch.setattr(
+        "app.api.actions_runtime_center._operational_orchestrator",
+        lambda: orchestrator,
+    )
+    headers = _admin_headers()
+    first_payload = {
+        "workflow_run": {
+            "id": 777,
+            "name": "CI",
+            "status": "completed",
+            "conclusion": "failure",
+            "head_branch": "feature/conflict",
+            "head_sha": "sha-conflict",
+            "html_url": "https://github.com/example/run/777",
+        }
+    }
+
+    first = client.post(
+        "/v1/actions-runtime/orchestrator/ingest/workflow-run",
+        headers=headers,
+        json=first_payload,
+    )
+    assert first.status_code == 200
+    action_id = first.json()["data"]["action"]["action_id"]
+
+    replay = client.post(
+        "/v1/actions-runtime/orchestrator/ingest/workflow-run",
+        headers=headers,
+        json=first_payload,
+    )
+    assert replay.status_code == 200
+    assert replay.json()["data"]["created"] is False
+    assert replay.json()["data"]["action"]["action_id"] == action_id
+
+    divergent = {
+        "workflow_run": {
+            **first_payload["workflow_run"],
+            "name": "CI adulterado",
+            "html_url": "https://github.com/example/run/777-divergent",
+        }
+    }
+    conflict = client.post(
+        "/v1/actions-runtime/orchestrator/ingest/workflow-run",
+        headers=headers,
+        json=divergent,
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"] == (
+        "Chave idempotente reutilizada para outra intenção operacional."
+    )
+
+    actions = client.get(
+        "/v1/actions-runtime/orchestrator/actions",
+        headers=headers,
+    )
+    assert actions.status_code == 200
+    items = actions.json()["data"]["items"]
+    assert len(items) == 1
+    assert items[0]["action_id"] == action_id
+    assert items[0]["payload"]["workflow"] == "CI"
+    assert items[0]["payload"]["html_url"] == "https://github.com/example/run/777"
+
+
 def test_orchestrator_status_actions_e_execute_api(tmp_path: Path, monkeypatch):
     orchestrator = _build_orchestrator(tmp_path)
     monkeypatch.setattr(

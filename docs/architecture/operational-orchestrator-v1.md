@@ -25,6 +25,8 @@ Por padrão, o banco SQLite é criado no diretório temporário do sistema opera
 
 `REQSYS_OPERATIONAL_DB_PATH=/caminho/volume/state.sqlite3`
 
+A idempotência da Action Queue é **fail-closed por intenção**. A chave pode ser derivada de um material reduzido para estabilizar replays, mas uma colisão só é considerada replay válido quando a intenção completa persistida também coincide: origem, projeto, ambiente, tipo, repositório/branch/SHA, risco, executor, próxima ação, validação e payload. Reutilizar a mesma chave com qualquer desses campos divergente gera conflito e preserva integralmente a ação original.
+
 O schema possui duas estruturas:
 
 - `actions`: fila idempotente, status, risco, executor, branch, SHA e `correlation_id`;
@@ -101,8 +103,9 @@ readiness_check
 1. caso positivo com `correlation_id` único e SHA conhecido;
 2. leitura independente do SQLite para confirmar a evidência persistida;
 3. repetição idempotente da mesma entrada, comprovando uma única ação/evidência;
-4. caso negativo com referência obrigatória ausente;
-5. teste do próprio teste consultando o `correlation_id` correto com SHA deliberadamente incorreto e exigindo zero registros.
+4. controle de colisão: mesma chave derivada com intenção divergente é rejeitada e uma leitura SQLite independente confirma que a ação original não foi alterada nem duplicada;
+5. caso negativo com referência obrigatória ausente;
+6. teste do próprio teste consultando o `correlation_id` correto com SHA deliberadamente incorreto e exigindo zero registros.
 
 O workflow `Operational Orchestrator CI` executa compilação, validação do manifesto/schema, testes do núcleo e esse E2E.
 

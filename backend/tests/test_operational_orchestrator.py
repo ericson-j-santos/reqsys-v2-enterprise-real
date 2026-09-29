@@ -8,6 +8,7 @@ import pytest
 
 from app.services.operational_orchestrator import (
     ManifestError,
+    OperationalActionIdentityConflictError,
     OperationalOrchestrator,
     OperationalStore,
     load_readiness_manifest,
@@ -121,6 +122,60 @@ def test_action_queue_e_idempotente(tmp_path: Path):
     assert created_second is False
     assert first.action_id == second.action_id
     assert store.summary()["actions_total"] == 1
+
+
+def test_action_queue_rejeita_mesma_chave_para_intencao_diferente_sem_mutar_original(tmp_path: Path):
+    db_path = tmp_path / "state.sqlite3"
+    store = OperationalStore(db_path)
+    common = {
+        "source": "test",
+        "project": "reqsys",
+        "environment": "development",
+        "action_type": "ci_failure",
+        "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+        "branch": "feature/idempotency",
+        "sha": "sha-intent",
+        "risk": "yellow",
+        "executor": "github_agent",
+        "next_action": "analisar",
+        "validation": {"e2e": True, "independent_evidence": True},
+        "idempotency_material": {
+            "type": "ci_failure",
+            "run_id": 9001,
+            "head_sha": "sha-intent",
+            "conclusion": "failure",
+        },
+    }
+
+    original, created = store.enqueue(
+        **common,
+        payload={"run_id": 9001, "workflow": "CI", "conclusion": "failure"},
+    )
+    assert created is True
+
+    with pytest.raises(
+        OperationalActionIdentityConflictError,
+        match="idempotency_key_reused_with_different_action_intent",
+    ):
+        store.enqueue(
+            **common,
+            payload={"run_id": 9001, "workflow": "CI adulterado", "conclusion": "failure"},
+        )
+
+    persisted = store.get_action(original.action_id)
+    assert persisted is not None
+    assert persisted.payload == {"run_id": 9001, "workflow": "CI", "conclusion": "failure"}
+    assert persisted.risk == "yellow"
+    assert persisted.executor == "github_agent"
+
+    with sqlite3.connect(db_path) as independent:
+        rows = independent.execute(
+            "SELECT action_id, payload_json FROM actions WHERE idempotency_key = ?",
+            (original.idempotency_key,),
+        ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] == original.action_id
+    assert json.loads(rows[0][1])["workflow"] == "CI"
 
 
 def test_readiness_positivo_gera_evidencia_independente_e_idempotente(tmp_path: Path):

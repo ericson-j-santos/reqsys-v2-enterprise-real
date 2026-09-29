@@ -19,7 +19,11 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.services.operational_orchestrator import OperationalOrchestrator, OperationalStore  # noqa: E402
+from app.services.operational_orchestrator import (  # noqa: E402
+    OperationalActionIdentityConflictError,
+    OperationalOrchestrator,
+    OperationalStore,
+)
 
 
 def _write_manifest(path: Path) -> None:
@@ -56,6 +60,15 @@ def _independent_rows(db_path: Path, correlation_id: str, sha: str) -> list[tupl
             "SELECT status, sha, kind FROM evidence WHERE correlation_id = ? AND sha = ? ORDER BY observed_at",
             (correlation_id, sha),
         ).fetchall()
+
+
+def _independent_action_payloads(db_path: Path, idempotency_key: str) -> list[dict]:
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT payload_json FROM actions WHERE idempotency_key = ? ORDER BY created_at",
+            (idempotency_key,),
+        ).fetchall()
+    return [json.loads(row[0]) for row in rows]
 
 
 def main() -> int:
@@ -107,6 +120,53 @@ def main() -> int:
         )
         assert independent_negative == [("blocked", validation_sha, "readiness")]
 
+        idempotency_source = {
+            "id": 4242,
+            "name": "Operational Orchestrator CI",
+            "status": "completed",
+            "conclusion": "failure",
+            "head_branch": "e2e/idempotency",
+            "head_sha": validation_sha,
+            "html_url": "https://github.com/example/actions/runs/4242",
+        }
+        idempotent_first = positive.ingest_workflow_run(idempotency_source)
+        assert idempotent_first["created"] is True
+        idempotent_replay = positive.ingest_workflow_run(idempotency_source)
+        assert idempotent_replay["created"] is False
+        assert (
+            idempotent_replay["action"]["action_id"]
+            == idempotent_first["action"]["action_id"]
+        )
+
+        divergent_source = {
+            **idempotency_source,
+            "name": "Operational Orchestrator CI adulterado",
+            "html_url": "https://github.com/example/actions/runs/4242-divergent",
+        }
+        conflict_detected = False
+        try:
+            positive.ingest_workflow_run(divergent_source)
+        except OperationalActionIdentityConflictError:
+            conflict_detected = True
+        assert conflict_detected is True
+
+        idempotent_action = positive.store.get_action(
+            idempotent_first["action"]["action_id"]
+        )
+        assert idempotent_action is not None
+        independent_action_payloads = _independent_action_payloads(
+            db_path, idempotent_action.idempotency_key
+        )
+        assert independent_action_payloads == [
+            {
+                "conclusion": "failure",
+                "event": None,
+                "html_url": "https://github.com/example/actions/runs/4242",
+                "run_id": 4242,
+                "workflow": "Operational Orchestrator CI",
+            }
+        ]
+
         # Teste do próprio teste: evidência do correlation_id correto não pode
         # satisfazer uma consulta vinculada a outro SHA.
         false_positive_probe = _independent_rows(
@@ -134,6 +194,13 @@ def main() -> int:
                 "duplicate_action_created": repeated["action_created"],
                 "evidence_count_after_repeat": len(
                     _independent_rows(db_path, action["correlation_id"], validation_sha)
+                ),
+                "workflow_replay_created": idempotent_replay["created"],
+                "divergent_intent_conflict_detected": conflict_detected,
+                "independent_action_count_after_conflict": len(independent_action_payloads),
+                "original_workflow_preserved_after_conflict": (
+                    independent_action_payloads[0]["workflow"]
+                    == "Operational Orchestrator CI"
                 ),
             },
             "false_positive_control": {
