@@ -23,6 +23,10 @@ on:
       head_sha:
         description: "HEAD pré-merge para recuperação post-merge"
         required: false
+      test_case:
+        description: "Controle interno: normal, replay ou missing-required-workflow"
+        required: false
+        default: "normal"
 
 permissions:
   actions: write
@@ -132,6 +136,8 @@ jobs:
             const mergeSha = String(payload.merge_sha || '').trim().toLowerCase();
             const headSha = String(payload.head_sha || '').trim().toLowerCase();
             const prNumber = Number(payload.pr_number);
+            const testCase = String(payload.test_case || 'normal').trim();
+            const allowedTestCases = new Set(['normal', 'replay', 'missing-required-workflow']);
             const shaPattern = /^[0-9a-f]{40}$/;
             const evidence = {
               schema_version: '1.0.0',
@@ -141,8 +147,12 @@ jobs:
               merge_sha: mergeSha,
               head_sha: headSha,
               pr_number: prNumber,
+              test_case: testCase,
               required_workflows: [],
               main_validation: null,
+              dispatches_created: [],
+              reused_run_ids: [],
+              negative_control_detected: false,
               temporary_ref: null,
               replay_safe: true,
               production_touched: false,
@@ -156,6 +166,13 @@ jobs:
               { file: 'governance-quality-gates.yml', name: 'Governance Quality Gates' },
               { file: 'governanca-padrao-ouro.yml', name: 'Governança Padrão Ouro' },
             ];
+            if (testCase === 'missing-required-workflow') {
+              required.push({
+                file: '__missing-required-workflow-control__.yml',
+                name: 'Missing Required Workflow — negative control',
+                negative_control: true,
+              });
+            }
             const mainValidation = {
               file: 'main-post-merge-validation.yml',
               name: 'Main Post-Merge Validation',
@@ -222,6 +239,7 @@ jobs:
               if (!shaPattern.test(mergeSha)) throw new Error('MERGE_SHA_INVALID');
               if (!shaPattern.test(headSha)) throw new Error('HEAD_SHA_INVALID');
               if (!Number.isInteger(prNumber) || prNumber <= 0) throw new Error('PR_NUMBER_INVALID');
+              if (!allowedTestCases.has(testCase)) throw new Error('TEST_CASE_INVALID');
 
               const { data: pr } = await github.rest.pulls.get({
                 owner,
@@ -259,6 +277,13 @@ jobs:
                 if (state.state === 'failed') {
                   throw new Error('EXISTING_POST_MERGE_FAILURE ' + workflow.name + ' run=' + state.run.id);
                 }
+                if (state.state === 'success') {
+                  evidence.reused_run_ids.push(state.run.id);
+                  continue;
+                }
+                if (state.state === 'missing' && workflow.negative_control === true) {
+                  throw new Error('NEGATIVE_CONTROL_REQUIRED_WORKFLOW_MISSING');
+                }
                 if (state.state === 'missing') {
                   await github.rest.actions.createWorkflowDispatch({
                     owner,
@@ -266,6 +291,7 @@ jobs:
                     workflow_id: workflow.file,
                     ref: temporaryBranch,
                   });
+                  evidence.dispatches_created.push(workflow.name);
                 }
               }
 
@@ -284,6 +310,9 @@ jobs:
               if (existingMain.state === 'failed') {
                 throw new Error('EXISTING_MAIN_VALIDATION_FAILURE run=' + existingMain.run.id);
               }
+              if (existingMain.state === 'success') {
+                evidence.reused_run_ids.push(existingMain.run.id);
+              }
               if (existingMain.state === 'missing') {
                 await github.rest.actions.createWorkflowDispatch({
                   owner,
@@ -292,6 +321,7 @@ jobs:
                   ref: temporaryBranch,
                   inputs: { commit_sha: mergeSha },
                 });
+                evidence.dispatches_created.push(mainValidation.name);
               }
 
               const mainStates = await waitFor([mainValidation], 'workflow_dispatch');
@@ -308,6 +338,9 @@ jobs:
             } catch (error) {
               evidence.status = 'failed';
               evidence.error_code = String(error && error.message ? error.message : error).slice(0, 300);
+              if (evidence.error_code === 'NEGATIVE_CONTROL_REQUIRED_WORKFLOW_MISSING') {
+                evidence.negative_control_detected = true;
+              }
               core.setFailed(evidence.error_code);
             } finally {
               if (refReady) {
