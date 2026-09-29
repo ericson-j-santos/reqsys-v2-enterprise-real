@@ -2,7 +2,7 @@
   "feature_name": "ocr-external-runtime-package",
   "project": "ReqSys v2 Enterprise — OCR",
   "created_at": "2026-09-23",
-  "updated_at": "2026-09-23",
+  "updated_at": "2026-09-29",
   "phase": "implementation",
   "increment_type": "gap_fix",
   "approvals": {
@@ -17,6 +17,6 @@
       "tests/test_ocr_external_package_workflow.py",
       "backend/ocr_tests/test_worker.py"
     ],
-    "evidence_contract": "O mesmo HEAD deve provar controle negativo de build sem wheel, checkout privado por token temporário contents: read, SHA exato, wheel com SHA-256, build Docker com OCR externo obrigatório, remoção da cópia /app/ocr_evidencia e import de site-packages dentro do container. PR não executa deploy nem toca produção."
+    "evidence_contract": "O mesmo HEAD deve provar que config/ocr-engine-lock.json e OCR_ENGINE_SHA do OCR Benchmark Gate apontam para o mesmo SHA completo, controle negativo de build sem wheel, checkout privado por token temporário contents: read, SHA exato, wheel com SHA-256, build Docker com OCR externo obrigatório, remoção da cópia /app/ocr_evidencia e import de site-packages dentro do container. PR não executa deploy nem toca produção."
   }
 }
