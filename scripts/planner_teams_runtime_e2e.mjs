@@ -144,7 +144,9 @@ export function graphRecoveryDecision({
 
   if (explicitTransient) {
     if (!canRetry) return { action: 'fail', reason: `http_${status}_retry_exhausted`, wait_seconds: 0 }
-    const retryAfter = Number(retryAfterSeconds)
+    const retryAfter = retryAfterSeconds == null || String(retryAfterSeconds).trim() === ''
+      ? Number.NaN
+      : Number(retryAfterSeconds)
     return {
       action: 'retry',
       reason: `http_${status}_transient`,
