@@ -1,4 +1,5 @@
 name: Noteri Control Plane Fallback Probe
+# Diagnostic branch: prove current Noteri runner pickup for cross-repo CI recovery.
 
 on:
   workflow_dispatch:
