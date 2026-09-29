@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "repository": "ericson-j-santos/ocr-evidence-engine",
-  "sha": "15209941c4ddbf52da62cedc866510592b3172ee",
+  "sha": "4329781d38c25787882676f1cd29009303fcd44c",
   "package": "ocr-evidence-engine",
   "module": "ocr_evidencia",
   "version": "1.2.0"
