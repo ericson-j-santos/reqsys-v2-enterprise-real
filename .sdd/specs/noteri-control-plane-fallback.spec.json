@@ -29,6 +29,14 @@
       "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
       "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
       "scope": "noteri-control-plane-probe workflow only"
+    },
+    "runtime_auto_recovery": {
+      "workflow": ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+      "recovery_mode": "runner-recover",
+      "canary_mode": "runner-canary",
+      "trigger": "after_runtime_active",
+      "ref": "main",
+      "exact_sha_required": true
     }
   },
   "security": {
@@ -40,7 +48,9 @@
     "fail_closed_on_missing_runner": true,
     "elevated_result_contains_secrets": false,
     "self_hosted_pull_request_trigger": false,
-    "premerge_owner_push_only": true
+    "premerge_owner_push_only": true,
+    "desktop_recovery_arbitrary_target": false,
+    "desktop_recovery_reboot": false
   },
   "runtime_gate": {
     "prerequisite": "GitHub CLI autenticado e bootstrap governado capaz de provisionar ou reutilizar o runner do Noteri",
@@ -60,7 +70,13 @@
       "tests/test_noteri_control_plane_fallback.py",
       ".sdd/specs/noteri-control-plane-fallback.requirements.md",
       ".sdd/specs/noteri-control-plane-fallback.spec.json"
-    ]
+    ],
+    "physical_queue_watchdog": {
+      "runner": "ubuntu-latest",
+      "pickup_timeout_seconds": 60,
+      "cancel_exact_stalled_run": true,
+      "cancel_stale_head_on_new_push": true
+    }
   },
   "sdd_gate": {
     "tests": [
@@ -70,7 +86,7 @@
       "tests/test_activate_noteri_free_control_plane.py",
       "tests/test_noteri_runtime_auto_watch_workflow.py"
     ],
-    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted. O workflow do probe deve preparar Python 3.12.10 portátil com URL e SHA-256 fixos e executar tanto o probe quanto o E2E do noteri-runtime por REQSYS_PYTHON; o Python global do host não é uma dependência operacional."
+    "evidence_contract": "A cota/indisponibilidade do RDC não pode impedir o Gateway de usar a rota Noteri; o bootstrap pode provisionar ou reutilizar o runner sem persistir token; sucesso exige pickup real e prova no host exato; ausência de pickup cancela o run exato e registra o resultado sem retry automático. O fallback interativo deve executar scripts copiados do checkout imutável do próprio workflow, validar SHA-256 da cópia e não depender de origin/main ou de atualização Git no clique humano. O probe operacional deve relatar de forma somente-leitura o estado da tarefa headless via schtasks XML, sem UAC, sem RDC e sem expor principal/credenciais. O staging interativo deve embutir o caminho absoluto do Python resolvido no runner, não depender de PATH do Explorer e persistir diagnóstico sanitizado de execução local/elevada. O workflow remoto não deve disparar UAC, apenas preparar o launcher imutável. Quando o COM falhar por identidade/logon, a instalação pode usar `schtasks /NP` como fallback nativo sem senha, mas só é aceita se a leitura XML independente comprovar tarefa habilitada, `BootTrigger` e `LogonType=S4U`; divergência deve ser removida e falhar fechado. O diagnóstico deve preservar HRESULT externo e interno sem expor o principal. O runtime auto watch deve executar em GitHub-hosted runner, despachar apenas o probe fixo do Noteri, vincular a evidência ao SHA atual da main, cancelar runs sem pickup, baixar apenas o artifact sanitizado do probe quando houver execução e atualizar um único comentário de estado. Não pode executar reboot, GUI, produção, deploy, ler segredos ou abrir shell arbitrário. O probe também pode usar exclusivamente a autenticação gh local do Noteri, após remover GH_TOKEN/GITHUB_TOKEN do ambiente, para consultar em modo somente-leitura o runner DESKTOP-PDQK954 e publicar apenas estado/busy/labels sanitizados; nenhuma credencial é registrada. O probe deve também resolver o SHA corrente de ericson-j-santos/noteri-runtime/main, fazer checkout imutável desse SHA no próprio Noteri e executar o E2E isolado NORMAL->ESTUDO->replay->NORMAL. A evidência só é aceita quando expected_sha e observed_sha coincidem, source_sha_verified=true, o estado final lido independentemente é NORMAL, replay idempotente e controle negativo estão presentes, sem RDC, produção ou segredos. Alterações do workflow/probe/watchdog exigem E2E físico no SHA da branch por push canônico do owner; pull_request nunca executa no runner self-hosted. O workflow do probe deve preparar Python 3.12.10 portátil com URL e SHA-256 fixos e executar tanto o probe quanto o E2E do noteri-runtime por REQSYS_PYTHON; o Python global do host não é uma dependência operacional. Quando o Noteri atingir runtime_active, o auto watch também deve despachar exclusivamente o workflow canônico de recuperação do Desktop em main, primeiro com runner-recover e depois com runner-canary, validando SHA/identidade, limitando pickup/conclusão e cancelando somente o run exato em timeout. Sucesso do Desktop exige canário físico; ausência de pickup ou falha permanece bloqueada sem retry no mesmo ciclo. O probe físico do Noteri deve executar em paralelo com watchdog GitHub-hosted de pickup e cancelar runs obsoletos por novo HEAD."
   },
   "traceability": {
     "requirements": ".sdd/specs/noteri-control-plane-fallback.requirements.md",
@@ -209,13 +225,24 @@
         "runner_unavailable",
         "runner_online_headless_not_ready",
         "runtime_active",
-        "probe_failed"
+        "probe_failed",
+        "desktop_recovery_blocked",
+        "desktop_pickup_blocked",
+        "desktop_runner_recovered"
       ],
       "reboot": false,
       "rdc_required": false,
       "production_touched": false,
-      "secrets_read": false
+      "secrets_read": false,
+      "desktop_recovery_workflow": ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+      "desktop_recovery_mode": "runner-recover",
+      "desktop_canary_mode": "runner-canary",
+      "recovery_after_state": "runtime_active",
+      "validates_recovery_exact_main_sha": true,
+      "recovery_pickup_bounded": true,
+      "canary_required_for_desktop_success": true,
+      "cancel_exact_run_on_timeout": true
     }
   },
-  "updated_at": "2026-09-29"
+  "updated_at": "2026-09-30"
 }
