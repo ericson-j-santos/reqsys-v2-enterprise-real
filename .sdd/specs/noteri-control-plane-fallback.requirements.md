@@ -38,6 +38,7 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - se Task Scheduler negar `AtStartup + S4U`, retornar `activation_pending=true` e não declarar ativação concluída;
 - a ativação headless administrativa deve ocorrer somente por workflow self-hosted fixo no Noteri, sem inputs arbitrários, via UAC legítimo e validação posterior de tarefa `AtStartup + S4U`;
 - o workflow de ativação headless não pode executar reboot, produção, shell genérico ou ler segredos.
+- o workflow do probe deve usar Python 3.12.10 portátil pinado por URL e SHA-256 para o probe e para o E2E do `noteri-runtime`; o Python global do host não pode ser dependência operacional.
 - a evidência do `noteri-runtime` deve registrar `expected_sha`, `observed_sha` e `source_sha_verified=true`, falhando fechado em divergência, estado final diferente de NORMAL, ausência de replay idempotente ou controle negativo.
 - o runtime auto watch deve executar em `ubuntu-latest`, sem segredos, sem reboot, sem GUI, sem produção/deploy e sem shell arbitrário; ausência de pickup é estado observável, não motivo para deixar runs órfãos na fila.
 

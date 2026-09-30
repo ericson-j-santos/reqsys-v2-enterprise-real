@@ -74,7 +74,7 @@
       "python_runtime": "portable Python 3.12.10 pinned by SHA-256",
       "mutating": false,
       "arbitrary_target": false,
-      "workflow_dispatch": true
+      "workflow_dispatch_on_main": true
     }
   },
   "security": {
@@ -182,7 +182,8 @@
     "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
     "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
     "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório.",
-    "O readback do Orchestrator materializa em workflow_dispatch e nas branches fix/noteri-desktop-orchestrator-status-*, usa apenas GET /readyz e GET /v1/status no DESKTOP-PDQK954:8787, fixa worker e runtime SHA, executa pelo Python portátil pinado e nunca substitui o pickup físico independente do Desktop."
+    "O readback do Orchestrator usa apenas GET /readyz e GET /v1/status no DESKTOP-PDQK954:8787, fixa worker e runtime SHA, executa pelo Python portátil pinado e nunca substitui o pickup físico independente do Desktop.",
+    "O readback do Orchestrator pode ser executado por workflow_dispatch na main, no SHA exato, usando somente GET /readyz e GET /v1/status; o resultado permanece diagnóstico e não conclui recovery sem pickup físico independente."
   ],
   "hotfix_issue": 2088
 }

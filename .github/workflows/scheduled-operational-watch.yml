@@ -177,11 +177,36 @@ jobs:
             const rssUrl = 'https://developer.microsoft.com/en-us/graph/changelog/rss';
             const markerStart = '<!-- graph-watch-state\n';
             const markerEnd = '\ngraph-watch-state -->';
-            const keywords = [
-              'channelmessage', 'channel message', 'chatmessage', 'teamwork.migrate.all',
-              'resource-specific consent', 'resource specific consent', 'admin consent',
-              'authentication', 'teams'
+            const messageSignals = [
+              'channelmessage', 'channel message', 'chatmessage', 'chat message',
+              'teamwork.migrate.all'
             ];
+            const consentSignals = [
+              'channelmessage.read', 'channelmessage.send',
+              'resource-specific consent', 'resource specific consent'
+            ];
+            const notificationSignals = ['change notification', 'change notifications', 'subscription'];
+            const authSignals = [
+              'admin consent', 'application permission', 'application permissions',
+              'client credential', 'client credentials', 'service principal',
+              'access token', 'oauth'
+            ];
+            const graphContextSignals = [
+              'microsoft graph', 'graph', 'teams',
+              'channelmessage', 'channel message', 'chatmessage', 'chat message'
+            ];
+
+            function rssEntryIsMaterial(entry) {
+              const haystack = (entry.title + '\n' + entry.description).toLowerCase();
+              const hasAny = terms => terms.some(term => haystack.includes(term));
+              const messageChange = hasAny(messageSignals);
+              const consentChange = hasAny(consentSignals);
+              const notificationChange =
+                hasAny(notificationSignals) &&
+                hasAny(['channelmessage', 'channel message', 'chatmessage', 'chat message', 'teams', 'teamwork']);
+              const appAuthChange = hasAny(authSignals) && hasAny(graphContextSignals);
+              return messageChange || consentChange || notificationChange || appAuthChange;
+            }
 
             function clean(raw) {
               return raw
@@ -261,10 +286,7 @@ jobs:
                 const id = tag(item, 'guid') || link || title;
                 const published = tag(item, 'pubDate');
                 return {id, title, description, link, published};
-              }).filter(entry => {
-                const haystack = (entry.title + '\n' + entry.description).toLowerCase();
-                return keywords.some(keyword => haystack.includes(keyword));
-              });
+              }).filter(rssEntryIsMaterial);
             }
 
             const issue = await github.rest.issues.get({
@@ -275,7 +297,14 @@ jobs:
             const currentBody = issue.data.body || '';
             const start = currentBody.indexOf(markerStart);
             const end = start >= 0 ? currentBody.indexOf(markerEnd, start + markerStart.length) : -1;
-            let previous = {schema_version: '1.0', source_hashes: {}, source_text: {}, rss_initialized: false, seen_rss_ids: []};
+            let previous = {
+              schema_version: '1.1',
+              source_hashes: {},
+              source_text: {},
+              rss_initialized: false,
+              rss_latest_published_ms: 0,
+              rss_recent_ids: []
+            };
             if (start >= 0 && end >= 0) {
               try {
                 previous = {...previous, ...JSON.parse(currentBody.slice(start + markerStart.length, end).trim())};
@@ -284,12 +313,14 @@ jobs:
               }
             }
 
+            const parsedWatermark = Number(previous.rss_latest_published_ms || 0);
             const next = {
-              schema_version: '1.0',
+              schema_version: '1.1',
               source_hashes: {...(previous.source_hashes || {})},
               source_text: {...(previous.source_text || {})},
               rss_initialized: Boolean(previous.rss_initialized),
-              seen_rss_ids: Array.isArray(previous.seen_rss_ids) ? previous.seen_rss_ids.slice(-200) : []
+              rss_latest_published_ms: Number.isFinite(parsedWatermark) && parsedWatermark > 0 ? parsedWatermark : 0,
+              rss_recent_ids: Array.isArray(previous.rss_recent_ids) ? previous.rss_recent_ids.slice(-200) : []
             };
             const changes = [];
             const errors = [];
@@ -321,10 +352,19 @@ jobs:
 
             try {
               const entries = rssEntries(await fetchText(rssUrl));
-              const seen = new Set(next.seen_rss_ids);
-              if (next.rss_initialized) {
-                for (const entry of entries) {
-                  if (!seen.has(entry.id)) {
+              const datedEntries = entries
+                .map(entry => ({...entry, publishedMs: Date.parse(entry.published)}))
+                .filter(entry => Number.isFinite(entry.publishedMs));
+              if (entries.length && !datedEntries.length) throw new Error('rss_published_date_missing');
+
+              const previousWatermark = next.rss_latest_published_ms;
+              const recentIds = new Set(next.rss_recent_ids);
+              if (next.rss_initialized && previousWatermark > 0) {
+                for (const entry of datedEntries) {
+                  const isNewer = entry.publishedMs > previousWatermark;
+                  const isNewAtWatermark =
+                    entry.publishedMs === previousWatermark && !recentIds.has(entry.id);
+                  if (isNewer || isNewAtWatermark) {
                     changes.push({
                       source: 'graph-changelog-rss',
                       url: entry.link || rssUrl,
@@ -336,13 +376,24 @@ jobs:
                   }
                 }
               } else {
+                // Migration/baseline: seed the current feed without replaying historical entries.
                 seeded.push('graph-changelog-rss');
               }
-              for (const entry of entries) {
-                if (!seen.has(entry.id)) next.seen_rss_ids.push(entry.id);
-                seen.add(entry.id);
-              }
-              next.seen_rss_ids = next.seen_rss_ids.slice(-200);
+
+              const currentWatermark = datedEntries.reduce(
+                (maximum, entry) => Math.max(maximum, entry.publishedMs),
+                previousWatermark
+              );
+              next.rss_latest_published_ms = currentWatermark;
+              const retentionFloor = currentWatermark > 0
+                ? currentWatermark - (30 * 24 * 60 * 60 * 1000)
+                : 0;
+              next.rss_recent_ids = Array.from(new Set(
+                datedEntries
+                  .filter(entry => entry.publishedMs >= retentionFloor)
+                  .sort((a, b) => b.publishedMs - a.publishedMs)
+                  .map(entry => entry.id)
+              )).slice(0, 200);
               next.rss_initialized = true;
             } catch (error) {
               errors.push({source: 'graph-changelog-rss', url: rssUrl, error: String(error.message || error)});
@@ -434,7 +485,7 @@ jobs:
             }
 
             const report = {
-              schema_version: '1.0',
+              schema_version: '1.1',
               repository: context.repo.owner + '/' + context.repo.repo,
               run_id: context.runId,
               status,

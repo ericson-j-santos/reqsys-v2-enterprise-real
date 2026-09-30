@@ -437,3 +437,17 @@ def test_runner_bootstrap_evidence_stays_outside_governed_worktree() -> None:
 def test_work_item_id_rejects_path_injection() -> None:
     with pytest.raises(subject.BootstrapError, match="work_item_id_invalid"):
         subject.validate_work_item_id("../../v1/status")
+
+def test_same_mode_recovery_does_not_cancel_inflight_run() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "noteri-desktop-watchdog-recovery.yml"
+    ).read_text(encoding="utf-8")
+    header = workflow.split("jobs:", maxsplit=1)[0]
+
+    assert "group: noteri-desktop-watchdog-recovery-${{ inputs.mode }}" in header
+    assert "cancel-in-progress: false" in header
+    assert "cancel-in-progress: true" not in header
+

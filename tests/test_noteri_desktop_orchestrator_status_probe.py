@@ -186,7 +186,7 @@ def test_workflow_uses_pinned_portable_python_for_status_job() -> None:
     assert '"fix/noteri-desktop-orchestrator-status-*"' in raw
     assert "!startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-')" in raw
     status_block = raw.split("  orchestrator_status_readback:", 1)[1]
-    assert "github.event_name == 'workflow_dispatch' || (github.event_name == 'push'" in status_block
+    assert "github.event_name == 'workflow_dispatch' ||" in status_block
     assert "python-3.12.10-embed-amd64.zip" in status_block
     assert "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3" in status_block
     assert "$raw = & $env:REQSYS_PYTHON $launcher @args" in status_block

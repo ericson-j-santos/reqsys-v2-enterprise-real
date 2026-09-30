@@ -22,6 +22,7 @@ Recuperar o runner GitHub Actions já registrado no `DESKTOP-PDQK954` usando o E
     - `/reqsys run desktop-runner-pickup-canary`.
 13. Nenhum input arbitrário é aceito por esses dois comandos.
 14. O arquivo de evidência do bootstrap deve ser gravado em `RUNNER_TEMP`, fora do worktree validado pelo Command Gateway, para que observabilidade não produza falso `state_changed`.
+15. A concorrência do workflow deve ser serial por `mode` e usar `cancel-in-progress: false`; um comando duplicado pode permanecer enfileirado ou ser cancelado pelo gateway por ausência de pickup, mas nunca pode cancelar uma recuperação do mesmo modo que já esteja em execução.
 
 ## Critérios de aceite
 
