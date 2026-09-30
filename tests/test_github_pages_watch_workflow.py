@@ -45,3 +45,27 @@ def test_github_pages_watch_publishes_sanitized_evidence() -> None:
     assert "retention-days: 30" in text
     assert "actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b" in text
     assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in text
+
+
+def test_github_pages_watch_keeps_state_issue_governed_and_idempotent() -> None:
+    text = workflow_text()
+    job = text[text.index("  github-pages-pc24x7-watch:") :]
+    required_sections = [
+        "### Descrição do problema",
+        "### Estado atual evidenciado",
+        "### Estado esperado",
+        "### Causa raiz",
+        "### Critérios de aceite",
+        "### Riscos",
+        "### Dependências",
+        "### Evidências",
+        "### PR(s) relacionadas",
+        "### Responsável",
+        "### Prioridade",
+        "### Declaração de rastreabilidade",
+    ]
+    for section in required_sections:
+        assert section in job
+    assert "- [x] Issue canônica de estado do monitor GitHub Pages" in job
+    assert "if (currentBody.trim() !== nextBody.trim())" in job
+    assert "Replay sem mudança não duplica comentário nem reescreve a Issue sem alteração de estado." in job
