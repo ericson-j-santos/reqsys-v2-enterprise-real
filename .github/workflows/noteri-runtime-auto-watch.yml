@@ -244,7 +244,7 @@ jobs:
           PY
 
       - name: Update single runtime status comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           STATE: ${{ steps.monitor.outputs.state }}
           TARGET_SHA: ${{ steps.main.outputs.sha }}
@@ -499,7 +499,7 @@ jobs:
             }' > "$EVIDENCE_FILE"
 
       - name: Update durable runtime checkpoint
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           NOTERI_STATE: ${{ needs.watch.outputs.noteri_state }}
           EXPECTED_SHA: ${{ needs.watch.outputs.observed_sha }}
