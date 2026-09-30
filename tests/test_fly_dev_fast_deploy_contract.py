@@ -87,3 +87,17 @@ def test_summary_fails_closed_when_any_required_stage_fails() -> None:
     assert '[ "$FRONTEND_RESULT" != "success" ]' in summary
     assert '[ "$SMOKE_RESULT" != "success" ]' in summary
     assert "exit 1" in summary
+
+
+def test_fast_deploy_is_manual_contingency_only() -> None:
+    workflow = text()
+    triggers = workflow.split("on:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    assert "workflow_dispatch:" in triggers
+    assert "\n  push:" not in triggers
+    assert "\n  schedule:" not in triggers
+    assert (
+        'if [ "$EVENT_NAME" != "workflow_dispatch" ] || [ "$DEPLOY_INPUT" != "true" ]; then'
+        in workflow
+    )
+    assert 'echo "should_deploy=false" >> "$GITHUB_OUTPUT"' in workflow
