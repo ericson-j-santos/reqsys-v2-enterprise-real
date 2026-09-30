@@ -18,10 +18,16 @@ jobs:
   watch:
     name: Detect Noteri runtime recovery
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 8
+    outputs:
+      noteri_state: ${{ steps.evidence.outputs.state }}
+      observed_sha: ${{ steps.main.outputs.sha }}
+      probe_run_url: ${{ steps.dispatch.outputs.run_url }}
+      headless_ready: ${{ steps.evidence.outputs.headless_ready }}
+      runner_listener: ${{ steps.evidence.outputs.runner_listener_detected }}
+      rdc_required: ${{ steps.evidence.outputs.rdc_required }}
     env:
       TARGET_WORKFLOW: noteri-control-plane-probe.yml
-      RECOVERY_WORKFLOW: noteri-desktop-watchdog-recovery.yml
       ISSUE_NUMBER: '1705'
       MARKER: '<!-- reqsys-noteri-runtime-auto-watch -->'
     steps:
@@ -182,308 +188,6 @@ jobs:
               out.write(f"rdc_required={str(payload.get('rdc_required')).lower()}\n")
           PY
 
-      - name: Reconcile Desktop runner after Noteri recovery
-        id: desktop_reconcile
-        if: steps.evidence.outputs.state == 'runtime_active'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
-        run: |
-          set -euo pipefail
-
-          record_output() {
-            local prefix="$1"
-            local state="$2"
-            local run_id="$3"
-            local run_url="$4"
-            printf '%s_state=%s\n' "$prefix" "$state" >> "$GITHUB_OUTPUT"
-            printf '%s_run_id=%s\n' "$prefix" "$run_id" >> "$GITHUB_OUTPUT"
-            printf '%s_run_url=%s\n' "$prefix" "$run_url" >> "$GITHUB_OUTPUT"
-          }
-
-          cancel_exact_run() {
-            local run_id="$1"
-            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || true
-          }
-
-          run_mode() {
-            local mode="$1"
-            local prefix="$2"
-            local completion_attempts="$3"
-            local run_url run_id run_json status conclusion started
-            LAST_STATE='dispatch_failed'
-
-            run_url="$(gh workflow run "$RECOVERY_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main -f mode="$mode")"
-            case "$run_url" in
-              "https://github.com/${GITHUB_REPOSITORY}/actions/runs/"*) ;;
-              *) record_output "$prefix" "dispatch_invalid" "" ""; LAST_STATE='dispatch_invalid'; return ;;
-            esac
-            run_id="${run_url##*/}"
-            case "$run_id" in
-              ''|*[!0-9]*) record_output "$prefix" "dispatch_invalid" "" "$run_url"; LAST_STATE='dispatch_invalid'; return ;;
-            esac
-
-            run_json=''
-            for attempt in {1..12}; do
-              run_json="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,headSha,event,status,url 2>/dev/null || true)"
-              [ -n "$run_json" ] && break
-              sleep 5
-            done
-            if [ -z "$run_json" ]; then
-              cancel_exact_run "$run_id"
-              record_output "$prefix" "identity_unavailable" "$run_id" "$run_url"
-              LAST_STATE='identity_unavailable'
-              return
-            fi
-            RUN_JSON="$run_json" TARGET_RUN_ID="$run_id" python - <<'PY'
-          import json
-          import os
-
-          run = json.loads(os.environ["RUN_JSON"])
-          if run.get("databaseId") != int(os.environ["TARGET_RUN_ID"]):
-              raise SystemExit("desktop_reconcile_run_id_mismatch")
-          if run.get("headSha") != os.environ["EXPECTED_SHA"]:
-              raise SystemExit("desktop_reconcile_sha_mismatch")
-          if run.get("event") != "workflow_dispatch":
-              raise SystemExit("desktop_reconcile_event_mismatch")
-          PY
-
-            started='false'
-            status='queued'
-            for attempt in {1..12}; do
-              status="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
-              count="$(
-                gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?filter=latest&per_page=100" \
-                  --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
-                  2>/dev/null || printf '0'
-              )"
-              case "$count" in
-                ''|*[!0-9]*) count=0 ;;
-              esac
-              if [ "$count" -gt 0 ]; then
-                started='true'
-                break
-              fi
-              case "$status" in
-                completed) break ;;
-                *) sleep 5 ;;
-              esac
-            done
-            if [ "$started" != 'true' ]; then
-              cancel_exact_run "$run_id"
-              record_output "$prefix" "pickup_timeout" "$run_id" "$run_url"
-              LAST_STATE='pickup_timeout'
-              return
-            fi
-
-            conclusion=''
-            for attempt in $(seq 1 "$completion_attempts"); do
-              state="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv')"
-              IFS=        shell: bash
-        env:
-          PICKUP_STATE: ${{ steps.pickup.outputs.state }}
-          PICKUP_STATUS: ${{ steps.pickup.outputs.pickup_status }}
-          PICKUP_CONCLUSION: ${{ steps.pickup.outputs.conclusion }}
-          PROBE_CONCLUSION: ${{ steps.completion.outputs.conclusion }}
-          EVIDENCE_STATE: ${{ steps.evidence.outputs.state }}
-          HEADLESS_READY: ${{ steps.evidence.outputs.headless_ready }}
-          RUNNER_LISTENER: ${{ steps.evidence.outputs.runner_listener_detected }}
-          RDC_REQUIRED: ${{ steps.evidence.outputs.rdc_required }}
-          DESKTOP_RECOVERY_STATE: ${{ steps.desktop_reconcile.outputs.recovery_state }}
-          DESKTOP_RECOVERY_RUN_ID: ${{ steps.desktop_reconcile.outputs.recovery_run_id }}
-          DESKTOP_RECOVERY_RUN_URL: ${{ steps.desktop_reconcile.outputs.recovery_run_url }}
-          DESKTOP_CANARY_STATE: ${{ steps.desktop_reconcile.outputs.canary_state }}
-          DESKTOP_CANARY_RUN_ID: ${{ steps.desktop_reconcile.outputs.canary_run_id }}
-          DESKTOP_CANARY_RUN_URL: ${{ steps.desktop_reconcile.outputs.canary_run_url }}
-          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
-          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
-          TARGET_SHA: ${{ steps.main.outputs.sha }}
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from datetime import datetime, timezone
-
-          pickup_state = os.environ.get("PICKUP_STATE") or "unknown"
-          evidence_state = os.environ.get("EVIDENCE_STATE") or ""
-          if evidence_state:
-              noteri_state = evidence_state
-          elif pickup_state == "runner_unavailable":
-              noteri_state = "runner_unavailable"
-          elif os.environ.get("PROBE_CONCLUSION") not in ("", "success"):
-              noteri_state = "probe_failed"
-          else:
-              noteri_state = pickup_state
-
-          recovery_state = os.environ.get("DESKTOP_RECOVERY_STATE") or "not_run"
-          canary_state = os.environ.get("DESKTOP_CANARY_STATE") or "not_run"
-          if noteri_state == "runtime_active" and canary_state == "success":
-              state = "desktop_runner_recovered"
-          elif noteri_state == "runtime_active" and recovery_state == "success":
-              state = "desktop_pickup_blocked"
-          elif noteri_state == "runtime_active":
-              state = "desktop_recovery_blocked"
-          else:
-              state = noteri_state
-
-          payload = {
-              "state": state,
-              "noteri_state": noteri_state,
-              "target_sha": os.environ["TARGET_SHA"],
-              "target_run_id": int(os.environ["TARGET_RUN_ID"]),
-              "target_run_url": os.environ["TARGET_RUN_URL"],
-              "pickup_status": os.environ.get("PICKUP_STATUS") or None,
-              "probe_conclusion": os.environ.get("PROBE_CONCLUSION") or os.environ.get("PICKUP_CONCLUSION") or None,
-              "headless_ready": os.environ.get("HEADLESS_READY") or None,
-              "runner_listener_detected": os.environ.get("RUNNER_LISTENER") or None,
-              "rdc_required": os.environ.get("RDC_REQUIRED") or False,
-              "desktop_recovery": {
-                  "state": recovery_state,
-                  "run_id": int(os.environ["DESKTOP_RECOVERY_RUN_ID"]) if os.environ.get("DESKTOP_RECOVERY_RUN_ID") else None,
-                  "run_url": os.environ.get("DESKTOP_RECOVERY_RUN_URL") or None,
-              },
-              "desktop_canary": {
-                  "state": canary_state,
-                  "run_id": int(os.environ["DESKTOP_CANARY_RUN_ID"]) if os.environ.get("DESKTOP_CANARY_RUN_ID") else None,
-                  "run_url": os.environ.get("DESKTOP_CANARY_RUN_URL") or None,
-              },
-              "production_touched": False,
-              "secrets_read": False,
-              "reboot_performed": False,
-              "observed_at": datetime.now(timezone.utc).isoformat(),
-          }
-          with open("noteri-runtime-auto-watch.json", "w", encoding="utf-8") as fh:
-              json.dump(payload, fh, indent=2, sort_keys=True)
-              fh.write("\n")
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              out.write(f"state={state}\n")
-          PY
-
-      - name: Update single runtime status comment
-        uses: actions/github-script@v7
-        env:
-          STATE: ${{ steps.monitor.outputs.state }}
-          TARGET_SHA: ${{ steps.main.outputs.sha }}
-          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
-          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
-          PICKUP_STATUS: ${{ steps.pickup.outputs.pickup_status }}
-          PROBE_CONCLUSION: ${{ steps.completion.outputs.conclusion }}
-          HEADLESS_READY: ${{ steps.evidence.outputs.headless_ready }}
-          RUNNER_LISTENER: ${{ steps.evidence.outputs.runner_listener_detected }}
-          RDC_REQUIRED: ${{ steps.evidence.outputs.rdc_required }}
-          NOTERI_STATE: ${{ steps.evidence.outputs.state }}
-          DESKTOP_RECOVERY_STATE: ${{ steps.desktop_reconcile.outputs.recovery_state }}
-          DESKTOP_RECOVERY_RUN_URL: ${{ steps.desktop_reconcile.outputs.recovery_run_url }}
-          DESKTOP_CANARY_STATE: ${{ steps.desktop_reconcile.outputs.canary_state }}
-          DESKTOP_CANARY_RUN_URL: ${{ steps.desktop_reconcile.outputs.canary_run_url }}
-        with:
-          script: |
-            const marker = process.env.MARKER;
-            const state = process.env.STATE || 'unknown';
-            const headless = process.env.HEADLESS_READY || 'unknown';
-            const listener = process.env.RUNNER_LISTENER || 'unknown';
-            const rdc = process.env.RDC_REQUIRED || 'false';
-            const conclusion = process.env.PROBE_CONCLUSION || (state === 'runner_unavailable' ? 'cancelled' : 'unknown');
-            const body = [
-              marker,
-              '## Noteri — runtime auto watch',
-              '',
-              `- estado: \`${state}\`;`,
-              `- SHA observado: \`${process.env.TARGET_SHA}\`;`,
-              `- pickup: \`${process.env.PICKUP_STATUS || 'unknown'}\`;`,
-              `- conclusão do probe: \`${conclusion}\`;`,
-              `- \`headless_ready\`: \`${headless}\`;`,
-              `- \`Runner.Listener.exe\`: \`${listener}\`;`,
-              `- \`rdc_required\`: \`${rdc}\`;`,
-              `- estado Noteri: \`${process.env.NOTERI_STATE || state}\`;`,
-              `- recuperação Desktop: \`${process.env.DESKTOP_RECOVERY_STATE || 'not_run'}\`;`,
-              `- canário Desktop: \`${process.env.DESKTOP_CANARY_STATE || 'not_run'}\`;`,
-              `- probe Noteri: ${process.env.TARGET_RUN_URL}.`,
-              process.env.DESKTOP_RECOVERY_RUN_URL ? `- recovery Desktop: ${process.env.DESKTOP_RECOVERY_RUN_URL}.` : null,
-              process.env.DESKTOP_CANARY_RUN_URL ? `- canário Desktop: ${process.env.DESKTOP_CANARY_RUN_URL}.` : null,
-              '',
-              'O monitor é somente leitura; não executa reboot, deploy, produção, GUI ou bypass de UAC.'
-            ].filter(Boolean).join('\n');
-
-            const issue_number = Number(process.env.ISSUE_NUMBER);
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number,
-              per_page: 100,
-            });
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              if (existing.body !== body) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                  body,
-                });
-              }
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number,
-                body,
-              });
-            }
-
-      - name: Upload monitor evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: noteri-runtime-auto-watch-${{ github.run_id }}
-          path: noteri-runtime-auto-watch.json
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Summary
-        shell: bash
-        env:
-          STATE: ${{ steps.monitor.outputs.state }}
-          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
-          DESKTOP_RECOVERY_STATE: ${{ steps.desktop_reconcile.outputs.recovery_state }}
-          DESKTOP_CANARY_STATE: ${{ steps.desktop_reconcile.outputs.canary_state }}
-        run: |
-          {
-            echo '## Noteri Runtime Auto Watch'
-            echo "- Estado: $STATE"
-            echo "- Probe: $TARGET_RUN_URL"
-            echo "- Recuperação Desktop: ${DESKTOP_RECOVERY_STATE:-not_run}"
-            echo "- Canário Desktop: ${DESKTOP_CANARY_STATE:-not_run}"
-            echo '- RDC necessário: não'
-            echo '- Reboot executado: não'
-          } >> "$GITHUB_STEP_SUMMARY"
-\t' read -r status conclusion <<< "$state"
-              [ "$status" = 'completed' ] && break
-              sleep 5
-            done
-            if [ "$status" != 'completed' ]; then
-              cancel_exact_run "$run_id"
-              record_output "$prefix" "completion_timeout" "$run_id" "$run_url"
-              LAST_STATE='completion_timeout'
-              return
-            fi
-            if [ "$conclusion" != 'success' ]; then
-              record_output "$prefix" "failed" "$run_id" "$run_url"
-              LAST_STATE='failed'
-              return
-            fi
-            record_output "$prefix" "success" "$run_id" "$run_url"
-            LAST_STATE='success'
-          }
-
-          record_output canary not_run "" ""
-          run_mode runner-recover recovery 66
-          recovery_state="$LAST_STATE"
-          if [ "$recovery_state" = 'success' ]; then
-            run_mode runner-canary canary 66
-          fi
-
       - name: Build monitor evidence
         id: monitor
         shell: bash
@@ -622,3 +326,254 @@ jobs:
             echo '- RDC necessário: não'
             echo '- Reboot executado: não'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  reconcile-desktop:
+    name: Reconcile Desktop runner after Noteri recovery
+    needs: watch
+    if: needs.watch.outputs.noteri_state == 'runtime_active'
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    env:
+      RECOVERY_WORKFLOW: noteri-desktop-watchdog-recovery.yml
+      EXPECTED_SHA: ${{ needs.watch.outputs.observed_sha }}
+      ISSUE_NUMBER: '1705'
+      MARKER: '<!-- reqsys-noteri-runtime-auto-watch -->'
+      EVIDENCE_FILE: desktop-runtime-auto-reconcile.json
+    steps:
+      - name: Recover and independently prove Desktop runner
+        id: reconcile
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          RECOVERY_STATE='not_run'
+          RECOVERY_RUN_ID=''
+          RECOVERY_RUN_URL=''
+          CANARY_STATE='not_run'
+          CANARY_RUN_ID=''
+          CANARY_RUN_URL=''
+
+          cancel_exact_run() {
+            local run_id="$1"
+            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || true
+          }
+
+          record() {
+            local prefix="$1"
+            local state="$2"
+            local run_id="$3"
+            local run_url="$4"
+            printf '%s_state=%s\n' "$prefix" "$state" >> "$GITHUB_OUTPUT"
+            printf '%s_run_id=%s\n' "$prefix" "$run_id" >> "$GITHUB_OUTPUT"
+            printf '%s_run_url=%s\n' "$prefix" "$run_url" >> "$GITHUB_OUTPUT"
+            case "$prefix" in
+              recovery)
+                RECOVERY_STATE="$state"
+                RECOVERY_RUN_ID="$run_id"
+                RECOVERY_RUN_URL="$run_url"
+                ;;
+              canary)
+                CANARY_STATE="$state"
+                CANARY_RUN_ID="$run_id"
+                CANARY_RUN_URL="$run_url"
+                ;;
+            esac
+          }
+
+          dispatch_mode() {
+            local mode="$1"
+            local prefix="$2"
+            local run_url run_id identity observed_id head_sha event status observed_url count conclusion state
+            local picked_up='false'
+
+            run_url="$(gh workflow run "$RECOVERY_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main -f mode="$mode")"
+            case "$run_url" in
+              "https://github.com/${GITHUB_REPOSITORY}/actions/runs/"*) ;;
+              *)
+                record "$prefix" 'dispatch_invalid' '' ''
+                return
+                ;;
+            esac
+            run_id="${run_url##*/}"
+            case "$run_id" in
+              ''|*[!0-9]*)
+                record "$prefix" 'dispatch_invalid' '' "$run_url"
+                return
+                ;;
+            esac
+
+            identity=''
+            for attempt in {1..12}; do
+              identity="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,headSha,event,status,url --jq '[.databaseId,.headSha,.event,.status,.url] | @tsv' 2>/dev/null || true)"
+              [ -n "$identity" ] && break
+              sleep 5
+            done
+            if [ -z "$identity" ]; then
+              cancel_exact_run "$run_id"
+              record "$prefix" 'identity_unavailable' "$run_id" "$run_url"
+              return
+            fi
+            IFS=$'\t' read -r observed_id head_sha event status observed_url <<< "$identity"
+            if [ "$observed_id" != "$run_id" ] || [ "$head_sha" != "$EXPECTED_SHA" ] || [ "$event" != 'workflow_dispatch' ]; then
+              cancel_exact_run "$run_id"
+              record "$prefix" 'identity_mismatch' "$run_id" "$run_url"
+              return
+            fi
+
+            for attempt in {1..12}; do
+              status="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
+              count="$(
+                gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?filter=latest&per_page=100" \
+                  --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
+                  2>/dev/null || printf '0'
+              )"
+              case "$count" in
+                ''|*[!0-9]*) count=0 ;;
+              esac
+              if [ "$count" -gt 0 ]; then
+                picked_up='true'
+                break
+              fi
+              [ "$status" = 'completed' ] && break
+              sleep 5
+            done
+            if [ "$picked_up" != 'true' ]; then
+              cancel_exact_run "$run_id"
+              record "$prefix" 'pickup_timeout' "$run_id" "$run_url"
+              return
+            fi
+
+            conclusion=''
+            for attempt in {1..66}; do
+              state="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv')"
+              IFS=$'\t' read -r status conclusion <<< "$state"
+              [ "$status" = 'completed' ] && break
+              sleep 5
+            done
+            if [ "$status" != 'completed' ]; then
+              cancel_exact_run "$run_id"
+              record "$prefix" 'completion_timeout' "$run_id" "$run_url"
+              return
+            fi
+            if [ "$conclusion" != 'success' ]; then
+              record "$prefix" 'failed' "$run_id" "$run_url"
+              return
+            fi
+            record "$prefix" 'success' "$run_id" "$run_url"
+          }
+
+          record canary 'not_run' '' ''
+          dispatch_mode runner-recover recovery
+          if [ "$RECOVERY_STATE" = 'success' ]; then
+            dispatch_mode runner-canary canary
+          fi
+
+          jq -n \
+            --arg expected_sha "$EXPECTED_SHA" \
+            --arg recovery_state "$RECOVERY_STATE" \
+            --arg recovery_run_id "$RECOVERY_RUN_ID" \
+            --arg recovery_run_url "$RECOVERY_RUN_URL" \
+            --arg canary_state "$CANARY_STATE" \
+            --arg canary_run_id "$CANARY_RUN_ID" \
+            --arg canary_run_url "$CANARY_RUN_URL" \
+            '{
+              schema_version: "1",
+              expected_sha: $expected_sha,
+              noteri_state: "runtime_active",
+              desktop_recovery: {
+                state: $recovery_state,
+                run_id: (if $recovery_run_id == "" then null else ($recovery_run_id | tonumber) end),
+                run_url: (if $recovery_run_url == "" then null else $recovery_run_url end)
+              },
+              desktop_canary: {
+                state: $canary_state,
+                run_id: (if $canary_run_id == "" then null else ($canary_run_id | tonumber) end),
+                run_url: (if $canary_run_url == "" then null else $canary_run_url end)
+              },
+              desktop_runner_recovered: ($canary_state == "success"),
+              production_touched: false,
+              secrets_read: false,
+              reboot_performed: false
+            }' > "$EVIDENCE_FILE"
+
+      - name: Update durable runtime checkpoint
+        uses: actions/github-script@v7
+        env:
+          NOTERI_STATE: ${{ needs.watch.outputs.noteri_state }}
+          EXPECTED_SHA: ${{ needs.watch.outputs.observed_sha }}
+          PROBE_RUN_URL: ${{ needs.watch.outputs.probe_run_url }}
+          HEADLESS_READY: ${{ needs.watch.outputs.headless_ready }}
+          RUNNER_LISTENER: ${{ needs.watch.outputs.runner_listener }}
+          RDC_REQUIRED: ${{ needs.watch.outputs.rdc_required }}
+          RECOVERY_STATE: ${{ steps.reconcile.outputs.recovery_state }}
+          RECOVERY_RUN_URL: ${{ steps.reconcile.outputs.recovery_run_url }}
+          CANARY_STATE: ${{ steps.reconcile.outputs.canary_state }}
+          CANARY_RUN_URL: ${{ steps.reconcile.outputs.canary_run_url }}
+        with:
+          script: |
+            const marker = process.env.MARKER;
+            const body = [
+              marker,
+              '## Noteri / Desktop — runtime auto reconciliation',
+              '',
+              `- estado Noteri: \`${process.env.NOTERI_STATE}\`;`,
+              `- SHA observado: \`${process.env.EXPECTED_SHA}\`;`,
+              `- \`headless_ready\`: \`${process.env.HEADLESS_READY}\`;`,
+              `- \`Runner.Listener.exe\`: \`${process.env.RUNNER_LISTENER}\`;`,
+              `- recuperação Desktop: \`${process.env.RECOVERY_STATE || 'not_run'}\`;`,
+              `- canário Desktop: \`${process.env.CANARY_STATE || 'not_run'}\`;`,
+              `- probe Noteri: ${process.env.PROBE_RUN_URL}.`,
+              process.env.RECOVERY_RUN_URL ? `- recovery Desktop: ${process.env.RECOVERY_RUN_URL}.` : null,
+              process.env.CANARY_RUN_URL ? `- canário Desktop: ${process.env.CANARY_RUN_URL}.` : null,
+              '',
+              'Fail-closed: sem reboot, deploy, produção, GUI, segredo ou shell remoto arbitrário.'
+            ].filter(Boolean).join('\n');
+
+            const issue_number = Number(process.env.ISSUE_NUMBER);
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: Upload reconciliation evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: desktop-runtime-auto-reconcile-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        shell: bash
+        env:
+          RECOVERY_STATE: ${{ steps.reconcile.outputs.recovery_state }}
+          CANARY_STATE: ${{ steps.reconcile.outputs.canary_state }}
+        run: |
+          {
+            echo '## Desktop Runtime Auto Reconciliation'
+            echo "- Recuperação: ${RECOVERY_STATE:-not_run}"
+            echo "- Canário: ${CANARY_STATE:-not_run}"
+            echo '- Reboot executado: não'
+            echo '- Produção tocada: não'
+          } >> "$GITHUB_STEP_SUMMARY"
+
