@@ -87,3 +87,30 @@ def test_summary_fails_closed_when_any_required_stage_fails() -> None:
     assert '[ "$FRONTEND_RESULT" != "success" ]' in summary
     assert '[ "$SMOKE_RESULT" != "success" ]' in summary
     assert "exit 1" in summary
+
+
+def test_fast_deploy_is_manual_contingency_only() -> None:
+    workflow = text()
+    triggers = workflow.split("on:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    assert "workflow_dispatch:" in triggers
+    assert "\n  push:" not in triggers
+    assert "\n  schedule:" not in triggers
+    assert (
+        'if [ "$EVENT_NAME" != "workflow_dispatch" ] || [ "$DEPLOY_INPUT" != "true" ]; then'
+        in workflow
+    )
+    assert 'echo "should_deploy=false" >> "$GITHUB_OUTPUT"' in workflow
+
+
+def test_fast_deploy_uses_immutable_action_refs() -> None:
+    workflow = text()
+
+    assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in workflow
+    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
+    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in workflow
+    assert "superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1" in workflow
+    assert "actions/checkout@v" not in workflow
+    assert "actions/setup-python@v" not in workflow
+    assert "actions/upload-artifact@v" not in workflow
+    assert "superfly/flyctl-actions/setup-flyctl@master" not in workflow

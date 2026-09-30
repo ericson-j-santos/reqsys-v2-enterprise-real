@@ -34,6 +34,16 @@ def test_accepts_complete_contract(tmp_path):
     assert "SDD_OK head=abc" in detail
 
 
+def test_accepts_singular_portuguese_acceptance_heading(tmp_path):
+    write_spec(tmp_path)
+    req = tmp_path / ".sdd" / "specs" / "feature.requirements.md"
+    req.write_text("# Requisitos\n## Critério de aceite\n1. deve funcionar", encoding="utf-8")
+    files = ["backend/app/api/x.py", ".sdd/specs/feature.spec.json"]
+    ok, detail = MODULE.validate(tmp_path, files, "abc")
+    assert ok is True
+    assert "SDD_OK head=abc" in detail
+
+
 def test_blocks_missing_acceptance_criteria(tmp_path):
     write_spec(tmp_path, acceptance=False)
     ok, detail = MODULE.validate(tmp_path, ["scripts/x.py", ".sdd/specs/feature.spec.json"], "abc")

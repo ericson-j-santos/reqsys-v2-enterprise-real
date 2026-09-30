@@ -21,6 +21,9 @@
     "target_ref": "main",
     "deploy_input": true,
     "production_touched": false,
-    "arbitrary_workflow_allowed": false
+    "arbitrary_workflow_allowed": false,
+    "trigger_mode": "workflow_dispatch_manual_contingency",
+    "automatic_main_push": false,
+    "scheduled_deploy": false
   }
 }
