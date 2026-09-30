@@ -46,3 +46,15 @@ Mudança restrita a monitoramento/report-only em DEV. Rollback: reverter o job e
 - Nenhuma entrada Vitest usada pelo frontend permanece em 4.1.10.
 - `npm audit --audit-level=high` não reporta `GHSA-82fw-gwwq-j7x9`.
 - Build e testes do frontend permanecem verdes no mesmo HEAD.
+
+## Correção preventiva adicional — brace-expansion
+
+- O `npm audit` posterior detectou novos advisories de DoS em `brace-expansion` 5.0.9, incluindo `GHSA-q2hr-2g5m-vwhr`, `GHSA-qhr7-859c-m2p7` e `GHSA-6j4f-fj2g-mc7p`.
+- O override deve fixar `brace-expansion` em 5.0.12, versão que cobre o conjunto de advisories observado pelo gate.
+- O `npm audit --audit-level=high` continua bloqueante; não há suppress/ignore de advisory.
+
+### Critérios de aceite adicionais — brace-expansion
+
+- `frontend/package.json` fixa `brace-expansion` em 5.0.12.
+- O lockfile resolve `node_modules/brace-expansion` em 5.0.12.
+- O job `Frontend Build + Security Audit` executa `npm audit --audit-level=high` e termina verde no HEAD atual.
