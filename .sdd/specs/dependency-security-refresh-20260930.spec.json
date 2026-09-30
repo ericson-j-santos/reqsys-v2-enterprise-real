@@ -1,0 +1,34 @@
+{
+  "feature_name": "Dependency security refresh 2026-09-30",
+  "approvals": {
+    "requirements": true
+  },
+  "description": "Raise direct frontend and backend dependency floors to versions that clear the current npm/pip security gates without suppressing findings.",
+  "scope": {
+    "environment": "CI/DEV",
+    "production_touched": false,
+    "secrets_read": false,
+    "deploy": false
+  },
+  "files": [
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "backend/requirements.txt",
+    "backend/requirements-audit.txt",
+    "backend/token_broker/requirements.txt",
+    "tests/test_pyjwt_security_pin.py",
+    "tests/test_dependency_security_refresh_20260930.py"
+  ],
+  "tests": [
+    "tests/test_pyjwt_security_pin.py",
+    "tests/test_dependency_security_refresh_20260930.py"
+  ],
+  "evidence": {
+    "source_run_id": 36772334403,
+    "pip_audit_artifact_id": 11124437566,
+    "required_gates": [
+      "npm audit --omit=dev --audit-level=high",
+      "pip-audit -r requirements-audit.txt --no-deps"
+    ]
+  }
+}
