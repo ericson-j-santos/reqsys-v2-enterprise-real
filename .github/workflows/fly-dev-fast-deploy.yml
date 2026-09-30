@@ -1,17 +1,6 @@
 name: Fly DEV Fast Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "infra/fly-environments.json"
-      - "config/ocr-engine-lock.json"
-      - "scripts/prepare_ocr_runtime_package.py"
-      - ".github/actions/resolve-managed-credential/**"
-      - ".github/actions/prepare-ocr-runtime/**"
-      - ".github/workflows/fly-dev-fast-deploy.yml"
   workflow_dispatch:
     inputs:
       deploy:
@@ -27,7 +16,7 @@ permissions:
 env:
   CORRELATION_ID: fly-dev-fast-${{ github.run_id }}-${{ github.run_attempt }}
 
-# DEV sempre converge para o SHA mais recente. Uma execução obsoleta é cancelada.
+# Fly DEV é contingência manual explícita. Uma execução manual obsoleta é cancelada.
 concurrency:
   group: fly-dev-fast-deploy
   cancel-in-progress: true
@@ -63,7 +52,7 @@ jobs:
           DEPLOY_INPUT: ${{ github.event.inputs.deploy || 'true' }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DEPLOY_INPUT" != "true" ]; then
+          if [ "$EVENT_NAME" != "workflow_dispatch" ] || [ "$DEPLOY_INPUT" != "true" ]; then
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
