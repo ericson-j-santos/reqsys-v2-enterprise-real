@@ -23,7 +23,7 @@
     "tests": [
       "tests/test_github_pages_watch_workflow.py"
     ],
-    "evidence_contract": "O monitor reutiliza o Scheduled Operational Watch, usa somente fontes oficiais, semeia baseline sem alerta, falha degradado para erro de fonte, alerta somente por mudança material filtrada e persiste estado na issue #2179 sem alterar automaticamente domínio, publicação, Cloudflare ou PC24x7."
+    "evidence_contract": "O monitor reutiliza o Scheduled Operational Watch, usa somente fontes oficiais, semeia baseline sem alerta, falha degradado para erro de fonte, alerta somente por mudança material filtrada e persiste estado na issue #2179 sem alterar automaticamente domínio, publicação, Cloudflare ou PC24x7. A Issue #2179 deve manter o contrato de governança e replay sem mudança deve ser idempotente também na escrita do corpo."
   },
   "risk": {
     "production": false,
@@ -40,6 +40,8 @@
     "O monitor não altera infraestrutura automaticamente.",
     "tests/test_github_pages_watch_workflow.py e Pre-PR Readiness ficam verdes no HEAD exato.",
     "Vitest e @vitest/coverage-v8 resolvem em 4.1.11 ou superior compatível, e o npm audit não reporta GHSA-82fw-gwwq-j7x9.",
-    "brace-expansion resolve em 5.0.12 e o npm audit bloqueante não reporta GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 ou GHSA-6j4f-fj2g-mc7p."
+    "brace-expansion resolve em 5.0.12 e o npm audit bloqueante não reporta GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 ou GHSA-6j4f-fj2g-mc7p.",
+    "A Issue #2179 permanece conforme o contrato de governança de Issues, com 12 seções obrigatórias e declaração de rastreabilidade [x].",
+    "Replay sem mudança não reescreve o corpo da #2179 nem cria comentário material duplicado."
   ]
 }

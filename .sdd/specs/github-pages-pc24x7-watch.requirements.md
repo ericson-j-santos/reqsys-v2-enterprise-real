@@ -58,3 +58,16 @@ Mudança restrita a monitoramento/report-only em DEV. Rollback: reverter o job e
 - `frontend/package.json` fixa `brace-expansion` em 5.0.12.
 - O lockfile resolve `node_modules/brace-expansion` em 5.0.12.
 - O job `Frontend Build + Security Audit` executa `npm audit --audit-level=high` e termina verde no HEAD atual.
+
+## Correção preventiva — governança da Issue de estado
+
+11. O corpo persistido na Issue #2179 deve permanecer conforme o contrato de governança de Issues do ReqSys, com todas as seções obrigatórias e declaração de rastreabilidade marcada.
+12. Replay sem mudança de fatos, status ou estado persistido não deve reescrever a Issue nem produzir comentário duplicado.
+13. O artifact do run continua sendo a evidência temporal de cada coleta; a Issue representa o estado canônico persistente e não precisa mudar apenas para registrar horário de execução.
+
+### Critérios de aceite adicionais — governança da Issue
+
+- `tests/test_github_pages_watch_workflow.py` verifica as 12 seções obrigatórias e a declaração `[x]`.
+- O workflow atualiza a Issue apenas quando `currentBody.trim() !== nextBody.trim()`.
+- Após integração, uma coleta real transforma a #2179 em Issue governada válida.
+- Uma segunda coleta sem mudança mantém o corpo da #2179 idêntico e não cria alerta material.

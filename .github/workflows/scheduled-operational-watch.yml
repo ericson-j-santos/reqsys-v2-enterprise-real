@@ -796,35 +796,59 @@ jobs:
             const checkedAt = new Date().toISOString();
             const stateJson = JSON.stringify(next);
             const nextBody = [
-              '### Objetivo',
-              'Monitorar mudanças oficiais do GitHub Pages que possam afetar a rota DEV GitHub Pages → locator assinado → Cloudflare → PC24x7.',
-              '',
-              '### Escopo material',
-              '- publicação e workflows de Pages;',
-              '- domínios personalizados, DNS e HTTPS;',
-              '- limites, quotas e rate limits;',
-              '- segurança e risco de takeover;',
-              '- compatibilidade e deprecações de Pages Actions.',
+              '### Descrição do problema',
+              'Monitorar mudanças oficiais do GitHub Pages que possam afetar a rota DEV GitHub Pages → locator assinado → Cloudflare → PC24x7 sem alterar automaticamente a infraestrutura.',
               '',
               '### Estado atual evidenciado',
-              '- Execução: GitHub Actions no Scheduled Operational Watch existente (cron de 4 horas).',
-              '- Última coleta: ' + checkedAt + '.',
-              '- Estado técnico: ' + status + '; fontes com erro: ' + errors.length + '.',
+              '- Execução: GitHub Actions no `Scheduled Operational Watch` existente (cron de 4 horas).',
+              '- Estado técnico: `' + status + '`; fontes com erro: `' + errors.length + '`.',
               '- Alertas: somente quando fatos materiais das fontes oficiais mudarem após o baseline.',
               '',
-              '### Política de adaptação',
-              '- Não alterar domínio, permissão, publicação ou runtime automaticamente.',
-              '- Para mudança confirmada, aplicar somente a menor adaptação oficial necessária e manter o locator assinado e a rota PC24x7.',
-              '- Revalidar o fluxo real Pages → locator → Cloudflare → PC24x7, com health/readiness e leitura independente antes de concluir.',
+              '### Estado esperado',
+              'Detectar mudança material em publicação, Pages Actions, domínio/DNS/HTTPS, limites ou segurança e registrar um único alerta acionável sem falso positivo.',
+              '',
+              '### Causa raiz',
+              'A entrada estática da rota DEV depende do contrato externo do GitHub Pages; mudanças oficiais podem quebrar publicação, domínio, HTTPS ou limites sem alteração no código do ReqSys.',
+              '',
+              '### Critérios de aceite',
+              '- Primeira coleta sem baseline não gera alerta histórico.',
+              '- Mudança material futura gera um único comentário com fonte oficial, risco e menor adaptação segura/idempotente.',
+              '- Erro isolado de fonte gera estado degradado, nunca alerta material.',
+              '- Replay sem mudança não duplica comentário nem reescreve a Issue sem alteração de estado.',
+              '- O corpo desta Issue permanece conforme o contrato de governança de Issues do ReqSys.',
+              '',
+              '### Riscos',
+              'Falso positivo documental, configuração DNS/HTTPS incorreta ou takeover. O monitor não altera domínio, permissão, publicação, Cloudflare, locator, PC24x7, segredo ou produção.',
+              '',
+              '### Dependências',
+              'GitHub Docs, GitHub Changelog oficial, GitHub Actions e disponibilidade da Issue #2179.',
+              '',
+              '### Evidências',
+              '- Artifact sanitizado: `github-pages-pc24x7-watch`.',
+              '- Estado/deduplicação persistidos abaixo por fatos oficiais normalizados.',
+              '',
+              '### PR(s) relacionadas',
+              '- #2180',
+              '',
+              '### Responsável',
+              'Engineering Control Plane / GitHub Actions.',
+              '',
+              '### Prioridade',
+              'P1 — confiabilidade da rota DEV PC24x7.',
+              '',
+              '### Declaração de rastreabilidade',
+              '- [x] Issue canônica de estado do monitor GitHub Pages ↔ locator assinado ↔ Cloudflare ↔ PC24x7.',
               '',
               markerStart + stateJson + markerEnd
             ].join('\n');
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: nextBody
-            });
+            if (currentBody.trim() !== nextBody.trim()) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: nextBody
+              });
+            }
 
             if (changes.length > 0) {
               const sections = changes.map(change => {
