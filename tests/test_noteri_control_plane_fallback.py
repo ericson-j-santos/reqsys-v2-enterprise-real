@@ -169,6 +169,7 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
     assert "Physical runner queue watchdog" in workflow
+    assert "cancel-in-progress: true" in workflow
     assert "runs-on: ubuntu-latest" in workflow
     assert "actions: write" in workflow
     assert "gh run cancel \"$GITHUB_RUN_ID\"" in workflow
