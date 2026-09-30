@@ -15,7 +15,9 @@
     ".github/workflows/scheduled-operational-watch.yml",
     ".sdd/specs/github-pages-pc24x7-watch.requirements.md",
     ".sdd/specs/github-pages-pc24x7-watch.spec.json",
-    "tests/test_github_pages_watch_workflow.py"
+    "tests/test_github_pages_watch_workflow.py",
+    "frontend/package.json",
+    "frontend/package-lock.json"
   ],
   "sdd_gate": {
     "tests": [
@@ -36,6 +38,7 @@
     "Somente mudanças materiais em publicação, domínio/HTTPS, limites, segurança ou compatibilidade podem gerar comentário.",
     "Issue #2179 persiste baseline e o artifact sanitizado registra run, estado, mudanças e erros.",
     "O monitor não altera infraestrutura automaticamente.",
-    "tests/test_github_pages_watch_workflow.py e Pre-PR Readiness ficam verdes no HEAD exato."
+    "tests/test_github_pages_watch_workflow.py e Pre-PR Readiness ficam verdes no HEAD exato.",
+    "Vitest e @vitest/coverage-v8 resolvem em 4.1.11 ou superior compatível, e o npm audit não reporta GHSA-82fw-gwwq-j7x9."
   ]
 }

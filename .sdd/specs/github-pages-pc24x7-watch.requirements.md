@@ -33,3 +33,16 @@ Detectar somente mudanças oficiais e materialmente relevantes do GitHub Pages q
 ## Risco e rollback
 
 Mudança restrita a monitoramento/report-only em DEV. Rollback: reverter o job e os artefatos SDD/teste deste incremento. Nenhum segredo, deploy, produção ou permissão administrativa é modificado.
+
+## Correção preventiva descoberta pelo CI
+
+- O `npm audit` do HEAD inicial detectou `GHSA-82fw-gwwq-j7x9` em Vitest 4.1.10.
+- A versão mínima de `vitest` e `@vitest/coverage-v8` deve ser 4.1.11, versão corrigida publicada pelo projeto.
+- O lockfile deve resolver `vitest`, `@vitest/mocker`, `@vitest/coverage-v8` e os pacotes internos `@vitest/*` relacionados em 4.1.11.
+- A correção não relaxa o gate de segurança; o `npm audit --audit-level=high` deve permanecer bloqueante.
+
+### Critérios de aceite adicionais
+
+- Nenhuma entrada Vitest usada pelo frontend permanece em 4.1.10.
+- `npm audit --audit-level=high` não reporta `GHSA-82fw-gwwq-j7x9`.
+- Build e testes do frontend permanecem verdes no mesmo HEAD.
