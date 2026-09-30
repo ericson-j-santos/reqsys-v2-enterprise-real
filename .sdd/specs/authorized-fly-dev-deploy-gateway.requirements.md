@@ -16,6 +16,8 @@ Permitir publicar o ambiente DEV do ReqSys pelo Authorized Actions Gateway usand
 8. O fluxo não deve ler segredos nem tocar STG/HML/PROD.
 9. A evidência sanitizada deve registrar o SHA da main e o run disparado.
 10. A publicação só conta como válida após `/api/runtime/build-info` confirmar o mesmo SHA.
+11. O workflow `fly-dev-fast-deploy.yml` deve ser exclusivamente uma contingência manual por `workflow_dispatch`; `push`, `schedule` ou outro gatilho automático não podem autorizar deploy Fly DEV.
+12. Mesmo que outro gatilho seja reintroduzido por engano, o preflight deve falhar fechado com `should_deploy=false` fora de `workflow_dispatch` com `deploy=true`.
 
 ## Critérios de aceite
 
@@ -23,5 +25,6 @@ Permitir publicar o ambiente DEV do ReqSys pelo Authorized Actions Gateway usand
 - comandos não allowlisted continuam fail-closed;
 - `production_touched=false` permanece na evidência;
 - workflow disparado deve publicar somente DEV;
+- workflow Fly DEV não possui gatilho automático e o teste de contrato falha se `push` ou `schedule` reaparecer;
 - após deploy, o runtime DEV deve informar o SHA esperado antes de qualquer aceite WSJF;
 - bootstrap WSJF e aceite real devem ser reexecutados somente depois do same-SHA.
