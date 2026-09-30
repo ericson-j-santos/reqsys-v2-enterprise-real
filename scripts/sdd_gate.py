@@ -53,7 +53,8 @@ def validate(root: Path, files: list[str], head_sha: str) -> tuple[bool, str]:
         if approvals.get("requirements") is not True:
             errors.append(f"{rel}: requirements não aprovado")
         lowered = req_text.lower()
-        if "acceptance criteria" not in lowered and "critérios de aceite" not in lowered:
+        acceptance_markers = ("acceptance criteria", "critérios de aceite", "critério de aceite")
+        if not any(marker in lowered for marker in acceptance_markers):
             errors.append(f"{rel}: critérios de aceite ausentes")
         tests = gate.get("tests") if isinstance(gate, dict) else None
         if not isinstance(tests, list) or not tests:

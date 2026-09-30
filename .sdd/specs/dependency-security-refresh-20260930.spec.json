@@ -17,7 +17,9 @@
     "backend/requirements-audit.txt",
     "backend/token_broker/requirements.txt",
     "tests/test_pyjwt_security_pin.py",
-    "tests/test_dependency_security_refresh_20260930.py"
+    "tests/test_dependency_security_refresh_20260930.py",
+    "scripts/sdd_gate.py",
+    "tests/test_sdd_gate.py"
   ],
   "tests": [
     "tests/test_pyjwt_security_pin.py",
@@ -29,6 +31,13 @@
     "required_gates": [
       "npm audit --omit=dev --audit-level=high",
       "pip-audit -r requirements-audit.txt --no-deps"
+    ]
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pyjwt_security_pin.py",
+      "tests/test_dependency_security_refresh_20260930.py",
+      "tests/test_sdd_gate.py"
     ]
   }
 }
