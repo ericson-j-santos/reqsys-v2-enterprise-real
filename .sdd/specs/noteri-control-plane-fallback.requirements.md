@@ -17,10 +17,12 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 5. O Gateway aceita somente os comandos exatos `/reqsys run noteri-control-plane-probe` e `/reqsys run noteri-headless-control-plane-activation`.
 6. O Gateway aguarda pickup e falha fechado com `SELF_HOSTED_RUNNER_UNAVAILABLE` se o runner não adquirir o job.
 7. Quando não houver pickup, o Gateway cancela o run self-hosted abandonado, confirma `completed/cancelled` por janela limitada e registra o resultado da limpeza; nenhuma nova tentativa é criada automaticamente.
-8. Um runtime auto watch em GitHub-hosted runner deve verificar periodicamente o retorno do Noteri sem depender do chat: despachar somente `noteri-control-plane-probe.yml` na `main`, validar o SHA exato, cancelar o run sem pickup e atualizar um único comentário de estado na issue governada.
+8. Um runtime auto watch em GitHub-hosted runner deve verificar periodicamente o retorno do Noteri sem depender do chat: despachar `noteri-control-plane-probe.yml` na `main`, validar o SHA exato, cancelar o run sem pickup e atualizar um único comentário de estado na issue governada.
 9. Quando houver pickup, o auto watch deve aguardar o probe, baixar somente o artifact sanitizado e declarar `runtime_active` apenas com `ok=true`, host Noteri, `Runner.Listener.exe` comprovado, `headless_ready=true` e `rdc_required=false`.
-10. O mesmo probe deve resolver o SHA atual de `ericson-j-santos/noteri-runtime/main`, fazer checkout desse SHA imutável no host Noteri e executar o E2E isolado `NORMAL -> ESTUDO -> replay -> NORMAL`, exigindo leitura independente e igualdade entre SHA esperado e observado.
-11. Alterações do próprio probe, dos scripts de controle, do teste de contrato ou do SDD correspondente devem disparar o E2E físico no SHA da branch antes do merge por `push` no repositório canônico, somente quando o ator for `ericson-j-santos`; `pull_request` é proibido como gatilho do runner self-hosted para impedir execução de código de fork não confiável.
+10. Somente após `runtime_active`, o mesmo auto watch deve reconciliar o Desktop sem depender do chat: despachar `noteri-desktop-watchdog-recovery.yml` em `main` com o modo fixo `runner-recover`, validar identidade e SHA, aguardar pickup por janela limitada e exigir conclusão `success`.
+11. Após recuperação concluída, o auto watch deve despachar o mesmo workflow em modo fixo `runner-canary` e só declarar `desktop_runner_recovered` quando o canário executar no `DESKTOP-PDQK954` e concluir com sucesso; ausência de pickup, timeout, falha ou divergência deve cancelar somente o run exato e permanecer bloqueada, sem retry em loop no mesmo ciclo.
+12. O mesmo probe deve resolver o SHA atual de `ericson-j-santos/noteri-runtime/main`, fazer checkout desse SHA imutável no host Noteri e executar o E2E isolado `NORMAL -> ESTUDO -> replay -> NORMAL`, exigindo leitura independente e igualdade entre SHA esperado e observado.
+13. Alterações do próprio probe, dos scripts de controle, do teste de contrato ou do SDD correspondente devem disparar o E2E físico no SHA da branch antes do merge por `push` no repositório canônico, somente quando o ator for `ericson-j-santos`; `pull_request` é proibido como gatilho do runner self-hosted para impedir execução de código de fork não confiável. O próprio workflow físico deve ter watchdog hospedado de pickup e `concurrency.cancel-in-progress=true` para impedir fila órfã de SHA obsoleto.
 
 ## Requisitos
 
@@ -41,6 +43,8 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 - o workflow do probe deve usar Python 3.12.10 portátil pinado por URL e SHA-256 para o probe e para o E2E do `noteri-runtime`; o Python global do host não pode ser dependência operacional.
 - a evidência do `noteri-runtime` deve registrar `expected_sha`, `observed_sha` e `source_sha_verified=true`, falhando fechado em divergência, estado final diferente de NORMAL, ausência de replay idempotente ou controle negativo.
 - o runtime auto watch deve executar em `ubuntu-latest`, sem segredos, sem reboot, sem GUI, sem produção/deploy e sem shell arbitrário; ausência de pickup é estado observável, não motivo para deixar runs órfãos na fila.
+- a reconciliação automática do Desktop deve usar somente os modos fixos `runner-recover` e `runner-canary` do workflow canônico, ambos na `main` e no mesmo SHA capturado pelo monitor; não pode usar bootstrap, reboot, RDC, Admin Broker, WMI, SCM, Task Scheduler remoto, WinRM, SSH ou alvo/comando arbitrário;
+- cada run de recuperação/canário deve ter pickup e conclusão limitados no tempo, ser cancelado exatamente em timeout e produzir evidência sanitizada com `production_touched=false`, `secrets_read=false` e `reboot_performed=false`.
 
 ## Bootstrap físico único
 
