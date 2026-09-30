@@ -1,0 +1,45 @@
+{
+  "feature_name": "github-pages-pc24x7-watch",
+  "project": "ReqSys v2 Enterprise — Runtime Platform / DEV",
+  "created_at": "2026-09-30",
+  "updated_at": "2026-09-30",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Monitora mudanças oficiais e materiais do GitHub Pages que possam afetar a rota DEV GitHub Pages → locator assinado → Cloudflare → PC24x7, sem mutação automática de infraestrutura.",
+  "scope": "runtime-platform-dev-observability",
+  "files": [
+    ".github/workflows/scheduled-operational-watch.yml",
+    ".sdd/specs/github-pages-pc24x7-watch.requirements.md",
+    ".sdd/specs/github-pages-pc24x7-watch.spec.json",
+    "tests/test_github_pages_watch_workflow.py",
+    "frontend/package.json",
+    "frontend/package-lock.json"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_github_pages_watch_workflow.py"
+    ],
+    "evidence_contract": "O monitor reutiliza o Scheduled Operational Watch, usa somente fontes oficiais, semeia baseline sem alerta, falha degradado para erro de fonte, alerta somente por mudança material filtrada e persiste estado na issue #2179 sem alterar automaticamente domínio, publicação, Cloudflare ou PC24x7."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  },
+  "acceptance_criteria": [
+    "Nenhum novo workflow ativo é criado; o job é adicionado ao Scheduled Operational Watch existente.",
+    "A primeira coleta não alerta e erros de fonte não são tratados como mudança.",
+    "Somente mudanças materiais em publicação, domínio/HTTPS, limites, segurança ou compatibilidade podem gerar comentário.",
+    "Issue #2179 persiste baseline e o artifact sanitizado registra run, estado, mudanças e erros.",
+    "O monitor não altera infraestrutura automaticamente.",
+    "tests/test_github_pages_watch_workflow.py e Pre-PR Readiness ficam verdes no HEAD exato.",
+    "Vitest e @vitest/coverage-v8 resolvem em 4.1.11 ou superior compatível, e o npm audit não reporta GHSA-82fw-gwwq-j7x9.",
+    "brace-expansion resolve em 5.0.12 e o npm audit bloqueante não reporta GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 ou GHSA-6j4f-fj2g-mc7p."
+  ]
+}
