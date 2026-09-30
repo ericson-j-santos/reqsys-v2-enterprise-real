@@ -14,6 +14,7 @@ on:
       - '.sdd/specs/noteri-control-plane-fallback.spec.json'
 
 permissions:
+  actions: write
   contents: read
 
 concurrency:
@@ -21,6 +22,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  queue-watchdog:
+    name: Physical runner queue watchdog
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Observe Noteri pickup
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          picked_up='false'
+          for attempt in {1..12}; do
+            count="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
+                --jq '[.jobs[] | select(.name == "Prove Noteri fallback without RDC" and .started_at != null and (.runner_name // "") != "")] | length' \
+                2>/dev/null || printf '0'
+            )"
+            case "$count" in
+              ''|*[!0-9]*) count=0 ;;
+            esac
+            if [ "$count" -gt 0 ]; then
+              picked_up='true'
+              break
+            fi
+            sleep 5
+          done
+          if [ "$picked_up" = 'true' ]; then
+            echo "NOTERI_RUNNER_PICKUP_PROVEN" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "SELF_HOSTED_RUNNER_UNAVAILABLE"
+            echo "No Noteri pickup was observed within 60 seconds; cancelling this exact run fail-closed."
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" >/dev/null || true
+
   probe:
     name: Prove Noteri fallback without RDC
     if: >-
