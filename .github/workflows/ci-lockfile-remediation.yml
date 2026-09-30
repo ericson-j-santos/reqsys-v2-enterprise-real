@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - agent/flow-completion-real-evidence
-      - fix/fly-dev-manual-contingency-20260930
     paths:
       - frontend/package.json
       - frontend/package-lock.json
