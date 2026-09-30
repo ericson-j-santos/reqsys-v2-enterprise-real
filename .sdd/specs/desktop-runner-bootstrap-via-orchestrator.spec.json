@@ -2,7 +2,7 @@
   "feature_name": "desktop-runner-bootstrap-via-orchestrator",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-25",
-  "updated_at": "2026-09-28",
+  "updated_at": "2026-09-29",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -45,7 +45,8 @@
     "command_gateway_required": true,
     "command_gateway_risk": 2,
     "rules_sha": "881d9ca2f8e77025edb7298b22981109c567a730",
-    "workflow_surface_growth": 0
+    "workflow_surface_growth": 0,
+    "same_mode_cancel_in_progress": false
   },
   "acceptance_criteria": [
     "Bootstrap executa somente a partir do Noteri e para DESKTOP-PDQK954.",
@@ -58,6 +59,7 @@
     "A evidência do bootstrap permanece fora do worktree governado e não altera o estado Git da sessão.",
     "Refresh só é aceito após readback do runtime_source_sha exato, worker_instance_id pós-reexec e host.github_runner.bootstrap.v1.",
     "A evidência do refresh registra runtime_source_sha e worker_instance_id anteriores e observados para impedir falso positivo por capability residual.",
-    "O refresh do bootstrap está pinado ao SHA corrente 313f5da4bb0ee9dd70937c238c7cfdf4e3514602 da main do Engineering Orchestrator, preservando o fallback governado de recovery do runner ReqSys, o reexec pós-refresh e o inventário Windows somente-leitura."
+    "O refresh do bootstrap está pinado ao SHA corrente 313f5da4bb0ee9dd70937c238c7cfdf4e3514602 da main do Engineering Orchestrator, preservando o fallback governado de recovery do runner ReqSys, o reexec pós-refresh e o inventário Windows somente-leitura.",
+    "Execuções duplicadas do mesmo modo não cancelam uma recuperação já em andamento; o workflow serializa por mode com cancel-in-progress=false."
   ]
 }

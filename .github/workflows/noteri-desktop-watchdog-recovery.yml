@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: noteri-desktop-watchdog-recovery-${{ inputs.mode }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   recover:
