@@ -79,7 +79,8 @@ class MicrosoftOAuthError(RuntimeError):
             if isinstance(raw_payload, dict):
                 payload = raw_payload
         except (ValueError, TypeError):
-            pass
+            # Corpo não JSON é ignorado para evitar propagar conteúdo sensível.
+            payload = {}
 
         description = str(payload.get('error_description') or '')
         aadsts_match = _AADSTS_PATTERN.search(description)
@@ -90,7 +91,7 @@ class MicrosoftOAuthError(RuntimeError):
                 try:
                     aadsts_code = f'AADSTS{int(error_codes[0])}'
                 except (TypeError, ValueError):
-                    pass
+                    aadsts_code = None
 
         return cls(
             resource=resource,
