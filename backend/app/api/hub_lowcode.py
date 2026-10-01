@@ -345,6 +345,16 @@ async def planner_publish_governado(
     return ok(resultado, correlation_id)
 
 
+@router.get('/planner/reprocessamento/pendentes')
+def planner_reprocessamento_pendentes(
+    db: Session = Depends(get_db),
+    limit: int = Query(default=10, ge=1, le=500),
+    _auth=Depends(require_planner_publish_auth),
+):
+    """Leitura escopada para o agendador S2S de reprocessamento do Planner."""
+    return ok({'items': listar_tentativas_planner_publish(db, None, 'falhou_integracao', limit)})
+
+
 @router.get('/planner/publish/{attempt_id}')
 def planner_publish_status(
     attempt_id: int,

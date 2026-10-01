@@ -47,13 +47,23 @@ jobs:
 
       - name: Resolver base URL do ambiente
         id: resolver
+        env:
+          REQSYS_API_BASE_URL: ${{ vars.REQSYS_API_BASE_URL }}
         run: |
           set -euo pipefail
-          case "${{ github.event.inputs.environment || 'dev' }}" in
-            dev) echo "base_url=https://reqsys-api-dev.fly.dev" >> "$GITHUB_OUTPUT" ;;
-            stg) echo "base_url=https://reqsys-api-stg.fly.dev" >> "$GITHUB_OUTPUT" ;;
-            *) echo "Ambiente desconhecido" >&2; exit 1 ;;
-          esac
+          python - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+
+          base_url = os.environ.get('REQSYS_API_BASE_URL', '').strip().rstrip('/')
+          parsed = urlsplit(base_url)
+          if (parsed.scheme != 'https' or not parsed.hostname
+                  or parsed.username or parsed.password or parsed.query or parsed.fragment
+                  or parsed.hostname == 'fly.dev' or parsed.hostname.endswith('.fly.dev')):
+              raise SystemExit('Configure REQSYS_API_BASE_URL do PC24x7 no Environment; URL HTTPS obrigatória e Fly.io legado recusado.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'base_url={base_url}\n')
+          PY
 
       - name: Reprocessar tentativas pendentes
         env:
@@ -61,13 +71,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${PLANNER_PUBLISH_SERVICE_TOKEN:-}" ]; then
-            echo "PLANNER_PUBLISH_SERVICE_TOKEN não configurado neste ambiente — nada a fazer." >&2
-            exit 0
+            echo "PLANNER_PUBLISH_SERVICE_TOKEN não configurado neste ambiente — reprocessamento bloqueado." >&2
+            exit 1
           fi
           python scripts/planner_publish_reprocess_pendentes.py \
             --base-url "${{ steps.resolver.outputs.base_url }}" \
             --service-token "$PLANNER_PUBLISH_SERVICE_TOKEN" \
             --lote-max "${{ github.event.inputs.lote_max || '10' }}" \
+            --strict \
             --evidence-file "$ARTIFACT_DIR/resumo.json"
 
       - name: Upload evidência
