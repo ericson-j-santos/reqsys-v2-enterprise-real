@@ -30,7 +30,21 @@
         "/api/runtime/readiness",
         "/api/runtime/liveness"
       ],
-      "required_secret_names": ["JWT_SECRET", "JWT_ISSUER", "JWT_AUDIENCE"]
+      "required_secret_names": [
+        "JWT_SECRET",
+        "JWT_ISSUER",
+        "JWT_AUDIENCE",
+        "POWER_PLATFORM_TENANT_ID",
+        "POWER_PLATFORM_CLIENT_ID",
+        "POWER_PLATFORM_CLIENT_SECRET",
+        "DATAVERSE_TENANT_ID",
+        "DATAVERSE_CLIENT_ID",
+        "DATAVERSE_CLIENT_SECRET",
+        "DATAVERSE_ENVIRONMENT_URL",
+        "SHAREPOINT_GRAPH_CLIENT_SECRET",
+        "SHAREPOINT_SITE_ID",
+        "SHAREPOINT_LIST_IA"
+      ]
     },
     "hml": {
       "fly_config": "backend/fly.staging.toml",
@@ -55,7 +69,23 @@
         "/api/runtime/readiness",
         "/api/runtime/liveness"
       ],
-      "required_secret_names": ["JWT_SECRET", "JWT_ISSUER", "JWT_AUDIENCE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"]
+      "required_secret_names": [
+        "JWT_SECRET",
+        "JWT_ISSUER",
+        "JWT_AUDIENCE",
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "POWER_PLATFORM_TENANT_ID",
+        "POWER_PLATFORM_CLIENT_ID",
+        "POWER_PLATFORM_CLIENT_SECRET",
+        "DATAVERSE_TENANT_ID",
+        "DATAVERSE_CLIENT_ID",
+        "DATAVERSE_CLIENT_SECRET",
+        "DATAVERSE_ENVIRONMENT_URL",
+        "SHAREPOINT_GRAPH_CLIENT_SECRET",
+        "SHAREPOINT_SITE_ID",
+        "SHAREPOINT_LIST_IA"
+      ]
     },
     "prod": {
       "fly_config": "backend/fly.toml",
@@ -81,10 +111,35 @@
         "/api/runtime/liveness",
         "/api/runtime/metrics"
       ],
-      "required_secret_names": ["JWT_SECRET", "JWT_ISSUER", "JWT_AUDIENCE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"]
+      "required_secret_names": [
+        "JWT_SECRET",
+        "JWT_ISSUER",
+        "JWT_AUDIENCE",
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "POWER_PLATFORM_TENANT_ID",
+        "POWER_PLATFORM_CLIENT_ID",
+        "POWER_PLATFORM_CLIENT_SECRET",
+        "DATAVERSE_TENANT_ID",
+        "DATAVERSE_CLIENT_ID",
+        "DATAVERSE_CLIENT_SECRET",
+        "DATAVERSE_ENVIRONMENT_URL",
+        "SHAREPOINT_GRAPH_CLIENT_SECRET",
+        "SHAREPOINT_SITE_ID",
+        "SHAREPOINT_LIST_IA"
+      ]
     }
   },
-  "forbidden_versioned_secret_patterns": ["JWT_SECRET", "AZURE_CLIENT_SECRET", "PASSWORD", "TOKEN", "PRIVATE_KEY"],
+  "forbidden_versioned_secret_patterns": [
+    "JWT_SECRET",
+    "AZURE_CLIENT_SECRET",
+    "POWER_PLATFORM_CLIENT_SECRET",
+    "DATAVERSE_CLIENT_SECRET",
+    "SHAREPOINT_GRAPH_CLIENT_SECRET",
+    "PASSWORD",
+    "TOKEN",
+    "PRIVATE_KEY"
+  ],
   "drift_evidence": {
     "required_runtime_fields": ["commit_sha", "version", "environment", "correlation_id"],
     "artifact_name": "fly-enterprise-sync-evidence"

@@ -1,9 +1,12 @@
 """Testes de caminhos críticos — serviço hub_lowcode (degradação e persistência)."""
 
+import asyncio
+import json
 import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 os.environ.setdefault('APP_ENV', 'test')
@@ -12,8 +15,6 @@ os.environ.setdefault('JWT_SECRET', 'reqsys-test-secret-with-minimum-safe-length
 
 from app.db import Base, SessionLocal, engine
 from app.services import hub_lowcode as svc
-
-import asyncio
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -30,6 +31,13 @@ def test_listagens_sem_credenciais_retornam_configurado_false(monkeypatch):
     monkeypatch.setattr(svc.settings, 'azure_tenant_id', '')
     monkeypatch.setattr(svc.settings, 'azure_client_id', '')
     monkeypatch.setattr(svc.settings, 'azure_client_secret', '')
+    monkeypatch.setattr(svc.settings, 'power_platform_tenant_id', '')
+    monkeypatch.setattr(svc.settings, 'power_platform_client_id', '')
+    monkeypatch.setattr(svc.settings, 'power_platform_client_secret', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_tenant_id', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_client_id', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_client_secret', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_environment_url', '')
     monkeypatch.setattr(svc.settings, 'sharepoint_site_id', '')
     monkeypatch.setattr(svc.settings, 'github_alm_repo', '')
 
@@ -45,6 +53,27 @@ def test_listagens_sem_credenciais_retornam_configurado_false(monkeypatch):
     assert ambientes['configurado'] is False
     assert github['configurado'] is False
     assert planos['configurado'] is False
+
+
+def test_integracoes_nao_reutilizam_credenciais_do_login_azure(monkeypatch):
+    monkeypatch.setattr(svc.settings, 'azure_tenant_id', 'tenant-login')
+    monkeypatch.setattr(svc.settings, 'azure_client_id', 'client-spa')
+    monkeypatch.setattr(svc.settings, 'azure_client_secret', 'secret-legado')
+    monkeypatch.setattr(svc.settings, 'power_platform_tenant_id', '')
+    monkeypatch.setattr(svc.settings, 'power_platform_client_id', '')
+    monkeypatch.setattr(svc.settings, 'power_platform_client_secret', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_tenant_id', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_client_id', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_client_secret', '')
+    monkeypatch.setattr(svc.settings, 'dataverse_environment_url', '')
+
+    flows = _run(svc.listar_flows_pa())
+    ambientes = _run(svc.listar_ambientes_powerplatform())
+
+    assert flows['configurado'] is False
+    assert 'DATAVERSE_CLIENT_ID' in flows['campos_ausentes']
+    assert ambientes['configurado'] is False
+    assert 'POWER_PLATFORM_CLIENT_ID' in ambientes['campos_ausentes']
 
 
 def test_listar_runs_github_sem_repo_configurado(monkeypatch):
@@ -175,6 +204,13 @@ def _mock_credenciais_graph(monkeypatch):
     monkeypatch.setattr(svc.settings, 'azure_tenant_id', 'tenant-id')
     monkeypatch.setattr(svc.settings, 'azure_client_id', 'client-id')
     monkeypatch.setattr(svc.settings, 'azure_client_secret', 'client-secret')
+    monkeypatch.setattr(svc.settings, 'power_platform_tenant_id', 'tenant-power-platform')
+    monkeypatch.setattr(svc.settings, 'power_platform_client_id', 'client-power-platform')
+    monkeypatch.setattr(svc.settings, 'power_platform_client_secret', 'secret-power-platform')
+    monkeypatch.setattr(svc.settings, 'dataverse_tenant_id', 'tenant-dataverse')
+    monkeypatch.setattr(svc.settings, 'dataverse_client_id', 'client-dataverse')
+    monkeypatch.setattr(svc.settings, 'dataverse_client_secret', 'secret-dataverse')
+    monkeypatch.setattr(svc.settings, 'dataverse_environment_url', 'https://org-test.crm2.dynamics.com')
     monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-id')
 
 
@@ -258,6 +294,28 @@ def test_listar_pacotes_ia_bloqueia_quando_identidade_nao_resolve(mock_acquire_t
     assert 'perfil SharePoint ausente' in resultado['erro']
 
 
+@patch('app.services.sharepoint_packages.acquire_sharepoint_graph_token', new_callable=AsyncMock)
+def test_listar_pacotes_ia_retorna_oauth_sanitizado(mock_acquire_token, monkeypatch):
+    from app.services.microsoft_oauth import MicrosoftOAuthError
+
+    monkeypatch.setattr(svc.settings, 'sharepoint_site_id', 'site-id')
+    mock_acquire_token.side_effect = MicrosoftOAuthError(
+        resource='sharepoint_graph',
+        status_code=401,
+        error_code='invalid_client',
+        aadsts_code='AADSTS7000222',
+        trace_id='trace-sp',
+        correlation_id='corr-sp',
+    )
+
+    resultado = _run(svc.listar_pacotes_ia())
+
+    assert resultado['configurado'] is True
+    assert resultado['itens'] == []
+    assert resultado['erro_oauth']['resource'] == 'sharepoint_graph'
+    assert resultado['erro_oauth']['aadsts_code'] == 'AADSTS7000222'
+
+
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
 def test_listar_flows_pa_degrada_em_excecao(mock_client_cls, monkeypatch):
     _mock_credenciais_graph(monkeypatch)
@@ -273,6 +331,46 @@ def test_listar_flows_pa_degrada_em_excecao(mock_client_cls, monkeypatch):
     assert resultado['configurado'] is True
     assert resultado['flows'] == []
     assert 'dataverse offline' in resultado['erro']
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_flows_pa_retorna_oauth_sanitizado(mock_client_cls, monkeypatch):
+    import httpx
+
+    _mock_credenciais_graph(monkeypatch)
+    request = httpx.Request('POST', 'https://login.microsoftonline.com/tenant/oauth2/v2.0/token')
+    response = httpx.Response(
+        401,
+        request=request,
+        json={
+            'error': 'invalid_client',
+            'error_description': 'AADSTS7000215: secret-super-sensivel foi rejeitado',
+            'trace_id': 'trace-123',
+            'correlation_id': 'corr-456',
+            'timestamp': '2026-10-01 12:00:00Z',
+        },
+    )
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_flows_pa())
+
+    assert resultado['configurado'] is True
+    assert resultado['erro_oauth'] == {
+        'type': 'oauth_token',
+        'provider': 'microsoft_entra',
+        'resource': 'dataverse',
+        'status_code': 401,
+        'error_code': 'invalid_client',
+        'aadsts_code': 'AADSTS7000215',
+        'trace_id': 'trace-123',
+        'correlation_id': 'corr-456',
+        'timestamp': '2026-10-0112:00:00Z',
+    }
+    assert 'secret-super-sensivel' not in json.dumps(resultado)
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
@@ -318,6 +416,11 @@ def test_listar_flows_pa_mapeia_status_stopped(mock_client_cls, monkeypatch):
     resultado = _run(svc.listar_flows_pa())
 
     assert resultado['flows'][0]['estado'] == 'Stopped'
+    token_data = mock_client.post.await_args.kwargs['data']
+    assert token_data['client_id'] == 'client-dataverse'
+    assert token_data['client_secret'] == 'secret-dataverse'
+    assert token_data['scope'] == 'https://org-test.crm2.dynamics.com/.default'
+    assert mock_client.get.await_args.args[0].startswith('https://org-test.crm2.dynamics.com/api/data/v9.2/workflows')
     _mock_credenciais_graph(monkeypatch)
 
     mock_resp = MagicMock()
@@ -373,6 +476,36 @@ def test_listar_ambientes_powerplatform_com_mock(mock_client_cls, monkeypatch):
 
     assert resultado['configurado'] is True
     assert resultado['ambientes'][0]['nome'] == 'Dev'
+    token_data = mock_client.post.await_args.kwargs['data']
+    assert token_data['client_id'] == 'client-power-platform'
+    assert token_data['client_secret'] == 'secret-power-platform'
+    assert token_data['scope'] == 'https://api.powerplatform.com/.default'
+    assert mock_client.get.await_args.args[0] == (
+        'https://api.powerplatform.com/environmentmanagement/environments?api-version=2024-10-01'
+    )
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_ambientes_powerplatform_fallback_legado_em_403(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+    token_response = MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'})
+    modern_request = httpx.Request('GET', 'https://api.powerplatform.com/environmentmanagement/environments')
+    modern_response = httpx.Response(403, json={'code': 'ForbiddenAccess'}, request=modern_request)
+    legacy_response = MagicMock()
+    legacy_response.raise_for_status = MagicMock()
+    legacy_response.json.return_value = {'value': [{'name': 'env-legacy', 'properties': {'displayName': 'DEV'}}]}
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(side_effect=[token_response, token_response])
+    mock_client.get = AsyncMock(side_effect=[modern_response, legacy_response])
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_ambientes_powerplatform())
+
+    assert resultado['ambientes'][0]['nome'] == 'DEV'
+    assert mock_client.post.await_args_list[1].kwargs['data']['scope'] == 'https://service.powerapps.com/.default'
+    assert mock_client.get.await_args_list[1].args[0] == svc._POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')

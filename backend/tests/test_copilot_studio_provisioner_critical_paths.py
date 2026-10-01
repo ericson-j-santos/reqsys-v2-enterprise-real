@@ -55,9 +55,9 @@ def test_provisionar_dataverse_sem_environment_url(monkeypatch):
 
 def test_provisionar_dataverse_sem_solution_zip(monkeypatch):
     monkeypatch.setattr(provisioner.settings, 'copilotstudio_environment_url', 'https://org.crm.dynamics.com/')
-    monkeypatch.setattr(provisioner.settings, 'azure_tenant_id', 'tenant')
-    monkeypatch.setattr(provisioner.settings, 'azure_client_id', 'client')
-    monkeypatch.setattr(provisioner.settings, 'azure_client_secret', 'secret')
+    monkeypatch.setattr(provisioner.settings, 'dataverse_tenant_id', 'tenant')
+    monkeypatch.setattr(provisioner.settings, 'dataverse_client_id', 'client')
+    monkeypatch.setattr(provisioner.settings, 'dataverse_client_secret', 'secret')
 
     resultado = _run(
         provisioner.provisionar_copilot_studio(
@@ -103,7 +103,7 @@ def test_provisionar_webhook_sucesso_mockado(monkeypatch):
 
 def test_provisionar_dataverse_sem_credenciais_entra(monkeypatch):
     monkeypatch.setattr(provisioner.settings, 'copilotstudio_environment_url', 'https://org.crm.dynamics.com/')
-    monkeypatch.setattr(provisioner.settings, 'azure_tenant_id', '')
+    monkeypatch.setattr(provisioner.settings, 'dataverse_tenant_id', '')
 
     resultado = _run(
         provisioner.provisionar_copilot_studio(
@@ -145,9 +145,9 @@ def test_provisionar_dataverse_import_sucesso_mockado(monkeypatch):
     import base64
 
     monkeypatch.setattr(provisioner.settings, 'copilotstudio_environment_url', 'https://org.crm.dynamics.com/')
-    monkeypatch.setattr(provisioner.settings, 'azure_tenant_id', 'tenant')
-    monkeypatch.setattr(provisioner.settings, 'azure_client_id', 'client')
-    monkeypatch.setattr(provisioner.settings, 'azure_client_secret', 'secret')
+    monkeypatch.setattr(provisioner.settings, 'dataverse_tenant_id', 'tenant')
+    monkeypatch.setattr(provisioner.settings, 'dataverse_client_id', 'client')
+    monkeypatch.setattr(provisioner.settings, 'dataverse_client_secret', 'secret')
 
     token_response = type(
         'Resp',

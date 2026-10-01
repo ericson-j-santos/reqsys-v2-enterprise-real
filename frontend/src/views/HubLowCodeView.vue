@@ -233,8 +233,10 @@
       </v-alert>
 
       <v-alert v-if="!pacotes.configurado && !pacotes.erro" type="info" variant="tonal" class="ma-4" density="compact">
-        Configure <code>SHAREPOINT_SITE_ID</code>, <code>AZURE_CLIENT_SECRET</code> e
-        execute <code>New-IACodigosSync.ps1</code> para ativar o catálogo de pacotes IA.
+        Configure <code>SHAREPOINT_SITE_ID</code> e o perfil governado
+        <code>sharepoint-package-catalog-read</code> em <code>REQSYS_IDENTITY_GOVERNANCE_FILE</code>,
+        com o segredo resolvido pelo <code>current_secret_ref</code>. Depois, execute
+        <code>New-IACodigosSync.ps1</code> para ativar o catálogo de pacotes IA.
       </v-alert>
 
       <v-table v-if="pacotes.itens.length" density="comfortable">
@@ -296,7 +298,9 @@
           <v-divider />
 
           <v-alert v-if="!flows.configurado" type="info" variant="tonal" class="ma-4" density="compact">
-            Configure <code>POWERAUTOMATE_ENV_ID</code> e <code>AZURE_CLIENT_SECRET</code>.
+            Configure <code>DATAVERSE_ENVIRONMENT_URL</code> e as credenciais dedicadas
+            <code>DATAVERSE_TENANT_ID</code>, <code>DATAVERSE_CLIENT_ID</code> e
+            <code>DATAVERSE_CLIENT_SECRET</code>.
           </v-alert>
 
           <v-list v-if="flows.flows.length" density="comfortable">

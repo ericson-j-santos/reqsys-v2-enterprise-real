@@ -17,14 +17,14 @@ Uso:
 
   python scripts/configurar_redmine_sync_queue.py verificar
       Testa ao vivo: aquisição de token Azure AD/Dataverse, Application User
-      do AZURE_CLIENT_ID no ambiente, schema real das tabelas cr85a_* contra
+      do DATAVERSE_CLIENT_ID no ambiente, schema real das tabelas cr85a_* contra
       o que o código assume (incluindo o bloqueador de cr85a_correlationid em
       cr85a_agilesync), e conectividade de leitura com o Redmine.
 
   python scripts/configurar_redmine_sync_queue.py tudo
       capturar (só o que faltar) + verificar, em sequência.
 
-Nunca imprime AZURE_CLIENT_SECRET/REDMINE_API_KEY em texto puro — apenas
+Nunca imprime DATAVERSE_CLIENT_SECRET/REDMINE_API_KEY em texto puro — apenas
 presença/ausência e um preview mascarado.
 """
 from __future__ import annotations
@@ -67,9 +67,9 @@ ENV_FILE = _ROOT / '.env'
 
 # (nome, é_segredo, descrição, ajuda_de_onde_conseguir)
 VARIAVEIS: list[tuple[str, bool, str, str]] = [
-    ('AZURE_TENANT_ID', False, 'Tenant ID do Azure AD', 'mesmo já usado por Teams Gateway/hub_lowcode — az account show'),
-    ('AZURE_CLIENT_ID', False, 'Client ID do App Registration', '"ReqSys Enterprise" ou equivalente no Entra ID'),
-    ('AZURE_CLIENT_SECRET', True, 'Client secret do App Registration', 'Entra ID > App Registration > Certificates & secrets'),
+    ('DATAVERSE_TENANT_ID', False, 'Tenant ID da identidade Dataverse dedicada', 'az account show'),
+    ('DATAVERSE_CLIENT_ID', False, 'Client ID do App Registration Dataverse', 'App confidencial dedicada no Entra ID'),
+    ('DATAVERSE_CLIENT_SECRET', True, 'Client secret do App Registration Dataverse', 'Entra ID > App Registration > Certificates & secrets'),
     ('REDMINE_BASE_URL', False, 'URL base do Redmine', 'ex.: https://redmine.example.com'),
     (
         'REDMINE_VERSION', False, 'Versão exata do Redmine (MAJOR.MINOR.PATCH)',
@@ -217,8 +217,8 @@ def _get_redmine_json(base_url: str, path: str, api_key: str) -> Any:
 
 async def _verificar_dataverse(cfg: Settings, erros: list[str]) -> None:
     _titulo('1) Azure AD -> token Dataverse')
-    if not (cfg.azure_tenant_id and cfg.azure_client_id and cfg.azure_client_secret):
-        _linha('  [FALTA] AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET incompleto(s).')
+    if not (cfg.dataverse_tenant_id and cfg.dataverse_client_id and cfg.dataverse_client_secret):
+        _linha('  [FALTA] DATAVERSE_TENANT_ID/DATAVERSE_CLIENT_ID/DATAVERSE_CLIENT_SECRET incompleto(s).')
         erros.append('azure_ad_incompleto')
         return
     if not cfg.redmine_sync_dataverse_url:
@@ -230,22 +230,22 @@ async def _verificar_dataverse(cfg: Settings, erros: list[str]) -> None:
         token = await dv.testar_autenticacao(cfg.redmine_sync_dataverse_url)
         _linha(f'  [OK] Token adquirido ({len(token)} caracteres).')
     except Exception as exc:
-        _linha(f'  [FALHA] {_mascarar_exc(exc, cfg.azure_client_secret)}')
+        _linha(f'  [FALHA] {_mascarar_exc(exc, cfg.dataverse_client_secret)}')
         erros.append('token_dataverse')
         return
 
-    _titulo('2) Application User no Dataverse (AZURE_CLIENT_ID)')
+    _titulo('2) Application User no Dataverse (DATAVERSE_CLIENT_ID)')
     try:
-        info = await dv.verificar_application_user(cfg.redmine_sync_dataverse_url, cfg.azure_client_id)
+        info = await dv.verificar_application_user(cfg.redmine_sync_dataverse_url, cfg.dataverse_client_id)
         if info['existe']:
             _linha(f'  [OK] Application User existe (systemuserid={info["systemuserid"]}).')
         else:
-            _linha('  [FALTA] Nenhum Application User para este AZURE_CLIENT_ID neste ambiente.')
+            _linha('  [FALTA] Nenhum Application User para este DATAVERSE_CLIENT_ID neste ambiente.')
             _linha('          Rode (um humano com Power Platform Admin):')
-            _linha(f'          pac admin application register --application-id {cfg.azure_client_id}')
+            _linha(f'          pac admin application register --application-id {cfg.dataverse_client_id}')
             _linha(
                 f'          pac admin assign-user --environment {cfg.redmine_sync_dataverse_url} '
-                f'--user {cfg.azure_client_id} --role "System Customizer" --application-user'
+                f'--user {cfg.dataverse_client_id} --role "System Customizer" --application-user'
             )
             erros.append('application_user_ausente')
     except DataverseError as exc:

@@ -1,6 +1,7 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -69,6 +70,9 @@ def _set_microsoft_credentials(monkeypatch, enabled=True):
     monkeypatch.setattr(settings, 'azure_tenant_id', 'tenant-1' if enabled else '')
     monkeypatch.setattr(settings, 'azure_client_id', 'client-1' if enabled else '')
     monkeypatch.setattr(settings, 'azure_client_secret', 'secret-1' if enabled else '')
+    monkeypatch.setattr(settings, 'power_platform_tenant_id', 'tenant-pp-1' if enabled else '')
+    monkeypatch.setattr(settings, 'power_platform_client_id', 'client-pp-1' if enabled else '')
+    monkeypatch.setattr(settings, 'power_platform_client_secret', 'secret-pp-1' if enabled else '')
 
 
 def _payload(confirmar=True):
@@ -90,7 +94,7 @@ def _payload(confirmar=True):
 
 def test_token_falha_sem_credenciais(monkeypatch):
     _set_microsoft_credentials(monkeypatch, False)
-    with pytest.raises(RuntimeError, match='Credenciais Microsoft Entra'):
+    with pytest.raises(RuntimeError, match='Credenciais Microsoft Graph'):
         asyncio.run(assistant._token('scope'))
 
 
@@ -127,6 +131,32 @@ def test_listar_ambientes_mapeia_resposta(monkeypatch):
     assert result['ambientes'][0]['nome'] == 'DEV'
     assert result['ambientes'][1]['nome'] == 'env-2'
     assert result['ambientes'][1]['regiao'] == 'south'
+
+
+def test_listar_ambientes_fallback_legado_em_403(monkeypatch):
+    _set_microsoft_credentials(monkeypatch, True)
+    monkeypatch.setattr(assistant, '_token', AsyncMock(side_effect=['modern-token', 'legacy-token']))
+    modern_url = f'{assistant._POWER_PLATFORM_BASE}/environmentmanagement/environments?api-version=2024-10-01'
+    request = httpx.Request('GET', modern_url)
+
+    class ForbiddenResponse(FakeResponse):
+        def raise_for_status(self):
+            response = httpx.Response(403, json={'code': 'ForbiddenAccess'}, request=request)
+            raise httpx.HTTPStatusError('forbidden', request=request, response=response)
+
+    FakeAsyncClient.reset({
+        ('GET', modern_url): ForbiddenResponse(status_code=403),
+        ('GET', assistant._POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL): FakeResponse({
+            'value': [{'name': 'env-legacy', 'properties': {'displayName': 'DEV'}}]
+        }),
+    })
+    monkeypatch.setattr(assistant.httpx, 'AsyncClient', FakeAsyncClient)
+
+    result = asyncio.run(assistant.listar_ambientes_instalacao())
+
+    assert result['erro'] is None
+    assert result['ambientes'][0]['nome'] == 'DEV'
+    assert assistant._token.await_args_list[1].args[0] == assistant._POWER_PLATFORM_LEGACY_SCOPE
 
 
 def test_listar_ambientes_converte_erro(monkeypatch):
