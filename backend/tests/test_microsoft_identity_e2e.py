@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -24,8 +25,9 @@ def test_run_valida_power_platform_e_dataverse(monkeypatch):
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/oauth2/v2.0/token"):
-            body = request.content.decode()
-            token = "pp-token" if "api.powerplatform.com" in body else "dataverse-token"
+            scope = parse_qs(request.content.decode()).get("scope", [""])[0]
+            scope_host = urlsplit(scope).hostname
+            token = "pp-token" if scope_host == "api.powerplatform.com" else "dataverse-token"
             return httpx.Response(200, json={"access_token": token}, request=request)
         if request.url.host == "api.powerplatform.com":
             assert request.headers["Authorization"] == "Bearer pp-token"
@@ -57,10 +59,11 @@ def test_run_faz_fallback_legado_quando_rbac_v2_rejeita_service_principal(monkey
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/oauth2/v2.0/token"):
-            body = request.content.decode()
-            if "api.powerplatform.com" in body:
+            scope = parse_qs(request.content.decode()).get("scope", [""])[0]
+            scope_host = urlsplit(scope).hostname
+            if scope_host == "api.powerplatform.com":
                 token = "pp-v2-token"
-            elif "service.powerapps.com" in body:
+            elif scope_host == "service.powerapps.com":
                 token = "pp-legacy-token"
             else:
                 token = "dataverse-token"
