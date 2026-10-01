@@ -4,7 +4,7 @@ import os
 import re
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 
 from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
@@ -12,6 +12,11 @@ from app.core.security import require_admin
 from app.services.vba_call_graph import (
     analyze_vba_with_call_graph,
     attach_project_call_graph,
+)
+from app.services.vba_governed_evaluation import (
+    TRANSFORM_EXTENSIONS,
+    VbaGovernedEvaluationError,
+    evaluate_vba_governed,
 )
 from app.services.vba_office_container import (
     OFFICE_CONTAINER_EXTENSIONS,
@@ -117,6 +122,11 @@ def vba_analyzer_readiness(user: dict = Depends(require_admin)):
             'interprocedural_call_graph': True,
             'dynamic_call_detection': True,
             'project_call_resolution': True,
+            'governed_evaluation': True,
+            'governed_transform_extensions': list(TRANSFORM_EXTENSIONS),
+            'functional_equivalence_proven': False,
+            'dynamic_validation_required': True,
+            'office_execution': False,
             'supported_source_extensions': sorted(SUPPORTED_EXTENSIONS),
             'supported_office_extensions': sorted(OFFICE_CONTAINER_EXTENSIONS),
             'office_container_ready': container['ready'],
@@ -165,5 +175,62 @@ async def analyze_vba_upload(
             'idempotent_analysis': True,
             'source_persisted': False,
             'execution_performed': False,
+        },
+    )
+
+
+@router.post('/avaliar-versao-controlada')
+async def evaluate_vba_controlled_upload(
+    arquivo: UploadFile = File(...),
+    versao: str = Form(...),
+    user: dict = Depends(require_admin),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-Id'),
+):
+    del user
+    file_name = _safe_name(arquivo.filename)
+    content = await arquivo.read()
+    extension = _validate_file(file_name, content)
+    if extension not in TRANSFORM_EXTENSIONS:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'code': 'VBA_GOVERNED_TRANSFORMATION_REQUIRES_EXPORTED_BAS',
+                'supported_transform_extensions': list(TRANSFORM_EXTENSIONS),
+                'analysis_only_extensions': sorted(
+                    (SUPPORTED_EXTENSIONS | OFFICE_CONTAINER_EXTENSIONS)
+                    - set(TRANSFORM_EXTENSIONS)
+                ),
+            },
+        )
+
+    try:
+        source = _decode_source(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={'code': str(exc)}) from None
+
+    fallback_correlation_id = str(uuid4())
+    correlation_id = resolver_correlation_id(x_correlation_id, fallback_correlation_id)
+    try:
+        evaluation = evaluate_vba_governed(
+            source,
+            file_name=file_name,
+            version=versao,
+            raw_input=content,
+        )
+    except VbaGovernedEvaluationError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={'code': exc.code, **exc.context},
+        ) from None
+
+    return ok(
+        evaluation,
+        correlation_id,
+        meta={
+            'idempotent_evaluation': True,
+            'source_persisted': False,
+            'execution_performed': False,
+            'office_execution': False,
+            'functional_equivalence_proven': False,
         },
     )

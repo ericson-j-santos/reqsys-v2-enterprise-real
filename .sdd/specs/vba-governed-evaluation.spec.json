@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Avaliação governada de versão VBA",
+  "status": "implemented_pending_ci",
+  "classification": "hotfix",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_vba_governed_evaluation.py",
+      "backend/tests/test_vba_governed_evaluation_e2e.py",
+      "backend/tests/test_vba_legacy_api.py"
+    ],
+    "evidence_contract": "Análise estática existente, transformação conservadora e idempotente, preservação estática, pacote determinístico e manifesto EXPERIMENTAL bloqueado para release; equivalência funcional permanece não comprovada."
+  },
+  "traceability": {
+    "endpoint": "/api/requisitos/legado/vba/avaliar-versao-controlada",
+    "documentation": "docs/VBA_GOVERNED_EVALUATION.md",
+    "pull_request": "pending"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "office_execution": false
+  }
+}
