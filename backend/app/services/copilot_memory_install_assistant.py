@@ -18,6 +18,12 @@ from copilot_memory_powerautomate_complete import (
 from copilot_memory_simple_package import gerar_planilha_xlsx
 
 _POWER_PLATFORM_BASE = 'https://api.powerplatform.com'
+_POWER_PLATFORM_SCOPE = 'https://api.powerplatform.com/.default'
+_POWER_PLATFORM_LEGACY_SCOPE = 'https://service.powerapps.com/.default'
+_POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL = (
+    'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/'
+    'scopes/admin/environments?api-version=2020-10-01'
+)
 _GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 _ALM_WORKFLOW = 'power-automate-flow-provisioning-p0.yml'
 _DEFAULT_ALM_REPO = 'ericson-j-santos/reqsys-powerplatform-alm'
@@ -44,7 +50,7 @@ def _segmento_id_seguro(value: str, label: str) -> str:
 
 
 async def _token(scope: str) -> str:
-    power_platform = scope == 'https://api.powerplatform.com/.default'
+    power_platform = scope in {_POWER_PLATFORM_SCOPE, _POWER_PLATFORM_LEGACY_SCOPE}
     if power_platform:
         if not _credenciais_power_platform_configuradas():
             raise RuntimeError('Credenciais Power Platform nao configuradas no ReqSys')
@@ -74,13 +80,23 @@ async def listar_ambientes_instalacao(user_token: str | None = None) -> dict[str
     if not user_token and not _credenciais_power_platform_configuradas():
         return {'configurado': False, 'ambientes': [], 'erro': 'Credenciais Power Platform nao configuradas'}
     try:
-        token = user_token or await _token('https://api.powerplatform.com/.default')
+        token = user_token or await _token(_POWER_PLATFORM_SCOPE)
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
                 f'{_POWER_PLATFORM_BASE}/environmentmanagement/environments?api-version=2024-10-01',
                 headers={'Authorization': f'Bearer {token}'},
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError:
+                if user_token or response.status_code not in {401, 403}:
+                    raise
+                legacy_token = await _token(_POWER_PLATFORM_LEGACY_SCOPE)
+                response = await client.get(
+                    _POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL,
+                    headers={'Authorization': f'Bearer {legacy_token}'},
+                )
+                response.raise_for_status()
         ambientes = []
         for item in response.json().get('value', []):
             props = item.get('properties') or {}

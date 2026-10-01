@@ -51,6 +51,39 @@ def test_run_valida_power_platform_e_dataverse(monkeypatch):
     assert result["checks"][3]["items_observed"] == 0
 
 
+def test_run_faz_fallback_legado_quando_rbac_v2_rejeita_service_principal(monkeypatch):
+    _configure_env(monkeypatch)
+    real_client = httpx.Client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/oauth2/v2.0/token"):
+            body = request.content.decode()
+            if "api.powerplatform.com" in body:
+                token = "pp-v2-token"
+            elif "service.powerapps.com" in body:
+                token = "pp-legacy-token"
+            else:
+                token = "dataverse-token"
+            return httpx.Response(200, json={"access_token": token}, request=request)
+        if request.url.host == "api.powerplatform.com":
+            return httpx.Response(403, json={"code": "ForbiddenAccess"}, request=request)
+        if request.url.host == "api.bap.microsoft.com":
+            assert request.headers["Authorization"] == "Bearer pp-legacy-token"
+            return httpx.Response(200, json={"value": [{"name": "env-1"}]}, request=request)
+        if request.url.host == "org-test.crm2.dynamics.com":
+            return httpx.Response(200, json={"UserId": "user-1"}, request=request)
+        raise AssertionError(f"URL inesperada: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(e2e.httpx, "Client", lambda **kwargs: real_client(transport=transport, **kwargs))
+
+    result = e2e.run()
+
+    assert result["checks"][0]["api_mode"] == "legacy_admin_application"
+    assert result["checks"][1]["api_mode"] == "legacy_admin_application"
+    assert result["checks"][1]["items_observed"] == 1
+
+
 def test_required_env_falha_sem_expor_segredo(monkeypatch):
     _configure_env(monkeypatch)
     monkeypatch.delenv("DATAVERSE_TENANT_ID", raising=False)

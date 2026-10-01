@@ -40,6 +40,11 @@ _GRAPH_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
 _GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 _POWER_PLATFORM_BASE = 'https://api.powerplatform.com'
 _POWER_PLATFORM_ENVIRONMENTS_PATH = '/environmentmanagement/environments?api-version=2024-10-01'
+_POWER_PLATFORM_LEGACY_SCOPE = 'https://service.powerapps.com/.default'
+_POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL = (
+    'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/'
+    'scopes/admin/environments?api-version=2020-10-01'
+)
 _GH_BASE = 'https://api.github.com'
 
 _CHAVE_WEBHOOK_URL = 'planner_webhook_url'
@@ -92,14 +97,14 @@ async def _token_grafico() -> str:
         return resp.json()['access_token']
 
 
-async def token_power_platform() -> str:
+async def token_power_platform(scope: str = 'https://api.powerplatform.com/.default') -> str:
     async with httpx.AsyncClient(timeout=10) as c:
         return await acquire_client_credentials_token(
             client=c,
             tenant_id=settings.power_platform_tenant_id,
             client_id=settings.power_platform_client_id,
             client_secret=settings.power_platform_client_secret,
-            scope='https://api.powerplatform.com/.default',
+            scope=scope,
             resource='power_platform',
         )
 
@@ -194,14 +199,26 @@ async def listar_ambientes_powerplatform() -> dict[str, Any]:
         }
 
     try:
-        token = await token_power_platform()
-        headers = {'Authorization': f'Bearer {token}'}
         async with httpx.AsyncClient(timeout=15) as c:
+            token = await token_power_platform()
             resp = await c.get(
                 f'{_POWER_PLATFORM_BASE}{_POWER_PLATFORM_ENVIRONMENTS_PATH}',
-                headers=headers,
+                headers={'Authorization': f'Bearer {token}'},
             )
-            resp.raise_for_status()
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError:
+                if resp.status_code not in {401, 403}:
+                    raise
+                # Compatibilidade controlada para tenants onde o RBAC v2 já
+                # existe, mas o endpoint moderno ainda rejeita service principals.
+                # A identidade continua dedicada e o consumidor executa apenas GET.
+                legacy_token = await token_power_platform(_POWER_PLATFORM_LEGACY_SCOPE)
+                resp = await c.get(
+                    _POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL,
+                    headers={'Authorization': f'Bearer {legacy_token}'},
+                )
+                resp.raise_for_status()
             raw = resp.json().get('value', [])
 
         ambientes = [

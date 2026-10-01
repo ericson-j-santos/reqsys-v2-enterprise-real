@@ -15,6 +15,12 @@ POWER_PLATFORM_ENVIRONMENTS_URL = (
     "https://api.powerplatform.com/environmentmanagement/environments"
     "?api-version=2024-10-01"
 )
+POWER_PLATFORM_SCOPE = "https://api.powerplatform.com/.default"
+POWER_PLATFORM_LEGACY_SCOPE = "https://service.powerapps.com/.default"
+POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL = (
+    "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/"
+    "scopes/admin/environments?api-version=2020-10-01"
+)
 
 
 def _required_env() -> dict[str, str]:
@@ -88,18 +94,38 @@ def run() -> dict[str, Any]:
             config["POWER_PLATFORM_TENANT_ID"],
             config["POWER_PLATFORM_CLIENT_ID"],
             config["POWER_PLATFORM_CLIENT_SECRET"],
-            "https://api.powerplatform.com/.default",
+            POWER_PLATFORM_SCOPE,
             "power_platform",
         )
-        checks.append({"status": "PASS", "check": "powerplatform_token"})
-        checks.append(
-            _check_api(
+        power_platform_mode = "rbac_v2"
+        try:
+            power_platform_check = _check_api(
                 client,
                 url=POWER_PLATFORM_ENVIRONMENTS_URL,
                 token=power_token,
                 label="powerplatform_environments",
             )
-        )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code not in {401, 403}:
+                raise
+            power_platform_mode = "legacy_admin_application"
+            power_token = _token(
+                client,
+                config["POWER_PLATFORM_TENANT_ID"],
+                config["POWER_PLATFORM_CLIENT_ID"],
+                config["POWER_PLATFORM_CLIENT_SECRET"],
+                POWER_PLATFORM_LEGACY_SCOPE,
+                "power_platform_legacy",
+            )
+            power_platform_check = _check_api(
+                client,
+                url=POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL,
+                token=power_token,
+                label="powerplatform_environments",
+            )
+        checks.append({"status": "PASS", "check": "powerplatform_token", "api_mode": power_platform_mode})
+        power_platform_check["api_mode"] = power_platform_mode
+        checks.append(power_platform_check)
 
         dataverse_url = config["DATAVERSE_ENVIRONMENT_URL"]
         dataverse_token = _token(

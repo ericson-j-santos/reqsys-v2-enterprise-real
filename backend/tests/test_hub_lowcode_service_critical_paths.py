@@ -6,6 +6,7 @@ import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 os.environ.setdefault('APP_ENV', 'test')
@@ -482,6 +483,29 @@ def test_listar_ambientes_powerplatform_com_mock(mock_client_cls, monkeypatch):
     assert mock_client.get.await_args.args[0] == (
         'https://api.powerplatform.com/environmentmanagement/environments?api-version=2024-10-01'
     )
+
+
+@patch('app.services.hub_lowcode.httpx.AsyncClient')
+def test_listar_ambientes_powerplatform_fallback_legado_em_403(mock_client_cls, monkeypatch):
+    _mock_credenciais_graph(monkeypatch)
+    token_response = MagicMock(raise_for_status=MagicMock(), json=lambda: {'access_token': 'token'})
+    modern_request = httpx.Request('GET', 'https://api.powerplatform.com/environmentmanagement/environments')
+    modern_response = httpx.Response(403, json={'code': 'ForbiddenAccess'}, request=modern_request)
+    legacy_response = MagicMock()
+    legacy_response.raise_for_status = MagicMock()
+    legacy_response.json.return_value = {'value': [{'name': 'env-legacy', 'properties': {'displayName': 'DEV'}}]}
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(side_effect=[token_response, token_response])
+    mock_client.get = AsyncMock(side_effect=[modern_response, legacy_response])
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_cls.return_value = mock_client
+
+    resultado = _run(svc.listar_ambientes_powerplatform())
+
+    assert resultado['ambientes'][0]['nome'] == 'DEV'
+    assert mock_client.post.await_args_list[1].kwargs['data']['scope'] == 'https://service.powerapps.com/.default'
+    assert mock_client.get.await_args_list[1].args[0] == svc._POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL
 
 
 @patch('app.services.hub_lowcode.httpx.AsyncClient')
