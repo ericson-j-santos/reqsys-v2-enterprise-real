@@ -69,6 +69,9 @@ def _set_microsoft_credentials(monkeypatch, enabled=True):
     monkeypatch.setattr(settings, 'azure_tenant_id', 'tenant-1' if enabled else '')
     monkeypatch.setattr(settings, 'azure_client_id', 'client-1' if enabled else '')
     monkeypatch.setattr(settings, 'azure_client_secret', 'secret-1' if enabled else '')
+    monkeypatch.setattr(settings, 'power_platform_tenant_id', 'tenant-pp-1' if enabled else '')
+    monkeypatch.setattr(settings, 'power_platform_client_id', 'client-pp-1' if enabled else '')
+    monkeypatch.setattr(settings, 'power_platform_client_secret', 'secret-pp-1' if enabled else '')
 
 
 def _payload(confirmar=True):
@@ -90,7 +93,7 @@ def _payload(confirmar=True):
 
 def test_token_falha_sem_credenciais(monkeypatch):
     _set_microsoft_credentials(monkeypatch, False)
-    with pytest.raises(RuntimeError, match='Credenciais Microsoft Entra'):
+    with pytest.raises(RuntimeError, match='Credenciais Microsoft Graph'):
         asyncio.run(assistant._token('scope'))
 
 

@@ -272,6 +272,35 @@ jobs:
             --cofre-tenant-key AZURE_TENANT_ID \
             --cofre-client-key AZURE_CLIENT_ID \
             | tee "fly-auth-azure-report-${{ matrix.target_environment }}.json"
+      - name: Aplicar identidades app-only dedicadas
+        if: matrix.target_environment == 'hml' || matrix.target_environment == 'prod'
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          DATAVERSE_TENANT_ID: ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
+        run: |
+          set -euo pipefail
+          for name in \
+            POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET \
+            DATAVERSE_TENANT_ID DATAVERSE_CLIENT_ID DATAVERSE_CLIENT_SECRET DATAVERSE_ENVIRONMENT_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Secret dedicado obrigatório ausente: $name"
+              exit 1
+            fi
+          done
+          flyctl secrets set \
+            POWER_PLATFORM_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
+            POWER_PLATFORM_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
+            POWER_PLATFORM_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            DATAVERSE_TENANT_ID="$DATAVERSE_TENANT_ID" \
+            DATAVERSE_CLIENT_ID="$DATAVERSE_CLIENT_ID" \
+            DATAVERSE_CLIENT_SECRET="$DATAVERSE_CLIENT_SECRET" \
+            DATAVERSE_ENVIRONMENT_URL="$DATAVERSE_ENVIRONMENT_URL" \
+            -a "${{ steps.env.outputs.fly_app }}"
       - name: Deploy API Fly app
         env:
           FLY_CONFIG: ${{ steps.env.outputs.fly_config }}

@@ -9,6 +9,7 @@ import logging
 import uuid
 from datetime import datetime, time, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy import select
@@ -23,6 +24,10 @@ from app.core.resilience import (
 )
 from app.models.configuracao_lowcode import ConfiguracaoLowCode
 from app.models.integracao_log import IntegracaoLog
+from app.services.microsoft_oauth import (
+    MicrosoftOAuthError,
+    acquire_client_credentials_token,
+)
 from app.services.sharepoint_packages import listar_pacotes_ia_governado
 from app.services.teams_graph_identity import (
     acquire_teams_graph_token,
@@ -33,10 +38,9 @@ logger = logging.getLogger('reqsys.hub_lowcode')
 
 _GRAPH_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
 _GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
-_PA_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
-_PA_BASE = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
+_POWER_PLATFORM_BASE = 'https://api.powerplatform.com'
+_POWER_PLATFORM_ENVIRONMENTS_PATH = '/environmentmanagement/environments?api-version=2024-10-01'
 _GH_BASE = 'https://api.github.com'
-_TIERI_URL = 'https://orga258f260.crm2.dynamics.com'
 
 _CHAVE_WEBHOOK_URL = 'planner_webhook_url'
 _CHAVE_WEBHOOK_KEY = 'planner_webhook_key'
@@ -48,6 +52,29 @@ _FLOW_BOT_ACOES_ERRO = 3
 
 def _tem_credenciais_graph() -> bool:
     return bool(settings.azure_tenant_id and settings.azure_client_id and settings.azure_client_secret)
+
+
+def _tem_credenciais_power_platform() -> bool:
+    return settings.power_platform_configured
+
+
+def _tem_credenciais_dataverse() -> bool:
+    return settings.dataverse_configured
+
+
+def _dataverse_base_url() -> str:
+    raw_url = settings.dataverse_environment_url.strip().rstrip('/')
+    parsed = urlsplit(raw_url)
+    if (
+        parsed.scheme.lower() != 'https'
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError('DATAVERSE_ENVIRONMENT_URL deve ser uma URL HTTPS de ambiente sem credenciais, query ou fragmento')
+    return raw_url
 
 
 async def _token_grafico() -> str:
@@ -65,35 +92,29 @@ async def _token_grafico() -> str:
         return resp.json()['access_token']
 
 
-async def token_power_automate() -> str:
+async def token_power_platform() -> str:
     async with httpx.AsyncClient(timeout=10) as c:
-        resp = await c.post(
-            _PA_TOKEN_URL.format(tenant=settings.azure_tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': settings.azure_client_id,
-                'client_secret': settings.azure_client_secret,
-                'scope': 'https://service.flow.microsoft.com/.default',
-            },
+        return await acquire_client_credentials_token(
+            client=c,
+            tenant_id=settings.power_platform_tenant_id,
+            client_id=settings.power_platform_client_id,
+            client_secret=settings.power_platform_client_secret,
+            scope='https://api.powerplatform.com/.default',
+            resource='power_platform',
         )
-        resp.raise_for_status()
-        return resp.json()['access_token']
 
 
 async def _token_dataverse(instance_url: str) -> str:
     scope = instance_url.rstrip('/') + '/.default'
     async with httpx.AsyncClient(timeout=10) as c:
-        resp = await c.post(
-            _GRAPH_TOKEN_URL.format(tenant=settings.azure_tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': settings.azure_client_id,
-                'client_secret': settings.azure_client_secret,
-                'scope': scope,
-            },
+        return await acquire_client_credentials_token(
+            client=c,
+            tenant_id=settings.dataverse_tenant_id,
+            client_id=settings.dataverse_client_id,
+            client_secret=settings.dataverse_client_secret,
+            scope=scope,
+            resource='dataverse',
         )
-        resp.raise_for_status()
-        return resp.json()['access_token']
 
 
 # ---------------------------------------------------------------------------
@@ -111,13 +132,20 @@ async def listar_pacotes_ia(limit: int = 20) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 async def listar_flows_pa() -> dict[str, Any]:
-    if not _tem_credenciais_graph():
-        return {'configurado': False, 'flows': [], 'execucoes': [], 'erro': 'Credenciais Azure AD não configuradas'}
+    if not _tem_credenciais_dataverse():
+        return {
+            'configurado': False,
+            'flows': [],
+            'execucoes': [],
+            'erro': 'Credenciais Dataverse não configuradas',
+            'campos_ausentes': settings.dataverse_missing_fields,
+        }
 
     try:
-        token = await _token_dataverse(_TIERI_URL)
+        dataverse_url = _dataverse_base_url()
+        token = await _token_dataverse(dataverse_url)
         headers = {'Authorization': f'Bearer {token}', 'OData-MaxVersion': '4.0', 'OData-Version': '4.0'}
-        base = f'{_TIERI_URL}/api/data/v9.2'
+        base = f'{dataverse_url}/api/data/v9.2'
 
         async with httpx.AsyncClient(timeout=15) as c:
             r_flows = await c.get(
@@ -142,21 +170,35 @@ async def listar_flows_pa() -> dict[str, Any]:
         ]
         return {'configurado': True, 'flows': flows, 'execucoes': [], 'erro': None}
 
+    except MicrosoftOAuthError as exc:
+        logger.warning('hub_lowcode: OAuth Dataverse rejeitado: %s', exc)
+        return {
+            'configurado': True,
+            'flows': [],
+            'execucoes': [],
+            'erro': str(exc),
+            'erro_oauth': exc.as_dict(),
+        }
     except Exception as exc:
         logger.warning('hub_lowcode: erro ao ler flows via Dataverse: %s', exc)
         return {'configurado': True, 'flows': [], 'execucoes': [], 'erro': str(exc)}
 
 
 async def listar_ambientes_powerplatform() -> dict[str, Any]:
-    if not _tem_credenciais_graph():
-        return {'configurado': False, 'ambientes': [], 'erro': 'Credenciais Azure AD não configuradas'}
+    if not _tem_credenciais_power_platform():
+        return {
+            'configurado': False,
+            'ambientes': [],
+            'erro': 'Credenciais Power Platform não configuradas',
+            'campos_ausentes': settings.power_platform_missing_fields,
+        }
 
     try:
-        token = await token_power_automate()
+        token = await token_power_platform()
         headers = {'Authorization': f'Bearer {token}'}
         async with httpx.AsyncClient(timeout=15) as c:
             resp = await c.get(
-                f'{_PA_BASE}/environments?api-version=2016-11-01',
+                f'{_POWER_PLATFORM_BASE}{_POWER_PLATFORM_ENVIRONMENTS_PATH}',
                 headers=headers,
             )
             resp.raise_for_status()
@@ -164,16 +206,28 @@ async def listar_ambientes_powerplatform() -> dict[str, Any]:
 
         ambientes = [
             {
-                'id': e.get('name'),
-                'nome': e.get('properties', {}).get('displayName', ''),
-                'regiao': e.get('location', ''),
-                'tipo': e.get('properties', {}).get('environmentSku', ''),
-                'estado': e.get('properties', {}).get('provisioningState', ''),
+                'id': e.get('name') or e.get('id'),
+                'nome': e.get('properties', {}).get('displayName') or e.get('displayName', ''),
+                'regiao': (
+                    e.get('location')
+                    or e.get('properties', {}).get('azureRegion')
+                    or e.get('geo', '')
+                ),
+                'tipo': e.get('properties', {}).get('environmentSku') or e.get('type', ''),
+                'estado': e.get('properties', {}).get('provisioningState') or e.get('state', ''),
             }
             for e in raw
         ]
         return {'configurado': True, 'ambientes': ambientes, 'erro': None}
 
+    except MicrosoftOAuthError as exc:
+        logger.warning('hub_lowcode: OAuth Power Platform rejeitado: %s', exc)
+        return {
+            'configurado': True,
+            'ambientes': [],
+            'erro': str(exc),
+            'erro_oauth': exc.as_dict(),
+        }
     except Exception as exc:
         logger.warning('hub_lowcode: erro ao listar ambientes PA: %s', exc)
         return {'configurado': True, 'ambientes': [], 'erro': str(exc)}

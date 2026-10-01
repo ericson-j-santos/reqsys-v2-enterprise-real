@@ -44,10 +44,16 @@ jobs:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          DATAVERSE_TENANT_ID: ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
         run: |
           set -euo pipefail
           missing=0
-          for name in POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET; do
+          for name in \
+            POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET \
+            DATAVERSE_TENANT_ID DATAVERSE_CLIENT_ID DATAVERSE_CLIENT_SECRET DATAVERSE_ENVIRONMENT_URL; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Segredo obrigatório ausente: $name"
               missing=1
@@ -60,12 +66,22 @@ jobs:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          DATAVERSE_TENANT_ID: ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
         run: |
           set -euo pipefail
+          # Um unico release de secrets evita que o runtime observe uma
+          # combinacao parcial entre identidade e ambiente.
           flyctl secrets set \
-            AZURE_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
-            AZURE_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
-            AZURE_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            POWER_PLATFORM_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
+            POWER_PLATFORM_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
+            POWER_PLATFORM_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            DATAVERSE_TENANT_ID="$DATAVERSE_TENANT_ID" \
+            DATAVERSE_CLIENT_ID="$DATAVERSE_CLIENT_ID" \
+            DATAVERSE_CLIENT_SECRET="$DATAVERSE_CLIENT_SECRET" \
+            DATAVERSE_ENVIRONMENT_URL="$DATAVERSE_ENVIRONMENT_URL" \
             -a reqsys-api-dev
 
       - name: Aguardar API DEV saudável
@@ -84,7 +100,7 @@ jobs:
       - name: Confirmar presença das variáveis no runtime sem revelar segredos
         run: |
           set -euo pipefail
-          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"AZURE_TENANT_ID\",\"AZURE_CLIENT_ID\",\"AZURE_CLIENT_SECRET\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
+          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"POWER_PLATFORM_TENANT_ID\",\"POWER_PLATFORM_CLIENT_ID\",\"POWER_PLATFORM_CLIENT_SECRET\",\"DATAVERSE_TENANT_ID\",\"DATAVERSE_CLIENT_ID\",\"DATAVERSE_CLIENT_SECRET\",\"DATAVERSE_ENVIRONMENT_URL\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
           echo "$output"
           echo "$output" | grep -q 'configured'
 
@@ -99,7 +115,7 @@ jobs:
           printf '%s\n' "$result" > audit/microsoft-identity-dev-e2e.json
           echo "$result" | grep -q '"status":"PASS"'
           echo "$result" | grep -q '"check":"powerplatform_environments"'
-          echo "$result" | grep -q '"check":"graph_groups"'
+          echo "$result" | grep -q '"check":"dataverse_whoami"'
 
       - uses: actions/upload-artifact@v4
         if: always()

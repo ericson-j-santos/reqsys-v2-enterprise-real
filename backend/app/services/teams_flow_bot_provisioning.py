@@ -43,15 +43,27 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.services.hub_lowcode import token_power_automate
+from app.services.microsoft_oauth import acquire_client_credentials_token
 
 logger = logging.getLogger('reqsys.teams_flow_bot_provisioning')
 
 _PA_BASE = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
 _PA_API_VERSION = '2016-11-01'
 
-_DATAVERSE_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
 _DATAVERSE_API_VERSION = 'v9.2'
+
+
+async def token_power_automate() -> str:
+    """Token legado restrito ao provisionador da Flow Management API."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        return await acquire_client_credentials_token(
+            client=client,
+            tenant_id=settings.power_platform_tenant_id,
+            client_id=settings.power_platform_client_id,
+            client_secret=settings.power_platform_client_secret,
+            scope='https://service.flow.microsoft.com/.default',
+            resource='power_automate_legacy',
+        )
 
 
 async def capturar_definicao_flow(environment: str, flow_id: str) -> dict[str, Any]:
@@ -155,17 +167,14 @@ def _normalizar_env_url(environment_url: str) -> str:
 async def _token_dataverse(environment_url: str) -> str:
     env_url = _normalizar_env_url(environment_url)
     async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(
-            _DATAVERSE_TOKEN_URL.format(tenant=settings.azure_tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': settings.azure_client_id,
-                'client_secret': settings.azure_client_secret,
-                'scope': env_url + '.default',
-            },
+        return await acquire_client_credentials_token(
+            client=client,
+            tenant_id=settings.dataverse_tenant_id,
+            client_id=settings.dataverse_client_id,
+            client_secret=settings.dataverse_client_secret,
+            scope=env_url + '.default',
+            resource='dataverse',
         )
-        resp.raise_for_status()
-        return resp.json()['access_token']
 
 
 def _headers_dataverse(token: str) -> dict[str, str]:

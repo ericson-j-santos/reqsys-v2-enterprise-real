@@ -29,9 +29,9 @@ def _reset_state(monkeypatch):
     # mantém o fail-fast de configuração para produção. Isole o ambiente do
     # runner com credenciais sintéticas para que cada teste alcance o ponto
     # explicitamente mockado.
-    monkeypatch.setattr(module.settings, 'azure_tenant_id', 'tenant-test')
-    monkeypatch.setattr(module.settings, 'azure_client_id', 'client-test')
-    monkeypatch.setattr(module.settings, 'azure_client_secret', 'secret-test')
+    monkeypatch.setattr(module.settings, 'dataverse_tenant_id', 'tenant-test')
+    monkeypatch.setattr(module.settings, 'dataverse_client_id', 'client-test')
+    monkeypatch.setattr(module.settings, 'dataverse_client_secret', 'secret-test')
     module.reset_circuit_breakers()
     yield
     module.reset_circuit_breakers()
@@ -39,20 +39,20 @@ def _reset_state(monkeypatch):
 
 @patch('app.services.dataverse_queue_client.settings')
 def test_dataverse_configurado_reflete_settings(mock_settings):
-    mock_settings.azure_tenant_id = ''
-    mock_settings.azure_client_id = 'x'
-    mock_settings.azure_client_secret = 'y'
+    mock_settings.dataverse_tenant_id = ''
+    mock_settings.dataverse_client_id = 'x'
+    mock_settings.dataverse_client_secret = 'y'
     assert module.dataverse_configurado() is False
 
-    mock_settings.azure_tenant_id = 't'
+    mock_settings.dataverse_tenant_id = 't'
     assert module.dataverse_configurado() is True
 
 
 @patch('app.services.dataverse_queue_client.settings')
 def test_request_levanta_erro_quando_nao_configurado(mock_settings):
-    mock_settings.azure_tenant_id = ''
-    mock_settings.azure_client_id = ''
-    mock_settings.azure_client_secret = ''
+    mock_settings.dataverse_tenant_id = ''
+    mock_settings.dataverse_client_id = ''
+    mock_settings.dataverse_client_secret = ''
 
     with pytest.raises(DataverseError, match='não configurado'):
         _run(module._request(ENV, 'GET', 'cr85a_redminequeues'))
