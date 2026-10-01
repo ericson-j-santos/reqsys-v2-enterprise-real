@@ -10,6 +10,7 @@ O roteador permanece anexado à API canônica de requisitos:
 
 - `GET /api/requisitos/legado/vba/readiness`
 - `POST /api/requisitos/legado/vba/analisar`
+- `POST /api/requisitos/legado/vba/avaliar-controles?version=X.Y.Z`
 
 Ambos exigem identidade administrativa do ReqSys.
 
@@ -81,6 +82,18 @@ Invariantes:
 ## Limitações conhecidas
 
 Este incremento interpreta o **código-fonte VBA armazenado no projeto**. Ele não executa o P-code, não tenta emular comportamento e não declara equivalência funcional da macro. Chamadas dinâmicas, código construído em tempo de execução e VBA stomping exigem uma trilha de análise especializada futura.
+
+## Avaliação governada e pacote versionado
+
+O endpoint `avaliar-controles` aceita somente módulos textuais exportados. Ele preserva o analisador existente e encadeia:
+
+1. análise estática atual;
+2. inclusão determinística de `Option Explicit`;
+3. tratamento de erro com registro e repropagação apenas em procedimentos sem handler ou labels preexistentes;
+4. comparação da assinatura estática de procedimentos, dependências e regras de negócio;
+5. pacote ZIP reproduzível com manifesto, SHA-256, checksums, instruções e rollback.
+
+Procedimentos ambíguos não são reescritos e deixam o gate estático incompleto. Contêineres Office podem continuar sendo analisados pelo endpoint existente, mas não são reempacotados nem executados. O manifesto sempre mantém `release_allowed=false` e `dynamic_validation.status=future_required`: a comparação estática não comprova equivalência funcional real em Excel/Office.
 
 ## Validação
 
