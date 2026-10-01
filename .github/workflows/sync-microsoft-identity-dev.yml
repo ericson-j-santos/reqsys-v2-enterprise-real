@@ -129,8 +129,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p audit
-          payload="$(base64 -w0 backend/app/microsoft_identity_e2e.py)"
-          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'")"
+          oauth_payload="$(base64 -w0 backend/app/services/microsoft_oauth.py)"
+          e2e_payload="$(base64 -w0 backend/app/microsoft_identity_e2e.py)"
+          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import base64,sys,types; m=types.ModuleType(\"app.services.microsoft_oauth\"); exec(compile(base64.b64decode(\"$oauth_payload\"), \"microsoft_oauth.py\", \"exec\"),m.__dict__); sys.modules[\"app.services.microsoft_oauth\"]=m; exec(compile(base64.b64decode(\"$e2e_payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'")"
           echo "$output"
           result="$(echo "$output" | tail -n 1)"
           printf '%s\n' "$result" > audit/microsoft-identity-dev-e2e.json
