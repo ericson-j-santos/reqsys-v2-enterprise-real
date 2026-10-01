@@ -23,9 +23,9 @@ jobs:
     environment: reqsys-power-platform-dev
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - name: Resolver credencial Fly da API DEV
         uses: ./.github/actions/resolve-managed-credential
@@ -139,7 +139,7 @@ jobs:
           echo "$result" | grep -q '"check":"powerplatform_environments"'
           echo "$result" | grep -q '"check":"dataverse_whoami"'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: microsoft-identity-dev-sync

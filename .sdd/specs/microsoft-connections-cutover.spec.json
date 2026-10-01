@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Microsoft Connections App-Only Cutover",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_microsoft_oauth.py",
+      "backend/tests/test_microsoft_identity_e2e.py",
+      "backend/tests/test_sharepoint_graph_identity.py",
+      "tests/test_microsoft_identity_secret_contract.py"
+    ],
+    "evidence_contract": "OAuth e recursos Microsoft são validados por identidades app-only dedicadas, com erros sanitizados, segregação por ambiente e smokes fail-closed."
+  },
+  "traceability": {
+    "workflows": [
+      ".github/workflows/sync-microsoft-identity-dev.yml",
+      ".github/workflows/fly-enterprise-sync.yml",
+      ".github/workflows/deploy-production-sync.yml"
+    ],
+    "runtime_registry": "backend/config/identity-governance.runtime.json",
+    "pull_request": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/2183"
+  },
+  "risk": {
+    "production": true,
+    "deploy": true,
+    "merge": true,
+    "secrets": true,
+    "browser_secret_access": false
+  }
+}
