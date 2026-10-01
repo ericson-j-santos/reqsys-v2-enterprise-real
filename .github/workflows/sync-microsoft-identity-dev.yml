@@ -48,12 +48,16 @@ jobs:
           DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
           DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
           DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
+          SHAREPOINT_GRAPH_CLIENT_SECRET: ${{ secrets.SHAREPOINT_GRAPH_CLIENT_SECRET }}
+          SHAREPOINT_SITE_ID: ${{ vars.SHAREPOINT_SITE_ID }}
+          SHAREPOINT_LIST_IA: ${{ vars.SHAREPOINT_LIST_IA }}
         run: |
           set -euo pipefail
           missing=0
           for name in \
             POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET \
-            DATAVERSE_TENANT_ID DATAVERSE_CLIENT_ID DATAVERSE_CLIENT_SECRET DATAVERSE_ENVIRONMENT_URL; do
+            DATAVERSE_TENANT_ID DATAVERSE_CLIENT_ID DATAVERSE_CLIENT_SECRET DATAVERSE_ENVIRONMENT_URL \
+            SHAREPOINT_GRAPH_CLIENT_SECRET SHAREPOINT_SITE_ID SHAREPOINT_LIST_IA; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Segredo obrigatório ausente: $name"
               missing=1
@@ -70,6 +74,9 @@ jobs:
           DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
           DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
           DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
+          SHAREPOINT_GRAPH_CLIENT_SECRET: ${{ secrets.SHAREPOINT_GRAPH_CLIENT_SECRET }}
+          SHAREPOINT_SITE_ID: ${{ vars.SHAREPOINT_SITE_ID }}
+          SHAREPOINT_LIST_IA: ${{ vars.SHAREPOINT_LIST_IA }}
         run: |
           set -euo pipefail
           # Um unico release de secrets evita que o runtime observe uma
@@ -82,6 +89,9 @@ jobs:
             DATAVERSE_CLIENT_ID="$DATAVERSE_CLIENT_ID" \
             DATAVERSE_CLIENT_SECRET="$DATAVERSE_CLIENT_SECRET" \
             DATAVERSE_ENVIRONMENT_URL="$DATAVERSE_ENVIRONMENT_URL" \
+            SHAREPOINT_GRAPH_CLIENT_SECRET="$SHAREPOINT_GRAPH_CLIENT_SECRET" \
+            SHAREPOINT_SITE_ID="$SHAREPOINT_SITE_ID" \
+            SHAREPOINT_LIST_IA="$SHAREPOINT_LIST_IA" \
             -a reqsys-api-dev
 
       - name: Aguardar API DEV saudável
@@ -100,7 +110,7 @@ jobs:
       - name: Confirmar presença das variáveis no runtime sem revelar segredos
         run: |
           set -euo pipefail
-          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"POWER_PLATFORM_TENANT_ID\",\"POWER_PLATFORM_CLIENT_ID\",\"POWER_PLATFORM_CLIENT_SECRET\",\"DATAVERSE_TENANT_ID\",\"DATAVERSE_CLIENT_ID\",\"DATAVERSE_CLIENT_SECRET\",\"DATAVERSE_ENVIRONMENT_URL\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
+          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"POWER_PLATFORM_TENANT_ID\",\"POWER_PLATFORM_CLIENT_ID\",\"POWER_PLATFORM_CLIENT_SECRET\",\"DATAVERSE_TENANT_ID\",\"DATAVERSE_CLIENT_ID\",\"DATAVERSE_CLIENT_SECRET\",\"DATAVERSE_ENVIRONMENT_URL\",\"SHAREPOINT_GRAPH_CLIENT_SECRET\",\"SHAREPOINT_SITE_ID\",\"SHAREPOINT_LIST_IA\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
           echo "$output"
           echo "$output" | grep -q 'configured'
 
