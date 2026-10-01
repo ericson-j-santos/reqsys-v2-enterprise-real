@@ -1,4 +1,75 @@
-n: str) -> str:
+from __future__ import annotations
+
+import base64
+import hashlib
+import io
+import json
+import re
+import zipfile
+from dataclasses import dataclass
+from pathlib import PurePosixPath
+
+from app.services.vba_call_graph import analyze_vba_with_call_graph
+
+PACKAGE_SCHEMA_VERSION = '1.0.0'
+TRANSFORMER_VERSION = '1.0.0'
+_SEMVER_RE = re.compile(r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$')
+_PROCEDURE_RE = re.compile(
+    r'^(?P<indent>\s*)(?:(?:Public|Private|Friend|Static)\s+)?'
+    r'(?P<kind>Sub|Function|Property\s+(?:Get|Let|Set))\s+'
+    r'(?P<name>[A-Za-z_]\w*)\b',
+    re.IGNORECASE,
+)
+_END_PROCEDURE_RE = re.compile(
+    r'^\s*End\s+(?:Sub|Function|Property)\s*$', re.IGNORECASE
+)
+_ON_ERROR_RE = re.compile(r'^\s*On\s+Error\b', re.IGNORECASE)
+_LABEL_RE = re.compile(r'^\s*[A-Za-z_]\w*:\s*(?:\'.*)?$')
+
+
+class GovernedVbaEvaluationError(ValueError):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class ProcedureBlock:
+    start: int
+    end: int
+    kind: str
+    name: str
+    indent: str
+
+
+def _canonical_json(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    ).encode('utf-8') + b'\n'
+
+
+def _sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def _safe_file_name(file_name: str) -> str:
+    name = PurePosixPath(file_name.replace('\\', '/')).name.strip()
+    if not name or name in {'.', '..'}:
+        raise GovernedVbaEvaluationError(
+            'VBA_GOVERNED_FILE_NAME_INVALID', 'Nome de arquivo VBA inválido.'
+        )
+    if not re.fullmatch(r'[A-Za-z0-9_. -]+', name):
+        raise GovernedVbaEvaluationError(
+            'VBA_GOVERNED_FILE_NAME_INVALID',
+            'O nome do arquivo contém caracteres não permitidos.',
+        )
+    return name
+
+
+def _validate_version(version: str) -> str:
     normalized = version.strip()
     if not _SEMVER_RE.fullmatch(normalized):
         raise GovernedVbaEvaluationError(
