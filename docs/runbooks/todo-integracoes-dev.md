@@ -18,7 +18,9 @@ Atualizado em 01/10/2026. Escopo: PC24x7 DEV e Power Platform DEV.
   passaram, além dos 9 testes de script/workflow.
 - [x] Executar o gate de incremento como hotfix de escopo fechado da issue #32:
   decisão `allowed=true` com o artifact local de coordenador versionado.
-- [ ] Publicar a correção em PR e aguardar CI/revisão/merge governados.
+- [x] Publicar a correção em [PR #2185](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/2185),
+  com base atualizada e testes locais verdes.
+- [ ] Aguardar CI completo, revisão e merge governados da PR #2185.
 - [ ] Publicar backend e script juntos em PC24x7 DEV; confirmar `build-info` no SHA
   do merge antes de disparar reprocessamento.
 
