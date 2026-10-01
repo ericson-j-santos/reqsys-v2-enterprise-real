@@ -13,6 +13,10 @@ from app.services.vba_call_graph import (
     analyze_vba_with_call_graph,
     attach_project_call_graph,
 )
+from app.services.vba_governed_evaluation import (
+    GovernedVbaEvaluationError,
+    build_governed_vba_evaluation_package,
+)
 from app.services.vba_office_container import (
     OFFICE_CONTAINER_EXTENSIONS,
     OfficeVbaContainerError,
@@ -123,6 +127,8 @@ def vba_analyzer_readiness(user: dict = Depends(require_admin)):
             'office_parser': container,
             'max_upload_bytes': _max_upload_bytes(),
             'max_container_bytes': _max_container_bytes(),
+            'governed_control_application': True,
+            'governed_package_dynamic_equivalence': False,
         }
     )
 
@@ -165,5 +171,56 @@ async def analyze_vba_upload(
             'idempotent_analysis': True,
             'source_persisted': False,
             'execution_performed': False,
+        },
+    )
+
+
+@router.post('/avaliar-controles')
+async def evaluate_vba_controls(
+    arquivo: UploadFile = File(...),
+    version: str = '0.1.0',
+    user: dict = Depends(require_admin),
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-Id'),
+):
+    del user
+    file_name = _safe_name(arquivo.filename)
+    content = await arquivo.read()
+    extension = _validate_file(file_name, content)
+    if extension in OFFICE_CONTAINER_EXTENSIONS:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'code': 'VBA_GOVERNED_SOURCE_EXPORT_REQUIRED',
+                'message': (
+                    'A aplicação governada exige um módulo VBA textual exportado. '
+                    'O contêiner Office pode ser analisado, mas não é reempacotado com macros.'
+                ),
+            },
+        )
+    try:
+        source = _decode_source(content)
+        package = build_governed_vba_evaluation_package(
+            source,
+            file_name=file_name,
+            version=version,
+        )
+    except GovernedVbaEvaluationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={'code': exc.code, 'message': str(exc)},
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={'code': str(exc)}) from None
+
+    fallback_correlation_id = str(uuid4())
+    correlation_id = resolver_correlation_id(x_correlation_id, fallback_correlation_id)
+    return ok(
+        package,
+        correlation_id,
+        meta={
+            'idempotent_package': True,
+            'source_persisted': False,
+            'execution_performed': False,
+            'dynamic_equivalence_proven': False,
         },
     )
