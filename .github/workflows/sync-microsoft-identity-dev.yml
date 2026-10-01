@@ -110,9 +110,20 @@ jobs:
       - name: Confirmar presença das variáveis no runtime sem revelar segredos
         run: |
           set -euo pipefail
-          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"POWER_PLATFORM_TENANT_ID\",\"POWER_PLATFORM_CLIENT_ID\",\"POWER_PLATFORM_CLIENT_SECRET\",\"DATAVERSE_TENANT_ID\",\"DATAVERSE_CLIENT_ID\",\"DATAVERSE_CLIENT_SECRET\",\"DATAVERSE_ENVIRONMENT_URL\",\"SHAREPOINT_GRAPH_CLIENT_SECRET\",\"SHAREPOINT_SITE_ID\",\"SHAREPOINT_LIST_IA\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
-          echo "$output"
-          echo "$output" | grep -q 'configured'
+          for tentativa in $(seq 1 30); do
+            set +e
+            output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"POWER_PLATFORM_TENANT_ID\",\"POWER_PLATFORM_CLIENT_ID\",\"POWER_PLATFORM_CLIENT_SECRET\",\"DATAVERSE_TENANT_ID\",\"DATAVERSE_CLIENT_ID\",\"DATAVERSE_CLIENT_SECRET\",\"DATAVERSE_ENVIRONMENT_URL\",\"SHAREPOINT_GRAPH_CLIENT_SECRET\",\"SHAREPOINT_SITE_ID\",\"SHAREPOINT_LIST_IA\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'" 2>&1)"
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ] && echo "$output" | grep -q 'configured'; then
+              echo "Variáveis confirmadas no runtime DEV."
+              exit 0
+            fi
+            echo "Runtime ainda reiniciando (tentativa ${tentativa}/30)."
+            sleep 2
+          done
+          echo "::error::Não foi possível confirmar as variáveis no runtime DEV."
+          exit 1
 
       - name: Teste ponta a ponta Microsoft no runtime DEV
         run: |
