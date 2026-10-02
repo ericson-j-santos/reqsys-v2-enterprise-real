@@ -35,12 +35,13 @@ jobs:
     name: Diagnose Desktop reachability from Noteri
     if: ${{ github.event_name == 'workflow_dispatch' || (github.ref_name != 'main' && github.ref_name != 'fix/noteri-desktop-network-probe-status-8787-20260929' && !startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-') && !startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') && !startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
+      PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -48,6 +49,48 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+          PORTABLE_PIP_URL: https://files.pythonhosted.org/packages/b7/3f/945ef7ab14dc4f9d7f40288d2df998d1837ee0888ec3659c813487572faa/pip-25.2-py3-none-any.whl
+          PORTABLE_PIP_SHA256: 6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953717
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+          if ($env:COMPUTERNAME -ne "Noteri") { throw "NOTERI_HOST_MISMATCH" }
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_JOB + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing -TimeoutSec 120
+          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_sha256_mismatch:$observedHash" }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          $siteDir = Join-Path $root "Lib\site-packages"
+          New-Item -ItemType Directory -Force $siteDir | Out-Null
+          $pipFilename = "pip-25.2-py3-none-any.whl"
+          $pipWheel = Join-Path $root $pipFilename
+          Invoke-WebRequest -Uri $env:PORTABLE_PIP_URL -OutFile $pipWheel -UseBasicParsing -TimeoutSec 120
+          if ((Get-FileHash -LiteralPath $pipWheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PORTABLE_PIP_SHA256) { throw "portable_pip_sha256_mismatch" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($pipWheel, $siteDir)
+          $pth = Join-Path $root "python312._pth"
+          $pthLines = @("python312.zip", ".", "Lib\site-packages", "import site")
+          [System.IO.File]::WriteAllLines($pth, $pthLines, (New-Object System.Text.UTF8Encoding($false)))
+          if ($env:PYTHONNOUSERSITE -ne "1") { throw "portable_python_user_site_not_disabled" }
+          "REQSYS_PYTHON_SITE=$siteDir" | Add-Content $env:GITHUB_ENV
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -63,7 +106,11 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pth = Join-Path (Split-Path -Parent $env:REQSYS_PYTHON) "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          if (@(Get-Content -LiteralPath $pth) -notcontains $rulesScripts) { Add-Content -LiteralPath $pth -Value $rulesScripts }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $anchorSha = "${{ github.sha }}"
           $syncRef = "origin/$env:GITHUB_REF_NAME"
@@ -75,7 +122,7 @@ jobs:
             "--expected-head", $anchorSha,
             "--sync-ref", $syncRef
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & $env:REQSYS_PYTHON $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -85,6 +132,31 @@ jobs:
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Install pinned probe dependencies through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-dependencies",
+            "run", "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2", "--timeout", "240",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--", "$env:REQSYS_PYTHON", "-m", "pip", "--isolated", "install",
+            "--disable-pip-version-check", "--index-url", "https://pypi.org/simple",
+            "--no-user", "--only-binary=:all:", "--target", "$env:REQSYS_PYTHON_SITE",
+            "pytest==8.4.2", "pywin32==311"
+          )
+          & $env:REQSYS_PYTHON $gateway @args
+          exit $LASTEXITCODE
 
       - name: Validate targeted tests through Command Gateway
         shell: powershell
@@ -106,7 +178,7 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "pytest", "tests/test_noteri_desktop_network_probe.py", "-q"
+            "$env:REQSYS_PYTHON", "-m", "pytest", "tests/test_noteri_desktop_network_probe.py", "-q"
           )
           & "$env:REQSYS_PYTHON" $gateway @args
           exit $LASTEXITCODE
@@ -132,12 +204,12 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $probeScript,
+            "$env:REQSYS_PYTHON", $probeScript,
             "--confirm", "PROBE-NOTERI-DESKTOP-NETWORK",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Upload sanitized network evidence
@@ -154,9 +226,9 @@ jobs:
     if: ${{ github.event_name == 'push' && (github.ref_name == 'main' || startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')) }}
     name: Recover Desktop runner through Engineering Orchestrator
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
-      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: desktop-runner-orchestrator-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
 
@@ -175,6 +247,33 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+          if ($env:COMPUTERNAME -ne "Noteri") { throw "NOTERI_HOST_MISMATCH" }
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_JOB + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing -TimeoutSec 120
+          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_sha256_mismatch:$observedHash" }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -189,7 +288,11 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pth = Join-Path (Split-Path -Parent $env:REQSYS_PYTHON) "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          if (@(Get-Content -LiteralPath $pth) -notcontains $rulesScripts) { Add-Content -LiteralPath $pth -Value $rulesScripts }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $args = @(
             "--policy", $policy,
@@ -230,13 +333,13 @@ jobs:
             "--timeout", "120",
             "--expected-head", "${{ github.sha }}",
             "--",
-            "python", $script,
+            "$env:REQSYS_PYTHON", $script,
             "--confirm", "RECOVER-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL,
             "--timeout-seconds", "75"
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Validate sanitized physical evidence
@@ -273,14 +376,15 @@ jobs:
 
   dev_http_probe:
     name: Diagnose Desktop DEV HTTP route from Noteri
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-python-') }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: noteri-desktop-dev-http-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-dev-http\evidence.json
+      PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -288,6 +392,48 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Prepare pinned portable Python 3.12
+        shell: powershell
+        env:
+          PORTABLE_PYTHON_VERSION: "3.12.10"
+          PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+          PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+          PORTABLE_PIP_URL: https://files.pythonhosted.org/packages/b7/3f/945ef7ab14dc4f9d7f40288d2df998d1837ee0888ec3659c813487572faa/pip-25.2-py3-none-any.whl
+          PORTABLE_PIP_SHA256: 6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953717
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+          if ($env:COMPUTERNAME -ne "Noteri") { throw "NOTERI_HOST_MISMATCH" }
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_JOB + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $zip = "$root.zip"
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing -TimeoutSec 120
+          $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_sha256_mismatch:$observedHash" }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $python = Join-Path $root "python.exe"
+          if (-not (Test-Path -LiteralPath $python)) { throw "portable_python_executable_missing" }
+          $observedVersion = (& $python --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $observedVersion -ne "Python $env:PORTABLE_PYTHON_VERSION") {
+            throw "portable_python_version_mismatch:$observedVersion"
+          }
+          $siteDir = Join-Path $root "Lib\site-packages"
+          New-Item -ItemType Directory -Force $siteDir | Out-Null
+          $pipFilename = "pip-25.2-py3-none-any.whl"
+          $pipWheel = Join-Path $root $pipFilename
+          Invoke-WebRequest -Uri $env:PORTABLE_PIP_URL -OutFile $pipWheel -UseBasicParsing -TimeoutSec 120
+          if ((Get-FileHash -LiteralPath $pipWheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PORTABLE_PIP_SHA256) { throw "portable_pip_sha256_mismatch" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($pipWheel, $siteDir)
+          $pth = Join-Path $root "python312._pth"
+          $pthLines = @("python312.zip", ".", "Lib\site-packages", "import site")
+          [System.IO.File]::WriteAllLines($pth, $pthLines, (New-Object System.Text.UTF8Encoding($false)))
+          if ($env:PYTHONNOUSERSITE -ne "1") { throw "portable_python_user_site_not_disabled" }
+          "REQSYS_PYTHON_SITE=$siteDir" | Add-Content $env:GITHUB_ENV
+          "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -303,7 +449,11 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $rulesScripts = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts"
+          $pth = Join-Path (Split-Path -Parent $env:REQSYS_PYTHON) "python312._pth"
+          if (-not (Test-Path -LiteralPath $pth)) { throw "PORTABLE_PYTHON_PTH_MISSING" }
+          if (@(Get-Content -LiteralPath $pth) -notcontains $rulesScripts) { Add-Content -LiteralPath $pth -Value $rulesScripts }
+          $launcher = Join-Path $rulesScripts "session_launcher.py"
           $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
           $anchorSha = "${{ github.sha }}"
           $syncRef = "origin/$env:GITHUB_REF_NAME"
@@ -315,7 +465,7 @@ jobs:
             "--expected-head", $anchorSha,
             "--sync-ref", $syncRef
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & $env:REQSYS_PYTHON $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -325,6 +475,31 @@ jobs:
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Install pinned probe dependencies through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-dependencies",
+            "run", "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2", "--timeout", "240",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--", "$env:REQSYS_PYTHON", "-m", "pip", "--isolated", "install",
+            "--disable-pip-version-check", "--index-url", "https://pypi.org/simple",
+            "--no-user", "--only-binary=:all:", "--target", "$env:REQSYS_PYTHON_SITE",
+            "pytest==8.4.2", "pywin32==311"
+          )
+          & $env:REQSYS_PYTHON $gateway @args
+          exit $LASTEXITCODE
 
       - name: Validate HTTP-only tests through Command Gateway
         shell: powershell
@@ -346,9 +521,9 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "pytest", "tests/test_noteri_desktop_dev_http_probe.py", "-q"
+            "$env:REQSYS_PYTHON", "-m", "pytest", "tests/test_noteri_desktop_dev_http_probe.py", "-q"
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Probe fixed Desktop DEV HTTP route through Command Gateway
@@ -372,12 +547,12 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $probeScript,
+            "$env:REQSYS_PYTHON", $probeScript,
             "--confirm", "PROBE-NOTERI-DESKTOP-DEV-HTTP",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Upload sanitized DEV HTTP evidence
@@ -391,12 +566,12 @@ jobs:
 
   orchestrator_status_readback:
     name: Read Desktop Orchestrator status from Noteri
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' || startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-'))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' || startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-') || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-python-'))) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 641bd1df60befa7310db9200aebc95221bdbee12
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: desktop-orchestrator-status-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\\noteri-desktop-orchestrator-status\\evidence.json
 
@@ -416,12 +591,14 @@ jobs:
           PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
         run: |
           $ErrorActionPreference = "Stop"
-          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
+          $ProgressPreference = "SilentlyContinue"
+          if ($env:COMPUTERNAME -ne "Noteri") { throw "NOTERI_HOST_MISMATCH" }
+          $root = Join-Path $env:RUNNER_TEMP ("reqsys-python-" + $env:PORTABLE_PYTHON_VERSION + "-" + $env:GITHUB_JOB + "-" + $env:GITHUB_RUN_ID + "-" + $env:GITHUB_RUN_ATTEMPT)
           $zip = "$root.zip"
           if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
           if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
           New-Item -ItemType Directory -Force $root | Out-Null
-          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing
+          Invoke-WebRequest -Uri $env:PORTABLE_PYTHON_URL -OutFile $zip -UseBasicParsing -TimeoutSec 120
           $observedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($observedHash -ne $env:PORTABLE_PYTHON_SHA256) { throw "portable_python_sha256_mismatch:$observedHash" }
           Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
@@ -496,7 +673,7 @@ jobs:
             "--timeout", "30",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $script,
+            "$env:REQSYS_PYTHON", $script,
             "--confirm", "PROBE-DESKTOP-ORCHESTRATOR-STATUS",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL,

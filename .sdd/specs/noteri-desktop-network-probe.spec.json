@@ -75,6 +75,22 @@
       "mutating": false,
       "arbitrary_target": false,
       "workflow_dispatch_on_main": true
+    },
+    "python_execution": {
+      "version": "3.12.10",
+      "network_http_recovery": "portable archive verified by fixed SHA-256; no global or registry installation",
+      "status": "portable archive verified by SHA-256",
+      "explicit_executable_required": true,
+      "child_executable_must_match": true,
+      "global_alias_required": false,
+      "rules_sha": "d26351458b17c917100efc3b736dcc6d53a646cb",
+      "dependency_installation": "Command Gateway risk 2; isolated pip, official index, binary wheels, explicit temporary target",
+      "physical_validation_branch_prefix": "fix/noteri-desktop-network-probe-python-",
+      "temporary_root_per_job": true,
+      "pip_bootstrap": "pip 25.2 wheel from fixed official HTTPS URL and pinned SHA-256 before extraction; execution only after governed session",
+      "pip_wheel_sha256": "6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953717",
+      "user_site_disabled": true,
+      "validation": "physical read-only probes and readiness on final HEAD after synchronization with main"
     }
   },
   "security": {
@@ -167,7 +183,7 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-29",
+  "updated_at": "2026-10-02",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -183,7 +199,8 @@
     "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
     "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório.",
     "O readback do Orchestrator usa apenas GET /readyz e GET /v1/status no DESKTOP-PDQK954:8787, fixa worker e runtime SHA, executa pelo Python portátil pinado e nunca substitui o pickup físico independente do Desktop.",
-    "O readback do Orchestrator pode ser executado por workflow_dispatch na main, no SHA exato, usando somente GET /readyz e GET /v1/status; o resultado permanece diagnóstico e não conclui recovery sem pickup físico independente."
+    "O readback do Orchestrator pode ser executado por workflow_dispatch na main, no SHA exato, usando somente GET /readyz e GET /v1/status; o resultado permanece diagnóstico e não conclui recovery sem pickup físico independente.",
+    "Os quatro jobs validam Python portátil 3.12.10 e hash fixo sem instalação global/registro. Launcher, Gateway, pytest e probes filhos usam o mesmo executável explícito. Dependências dos dois jobs de testes são instaladas apenas no destino temporário e pelo Gateway após bootstrap; PYTHONNOUSERSITE=1 bloqueia código e pacotes do perfil do runner, e o wheel inicial do pip usa URL e SHA-256 fixos."
   ],
   "hotfix_issue": 2088
 }

@@ -169,7 +169,7 @@ jobs:
           VITE_BASE_PATH: /reqsys-v2-enterprise-real/dev/
           VITE_PUBLIC_URL: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev
           VITE_MSAL_PUBLIC_ORIGIN: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev
-          VITE_MSAL_REDIRECT_URI: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/
+          VITE_MSAL_CALLBACK_PATH: /auth/callback.html
           VITE_MSAL_POST_LOGOUT_PATH: /login
           VITE_MSAL_LOGIN_REDIRECT_START_PATH: /login
         run: |

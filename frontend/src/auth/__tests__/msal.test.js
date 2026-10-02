@@ -9,6 +9,10 @@ const mockConstructor = vi.fn()
 const mockAcquireTokenSilent = vi.fn()
 const mockAcquireTokenPopup = vi.fn()
 
+function encodedRequestParams(state = 'opaque') {
+  return btoa(JSON.stringify({ state, correlationId: 'corr-test' }))
+}
+
 vi.mock('@azure/msal-browser', () => {
   class PublicClientApplication {
     constructor(config) {
@@ -43,6 +47,7 @@ vi.mock('../../services/api', () => ({
 beforeEach(() => {
   vi.resetModules()
   vi.unstubAllEnvs()
+  window.history.replaceState({}, '', '/')
   mockConstructor.mockReset()
   mockHandleRedirectPromise.mockReset().mockResolvedValue(null)
   mockLoginRedirect.mockReset().mockResolvedValue(undefined)
@@ -110,6 +115,7 @@ describe('getMsalInstance', () => {
           redirectUri: `${window.location.origin}/auth/callback.html`,
           postLogoutRedirectUri: `${window.location.origin}/login`,
           navigateToLoginRequestUrl: false,
+          onRedirectNavigate: expect.any(Function),
         }),
         cache: expect.objectContaining({
           cacheLocation: 'sessionStorage',
@@ -131,6 +137,46 @@ describe('getMsalInstance', () => {
         }),
       })
     )
+  })
+
+  it('aciona o handoff temporario imediatamente antes do redirect Microsoft', async () => {
+    const { getMsalInstance } = await import('../msal')
+    await getMsalInstance()
+    sessionStorage.setItem('msal.interaction.status', JSON.stringify({ clientId: 'test-client-id', type: 'signin' }))
+    sessionStorage.setItem('msal.test-client-id.request.params', encodedRequestParams())
+    sessionStorage.setItem('msal.test-client-id.code.verifier', 'verifier')
+    sessionStorage.setItem('msal.test-client-id.request.origin', `${window.location.origin}/login`)
+
+    const config = mockConstructor.mock.calls[0][0]
+    config.auth.onRedirectNavigate()
+
+    expect(localStorage.getItem('reqsys_msal_redirect_handoff_v1')).toContain('opaque')
+    expect(localStorage.getItem('reqsys_msal_redirect_handoff_v1')).not.toContain('idtoken')
+  })
+
+  it('restaura o callback pelo handoff mesmo se a API de configuracao estiver indisponivel', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockClear()
+    const { persistMsalRedirectHandoff } = await import('../msalRedirectHandoff')
+    const redirectUri = 'https://reqsys.example.test/auth/callback.html'
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', redirectUri)
+    sessionStorage.setItem('msal.interaction.status', JSON.stringify({ clientId: 'test-client-id', type: 'signin' }))
+    sessionStorage.setItem('msal.test-client-id.request.params', encodedRequestParams())
+    sessionStorage.setItem('msal.test-client-id.code.verifier', 'verifier')
+    sessionStorage.setItem('msal.test-client-id.request.origin', `${window.location.origin}/login`)
+    expect(persistMsalRedirectHandoff({
+      clientId: 'test-client-id',
+      tenantId: '6d09c88c-test',
+      redirectUri,
+    })).toBe(true)
+    sessionStorage.clear()
+    window.history.replaceState({}, '', '/#code=auth-code&state=opaque')
+
+    const { getMsalInstance } = await import('../msal')
+    expect(await getMsalInstance()).not.toBeNull()
+    expect(api.get).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem('msal.test-client-id.code.verifier')).toBe('verifier')
+    expect(localStorage.getItem('reqsys_msal_redirect_handoff_v1')).toBeNull()
   })
 })
 
@@ -186,6 +232,16 @@ describe('loginMicrosoftRedirect', () => {
 })
 
 describe('handleRedirectResult', () => {
+  it('limpa o callback quando nao existe configuracao MSAL valida', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    window.history.replaceState({}, '', '/#error=invalid_request&state=opaque')
+    const { handleRedirectResult } = await import('../msal')
+
+    await expect(handleRedirectResult()).resolves.toBeNull()
+    expect(window.location.hash).toBe('')
+  })
+
   it('retorna null quando nao ha redirect pendente', async () => {
     mockHandleRedirectPromise.mockResolvedValue(null)
     const { handleRedirectResult } = await import('../msal')
@@ -199,6 +255,22 @@ describe('handleRedirectResult', () => {
   })
 
   it.each([
+    ['query', '/?code=auth-code&state=opaque', '?code=auth-code&state=opaque'],
+    ['fragmento', '/#code=auth-code&state=opaque', '#code=auth-code&state=opaque'],
+  ])('entrega o retorno em %s explicitamente ao parser do MSAL', async (_origem, url, hash) => {
+    window.history.replaceState({}, '', url)
+    const { handleRedirectResult } = await import('../msal')
+
+    await handleRedirectResult()
+
+    expect(mockHandleRedirectPromise).toHaveBeenCalledWith({
+      hash,
+      navigateToLoginRequestUrl: false,
+    })
+    if (url.includes('?')) expect(window.location.search).toBe('')
+  })
+
+  it.each([
     'no_token_request_cache_error',
     'state_not_found',
     'no_cached_authority_error',
@@ -209,6 +281,18 @@ describe('handleRedirectResult', () => {
     mockHandleRedirectPromise.mockRejectedValue(err)
     const { handleRedirectResult } = await import('../msal')
     await expect(handleRedirectResult()).resolves.toBeNull()
+  })
+
+  it.each([
+    'no_token_request_cache_error',
+    'state_not_found',
+  ])('propaga %s quando a URL contem retorno OAuth', async (errorCode) => {
+    window.history.replaceState({}, '', '/?code=auth-code&state=opaque')
+    const err = Object.assign(new Error(errorCode), { errorCode })
+    mockHandleRedirectPromise.mockRejectedValue(err)
+    const { handleRedirectResult } = await import('../msal')
+
+    await expect(handleRedirectResult()).rejects.toMatchObject({ errorCode })
   })
 
   it('propaga erros desconhecidos', async () => {

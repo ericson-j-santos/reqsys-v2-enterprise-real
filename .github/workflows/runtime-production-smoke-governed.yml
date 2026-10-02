@@ -6,7 +6,7 @@ on:
       base_url:
         description: "URL pública base do ReqSys"
         required: false
-        default: "https://reqsys-app.fly.dev"
+        default: ""
         type: string
       allow_degraded:
         description: "Não falhar workflow se smoke retornar degraded"
@@ -19,6 +19,7 @@ on:
       - ".github/workflows/runtime-production-smoke-governed.yml"
       - "scripts/runtime_production_smoke_governed.py"
       - "tests/test_runtime_production_smoke_governed.py"
+      - "tests/test_runtime_production_smoke_workflow.py"
       - "backend/app/main.py"
   push:
     branches: [main]
@@ -28,7 +29,6 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
-  DEFAULT_RUNTIME_PUBLIC_BASE_URL: "https://reqsys-app.fly.dev"
 
 concurrency:
   group: runtime-production-smoke-governed-${{ github.ref }}
@@ -54,20 +54,28 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest PyYAML
 
       - name: Validar script e testes do smoke
         run: |
           set -euo pipefail
           python -m py_compile scripts/runtime_production_smoke_governed.py
-          python -m pytest tests/test_runtime_production_smoke_governed.py -q
+          python -m pytest tests/test_runtime_production_smoke_governed.py tests/test_runtime_production_smoke_workflow.py -q
 
       - name: Executar smoke público governado
+        if: github.event_name != 'pull_request'
         env:
-          RUNTIME_PUBLIC_BASE_URL: ${{ github.event.inputs.base_url || env.DEFAULT_RUNTIME_PUBLIC_BASE_URL }}
+          RUNTIME_PUBLIC_BASE_URL: ${{ github.event.inputs.base_url || vars.RUNTIME_PUBLIC_BASE_URL }}
           ALLOW_DEGRADED: ${{ github.event.inputs.allow_degraded || 'false' }}
         run: |
           set -euo pipefail
+          if [[ -z "${RUNTIME_PUBLIC_BASE_URL}" ]]; then
+            echo "::error::Configure RUNTIME_PUBLIC_BASE_URL com o runtime aprovado; nenhum fallback é permitido."
+            exit 1
+          fi
+          case "${RUNTIME_PUBLIC_BASE_URL}" in
+            *fly.io*|*fly.dev*) echo "::error::Provedor retirado não pode receber smoke."; exit 1 ;;
+          esac
           args=(
             --base-url "${RUNTIME_PUBLIC_BASE_URL}"
             --output artifacts/runtime-production-smoke-governed.json
@@ -87,8 +95,12 @@ jobs:
           REPORT="artifacts/runtime-production-smoke-governed.json"
           if [[ ! -f "${REPORT}" ]]; then
             echo "## Runtime Production Smoke" >> "$GITHUB_STEP_SUMMARY"
-            echo "Artifact ausente." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              echo "PR: código e testes do smoke validados. Ambiente publicado não foi consultado; isso não comprova disponibilidade." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Artifact ausente: smoke público não comprovado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
@@ -111,7 +123,7 @@ jobs:
           PY
 
       - name: Publicar artifact do smoke
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: runtime-production-smoke-governed

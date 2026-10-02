@@ -270,4 +270,4 @@ def test_govbi_health_reporta_bloqueio_para_host_fly(monkeypatch):
     data = response.json()['data']
     assert data['status'] == 'bloqueado'
     assert data['external_base_url_configured'] is False
-    assert 'Fly.io' in data['configuration_error']
+    assert data['configuration_error'] == 'GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.'

@@ -6,10 +6,13 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-FLY = re.compile(r"flyctl|superfly/|FLY_API_TOKEN|FLY_APP|fly-environment-(?:promotion-stage|evidence-capture)\.yml", re.I)
+FLY = re.compile(
+    r"flyctl|superfly/|FLY_API_TOKEN|FLY_APP|fly-environment-(?:promotion-stage|evidence-capture)\.yml",
+    re.IGNORECASE,
+)
 FLY_URL = re.compile(
     r"(?:https?://(?:[a-z0-9*_-]+\.)*fly\.(?:dev|io)\b|(?:[a-z0-9_-]+\.)+fly\.(?:dev|io)\b|\*fly\.(?:dev|io)\*)",
-    re.I,
+    re.IGNORECASE,
 )
 INNOCUOUS_FLY_URL_GUARDS = (
     "*fly.io*|*fly.dev*",
@@ -34,7 +37,6 @@ def active_fly_url_jobs(workflow):
             violations.append(name)
     return violations
 
-
 def active_indirect_fly_url_jobs(workflow):
     """Detecta jobs que herdam URL Fly de env/input definido no workflow."""
     violations = set()
@@ -45,7 +47,7 @@ def active_indirect_fly_url_jobs(workflow):
             re.search(
                 rf"(?<![A-Za-z0-9_]){re.escape(str(name))}(?![A-Za-z0-9_])",
                 json.dumps(job),
-                re.I,
+                re.IGNORECASE,
             )
         )
 
@@ -90,7 +92,6 @@ def test_flyio_url_jobs_are_permanently_blocked():
             if jobs:
                 violations[path.name] = jobs
     assert not violations, violations
-
 
 def test_indirect_flyio_url_jobs_are_permanently_blocked():
     violations = {}
@@ -140,8 +141,6 @@ def test_url_guard_detects_calls_but_allows_rejection_only_guards():
     assert active_fly_url_jobs(guard_and_call) == ["smoke"]
     assert active_fly_url_jobs({"jobs": {"smoke": {"env": {"URL": "reqsys-api-dev.fly.dev"}}}}) == ["smoke"]
     assert not active_fly_url_jobs({"jobs": {"smoke": {"steps": [{"run": "curl https://example.com/health"}]}}})
-
-
 def test_indirect_url_guard_detects_workflow_env_and_dispatch_defaults():
     inherited_env = {
         "env": {"PUBLIC_URL": "https://reqsys-app.fly.dev"},

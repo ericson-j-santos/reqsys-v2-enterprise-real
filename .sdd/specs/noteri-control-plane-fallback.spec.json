@@ -82,7 +82,10 @@
     "policy": ".github/self-hosted-runner-policy.json",
     "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml",
-    "runtime_repository": "ericson-j-santos/noteri-runtime"
+    "runtime_repository": "ericson-j-santos/noteri-runtime",
+    "premerge_integration_base_sha": "75f19e1239a1cefcb3122bdc99d59b37d679ee0c",
+    "premerge_integration_base_pr": 2196,
+    "premerge_validation": "fresh CI and physical Noteri E2E required after base synchronization"
   },
   "artifacts": {
     "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
@@ -181,14 +184,25 @@
         "negative_control": true,
         "rdc_required": false,
         "production_touched": false,
-        "secrets_read": false
+        "secrets_read": false,
+        "source_resolution": {
+          "transport": "GitHub REST API getBranch",
+          "owner": "ericson-j-santos",
+          "repository": "noteri-runtime",
+          "branch": "main",
+          "action": "actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea",
+          "sha_validation": "^[0-9a-f]{40}$",
+          "git_ls_remote_allowed": false
+        }
       },
       "premerge_evidence": {
         "required": true,
         "trigger": "canonical_repo_push",
         "actor": "ericson-j-santos",
         "forbidden_trigger": "pull_request",
-        "exact_branch_sha": true
+        "exact_branch_sha": true,
+        "concurrency_group_scope": "github.ref",
+        "isolated_from_main_auto_watch": true
       },
       "python_runtime": {
         "source": "pinned_portable_python",
@@ -217,5 +231,5 @@
       "secrets_read": false
     }
   },
-  "updated_at": "2026-09-29"
+  "updated_at": "2026-10-02"
 }
