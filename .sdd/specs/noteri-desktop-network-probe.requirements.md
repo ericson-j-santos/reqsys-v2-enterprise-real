@@ -168,3 +168,13 @@ Somente readback atual e inequívoco do `:8787`, no SHA corrente, permite escolh
 entre recovery e bootstrap. Depois da ação escolhida, o critério terminal permanece
 pickup físico independente do runner Desktop, versão/registro/listener comprovados
 e replay idempotente sem nova mutação.
+
+## Recuperação do Python do Noteri — 02/10/2026
+
+1. Os jobs de rede, HTTP e recuperação devem selecionar Python 3.12.10 pela action oficial fixada por commit e validar o caminho absoluto e a versão antes do Session Launcher.
+2. O readback do Orchestrator preserva Python portátil 3.12.10 e a validação de SHA-256 do archive.
+3. Launcher, Gateway e processos filhos devem usar o mesmo executável explícito selecionado. Aliases globais de Python e pytest não podem ser dependência operacional.
+4. As regras são fixadas em `d26351458b17c917100efc3b736dcc6d53a646cb`, que reconhece a origem transitória do runner Noteri e preserva o isolamento do worktree.
+5. As dependências fixadas dos testes e da sonda WMI são instaladas somente depois do bootstrap, por Command Gateway com risco 2. Os testes continuam executando com risco 1.
+6. A branch canônica `fix/noteri-desktop-network-probe-python-*` pode executar os três diagnósticos para comprovar o reparo no mesmo SHA. Essa branch não dispara a recuperação mutante do runner.
+7. A regressão deve cobrir o interpretador dos processos filhos, além do interpretador que inicia o Gateway.

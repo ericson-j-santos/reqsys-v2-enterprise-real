@@ -75,6 +75,17 @@
       "mutating": false,
       "arbitrary_target": false,
       "workflow_dispatch_on_main": true
+    },
+    "python_execution": {
+      "version": "3.12.10",
+      "network_http_recovery": "official actions/setup-python pinned to a commit",
+      "status": "portable archive verified by SHA-256",
+      "explicit_executable_required": true,
+      "child_executable_must_match": true,
+      "global_alias_required": false,
+      "rules_sha": "d26351458b17c917100efc3b736dcc6d53a646cb",
+      "dependency_installation": "Command Gateway after validated session",
+      "physical_validation_branch_prefix": "fix/noteri-desktop-network-probe-python-"
     }
   },
   "security": {
@@ -167,7 +178,7 @@
   "approvals": {
     "requirements": true
   },
-  "updated_at": "2026-09-29",
+  "updated_at": "2026-10-02",
   "acceptance_criteria": [
     "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
     "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
@@ -183,7 +194,8 @@
     "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
     "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório.",
     "O readback do Orchestrator usa apenas GET /readyz e GET /v1/status no DESKTOP-PDQK954:8787, fixa worker e runtime SHA, executa pelo Python portátil pinado e nunca substitui o pickup físico independente do Desktop.",
-    "O readback do Orchestrator pode ser executado por workflow_dispatch na main, no SHA exato, usando somente GET /readyz e GET /v1/status; o resultado permanece diagnóstico e não conclui recovery sem pickup físico independente."
+    "O readback do Orchestrator pode ser executado por workflow_dispatch na main, no SHA exato, usando somente GET /readyz e GET /v1/status; o resultado permanece diagnóstico e não conclui recovery sem pickup físico independente.",
+    "Os jobs de rede, HTTP e recovery selecionam Python 3.12.10 e validam caminho/versão; o status preserva o archive portátil com hash validado. Launcher, Gateway, pytest e probes filhos usam o mesmo executável explícito, sem alias global."
   ],
   "hotfix_issue": 2088
 }
