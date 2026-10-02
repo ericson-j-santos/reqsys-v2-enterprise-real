@@ -1,3 +1,5 @@
+import { verifyAsync as verifyEd25519Fallback } from '@noble/ed25519'
+
 const GITHUB_PAGES_HOST = 'ericson-j-santos.github.io'
 const GITHUB_PAGES_PREFIX = '/reqsys-v2-enterprise-real/dev/'
 
@@ -29,19 +31,26 @@ export async function verifyLocatorEnvelope(envelope, config, options = {}) {
 
   const cryptoImpl = options.cryptoImpl || crypto
   const now = options.now ?? Math.floor(Date.now() / 1000)
-  const key = await cryptoImpl.subtle.importKey(
-    'raw',
-    decodeBase64(config.public_key_b64),
-    { name: 'Ed25519' },
-    false,
-    ['verify'],
-  )
-  const valid = await cryptoImpl.subtle.verify(
-    { name: 'Ed25519' },
-    key,
-    decodeBase64(envelope.signature_b64),
-    new TextEncoder().encode(envelope.payload_b64),
-  )
+  const publicKey = decodeBase64(config.public_key_b64)
+  const signature = decodeBase64(envelope.signature_b64)
+  const signedPayload = new TextEncoder().encode(envelope.payload_b64)
+  let valid = false
+  try {
+    const key = await cryptoImpl.subtle.importKey(
+      'raw',
+      publicKey,
+      { name: 'Ed25519' },
+      false,
+      ['verify'],
+    )
+    valid = await cryptoImpl.subtle.verify({ name: 'Ed25519' }, key, signature, signedPayload)
+  } catch {
+    // Safari/WebViews antigos não implementam Ed25519 no Web Crypto. O
+    // fallback é uma verificação criptográfica local, não uma aceitação sem
+    // assinatura; os mesmos bytes e a mesma chave pública continuam exigidos.
+    const fallback = options.verifyEd25519Fallback || verifyEd25519Fallback
+    valid = await fallback(signature, signedPayload, publicKey)
+  }
   if (!valid) return null
 
   const payload = decodeBase64Json(envelope.payload_b64)
