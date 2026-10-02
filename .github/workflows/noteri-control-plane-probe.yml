@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: noteri-control-plane-fallback-probe
+  group: noteri-control-plane-fallback-probe-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -76,14 +76,19 @@ jobs:
 
       - name: Resolve immutable noteri-runtime main SHA
         id: noteri_runtime
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $line = (& git ls-remote https://github.com/ericson-j-santos/noteri-runtime.git refs/heads/main | Select-Object -First 1)
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($line)) { throw 'noteri_runtime_main_resolution_failed' }
-          $sha = (($line -split '\s+')[0]).Trim().ToLowerInvariant()
-          if ($sha -notmatch '^[0-9a-f]{40}$') { throw 'noteri_runtime_main_sha_invalid' }
-          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "sha=$sha`n", [System.Text.UTF8Encoding]::new($false))
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const { data } = await github.rest.repos.getBranch({
+              owner: 'ericson-j-santos',
+              repo: 'noteri-runtime',
+              branch: 'main'
+            });
+            const sha = String(data.commit?.sha || '').trim().toLowerCase();
+            if (!/^[0-9a-f]{40}$/.test(sha)) {
+              throw new Error('noteri_runtime_main_sha_invalid');
+            }
+            core.setOutput('sha', sha);
 
       - name: Checkout immutable noteri-runtime source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5

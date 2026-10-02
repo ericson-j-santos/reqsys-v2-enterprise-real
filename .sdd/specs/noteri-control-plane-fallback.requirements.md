@@ -19,8 +19,8 @@ Manter uma rota governada de execução quando o Remote Desktop Commander estive
 7. Quando não houver pickup, o Gateway cancela o run self-hosted abandonado, confirma `completed/cancelled` por janela limitada e registra o resultado da limpeza; nenhuma nova tentativa é criada automaticamente.
 8. Um runtime auto watch em GitHub-hosted runner deve verificar periodicamente o retorno do Noteri sem depender do chat: despachar somente `noteri-control-plane-probe.yml` na `main`, validar o SHA exato, cancelar o run sem pickup e atualizar um único comentário de estado na issue governada.
 9. Quando houver pickup, o auto watch deve aguardar o probe, baixar somente o artifact sanitizado e declarar `runtime_active` apenas com `ok=true`, host Noteri, `Runner.Listener.exe` comprovado, `headless_ready=true` e `rdc_required=false`.
-10. O mesmo probe deve resolver o SHA atual de `ericson-j-santos/noteri-runtime/main`, fazer checkout desse SHA imutável no host Noteri e executar o E2E isolado `NORMAL -> ESTUDO -> replay -> NORMAL`, exigindo leitura independente e igualdade entre SHA esperado e observado.
-11. Alterações do próprio probe, dos scripts de controle, do teste de contrato ou do SDD correspondente devem disparar o E2E físico no SHA da branch antes do merge por `push` no repositório canônico, somente quando o ator for `ericson-j-santos`; `pull_request` é proibido como gatilho do runner self-hosted para impedir execução de código de fork não confiável.
+10. O mesmo probe deve resolver o SHA atual de `ericson-j-santos/noteri-runtime/main` pela API oficial GitHub `getBranch`, com proprietário/repositório/branch fixos e `actions/github-script` pinado por SHA completo; exigir SHA de 40 caracteres hexadecimais antes do checkout imutável no host Noteri e executar o E2E isolado `NORMAL -> ESTUDO -> replay -> NORMAL`, com leitura independente e igualdade entre SHA esperado e observado. Não depender de `git ls-remote` nem de pipeline PowerShell para resolver o SHA.
+11. Alterações do próprio probe, dos scripts de controle, do teste de contrato ou do SDD correspondente devem disparar o E2E físico no SHA da branch antes do merge por `push` no repositório canônico, somente quando o ator for `ericson-j-santos`; `pull_request` é proibido como gatilho do runner self-hosted para impedir execução de código de fork não confiável. O grupo de concorrência deve incluir `github.ref`, preservando a serialização por branch e impedindo que o auto watch da `main` substitua uma execução física pré-merge pendente.
 
 ## Requisitos
 
@@ -56,6 +56,10 @@ O bootstrap `scripts/activate_noteri_free_control_plane.cmd` deve eliminar a seq
 - iniciar o watchdog existente e retornar evidência sanitizada com `rdc_required=false`.
 
 A autenticação interativa do GitHub pode exigir ação humana por consentimento, mas nenhuma etapa recorrente de operação pode voltar a depender do RDC.
+
+## Regressão do resolver
+
+O [run 37059423546](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/37059423546) adquiriu o job no Noteri e falhou em `Resolve immutable noteri-runtime main SHA` com `noteri_runtime_main_resolution_failed`. A correção deve comprovar a consulta oficial de `main`, o checkout do SHA completo e o E2E isolado no mesmo SHA da branch, incluindo após sincronização com a base.
 
 ## Critérios de aceite de código
 
