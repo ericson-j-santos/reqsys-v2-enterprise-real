@@ -13,9 +13,10 @@ import {
   sign,
   verify,
 } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
-export const TOPIC = "reqsys-dev-locator-2b0950c3bf37ac05b46bdb70ab793ca4c85b220b";
-export const PUBLIC_KEY_B64 = "xMQwHfokBxBOkP1bvDCxBDdzmnXlVxApGQbwQ9h8kr8=";
+export const TOPIC = "reqsys-dev-locator-1651e9182d6e1c939fa6672c1248c9d532716fe7";
+export const PUBLIC_KEY_B64 = "Ox1kIxgrkNTG96NI69Obi/W+ZiZz2jxw3DLCQMvwMcM=";
 export const TITLE = "reqsys-dev-locator";
 export const ENDPOINT = `https://ntfy.sh/${TOPIC}/json?poll=1&since=1h`;
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
@@ -263,7 +264,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     process.stderr.write(`SIGNED_LOCATOR_BLOCKED: ${error.message}\n`);
     process.exitCode = 2;

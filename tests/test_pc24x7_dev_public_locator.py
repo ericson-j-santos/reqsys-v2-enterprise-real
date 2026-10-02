@@ -11,6 +11,7 @@ MANIFEST = ROOT / "infra" / "public-access-urls.json"
 PUBLISHER = ROOT / "scripts" / "pc24x7_dev_locator_publisher.py"
 RESOLVER = ROOT / "scripts" / "resolve_pc24x7_dev_locator.mjs"
 PROMOTION = ROOT / ".github" / "workflows" / "fly-automatic-environment-promotion.yml"
+PC24X7_COMPOSE = ROOT / "docker-compose.pc24x7-public-dev.yml"
 
 
 def test_locator_requires_valid_signed_fresh_cloudflare_state():
@@ -38,9 +39,20 @@ def test_locator_preserves_only_relative_target_route():
 
 def test_pages_composite_publishes_stable_dev_path():
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "cp -a docs/public-dev-locator/. site/dev/" in raw
+    assert "cp -a frontend/dist/. site/dev/" in raw
+    assert "VITE_BASE_PATH: /reqsys-v2-enterprise-real/dev/" in raw
     assert "test -s site/dev/index.html" in raw
+    assert "test -s site/dev/runtime-locator.json" in raw
     assert "actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e" in raw
+
+
+def test_pc24x7_public_runtime_enables_entra_and_disables_demo_login():
+    raw = PC24X7_COMPOSE.read_text(encoding="utf-8")
+    assert 'ALLOW_DEMO_LOGIN: "false"' in raw
+    assert "AZURE_TENANT_ID: 6d09c88c-0617-490c-8329-305e577684bc" in raw
+    assert "AZURE_CLIENT_ID: 4061c542-cdc1-4007-ab57-40ab8f9109fc" in raw
+    assert "APP_PUBLIC_URL: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev" in raw
+    assert "https://ericson-j-santos.github.io" in raw
 
 
 def test_supervisor_uses_cloudflare_and_signed_locator_only():
@@ -116,10 +128,11 @@ def test_ci_locator_resolver_proves_fail_closed_negative_cases():
 def test_ci_locator_uses_same_public_identity_as_pages():
     html = HTML.read_text(encoding="utf-8")
     resolver = RESOLVER.read_text(encoding="utf-8")
-    assert 'reqsys-dev-locator-2b0950c3bf37ac05b46bdb70ab793ca4c85b220b' in html
-    assert 'reqsys-dev-locator-2b0950c3bf37ac05b46bdb70ab793ca4c85b220b' in resolver
-    assert 'xMQwHfokBxBOkP1bvDCxBDdzmnXlVxApGQbwQ9h8kr8=' in html
-    assert 'xMQwHfokBxBOkP1bvDCxBDdzmnXlVxApGQbwQ9h8kr8=' in resolver
+    runtime_config = json.loads((ROOT / "frontend" / "public" / "runtime-locator.json").read_text(encoding="utf-8"))
+    assert runtime_config["topic"] in html
+    assert runtime_config["topic"] in resolver
+    assert runtime_config["public_key_b64"] in html
+    assert runtime_config["public_key_b64"] in resolver
 
 
 def test_automatic_promotion_resolves_current_locator_instead_of_static_quick_tunnel():

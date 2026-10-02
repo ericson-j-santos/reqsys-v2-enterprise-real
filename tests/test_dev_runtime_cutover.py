@@ -25,7 +25,7 @@ def test_critical_operational_files_do_not_reference_legacy_dev_fly():
 def test_frontend_uses_stable_pc24x7_entrypoint():
     raw = (ROOT / "frontend/src/constants/ambientesOperacionais.js").read_text(encoding="utf-8")
     assert STABLE_DEV_ENTRYPOINT in raw
-    assert "searchParams.set('target', suffix)" in raw
+    assert "new URL(rotaRelativa.replace" in raw
 
 
 def test_public_smokes_fail_closed_instead_of_false_green():

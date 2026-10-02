@@ -22,7 +22,12 @@ services:
       - JWT_SECRET=${JWT_SECRET:-trocar-em-producao}
       - JWT_ISSUER=${JWT_ISSUER:-reqsys-api}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-reqsys-frontend}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081},https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:${GATEWAY_PORT:-8081},https://ericson-j-santos.github.io,https://tieridev.duckdns.org,https://tierin.duckdns.org,https://tieriprod.duckdns.org}
+      - ALLOW_DEMO_LOGIN=${ALLOW_DEMO_LOGIN:-true}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
+      - APP_PUBLIC_URL=${APP_PUBLIC_URL:-}
+      - API_PUBLIC_URL=${API_PUBLIC_URL:-}
       - SSRS_BASE_URL=${SSRS_BASE_URL:-}
       - SSRS_REPORTS_PATH=${SSRS_REPORTS_PATH:-ReqSys}
       - SSRS_REPORT_NAMES=${SSRS_REPORT_NAMES:-AtvIndividual,Cracha,CrachAula2,RelatorioDetalhado,RelatorioDetalhadoAula2}

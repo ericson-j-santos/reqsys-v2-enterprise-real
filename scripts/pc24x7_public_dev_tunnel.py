@@ -85,7 +85,7 @@ def build_run_command(name: str, *, target: str, image: str) -> list[str]:
     ]
 
 
-def probe(url: str, timeout: float = 8.0) -> dict[str, Any]:
+def probe(url: str, timeout: float = 15.0) -> dict[str, Any]:
     try:
         request = urllib.request.Request(
             url,

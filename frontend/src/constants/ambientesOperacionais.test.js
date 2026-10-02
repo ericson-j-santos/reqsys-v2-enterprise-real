@@ -50,10 +50,10 @@ describe('ambientesOperacionais', () => {
     expect(url).toBe('https://reqsys-app-stg.fly.dev/governanca')
   })
 
-  it('navega para DEV somente pelo locator assinado e preserva a rota como target relativo', () => {
+  it('mantém a SPA DEV no Pages e preserva a rota enquanto a API usa locator assinado', () => {
     const url = montarUrlAmbiente('desenvolvimento', { path: '/task-console?tab=study', preserveRoute: false })
     expect(url).toBe(
-      'https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/?target=%2Ftask-console%3Ftab%3Dstudy',
+      'https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/task-console?tab=study',
     )
     expect(url).not.toContain('fly.dev')
   })

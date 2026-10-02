@@ -88,7 +88,7 @@ def probe(base_url: str, path: str) -> bool:
             base_url.rstrip("/") + path,
             headers={"User-Agent": "ReqSysLocatorPublisher/2.0", "Accept": "application/json"},
         )
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=15) as response:
             body = response.read(262_144)
             if int(response.status) != 200:
                 return False
@@ -107,7 +107,7 @@ def probe_status(base_url: str, path: str) -> int | None:
             base_url.rstrip("/") + path,
             headers={"User-Agent": "ReqSysLocatorPublisher/3.0", "Accept": "*/*"},
         )
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=15) as response:
             return int(response.status)
     except urllib.error.HTTPError as exc:
         return int(exc.code)

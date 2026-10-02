@@ -110,7 +110,7 @@ export const routes = [
   { path: '/admin/ocr-review', component: OcrReviewView, meta: { recurso: 'ocr-review:admin' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
-const router = createRouter({ history: createWebHistory(), routes })
+const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), routes })
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.autenticado) {

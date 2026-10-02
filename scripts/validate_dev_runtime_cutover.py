@@ -64,14 +64,14 @@ def validate() -> list[str]:
     frontend = read("frontend/src/constants/ambientesOperacionais.js")
     if STABLE_DEV_ENTRYPOINT not in frontend:
         errors.append("frontend_dev_entrypoint_not_canonical")
-    if "searchParams.set('target', suffix)" not in frontend:
-        errors.append("frontend_dev_route_not_forwarded_to_locator")
+    if "new URL(rotaRelativa.replace" not in frontend:
+        errors.append("frontend_dev_route_not_kept_on_stable_pages")
 
-    locator = read("docs/public-dev-locator/index.html")
-    if 'requestedTarget=params.get("target")||"/task-console"' not in locator:
-        errors.append("locator_target_forwarding_missing")
-    if 'payload.selected_url+target' not in locator:
-        errors.append("locator_runtime_redirect_missing")
+    pages_runtime = read("frontend/src/services/publicRuntimeLocator.js")
+    if "verifyLocatorEnvelope" not in pages_runtime:
+        errors.append("pages_signed_locator_verification_missing")
+    if "return `${payload.selected_url.replace" not in pages_runtime:
+        errors.append("pages_dynamic_api_resolution_missing")
 
     for relative in SIGNED_LOCATOR_CONSUMERS:
         raw = read(relative)
