@@ -23,9 +23,17 @@ def test_merge_eligibility_fails_closed_on_sdd_result() -> None:
     text = workflow_text()
     assert (
         "needs: [resolve-context, sdd-contract, isolated-validation, "
-        "temporary-integration, current-sha-stability]"
+        "temporary-integration, current-sha-stability, base-head-stability]"
     ) in text
     assert 'SDD="${{ needs.sdd-contract.result }}"' in text
     assert '[ "$SDD" != "success" ]' in text
     assert "--arg sdd_contract_result" in text
     assert "sdd_contract: $sdd_contract_result" in text
+
+
+def test_merge_eligibility_revalidates_live_base_and_head_before_admission() -> None:
+    text = workflow_text()
+    assert "base-head-stability:" in text
+    assert "current-sha-stability, base-head-stability" in text
+    assert "PR atrasada ou divergente" in text
+    assert "behind_by" in text
