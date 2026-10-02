@@ -34,6 +34,8 @@ defaults:
 
 jobs:
   public-runtime-evidence:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Public runtime evidence
     runs-on: ubuntu-latest
     steps:

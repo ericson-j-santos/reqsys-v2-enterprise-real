@@ -1,6 +1,13 @@
 {
   "schema_version": "1.2.0",
   "strategy": "fly-enterprise-sync",
+  "retirement": {
+    "status": "PERMANENTLY_RETIRED",
+    "effective_date": "2026-10-02",
+    "mutations_allowed": false,
+    "reactivation_allowed": false,
+    "purpose": "historical_inventory_and_final_retirement_evidence_only"
+  },
   "canonical_environments": ["dev", "hml", "prod"],
   "promotion_order": ["dev", "hml", "prod"],
   "environment_aliases": {

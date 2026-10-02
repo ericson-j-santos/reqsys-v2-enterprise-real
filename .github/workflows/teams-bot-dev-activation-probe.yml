@@ -35,7 +35,11 @@ jobs:
 
   azure-probe:
     name: Descobrir Azure Bot DEV sem alterar recursos
-    if: ${{ github.event_name != 'pull_request' && vars.CCP_ENABLED == 'true' }}
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name != 'pull_request' && vars.CCP_ENABLED == 'true'
+      ) }}
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 8

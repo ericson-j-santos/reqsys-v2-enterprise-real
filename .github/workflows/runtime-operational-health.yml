@@ -30,6 +30,8 @@ concurrency:
 
 jobs:
   runtime-health:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Runtime health check governado
     runs-on: ubuntu-latest
     timeout-minutes: 10

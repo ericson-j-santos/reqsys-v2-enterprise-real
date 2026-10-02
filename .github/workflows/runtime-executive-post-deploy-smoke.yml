@@ -36,6 +36,8 @@ concurrency:
 
 jobs:
   post-deploy-smoke:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Smoke endpoint público Runtime Executive
     runs-on: ubuntu-latest
     timeout-minutes: 6

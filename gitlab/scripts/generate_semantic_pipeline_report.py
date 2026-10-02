@@ -38,12 +38,6 @@ ROUTES = [
         "include": "gitlab/ci/security.yml",
         "paths": ["security/**/*", "gitlab/**/*", ".gitlab-ci.yml"],
     },
-    {
-        "domain": "deploy",
-        "label": "ia:runtime",
-        "include": "gitlab/ci/deploy.yml",
-        "paths": ["infra/**/*", "deploy/**/*", ".gitlab-ci.yml"],
-    },
 ]
 
 

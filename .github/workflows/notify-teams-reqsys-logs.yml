@@ -55,7 +55,11 @@ concurrency:
 jobs:
   notify:
     name: Enviar Adaptive Card seguro ao Teams
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'success'
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'success'
+      ) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:

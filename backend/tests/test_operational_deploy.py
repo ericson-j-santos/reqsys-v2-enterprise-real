@@ -1,49 +1,56 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-from app.services.operational_deploy import executar_deploy_dev, preparar_deploy_dev
-
-
-def test_preparar_backend_dev_nao_toca_producao():
-    op = preparar_deploy_dev('backend')
-    assert op.app_name == 'reqsys-api-dev'
-    assert op.ambiente == 'development'
-    assert op.production_touched is False
-    assert len(op.idempotency_key) == 64
+from app.core.security import require_admin
+from app.main import app
 
 
-def test_preparar_frontend_dev_mapeia_app_canonico():
-    op = preparar_deploy_dev('frontend')
-    assert op.app_name == 'reqsys-app-dev'
+def _fake_admin():
+    return {'sub': 'operational-deploy-retirement-test', 'papel': 'admin'}
 
 
-def test_aplicacao_fora_allowlist_e_bloqueada():
-    with pytest.raises(ValueError):
-        preparar_deploy_dev('production')
+@pytest.fixture(autouse=True)
+def _admin_override():
+    app.dependency_overrides[require_admin] = _fake_admin
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(require_admin, None)
 
 
-def test_execucao_sem_token_falha_fechada():
-    with patch('app.services.operational_deploy._token', return_value=''):
-        with pytest.raises(RuntimeError, match='Credencial GitHub'):
-            executar_deploy_dev('backend')
+def test_catalogo_informa_retirada_definitiva():
+    response = TestClient(app).get('/v1/actions-runtime/operational-deploy/catalog')
+
+    assert response.status_code == 200
+    data = response.json()['data']
+    assert data['status'] == 'RETIRADO'
+    assert data['habilitado'] is False
+    assert data['production_touched'] is False
+    assert data['aplicacoes'] == []
+    assert 'não despacha mais workflows' in data['motivo']
 
 
-def test_dispatch_backend_usa_workflow_governado_sem_confirmacao_prod():
-    resposta = MagicMock()
-    resposta.status_code = 204
-    with patch('app.services.operational_deploy._token', return_value='token-teste'):
-        with patch('app.services.operational_deploy.requests.post', return_value=resposta) as post:
-            resultado = executar_deploy_dev('backend')
+def test_validacao_retorna_410_sem_despachar_workflow():
+    with patch('requests.post') as post:
+        response = TestClient(app).post(
+            '/v1/actions-runtime/operational-deploy/validate',
+            json={'aplicacao': 'backend'},
+        )
 
-    payload = post.call_args.kwargs['json']
-    assert payload['ref'] == 'main'
-    assert payload['inputs'] == {
-        'app_name': 'reqsys-api-dev',
-        'environment': 'development',
-        'command': 'deploy',
-        'scale_count': '1',
-        'confirmacao': '',
-    }
-    assert resultado['status'] == 'EM_EXECUCAO'
-    assert resultado['production_touched'] is False
+    assert response.status_code == 410
+    assert 'retirada' in response.json()['detail'].lower()
+    post.assert_not_called()
+
+
+def test_execucao_confirmada_retorna_410_sem_despachar_workflow():
+    with patch('requests.post') as post:
+        response = TestClient(app).post(
+            '/v1/actions-runtime/operational-deploy/execute',
+            json={'aplicacao': 'backend', 'confirmar': True},
+        )
+
+    assert response.status_code == 410
+    assert 'Fly.io' in response.json()['detail']
+    post.assert_not_called()

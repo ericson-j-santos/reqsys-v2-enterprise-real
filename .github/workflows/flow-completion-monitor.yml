@@ -30,7 +30,11 @@ concurrency:
 
 jobs:
   monitor:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled' }}
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled'
+      ) }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:

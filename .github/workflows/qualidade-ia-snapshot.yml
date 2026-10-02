@@ -14,6 +14,8 @@ permissions:
 
 jobs:
   snapshot:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Registrar snapshot de Qualidade IA (dev/hml/prod)
     runs-on: ubuntu-latest
     strategy:

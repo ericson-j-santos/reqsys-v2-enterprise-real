@@ -2,6 +2,9 @@ param(
     [switch]$ShowGenerated = $true
 )
 
+# FLYIO_RETIREMENT_GUARD
+throw "Fly.io foi retirado definitivamente em 2026-10-02; setup OCR para deploy Fly esta bloqueado."
+
 # Generate OCR_DATA_ENCRYPTION_KEY (AES-256-GCM: 32 bytes in Base64)
 $bytes = New-Object byte[] 32
 [Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($bytes)

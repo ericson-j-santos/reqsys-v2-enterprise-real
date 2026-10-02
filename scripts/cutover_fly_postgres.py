@@ -47,9 +47,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
 
+from app.db import Base  # noqa: E402
 from migrate_sqlite_to_postgres import conectar_postgres, migrar  # noqa: E402
 
-from app.db import Base  # noqa: E402
+FLYIO_RETIREMENT_GUARD = (
+    'Fly.io foi retirado definitivamente em 2026-10-02; cutover, secrets, deploy e rollback estao bloqueados.'
+)
 
 
 def _fly_bin() -> str:
@@ -152,10 +155,14 @@ def passo_4_conferir(backup_path: Path, postgres_url: str, dry_run: bool) -> Non
 
 
 def passo_5_setar_secret(fly: str, app: str, postgres_url: str, dry_run: bool) -> None:
+    if not dry_run:
+        raise RuntimeError(FLYIO_RETIREMENT_GUARD)
     _run([fly, 'secrets', 'set', f'DATABASE_URL={postgres_url}', '-a', app], 'Set fly secret DATABASE_URL', dry_run)
 
 
 def passo_6_deploy_e_verificar(fly: str, app: str, fly_config: str, health_url: str, dry_run: bool) -> bool:
+    if not dry_run:
+        raise RuntimeError(FLYIO_RETIREMENT_GUARD)
     _run([fly, 'deploy', '-a', app, '-c', fly_config], 'Deploy', dry_run)
 
     if dry_run:
@@ -175,6 +182,8 @@ def passo_6_deploy_e_verificar(fly: str, app: str, fly_config: str, health_url: 
 
 
 def rollback(fly: str, app: str, fly_config: str) -> None:
+    raise RuntimeError(FLYIO_RETIREMENT_GUARD)
+
     print('!! ROLLBACK: removendo secret DATABASE_URL e reimplantando (volta pro SQLite do [env])')
     subprocess.run([fly, 'secrets', 'unset', 'DATABASE_URL', '-a', app], capture_output=True, text=True)
     subprocess.run([fly, 'deploy', '-a', app, '-c', fly_config], capture_output=True, text=True)
@@ -190,6 +199,10 @@ def main() -> int:
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--yes', action='store_true', help='Confirma execucao real (obrigatorio se nao for --dry-run)')
     args = parser.parse_args()
+
+    if not args.dry_run:
+        print(FLYIO_RETIREMENT_GUARD, file=sys.stderr)
+        return 78
 
     if not args.dry_run and not args.yes:
         print('ERRO: rode com --dry-run primeiro, ou passe --yes para confirmar a execucao real.', file=sys.stderr)

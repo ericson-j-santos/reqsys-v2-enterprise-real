@@ -6,6 +6,9 @@ param(
     [switch]$ValidateOnly = $false
 )
 
+# FLYIO_RETIREMENT_GUARD
+throw "Fly.io foi retirado definitivamente em 2026-10-02; o provisionamento de FLY_API_TOKEN esta bloqueado."
+
 # Configuration
 $ProjectId = "48896143"
 $ApiUrl = "https://gitlab.com/api/v4"

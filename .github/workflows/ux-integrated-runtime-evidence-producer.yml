@@ -25,6 +25,8 @@ concurrency:
 
 jobs:
   integrated-smoke-and-evidence:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:

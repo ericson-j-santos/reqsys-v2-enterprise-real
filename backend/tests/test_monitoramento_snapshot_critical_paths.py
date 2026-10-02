@@ -2,8 +2,15 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.schemas.monitoramento_operacional import ItemMonitorado
 from app.services import monitoramento_snapshot as snapshot
+
+
+@pytest.fixture(autouse=True)
+def _govbi_base_url_aprovada(monkeypatch):
+    monkeypatch.setattr(snapshot.settings, 'govbi_base_url', 'https://govbi.example')
 
 
 def test_classificar_estado_geral_lista_vazia():
@@ -109,6 +116,19 @@ def test_estado_govbi_vermelho_quando_probe_falha(_mock_client):
     estado, detalhes = snapshot._estado_govbi()
     assert estado == 'vermelho'
     assert 'erro' in detalhes
+
+
+@pytest.mark.parametrize('base_url', ['', 'https://govbi.fly.dev', 'https://govbi.fly.io'])
+def test_estado_govbi_bloqueado_sem_url_aprovada(monkeypatch, base_url):
+    monkeypatch.setattr(snapshot.settings, 'govbi_base_url', base_url)
+    with patch('app.services.monitoramento_snapshot.httpx.Client') as client:
+        estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'bloqueado'
+    assert detalhes['fonte'] == 'configuracao'
+    assert detalhes['modo'] == 'bloqueado'
+    assert detalhes['base_url'] is None
+    client.assert_not_called()
 
 
 @patch.dict('os.environ', {}, clear=True)

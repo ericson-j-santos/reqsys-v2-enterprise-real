@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# FLYIO_RETIREMENT_GUARD
+echo "Fly.io foi retirado definitivamente em 2026-10-02; start/stop/SSH de Fly Machines esta bloqueado." >&2
+exit 78
+
 : "${ASSET_JSON:?}" "${FLY_API_TOKEN:?}" "${RESTIC_REPOSITORY:?}" "${RESTIC_PASSWORD:?}" "${RUN_URL:?}" "${CORRELATION_ID:?}"
 mkdir -p work/config artifacts/backup
 printf '%s\n' "$ASSET_JSON" > work/config/asset.json

@@ -4,16 +4,15 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
+from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url
 from app.core.envelope import ok
 
 router = APIRouter(prefix='/api/govbi', tags=['govbi'])
 logger = logging.getLogger('reqsys.govbi')
 
-DEFAULT_GOVBI_BASE_URL = 'https://govbi-ia-hom.fly.dev'
 DEFAULT_GOVBI_TIMEOUT_SECONDS = 15.0
 
 
@@ -33,7 +32,7 @@ def _correlation_id(header_value: str | None) -> str:
 
 
 def _govbi_base_url() -> str:
-    return getattr(settings, 'govbi_base_url', '') or DEFAULT_GOVBI_BASE_URL
+    return validate_govbi_base_url(getattr(settings, 'govbi_base_url', ''))
 
 
 def _govbi_timeout() -> float:
@@ -106,7 +105,11 @@ def _fallback_governado(pergunta: str, correlation_id: str, detalhe: str) -> dic
             'linhas': [
                 {'item': 'Pergunta recebida', 'valor': pergunta, 'status': 'VALIDADA'},
                 {'item': 'Serviço GovBI', 'valor': detalhe, 'status': 'FALLBACK_GOVERNADO'},
-                {'item': 'Próxima ação', 'valor': 'Validar GOVBI_BASE_URL, contrato /api/v1/perguntas e logs Fly.io.', 'status': 'ACAO_OPERACIONAL'},
+                {
+                    'item': 'Próxima ação',
+                    'valor': 'Validar GOVBI_BASE_URL, contrato /api/v1/perguntas e logs do provedor aprovado.',
+                    'status': 'ACAO_OPERACIONAL',
+                },
             ],
         },
         'mascaramentoAplicado': True,
@@ -119,7 +122,14 @@ def _fallback_governado(pergunta: str, correlation_id: str, detalhe: str) -> dic
 @router.post('/perguntas')
 async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str | None = Header(default=None)):
     correlation_id = _correlation_id(x_correlation_id)
-    base_url = _govbi_base_url().rstrip('/')
+    try:
+        base_url = _govbi_base_url()
+    except GovBIConfigurationError as exc:
+        logger.error('govbi_configuracao_bloqueada correlation_id=%s motivo=%s', correlation_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from None
     url = f'{base_url}/api/v1/perguntas'
 
     headers = {
@@ -163,10 +173,19 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
 
 @router.get('/health')
 def govbi_health():
+    try:
+        _govbi_base_url()
+        configurado = True
+        configuracao_erro = None
+    except GovBIConfigurationError as exc:
+        configurado = False
+        configuracao_erro = str(exc)
+
     return ok({
         'service': 'govbi-proxy',
-        'status': 'ok',
-        'external_base_url_configured': bool(_govbi_base_url()),
+        'status': 'ok' if configurado else 'bloqueado',
+        'external_base_url_configured': configurado,
+        'configuration_error': configuracao_erro,
         'timeout_seconds': _govbi_timeout(),
     })
 
@@ -187,7 +206,13 @@ def _resultado_funcionamento(
 
 
 def _executar_funcionamento_govbi() -> dict[str, Any]:
-    base_url = _govbi_base_url()
+    try:
+        base_url = _govbi_base_url()
+        base_url_valida = True
+        base_url_detalhe = base_url
+    except GovBIConfigurationError as exc:
+        base_url_valida = False
+        base_url_detalhe = str(exc)
     timeout = _govbi_timeout()
     fallback = _fallback_governado('teste funcionamento', 'govbi-func-backend', 'simulado')
 
@@ -195,8 +220,8 @@ def _executar_funcionamento_govbi() -> dict[str, Any]:
         _resultado_funcionamento(
             'config-base-url',
             'Configuração GOVBI_BASE_URL',
-            bool(base_url),
-            base_url or 'ausente',
+            base_url_valida,
+            base_url_detalhe,
         ),
         _resultado_funcionamento(
             'config-timeout',

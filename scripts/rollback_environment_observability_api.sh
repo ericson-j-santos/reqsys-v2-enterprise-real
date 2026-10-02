@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# FLYIO_RETIREMENT_GUARD
+echo "Fly.io foi retirado definitivamente em 2026-10-02; rollback/deploy Fly esta bloqueado." >&2
+exit 78
+
 environment_name="${1:?environment is required}"
 app_name="${2:?Fly app name is required}"
 config_file="${3:?Fly config file is required}"

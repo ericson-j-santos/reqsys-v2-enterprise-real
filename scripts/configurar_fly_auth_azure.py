@@ -25,6 +25,10 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+FLYIO_RETIREMENT_GUARD = (
+    "Fly.io foi retirado definitivamente em 2026-10-02; configurar secrets ou reativar apps esta bloqueado."
+)
+
 
 class ConfigError(RuntimeError):
     """Erro operacional de configuração."""
@@ -145,6 +149,8 @@ def _resolver_jwt_secret(explicit_value: str) -> tuple[str, str]:
 
 
 def aplicar_fly(args: argparse.Namespace, config: ConfiguracaoAuth) -> None:
+    raise ConfigError(FLYIO_RETIREMENT_GUARD)
+
     fly_token = args.fly_api_token or os.getenv("FLY_API_TOKEN", "")
     if not fly_token.strip():
         raise ConfigError("FLY_API_TOKEN não configurado")

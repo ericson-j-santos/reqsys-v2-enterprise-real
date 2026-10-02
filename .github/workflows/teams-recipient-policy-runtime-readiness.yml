@@ -47,7 +47,11 @@ jobs:
           tests/test_teams_recipient_policy_issue_reconciliation_contract.py
 
   probe-runtime:
-    if: github.event_name != 'pull_request'
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name != 'pull_request'
+      ) }}
     runs-on: ubuntu-latest
     timeout-minutes: 6
     env:

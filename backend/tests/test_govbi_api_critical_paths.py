@@ -1,12 +1,20 @@
 """Caminhos críticos — API GovBI (health, funcionamento e proxy)."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.govbi import _correlation_id, _normalizar_resposta
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _govbi_base_url_aprovada(monkeypatch):
+    import app.api.govbi as govbi
+
+    monkeypatch.setattr(govbi.settings, 'govbi_base_url', 'https://govbi.example')
 
 
 def test_correlation_id_gera_quando_ausente():
