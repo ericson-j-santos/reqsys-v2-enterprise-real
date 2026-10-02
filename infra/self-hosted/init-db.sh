@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-password="$(cat /run/secrets/db_app_password)"
+read -r password < /run/secrets/db_app_password
 # A senha gerada e hex: nao aceita SQL/metacaracteres vindos do arquivo.
 case "$password" in *[!0-9a-f]*|"") echo "db_app_password invalido" >&2; exit 1;; esac
 [ "${#password}" -eq 64 ] || exit 1
