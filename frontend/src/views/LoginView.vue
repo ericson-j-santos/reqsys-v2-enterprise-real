@@ -143,7 +143,7 @@ const mensagemDiagnosticoAuth = computed(() => {
 })
 
 onMounted(async () => {
-  const azureErr = sessionStorage.getItem('azure_login_error')
+  const azureErr = sessionStorage.getItem('azure_login_error') || localStorage.getItem('azure_login_error')
   if (azureErr) {
     erro.value = azureErr
     sessionStorage.removeItem('azure_login_error')
@@ -164,6 +164,7 @@ async function entrarMicrosoft() {
   if (!azureConfig.value) return
   carregandoAzure.value = true
   erro.value = ''
+  localStorage.removeItem('azure_login_error')
   try {
     await loginMicrosoftRedirect()
   } catch (e) {

@@ -27,6 +27,12 @@ describe('startup fail-safe', () => {
     expect(awaitedAuthAt).toBeLessThan(mountAt)
   })
 
+  it('mantem falha do callback visivel e registra codigo diagnostico sem token', () => {
+    expect(mainSource).toContain("localStorage.setItem('azure_login_error', msg)")
+    expect(mainSource).toContain('MSAL_CALLBACK_WITHOUT_ID_TOKEN')
+    expect(mainSource).toContain("localStorage.removeItem('azure_login_error')")
+  })
+
   it('nao bloqueia o mount aguardando MSAL diretamente', () => {
     const mountAt = mainSource.indexOf("app.mount('#app')")
     const redirectAt = mainSource.indexOf('await handleRedirectResult()')
