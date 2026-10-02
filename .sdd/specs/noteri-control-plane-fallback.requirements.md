@@ -57,6 +57,10 @@ O bootstrap `scripts/activate_noteri_free_control_plane.cmd` deve eliminar a seq
 
 A autenticação interativa do GitHub pode exigir ação humana por consentimento, mas nenhuma etapa recorrente de operação pode voltar a depender do RDC.
 
+## Regressão do resolver
+
+O [run 37059423546](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/37059423546) adquiriu o job no Noteri e falhou em `Resolve immutable noteri-runtime main SHA` com `noteri_runtime_main_resolution_failed`. A correção deve comprovar a consulta oficial de `main`, o checkout do SHA completo e o E2E isolado no mesmo SHA da branch, incluindo após sincronização com a base.
+
 ## Critérios de aceite de código
 
 - testes unitários do probe/watchdog verdes;
