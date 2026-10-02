@@ -38,7 +38,7 @@ PC24x7 --Ed25519--> ntfy.sh
 10. HML e PROD permanecem fora deste incremento.
 11. Merge, push, schedule e conclusão de outro workflow não podem publicar GitHub Pages automaticamente; o deploy deve aceitar somente `workflow_dispatch` explícito a partir de `main`.
 12. O deploy deve exigir `authorization=DEPLOY_PAGES` e `expected_sha` completo igual ao HEAD atual de `main`; divergência deve falhar antes do checkout/publicação. O run produtor do dashboard Teams deve ser resolvido separadamente e validado como bem-sucedido.
-13. A `Validação de Acessos Públicos — ReqSys` deve executar após qualquer Pull Request realmente mergeada em `main`, usando `pull_request: closed`, exigindo `merged=true` e validando o `merge_commit_sha` exato. O gatilho `workflow_run` não deve ser usado para essa prova pós-merge.
+13. A `Validação de Acessos Públicos — ReqSys` deve executar após qualquer Pull Request realmente mergeada em `main`, usando `pull_request: closed`, exigindo `merged=true` e fazendo checkout do `merge_commit_sha` exato. O gatilho `workflow_run` não deve ser usado para essa prova pós-merge.
 14. Consumidores CI do runtime DEV não podem depender de uma URL Quick Tunnel estática; devem resolver o locator público assinado vigente.
 15. A resolução em CI deve validar Ed25519, ambiente DEV, TTL máximo de 15 minutos, `issued_at`, `selected_url` pertencente à lista e somente HTTPS `*.trycloudflare.com`; qualquer divergência falha fechada.
 16. O publisher local só pode publicar URLs que respondam HTTP 200 em `/api/health`, `/api/runtime/health` e `/api/runtime/build-info`.
@@ -51,6 +51,7 @@ PC24x7 --Ed25519--> ntfy.sh
 23. Smokes executivos acionados por `deployment_status` devem exigir `environment_url` pública não vazia antes de resolver o locator DEV; eventos genéricos do GitHub Environment sem URL pública devem ser ignorados, enquanto `workflow_dispatch` explícito permanece disponível. Esse filtro não pode converter falha funcional de um alvo público real em sucesso.
 24. O payload assinado deve declarar `runtime_contract.version=2.0.0`, os quatro endpoints obrigatórios (`/api/health`, `/api/runtime/health`, `/api/runtime/readiness`, `/api/runtime/build-info`), `static_frontend_required=true` e `vite_hmr_forbidden=true`. Pages e o resolver CI devem rejeitar locators antigos que não carreguem esse contrato assinado, mesmo quando assinatura, TTL e host forem válidos.
 25. A publicação do Pages corrigido pode ser acionada pelo Authorized Actions Gateway somente pelo comando exato `/reqsys run deploy-pages-current-main`, fixando `deploy-reqsys-pages-composite.yml`, `ref=main`, `expected_sha` no SHA capturado da main e `authorization=DEPLOY_PAGES`; nenhum SHA, workflow, autorização ou `producer_run_id` pode vir do comentário.
+26. A validação pública deve comparar a árvore do `build_sha` observado com a árvore do SHA validado e exigir igualdade exata quando o delta contiver arquivo de runtime ou caminho desconhecido. A divergência de SHA pode ser apenas informativa quando todo o delta estiver limitado a CI (`.github/`), SDD (`.sdd/`), documentação/evidência ou testes. Escopo ausente, vazio sem igualdade de SHA ou commit observado indisponível deve falhar fechado.
 
 ## Critérios de aceite
 
@@ -63,7 +64,8 @@ PC24x7 --Ed25519--> ntfy.sh
 - merge, push, schedule e `workflow_run` não disparam publicação de Pages;
 - `workflow_dispatch` com autorização ausente/incorreta ou SHA divergente falha fechado antes da publicação;
 - `workflow_dispatch` autorizado opera somente sobre o SHA exato da `main` informado em `expected_sha`;
-- validação pública pós-merge é disparada automaticamente por `pull_request: closed` somente quando `merged=true`, valida o `merge_commit_sha` exato e falha se o alvo obrigatório estiver indisponível;
+- validação pública pós-merge é disparada automaticamente por `pull_request: closed` somente quando `merged=true`, faz checkout do `merge_commit_sha` exato e falha se o alvo obrigatório estiver indisponível;
+- diferença de `build_sha` permanece bloqueante quando o delta acumulado contém runtime ou caminho desconhecido, mas não bloqueia quando todo o delta é comprovadamente apenas CI/SDD/testes/docs;
 - nenhuma dependência paga é introduzida;
 - o workflow de promoção automática resolve o tunnel vigente pelo locator assinado e não usa `vars.PC24X7_DEV_BASE_URL`/`vars.PC24X7_DEV_FRONTEND_URL` como URL efêmera estática;
 - runtime parcial (health básico verde, mas runtime health/build-info ausentes) nunca é republicado pelo locator.
