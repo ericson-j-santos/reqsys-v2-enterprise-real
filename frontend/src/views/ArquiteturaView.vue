@@ -32,10 +32,10 @@
                 🌐 Browser<br><small>Chrome / Edge / Firefox</small>
               </div>
               <div class="arch-node arch-node--external">
-                🔐 Locator assinado<br><small>DEV · Ed25519 · Cloudflare Tunnel</small>
+                🔐 Locator assinado<br><small>desenvolvimento · Ed25519 · Cloudflare Tunnel</small>
               </div>
               <div class="arch-node arch-node--external">
-                📚 GitHub Pages<br><small>Documentação e SPA DEV</small>
+                📚 GitHub Pages<br><small>Documentação e SPA desenvolvimento</small>
               </div>
             </div>
           </div>
@@ -276,7 +276,7 @@ npm run dev</pre>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Runtime remoto</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Execução remoto</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">Nenhum destino remoto configurado</pre>
                 <div class="muted mt-2" style="font-size:var(--font-size-xs)">Publicação remota permanece bloqueada até definição governada.</div>

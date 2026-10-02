@@ -84,7 +84,7 @@ function emitGovBIEmptyResult(response) {
 api.interceptors.request.use(async (config) => {
   const publicRuntimeBase = await ensurePublicRuntimeApiBase()
   if (publicRuntimeBase) {
-    config.baseURL = requireProviderNeutralRuntimeUrl(publicRuntimeBase, 'public runtime locator')
+    config.baseURL = requireProviderNeutralRuntimeUrl(publicRuntimeBase, 'public execução locator')
   }
   const token = localStorage.getItem('reqsys_token')
   config.headers['X-Correlation-Id'] = obterCorrelationIdSessao()
