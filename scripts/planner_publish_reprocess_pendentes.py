@@ -5,7 +5,7 @@ automático" da issue #32 — até aqui só existia o endpoint manual
 `POST /v1/hub-lowcode/planner/publish/{id}/reprocessar`.
 
 Não construído como um worker/fila com estado próprio: a cada execução lista
-as tentativas em `falhou_integracao` via `GET /v1/hub-lowcode/planner/publish`
+as tentativas em `falhou_integracao` via `GET /v1/hub-lowcode/planner/reprocessamento/pendentes`
 e chama o endpoint de reprocesso já existente para cada uma, até um limite de
 lote. A idempotência e o limite de tentativas continuam garantidos pelo
 próprio backend (`reprocessar_tentativa` em `planner_publish.py`) — este
@@ -14,7 +14,7 @@ ao endpoint que já decide isso.
 
 Uso:
   python scripts/planner_publish_reprocess_pendentes.py \
-      --base-url https://reqsys-api-dev.fly.dev \
+      --base-url "$REQSYS_API_BASE_URL" \
       --service-token "$PLANNER_PUBLISH_SERVICE_TOKEN" \
       [--lote-max 10] [--evidence-file artifacts/planner-reprocess.json] [--strict]
 
@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -57,7 +56,7 @@ def _http_request(method: str, url: str, *, headers: dict[str, str], timeout: in
 def listar_pendentes(base_url: str, service_token: str, limit: int, timeout: int) -> list[dict[str, Any]]:
     status, body = _http_request(
         'GET',
-        f'{base_url}/v1/hub-lowcode/planner/publish?status={STATUS_FALHOU_INTEGRACAO}&limit={limit}',
+        f'{base_url}/v1/hub-lowcode/planner/reprocessamento/pendentes?limit={limit}',
         headers={'X-Service-Token': service_token},
         timeout=timeout,
     )

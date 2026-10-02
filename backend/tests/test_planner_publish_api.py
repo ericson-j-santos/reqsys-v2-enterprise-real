@@ -50,6 +50,44 @@ def test_publish_sem_auth_retorna_401_ou_403():
     assert response.status_code in (401, 403)
 
 
+@pytest.mark.parametrize('escopo,status', [('planner_publish:enviar', 200), ('outro:escopo', 403)])
+@patch('app.api.hub_lowcode.listar_tentativas_planner_publish')
+def test_reprocessamento_lista_pendentes_com_service_token(mock_listar, escopo, status):
+    # Exerce o token real, sem override da autorização, como o agendador.
+    from app.core.service_tokens import hash_token
+    from app.db import Base, SessionLocal, engine
+    from app.models.service_token import ServiceToken
+    import json
+    import uuid
+
+    Base.metadata.create_all(bind=engine)
+    token = uuid.uuid4().hex
+    with SessionLocal() as db:
+        registro = ServiceToken(label='planner-test', token_hash=hash_token(token),
+                                scopes=json.dumps([escopo]))
+        db.add(registro)
+        db.commit()
+        registro_id = registro.id
+    try:
+        mock_listar.return_value = [{'attempt_id': 42}]
+        response = client.get('/v1/hub-lowcode/planner/reprocessamento/pendentes?limit=5',
+                              headers={'X-Service-Token': token})
+        assert response.status_code == status
+        if status == 200:
+            assert response.json()['data']['items'] == [{'attempt_id': 42}]
+            assert mock_listar.call_args.args[1:] == (None, 'falhou_integracao', 5)
+        else:
+            mock_listar.assert_not_called()
+    finally:
+        with SessionLocal() as db:
+            db.delete(db.get(ServiceToken, registro_id))
+            db.commit()
+
+
+def test_reprocessamento_pendentes_sem_credenciais():
+    assert client.get('/v1/hub-lowcode/planner/reprocessamento/pendentes').status_code == 401
+
+
 @patch('app.api.hub_lowcode.publicar_tarefa_planner_governada', new_callable=AsyncMock)
 def test_publish_happy_path(mock_publicar, auth_override):
     mock_publicar.return_value = {
