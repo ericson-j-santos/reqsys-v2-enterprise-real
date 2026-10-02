@@ -19,6 +19,8 @@ com identidades dedicadas por ambiente e sem expor tokens ou segredos ao navegad
 10. A promoção deve seguir DEV, HML e PROD, com gates de aprovação existentes.
 11. O smoke pré-deploy deve funcionar mesmo quando o runtime ainda estiver na imagem anterior.
 12. A ausência de qualquer material obrigatório deve falhar fechado.
+13. Os testes de roteamento de tokens devem classificar o recurso pelo host OAuth exato, sem correspondência por substring.
+14. Respostas OAuth inválidas ou não JSON devem produzir somente diagnóstico allowlisted, sem propagar o corpo recebido.
 
 ## Critérios de aceite
 
@@ -27,5 +29,7 @@ com identidades dedicadas por ambiente e sem expor tokens ou segredos ao navegad
 - O app SharePoint DEV obtém token e lê a lista `IA_Catalogo_Projetos` no site selecionado.
 - O workflow DEV confirma as variáveis no Fly e aprova os smokes Power Platform e Dataverse.
 - Nenhuma resposta operacional ou log contém client secret ou access token.
+- Escopos com texto semelhante, mas host diferente, não são classificados como Power Platform ou Power Apps.
+- Corpos OAuth inválidos ou não JSON são descartados e retornam somente o erro sanitizado padrão.
 - Actions externas dos workflows modificados ficam fixadas por SHA imutável.
 - HML e PROD só são promovidos após o sucesso do ambiente anterior e seus gates próprios.
