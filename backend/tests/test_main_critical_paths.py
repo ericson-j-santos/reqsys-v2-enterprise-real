@@ -42,10 +42,9 @@ def test_health_retorna_503_quando_banco_indisponivel(_probe):
     assert body['data']['status'] == 'degraded'
 
 
-def test_build_sha_prioriza_github_e_fallback_fly(monkeypatch):
+def test_build_sha_usa_github_e_falha_fechado_sem_sha(monkeypatch):
     monkeypatch.delenv('GITHUB_SHA', raising=False)
-    monkeypatch.setenv('FLY_IMAGE_REF', 'registry.example/app:deploy-123')
-    assert _build_sha() == 'registry.example/app:deploy-123'
+    assert _build_sha() == 'unknown'
 
     monkeypatch.setenv('GITHUB_SHA', 'abc123def')
     assert _build_sha() == 'abc123def'
@@ -65,7 +64,8 @@ def test_runtime_contracts_e_version():
     assert version.status_code == 200
     assert version.json()['data']['service'] == 'reqsys-api'
     assert readiness.status_code == 200
-    assert readiness.json()['data']['ready'] is True
+    assert readiness.json()['data']['ready'] is False
+    assert readiness.json()['data']['readiness_reason'] == 'blocked_items_detected'
     assert liveness.status_code == 200
     assert liveness.json()['data']['alive'] is True
 
