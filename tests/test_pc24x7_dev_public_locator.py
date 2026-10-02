@@ -112,6 +112,25 @@ def test_public_access_validation_runs_after_merged_pr_close():
     assert "ACCESS_VALIDATION_FAIL_ON_UNAVAILABLE" in workflow
 
 
+def test_public_access_validation_requires_runtime_sha_only_for_deploy_scope():
+    workflow = (ROOT / ".github" / "workflows" / "validacao-acessos.yml").read_text(encoding="utf-8")
+    assert "validacao-acessos-${{ github.event_name }}-" in workflow
+    assert "github.event.pull_request.number || github.sha" in workflow
+    assert "validacao-acessos-${{ github.ref }}" not in workflow
+    assert ".github/scripts/classify_public_access_runtime_scope.py" in workflow
+    assert '"/api/runtime/build-info"' in workflow
+    assert 'git diff --no-renames --name-only "$observed_sha" "$EXPECTED_SHA" --' in workflow
+    assert "--scope-available" in workflow
+    assert "RUNTIME_SHA_REQUIRED: ${{ steps.runtime_scope.outputs.runtime_sha_required }}" in workflow
+    assert "CLASSIFIED_OBSERVED_SHA: ${{ steps.runtime_scope.outputs.observed_sha }}" in workflow
+    assert 'if observed != classified_observed:' in workflow
+    assert "if runtime_sha_required and observed != expected:" in workflow
+    assert 'final_status, final_body, final_latency = get("/api/runtime/build-info")' in workflow
+    assert 'if final_observed != classified_observed:' in workflow
+    assert 'raise SystemExit("build_sha_changed_after_validation")' in workflow
+    assert '"health_strict_sha_informational"' in workflow
+
+
 def test_ci_locator_resolver_proves_fail_closed_negative_cases():
     result = subprocess.run(
         ["node", str(RESOLVER), "--self-test"],
