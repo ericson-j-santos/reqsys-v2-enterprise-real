@@ -30,6 +30,7 @@
     "Pares path + testId permanecem únicos.",
     "Todas as rotas autenticadas continuam sendo avaliadas pelo Axe para WCAG 2.2 A/AA.",
     "O resumo WCAG deve informar exatamente a quantidade atual de rotas autenticadas do catálogo canônico.",
+    "Rotas parametrizadas são resolvidas para caminhos determinísticos antes da análise Axe.",
     "Nova rota canônica não exige alterar uma igualdade numérica apenas para o teste passar."
   ]
 }

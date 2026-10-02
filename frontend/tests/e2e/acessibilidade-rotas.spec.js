@@ -32,7 +32,11 @@ function carregarRotasCanonicas() {
   const source = fs.readFileSync(arquivo, 'utf8')
   const pattern = /\{\s*path:\s*'([^']+)',\s*testId:\s*'([^']+)',\s*titulo:\s*'([^']+)'\s*\}/g
   return [...source.matchAll(pattern)].map((match) => ({
-    path: match[1] === '/estatisticas/:indicadorId' ? '/estatisticas/total-requisitos' : match[1],
+    path: match[1] === '/estatisticas/:indicadorId'
+      ? '/estatisticas/total-requisitos'
+      : match[1] === '/service-cases/:caseId?'
+        ? '/service-cases'
+        : match[1],
     testId: match[2],
     public: match[1] === '/login',
   }))
