@@ -4,6 +4,7 @@ import yaml
 
 
 WORKFLOW = Path('.github/workflows/teams-bot-dev-activation-probe.yml')
+AZURE_LOGIN_SHA = '7184910d9eb2b1c5e48f7073824a90609bb9b6d6'
 
 
 def _text() -> str:
@@ -16,7 +17,8 @@ def _workflow() -> dict:
 
 def test_sonda_usa_oidc_governado_e_subscription_existente() -> None:
     text = _text()
-    assert 'azure/login@v2' in text
+    assert f'azure/login@{AZURE_LOGIN_SHA}' in text
+    assert 'azure/login@v2' not in text
     assert 'CCP_AZURE_CLIENT_ID' in text
     assert 'CCP_AZURE_TENANT_ID' in text
     assert 'CCP_AZURE_SUBSCRIPTION_ID' in text
