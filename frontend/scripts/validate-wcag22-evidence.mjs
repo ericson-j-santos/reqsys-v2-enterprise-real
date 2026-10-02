@@ -19,9 +19,13 @@ function exigir(condicao, mensagem) {
 const resumo = lerJson('wcag22-resumo.json')
 const violacoes = lerJson('wcag22-violacoes.json')
 const revisaoManual = lerJson('wcag22-revisao-manual.json')
+const TOTAL_ROTAS_AUTENTICADAS = 38
 
 exigir(resumo.schema_version === 1, 'Versão de esquema WCAG inesperada')
-exigir(resumo.rotas_autenticadas === 37, `Esperadas 37 rotas autenticadas; recebido ${resumo.rotas_autenticadas}`)
+exigir(
+  resumo.rotas_autenticadas === TOTAL_ROTAS_AUTENTICADAS,
+  `Esperadas ${TOTAL_ROTAS_AUTENTICADAS} rotas autenticadas; recebido ${resumo.rotas_autenticadas}`,
+)
 exigir(resumo.resultado_automatizado === 'approved', `Resultado automatizado não aprovado: ${resumo.resultado_automatizado}`)
 exigir(resumo.conformidade_formal === 'pending_manual_audit', 'O teste automatizado não pode declarar conformidade formal sozinho')
 exigir(Object.keys(violacoes).length === 0, `Há violações automatizáveis: ${JSON.stringify(violacoes)}`)
@@ -62,6 +66,6 @@ console.log(JSON.stringify(saida, null, 2))
 if (process.env.GITHUB_STEP_SUMMARY) {
   fs.appendFileSync(
     process.env.GITHUB_STEP_SUMMARY,
-    `\n## WCAG 2.2 — evidência automatizada\n\n- Rotas autenticadas: **${saida.rotas_autenticadas}/37**\n- Violações automatizáveis A/AA: **0**\n- Exceções Axe: **0**\n- Rotas com itens Axe para revisão manual: **${saida.rotas_com_revisao_manual_axe}**\n- Conformidade formal: **pendente de auditoria manual**\n`,
+    `\n## WCAG 2.2 — evidência automatizada\n\n- Rotas autenticadas: **${saida.rotas_autenticadas}/${TOTAL_ROTAS_AUTENTICADAS}**\n- Violações automatizáveis A/AA: **0**\n- Exceções Axe: **0**\n- Rotas com itens Axe para revisão manual: **${saida.rotas_com_revisao_manual_axe}**\n- Conformidade formal: **pendente de auditoria manual**\n`,
   )
 }
