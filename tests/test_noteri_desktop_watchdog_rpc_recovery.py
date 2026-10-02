@@ -182,6 +182,12 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "if: ${{ inputs.mode == 'runner-bootstrap' }}" in raw
     assert "Bootstrap registered Desktop GitHub runner through control plane" in raw
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in raw
+    runner_bootstrap = raw.split("  runner-bootstrap:", 1)[1].split(
+        "  runner-canary:", 1
+    )[0]
+    assert "timeout-minutes: 12" in runner_bootstrap
+    assert '"--timeout", "150"' in runner_bootstrap
+    assert '"--timeout-seconds", "90"' in runner_bootstrap
     assert "desktop_runner_bootstrap_via_orchestrator.py" in raw
     assert "BOOTSTRAP-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR" in raw
     assert "DESKTOP_GITHUB_RUNNER_LOCAL_BOOTSTRAP_VERIFIED" in raw

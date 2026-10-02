@@ -542,7 +542,7 @@ jobs:
     if: ${{ inputs.mode == 'runner-bootstrap' }}
     name: Bootstrap registered Desktop GitHub runner through control plane
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 6
+    timeout-minutes: 12
     env:
       TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: 562fc4274aff24f7058cb135f27a509aa69031c1

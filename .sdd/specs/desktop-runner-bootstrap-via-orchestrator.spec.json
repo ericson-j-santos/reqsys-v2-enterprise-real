@@ -2,7 +2,7 @@
   "feature_name": "desktop-runner-bootstrap-via-orchestrator",
   "project": "ReqSys v2 Enterprise — Desktop control plane",
   "created_at": "2026-09-25",
-  "updated_at": "2026-09-29",
+  "updated_at": "2026-10-02",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
@@ -19,18 +19,23 @@
     ".github/self-hosted-runner-policy.json",
     "tests/test_desktop_runner_bootstrap_via_orchestrator.py",
     "tests/test_desktop_runner_pickup_canary.py",
+    "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
     "tests/test_reqsys_authorized_actions_gateway.py"
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_desktop_runner_bootstrap_via_orchestrator.py",
       "tests/test_desktop_runner_pickup_canary.py",
+      "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_self_hosted_runner_governance.py"
     ],
     "evidence_contract": "Noteri -> Session Launcher -> Command Gateway risk 2 -> DESKTOP-PDQK954:8787 -> refresh pinado quando runtime/capability estiver ausente ou stale -> heartbeat independente exige runtime_source_sha exato + worker_instance_id nova/presente + host.github_runner.bootstrap.v1 -> listener local verificado; conclusão isolada do work item de refresh não comprova aplicação; prova terminal separada pelo modo runner-canary no runner DESKTOP-PDQK954 e SHA exato.",
     "orchestrator_runtime_sha": "313f5da4bb0ee9dd70937c238c7cfdf4e3514602",
-    "evidence_location": "RUNNER_TEMP outside governed worktree"
+    "evidence_location": "RUNNER_TEMP outside governed worktree",
+    "job_timeout_minutes": 12,
+    "command_gateway_timeout_seconds": 150,
+    "orchestrator_timeout_seconds": 90
   },
   "risk": {
     "production": false,
@@ -60,6 +65,7 @@
     "Refresh só é aceito após readback do runtime_source_sha exato, worker_instance_id pós-reexec e host.github_runner.bootstrap.v1.",
     "A evidência do refresh registra runtime_source_sha e worker_instance_id anteriores e observados para impedir falso positivo por capability residual.",
     "O refresh do bootstrap está pinado ao SHA corrente 313f5da4bb0ee9dd70937c238c7cfdf4e3514602 da main do Engineering Orchestrator, preservando o fallback governado de recovery do runner ReqSys, o reexec pós-refresh e o inventário Windows somente-leitura.",
-    "Execuções duplicadas do mesmo modo não cancelam uma recuperação já em andamento; o workflow serializa por mode com cancel-in-progress=false."
+    "Execuções duplicadas do mesmo modo não cancelam uma recuperação já em andamento; o workflow serializa por mode com cancel-in-progress=false.",
+    "O job runner-bootstrap reserva 12 minutos para checkout, download pinado e gateway, sem ampliar os limites internos de 150 segundos do Command Gateway e 90 segundos do bootstrap do Orchestrator."
   ]
 }

@@ -23,6 +23,7 @@ Recuperar o runner GitHub Actions já registrado no `DESKTOP-PDQK954` usando o E
 13. Nenhum input arbitrário é aceito por esses dois comandos.
 14. O arquivo de evidência do bootstrap deve ser gravado em `RUNNER_TEMP`, fora do worktree validado pelo Command Gateway, para que observabilidade não produza falso `state_changed`.
 15. A concorrência do workflow deve ser serial por `mode` e usar `cancel-in-progress: false`; um comando duplicado pode permanecer enfileirado ou ser cancelado pelo gateway por ausência de pickup, mas nunca pode cancelar uma recuperação do mesmo modo que já esteja em execução.
+16. O job `runner-bootstrap` deve reservar 12 minutos para cobrir checkout, download e validação do Python portátil e a execução governada; os limites internos permanecem restritos a 150 segundos no Command Gateway e 90 segundos no bootstrap do Orchestrator.
 
 ## Critérios de aceite
 
