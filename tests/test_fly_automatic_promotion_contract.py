@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 AUTO = Path(".github/workflows/fly-automatic-environment-promotion.yml")
 CAPTURE = Path(".github/workflows/fly-environment-evidence-capture.yml")
 STAGE = Path(".github/workflows/fly-environment-promotion-stage.yml")
@@ -75,7 +77,9 @@ def test_stage_deploys_exact_current_main_sha_and_verifies() -> None:
     assert "Deploy frontend exact source" in workflow
     assert "uses: ./.github/workflows/fly-environment-evidence-capture.yml" in workflow
     assert "strict: true" in workflow
-    assert "if: always() && needs.deploy.result == 'success'" in workflow
+    condition = yaml.safe_load(workflow)["jobs"]["verify"]["if"]
+    assert condition.startswith("${{ false && (")
+    assert "always() && needs.deploy.result == 'success'" in condition
 
 
 def test_contract_documents_manual_only_dev_pc24x7_and_rollback_policy() -> None:

@@ -1,0 +1,76 @@
+{
+  "feature_name": "flyio-permanent-retirement",
+  "project": "ReqSys v2 Enterprise — todos os ambientes",
+  "created_at": "2026-10-02",
+  "updated_at": "2026-10-02",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Bloqueia os jobs Fly.io identificados em todos os ambientes por decisão explícita do usuário, preservando contratos e condições de autorização.",
+  "scope": "runtime-flyio-retirement",
+  "files": [
+    ".github/workflows/coleta-requisitos-teams-e2e-dev.yml",
+    ".github/workflows/configurar-fly-auth-azure.yml",
+    ".github/workflows/configurar-integracao-github-fly-dev.yml",
+    ".github/workflows/control-plane-lifecycle.yml",
+    ".github/workflows/credential-consumer-cutover-contract.yml",
+    ".github/workflows/credential-control-plane-cutover-smoke.yml",
+    ".github/workflows/credential-control-plane-runtime-health.yml",
+    ".github/workflows/deploy-production-sync.yml",
+    ".github/workflows/deploy-staging-auth-fix.yml",
+    ".github/workflows/dev-merge-console-homologation.yml",
+    ".github/workflows/dev-runtime-auth-diagnostic.yml",
+    ".github/workflows/dev-runtime-auth-diagnostics.yml",
+    ".github/workflows/environment-observability-api.yml",
+    ".github/workflows/environment-observability-promotion.yml",
+    ".github/workflows/environment-observability-rollback.yml",
+    ".github/workflows/fly-automatic-environment-promotion.yml",
+    ".github/workflows/fly-dev-fast-deploy.yml",
+    ".github/workflows/fly-dev-runtime-diagnostic.yml",
+    ".github/workflows/fly-enterprise-sync.yml",
+    ".github/workflows/fly-environment-evidence-capture.yml",
+    ".github/workflows/fly-environment-homologation-gate.yml",
+    ".github/workflows/fly-environment-promotion-stage.yml",
+    ".github/workflows/fly-governed-command-center.yml",
+    ".github/workflows/fly-org-token-successor-probe.yml",
+    ".github/workflows/fly-runtime-p0.yml",
+    ".github/workflows/ocr-deploy-staging.yml",
+    ".github/workflows/ocr-secret-rotation.yml",
+    ".github/workflows/padrao-ouro-delivery-automation.yml",
+    ".github/workflows/reqsys-backup-provider-readiness.yml",
+    ".github/workflows/reqsys-free-tier-backup.yml",
+    ".github/workflows/sync-microsoft-identity-dev.yml",
+    ".github/workflows/teams-gateway-contract-acceptance-dev.yml",
+    "tests/test_flyio_permanent_retirement.py",
+    "docs/releases/flyio-retirement-20261002.md",
+    "tests/test_environment_observability_build_only_contract.py",
+    "tests/test_fly_automatic_promotion_contract.py"
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_flyio_permanent_retirement.py"
+    ],
+    "tests": [
+      "tests/test_flyio_permanent_retirement.py",
+      "tests/test_fly_dev_fast_deploy_contract.py",
+      "tests/test_fly_dev_runtime_diagnostic_contract.py",
+      "tests/test_fly_runtime_p0_bacen_gate_contract.py",
+      "tests/test_fly_enterprise_sync_bacen_gate_contract.py",
+      "tests/test_fly_command_center_bacen_gate_contract.py",
+      "tests/test_capture_fly_environment_workload_contract.py",
+      "tests/test_environment_observability_build_only_contract.py",
+      "tests/test_fly_automatic_promotion_contract.py"
+    ],
+    "evidence_contract": "Workflows YAML válidos no SHA do PR; todos os jobs com referências diretas a operações, tokens ou callers Fly.io são bloqueados por condição constante falsa; controle negativo detecta reativação e false || true; demais jobs e contratos permanecem. Não declarar retirada de recursos remotos sem inventário autenticado."
+  },
+  "risk": {
+    "production": true,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  }
+}

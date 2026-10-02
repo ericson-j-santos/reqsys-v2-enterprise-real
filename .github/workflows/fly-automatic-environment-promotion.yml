@@ -207,9 +207,13 @@ jobs:
           exit 1
 
   capture-stg:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.dev-result.result == 'success'
+      ) }}
     name: Capture STG
     needs: [resolve, dev-result]
-    if: needs.dev-result.result == 'success'
     uses: ./.github/workflows/fly-environment-evidence-capture.yml
     with:
       environment: hml
@@ -219,9 +223,13 @@ jobs:
     secrets: inherit
 
   promote-stg:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.capture-stg.outputs.ready != 'true'
+      ) }}
     name: Promote STG when drifted
     needs: [resolve, capture-stg]
-    if: needs.capture-stg.outputs.ready != 'true'
     uses: ./.github/workflows/fly-environment-promotion-stage.yml
     with:
       environment: hml
@@ -268,9 +276,13 @@ jobs:
       enforce: false
 
   capture-prod:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.stg-result.result == 'success' && needs.resolve.outputs.promote_prod == 'true'
+      ) }}
     name: Capture PROD
     needs: [resolve, stg-result]
-    if: needs.stg-result.result == 'success' && needs.resolve.outputs.promote_prod == 'true'
     uses: ./.github/workflows/fly-environment-evidence-capture.yml
     with:
       environment: prod
@@ -280,11 +292,13 @@ jobs:
     secrets: inherit
 
   promote-prod:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.capture-prod.outputs.ready != 'true' && needs.bacen-production.outputs.production_allowed == 'true'
+      ) }}
     name: Promote PROD when authorized and drifted
     needs: [resolve, bacen-production, capture-prod]
-    if: >-
-      needs.capture-prod.outputs.ready != 'true' &&
-      needs.bacen-production.outputs.production_allowed == 'true'
     uses: ./.github/workflows/fly-environment-promotion-stage.yml
     with:
       environment: prod
