@@ -20,11 +20,13 @@ describe('startup fail-safe', () => {
   it('consome o retorno OAuth antes de montar o router e preservar code/state', () => {
     const oauthAt = mainSource.indexOf('if (retornoMicrosoft) {')
     const awaitedAuthAt = mainSource.indexOf('await inicializarAutenticacao(caminhoInicial, true)')
+    const routerInstallAt = mainSource.indexOf('app.use(router)')
     const mountAt = mainSource.indexOf("app.mount('#app')")
 
     expect(oauthAt).toBeGreaterThan(-1)
     expect(awaitedAuthAt).toBeGreaterThan(oauthAt)
-    expect(awaitedAuthAt).toBeLessThan(mountAt)
+    expect(routerInstallAt).toBeGreaterThan(awaitedAuthAt)
+    expect(routerInstallAt).toBeLessThan(mountAt)
   })
 
   it('mantem falha do callback visivel e registra codigo diagnostico sem token', () => {

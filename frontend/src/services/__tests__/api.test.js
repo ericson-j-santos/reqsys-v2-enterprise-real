@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import apiDefault, {
   api,
+  buildLoginRedirectLocation,
   definirCorrelationIdSessao,
   isJourneyRequest,
   journeyLoadingMessage,
@@ -89,5 +90,22 @@ describe('services/api — interceptor de request', () => {
     expect(localStorage.getItem('reqsys_token')).toBeNull()
     expect(localStorage.getItem('reqsys_usuario')).toBeNull()
     expect(assign).toHaveBeenCalledWith('/login?redirect=%2Frequisitos%3Faba%3Dlista')
+  })
+
+  it('preserva o prefixo do GitHub Pages ao redirecionar um 401', () => {
+    expect(buildLoginRedirectLocation(
+      {
+        pathname: '/reqsys-v2-enterprise-real/dev/requisitos',
+        search: '?aba=lista',
+      },
+      '/reqsys-v2-enterprise-real/dev/'
+    )).toBe('/reqsys-v2-enterprise-real/dev/?redirect=%2Frequisitos%3Faba%3Dlista')
+  })
+
+  it('nao cria loop quando o 401 ja ocorreu na rota de login', () => {
+    expect(buildLoginRedirectLocation(
+      { pathname: '/reqsys-v2-enterprise-real/dev/login', search: '' },
+      '/reqsys-v2-enterprise-real/dev/'
+    )).toBeNull()
   })
 })

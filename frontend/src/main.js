@@ -14,6 +14,7 @@ import { installWcag22Guard } from './accessibility/wcag22Guard'
 import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
 import { acquireIdTokenSilent, handleRedirectResult } from './auth/msal'
+import { isMicrosoftRedirectResponse } from './auth/msalRedirectHandoff'
 import { DSC_TABLE, DSC_Z_INDEX, figmaVuetifyLightTheme, figmaVuetifyTheme } from './theme/figmaPadraoOuro'
 
 const temaPersistido = localStorage.getItem('reqsys_tema_visual')
@@ -42,11 +43,6 @@ const vuetify = createVuetify({
 
 function caminhoAtual() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`
-}
-
-export function isMicrosoftRedirectResponse(locationLike = window.location) {
-  const search = new URLSearchParams(locationLike.search || '')
-  return search.has('code') || search.has('error') || (search.has('state') && search.has('session_state'))
 }
 
 function destinoSeguroAposLogin(caminhoInicial, retornoMicrosoft = false) {
@@ -99,7 +95,7 @@ async function boot() {
 
   const caminhoInicial = caminhoAtual()
   const retornoMicrosoft = isMicrosoftRedirectResponse(window.location)
-  const app = createApp(App).use(pinia).use(router).use(vuetify)
+  const app = createApp(App).use(pinia).use(vuetify)
 
   // No retorno OAuth, o MSAL precisa consumir code/state antes que o guard do
   // router redirecione para /login e remova esses parametros da URL.
@@ -111,6 +107,7 @@ async function boot() {
   // de autenticacao. Assim, atraso/falha do MSAL nunca deixa a tela em branco.
   // Monta antes da resolução assíncrona da rota inicial. Isso mantém o
   // comportamento de foco dos deep links e evita bloquear a interface.
+  app.use(router)
   installWcag22Guard(router)
   app.mount('#app')
 
