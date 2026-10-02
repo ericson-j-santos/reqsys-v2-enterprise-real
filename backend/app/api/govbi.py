@@ -128,7 +128,7 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
         logger.error('govbi_configuracao_bloqueada correlation_id=%s motivo=%s', correlation_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail='Integração GovBI indisponível.',
         ) from None
     url = f'{base_url}/api/v1/perguntas'
 

@@ -255,7 +255,8 @@ def test_govbi_perguntas_sem_url_explicita_retorna_503(monkeypatch):
         )
 
     assert response.status_code == 503
-    assert response.json()['detail'] == 'GOVBI_BASE_URL deve ser configurada explicitamente.'
+    assert response.json()['detail'] == 'Integração GovBI indisponível.'
+    assert 'GOVBI_BASE_URL' not in response.text
     async_client.assert_not_called()
 
 
