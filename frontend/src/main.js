@@ -44,7 +44,13 @@ function caminhoAtual() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`
 }
 
-function destinoSeguroAposLogin(caminhoInicial) {
+export function isMicrosoftRedirectResponse(locationLike = window.location) {
+  const search = new URLSearchParams(locationLike.search || '')
+  return search.has('code') || search.has('error') || (search.has('state') && search.has('session_state'))
+}
+
+function destinoSeguroAposLogin(caminhoInicial, retornoMicrosoft = false) {
+  if (retornoMicrosoft) return '/'
   const redirect = router.currentRoute.value?.query?.redirect
   if (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) {
     return redirect
@@ -55,7 +61,7 @@ function destinoSeguroAposLogin(caminhoInicial) {
   return '/'
 }
 
-async function inicializarAutenticacao(caminhoInicial) {
+async function inicializarAutenticacao(caminhoInicial, retornoMicrosoft = false) {
   try {
     let idToken = await handleRedirectResult()
     if (!idToken && !useAuthStore().autenticado) {
@@ -66,7 +72,7 @@ async function inicializarAutenticacao(caminhoInicial) {
     const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
     useAuthStore().salvarSessao(data.data)
 
-    const destino = destinoSeguroAposLogin(caminhoInicial)
+    const destino = destinoSeguroAposLogin(caminhoInicial, retornoMicrosoft)
     if (router.currentRoute.value.fullPath !== destino) {
       await router.replace(destino)
     }
@@ -81,17 +87,23 @@ async function boot() {
   setActivePinia(pinia)
 
   const caminhoInicial = caminhoAtual()
+  const retornoMicrosoft = isMicrosoftRedirectResponse(window.location)
   const app = createApp(App).use(pinia).use(router).use(vuetify)
 
-  // A interface deve existir antes de qualquer chamada externa de autenticacao.
-  // Assim, atraso/falha do MSAL nunca deixa o usuario preso em tela branca:
-  // a rota protegida cai no login e, quando o SSO concluir, volta ao destino.
+  // No retorno OAuth, o MSAL precisa consumir code/state antes que o guard do
+  // router redirecione para /login e remova esses parametros da URL.
+  if (retornoMicrosoft) {
+    await inicializarAutenticacao(caminhoInicial, true)
+  }
+
+  // Fora do retorno OAuth, a interface deve existir antes de chamadas externas
+  // de autenticacao. Assim, atraso/falha do MSAL nunca deixa a tela em branco.
   // Monta antes da resolução assíncrona da rota inicial. Isso mantém o
   // comportamento de foco dos deep links e evita bloquear a interface.
   installWcag22Guard(router)
   app.mount('#app')
 
-  void inicializarAutenticacao(caminhoInicial)
+  if (!retornoMicrosoft) void inicializarAutenticacao(caminhoInicial)
 }
 
 boot().catch((error) => {

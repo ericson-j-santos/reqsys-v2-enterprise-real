@@ -8,13 +8,23 @@ const mainSource = readFileSync(resolve(here, '../../main.js'), 'utf8')
 const indexSource = readFileSync(resolve(here, '../../../index.html'), 'utf8')
 
 describe('startup fail-safe', () => {
-  it('monta a interface antes do bootstrap MSAL', () => {
+  it('monta a interface antes do bootstrap MSAL fora do retorno OAuth', () => {
     const mountAt = mainSource.indexOf("app.mount('#app')")
     const authAt = mainSource.indexOf('void inicializarAutenticacao(caminhoInicial)')
 
     expect(mountAt).toBeGreaterThan(-1)
     expect(authAt).toBeGreaterThan(-1)
     expect(mountAt).toBeLessThan(authAt)
+  })
+
+  it('consome o retorno OAuth antes de montar o router e preservar code/state', () => {
+    const oauthAt = mainSource.indexOf('if (retornoMicrosoft) {')
+    const awaitedAuthAt = mainSource.indexOf('await inicializarAutenticacao(caminhoInicial, true)')
+    const mountAt = mainSource.indexOf("app.mount('#app')")
+
+    expect(oauthAt).toBeGreaterThan(-1)
+    expect(awaitedAuthAt).toBeGreaterThan(oauthAt)
+    expect(awaitedAuthAt).toBeLessThan(mountAt)
   })
 
   it('nao bloqueia o mount aguardando MSAL diretamente', () => {
