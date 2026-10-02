@@ -41,6 +41,7 @@ jobs:
       RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
+      PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -55,6 +56,8 @@ jobs:
           PORTABLE_PYTHON_VERSION: "3.12.10"
           PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
           PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+          PORTABLE_PIP_URL: https://files.pythonhosted.org/packages/b7/3f/945ef7ab14dc4f9d7f40288d2df998d1837ee0888ec3659c813487572faa/pip-25.2-py3-none-any.whl
+          PORTABLE_PIP_SHA256: 6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953717
         run: |
           $ErrorActionPreference = "Stop"
           $ProgressPreference = "SilentlyContinue"
@@ -76,25 +79,16 @@ jobs:
           }
           $siteDir = Join-Path $root "Lib\site-packages"
           New-Item -ItemType Directory -Force $siteDir | Out-Null
-          $pipVersion = "25.2"
           $pipFilename = "pip-25.2-py3-none-any.whl"
-          $pipMetadata = Invoke-RestMethod -Uri "https://pypi.org/pypi/pip/25.2/json" -TimeoutSec 120
-          if ($pipMetadata.info.name -ne "pip" -or $pipMetadata.info.version -ne $pipVersion) { throw "portable_pip_metadata_mismatch" }
-          $pipFiles = @($pipMetadata.urls | Where-Object { $_.filename -eq $pipFilename -and $_.packagetype -eq "bdist_wheel" -and $_.python_version -eq "py3" -and -not $_.yanked })
-          if ($pipFiles.Count -ne 1) { throw "portable_pip_wheel_selection_failed" }
-          $pipFile = $pipFiles[0]
-          $pipHash = ([string]$pipFile.digests.sha256).ToLowerInvariant()
-          if ($pipHash -notmatch '^[a-f0-9]{64}$') { throw "portable_pip_sha256_invalid" }
-          $pipUri = [uri]$pipFile.url
-          if (-not $pipUri.IsAbsoluteUri -or $pipUri.Scheme -ne "https" -or $pipUri.DnsSafeHost -ne "files.pythonhosted.org" -or $pipUri.Port -ne 443 -or $pipUri.UserInfo -ne "" -or -not $pipUri.AbsolutePath.EndsWith("/$pipFilename")) { throw "portable_pip_url_rejected" }
           $pipWheel = Join-Path $root $pipFilename
-          Invoke-WebRequest -Uri $pipUri.AbsoluteUri -OutFile $pipWheel -UseBasicParsing -TimeoutSec 120
-          if ((Get-FileHash -LiteralPath $pipWheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pipHash) { throw "portable_pip_sha256_mismatch" }
+          Invoke-WebRequest -Uri $env:PORTABLE_PIP_URL -OutFile $pipWheel -UseBasicParsing -TimeoutSec 120
+          if ((Get-FileHash -LiteralPath $pipWheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PORTABLE_PIP_SHA256) { throw "portable_pip_sha256_mismatch" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [System.IO.Compression.ZipFile]::ExtractToDirectory($pipWheel, $siteDir)
           $pth = Join-Path $root "python312._pth"
           $pthLines = @("python312.zip", ".", "Lib\site-packages", "import site")
           [System.IO.File]::WriteAllLines($pth, $pthLines, (New-Object System.Text.UTF8Encoding($false)))
+          if ($env:PYTHONNOUSERSITE -ne "1") { throw "portable_python_user_site_not_disabled" }
           "REQSYS_PYTHON_SITE=$siteDir" | Add-Content $env:GITHUB_ENV
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
@@ -390,6 +384,7 @@ jobs:
       RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: noteri-desktop-dev-http-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-dev-http\evidence.json
+      PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -404,6 +399,8 @@ jobs:
           PORTABLE_PYTHON_VERSION: "3.12.10"
           PORTABLE_PYTHON_URL: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
           PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3
+          PORTABLE_PIP_URL: https://files.pythonhosted.org/packages/b7/3f/945ef7ab14dc4f9d7f40288d2df998d1837ee0888ec3659c813487572faa/pip-25.2-py3-none-any.whl
+          PORTABLE_PIP_SHA256: 6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953717
         run: |
           $ErrorActionPreference = "Stop"
           $ProgressPreference = "SilentlyContinue"
@@ -425,25 +422,16 @@ jobs:
           }
           $siteDir = Join-Path $root "Lib\site-packages"
           New-Item -ItemType Directory -Force $siteDir | Out-Null
-          $pipVersion = "25.2"
           $pipFilename = "pip-25.2-py3-none-any.whl"
-          $pipMetadata = Invoke-RestMethod -Uri "https://pypi.org/pypi/pip/25.2/json" -TimeoutSec 120
-          if ($pipMetadata.info.name -ne "pip" -or $pipMetadata.info.version -ne $pipVersion) { throw "portable_pip_metadata_mismatch" }
-          $pipFiles = @($pipMetadata.urls | Where-Object { $_.filename -eq $pipFilename -and $_.packagetype -eq "bdist_wheel" -and $_.python_version -eq "py3" -and -not $_.yanked })
-          if ($pipFiles.Count -ne 1) { throw "portable_pip_wheel_selection_failed" }
-          $pipFile = $pipFiles[0]
-          $pipHash = ([string]$pipFile.digests.sha256).ToLowerInvariant()
-          if ($pipHash -notmatch '^[a-f0-9]{64}$') { throw "portable_pip_sha256_invalid" }
-          $pipUri = [uri]$pipFile.url
-          if (-not $pipUri.IsAbsoluteUri -or $pipUri.Scheme -ne "https" -or $pipUri.DnsSafeHost -ne "files.pythonhosted.org" -or $pipUri.Port -ne 443 -or $pipUri.UserInfo -ne "" -or -not $pipUri.AbsolutePath.EndsWith("/$pipFilename")) { throw "portable_pip_url_rejected" }
           $pipWheel = Join-Path $root $pipFilename
-          Invoke-WebRequest -Uri $pipUri.AbsoluteUri -OutFile $pipWheel -UseBasicParsing -TimeoutSec 120
-          if ((Get-FileHash -LiteralPath $pipWheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pipHash) { throw "portable_pip_sha256_mismatch" }
+          Invoke-WebRequest -Uri $env:PORTABLE_PIP_URL -OutFile $pipWheel -UseBasicParsing -TimeoutSec 120
+          if ((Get-FileHash -LiteralPath $pipWheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PORTABLE_PIP_SHA256) { throw "portable_pip_sha256_mismatch" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [System.IO.Compression.ZipFile]::ExtractToDirectory($pipWheel, $siteDir)
           $pth = Join-Path $root "python312._pth"
           $pthLines = @("python312.zip", ".", "Lib\site-packages", "import site")
           [System.IO.File]::WriteAllLines($pth, $pthLines, (New-Object System.Text.UTF8Encoding($false)))
+          if ($env:PYTHONNOUSERSITE -ne "1") { throw "portable_python_user_site_not_disabled" }
           "REQSYS_PYTHON_SITE=$siteDir" | Add-Content $env:GITHUB_ENV
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
