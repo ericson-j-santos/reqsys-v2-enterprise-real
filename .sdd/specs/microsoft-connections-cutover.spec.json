@@ -12,7 +12,7 @@
       "backend/tests/test_sharepoint_graph_identity.py",
       "tests/test_microsoft_identity_secret_contract.py"
     ],
-    "evidence_contract": "OAuth e recursos Microsoft são validados por identidades app-only dedicadas, com erros sanitizados, segregação por ambiente e smokes fail-closed."
+    "evidence_contract": "OAuth e recursos Microsoft são validados por identidades app-only dedicadas, com seleção por host exato, erros sanitizados inclusive para respostas não JSON, segregação por ambiente e smokes fail-closed."
   },
   "traceability": {
     "workflows": [
@@ -21,7 +21,8 @@
       ".github/workflows/deploy-production-sync.yml"
     ],
     "runtime_registry": "backend/config/identity-governance.runtime.json",
-    "pull_request": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/2183"
+    "pull_request": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/2183",
+    "hardening_pull_request": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/2186"
   },
   "risk": {
     "production": true,
