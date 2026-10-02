@@ -85,7 +85,9 @@ jobs:
                       f"{data['latency_ms']['p95']} | {data['status_codes']} |\n"
                   )
           PY
-          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f /tmp/summary.md ]]; then
+            cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload da evidência sanitizada
         if: always()

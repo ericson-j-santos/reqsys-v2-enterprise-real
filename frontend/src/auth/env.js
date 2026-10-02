@@ -27,7 +27,7 @@ function resolveAbsoluteHttpUrl(value) {
     return null
   }
   if (!['http:', 'https:'].includes(url.protocol)) return null
-  return requireProviderNeutralRuntimeUrl(url.toString(), 'MSAL redirect endereço')
+  return requireProviderNeutralRuntimeUrl(url.toString(), 'endereço de redirecionamento do MSAL')
 }
 
 function publicOrigin() {

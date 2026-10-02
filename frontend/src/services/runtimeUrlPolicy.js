@@ -15,7 +15,7 @@ export function isRetiredFlyUrl(value, baseOrigin = globalThis.location?.origin)
   }
 }
 
-export function requireProviderNeutralRuntimeUrl(value, label = 'execução endereço') {
+export function requireProviderNeutralRuntimeUrl(value, label = 'endereço da execução') {
   if (isRetiredFlyUrl(value)) {
     throw new Error(`${label} aponta para Fly.io, retirado definitivamente`)
   }

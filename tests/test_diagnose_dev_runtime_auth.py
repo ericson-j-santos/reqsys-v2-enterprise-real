@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from scripts.diagnose_dev_runtime_auth import (
@@ -5,6 +7,9 @@ from scripts.diagnose_dev_runtime_auth import (
     classify,
     sanitize_auth_payload,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "dev-runtime-auth-diagnostics.yml"
 
 
 def test_sanitize_auth_payload_remove_identificadores_sensiveis():
@@ -116,3 +121,18 @@ def test_build_targets_rejects_fly_and_plain_http():
         build_targets("https://legacy.fly.dev", "https://api.example.net")
     with pytest.raises(ValueError, match="HTTPS"):
         build_targets("https://app.example.net", "http://api.example.net")
+
+
+def test_workflow_summary_does_not_fail_when_evidence_is_absent():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    summary_step = workflow.split("      - name: Publicar resumo sanitizado", 1)[1].split(
+        "      - name: Upload da evidência sanitizada",
+        1,
+    )[0]
+
+    guard = "if [[ -f /tmp/summary.md ]]; then"
+    publish = 'cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"'
+
+    assert guard in summary_step
+    assert publish in summary_step
+    assert summary_step.index(guard) < summary_step.index(publish)
