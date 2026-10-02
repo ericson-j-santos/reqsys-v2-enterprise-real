@@ -79,6 +79,8 @@ jobs:
           echo "**Ready for deploy!**" >> $GITHUB_STEP_SUMMARY
 
   deploy-staging:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: 🚀 Deploy to Fly.io Staging
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
@@ -309,11 +311,14 @@ jobs:
           cat /tmp/deployment.txt
 
   rollback-on-failure:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        failure()
+      ) }}
     name: 🔄 Rollback on Failure
     runs-on: ubuntu-latest
     needs: [deploy-staging, post-deploy-validation]
-    if: failure()
-
     steps:
       - name: 🐱 Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master

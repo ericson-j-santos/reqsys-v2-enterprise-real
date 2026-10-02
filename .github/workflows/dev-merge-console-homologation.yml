@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   preflight:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Validar acesso Fly DEV e secret do backend
     runs-on: ubuntu-latest
     environment: development

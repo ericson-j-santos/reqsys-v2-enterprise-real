@@ -87,6 +87,8 @@ jobs:
           retention-days: 30
 
   fly-state:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Inspecionar estado Fly DEV sem alterar runtime
     runs-on: ubuntu-latest
     timeout-minutes: 10

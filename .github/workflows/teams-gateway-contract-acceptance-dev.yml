@@ -18,6 +18,8 @@ env:
 
 jobs:
   acceptance:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment:
       name: development

@@ -56,8 +56,12 @@ permissions:
 
 jobs:
   configurar-auth-azure-manual:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name == 'workflow_dispatch'
+      ) }}
     name: Configurar secrets Fly e validar Azure AD — manual
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment:
@@ -168,8 +172,12 @@ jobs:
           if-no-files-found: warn
 
   configurar-auth-azure-todos-ambientes:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name == 'push'
+      ) }}
     name: Configurar Azure AD — ${{ matrix.environment }}
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:

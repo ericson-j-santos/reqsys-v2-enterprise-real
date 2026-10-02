@@ -32,6 +32,8 @@ env:
 
 jobs:
   probe:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Provar emissão org A→B sem token pessoal
     runs-on: ubuntu-latest
     timeout-minutes: 10

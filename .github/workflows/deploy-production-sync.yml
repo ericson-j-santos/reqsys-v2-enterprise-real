@@ -179,19 +179,17 @@ jobs:
         run: python scripts/validate_fly_enterprise_sync.py --output fly-enterprise-sync-validation.json
 
   configure-prod-secrets:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.gate.result == 'success' && needs.gate.outputs.production_allowed == 'true' && needs.pre-sync-check.result == 'success' && needs.validate-runtime.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
+          (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+        )
+      ) }}
     name: Configurar secrets auth produção
     runs-on: ubuntu-latest
     needs: [gate, pre-sync-check, validate-runtime]
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true' &&
-      needs.pre-sync-check.result == 'success' &&
-      needs.validate-runtime.result == 'success' &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
-        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
-      )
     environment: production
     timeout-minutes: 10
     steps:
@@ -279,20 +277,17 @@ jobs:
           if-no-files-found: warn
 
   deploy-backend:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.gate.result == 'success' && needs.gate.outputs.production_allowed == 'true' && needs.pre-sync-check.result == 'success' && needs.validate-runtime.result == 'success' && needs.configure-prod-secrets.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
+          (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+        )
+      ) }}
     name: Deploy API produção
     runs-on: ubuntu-latest
     needs: [gate, pre-sync-check, validate-runtime, configure-prod-secrets]
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true' &&
-      needs.pre-sync-check.result == 'success' &&
-      needs.validate-runtime.result == 'success' &&
-      needs.configure-prod-secrets.result == 'success' &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
-        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
-      )
     environment: production
     timeout-minutes: 25
     steps:
@@ -343,19 +338,17 @@ jobs:
           if-no-files-found: warn
 
   deploy-frontend:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.gate.result == 'success' && needs.gate.outputs.production_allowed == 'true' && needs.pre-sync-check.result == 'success' && needs.validate-runtime.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == true) ||
+          (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+        )
+      ) }}
     name: Deploy frontend produção
     runs-on: ubuntu-latest
     needs: [gate, pre-sync-check, validate-runtime]
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true' &&
-      needs.pre-sync-check.result == 'success' &&
-      needs.validate-runtime.result == 'success' &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == true) ||
-        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
-      )
     environment: production
     timeout-minutes: 20
     steps:

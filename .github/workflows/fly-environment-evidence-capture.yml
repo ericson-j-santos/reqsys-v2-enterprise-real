@@ -65,6 +65,8 @@ env:
 
 jobs:
   capture:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Capture ${{ inputs.environment }} evidence
     runs-on: ubuntu-latest
     timeout-minutes: 15

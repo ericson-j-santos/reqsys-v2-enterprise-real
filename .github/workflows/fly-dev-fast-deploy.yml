@@ -23,6 +23,8 @@ concurrency:
 
 jobs:
   preflight:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Preflight DEV
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -85,10 +87,14 @@ jobs:
           if-no-files-found: warn
 
   deploy-api:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.preflight.outputs.should_deploy == 'true'
+      ) }}
     name: Deploy API DEV
     runs-on: ubuntu-latest
     needs: preflight
-    if: needs.preflight.outputs.should_deploy == 'true'
     environment: dev
     timeout-minutes: 12
     steps:
@@ -148,10 +154,14 @@ jobs:
           if-no-files-found: warn
 
   deploy-frontend:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.preflight.outputs.should_deploy == 'true'
+      ) }}
     name: Deploy frontend DEV
     runs-on: ubuntu-latest
     needs: preflight
-    if: needs.preflight.outputs.should_deploy == 'true'
     environment: dev
     timeout-minutes: 12
     steps:

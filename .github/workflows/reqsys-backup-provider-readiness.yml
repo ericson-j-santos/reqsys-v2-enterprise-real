@@ -50,7 +50,11 @@ jobs:
           python -m pytest -q tests/test_evaluate_backup_provider_readiness.py tests/test_object_storage_workflow_contract.py
 
   provider-readiness:
-    if: github.event_name != 'pull_request'
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name != 'pull_request'
+      ) }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: development

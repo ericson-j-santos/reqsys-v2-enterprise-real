@@ -78,6 +78,8 @@ jobs:
         run: bash -n scripts/rollback_environment_observability_api.sh
 
   rollback:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Roll back ${{ inputs.environment }}
     needs: validate-request
     runs-on: ubuntu-latest

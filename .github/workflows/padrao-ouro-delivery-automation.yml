@@ -136,16 +136,16 @@ jobs:
       enforce: ${{ github.event_name == 'workflow_dispatch' }}
 
   configure-prod-secrets:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.validate-runtime.result == 'success' && needs.production-gate.result == 'success' && needs.production-gate.outputs.production_allowed == 'true' && ((github.event_name == 'push' && github.ref_name == 'main') ||
+         (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+         (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+      ) }}
     name: Configurar secrets auth produção
     runs-on: ubuntu-latest
     needs: [validate-runtime, production-gate]
-    if: >-
-      needs.validate-runtime.result == 'success' &&
-      needs.production-gate.result == 'success' &&
-      needs.production-gate.outputs.production_allowed == 'true' &&
-      ((github.event_name == 'push' && github.ref_name == 'main') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     environment: production
     timeout-minutes: 10
     outputs:
@@ -240,18 +240,16 @@ jobs:
           echo "::notice::Configuração de secrets produção ignorada de forma governada; dependência externa ausente."
 
   deploy-fly-prod:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.validate-runtime.result == 'success' && needs.production-gate.result == 'success' && needs.production-gate.outputs.production_allowed == 'true' && needs.configure-prod-secrets.result == 'success' && needs.configure-prod-secrets.outputs.configured == 'true' && ((github.event_name == 'push' && github.ref_name == 'main') ||
+         (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+         (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+      ) }}
     name: Deploy Fly.io produção (runtime)
     runs-on: ubuntu-latest
     needs: [validate-runtime, production-gate, configure-prod-secrets]
-    if: >-
-      needs.validate-runtime.result == 'success' &&
-      needs.production-gate.result == 'success' &&
-      needs.production-gate.outputs.production_allowed == 'true' &&
-      needs.configure-prod-secrets.result == 'success' &&
-      needs.configure-prod-secrets.outputs.configured == 'true' &&
-      ((github.event_name == 'push' && github.ref_name == 'main') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     environment: production
     timeout-minutes: 20
     steps:
@@ -315,16 +313,16 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-fly-frontend-prod:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.validate-runtime.result == 'success' && needs.production-gate.result == 'success' && needs.production-gate.outputs.production_allowed == 'true' && ((github.event_name == 'push' && github.ref_name == 'main') ||
+         (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+         (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+      ) }}
     name: Deploy Fly.io produção (frontend)
     runs-on: ubuntu-latest
     needs: [validate-runtime, production-gate]
-    if: >-
-      needs.validate-runtime.result == 'success' &&
-      needs.production-gate.result == 'success' &&
-      needs.production-gate.outputs.production_allowed == 'true' &&
-      ((github.event_name == 'push' && github.ref_name == 'main') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     environment: production
     timeout-minutes: 20
     steps:

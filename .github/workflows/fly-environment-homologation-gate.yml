@@ -69,6 +69,8 @@ env:
 
 jobs:
   preflight:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Preflight homologacao ${{ inputs.environment }}
     runs-on: ubuntu-latest
     outputs:
@@ -226,15 +228,16 @@ jobs:
       enforce: true
 
   deploy:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.preflight.result == 'success' && (needs.production-gate.result == 'success' || needs.production-gate.result == 'skipped')
+      ) }}
     name: Deploy Fly ${{ inputs.environment }}
     runs-on: ubuntu-latest
     needs:
       - preflight
       - production-gate
-    if: >-
-      always() &&
-      needs.preflight.result == 'success' &&
-      (needs.production-gate.result == 'success' || needs.production-gate.result == 'skipped')
     environment:
       name: ${{ needs.preflight.outputs.github_environment }}
     timeout-minutes: 30
@@ -392,12 +395,16 @@ jobs:
           if-no-files-found: warn
 
   smoke:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.preflight.result == 'success' && needs.deploy.result == 'success'
+      ) }}
     name: Smoke Teams Gateway ${{ inputs.environment }}
     runs-on: ubuntu-latest
     needs:
       - preflight
       - deploy
-    if: always() && needs.preflight.result == 'success' && needs.deploy.result == 'success'
     timeout-minutes: 15
     steps:
       - name: Executar smokes governados
@@ -697,13 +704,17 @@ jobs:
           if-no-files-found: warn
 
   comment-issue:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && inputs.comment_issue == true && needs.preflight.result == 'success'
+      ) }}
     name: Comentar issue de homologacao
     runs-on: ubuntu-latest
     needs:
       - preflight
       - deploy
       - smoke
-    if: always() && inputs.comment_issue == true && needs.preflight.result == 'success'
     steps:
       - name: Baixar evidencia de smoke
         uses: actions/download-artifact@v4

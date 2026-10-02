@@ -61,6 +61,8 @@ env:
 
 jobs:
   validate:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: development
     outputs:
@@ -126,8 +128,12 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"; echo "configured=$configured" >> "$GITHUB_OUTPUT"; echo "missing=$csv" >> "$GITHUB_OUTPUT"
 
   backup:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name != 'pull_request' && needs.validate.outputs.configured == 'true' && needs.validate.outputs.matrix != '{"include":[]}'
+      ) }}
     needs: validate
-    if: github.event_name != 'pull_request' && needs.validate.outputs.configured == 'true' && needs.validate.outputs.matrix != '{"include":[]}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: ${{ matrix.github_environment }}

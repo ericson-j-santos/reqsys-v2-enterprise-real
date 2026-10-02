@@ -42,13 +42,15 @@ jobs:
       enforce: true
 
   deploy:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && (needs.production-gate.result == 'success' || needs.production-gate.result == 'skipped')
+      ) }}
     name: Deploy exact SHA to ${{ inputs.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs: production-gate
-    if: >-
-      always() &&
-      (needs.production-gate.result == 'success' || needs.production-gate.result == 'skipped')
     environment:
       name: ${{ inputs.environment == 'dev' && 'dev' || inputs.environment == 'hml' && 'staging' || 'production' }}
     steps:
@@ -247,9 +249,13 @@ jobs:
           retention-days: 90
 
   verify:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.deploy.result == 'success'
+      ) }}
     name: Verify ${{ inputs.environment }} after deploy
     needs: deploy
-    if: always() && needs.deploy.result == 'success'
     uses: ./.github/workflows/fly-environment-evidence-capture.yml
     with:
       environment: ${{ inputs.environment }}

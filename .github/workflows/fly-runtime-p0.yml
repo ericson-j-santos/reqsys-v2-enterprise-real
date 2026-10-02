@@ -79,15 +79,14 @@ jobs:
       enforce: true
 
   deploy:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && github.event_name == 'workflow_dispatch' && inputs.deploy == true && needs.validate-config.result == 'success' && needs.production-gate.result == 'success'
+      ) }}
     name: Deploy to Fly
     runs-on: ubuntu-latest
     needs: [validate-config, production-gate]
-    if: >-
-      always() &&
-      github.event_name == 'workflow_dispatch' &&
-      inputs.deploy == true &&
-      needs.validate-config.result == 'success' &&
-      needs.production-gate.result == 'success'
     environment: production
     steps:
       - name: Checkout

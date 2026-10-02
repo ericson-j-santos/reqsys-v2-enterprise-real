@@ -74,8 +74,12 @@ jobs:
           retention-days: 30
 
   lifecycle:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        github.event_name != 'pull_request' && vars.CCP_ENABLED == 'true'
+      ) }}
     name: Planejar ou executar lifecycle
-    if: ${{ github.event_name != 'pull_request' && vars.CCP_ENABLED == 'true' }}
     needs: contract-tests
     runs-on: ubuntu-latest
     timeout-minutes: 12

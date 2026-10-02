@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   sync:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Sincronizar identidade Microsoft no ReqSys DEV
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
