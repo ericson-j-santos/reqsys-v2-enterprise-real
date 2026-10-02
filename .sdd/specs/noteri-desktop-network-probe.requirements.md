@@ -171,10 +171,13 @@ e replay idempotente sem nova mutação.
 
 ## Recuperação do Python do Noteri — 02/10/2026
 
-1. Os jobs de rede, HTTP e recuperação devem selecionar Python 3.12.10 pela action oficial fixada por commit e validar o caminho absoluto e a versão antes do Session Launcher.
-2. O readback do Orchestrator preserva Python portátil 3.12.10 e a validação de SHA-256 do archive.
+1. Os quatro jobs devem preparar Python portátil 3.12.10 com SHA-256 fixo, em diretório temporário distinto por job, e validar host, caminho absoluto e versão antes do Session Launcher. A preparação não altera registro nem instala Python global.
+2. Downloads possuem timeout finito e desabilitam o progresso do PowerShell para evitar o gargalo observado. Os jobs possuem timeout de 15 minutos.
 3. Launcher, Gateway e processos filhos devem usar o mesmo executável explícito selecionado. Aliases globais de Python e pytest não podem ser dependência operacional.
 4. As regras são fixadas em `d26351458b17c917100efc3b736dcc6d53a646cb`, que reconhece a origem transitória do runner Noteri e preserva o isolamento do worktree.
 5. As dependências fixadas dos testes e da sonda WMI são instaladas somente depois do bootstrap, por Command Gateway com risco 2. Os testes continuam executando com risco 1.
 6. A branch canônica `fix/noteri-desktop-network-probe-python-*` pode executar os três diagnósticos para comprovar o reparo no mesmo SHA. Essa branch não dispara a recuperação mutante do runner.
 7. A regressão deve cobrir o interpretador dos processos filhos, além do interpretador que inicia o Gateway.
+
+8. Somente os jobs com testes preparam pip 25.2 pelo wheel oficial de versão/nome fixos, selecionado unicamente do PyPI, com URL HTTPS allowlisted e SHA-256 verificado antes da extração. O primeiro uso de pip ocorre pelo Gateway após sessão validada.
+9. A instalação usa índice oficial, modo isolado, apenas wheels e destino temporário explícito; não usa site global ou de usuário. `import site` habilita o bootstrap portátil do pywin32, sem pós-instalação administrativa.
