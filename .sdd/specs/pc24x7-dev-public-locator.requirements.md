@@ -31,7 +31,9 @@ PC24x7 --Ed25519--> ntfy.sh
 5. Cada payload deve expirar em no máximo 15 minutos.
 6. O locator deve ignorar mensagens inválidas, não assinadas, expiradas ou de
    ambiente diferente de DEV.
-7. A tarefa local deve publicar novo estado a cada ciclo de 5 minutos.
+7. A tarefa local deve publicar novo estado a cada ciclo de 7 minutos, mantendo
+   o payload válido durante a janela de 15 minutos e tolerando uma execução
+   perdida antes da expiração.
 8. Cloudflare Quick Tunnel permanece o transporte; GitHub Pages é apenas a
    entrada estável/descoberta.
 9. Tailscale, DuckDNS e NPort não podem bloquear o DEV.
@@ -53,6 +55,17 @@ PC24x7 --Ed25519--> ntfy.sh
 25. A publicação do Pages corrigido pode ser acionada pelo Authorized Actions Gateway somente pelo comando exato `/reqsys run deploy-pages-current-main`, fixando `deploy-reqsys-pages-composite.yml`, `ref=main`, `expected_sha` no SHA capturado da main e `authorization=DEPLOY_PAGES`; nenhum SHA, workflow, autorização ou `producer_run_id` pode vir do comentário.
 26. A validação pública deve comparar a árvore do `build_sha` observado com a árvore do SHA validado e exigir igualdade exata quando o delta contiver arquivo de runtime ou caminho desconhecido. A divergência de SHA pode ser apenas informativa quando todo o delta estiver limitado a CI (`.github/`), SDD (`.sdd/`), documentação/evidência ou testes. Escopo ausente, vazio sem igualdade de SHA ou commit observado indisponível deve falhar fechado.
 27. Execuções `pull_request: closed`, `push`, `schedule` e `workflow_dispatch` não podem cancelar entre si; cada prova pós-merge deve preservar seu resultado e artifact. A allowlist não-runtime deve usar apenas raízes explícitas comprovadamente fora do runtime publicado, e o `build_sha` deve ser relido após todos os probes para detectar troca durante a validação.
+28. A cadência agendada deve produzir no máximo 206 ciclos recorrentes de
+    publicação por janela de 24 horas, abaixo do limite anônimo de 250 mensagens
+    por visitante/IP do ntfy, sem retries automáticos adicionais no publisher.
+29. Em esgotamento da cota do IP do PC24x7, um relay emergencial pode transportar
+    somente o mesmo envelope DEV já assinado para o mesmo tópico ntfy. A chave
+    privada permanece protegida por DPAPI no host e nunca é enviada ao GitHub.
+30. O relay deve exigir `workflow_dispatch` em `main`, autorização literal,
+    `expected_sha` igual ao HEAD atual, assinatura/TTL válidos, ao menos 300 segundos
+    restantes, smoke público sem redirects antes do POST, publicação única em
+    endpoint fixo e readback do hash exato. Falha ou HTTP 429 não autoriza fallback
+    por Gist, Issue, Pages ou outro provedor.
 
 ## Critérios de aceite
 
@@ -62,6 +75,14 @@ PC24x7 --Ed25519--> ntfy.sh
 - GitHub Pages publica `/dev/`;
 - `/dev/` valida assinatura e redireciona apenas para tunnel vigente;
 - task scheduler preserva bateria/StartWhenAvailable/timeout de 10 minutos;
+- task scheduler usa intervalo de 7 minutos (`PT7M`), totaliza no máximo 206
+  publicações recorrentes em 24 horas, tolera um ciclo perdido dentro do TTL e
+  permanece abaixo do orçamento anônimo de 250 por visitante/IP;
+- sign-only gera apenas envelope público assinado, sem publicar nem alterar o
+  estado local de publicação;
+- relay emergencial executa em runner hospedado pelo GitHub, não depende do runner
+  self-hosted, valida a `main` antes de executar código do checkout e comprova o
+  POST por readback assinado do envelope exato;
 - merge, push, schedule e `workflow_run` não disparam publicação de Pages;
 - `workflow_dispatch` com autorização ausente/incorreta ou SHA divergente falha fechado antes da publicação;
 - `workflow_dispatch` autorizado opera somente sobre o SHA exato da `main` informado em `expected_sha`;

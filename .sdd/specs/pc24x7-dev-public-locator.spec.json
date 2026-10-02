@@ -44,7 +44,18 @@
     "legacy_locator_redirect_allowed": false,
     "authorized_gateway_pages_deploy_required": true,
     "public_access_resolves_signed_locator_required": true,
-    "public_access_runtime_same_sha_smoke_required": true
+    "public_access_runtime_same_sha_smoke_required": true,
+    "locator_publish_interval_minutes": 7,
+    "locator_ttl_minutes": 15,
+    "locator_missed_cycle_tolerance": 1,
+    "locator_max_scheduled_publications_per_24h": 206,
+    "ntfy_anonymous_daily_message_limit": 250,
+    "emergency_same_topic_relay_allowed": true,
+    "relay_private_key_export_allowed": false,
+    "relay_self_hosted_runner_required": false,
+    "relay_pre_publish_public_smoke_required": true,
+    "relay_exact_envelope_readback_required": true,
+    "relay_alternate_provider_fallback_allowed": false
   },
   "sdd_gate": {
     "tests": [
@@ -57,7 +68,7 @@
       "tests/test_executive_promotion_advisor_public_smoke_workflow.py",
       "tests/test_reqsys_authorized_actions_gateway.py"
     ],
-    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 5 minutos e Cloudflare continua como transporte. O deploy do Pages deve ocorrer somente por workflow_dispatch explícito na main, com authorization=DEPLOY_PAGES e expected_sha completo igual ao HEAD atual de main; merge, push, schedule e workflow_run não autorizam publicação. Após qualquer Pull Request realmente mergeada em main, a Validação de Acessos Públicos deve disparar por pull_request:closed, exigir merged=true e fazer checkout do merge_commit_sha exato. A igualdade do build_sha do runtime é obrigatória quando o delta acumulado entre o SHA observado e o SHA validado contém runtime ou caminho desconhecido; um delta comprovadamente limitado a CI, SDD, testes e documentação/evidência mantém health e frontend estritos, mas trata a diferença de SHA como informativa. Escopo ausente, vazio sem igualdade ou commit observado indisponível falha fechado. O gatilho workflow_run não é aceito para essa prova pós-merge. Consumidores CI do DEV devem resolver o mesmo locator Ed25519 vigente e falhar fechado para assinatura inválida, estado expirado ou URL fora de *.trycloudflare.com; URL Quick Tunnel estática não é evidência válida. O publisher e o supervisor devem exigir /api/health, /api/runtime/health e /api/runtime/build-info antes de publicar um locator; health básico isolado não autoriza exposição pública. O cutover DEV é considerado concluído somente quando caminhos críticos de navegação/configuração não contêm fallback para reqsys-app-dev.fly.dev/reqsys-api-dev.fly.dev, consumidores públicos resolvem o locator assinado, falha de smoke torna o workflow vermelho e o Modo ESTUDO reconcilia automaticamente no PC24x7 após merge em main. Eventos deployment_status sem environment_url pública não são alvos de smoke executivo e devem ser ignorados; quando a URL pública existe, o smoke permanece fail-closed e qualquer resultado funcional diferente de passed mantém o workflow vermelho. O payload assinado deve incluir runtime_contract.version=2.0.0, required_endpoints completos, static_frontend_required=true e vite_hmr_forbidden=true; Pages e resolver CI rejeitam locator legado antes de qualquer redirecionamento. A publicação do Pages é acionável somente pelo comando gateway exato deploy-pages-current-main, com ref main, expected_sha capturado e authorization=DEPLOY_PAGES fixos."
+    "evidence_contract": "O Pages deve aceitar somente payload DEV Ed25519 válido, não expirado e contendo exclusivamente URLs HTTPS *.trycloudflare.com; o host publica a cada 7 minutos, tolerando um ciclo perdido dentro do TTL de 15 minutos, com no máximo 206 ciclos recorrentes por 24 horas sob o limite anônimo de 250 mensagens por visitante/IP do ntfy, e Cloudflare continua como transporte. O deploy do Pages deve ocorrer somente por workflow_dispatch explícito na main, com authorization=DEPLOY_PAGES e expected_sha completo igual ao HEAD atual de main; merge, push, schedule e workflow_run não autorizam publicação. Após qualquer Pull Request realmente mergeada em main, a Validação de Acessos Públicos deve disparar por pull_request:closed, exigir merged=true e fazer checkout do merge_commit_sha exato. A igualdade do build_sha do runtime é obrigatória quando o delta acumulado entre o SHA observado e o SHA validado contém runtime ou caminho desconhecido; um delta comprovadamente limitado a CI, SDD, testes e documentação/evidência mantém health e frontend estritos, mas trata a diferença de SHA como informativa. Escopo ausente, vazio sem igualdade ou commit observado indisponível falha fechado. O gatilho workflow_run não é aceito para essa prova pós-merge. Consumidores CI do DEV devem resolver o mesmo locator Ed25519 vigente e falhar fechado para assinatura inválida, estado expirado ou URL fora de *.trycloudflare.com; URL Quick Tunnel estática não é evidência válida. O publisher e o supervisor devem exigir /api/health, /api/runtime/health, /api/runtime/readiness, /api/runtime/build-info, /task-console estático e /@vite/client=404 antes de publicar um locator; health básico isolado não autoriza exposição pública. Em esgotamento excepcional da cota do IP local, o relay manual pode transportar apenas um envelope vigente já assinado para o mesmo tópico ntfy, com validação da main antes do checkout, smoke público pré-POST, POST único e readback exato; a chave privada permanece no PC24x7 e não existe fallback de provedor. O cutover DEV é considerado concluído somente quando caminhos críticos de navegação/configuração não contêm fallback para reqsys-app-dev.fly.dev/reqsys-api-dev.fly.dev, consumidores públicos resolvem o locator assinado, falha de smoke torna o workflow vermelho e o Modo ESTUDO reconcilia automaticamente no PC24x7 após merge em main. Eventos deployment_status sem environment_url pública não são alvos de smoke executivo e devem ser ignorados; quando a URL pública existe, o smoke permanece fail-closed e qualquer resultado funcional diferente de passed mantém o workflow vermelho. O payload assinado deve incluir runtime_contract.version=2.0.0, required_endpoints completos, static_frontend_required=true e vite_hmr_forbidden=true; Pages e resolver CI rejeitam locator legado antes de qualquer redirecionamento. A publicação do Pages é acionável somente pelo comando gateway exato deploy-pages-current-main, com ref main, expected_sha capturado e authorization=DEPLOY_PAGES fixos."
   },
   "post_merge_deployment": {
     "automatic": false,
@@ -98,6 +109,21 @@
     "static_runtime_variable_allowed": false,
     "signature": "Ed25519",
     "max_ttl_seconds": 900,
+    "fail_closed": true
+  },
+  "emergency_relay": {
+    "workflow": ".github/workflows/dispatch-public-runtime-evidence.yml",
+    "trigger_event": "workflow_dispatch",
+    "required_operation": "relay-dev-locator",
+    "required_ref": "refs/heads/main",
+    "required_authorization": "RELAY_DEV_LOCATOR",
+    "exact_main_sha_required": true,
+    "private_key_stays_on_pc24x7": true,
+    "signed_public_envelope_input_only": true,
+    "minimum_remaining_ttl_seconds": 300,
+    "fixed_transport": "ntfy_signed_ed25519",
+    "post_attempts": 1,
+    "exact_readback_required": true,
     "fail_closed": true
   },
   "traceability": {

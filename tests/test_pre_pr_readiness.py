@@ -84,7 +84,7 @@ def test_valid_workflow_yaml_is_accepted(tmp_path: Path) -> None:
 
 def test_workflow_installs_root_dependencies_before_backend_profile_branch() -> None:
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-    common_install = "python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5'"
+    common_install = "python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5' 'cryptography==50.0.0'"
     backend_branch = "if git diff --name-only \"origin/$BASE_REF...HEAD\" | grep -q '^backend/'; then"
 
     assert common_install in workflow

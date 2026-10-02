@@ -58,6 +58,40 @@ Ambos apontam para `http://host.docker.internal:8083`, evitando dependência do 
 host. O estado corrente é salvo fora do repositório em
 `%LOCALAPPDATA%/ReqSys/PublicRuntime/dev-tunnels.json`.
 
+### Cadência e orçamento do locator
+
+A tarefa `ReqSys-Dev-Runtime-Supervisor` usa intervalo de 7 minutos (`PT7M`).
+Como o publisher envia no máximo uma mensagem por ciclo, o teto recorrente é de
+206 ciclos em 24 horas (`ceil(24 * 60 / 7)`), abaixo do limite anônimo de 250
+mensagens por visitante/IP do ntfy. O locator continua com TTL de 15 minutos:
+uma execução perdida leva a próxima tentativa prevista a 14 minutos, ainda antes
+da expiração. A folga de um minuto não cobre duas falhas consecutivas ou uma
+execução anormalmente longa.
+
+Não reduza o intervalo sem recalcular esse orçamento. Execuções manuais são
+operacionais e devem permanecer excepcionais, pois também consomem a cota do
+canal público.
+
+Antes de executar o instalador, confira se os nomes de containers em
+`pc24x7_dev_runtime_supervisor.py` correspondem ao deployment ativo. O instalador
+copia esses scripts para `%LOCALAPPDATA%`; não o use para alterar somente a
+cadência quando houver drift entre a fonte e o runtime endurecido instalado.
+
+### Relay emergencial da mesma mensagem assinada
+
+Quando o IP do PC24x7 atingir a cota anônima, gere um envelope público temporário
+com `pc24x7_dev_locator_publisher.py --sign-only --envelope-output <arquivo>` e
+despache `dispatch-public-runtime-evidence.yml` na `main` com
+`operation=relay-dev-locator`, o SHA exato e a confirmação
+`RELAY_DEV_LOCATOR`. O workflow valida a `main` antes do checkout, revalida a
+assinatura, exige pelo menos 300 segundos de TTL, executa o smoke público antes
+do POST e comprova a mensagem exata por readback.
+
+O envelope assinado e sua codificação Base64 são material público de curta
+duração; a chave privada DPAPI nunca deixa o PC24x7. Apague o arquivo temporário
+após o dispatch. Um 429 deve encerrar a operação: não publique o locator em Gist,
+Issue, Pages ou outro canal alternativo.
+
 ## 3. Por que Quick Tunnel é contingência e não URL canônica
 
 Quick Tunnel é gratuito e não exige domínio, IP público ou porta aberta, mas o hostname
@@ -120,5 +154,6 @@ DEV público só passa de contingência para canônico quando:
 - HTTPS válido;
 - frontend e `/api/health` verdes;
 - reinício recupera stack e publicação;
+- tarefa recorrente usa intervalo de 7 minutos, tolera um ciclo perdido e mantém o orçamento do ntfy;
 - nenhuma porta de backend está exposta diretamente;
 - evidência vinculada ao SHA corrente.

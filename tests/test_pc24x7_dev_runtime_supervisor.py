@@ -41,6 +41,31 @@ def test_installer_uses_user_level_recurring_task_and_persistent_copy():
     }
 
 
+def test_installer_keeps_scheduled_publication_under_ntfy_anonymous_daily_budget():
+    assert installer.SUPERVISOR_INTERVAL_MINUTES == 7
+    assert installer.LOCATOR_TTL_MINUTES == 15
+    assert installer.MISSED_CYCLE_TOLERANCE == 1
+    assert installer.MAX_SCHEDULED_PUBLICATIONS_PER_DAY == 206
+    assert installer.NTFY_ANONYMOUS_DAILY_MESSAGE_LIMIT == 250
+    assert (
+        installer.MAX_SCHEDULED_PUBLICATIONS_PER_DAY
+        < installer.NTFY_ANONYMOUS_DAILY_MESSAGE_LIMIT
+    )
+
+    raw = (ROOT / "scripts" / "pc24x7_dev_runtime_supervisor_install.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"/MO", str(SUPERVISOR_INTERVAL_MINUTES)' in raw
+
+
+def test_installer_cadence_tolerates_one_missed_cycle_before_locator_expiry():
+    renewal_after_one_missed_cycle = (
+        installer.SUPERVISOR_INTERVAL_MINUTES
+        * (installer.MISSED_CYCLE_TOLERANCE + 1)
+    )
+    assert renewal_after_one_missed_cycle < installer.LOCATOR_TTL_MINUTES
+
+
 def test_supervisor_has_no_tailscale_or_nport_critical_dependency():
     assert supervisor.PUBLIC_TUNNEL.name == "pc24x7_public_dev_tunnel.py"
     assert supervisor.LOCATOR_PUBLISHER.name == "pc24x7_dev_locator_publisher.py"
