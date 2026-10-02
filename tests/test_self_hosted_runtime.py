@@ -35,6 +35,8 @@ class SelfHostedTests(unittest.TestCase):
             self.assertEqual(initializer.initialize(root), 0)
             self.assertEqual(original, {p.name: p.read_bytes() for p in root.iterdir()})
             for name in original:
+                self.assertEqual(len(original[name]), 65)
+                self.assertNotIn(b"\r", original[name])
                 self.assertEqual(len(startup.read_secret(root, name)), 64)
 
     def test_no_partial_environment_when_jwt_invalid(self):
