@@ -171,7 +171,7 @@ onMounted(() => {
       v-if="erro"
       type="error"
       variant="tonal"
-      class="mb-4"
+      class="mb-4 service-case-error"
       data-testid="service-case-error"
     >
       {{ erro }}
@@ -275,3 +275,9 @@ onMounted(() => {
     </v-card>
   </div>
 </template>
+
+<style scoped>
+.service-case-error :deep(.v-alert__content) {
+  color: var(--text) !important;
+}
+</style>

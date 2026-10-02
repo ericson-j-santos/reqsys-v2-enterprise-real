@@ -10,7 +10,7 @@
       "frontend/tests/e2e/acessibilidade-rotas.spec.js",
       "frontend/scripts/validate-wcag22-evidence.test.mjs"
     ],
-    "evidence_contract": "O teste e o validador de evidência usam o catálogo canônico, bloqueiam duplicidade e preservam a baseline sem igualdade numérica obsoleta."
+    "evidence_contract": "O teste e o validador de evidência usam o catálogo canônico, bloqueiam duplicidade, preservam a baseline sem igualdade numérica obsoleta e exercitam o feedback de erro da rota opcional de ServiceCase com contraste AA."
   },
   "traceability": {
     "requirements": ".sdd/specs/frontend-accessibility-route-catalog.requirements.md",
@@ -31,6 +31,7 @@
     "Todas as rotas autenticadas continuam sendo avaliadas pelo Axe para WCAG 2.2 A/AA.",
     "O resumo WCAG deve informar exatamente a quantidade atual de rotas autenticadas do catálogo canônico.",
     "Rotas parametrizadas são resolvidas para caminhos determinísticos antes da análise Axe.",
+    "A rota opcional de ServiceCase mantém o caminho sem identificador e o feedback de erro possui contraste mínimo de 4,5:1.",
     "Nova rota canônica não exige alterar uma igualdade numérica apenas para o teste passar."
   ]
 }
