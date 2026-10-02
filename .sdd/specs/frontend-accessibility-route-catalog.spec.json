@@ -7,7 +7,8 @@
   },
   "sdd_gate": {
     "tests": [
-      "frontend/tests/e2e/acessibilidade-rotas.spec.js"
+      "frontend/tests/e2e/acessibilidade-rotas.spec.js",
+      "frontend/scripts/validate-wcag22-evidence.test.mjs"
     ],
     "evidence_contract": "O teste e o validador de evidência usam o catálogo canônico, bloqueiam duplicidade e preservam a baseline sem igualdade numérica obsoleta."
   },
