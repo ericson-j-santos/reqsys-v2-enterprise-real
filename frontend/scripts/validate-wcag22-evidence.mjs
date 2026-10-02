@@ -19,7 +19,20 @@ function exigir(condicao, mensagem) {
 const resumo = lerJson('wcag22-resumo.json')
 const violacoes = lerJson('wcag22-violacoes.json')
 const revisaoManual = lerJson('wcag22-revisao-manual.json')
-const TOTAL_ROTAS_AUTENTICADAS = 38
+
+function contarRotasAutenticadasCanonicas() {
+  const arquivo = path.join(raiz, 'src', 'constants', 'rotasResponsivas.js')
+  const source = fs.readFileSync(arquivo, 'utf8')
+  const pattern = /\{\s*path:\s*'([^']+)',\s*testId:\s*'([^']+)',\s*titulo:\s*'([^']+)'\s*\}/g
+  const rotas = [...source.matchAll(pattern)].map((match) => match[1])
+
+  exigir(rotas.length >= 39, `Catálogo canônico incompleto: ${rotas.length} rotas encontradas`)
+  exigir(new Set(rotas).size === rotas.length, 'Catálogo canônico contém caminhos duplicados')
+
+  return rotas.filter((rota) => rota !== '/login').length
+}
+
+const TOTAL_ROTAS_AUTENTICADAS = contarRotasAutenticadasCanonicas()
 
 exigir(resumo.schema_version === 1, 'Versão de esquema WCAG inesperada')
 exigir(
