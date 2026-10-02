@@ -139,7 +139,9 @@
       "provider": "fly",
       "secret_name": "reqsys-fly-control-plane-org-token",
       "purpose": "Emitir, validar e revogar deploy tokens app-scoped do ReqSys",
-      "manual_bootstrap_required": true,
+      "manual_bootstrap_required": false,
+      "enabled": false,
+      "status": "PERMANENTLY_RETIRED",
       "stored_only_in_external_secret_store": true
     }
   ]

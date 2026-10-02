@@ -28,7 +28,7 @@
     "scripts/validate_fly_runtime_config.py",
     "scripts/workflow_inventory_audit.py"
   ],
-  "legacy_manifests": [
+  "forbidden_manifests": [
     "fly.toml",
     "backend/fly.dev.toml",
     "backend/fly.staging.toml",
@@ -43,7 +43,7 @@
     "services/environment-observability-api/fly.stg.toml",
     "services/environment-observability-api/fly.prod.toml"
   ],
-  "legacy_build_artifacts": [
+  "forbidden_legacy_build_artifacts": [
     "Dockerfile.fly",
     "backend/Dockerfile.fly",
     "backend/fly_boot.sh",

@@ -2,6 +2,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / 'scripts' / 'validar_teams_notification_control_center_runtime.py'
 spec = importlib.util.spec_from_file_location('teams_smoke', MODULE_PATH)
@@ -100,3 +102,20 @@ def test_invalid_governed_token_is_blocking(monkeypatch):
     )
     assert payload['ok'] is False
     assert payload['status'] == 'failed'
+
+
+def test_flyio_runtime_is_rejected_before_network():
+    called = False
+
+    def fake(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError('network must not be called')
+
+    with pytest.raises(ValueError, match='retirado definitivamente'):
+        module.validate_environment(
+            'dev', {'api_url': 'https://reqsys-api-dev.fly.dev'}, timeout=1,
+            require_authenticated=False, send_canary=False, request_fn=fake,
+        )
+
+    assert called is False

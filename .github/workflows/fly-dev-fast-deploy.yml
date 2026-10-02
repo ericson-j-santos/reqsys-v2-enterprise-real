@@ -202,14 +202,11 @@ jobs:
           if-no-files-found: warn
 
   smoke:
+    # Fly.io retirado definitivamente; não consultar publicação histórica.
     name: Smoke DEV pós-deploy
     runs-on: ubuntu-latest
     needs: [preflight, deploy-api, deploy-frontend]
-    if: >-
-      always() &&
-      needs.preflight.outputs.should_deploy == 'true' &&
-      needs.deploy-api.result == 'success' &&
-      needs.deploy-frontend.result == 'success'
+    if: ${{ false }}
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

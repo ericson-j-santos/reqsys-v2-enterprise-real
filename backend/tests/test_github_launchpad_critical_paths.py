@@ -6,6 +6,7 @@ import pytest
 
 from app.models.agile_runtime import AgileWorkItem
 from app.services.github_launchpad import (
+    _url_app_ambiente,
     branch_base_por_ambiente,
     montar_github_launchpad,
     normalizar_ambiente_launchpad,
@@ -57,6 +58,8 @@ def test_montar_launchpad_homolog_com_branch_deploy(_sha, _token):
     assert payload['links']['ci'] == item.ci_url
     assert payload['links']['deploy'] == item.deploy_url
     assert 'criar_branch_api' in payload['acoes_disponiveis']
+    assert 'abrir_app' not in payload['acoes_disponiveis']
+    assert payload['links']['app_ambiente'] is None
     assert payload['branch_existe'] is True
 
 
@@ -67,3 +70,11 @@ def test_montar_launchpad_sem_repo_configurado(_token):
         mock_settings.github_alm_repo = ''
         with pytest.raises(ValueError, match='Repositorio'):
             montar_github_launchpad(item, 'dev')
+
+
+def test_url_app_rejeita_provedor_retirado():
+    with patch('app.services.github_launchpad.settings') as mock_settings:
+        mock_settings.ambientes_urls = {
+            'desenvolvimento': {'frontend': 'https://reqsys-app-dev.fly.dev'},
+        }
+        assert _url_app_ambiente('dev') is None

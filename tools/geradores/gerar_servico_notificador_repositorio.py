@@ -6,8 +6,8 @@ conteúdo do serviço gerado (código + testes + docs) está embutido neste
 próprio arquivo gerador como string literal. Rodar este único arquivo em
 qualquer máquina com Python 3.11+ reproduz o pacote inteiro, sem precisar
 do restante do repositório ReqSys clonado. Em tempo de execução, o serviço
-gerado só precisa de acesso de rede ao Teams Messaging Gateway (por padrão
-https://reqsys-api.fly.dev, configurável via --base-url/env var).
+gerado só precisa de acesso de rede ao Teams Messaging Gateway configurado
+explicitamente via --base-url ou TEAMS_GATEWAY_BASE_URL.
 
 Uso:
     python tools/geradores/gerar_servico_notificador_repositorio.py --force --run-tests --zip
@@ -31,9 +31,19 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-DEFAULT_BASE_URL = "https://reqsys-api.fly.dev"
+
+def _require_authorized_base_url(value: str) -> str:
+    normalized = (value or "").strip().rstrip("/")
+    parsed = urlparse(normalized)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("Teams gateway base URL deve ser uma URL HTTPS explícita")
+    hostname = parsed.hostname.lower()
+    if hostname in {"fly.dev", "fly.io"} or hostname.endswith((".fly.dev", ".fly.io")):
+        raise ValueError("Fly.io foi retirado definitivamente; informe um gateway autorizado")
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,7 @@ def enviar_mensagem(
     rede ao base_url consegue notificar. O gateway decide o canal real (webhook,
     flow_bot, graph_delegado etc.) - este modulo apenas envia a intencao.
     """
+    base_url = _require_authorized_base_url(base_url)
     payload = {
         "destino_tipo": destino_tipo,
         "modo": modo,
@@ -126,7 +137,7 @@ def montar_texto_ambiente(*, ambiente: str, resultado: str, sha: str = "", detal
 
 def _args_comuns(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--destino-id", default=os.environ.get("TEAMS_GATEWAY_DESTINO_ID"))
-    parser.add_argument("--base-url", default=os.environ.get("TEAMS_GATEWAY_BASE_URL", DEFAULT_BASE_URL))
+    parser.add_argument("--base-url", default=os.environ.get("TEAMS_GATEWAY_BASE_URL", ""))
     parser.add_argument("--modo", default="auto")
     parser.add_argument("--destino-tipo", default="chat")
     parser.add_argument("--autor", default="repo-notifier")
@@ -264,10 +275,16 @@ class EnviarMensagemTest(unittest.TestCase):
         self.assertFalse(resultado["entregue"])
         self.assertEqual(resultado["erro"], "network_error")
 
+    def test_rejeita_fly_antes_da_rede(self):
+        with patch("service.urlopen") as opener:
+            with self.assertRaises(ValueError):
+                enviar_mensagem(base_url="https://legacy.fly.dev", texto="oi", titulo="T")
+        opener.assert_not_called()
+
 
 class MainCliTest(unittest.TestCase):
     def test_comando_commit_dry_run(self):
-        argv = ["commit", "--sha", "abc123", "--autor-commit", "F", "--mensagem", "m", "--destino-id", "a@b.com", "--dry-run"]
+        argv = ["commit", "--sha", "abc123", "--autor-commit", "F", "--mensagem", "m", "--destino-id", "a@b.com", "--base-url", "https://gateway.example.net", "--dry-run"]
         with patch(
             "service.urlopen",
             return_value=_FakeResponse({"success": True, "data": {"entregue": False, "dry_run": True}}),
@@ -276,7 +293,7 @@ class MainCliTest(unittest.TestCase):
         self.assertEqual(codigo, 0)
 
     def test_comando_ambiente_strict_falha(self):
-        argv = ["ambiente", "--nome", "prod", "--resultado", "failure", "--destino-id", "a@b.com", "--strict"]
+        argv = ["ambiente", "--nome", "prod", "--resultado", "failure", "--destino-id", "a@b.com", "--base-url", "https://gateway.example.net", "--strict"]
         with patch("service.urlopen", side_effect=URLError("falhou")):
             codigo = main(argv)
         self.assertEqual(codigo, 1)
@@ -292,10 +309,12 @@ README = (
     "o Teams sobre commits e ambientes, via o Teams Messaging Gateway do ReqSys. "
     "Gerado por `tools/geradores/gerar_servico_notificador_repositorio.py` — 100% "
     "autônomo: não depende de nenhum outro arquivo do repositório ReqSys, apenas "
-    "de acesso de rede ao gateway (`https://reqsys-api.fly.dev` por padrão).\n\n"
+    "de acesso de rede ao gateway HTTPS definido por `--base-url` ou "
+    "`TEAMS_GATEWAY_BASE_URL`.\n\n"
     "## Uso\n\n"
     "```bash\n"
-    "export TEAMS_GATEWAY_DESTINO_ID=usuario@tenant.onmicrosoft.com\n\n"
+    "export TEAMS_GATEWAY_DESTINO_ID=usuario@tenant.onmicrosoft.com\n"
+    "export TEAMS_GATEWAY_BASE_URL=https://gateway.example.net\n\n"
     "python src/service.py commit \\\n"
     "  --sha \"$(git rev-parse HEAD)\" \\\n"
     "  --autor-commit \"$(git log -1 --format=%an)\" \\\n"
@@ -315,7 +334,7 @@ FILES = {
     "teams-repo-notifier-service/pyproject.toml": "[project]\nname='teams-repo-notifier-service'\nversion='1.0.0'\nrequires-python='>=3.11'\n",
     "teams-repo-notifier-service/src/service.py": NOTIFIER,
     "teams-repo-notifier-service/tests/test_service.py": NOTIFIER_TEST,
-    "VALIDATION.md": "# Validação\n\nGerador validado localmente: 8 testes do serviço de notificação (montagem de texto, envio HTTP mockado, CLI commit/ambiente).\n",
+    "VALIDATION.md": "# Validação\n\nGerador validado localmente: 9 testes do serviço de notificação (montagem de texto, URL autorizada, envio HTTP mockado, CLI commit/ambiente).\n",
 }
 
 

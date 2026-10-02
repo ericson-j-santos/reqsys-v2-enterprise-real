@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Resolve a fonte de evidência de runtime sem fallback silencioso.
+"""Resolve evidência de runtime sem permitir fallback ao Fly.io aposentado.
 
-DEV pode usar Fly (transição) ou PC24x7. STG/PROD permanecem Fly. Quando DEV
-solicita PC24x7, a evidência local precisa existir, estar pronta, corresponder
-ao SHA esperado e estar dentro da janela de frescor.
+PC24x7 permanece suportado apenas em DEV e exige evidência local pronta,
+associada ao SHA esperado e dentro da janela de frescor. Solicitações Fly são
+reconhecidas apenas para produzir um bloqueio compatível e auditável.
 """
 
 from __future__ import annotations
@@ -79,27 +79,20 @@ def resolve_provider(
     if requested_provider not in VALID_PROVIDERS:
         raise ValueError(f"provedor inválido: {requested_provider}")
 
-    if environment != "dev":
-        if requested_provider != "fly":
-            return {
-                "allowed": False,
-                "environment": environment,
-                "provider": requested_provider,
-                "findings": ["pc24x7_not_allowed_outside_dev"],
-            }
-        return {
-            "allowed": True,
-            "environment": environment,
-            "provider": "fly",
-            "findings": [],
-        }
-
     if requested_provider == "fly":
         return {
-            "allowed": True,
-            "environment": "dev",
+            "allowed": False,
+            "environment": environment,
             "provider": "fly",
-            "findings": ["transitional_fly_provider"],
+            "findings": ["flyio_permanently_retired"],
+        }
+
+    if environment != "dev":
+        return {
+            "allowed": False,
+            "environment": environment,
+            "provider": requested_provider,
+            "findings": ["pc24x7_not_allowed_outside_dev"],
         }
 
     if evidence is None:

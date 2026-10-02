@@ -32,10 +32,10 @@
                 🌐 Browser<br><small>Chrome / Edge / Firefox</small>
               </div>
               <div class="arch-node arch-node--external">
-                🦆 DuckDNS<br><small>tieridev · tierin · tieriprod</small>
+                🔐 Locator assinado<br><small>DEV · Ed25519 · Cloudflare Tunnel</small>
               </div>
               <div class="arch-node arch-node--external">
-                ✈️ Fly.io CDN<br><small>reqsys-app.fly.dev</small>
+                📚 GitHub Pages<br><small>Documentação e SPA DEV</small>
               </div>
             </div>
           </div>
@@ -77,7 +77,7 @@
             <div class="arch-label">Dados</div>
             <div class="arch-nodes">
               <div class="arch-node arch-node--data">
-                🗃️ SQLite<br><small>/data/reqsys.db · Fly.io volume persistente</small>
+                🗃️ SQLite<br><small>Persistência local configurável</small>
               </div>
               <div class="arch-node arch-node--data">
                 🏢 SQL Server<br><small>DATABASE_URL configurável (produção)</small>
@@ -154,37 +154,38 @@
           </v-col>
         </v-row>
 
-        <!-- AMBIENTES FLY.IO -->
+        <!-- AMBIENTES OPERACIONAIS -->
         <div class="subsection-title mt-6">
           <v-icon size="15">mdi-cloud-outline</v-icon>
-          Ambientes · Fly.io · Região GRU (São Paulo)
+          Ambientes operacionais
         </div>
         <v-table density="compact" class="env-table mb-4">
           <thead>
             <tr>
               <th>Ambiente</th>
               <th>Aplicação</th>
-              <th>Serviço serviço</th>
-              <th>DuckDNS</th>
+              <th>Serviço</th>
+              <th>Situação</th>
             </tr>
           </thead>
           <tbody>
             <tr
-              v-for="env in ambientesFlyio"
+              v-for="env in ambientesOperacionais"
               :key="env.id"
-              class="ambiente-row"
-              tabindex="0"
-              role="link"
-              :aria-label="`Abrir ambiente ${env.label}`"
+              :class="['ambiente-row', { 'ambiente-row--disabled': !env.navegavel }]"
+              :tabindex="env.navegavel ? 0 : undefined"
+              :role="env.navegavel ? 'link' : undefined"
+              :aria-label="env.navegavel ? `Abrir ambiente ${env.label}` : `${env.label}: sem destino remoto configurado`"
+              :aria-disabled="env.navegavel ? undefined : 'true'"
               :data-testid="`ambiente-linha-${env.shortId}`"
-              @click="abrirAmbienteFlyio(env.id)"
-              @keydown.enter.prevent="abrirAmbienteFlyio(env.id)"
-              @keydown.space.prevent="abrirAmbienteFlyio(env.id)"
+              @click="env.navegavel && abrirAmbiente(env.id)"
+              @keydown.enter.prevent="env.navegavel && abrirAmbiente(env.id)"
+              @keydown.space.prevent="env.navegavel && abrirAmbiente(env.id)"
             >
               <td><v-chip size="x-small" :color="env.color" variant="tonal">{{ env.label }}</v-chip></td>
               <td><code class="small-code">{{ env.frontendHost }}</code></td>
               <td><code class="small-code">{{ env.backendHost }}</code></td>
-              <td><code class="small-code">{{ env.duckdnsHost }}</code></td>
+              <td><span class="small-code">{{ env.navegavel ? env.uso : 'Sem destino remoto' }}</span></td>
             </tr>
           </tbody>
         </v-table>
@@ -275,11 +276,10 @@ npm run dev</pre>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Implantação Fly.io</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Runtime remoto</v-card-title>
               <v-card-text class="pa-3 pt-1">
-                <pre class="code-block">.\scripts\fly-deploy.ps1 -Env prod
-# ou: -Env dev | -Env staging</pre>
-                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Requer flyctl autenticado</div>
+                <pre class="code-block">Nenhum destino remoto configurado</pre>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Publicação remota permanece bloqueada até definição governada.</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -531,12 +531,12 @@ const backendModulos = [
   { nome: 'Figma GitHub',    prefixo: '/v1/integracoes/figma-github', endpoints: '2', desc: 'Sync bidirecional Figma ↔ GitHub e consulta de vínculos em tela' },
 ]
 
-const ambientesFlyio = computed(() =>
+const ambientesOperacionais = computed(() =>
   AMBIENTES_OPERACIONAIS.filter((item) => !item.onlyLocal).map((item) => ({
     ...item,
-    frontendHost: item.frontend.replace(/^https?:\/\//, ''),
-    backendHost: item.backend.replace(/^https?:\/\//, ''),
-    duckdnsHost: item.duckdns.replace(/^https?:\/\//, ''),
+    navegavel: item.navegavel !== false && Boolean(item.frontend),
+    frontendHost: item.frontend.replace(/^https?:\/\//, '') || 'não publicado',
+    backendHost: item.backend.replace(/^https?:\/\//, '') || 'não publicado',
   })),
 )
 
@@ -548,7 +548,7 @@ const {
   cancelarNavegacaoProd,
 } = useNavegacaoAmbiente()
 
-function abrirAmbienteFlyio(id) {
+function abrirAmbiente(id) {
   solicitarNavegacao(id, { path: '/arquitetura', preserveRoute: false })
 }
 
@@ -841,6 +841,15 @@ const scripts = [
 .env-table .ambiente-row:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+.env-table .ambiente-row--disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.env-table .ambiente-row--disabled:hover {
+  background: transparent;
 }
 
 /* ─── Code blocks ─── */

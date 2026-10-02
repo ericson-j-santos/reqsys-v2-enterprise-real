@@ -1,4 +1,4 @@
-# Contexto de build do Fly (backend/Dockerfile.fly usa `COPY . .`).
+# Contexto do build provider-neutral (backend/Dockerfile usa `COPY . .`).
 # Isto e uma denylist: esquecer uma entrada aqui no maximo deixa algo extra na
 # imagem, nunca quebra o boot — ao contrario da allowlist antiga do
 # Dockerfile.fly, onde esquecer uma entrada derrubava o runtime.

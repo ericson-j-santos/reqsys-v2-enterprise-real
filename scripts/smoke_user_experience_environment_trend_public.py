@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Smoke público report-only do indicador de tendência ambiental de UX."""
 from __future__ import annotations
-import argparse, hashlib, json, urllib.request
-from datetime import datetime, timezone
 
-ENVIRONMENTS = {
-    "dev": "https://reqsys-app-dev.fly.dev",
-    "stg": "https://reqsys-app-stg.fly.dev",
-    "prod": "https://reqsys-app.fly.dev",
-}
+import argparse
+import hashlib
+import json
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/smoke_user_experience_environment_trend_public.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 PATHS = ("/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
 
 
 def fetch(url: str, timeout: int = 15) -> dict:
+    url = require_authorized_runtime_url(url, label="URL do smoke de tendência UX")
     try:
         with urllib.request.urlopen(url, timeout=timeout) as response:
             raw = response.read().decode("utf-8", errors="replace")
@@ -30,10 +36,15 @@ def canonical_fingerprint(payload: dict) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def build_report(environments: dict[str, str] | None = None) -> dict:
-    environments = environments or ENVIRONMENTS
+def build_report(environments: dict[str, str]) -> dict:
+    if not environments:
+        raise ValueError("ao menos um ambiente explícito é obrigatório")
+    authorized_environments = {
+        name: require_authorized_runtime_url(base, label=f"runtime {name}")
+        for name, base in environments.items()
+    }
     results = {}
-    for name, base in environments.items():
+    for name, base in authorized_environments.items():
         checks = {path: fetch(base + path) for path in PATHS}
         passed = sum(1 for check in checks.values() if check["ok"])
         contract = {path: {"ok": value["ok"], "status": value["status"]} for path, value in checks.items()}
@@ -63,8 +74,10 @@ def build_report(environments: dict[str, str] | None = None) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
+    parser.add_argument("--environments-json", required=True, help="Mapa JSON explícito de ambiente para URL autorizada")
     args = parser.parse_args()
-    report = build_report()
+    environments = json.loads(Path(args.environments_json).read_text(encoding="utf-8"))
+    report = build_report(environments)
     with open(args.output, "w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2, ensure_ascii=False)
     print(report["status"])

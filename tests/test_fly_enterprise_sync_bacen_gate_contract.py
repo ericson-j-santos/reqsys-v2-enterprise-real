@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 WORKFLOW = Path(".github/workflows/fly-enterprise-sync.yml")
 
 
@@ -32,13 +31,15 @@ def test_planning_requires_gate_success_or_nonprod_skip():
     assert "needs.production-gate.result == 'skipped'" in block
 
 
-def test_dev_hml_and_read_only_paths_are_preserved():
+def test_dev_hml_inventory_is_preserved_but_read_only_smoke_is_retired():
     workflow = text()
     assert "options: [dev, hml, prod]" in workflow
-    assert "github.event.inputs.deploy != 'true'" in workflow
     assert "dev) GH_ENV=dev" in workflow
     assert "hml) GH_ENV=staging" in workflow
-    assert "Verificar drift dev/hml (read-only)" in workflow
+    start = workflow.index("\n  runtime-smoke-readonly:\n")
+    block = workflow[start:]
+    assert "Fly.io retirado definitivamente" in block
+    assert "if: ${{ false }}" in block
 
 
 def test_managed_credentials_and_deploy_remain_after_authorized_plan():

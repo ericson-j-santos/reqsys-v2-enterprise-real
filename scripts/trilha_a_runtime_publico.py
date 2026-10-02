@@ -19,9 +19,8 @@ GOVERNANCE_FILES = [
     ".github/workflows/trilha-a-runtime-publico.yml",
     "docs/contracts/trilha-a-runtime-publico.schema.json",
     "scripts/runtime_public_validator.py",
-    "scripts/fly_boot.sh",
-    "Dockerfile.fly",
-    "fly.toml",
+    "scripts/runtime_url_policy.py",
+    "scripts/validate_publication_sync.py",
 ]
 
 CAPABILITIES = ["boot_resiliente", "healthcheck_camadas", "validador_consolidado", "probe_publico"]

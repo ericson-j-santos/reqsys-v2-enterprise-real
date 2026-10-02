@@ -4,16 +4,28 @@
 from __future__ import annotations
 
 import argparse
-from datetime import UTC, datetime
 import json
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-DEFAULT_BASE_URL = "https://reqsys-api.fly.dev"
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEFAULT_POLICIES = ("hitl-approvers", "reqsys-operations")
+
+
+def _require_https_base_url(value: str) -> str:
+    base_url = require_authorized_runtime_url(value, label="Teams gateway base URL")
+    if not base_url.startswith("https://"):
+        raise ValueError("Teams gateway base URL deve usar HTTPS")
+    return base_url
 
 
 def _safe_detail(value: str, limit: int = 300) -> str:
@@ -27,6 +39,7 @@ def probe_policy(
     timeout: float = 20.0,
     opener: Callable[..., Any] = urlopen,
 ) -> dict[str, Any]:
+    base_url = _require_https_base_url(base_url)
     normalized_policy = policy.strip().lower()
     if not normalized_policy:
         raise ValueError("policy is required")
@@ -108,6 +121,7 @@ def build_report(
     opener: Callable[..., Any] = urlopen,
     generated_at: datetime | None = None,
 ) -> dict[str, Any]:
+    base_url = _require_https_base_url(base_url)
     unique_policies = list(
         dict.fromkeys(policy.strip().lower() for policy in policies if policy.strip())
     )
@@ -147,7 +161,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Probe Teams recipient-policy endpoints using dry-run payloads"
     )
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    parser.add_argument("--base-url", required=True)
     parser.add_argument("--policy", action="append", dest="policies")
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--strict", action="store_true")

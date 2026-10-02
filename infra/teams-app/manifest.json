@@ -5,9 +5,9 @@
   "id": "00000000-0000-0000-0000-000000000000",
   "developer": {
     "name": "ReqSys",
-    "websiteUrl": "https://reqsys-api.fly.dev",
-    "privacyUrl": "https://reqsys-api.fly.dev/privacy",
-    "termsOfUseUrl": "https://reqsys-api.fly.dev/terms"
+    "websiteUrl": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real",
+    "privacyUrl": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real",
+    "termsOfUseUrl": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real"
   },
   "icons": {
     "color": "color.png",
@@ -38,7 +38,7 @@
     "messageTeamMembers"
   ],
   "validDomains": [
-    "reqsys-api.fly.dev"
+    "token.botframework.com"
   ],
   "webApplicationInfo": {
     "id": "${{TEAMS_BOT_APP_ID}}",

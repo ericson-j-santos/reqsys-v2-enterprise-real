@@ -11,10 +11,15 @@ import zipfile
 from pathlib import Path
 
 RSC_EXPECTED = [{"name": "ChannelMessage.Read.Group", "type": "Application"}]
-EXTRA_DOMAINS = ("reqsys-api-dev.fly.dev", "token.botframework.com")
+EXTRA_DOMAINS = ("token.botframework.com",)
+RETIRED_DOMAINS = ("fly.dev", "fly.io")
 
 
 def _validate_manifest(manifest: dict) -> None:
+    serialized = json.dumps(manifest, ensure_ascii=False).lower()
+    if any(domain in serialized for domain in RETIRED_DOMAINS):
+        raise ValueError("teams_manifest_retired_provider_forbidden")
+
     bots = manifest.get("bots") or []
     if len(bots) != 1:
         raise ValueError("teams_manifest_bot_count_invalid")

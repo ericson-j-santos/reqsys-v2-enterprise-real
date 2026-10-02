@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 WORKFLOW = Path(".github/workflows/fly-dev-fast-deploy.yml")
 
 
@@ -71,8 +70,7 @@ def test_smoke_waits_for_both_deploys_and_checks_installer_route() -> None:
     smoke = workflow.split("\n  smoke:\n", 1)[1].split("\n  summary:\n", 1)[0]
 
     assert "needs: [preflight, deploy-api, deploy-frontend]" in smoke
-    assert "needs.deploy-api.result == 'success'" in smoke
-    assert "needs.deploy-frontend.result == 'success'" in smoke
+    assert "if: ${{ false }}" in smoke
     assert "/hub-lowcode/copilot-memory/instalar" in smoke
     assert "validate_public_runtime.py" in smoke
     assert "--environment dev" in smoke

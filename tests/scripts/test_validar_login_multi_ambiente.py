@@ -1,9 +1,8 @@
-import sys
-from pathlib import Path
+import json
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+import pytest
 
+from scripts.runtime_url_policy import RuntimeURLPolicyError
 from scripts.validar_login_multi_ambiente import (
     LoginProbeResult,
     _probe_demo_login,
@@ -53,14 +52,14 @@ def test_validate_environment_login_compara_redirect_uri_com_origem_publica(monk
 
     validate_environment_login(
         'prod',
-        {'api_url': 'https://reqsys-api.fly.dev', 'frontend_url': 'https://reqsys-app.fly.dev', 'app_env': 'production'},
+        {'api_url': 'https://api.prod.example', 'frontend_url': 'https://app.prod.example', 'app_env': 'production'},
         timeout=1.0,
     )
 
-    assert chamadas == [('https://reqsys-api.fly.dev', 'https://reqsys-app.fly.dev')]
+    assert chamadas == [('https://api.prod.example', 'https://app.prod.example')]
 
 
-def test_build_payload_uses_manifest(monkeypatch):
+def test_build_payload_uses_manifest(monkeypatch, tmp_path):
     def fake_validate(env_name, cfg, *, timeout):
         return {
             "environment": env_name,
@@ -76,11 +75,49 @@ def test_build_payload_uses_manifest(monkeypatch):
         }
 
     monkeypatch.setattr("scripts.validar_login_multi_ambiente.validate_environment_login", fake_validate)
+    manifest = tmp_path / "environments.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "canonical_environments": ["dev", "hml", "prod"],
+                "environments": {
+                    name: {
+                        "api_url": f"https://api.{name}.example",
+                        "frontend_url": f"https://app.{name}.example",
+                        "app_env": "production" if name == "prod" else "development",
+                    }
+                    for name in ("dev", "hml", "prod")
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     payload = build_payload(
-        manifest_path=ROOT / "infra" / "fly-environments.json",
+        manifest_path=manifest,
         environment=None,
         timeout=1.0,
     )
     assert payload["summary"]["environments_total"] == 3
     assert payload["ok"] is False
     assert any("prod" in issue for issue in payload["blocking_issues"])
+
+
+def test_validate_environment_login_rejects_fly_before_downstream_calls(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "scripts.validar_login_multi_ambiente.validar_config",
+        lambda *_args, **_kwargs: calls.append("azure"),
+    )
+
+    with pytest.raises(RuntimeURLPolicyError, match="Fly.io"):
+        validate_environment_login(
+            "prod",
+            {
+                "api_url": "https://reqsys-api.fly.dev",
+                "frontend_url": "https://app.prod.example",
+                "app_env": "production",
+            },
+            timeout=1.0,
+        )
+
+    assert calls == []

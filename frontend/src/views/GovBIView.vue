@@ -778,7 +778,7 @@ function gerarRespostaFallback(perguntaOriginal, detalheErro) {
     avisos: [
       'GovBI IA indisponível ou fora do contrato esperado.',
       'Resultado abaixo é um plano analítico governado local, sem execução contra base real.',
-      'Use o Correlation ID para rastrear a ocorrência e validar o serviço ReqSys/Fly.',
+      'Use o Correlation ID para rastrear a ocorrência e validar o runtime autorizado do ReqSys.',
     ],
     nivelSensibilidade: 'BAIXA',
     statusFluxo: 'MODO_DEGRADADO',

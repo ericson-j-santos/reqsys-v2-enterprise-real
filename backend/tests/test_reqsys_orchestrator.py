@@ -63,8 +63,17 @@ def test_endpoint_orchestrator_route(client, correlation_id):
     data = body['data']
     assert data['tema'] == 'runtime'
     assert data['coordinator']['id'] == 'reqsys-runtime-coordinator'
-    assert data['governanca']['modo_execucao'] == 'assistido'
+    assert data['governanca']['modo_execucao'] == 'bloqueado'
+    assert data['pipeline_sugerido'] is None
+    assert data['automacoes_recomendadas'] == []
+    assert data['flyio_retirement'] == {
+        'applicable': True,
+        'status': 'PERMANENTLY_RETIRED',
+        'dispatch_allowed': False,
+        'detail': 'Fly.io permanentemente retirado em 2026-10-02.',
+    }
     assert 'ambiente:hml' in data['labels']
+    assert 'flyio-retired' in data['labels']
     assert 'agile_project_package' not in data
 
 

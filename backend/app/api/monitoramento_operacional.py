@@ -263,8 +263,8 @@ def _criar_runtime_dashboard_schema(snapshot: dict) -> dict:
                 'spa_drilldown': _spa_drilldown('/monitoramento-operacional', {'secao': 'runtime', 'estado': 'amarelo'}),
             },
             {
-                'id': 'fly-duckdns-status',
-                'title': 'Fly/DuckDNS',
+                'id': 'public-runtime-evidence-status',
+                'title': 'Runtime público',
                 'type': 'status',
                 'value': 'pending_public_evidence',
                 'severity': 'attention',

@@ -19,6 +19,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+try:
+    from scripts.runtime_url_policy import (
+        RuntimeURLPolicyError,
+        require_authorized_runtime_url,
+    )
+except ModuleNotFoundError:  # execução direta: python scripts/validate_dev_environment_readiness.py
+    from runtime_url_policy import RuntimeURLPolicyError, require_authorized_runtime_url
+
 
 @dataclass(frozen=True)
 class DevTarget:
@@ -29,21 +37,29 @@ class DevTarget:
     notes: str
 
 
-DEV_TARGET = DevTarget(
-    name="desenvolvimento",
-    frontend="https://reqsys-app-dev.fly.dev",
-    api_docs="https://reqsys-api-dev.fly.dev/docs",
-    api_health="https://reqsys-api-dev.fly.dev/health",
-    notes="Fly dev dedicado; validação pública read-only sem secrets",
-)
+def build_dev_target(frontend_url: str, api_url: str) -> DevTarget:
+    frontend = require_authorized_runtime_url(frontend_url, label="frontend DEV")
+    api = require_authorized_runtime_url(api_url, label="API DEV")
+    return DevTarget(
+        name="desenvolvimento",
+        frontend=frontend,
+        api_docs=f"{api}/docs",
+        api_health=f"{api}/health",
+        notes="Runtime DEV autorizado; validação pública read-only sem secrets",
+    )
 
 
 def is_public_https_url(url: str) -> bool:
-    parsed = urlparse(url)
-    return parsed.scheme == "https" and bool(parsed.netloc) and parsed.hostname not in {"localhost", "127.0.0.1", "0.0.0.0"}
+    try:
+        authorized_url = require_authorized_runtime_url(url)
+    except RuntimeURLPolicyError:
+        return False
+    parsed = urlparse(authorized_url)
+    return parsed.scheme == "https" and parsed.hostname not in {"localhost", "127.0.0.1", "0.0.0.0"}
 
 
 def probe_url(url: str, timeout_seconds: float) -> dict[str, Any]:
+    url = require_authorized_runtime_url(url, label="URL de probe DEV")
     started = time.perf_counter()
     request = urllib.request.Request(url, headers={"User-Agent": "ReqSysDevEnvironmentValidator/1.0"})
     try:
@@ -111,11 +127,12 @@ def classify_dev_environment(checks: dict[str, dict[str, Any]]) -> dict[str, Any
     }
 
 
-def validate_dev_environment(timeout_seconds: float = 5.0) -> dict[str, Any]:
+def validate_dev_environment(*, frontend_url: str, api_url: str, timeout_seconds: float = 5.0) -> dict[str, Any]:
+    target = build_dev_target(frontend_url, api_url)
     urls = {
-        "frontend": DEV_TARGET.frontend,
-        "api_docs": DEV_TARGET.api_docs,
-        "api_health": DEV_TARGET.api_health,
+        "frontend": target.frontend,
+        "api_docs": target.api_docs,
+        "api_health": target.api_health,
     }
     invalid_urls = [name for name, url in urls.items() if not is_public_https_url(url)]
     if invalid_urls:
@@ -129,11 +146,11 @@ def validate_dev_environment(timeout_seconds: float = 5.0) -> dict[str, Any]:
         "contract": "dev-environment-readiness-validation",
         "generated_at_epoch": int(time.time()),
         "environment": {
-            "name": DEV_TARGET.name,
-            "frontend": DEV_TARGET.frontend,
-            "api_docs": DEV_TARGET.api_docs,
-            "api_health": DEV_TARGET.api_health,
-            "notes": DEV_TARGET.notes,
+            "name": target.name,
+            "frontend": target.frontend,
+            "api_docs": target.api_docs,
+            "api_health": target.api_health,
+            "notes": target.notes,
             **classification,
             "checks": checks,
         },
@@ -156,11 +173,17 @@ def validate_dev_environment(timeout_seconds: float = 5.0) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate ReqSys development environment")
+    parser.add_argument("--frontend-url", required=True, help="URL pública autorizada do frontend DEV")
+    parser.add_argument("--api-url", required=True, help="URL pública autorizada da API DEV")
     parser.add_argument("--output", default="docs/ops-dashboard/data/dev-environments-validation.json")
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
     args = parser.parse_args()
 
-    payload = validate_dev_environment(timeout_seconds=args.timeout_seconds)
+    payload = validate_dev_environment(
+        frontend_url=args.frontend_url,
+        api_url=args.api_url,
+        timeout_seconds=args.timeout_seconds,
+    )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

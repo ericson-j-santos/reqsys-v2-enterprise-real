@@ -34,19 +34,24 @@ class _FakeResponse:
 
 
 def test_normalize_base_url_remove_barra_final() -> None:
-    assert smoke.normalize_base_url("https://reqsys-app.fly.dev/") == "https://reqsys-app.fly.dev"
+    assert smoke.normalize_base_url("https://runtime.example/") == "https://runtime.example"
 
 
 def test_normalize_base_url_rejeita_url_invalida() -> None:
     with pytest.raises(ValueError):
-        smoke.normalize_base_url("reqsys-app.fly.dev")
+        smoke.normalize_base_url("runtime.example")
+
+
+def test_normalize_base_url_rejeita_flyio() -> None:
+    with pytest.raises(ValueError, match="retirado definitivamente"):
+        smoke.normalize_base_url("https://reqsys-app.fly.dev")
 
 
 def test_check_endpoint_com_sucesso(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(smoke, "urlopen", lambda request, timeout: _FakeResponse())
 
     result = smoke.check_endpoint(
-        "https://reqsys-app.fly.dev",
+        "https://runtime.example",
         "/api/runtime/health",
         purpose="runtime_health",
         expected_http=200,
@@ -74,7 +79,7 @@ def test_check_endpoint_recupera_falha_transitoria(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(smoke.time, "sleep", lambda _: None)
 
     result = smoke.check_endpoint(
-        "https://reqsys-app.fly.dev",
+        "https://runtime.example",
         "/health",
         purpose="basic_health",
         expected_http=200,
@@ -97,7 +102,7 @@ def test_build_report_classifica_degraded_quando_required_falha() -> None:
 
     report = smoke.build_report(
         checks,
-        base_url="https://reqsys-app.fly.dev",
+        base_url="https://runtime.example",
         repository="owner/repo",
         run_id="123",
     )
@@ -115,7 +120,7 @@ def test_main_gera_artifact_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     exit_code = smoke.main(
         [
             "--base-url",
-            "https://reqsys-app.fly.dev",
+            "https://runtime.example",
             "--output",
             str(output),
             "--attempts",
@@ -135,7 +140,7 @@ def test_run_smoke_required_e_optional_com_mocks(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(smoke, "urlopen", lambda request, timeout: _FakeResponse())
 
     report = smoke.run_smoke(
-        base_url="https://reqsys-app.fly.dev",
+        base_url="https://runtime.example",
         timeout_seconds=1,
         attempts=1,
         delay_seconds=0,

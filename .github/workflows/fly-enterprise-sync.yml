@@ -10,7 +10,6 @@ on:
       - "scripts/validate_publication_sync.py"
       - "scripts/prepare_ocr_runtime_package.py"
       - "config/ocr-engine-lock.json"
-      - "backend/Dockerfile.fly"
       - ".github/actions/prepare-ocr-runtime/**"
       - ".github/workflows/fly-enterprise-sync.yml"
   # Sem filtro de paths no push: todo merge em main passa pelo gate rápido.
@@ -64,10 +63,11 @@ jobs:
           if-no-files-found: error
 
   publication-sync-gate:
+    # Fly.io retirado definitivamente; o inventário é apenas histórico.
     name: Publication sync gate (fast)
     runs-on: ubuntu-latest
     needs: validate-manifest
-    if: github.event_name == 'push'
+    if: ${{ false }}
     timeout-minutes: 2
     outputs:
       drift_detected: ${{ steps.check.outputs.drift_detected }}
@@ -395,12 +395,11 @@ jobs:
           if-no-files-found: warn
 
   runtime-smoke-readonly:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
     name: Runtime smoke (read-only)
     runs-on: ubuntu-latest
     needs: [validate-manifest, plan-environments]
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.deploy != 'true'
+    if: ${{ false }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065

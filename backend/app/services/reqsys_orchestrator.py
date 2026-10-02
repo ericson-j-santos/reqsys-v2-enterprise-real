@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.models.orchestrator import OrchestratorRoutingEvent
 
+FLYIO_RETIREMENT_GUARD = 'Fly.io permanentemente retirado em 2026-10-02.'
+
 
 @dataclass(frozen=True)
 class CoordinatorRule:
@@ -40,14 +42,14 @@ class OrchestratorDemand:
 COORDINATORS: tuple[CoordinatorRule, ...] = (
     CoordinatorRule(
         coordinator_id='reqsys-runtime-coordinator',
-        nome='Coordenador IA Runtime/Fly.io',
+        nome='Coordenador IA Runtime Provider-Neutral',
         tema='runtime',
         destino_operacional='runtime_queue',
-        backlog_destino='Backlog Runtime e Deploy Governado',
+        backlog_destino='Backlog Runtime e Operação Governada',
         pipeline_sugerido='runtime-health-validator',
-        labels=('runtime', 'flyio', 'deploy', 'observabilidade'),
+        labels=('runtime', 'deploy', 'observabilidade', 'flyio-retired'),
         palavras_chave=('runtime', 'fly', 'fly.io', 'deploy', 'health', 'readiness', 'liveness', 'ambiente', 'homologacao', 'produção', 'producao', 'prod'),
-        automacoes=('validar runtime health', 'verificar drift de ambiente', 'gerar evidencia pos-deploy'),
+        automacoes=('validar runtime health', 'verificar drift de ambiente', 'gerar evidencia operacional'),
         riscos_padrao=('drift_ambiente', 'deploy_sem_evidencia', 'secret_divergente'),
     ),
     CoordinatorRule(
@@ -154,6 +156,10 @@ def _normalizar_texto(valor: str) -> str:
     return valor.lower().strip()
 
 
+def _solicita_flyio(texto: str) -> bool:
+    return bool(re.search(r'(?<!\w)fly(?:\.io)?(?!\w)', texto))
+
+
 def _score_rule(texto: str, rule: CoordinatorRule) -> int:
     return sum(
         1
@@ -196,6 +202,7 @@ def listar_coordenadores() -> list[dict]:
 
 def classificar_demanda(demanda: OrchestratorDemand) -> dict:
     texto = _normalizar_texto(f'{demanda.titulo} {demanda.descricao}')
+    flyio_retirado = _solicita_flyio(texto)
     ranked: list[tuple[int, CoordinatorRule]] = sorted(
         ((_score_rule(texto, rule), rule) for rule in COORDINATORS),
         key=lambda item: item[0],
@@ -213,6 +220,14 @@ def classificar_demanda(demanda: OrchestratorDemand) -> dict:
         labels.append(f'ambiente:{demanda.ambiente}')
     if prioridade in ('alta', 'critica', 'crítica'):
         labels.append('prioridade-alta')
+    if flyio_retirado:
+        labels.append('flyio-retired')
+
+    pipeline_sugerido = None if flyio_retirado else rule.pipeline_sugerido
+    automacoes_recomendadas = [] if flyio_retirado else list(rule.automacoes)
+    riscos_iniciais = list(rule.riscos_padrao)
+    if flyio_retirado:
+        riscos_iniciais.append('provedor_permanentemente_aposentado')
 
     return {
         'schema_version': '1.0.0',
@@ -231,16 +246,26 @@ def classificar_demanda(demanda: OrchestratorDemand) -> dict:
         'confianca': round(confianca, 2),
         'score': score,
         'labels': labels,
-        'pipeline_sugerido': rule.pipeline_sugerido,
-        'automacoes_recomendadas': list(rule.automacoes),
-        'riscos_iniciais': list(rule.riscos_padrao),
+        'pipeline_sugerido': pipeline_sugerido,
+        'automacoes_recomendadas': automacoes_recomendadas,
+        'riscos_iniciais': riscos_iniciais,
         'governanca': {
-            'modo_execucao': 'assistido',
+            'modo_execucao': 'bloqueado' if flyio_retirado else 'assistido',
             'requer_aprovacao_humana': True,
             'gera_evidencia': True,
             'permite_acao_destrutiva': False,
         },
-        'proximo_passo': _proximo_passo(rule, score),
+        'flyio_retirement': {
+            'applicable': flyio_retirado,
+            'status': 'PERMANENTLY_RETIRED' if flyio_retirado else 'not_applicable',
+            'dispatch_allowed': False if flyio_retirado else None,
+            'detail': FLYIO_RETIREMENT_GUARD if flyio_retirado else None,
+        },
+        'proximo_passo': (
+            'Preservar somente evidência de aposentadoria; não despachar automação Fly.io.'
+            if flyio_retirado
+            else _proximo_passo(rule, score)
+        ),
     }
 
 

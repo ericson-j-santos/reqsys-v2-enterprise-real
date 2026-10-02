@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 COORDINATOR_VERSION = '0.1.0'
+FLYIO_RETIREMENT_GUARD = 'Fly.io permanentemente retirado em 2026-10-02.'
 
 ADR_AGENT_CATALOG: list[dict[str, Any]] = [
     {'adr': 'ADR-0001', 'titulo': 'Arquitetura Padrão Ouro', 'dominio': 'arquitetura', 'agente': 'Arquiteto Enterprise', 'quando_chamar': 'Decisões transversais, modularização, hexagonalidade, contratos e desacoplamento.', 'entregaveis': ['decisão arquitetural', 'mapa de impacto', 'contratos preservados']},
@@ -21,7 +23,7 @@ ADR_AGENT_CATALOG: list[dict[str, Any]] = [
     {'adr': 'ADR-031', 'titulo': 'Runtime Risk and Promotion Pipeline', 'dominio': 'promocao_runtime', 'agente': 'Agente de Promoção e Risco Runtime', 'quando_chamar': 'Promoção entre ambientes, risco runtime, go/no-go e evidência de estabilização.', 'entregaveis': ['risk score', 'go/no-go', 'plano de rollback']},
     {'adr': 'ADR-032', 'titulo': 'Operational Health Dashboard Governance', 'dominio': 'dashboard_operacional', 'agente': 'Agente de Dashboard Operacional', 'quando_chamar': 'Painéis de saúde, semáforo, cards executivos, drill-down e evidência navegável.', 'entregaveis': ['dashboard contract', 'semáforo executivo', 'fontes de evidência']},
     {'adr': 'ADR-035', 'titulo': 'Trilha E — Arquitetura Viva', 'dominio': 'arquitetura_viva', 'agente': 'Agente de Arquitetura Viva', 'quando_chamar': 'Mapas, diagramas vivos, rastreabilidade e documentação versionada.', 'entregaveis': ['mapa de arquitetura', 'índice vivo', 'rastreabilidade ADR']},
-    {'adr': 'ADR-036', 'titulo': 'Trilha A — Runtime Público', 'dominio': 'runtime_publico', 'agente': 'Agente de Runtime Público', 'quando_chamar': 'Fly.io, DuckDNS, boot resiliente, healthcheck público e readiness operacional.', 'entregaveis': ['smoke público', 'readiness report', 'status de endpoints']},
+    {'adr': 'ADR-036', 'titulo': 'Trilha A — Runtime Público Fly.io (aposentado)', 'dominio': 'runtime_publico', 'agente': 'Agente de Evidência de Aposentadoria Fly.io', 'quando_chamar': 'Auditoria histórica, prova de retirada e inventário residual do Fly.io.', 'entregaveis': ['evidência de aposentadoria', 'inventário residual', 'bloqueios confirmados']},
     {'adr': 'ADR-037', 'titulo': 'Trilha B — Observabilidade Enterprise', 'dominio': 'telemetria_enterprise', 'agente': 'Agente OpenTelemetry/Auditoria', 'quando_chamar': 'Telemetria enterprise, correlação, métricas, logs e auditoria sem PII.', 'entregaveis': ['plano OTel', 'métricas', 'correlação ponta a ponta']},
     {'adr': 'ADR-038', 'titulo': 'Trilha C — UX Operacional', 'dominio': 'ux_operacional', 'agente': 'Agente UX Operacional', 'quando_chamar': 'UX de operação, semáforo, leitura executiva, filtros, drill-down e responsividade.', 'entregaveis': ['fluxo UX', 'estado vazio/erro/carregamento', 'critérios responsivos']},
     {'adr': 'ADR-039', 'titulo': 'Trilha D — Qualidade e Governança', 'dominio': 'qualidade_governanca', 'agente': 'Agente QA/Governança Técnica', 'quando_chamar': 'Testes, governança, matriz de qualidade, evidências e validação paralelizável.', 'entregaveis': ['matriz de testes', 'quality gates', 'evidências de validação']},
@@ -33,7 +35,7 @@ ADR_AGENT_CATALOG: list[dict[str, Any]] = [
 KEYWORD_RULES: list[tuple[set[str], set[str]]] = [
     ({'seguranca', 'security', 'jwt', 'cors', 'pii', 'lgpd', 'secret', 'secrets', 'cofre'}, {'ADR-0002', 'ADR-041'}),
     ({'ci', 'cd', 'workflow', 'github', 'pr', 'merge', 'teste', 'testes'}, {'ADR-0004', 'ADR-030', 'ADR-039'}),
-    ({'runtime', 'health', 'deploy', 'fly', 'duckdns', 'rollback', 'producao', 'produção'}, {'ADR-023', 'ADR-031', 'ADR-036'}),
+    ({'runtime', 'health', 'deploy', 'fly', 'duckdns', 'rollback', 'producao', 'produção'}, {'ADR-023', 'ADR-031'}),
     ({'observabilidade', 'log', 'logs', 'auditoria', 'correlation', 'correlation_id', 'telemetria'}, {'ADR-0005', 'ADR-037'}),
     ({'dashboard', 'indicador', 'analytics', 'bi', 'score', 'drill'}, {'ADR-0006', 'ADR-032', 'ADR-038'}),
     ({'api', 'integracao', 'integração', 'power', 'automate', 'dataverse', 'connector', 'conector'}, {'ADR-020'}),
@@ -48,6 +50,14 @@ def _utc_now() -> str:
 
 def _normalizar(texto: str) -> str:
     return (texto or '').strip().lower()
+
+
+def _solicita_flyio(objetivo: str, adr_refs: list[str] | None) -> bool:
+    texto = _normalizar(objetivo)
+    refs = {ref.strip().upper() for ref in (adr_refs or []) if ref.strip()}
+    return 'ADR-036' in refs or bool(
+        re.search(r'(?<!\w)fly(?:\.io)?(?!\w)', texto)
+    )
 
 
 def listar_adr_base_coordenador() -> dict[str, Any]:
@@ -96,6 +106,7 @@ def planejar_coordenacao_por_adr(
 ) -> dict[str, Any]:
     correlation = correlation_id or str(uuid.uuid4())
     agentes = _selecionar_adrs(objetivo, adr_refs)
+    flyio_retirado = _solicita_flyio(objetivo, adr_refs)
     chamadas = []
     for ordem, item in enumerate(agentes, start=1):
         chamadas.append(
@@ -107,15 +118,25 @@ def planejar_coordenacao_por_adr(
                 'motivo': item['quando_chamar'],
                 'entrada_esperada': {'objetivo': objetivo, 'adr_base': item['adr'], 'correlation_id': correlation, 'idioma': 'pt-BR'},
                 'saida_esperada': item['entregaveis'],
-                'modo': 'dry_run_plan' if dry_run else 'ready_for_governed_dispatch',
+                'modo': (
+                    'blocked_permanent_retirement'
+                    if flyio_retirado
+                    else ('dry_run_plan' if dry_run else 'ready_for_governed_dispatch')
+                ),
             }
         )
+    if flyio_retirado:
+        chamadas = []
 
     return {
         'schema_version': COORDINATOR_VERSION,
         'capability': 'LowCode ADR Agent Coordinator',
         'idioma': 'pt-BR',
-        'status': 'planned' if dry_run else 'ready_for_governed_dispatch',
+        'status': (
+            'blocked_permanent_retirement'
+            if flyio_retirado
+            else ('planned' if dry_run else 'ready_for_governed_dispatch')
+        ),
         'generated_at': _utc_now(),
         'correlation_id': correlation,
         'objetivo': objetivo,
@@ -125,6 +146,12 @@ def planejar_coordenacao_por_adr(
             'fonte_decisoria': 'docs/padrao-ouro/ADR_INDEX.md',
         },
         'roteamento': chamadas,
+        'flyio_retirement': {
+            'applicable': flyio_retirado,
+            'status': 'PERMANENTLY_RETIRED' if flyio_retirado else 'not_applicable',
+            'external_dispatch_allowed': False if flyio_retirado else None,
+            'detail': FLYIO_RETIREMENT_GUARD if flyio_retirado else None,
+        },
         'guardrails': [
             'Não executar escrita externa sem aprovação humana ou pipeline ALM autorizado.',
             'Sempre preservar correlation_id em chamadas, logs e evidências.',

@@ -247,6 +247,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppVersion } from '../composables/useAppVersion'
 import { useUserJourneyTelemetry } from '../composables/useUserJourneyTelemetry'
+import { requireProviderNeutralRuntimeUrl } from '../services/runtimeUrlPolicy'
 
 const route = useRoute()
 const router = useRouter()
@@ -395,7 +396,10 @@ const guidedWorkspace = computed(() => {
 })
 
 function getApiBaseUrl() {
-  return (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+  return requireProviderNeutralRuntimeUrl(
+    import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '',
+    'VITE_API_BASE_URL',
+  ).replace(/\/$/, '')
 }
 
 function getPersistedFilters() {

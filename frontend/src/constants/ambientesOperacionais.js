@@ -26,20 +26,22 @@ export const AMBIENTES_OPERACIONAIS = [
     shortId: 'stg',
     label: 'Homolog',
     color: 'warning',
-    frontend: 'https://reqsys-app-stg.fly.dev',
-    backend: 'https://reqsys-api-stg.fly.dev',
-    duckdns: 'https://tierin.duckdns.org',
-    uso: 'Validação pré-produção.',
+    frontend: '',
+    backend: '',
+    duckdns: '',
+    uso: 'Destino remoto não configurado; navegação bloqueada.',
+    navegavel: false,
   },
   {
     id: 'producao',
     shortId: 'prod',
     label: 'Prod',
     color: 'success',
-    frontend: 'https://reqsys-app.fly.dev',
-    backend: 'https://reqsys-api.fly.dev',
-    duckdns: 'https://tieriprod.duckdns.org',
-    uso: 'Acesso final após implantação.',
+    frontend: '',
+    backend: '',
+    duckdns: '',
+    uso: 'Destino remoto não configurado; navegação bloqueada.',
+    navegavel: false,
   },
 ]
 
@@ -77,9 +79,7 @@ export function ambientePorId(id) {
 export function detectarAmbientePorHostname(hostname = '') {
   const host = String(hostname).toLowerCase()
   if (!host || host === 'localhost' || host === '127.0.0.1') return 'local'
-  if (host.includes('reqsys-app-stg') || host.includes('tierin.duckdns')) return 'homologacao'
   if (host.endsWith('.trycloudflare.com') || host === 'ericson-j-santos.github.io') return 'desenvolvimento'
-  if (host.includes('reqsys-app.fly.dev') || host.includes('tieriprod.duckdns')) return 'producao'
   return null
 }
 
@@ -94,12 +94,14 @@ export function resolverAmbienteAtual({ environmentHint = '', hostname = '' } = 
 export function ambientesNavegaveis({ hostname = '' } = {}) {
   const host = String(hostname).toLowerCase()
   const isLocal = !host || host === 'localhost' || host === '127.0.0.1'
-  return AMBIENTES_OPERACIONAIS.filter((item) => !item.onlyLocal || isLocal)
+  return AMBIENTES_OPERACIONAIS.filter(
+    (item) => item.navegavel !== false && (!item.onlyLocal || isLocal),
+  )
 }
 
 export function montarUrlAmbiente(ambiente, { path = '/', preserveRoute = true } = {}) {
   const alvo = typeof ambiente === 'string' ? ambientePorId(ambiente) : ambiente
-  if (!alvo?.frontend) return null
+  if (!alvo?.frontend || alvo.navegavel === false) return null
 
   let rota = path
   if (preserveRoute && typeof window !== 'undefined') {

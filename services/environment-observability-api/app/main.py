@@ -10,12 +10,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from app.metrics import metrics_response, normalize_route, record_request
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-
-from app.metrics import metrics_response, normalize_route, record_request
-
 
 LOG_SCHEMA_VERSION = "1.0"
 W3C_TRACEPARENT = re.compile(
@@ -42,9 +40,9 @@ class Settings(BaseModel):
     commit_sha: str = os.getenv("GITHUB_SHA", "unknown")
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
     readiness_enabled: bool = os.getenv("READINESS_ENABLED", "true").lower() == "true"
-    deployment_id: str = os.getenv("DEPLOYMENT_ID", os.getenv("FLY_IMAGE_REF", "unknown"))
-    region: str = os.getenv("FLY_REGION", os.getenv("REGION", "unknown"))
-    instance_id: str = os.getenv("FLY_MACHINE_ID", os.getenv("INSTANCE_ID", "unknown"))
+    deployment_id: str = os.getenv("DEPLOYMENT_ID", "unknown")
+    region: str = os.getenv("REGION", "unknown")
+    instance_id: str = os.getenv("INSTANCE_ID", "unknown")
     workflow_run_id: str | None = os.getenv("GITHUB_RUN_ID") or None
 
 

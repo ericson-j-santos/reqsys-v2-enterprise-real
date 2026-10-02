@@ -12,6 +12,11 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/pc24x7_teams_queue.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEFAULT_ROOT = Path(os.getenv("PC24X7_TEAMS_QUEUE_ROOT", "/var/lib/reqsys-24x7/teams"))
 MAX_ATTEMPTS = int(os.getenv("PC24X7_TEAMS_MAX_ATTEMPTS", "5"))
 
@@ -102,6 +107,7 @@ def read_token(path: Path) -> str:
 
 
 def call_reqsys(base_url: str, token: str, job: dict) -> dict:
+    base_url = require_authorized_runtime_url(base_url, label="ReqSys API base URL")
     body = json.dumps(job["payload"], ensure_ascii=False).encode("utf-8")
     req = Request(
         base_url.rstrip("/") + "/v1/teams-gateway/ai-conversations",
@@ -226,7 +232,7 @@ def parse_args() -> argparse.Namespace:
     add.add_argument("--titulo", default="ReqSys 24x7 Teams DEV")
     add.add_argument("--correlation-id")
     worker = sub.add_parser("worker")
-    worker.add_argument("--base-url", default=os.getenv("REQSYS_API_BASE_URL", "https://reqsys-api-dev.fly.dev"))
+    worker.add_argument("--base-url", default=os.getenv("REQSYS_API_BASE_URL", ""))
     worker.add_argument("--token-file", default=os.getenv("REQSYS_API_SERVICE_TOKEN_FILE", "/run/secrets/reqsys_api_service_token"))
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--interval", type=int, default=10)

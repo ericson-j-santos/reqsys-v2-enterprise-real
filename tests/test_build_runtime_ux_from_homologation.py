@@ -7,6 +7,8 @@ class RuntimeUxFromHomologationTests(unittest.TestCase):
     def evidence(self):
         return {
             "contract": "fly-environment-homologation-gate",
+            "historical": True,
+            "offline": True,
             "ok": True,
             "environment": "stg",
             "observed_sha": "abcdef123456",
@@ -27,6 +29,8 @@ class RuntimeUxFromHomologationTests(unittest.TestCase):
             source_workflow="Fly Environment Homologation Gate",
         )[0]
         self.assertEqual(result["source_run_id"], "123")
+        self.assertEqual(result["evidence_source"], "historical_offline")
+        self.assertTrue(result["historical"] and result["offline"])
         self.assertEqual(result["environment"], "stg")
         self.assertEqual(result["source_head_sha"], "abcdef123456")
         self.assertEqual(result["recovery_rate"], 100.0)
@@ -38,6 +42,17 @@ class RuntimeUxFromHomologationTests(unittest.TestCase):
         evidence = self.evidence()
         evidence["ok"] = False
         with self.assertRaisesRegex(ValueError, "reprovada"):
+            build_runtime_ux_evidence(
+                evidence,
+                source_run_id="123",
+                source_head_sha="abcdef1234567890",
+                source_workflow="Fly Environment Homologation Gate",
+            )
+
+    def test_rejects_unmarked_legacy_evidence(self):
+        evidence = self.evidence()
+        evidence.pop("offline")
+        with self.assertRaisesRegex(ValueError, "historical=true e offline=true"):
             build_runtime_ux_evidence(
                 evidence,
                 source_run_id="123",

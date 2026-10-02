@@ -53,11 +53,11 @@ def evaluate_capture(
     *,
     environment: str,
     expected_sha: str,
-    fly_state: dict[str, Any],
+    runtime_state: dict[str, Any],
     runtime: dict[str, Any],
     publication: dict[str, Any],
     login: dict[str, Any],
-    fly_state_error: str | None = None,
+    runtime_state_error: str | None = None,
     runtime_error: str | None = None,
     publication_error: str | None = None,
     login_error: str | None = None,
@@ -72,10 +72,10 @@ def evaluate_capture(
     checks: list[dict[str, Any]] = []
     checks.append(
         _check(
-            "fly_state_integrity",
-            fly_state_error is None
-            and fly_state.get("contract") == "fly-environment-state-capture",
-            fly_state_error or f"contract={fly_state.get('contract')}",
+            "runtime_state_integrity",
+            runtime_state_error is None
+            and runtime_state.get("contract") == "runtime-environment-state-capture",
+            runtime_state_error or f"contract={runtime_state.get('contract')}",
         )
     )
     checks.append(
@@ -103,12 +103,12 @@ def evaluate_capture(
         )
     )
 
-    fly_env = str(fly_state.get("environment") or "")
+    state_env = str(runtime_state.get("environment") or "")
     runtime_env = str(runtime.get("environment") or "")
     publication_env = _single_environment(publication, environment)
     login_env = _single_environment(login, environment)
     environment_consistent = (
-        fly_env == environment
+        state_env == environment
         and runtime_env == environment
         and publication_env is not None
         and login_env is not None
@@ -118,13 +118,13 @@ def evaluate_capture(
             "environment_consistency",
             environment_consistent,
             (
-                f"fly={fly_env or 'missing'} runtime={runtime_env or 'missing'} "
+                f"state={state_env or 'missing'} runtime={runtime_env or 'missing'} "
                 f"publication={bool(publication_env)} login={bool(login_env)}"
             ),
         )
     )
 
-    fly_sha = normalize_sha(fly_state.get("expected_sha"))
+    state_sha = normalize_sha(runtime_state.get("expected_sha"))
     observed_sha = normalize_sha(
         (publication_env or {}).get("observed", {}).get("sha")
     )
@@ -132,7 +132,7 @@ def evaluate_capture(
         (publication_env or {}).get("expected", {}).get("sha")
     )
     sha_consistent = (
-        fly_sha == expected
+        state_sha == expected
         and publication_expected == expected
         and observed_sha == expected
     )
@@ -141,24 +141,24 @@ def evaluate_capture(
             "sha_consistency",
             sha_consistent,
             (
-                f"expected={expected} fly={fly_sha or 'missing'} "
+                f"expected={expected} state={state_sha or 'missing'} "
                 f"publication_expected={publication_expected or 'missing'} "
                 f"observed={observed_sha or 'missing'}"
             ),
         )
     )
 
-    fly_ready = (
-        fly_state.get("ready") is True
-        and not (fly_state.get("blocking_issues") or [])
+    state_ready = (
+        runtime_state.get("ready") is True
+        and not (runtime_state.get("blocking_issues") or [])
     )
     checks.append(
         _check(
-            "fly_state_ready",
-            fly_ready,
+            "runtime_state_ready",
+            state_ready,
             (
-                f"ready={fly_state.get('ready')} "
-                f"blockers={len(fly_state.get('blocking_issues') or [])}"
+                f"ready={runtime_state.get('ready')} "
+                f"blockers={len(runtime_state.get('blocking_issues') or [])}"
             ),
         )
     )
@@ -240,7 +240,7 @@ def evaluate_capture(
         "checks": checks,
         "blocking_issues": [item["id"] for item in failed],
         "automatic_promotion_allowed": ready,
-        "production_touched": fly_state.get("production_touched") is True,
+        "production_touched": runtime_state.get("production_touched") is True,
     }
 
 
@@ -274,7 +274,7 @@ def main() -> int:
         choices=["dev", "hml", "prod"],
     )
     parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--fly-state", required=True)
+    parser.add_argument("--runtime-state", required=True)
     parser.add_argument("--runtime", required=True)
     parser.add_argument("--publication", required=True)
     parser.add_argument("--login", required=True)
@@ -282,18 +282,18 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
-    fly_state, fly_error = load_json_object(args.fly_state)
+    runtime_state, runtime_state_error = load_json_object(args.runtime_state)
     runtime, runtime_error = load_json_object(args.runtime)
     publication, publication_error = load_json_object(args.publication)
     login, login_error = load_json_object(args.login)
     report = evaluate_capture(
         environment=args.environment,
         expected_sha=args.expected_sha,
-        fly_state=fly_state,
+        runtime_state=runtime_state,
         runtime=runtime,
         publication=publication,
         login=login,
-        fly_state_error=fly_error,
+        runtime_state_error=runtime_state_error,
         runtime_error=runtime_error,
         publication_error=publication_error,
         login_error=login_error,

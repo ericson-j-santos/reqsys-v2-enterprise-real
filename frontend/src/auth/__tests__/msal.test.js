@@ -61,16 +61,22 @@ describe('getAuthCallbackUri', () => {
   })
 
   it('prioriza VITE_MSAL_REDIRECT_URI quando configurado por ambiente', async () => {
-    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-app-dev.fly.dev/auth/callback.html')
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-dev.example.invalid/auth/callback.html')
     const { getAuthCallbackUri } = await import('../env')
-    expect(getAuthCallbackUri()).toBe('https://reqsys-app-dev.fly.dev/auth/callback.html')
+    expect(getAuthCallbackUri()).toBe('https://reqsys-dev.example.invalid/auth/callback.html')
   })
 
   it('monta callback por VITE_PUBLIC_URL e VITE_MSAL_CALLBACK_PATH quando redirect absoluto nao foi definido', async () => {
-    vi.stubEnv('VITE_PUBLIC_URL', 'https://reqsys-app-stg.fly.dev/')
+    vi.stubEnv('VITE_PUBLIC_URL', 'https://reqsys-stg.example.invalid/')
     vi.stubEnv('VITE_MSAL_CALLBACK_PATH', 'auth/callback.html')
     const { getAuthCallbackUri } = await import('../env')
-    expect(getAuthCallbackUri()).toBe('https://reqsys-app-stg.fly.dev/auth/callback.html')
+    expect(getAuthCallbackUri()).toBe('https://reqsys-stg.example.invalid/auth/callback.html')
+  })
+
+  it('recusa redirects Fly.io aposentados', async () => {
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-app-dev.fly.dev/auth/callback.html')
+    const { getAuthCallbackUri } = await import('../env')
+    expect(() => getAuthCallbackUri()).toThrow('retirado definitivamente')
   })
 })
 
@@ -113,15 +119,15 @@ describe('getMsalInstance', () => {
   })
 
   it('configura MSAL com redirect e logout por variaveis VITE_MSAL_*', async () => {
-    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-app-dev.fly.dev/auth/callback.html')
-    vi.stubEnv('VITE_MSAL_POST_LOGOUT_REDIRECT_URI', 'https://reqsys-app-dev.fly.dev/login')
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-dev.example.invalid/auth/callback.html')
+    vi.stubEnv('VITE_MSAL_POST_LOGOUT_REDIRECT_URI', 'https://reqsys-dev.example.invalid/login')
     const { getMsalInstance } = await import('../msal')
     await getMsalInstance()
     expect(mockConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         auth: expect.objectContaining({
-          redirectUri: 'https://reqsys-app-dev.fly.dev/auth/callback.html',
-          postLogoutRedirectUri: 'https://reqsys-app-dev.fly.dev/login',
+          redirectUri: 'https://reqsys-dev.example.invalid/auth/callback.html',
+          postLogoutRedirectUri: 'https://reqsys-dev.example.invalid/login',
         }),
       })
     )
@@ -143,12 +149,12 @@ describe('loginMicrosoftRedirect', () => {
   })
 
   it('usa VITE_MSAL_LOGIN_REDIRECT_START_PAGE no loginRedirect quando configurado', async () => {
-    vi.stubEnv('VITE_MSAL_LOGIN_REDIRECT_START_PAGE', 'https://reqsys-app-stg.fly.dev/login')
+    vi.stubEnv('VITE_MSAL_LOGIN_REDIRECT_START_PAGE', 'https://reqsys-stg.example.invalid/login')
     const { loginMicrosoftRedirect } = await import('../msal')
     await loginMicrosoftRedirect()
     expect(mockLoginRedirect).toHaveBeenCalledWith(
       expect.objectContaining({
-        redirectStartPage: 'https://reqsys-app-stg.fly.dev/login',
+        redirectStartPage: 'https://reqsys-stg.example.invalid/login',
       })
     )
   })

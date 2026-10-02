@@ -74,15 +74,11 @@ def _operational_notes(validation: dict[str, Any]) -> list[dict[str, Any]]:
     if not validation.get("precondition_ok"):
         return [
             {
-                "id": "fly_runtime_deploy_lag",
+                "id": "runtime_precondition_failed",
                 "severity": "blocker",
-                "scope": "fly_runtime_deploy",
+                "scope": "observability_e2e",
                 "wire_scope": False,
-                "message": (
-                    "Observability E2E bloqueado: strict precondition falhou. "
-                    "Executar fly-runtime-p0-deploy antes deste incremento."
-                ),
-                "next_increment": "fly-runtime-p0-deploy",
+                "message": "Observability E2E bloqueado: a pré-condição estrita falhou; revisar a evidência do runtime.",
                 "blocks_increment": "evidence-automation-observability-e2e",
             }
         ]
