@@ -14,6 +14,8 @@ permissions:
 
 jobs:
   snapshot:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Registrar snapshot de Qualidade IA (dev/hml/prod)
     runs-on: ubuntu-latest
     strategy:
@@ -28,7 +30,7 @@ jobs:
             api_url: https://reqsys-api-dev.fly.dev
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Registrar snapshot em ${{ matrix.ambiente }}
         env:

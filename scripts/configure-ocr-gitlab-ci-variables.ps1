@@ -21,6 +21,11 @@ param(
     [string]$GitLabProjectUrl = "https://gitlab.com/ericson-j-santos/reqsys-v2-enterprise-real"
 )
 
+# FLYIO_RETIREMENT_GUARD
+throw "Fly.io foi retirado definitivamente em 2026-10-02; captura ou orientacao de FLY_API_TOKEN esta bloqueada."
+
+<# Conteudo operacional legado preservado somente como evidencia historica.
+
 Write-Host @"
 
 ╔════════════════════════════════════════════════════════════════╗
@@ -236,3 +241,4 @@ Write-Host @"
 " -ForegroundColor Cyan
 
 Write-Host "✅ Script concluído!" -ForegroundColor Green
+#>

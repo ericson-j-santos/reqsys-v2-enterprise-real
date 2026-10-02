@@ -7,6 +7,7 @@ Dependency-free validation focused on critical structure only.
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,7 +25,6 @@ REQUIRED_FILES = [
     "gitlab/ci/devsecops.yml",
     "gitlab/ci/environments.yml",
     "gitlab/ci/evidence.yml",
-    "gitlab/ci/deploy.yml",
     "gitlab/scripts/classify_issue.py",
     "gitlab/scripts/generate_semantic_pipeline_report.py",
     "gitlab/scripts/generate_devsecops_baseline.py",
@@ -32,6 +32,7 @@ REQUIRED_FILES = [
     "gitlab/scripts/validate_gitlab_governance.py",
     "gitlab/scripts/validate_gitlab_operational_evidence.py",
     "gitlab/tests/test_validate_gitlab_operational_evidence.py",
+    "gitlab/tests/test_validate_gitlab_governance.py",
 ]
 
 REQUIRED_CI_TERMS = [
@@ -45,7 +46,6 @@ REQUIRED_CI_TERMS = [
     "gitlab/ci/devsecops.yml",
     "gitlab/ci/environments.yml",
     "gitlab/ci/evidence.yml",
-    "gitlab/ci/deploy.yml",
 ]
 
 REQUIRED_INCLUDE_TERMS = {
@@ -61,7 +61,11 @@ REQUIRED_INCLUDE_TERMS = {
         "container_scanning_trivy",
         "artifacts:",
     ],
-    "gitlab/ci/environments.yml": ["gitlab_environments_baseline", "review_app_deploy", "review_app_stop", "FLY_API_TOKEN", "environment:"],
+    "gitlab/ci/environments.yml": [
+        "gitlab_environments_baseline",
+        "generate_environments_baseline.py",
+        "artifacts:",
+    ],
     "gitlab/ci/evidence.yml": [
         "gitlab_evidence_summary",
         "gitlab_operational_evidence_gate",
@@ -70,7 +74,6 @@ REQUIRED_INCLUDE_TERMS = {
         "gitlab-operational-evidence.json",
         "artifacts:",
     ],
-    "gitlab/ci/deploy.yml": ["deploy_staging_fly", "FLY_API_TOKEN", "environment:"],
 }
 
 FORBIDDEN_CI_TERMS = [
@@ -81,15 +84,79 @@ FORBIDDEN_CI_TERMS = [
     "secret=",
 ]
 
+FORBIDDEN_FLY_FILES = [
+    "gitlab/ci/deploy.yml",
+    "gitlab/ci/ocr-deploy-staging.yml",
+]
 
-def validate() -> tuple[bool, list[str]]:
+FORBIDDEN_FLY_INCLUDES = [
+    "gitlab/ci/deploy.yml",
+    "gitlab/ci/ocr-deploy-staging.yml",
+]
+
+FORBIDDEN_FLY_JOB_NAMES = [
+    "deploy_staging_fly",
+    "ocr_deploy_staging_fly",
+    "review_app_deploy",
+    "review_app_stop",
+]
+
+ACTIVE_GITLAB_SCRIPTS = [
+    "gitlab/scripts/generate_semantic_pipeline_report.py",
+    "gitlab/scripts/provision_gitlab_governance.py",
+]
+
+FLY_REFERENCE_PATTERN = re.compile(
+    r"(?:^|[^a-z0-9])fly(?:\.io)?(?:$|[^a-z0-9])|flyctl|superfly/",
+    re.IGNORECASE,
+)
+
+
+def validate_fly_retirement(root: Path = Path(".")) -> list[str]:
+    """Fail closed if an executable GitLab path can reactivate Fly.io."""
+
+    issues: list[str] = []
+
+    for relative_path in FORBIDDEN_FLY_FILES:
+        if (root / relative_path).exists():
+            issues.append(f"FORBIDDEN_FLY_FILE: {relative_path}")
+
+    ci_path = root / ".gitlab-ci.yml"
+    if ci_path.exists():
+        ci_text = ci_path.read_text(encoding="utf-8")
+        for include_path in FORBIDDEN_FLY_INCLUDES:
+            if include_path in ci_text:
+                issues.append(f"FORBIDDEN_FLY_INCLUDE: {include_path}")
+
+    active_paths = [ci_path]
+    ci_dir = root / "gitlab" / "ci"
+    if ci_dir.exists():
+        active_paths.extend(sorted(ci_dir.glob("*.yml")))
+        active_paths.extend(sorted(ci_dir.glob("*.yaml")))
+    active_paths.extend(root / relative_path for relative_path in ACTIVE_GITLAB_SCRIPTS)
+
+    for path in active_paths:
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        relative_path = path.relative_to(root).as_posix()
+        if FLY_REFERENCE_PATTERN.search(text):
+            issues.append(f"FORBIDDEN_FLY_REFERENCE: {relative_path}")
+        for job_name in FORBIDDEN_FLY_JOB_NAMES:
+            if re.search(rf"(?m)^\s*{re.escape(job_name)}\s*:\s*$", text):
+                issues.append(f"FORBIDDEN_FLY_JOB: {relative_path}: {job_name}")
+
+    return issues
+
+
+def validate(root: Path = Path(".")) -> tuple[bool, list[str]]:
     issues: list[str] = []
 
     for file_path in REQUIRED_FILES:
-        if not Path(file_path).exists():
+        if not (root / file_path).exists():
             issues.append(f"MISSING_FILE: {file_path}")
 
-    ci_path = Path(".gitlab-ci.yml")
+    ci_path = root / ".gitlab-ci.yml"
     if ci_path.exists():
         ci_text = ci_path.read_text(encoding="utf-8")
         for term in REQUIRED_CI_TERMS:
@@ -101,13 +168,15 @@ def validate() -> tuple[bool, list[str]]:
                 issues.append(f"FORBIDDEN_CI_TERM: {term}")
 
     for include_path, required_terms in REQUIRED_INCLUDE_TERMS.items():
-        path = Path(include_path)
+        path = root / include_path
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
         for term in required_terms:
             if term not in text:
                 issues.append(f"MISSING_INCLUDE_TERM: {include_path}: {term}")
+
+    issues.extend(validate_fly_retirement(root))
 
     return not issues, issues
 

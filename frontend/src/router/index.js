@@ -111,10 +111,20 @@ export const routes = [
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView, meta: { public: true } }
 ]
 const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), routes })
+
+function destinoSeguroParaLogin(to) {
+  const queryRedirect = to.path === '/' && typeof to.query?.redirect === 'string'
+    ? to.query.redirect
+    : null
+  if (queryRedirect?.startsWith('/') && !queryRedirect.startsWith('//')) return queryRedirect
+  return to.fullPath && to.fullPath !== '/' ? to.fullPath : null
+}
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.autenticado) {
-    return { path: '/login', query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
+    const redirect = destinoSeguroParaLogin(to)
+    return { path: '/login', query: redirect ? { redirect } : {} }
   }
   if (to.meta.recurso && auth.usuario && !auth.pode(to.meta.recurso)) {
     try {

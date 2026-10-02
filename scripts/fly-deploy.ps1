@@ -6,6 +6,9 @@ param(
     [switch]$SecretsOnly
 )
 
+# FLYIO_RETIREMENT_GUARD
+throw "Fly.io foi retirado definitivamente em 2026-10-02; deploy, criacao de apps e secrets estao bloqueados."
+
 $fly = "$env:USERPROFILE\.fly\bin\flyctl.exe"
 $root = Split-Path $PSScriptRoot -Parent
 

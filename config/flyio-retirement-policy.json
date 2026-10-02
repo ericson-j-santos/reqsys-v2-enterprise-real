@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "status": "PERMANENTLY_RETIRED",
+  "effective_date": "2026-10-02",
+  "mutations_allowed": false,
+  "reactivation_allowed": false,
+  "guard_marker": "FLYIO_RETIREMENT_GUARD",
+  "mutating_entrypoints": [
+    "scripts/configurar_fly_auth_azure.py",
+    "scripts/credential_control_plane_lifecycle.py",
+    "scripts/cutover_fly_postgres.py",
+    "scripts/fly-deploy.ps1",
+    "scripts/configurar-redmine.ps1",
+    "scripts/rollback_environment_observability_api.sh",
+    "scripts/run_reqsys_free_tier_backup.sh",
+    "scripts/setup-ocr-gitlab-ci-automatic.ps1",
+    "scripts/setup-ocr-gitlab-ci-vars.ps1",
+    "scripts/configure-ocr-gitlab-ci-variables.ps1",
+    "scripts/setup-ocr-gitlab-variables.ps1"
+  ],
+  "read_only_tools": [
+    "scripts/capture_fly_environment_state.py",
+    "scripts/check_fly_secret_strength.py",
+    "scripts/evaluate_backup_provider_readiness.py",
+    "scripts/inventory_production_gate_coverage.py",
+    "scripts/prod_readiness_audit.py",
+    "scripts/validate_fly_enterprise_sync.py",
+    "scripts/validate_fly_runtime_config.py",
+    "scripts/workflow_inventory_audit.py"
+  ],
+  "legacy_manifests": [
+    "fly.toml",
+    "backend/fly.dev.toml",
+    "backend/fly.staging.toml",
+    "backend/fly.toml",
+    "frontend/fly.dev.toml",
+    "frontend/fly.staging.toml",
+    "frontend/fly.toml",
+    "infra/dev/fly.toml",
+    "infra/hml/fly.toml",
+    "infra/prod/fly.toml",
+    "services/environment-observability-api/fly.dev.toml",
+    "services/environment-observability-api/fly.stg.toml",
+    "services/environment-observability-api/fly.prod.toml"
+  ],
+  "legacy_build_artifacts": [
+    "Dockerfile.fly",
+    "backend/Dockerfile.fly",
+    "backend/fly_boot.sh",
+    "scripts/fly_boot.sh"
+  ]
+}

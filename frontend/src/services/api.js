@@ -90,12 +90,33 @@ api.interceptors.request.use(async (config) => {
 
 export default api
 
+function normalizeBasePath(basePath = '/') {
+  const value = String(basePath || '/').trim()
+  const withLeadingSlash = value.startsWith('/') ? value : `/${value}`
+  return withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`
+}
+
+export function buildLoginRedirectLocation(locationLike, basePath = import.meta.env.BASE_URL || '/') {
+  const base = normalizeBasePath(basePath)
+  const pathname = String(locationLike?.pathname || '/')
+  const relativePath = pathname.startsWith(base)
+    ? `/${pathname.slice(base.length)}`
+    : pathname
+  if (relativePath === '/login') return null
+
+  const destino = `${relativePath}${locationLike?.search || ''}`
+  const redirectQuery = `redirect=${encodeURIComponent(destino)}`
+  // GitHub Pages não serve deep links do history router. Recarregamos a raiz
+  // publicada e deixamos o guard do Vue encaminhar internamente para /login.
+  return base === '/' ? `/login?${redirectQuery}` : `${base}?${redirectQuery}`
+}
+
 function limparSessaoExpirada() {
   localStorage.removeItem('reqsys_token')
   localStorage.removeItem('reqsys_usuario')
-  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-    const destino = `${window.location.pathname}${window.location.search}`
-    window.location.assign(`/login?redirect=${encodeURIComponent(destino)}`)
+  if (typeof window !== 'undefined') {
+    const loginLocation = buildLoginRedirectLocation(window.location)
+    if (loginLocation) window.location.assign(loginLocation)
   }
 }
 

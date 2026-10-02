@@ -11,7 +11,6 @@ from app.services.actions_runtime_monitor import (
     montar_snapshot_operacional,
     normalizar_run,
 )
-from app.services.operational_deploy import executar_deploy_dev, preparar_deploy_dev
 from app.services.operational_orchestrator import (
     ManifestError,
     OperationalActionIdentityConflictError,
@@ -20,6 +19,10 @@ from app.services.operational_orchestrator import (
 )
 
 router = APIRouter(prefix='/v1/actions-runtime', tags=['Actions Runtime Center'])
+
+_OPERATIONAL_DEPLOY_RETIRED_DETAIL = (
+    'Implantação operacional retirada: o ReqSys não despacha mais workflows de deploy no Fly.io.'
+)
 
 
 class RunsSnapshotRequest(BaseModel):
@@ -63,12 +66,12 @@ def status_actions_runtime(user: dict = Depends(get_current_user)):
                 'score_saude',
                 'pareto_falhas',
                 'decisao_operacional',
-                'deploy_dev_governado',
                 'action_queue',
                 'readiness_as_code',
                 'evidence_ledger',
                 'operational_orchestrator',
             ],
+            'capacidades_retiradas': ['operational_deploy_fly'],
         }
     )
 
@@ -107,42 +110,29 @@ def github_runs(
 def catalogo_deploy_dev(user: dict = Depends(require_admin)):
     return ok(
         {
-            'ambiente': 'development',
-            'approval_mode': 'single_confirmation_dev',
+            'status': 'RETIRADO',
+            'habilitado': False,
+            'motivo': _OPERATIONAL_DEPLOY_RETIRED_DETAIL,
             'production_touched': False,
-            'aplicacoes': [
-                {'id': 'backend', 'titulo': 'Backend ReqSys', 'app_name': 'reqsys-api-dev'},
-                {'id': 'frontend', 'titulo': 'Frontend ReqSys', 'app_name': 'reqsys-app-dev'},
-            ],
+            'aplicacoes': [],
         }
     )
 
 
 @router.post('/operational-deploy/validate')
 def validar_deploy_dev(body: DeployDevRequest, user: dict = Depends(require_admin)):
-    try:
-        operacao = preparar_deploy_dev(body.aplicacao)
-    except ValueError:
-        raise HTTPException(status_code=422, detail='Solicitacao de deploy DEV invalida.') from None
-    return ok(operacao.__dict__)
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=_OPERATIONAL_DEPLOY_RETIRED_DETAIL,
+    )
 
 
 @router.post('/operational-deploy/execute')
 def executar_deploy_dev_api(body: DeployDevRequest, user: dict = Depends(require_admin)):
-    if not body.confirmar:
-        raise HTTPException(status_code=409, detail='Confirmação explícita obrigatória para implantação em DEV.')
-    try:
-        resultado = executar_deploy_dev(body.aplicacao)
-    except ValueError:
-        raise HTTPException(status_code=422, detail='Solicitacao de deploy DEV invalida.') from None
-    except Exception:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Falha ao acionar execucao governada.',
-        ) from None
-    resultado['requested_by'] = user.get('sub')
-    resultado['production_touched'] = False
-    return ok(resultado)
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=_OPERATIONAL_DEPLOY_RETIRED_DETAIL,
+    )
 
 
 @router.get('/orchestrator/status')

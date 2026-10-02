@@ -41,7 +41,7 @@ class Config:
     mirror_name: str
 
     @classmethod
-    def from_environment(cls, dry_run: bool) -> "Config":
+    def from_environment(cls, dry_run: bool) -> Config:
         api_url = os.getenv("CI_API_V4_URL", "https://gitlab.com/api/v4").rstrip("/")
         project_id = os.getenv("CI_PROJECT_ID", "")
         token = os.getenv("GITLAB_PROVISIONING_TOKEN", "")
@@ -452,12 +452,6 @@ def main() -> int:
                 config,
                 "GITLAB_GOVERNANCE_TOKEN",
                 os.getenv("GITLAB_GOVERNANCE_TOKEN_SOURCE", ""),
-            ),
-            ensure_variable(
-                client,
-                config,
-                "FLY_API_TOKEN",
-                os.getenv("FLY_API_TOKEN_SOURCE", ""),
             ),
         ]
         report = build_report(config, actions)

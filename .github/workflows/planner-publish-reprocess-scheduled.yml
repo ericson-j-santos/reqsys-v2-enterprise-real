@@ -31,6 +31,8 @@ env:
 
 jobs:
   reprocessar:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Reprocessar pendentes (${{ github.event.inputs.environment || 'dev' }})
     runs-on: ubuntu-latest
     timeout-minutes: 10

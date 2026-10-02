@@ -42,7 +42,7 @@
       "secret_name": "reqsys-fly-api-dev-deploy-token",
       "issuer_secret_name": "reqsys-fly-control-plane-org-token",
       "token_name": "reqsys-api-dev-ci",
-      "enabled": true,
+      "enabled": false,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
         "interval_days": 365,
@@ -58,7 +58,7 @@
       "secret_name": "reqsys-fly-app-dev-deploy-token",
       "issuer_secret_name": "reqsys-fly-control-plane-org-token",
       "token_name": "reqsys-app-dev-ci",
-      "enabled": true,
+      "enabled": false,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
         "interval_days": 365,
@@ -74,7 +74,7 @@
       "secret_name": "reqsys-fly-api-hml-deploy-token",
       "issuer_secret_name": "reqsys-fly-control-plane-org-token",
       "token_name": "reqsys-api-stg-ci",
-      "enabled": true,
+      "enabled": false,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
         "interval_days": 365,
@@ -90,7 +90,7 @@
       "secret_name": "reqsys-fly-app-hml-deploy-token",
       "issuer_secret_name": "reqsys-fly-control-plane-org-token",
       "token_name": "reqsys-app-stg-ci",
-      "enabled": true,
+      "enabled": false,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
         "interval_days": 365,
@@ -106,7 +106,7 @@
       "secret_name": "reqsys-fly-api-prod-deploy-token",
       "issuer_secret_name": "reqsys-fly-control-plane-org-token",
       "token_name": "reqsys-api-prod-ci",
-      "enabled": true,
+      "enabled": false,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
         "interval_days": 365,
@@ -122,7 +122,7 @@
       "secret_name": "reqsys-fly-app-prod-deploy-token",
       "issuer_secret_name": "reqsys-fly-control-plane-org-token",
       "token_name": "reqsys-app-prod-ci",
-      "enabled": true,
+      "enabled": false,
       "rotation": {
         "strategy": "fly_replace_deploy_token",
         "interval_days": 365,
