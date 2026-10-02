@@ -5,6 +5,14 @@ import {
   getLoginRedirectStartPageUri,
   getPostLogoutRedirectUri,
 } from './env'
+import {
+  clearMicrosoftRedirectResponse,
+  getMicrosoftRedirectResponse,
+  isMicrosoftRedirectResponse,
+  peekMsalRedirectHandoff,
+  persistMsalRedirectHandoff,
+  restoreMsalRedirectHandoff,
+} from './msalRedirectHandoff'
 
 let _instance = null
 
@@ -17,23 +25,49 @@ async function fetchAuthConfig() {
   }
 }
 
+function configFromHandoff(handoff) {
+  if (!handoff) return null
+  return {
+    azure_enabled: true,
+    azure_client_id: handoff.clientId,
+    azure_tenant_id: handoff.tenantId,
+  }
+}
+
 export async function getMsalInstance() {
   if (_instance) return _instance
 
-  const serverConfig = await fetchAuthConfig()
-  if (!serverConfig.azure_enabled) return null
+  const redirectUri = getAuthCallbackUri()
+  const handoff = peekMsalRedirectHandoff({ expectedRedirectUri: redirectUri })
+  // No callback, a API continua sendo a fonte canônica. Durante o callback,
+  // o handoff usa a mesma configuração que iniciou a transação e evita uma
+  // chamada de rede capaz de perder code/state antes da restauração do PKCE.
+  const serverConfig = configFromHandoff(handoff) || await fetchAuthConfig()
+  const effectiveConfig = serverConfig.azure_enabled ? serverConfig : null
+  if (!effectiveConfig?.azure_enabled) return null
+
+  restoreMsalRedirectHandoff({
+    clientId: effectiveConfig.azure_client_id,
+    expectedRedirectUri: redirectUri,
+  })
 
   _instance = new PublicClientApplication({
     auth: {
-      clientId: serverConfig.azure_client_id,
-      authority: `https://login.microsoftonline.com/${serverConfig.azure_tenant_id}`,
-      redirectUri: getAuthCallbackUri(),
+      clientId: effectiveConfig.azure_client_id,
+      authority: `https://login.microsoftonline.com/${effectiveConfig.azure_tenant_id}`,
+      redirectUri,
       postLogoutRedirectUri: getPostLogoutRedirectUri(),
       navigateToLoginRequestUrl: false,
+      onRedirectNavigate: () => {
+        persistMsalRedirectHandoff({
+          clientId: effectiveConfig.azure_client_id,
+          tenantId: effectiveConfig.azure_tenant_id,
+          redirectUri,
+        })
+      },
     },
     cache: {
       cacheLocation: 'sessionStorage',
-      storeAuthStateInCookie: true,
     },
     system: {
       allowNativeBroker: false,
@@ -114,12 +148,17 @@ export async function loginMicrosoftRedirect() {
 
 // Mantido como fallback para sessoes de redirect que possam estar em transito.
 export async function handleRedirectResult() {
-  const msal = await getMsalInstance()
-  if (!msal) return null
+  const redirectResponse = getMicrosoftRedirectResponse(window.location)
   try {
-    const response = await msal.handleRedirectPromise({ navigateToLoginRequestUrl: false })
+    const msal = await getMsalInstance()
+    if (!msal) return null
+    const response = await msal.handleRedirectPromise({
+      ...(redirectResponse ? { hash: redirectResponse } : {}),
+      navigateToLoginRequestUrl: false,
+    })
     return response?.idToken ?? null
   } catch (err) {
+    if (redirectResponse || isMicrosoftRedirectResponse(window.location)) throw err
     const ignorable = [
       'no_token_request_cache_error',
       'state_not_found',
@@ -129,6 +168,8 @@ export async function handleRedirectResult() {
     ]
     if (ignorable.includes(err.errorCode)) return null
     throw err
+  } finally {
+    if (redirectResponse) clearMicrosoftRedirectResponse(window.location, window.history)
   }
 }
 
