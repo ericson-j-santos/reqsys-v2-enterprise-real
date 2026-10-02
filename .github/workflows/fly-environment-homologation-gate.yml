@@ -82,7 +82,7 @@ jobs:
       expected_sha: ${{ steps.resolve.outputs.expected_sha }}
     steps:
       - name: Checkout main
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
@@ -193,7 +193,7 @@ jobs:
         shell: bash
 
       - name: Validar issue de auditoria
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const issueNumber = Number('${{ inputs.issue_number }}');
@@ -213,7 +213,7 @@ jobs:
 
       - name: Upload preflight evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: fly-homologation-preflight-${{ inputs.environment }}
           path: artifacts/fly-homologation/preflight.json
@@ -243,11 +243,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout main
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Flyctl
         if: ${{ inputs.deploy == true }}
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - name: Resolver identidade Fly do ambiente
         if: ${{ inputs.deploy == true }}
@@ -386,7 +386,7 @@ jobs:
 
       - name: Upload deploy evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: fly-homologation-deploy-${{ inputs.environment }}
           path: |
@@ -695,7 +695,7 @@ jobs:
 
       - name: Upload smoke evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: fly-homologation-${{ inputs.environment }}
           path: |
@@ -717,14 +717,14 @@ jobs:
       - smoke
     steps:
       - name: Baixar evidencia de smoke
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         continue-on-error: true
         with:
           name: fly-homologation-${{ inputs.environment }}
           path: downloaded-evidence
 
       - name: Comentar issue
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           TARGET_ENV: ${{ inputs.environment }}
           FLY_APP: ${{ needs.preflight.outputs.fly_app }}

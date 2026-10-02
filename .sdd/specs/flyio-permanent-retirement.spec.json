@@ -45,7 +45,9 @@
     ".github/workflows/sync-microsoft-identity-dev.yml",
     ".github/workflows/teams-gateway-contract-acceptance-dev.yml",
     "tests/test_flyio_permanent_retirement.py",
-    "docs/releases/flyio-retirement-20261002.md"
+    "docs/releases/flyio-retirement-20261002.md",
+    "tests/test_environment_observability_build_only_contract.py",
+    "tests/test_fly_automatic_promotion_contract.py"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
@@ -58,7 +60,9 @@
       "tests/test_fly_runtime_p0_bacen_gate_contract.py",
       "tests/test_fly_enterprise_sync_bacen_gate_contract.py",
       "tests/test_fly_command_center_bacen_gate_contract.py",
-      "tests/test_capture_fly_environment_workload_contract.py"
+      "tests/test_capture_fly_environment_workload_contract.py",
+      "tests/test_environment_observability_build_only_contract.py",
+      "tests/test_fly_automatic_promotion_contract.py"
     ],
     "evidence_contract": "Workflows YAML válidos no SHA do PR; todos os jobs com referências diretas a operações, tokens ou callers Fly.io são bloqueados por condição constante falsa; controle negativo detecta reativação e false || true; demais jobs e contratos permanecem. Não declarar retirada de recursos remotos sem inventário autenticado."
   },

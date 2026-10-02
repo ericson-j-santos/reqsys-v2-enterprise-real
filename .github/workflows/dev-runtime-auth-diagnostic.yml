@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Resolver credencial Fly API DEV
         uses: ./.github/actions/resolve-managed-credential
@@ -68,7 +68,7 @@ jobs:
 
       - name: Instalar flyctl
         if: env.FLY_API_TOKEN != ''
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:
           version: latest
 
@@ -162,7 +162,7 @@ jobs:
 
       - name: Publicar evidência sanitizada
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: dev-runtime-auth-diagnostic
           path: artifacts/dev-runtime-auth-diagnostic

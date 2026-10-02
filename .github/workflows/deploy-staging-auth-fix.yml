@@ -28,9 +28,9 @@ jobs:
     name: Validar bundle local sem callback.html
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
           cache: npm
@@ -43,7 +43,7 @@ jobs:
           VITE_PUBLIC_URL: https://reqsys-app-stg.fly.dev
         run: npm ci && npm run build
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
@@ -52,7 +52,7 @@ jobs:
           python scripts/validar_frontend_auth_redirect.py --dist-dir frontend/dist \
             | tee frontend-auth-redirect-validation.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-auth-redirect-validation
           path: frontend-auth-redirect-validation.json
@@ -68,7 +68,7 @@ jobs:
     needs: validate-bundle
     environment: staging
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Resolver credencial Fly API staging
         uses: ./.github/actions/resolve-managed-credential
         with:
@@ -80,11 +80,11 @@ jobs:
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/fly-staging-api-credential-resolution.json
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
       - name: Deploy backend staging
         working-directory: backend
         run: flyctl deploy --remote-only --config fly.staging.toml --app reqsys-api-stg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: fly-staging-api-credential-${{ github.run_id }}-${{ github.run_attempt }}
@@ -102,7 +102,7 @@ jobs:
     needs: validate-bundle
     environment: staging
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Resolver credencial Fly frontend staging
         uses: ./.github/actions/resolve-managed-credential
         with:
@@ -114,11 +114,11 @@ jobs:
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/fly-staging-frontend-credential-resolution.json
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
       - name: Deploy frontend staging
         working-directory: frontend
         run: flyctl deploy --remote-only --config fly.staging.toml --app reqsys-app-stg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: fly-staging-frontend-credential-${{ github.run_id }}-${{ github.run_attempt }}
@@ -131,8 +131,8 @@ jobs:
     needs: [deploy-backend, deploy-frontend]
     if: always() && needs.validate-bundle.result == 'success' && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
@@ -149,7 +149,7 @@ jobs:
             --frontend-url https://reqsys-app-stg.fly.dev \
             | tee frontend-auth-public-report.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: staging-auth-validation-reports

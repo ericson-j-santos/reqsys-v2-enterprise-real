@@ -12,3 +12,10 @@ Em 2026-10-02 o usuário determinou retirar Fly.io definitivamente de todas as s
 4. Não apagar apps, bancos ou volumes e não revogar credenciais antes de migração/backup validados.
 5. Jobs skipped não comprovam disponibilidade, deploy, migração ou encerramento remoto.
 6. Revisão de chamadas indiretas, GitLab, scripts, configs, consumidores e encerramento de cobrança permanece obrigatória para concluir a retirada integral.
+
+## Critérios de aceite
+
+- Todos os jobs Fly.io identificados estão bloqueados; casos negativos detectam reativação.
+- YAML e testes regressivos passam no SHA da mudança.
+- Builds independentes do Fly.io e contratos de autorização são preservados.
+- CI de admissão e revisão de evidência passam antes do merge.
