@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: noteri-desktop-network-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-network\evidence.json
     steps:
@@ -48,6 +48,24 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Setup fixed Python 3.12
+        id: python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12.10"
+          architecture: "x64"
+
+      - name: Select explicit Python executable
+        shell: powershell
+        env:
+          PINNED_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Test-Path -LiteralPath $env:PINNED_PYTHON)) { throw "python_executable_missing" }
+          $version = (& $env:PINNED_PYTHON --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne "Python 3.12.10") { throw "python_version_mismatch" }
+          "REQSYS_PYTHON=$env:PINNED_PYTHON" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -75,7 +93,7 @@ jobs:
             "--expected-head", $anchorSha,
             "--sync-ref", $syncRef
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & $env:REQSYS_PYTHON $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -85,6 +103,29 @@ jobs:
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Install pinned probe dependencies through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-dependencies",
+            "run", "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2", "--timeout", "120",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--", "$env:REQSYS_PYTHON", "-m", "pip", "install",
+            "--disable-pip-version-check", "pytest==8.4.2", "pywin32==311"
+          )
+          & $env:REQSYS_PYTHON $gateway @args
+          exit $LASTEXITCODE
 
       - name: Validate targeted tests through Command Gateway
         shell: powershell
@@ -106,7 +147,7 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "pytest", "tests/test_noteri_desktop_network_probe.py", "-q"
+            "$env:REQSYS_PYTHON", "-m", "pytest", "tests/test_noteri_desktop_network_probe.py", "-q"
           )
           & "$env:REQSYS_PYTHON" $gateway @args
           exit $LASTEXITCODE
@@ -132,12 +173,12 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $probeScript,
+            "$env:REQSYS_PYTHON", $probeScript,
             "--confirm", "PROBE-NOTERI-DESKTOP-NETWORK",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Upload sanitized network evidence
@@ -156,7 +197,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
-      RULES_SHA: 881d9ca2f8e77025edb7298b22981109c567a730
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: desktop-runner-orchestrator-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
 
@@ -174,6 +215,24 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Setup fixed Python 3.12
+        id: python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12.10"
+          architecture: "x64"
+
+      - name: Select explicit Python executable
+        shell: powershell
+        env:
+          PINNED_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Test-Path -LiteralPath $env:PINNED_PYTHON)) { throw "python_executable_missing" }
+          $version = (& $env:PINNED_PYTHON --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne "Python 3.12.10") { throw "python_version_mismatch" }
+          "REQSYS_PYTHON=$env:PINNED_PYTHON" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -230,13 +289,13 @@ jobs:
             "--timeout", "120",
             "--expected-head", "${{ github.sha }}",
             "--",
-            "python", $script,
+            "$env:REQSYS_PYTHON", $script,
             "--confirm", "RECOVER-DESKTOP-GITHUB-RUNNER-VIA-ORCHESTRATOR",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL,
             "--timeout-seconds", "75"
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Validate sanitized physical evidence
@@ -273,12 +332,12 @@ jobs:
 
   dev_http_probe:
     name: Diagnose Desktop DEV HTTP route from Noteri
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-python-') }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 5d1f603241dde37a597d2b7bdc5e07425db7b451
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: noteri-desktop-dev-http-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\noteri-desktop-dev-http\evidence.json
     steps:
@@ -288,6 +347,24 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Setup fixed Python 3.12
+        id: python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12.10"
+          architecture: "x64"
+
+      - name: Select explicit Python executable
+        shell: powershell
+        env:
+          PINNED_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Test-Path -LiteralPath $env:PINNED_PYTHON)) { throw "python_executable_missing" }
+          $version = (& $env:PINNED_PYTHON --version 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne "Python 3.12.10") { throw "python_version_mismatch" }
+          "REQSYS_PYTHON=$env:PINNED_PYTHON" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -315,7 +392,7 @@ jobs:
             "--expected-head", $anchorSha,
             "--sync-ref", $syncRef
           )
-          $raw = & python $launcher @launcherArgs
+          $raw = & $env:REQSYS_PYTHON $launcher @launcherArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $data = @($raw)[-1] | ConvertFrom-Json
           if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
@@ -325,6 +402,29 @@ jobs:
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Install pinned probe dependencies through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @(
+            "--policy", $policy,
+            "--correlation-id", "$env:CORRELATION_ID-dependencies",
+            "run", "--cwd", $env:TARGET_PATH,
+            "--session-id", $env:SESSION_ID,
+            "--risk", "2", "--timeout", "120",
+            "--expected-head", $env:ANCHOR_SHA,
+            "--", "$env:REQSYS_PYTHON", "-m", "pip", "install",
+            "--disable-pip-version-check", "pytest==8.4.2", "pywin32==311"
+          )
+          & $env:REQSYS_PYTHON $gateway @args
+          exit $LASTEXITCODE
 
       - name: Validate HTTP-only tests through Command Gateway
         shell: powershell
@@ -346,9 +446,9 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "pytest", "tests/test_noteri_desktop_dev_http_probe.py", "-q"
+            "$env:REQSYS_PYTHON", "-m", "pytest", "tests/test_noteri_desktop_dev_http_probe.py", "-q"
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Probe fixed Desktop DEV HTTP route through Command Gateway
@@ -372,12 +472,12 @@ jobs:
             "--timeout", "60",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $probeScript,
+            "$env:REQSYS_PYTHON", $probeScript,
             "--confirm", "PROBE-NOTERI-DESKTOP-DEV-HTTP",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL
           )
-          & python $gateway @args
+          & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
       - name: Upload sanitized DEV HTTP evidence
@@ -391,12 +491,12 @@ jobs:
 
   orchestrator_status_readback:
     name: Read Desktop Orchestrator status from Noteri
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' || startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-'))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'fix/noteri-desktop-network-probe-status-8787-20260929' || startsWith(github.ref_name, 'fix/noteri-desktop-orchestrator-status-') || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-python-'))) }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
     timeout-minutes: 5
     env:
       TARGET_REPO: ${{ github.workspace }}
-      RULES_SHA: 641bd1df60befa7310db9200aebc95221bdbee12
+      RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: desktop-orchestrator-status-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_REL: artifacts\\noteri-desktop-orchestrator-status\\evidence.json
 
@@ -496,7 +596,7 @@ jobs:
             "--timeout", "30",
             "--expected-head", $env:ANCHOR_SHA,
             "--",
-            "python", $script,
+            "$env:REQSYS_PYTHON", $script,
             "--confirm", "PROBE-DESKTOP-ORCHESTRATOR-STATUS",
             "--correlation-id", $env:CORRELATION_ID,
             "--evidence-file", $env:EVIDENCE_REL,

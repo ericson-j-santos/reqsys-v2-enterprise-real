@@ -193,3 +193,13 @@ def test_workflow_uses_pinned_portable_python_for_status_job() -> None:
     assert "& $env:REQSYS_PYTHON $gateway @args" in status_block
     assert "actions/setup-python@" not in status_block
     assert status_block.count('"--risk", "2"') == 1
+
+def test_probe_children_use_the_selected_python() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert '"python", $script' not in raw
+    assert '"python", $probeScript' not in raw
+    assert "& python " not in raw
+    assert '"pytest", "tests/' not in raw
+    assert raw.count('"$env:REQSYS_PYTHON", $script') == 2
+    assert raw.count('"$env:REQSYS_PYTHON", $probeScript') == 2
+    assert raw.count('"$env:REQSYS_PYTHON", "-m", "pytest"') == 2
