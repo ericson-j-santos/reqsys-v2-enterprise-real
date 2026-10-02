@@ -11,6 +11,13 @@ import sys
 from pathlib import Path
 
 TASK_NAME = "ReqSys-Dev-Runtime-Supervisor"
+SUPERVISOR_INTERVAL_MINUTES = 7
+LOCATOR_TTL_MINUTES = 15
+MISSED_CYCLE_TOLERANCE = 1
+NTFY_ANONYMOUS_DAILY_MESSAGE_LIMIT = 250
+MAX_SCHEDULED_PUBLICATIONS_PER_DAY = (
+    (24 * 60) + SUPERVISOR_INTERVAL_MINUTES - 1
+) // SUPERVISOR_INTERVAL_MINUTES
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SCRIPTS = (
     "pc24x7_dev_runtime_supervisor.py",
@@ -59,6 +66,11 @@ def materialize_runtime() -> dict[str, str]:
         "source_root": str(ROOT),
         "supervisor": str(PERSISTENT_SUPERVISOR),
         "cost_policy": "zero_additional_cost",
+        "supervisor_interval_minutes": SUPERVISOR_INTERVAL_MINUTES,
+        "locator_ttl_minutes": LOCATOR_TTL_MINUTES,
+        "missed_cycle_tolerance": MISSED_CYCLE_TOLERANCE,
+        "max_scheduled_publications_per_day": MAX_SCHEDULED_PUBLICATIONS_PER_DAY,
+        "ntfy_anonymous_daily_message_limit": NTFY_ANONYMOUS_DAILY_MESSAGE_LIMIT,
     }
     MANIFEST.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
@@ -121,7 +133,7 @@ def install() -> int:
         "schtasks", "/Create", "/F",
         "/TN", TASK_NAME,
         "/TR", str(WRAPPER),
-        "/SC", "MINUTE", "/MO", "5",
+        "/SC", "MINUTE", "/MO", str(SUPERVISOR_INTERVAL_MINUTES),
     ])
     if created.returncode != 0:
         print(created.stderr or created.stdout, file=sys.stderr)

@@ -264,7 +264,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     process.stderr.write(`SIGNED_LOCATOR_BLOCKED: ${error.message}\n`);
     process.exitCode = 2;

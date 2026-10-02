@@ -2,6 +2,7 @@
 
 Status: **aceito para DEV**
 Data: 2026-09-20
+Atualizado: 2026-10-02
 
 ## Contexto
 
@@ -30,7 +31,7 @@ A publicação DEV passa a ter duas camadas:
 2. **Entrada estável:** GitHub Pages em
    `https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/`.
 
-O PC24x7 publica a cada ciclo de 5 minutos o estado atual dos tunnels em um
+O PC24x7 publica a cada ciclo de 7 minutos o estado atual dos tunnels em um
 tópico ntfy público. O payload é assinado com Ed25519.
 
 A chave privada:
@@ -45,14 +46,20 @@ O Pages contém somente a chave pública e aceita exclusivamente payload:
 - `environment=dev`;
 - não expirado;
 - com URL HTTPS terminando em `.trycloudflare.com`;
-- cujo destino foi previamente validado pelo publisher via `/api/health`.
+- cujo destino foi previamente validado pelo contrato completo: quatro endpoints
+  `/api/*`, frontend estático em `/task-console` e ausência de HMR em `/@vite/client`.
 
-O payload expira em 15 minutos. Mensagens inválidas ou spam no tópico público
-são ignorados.
+O payload expira em 15 minutos. A cadência de 7 minutos permite que uma execução
+seja perdida e que a próxima tentativa prevista ocorra em 14 minutos, antes da
+expiração. O teto recorrente é de 206 ciclos por 24 horas, abaixo do limite
+anônimo de 250 mensagens por visitante/IP do ntfy. Restam 44 mensagens de folga
+para operações excepcionais; múltiplas falhas ou atraso superior a um minuto
+continuam fora do SLA de um Quick Tunnel DEV. Mensagens inválidas ou spam no
+tópico público são ignorados.
 
 ## Resiliência local
 
-A tarefa `ReqSys-Dev-Runtime-Supervisor` executa a cada 5 minutos e possui:
+A tarefa `ReqSys-Dev-Runtime-Supervisor` executa a cada 7 minutos e possui:
 
 - `DisallowStartIfOnBatteries=false`;
 - `StopIfGoingOnBatteries=false`;
@@ -62,6 +69,12 @@ A tarefa `ReqSys-Dev-Runtime-Supervisor` executa a cada 5 minutos e possui:
 
 O supervisor recupera containers, reconcilia os dois Cloudflare tunnels e
 publica o locator assinado.
+
+Em esgotamento excepcional da cota do IP local, um workflow manual e vinculado ao
+SHA exato da `main` pode retransmitir pelo mesmo ntfy um envelope público assinado
+no PC24x7. Esse relay não recebe a chave privada, não altera a identidade do
+locator, executa smoke antes de um único POST e exige readback do envelope exato.
+Ele é recuperação operacional, não um segundo provedor nem fonte de verdade.
 
 ## Evidência
 
