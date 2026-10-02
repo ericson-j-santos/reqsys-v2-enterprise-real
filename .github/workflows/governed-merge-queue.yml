@@ -46,17 +46,20 @@ jobs:
         run: |
           set -euo pipefail
 
+          PR_NUMBER="${{ github.event.pull_request.number || github.event.inputs.pr_number }}"
+          EVENT_HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          EVENT_BASE_REF="${{ github.event.pull_request.base.ref }}"
+          EVENT_BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          PR_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          HEAD_SHA="$(jq -r '.head.sha' <<<"$PR_JSON")"
+          BASE_REF="$(jq -r '.base.ref' <<<"$PR_JSON")"
+          BASE_SHA="$(jq -r '.base.sha' <<<"$PR_JSON")"
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-            BASE_REF="${{ github.event.pull_request.base.ref }}"
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          else
-            PR_NUMBER="${{ github.event.inputs.pr_number }}"
-            PR_JSON="$(gh pr view "$PR_NUMBER" --json headRefOid,baseRefName,baseRefOid)"
-            HEAD_SHA="$(jq -r '.headRefOid' <<<"$PR_JSON")"
-            BASE_REF="$(jq -r '.baseRefName' <<<"$PR_JSON")"
-            BASE_SHA="$(jq -r '.baseRefOid' <<<"$PR_JSON")"
+            if [[ "$EVENT_HEAD_SHA" != "$HEAD_SHA" || "$EVENT_BASE_REF" != "$BASE_REF" || "$EVENT_BASE_SHA" != "$BASE_SHA" ]]; then
+              echo "::error::Contexto do evento diverge do PR atual; decisão governada invalidada."
+              exit 1
+            fi
           fi
 
           git check-ref-format --branch "$BASE_REF" >/dev/null
@@ -73,13 +76,13 @@ jobs:
     needs: resolve-context
     steps:
       - name: Checkout do SHA exato do PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ needs.resolve-context.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -103,13 +106,13 @@ jobs:
     needs: resolve-context
     steps:
       - name: Checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ needs.resolve-context.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -137,7 +140,7 @@ jobs:
     needs: [resolve-context, isolated-validation]
     steps:
       - name: Checkout com histórico completo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
@@ -176,7 +179,7 @@ jobs:
           git merge --no-commit --no-ff "$HEAD_SHA"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -191,12 +194,60 @@ jobs:
 
       - name: Publicar evidências da fila governada
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: governed-merge-queue-evidence
           path: artifacts/governed-merge-queue/
           if-no-files-found: error
           retention-days: 30
+
+  base-head-stability:
+    name: Estabilidade da base e do head antes da elegibilidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    needs: resolve-context
+    steps:
+      - name: Revalidar base e head imediatamente antes da fila
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.resolve-context.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ needs.resolve-context.outputs.head_sha }}
+          EXPECTED_BASE_REF: ${{ needs.resolve-context.outputs.base_ref }}
+          EXPECTED_BASE_SHA: ${{ needs.resolve-context.outputs.base_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          current_head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          current_base_ref="$(jq -r '.base.ref' <<<"$pr_json")"
+          current_base_sha="$(jq -r '.base.sha' <<<"$pr_json")"
+          branch_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${EXPECTED_BASE_REF}" --jq '.object.sha')"
+          comparison="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${EXPECTED_BASE_SHA}...${EXPECTED_HEAD_SHA}")"
+          compare_status="$(jq -r '.status' <<<"$comparison")"
+          behind_by="$(jq -r '.behind_by' <<<"$comparison")"
+
+          if [[ "$current_head_sha" != "$EXPECTED_HEAD_SHA" ]]; then
+            echo "::error::HEAD mudou durante a fila: esperado=$EXPECTED_HEAD_SHA atual=$current_head_sha"
+            exit 1
+          fi
+          if [[ "$current_base_ref" != "$EXPECTED_BASE_REF" || "$current_base_sha" != "$EXPECTED_BASE_SHA" || "$branch_sha" != "$EXPECTED_BASE_SHA" ]]; then
+            echo "::error::Base mudou durante a fila: esperado=$EXPECTED_BASE_SHA atual_pr=$current_base_sha atual_ref=$branch_sha"
+            exit 1
+          fi
+          if [[ "$compare_status" == "diverged" || "$compare_status" == "behind" || "$behind_by" != "0" ]]; then
+            echo "::error::PR atrasada ou divergente: status=$compare_status behind_by=$behind_by"
+            exit 1
+          fi
+
+          mkdir -p artifacts/governed-merge-queue
+          jq -n \
+            --arg head_sha "$current_head_sha" \
+            --arg base_ref "$current_base_ref" \
+            --arg base_sha "$current_base_sha" \
+            --arg compare_status "$compare_status" \
+            --arg behind_by "$behind_by" \
+            '{schema_version:"1.0.0", status:"passed", head_sha:$head_sha, base_ref:$base_ref, base_sha:$base_sha, compare_status:$compare_status, behind_by:($behind_by|tonumber)}' \
+            > artifacts/governed-merge-queue/base-head-stability.json
 
   # REQSYS_CURRENT_SHA_STABILITY_GATE
   current-sha-stability:
@@ -206,12 +257,12 @@ jobs:
     needs: resolve-context
     steps:
       - name: Checkout do SHA avaliado
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ needs.resolve-context.outputs.head_sha }}
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -269,7 +320,7 @@ jobs:
 
       - name: Publicar evidência de estabilidade do SHA
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: current-sha-workflow-stability
           path: artifacts/governed-merge-queue/current-sha-stability.json
@@ -280,22 +331,22 @@ jobs:
     name: Gate de merge governado
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [resolve-context, sdd-contract, isolated-validation, temporary-integration, current-sha-stability]
+    needs: [resolve-context, sdd-contract, isolated-validation, temporary-integration, current-sha-stability, base-head-stability]
     if: always()
     outputs:
       eligible: ${{ steps.policy.outputs.eligible }}
       allow_auto_merge: ${{ steps.policy.outputs.allow_auto_merge }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Baixar evidência de estabilidade do SHA atual
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         continue-on-error: true
         with:
           name: current-sha-workflow-stability
@@ -305,6 +356,7 @@ jobs:
         env:
           EVALUATED_SHA: ${{ needs.resolve-context.outputs.head_sha }}
           STABILITY_RESULT: ${{ needs.current-sha-stability.result }}
+          BASE_STABILITY_RESULT: ${{ needs.base-head-stability.result }}
         shell: bash
         run: |
           set -euo pipefail
@@ -366,11 +418,12 @@ jobs:
           ISOLATED="${{ needs.isolated-validation.result }}"
           INTEGRATION="${{ needs.temporary-integration.result }}"
           STABILITY="${{ needs.current-sha-stability.result }}"
+          BASE_STABILITY="${{ needs.base-head-stability.result }}"
           CI_STATUS="green"
           RUNTIME_SMOKE="green"
           CONTRACTS="green"
 
-          if [ "$SDD" != "success" ] || [ "$ISOLATED" != "success" ] || [ "$STABILITY" != "success" ]; then
+          if [ "$SDD" != "success" ] || [ "$ISOLATED" != "success" ] || [ "$STABILITY" != "success" ] || [ "$BASE_STABILITY" != "success" ]; then
             CI_STATUS="red"
           fi
           if [ "$INTEGRATION" != "success" ]; then
@@ -416,6 +469,7 @@ jobs:
             --arg isolated_result "$ISOLATED" \
             --arg integration_result "$INTEGRATION" \
             --arg stability_result "$STABILITY" \
+            --arg base_stability_result "$BASE_STABILITY" \
             --arg merge_path "governed_pr_automation" \
             --slurpfile runtime_gate artifacts/governed-merge-queue/runtime-merge-queue-gate.json \
             --slurpfile sha_stability artifacts/governed-merge-queue/current-sha-stability.json \
@@ -436,7 +490,8 @@ jobs:
                 sdd_contract: $sdd_contract_result,
                 isolated_validation: $isolated_result,
                 temporary_integration: $integration_result,
-                current_sha_stability: $stability_result
+                current_sha_stability: $stability_result,
+                base_head_stability: $base_stability_result
               },
               current_sha_stability: $sha_stability[0],
               notes: [
@@ -481,7 +536,7 @@ jobs:
       - name: Sincronizar label de elegibilidade
         if: always()
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const prNumber = Number('${{ needs.resolve-context.outputs.pr_number }}');
@@ -536,7 +591,7 @@ jobs:
 
       - name: Publicar evidência de política
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: governed-merge-queue-policy-evidence
           path: |

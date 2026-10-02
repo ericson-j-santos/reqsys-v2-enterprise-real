@@ -42,3 +42,12 @@ def test_final_gate_tolerates_missing_stability_artifact() -> None:
     assert "continue-on-error: true" in workflow
     assert "Garantir fallback de estabilidade do SHA" in workflow
     assert "stability_artifact_missing" in workflow
+
+
+def test_base_head_stability_is_fail_closed() -> None:
+    workflow = workflow_path().read_text(encoding="utf-8")
+    assert "base-head-stability:" in workflow
+    assert "current_base_sha" in workflow
+    assert "branch_sha" in workflow
+    assert "compare_status" in workflow
+    assert "PR atrasada ou divergente" in workflow

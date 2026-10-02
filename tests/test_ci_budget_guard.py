@@ -98,5 +98,5 @@ def test_governed_merge_queue_delegates_frontend_validation_to_required_ci():
     assert "npm run typecheck" not in workflow
     assert (
         "needs: [resolve-context, sdd-contract, isolated-validation, "
-        "temporary-integration, current-sha-stability]"
+        "temporary-integration, current-sha-stability, base-head-stability]"
     ) in workflow
