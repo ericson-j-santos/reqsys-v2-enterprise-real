@@ -1,6 +1,6 @@
 # TODO de aplicação — integrações ReqSys DEV
 
-Atualizado em 01/10/2026. Escopo: PC24x7 DEV e Power Platform DEV.
+Atualizado em 02/10/2026. Escopo: PC24x7 DEV e Power Platform DEV.
 `[x]` significa executado/comprovado; `[ ]` significa pendente. Bloqueio não
 é conclusão. Não promover HML/PROD por este TODO.
 
@@ -20,15 +20,57 @@ Atualizado em 01/10/2026. Escopo: PC24x7 DEV e Power Platform DEV.
   decisão `allowed=true` com o artifact local de coordenador versionado.
 - [x] Publicar a correção em [PR #2185](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/2185),
   com base atualizada e testes locais verdes.
-- [ ] Aguardar CI completo, revisão e merge governados da PR #2185.
+- [x] CI/revisão/merge governados da PR #2185 concluídos; merge
+  `c45ba453dbbd6978c0dda34838568e9db282cefe` em 02/10/2026.
 - [ ] Publicar backend e script juntos em PC24x7 DEV; confirmar `build-info` no SHA
   do merge antes de disparar reprocessamento.
+
+### Continuidade executada em 02/10
+
+- [x] Reconsultar PR integrada e atualizar checkout da `main`.
+- [x] Executar nova jornada real DEV, run
+  [37059683168](https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/37059683168).
+  O locator estava disponível para GitHub Actions, mas o gate bloqueou por SHA
+  divergente: fonte `3ee12d2db9475e3251c72f9d084ac81f75be480a`, runtime
+  `7527373167e0ddedf4d74d9760ced9f4c6970fa0`.
+- [x] Implementar `scripts/continuar_integracoes_dev.py`: descobre URL assinada,
+  verifica saúde/SHA, usa a implementação Planner existente e grava bloqueios
+  sanitizados; nenhum reprocessamento antes de token e SHA esperado confirmados.
+- [x] Corrigir `--strict` do script Planner para falhar também em HTTP 200 com
+  `falhou_integracao`; resposta de listagem malformada não significa fila vazia.
+- [x] Executar 18 testes de continuidade, resolução de alvo e reprocessamento.
+- [x] Executar comando manual nesta sessão: `BLOCKED_EXTERNAL`, token ausente no
+  contexto e HTTP 403 de acesso ao runtime; nenhuma publicação Planner executada.
+- [ ] Executar reconciliação DEV existente para alinhar o SHA do host:
+
+  ```bash
+  gh workflow run noteri-study-mode-dev-reconcile.yml \
+    -R ericson-j-santos/reqsys-v2-enterprise-real --ref main -f mode=public-static
+  ```
+
+  Tentativa nesta sessão recusada por HTTP 401 `Bad credentials` antes do dispatch.
+  Não foi criada execução de reconciliação. A CLI precisa de credencial válida para
+  Actions; não substituir credenciais por login interativo ou valores no chat.
+  O workflow usa o runner Windows `pc24x7, reqsys-dev`, preserva segredos existentes,
+  sincroniza apenas árvore limpa/fast-forward e verifica o SHA publicado.
+- [ ] Após reconciliação e token disponíveis, executar:
+
+  ```bash
+  python scripts/continuar_integracoes_dev.py --expected-sha <SHA_PUBLICADO> \
+    --reprocessar-planner --evidence-file artifacts/integracoes-dev/preflight.json
+  ```
+
+  Apenas o comando manual foi adicionado. O agendamento antigo permanece separado:
+  a PR #2191 em andamento desativa esse workflow na retirada do Fly.io. Não criar
+  recorrência concorrente nem desfazer essa desativação nesta frente.
 
 ## 2. Acesso ao runtime e configuração — bloqueios atuais
 
 - [x] Reconsultar locator público usando verificação de assinatura/validade canônica.
-- [ ] Restabelecer locator fresco no host PC24x7 DEV: consulta desta sessão retornou
-  `no_valid_fresh_signed_locator`. Owner do host deve verificar supervisor Windows
+- [ ] Garantir locator fresco no host PC24x7 DEV: consultas de 01/10 e início de
+  02/10 retornaram `no_valid_fresh_signed_locator`, mas a nova jornada real
+  de 02/10 resolveu um locator válido. Acesso direto desta sessão retornou HTTP 403.
+  Owner do host deve verificar supervisor Windows
   `ReqSys-Dev-Runtime-Supervisor`, tunnel e publicação do locator; usar componentes
   existentes `pc24x7_dev_runtime_supervisor.py` e `pc24x7_dev_locator_publisher.py`.
 - [ ] Confirmar `/api/health`, `/api/runtime/health` e `/api/runtime/build-info` e SHA
@@ -100,6 +142,9 @@ Atualizado em 01/10/2026. Escopo: PC24x7 DEV e Power Platform DEV.
 O HTTP 403 registrado historicamente em #1644 não se reproduz nessa evidência:
 não conceder permissões adicionais por esse diagnóstico antigo. A prova de criação
 está verde; o run não afirma ter exercitado uma notificação de conclusão de tarefa.
+
+O HTTP 403 de acesso ao runtime nesta sessão em 02/10 é um bloqueio diferente:
+não indica falta de permissão Graph/Teams e não autoriza ampliar privilégios no tenant.
 
 ## 7. ReqSys → Teams Gateway — homologação separada
 

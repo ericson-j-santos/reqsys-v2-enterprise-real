@@ -181,3 +181,5 @@ e replay idempotente sem nova mutação.
 
 8. Somente os jobs com testes preparam pip 25.2 pelo wheel oficial de versão/nome fixos, selecionado unicamente do PyPI, com URL HTTPS allowlisted e SHA-256 verificado antes da extração. O primeiro uso de pip ocorre pelo Gateway após sessão validada.
 9. A instalação usa índice oficial, modo isolado, apenas wheels e destino temporário explícito; não usa site global ou de usuário. `import site` habilita o bootstrap portátil do pywin32, sem pós-instalação administrativa.
+
+10. A validação física de aceite deve executar no HEAD final sincronizado com a main, preservando as mudanças externas. Evidência de HEAD anterior permanece diagnóstico e não libera a integração.

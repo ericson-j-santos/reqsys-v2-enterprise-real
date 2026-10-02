@@ -87,7 +87,8 @@
       "dependency_installation": "Command Gateway risk 2; isolated pip, official index, binary wheels, explicit temporary target",
       "physical_validation_branch_prefix": "fix/noteri-desktop-network-probe-python-",
       "temporary_root_per_job": true,
-      "pip_bootstrap": "pip 25.2 wheel from fixed official PyPI metadata; allowlisted HTTPS URL and verified SHA-256 before extraction; execution only after governed session"
+      "pip_bootstrap": "pip 25.2 wheel from fixed official PyPI metadata; allowlisted HTTPS URL and verified SHA-256 before extraction; execution only after governed session",
+      "validation": "physical read-only probes and readiness on final HEAD after synchronization with main"
     }
   },
   "security": {
