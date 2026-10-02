@@ -7,6 +7,9 @@ param(
     [switch]$TriggerPipeline = $false
 )
 
+# FLYIO_RETIREMENT_GUARD
+throw "Fly.io foi retirado definitivamente em 2026-10-02; o provisionamento OCR/GitLab legado esta bloqueado."
+
 # Configuration
 $GitLabProjectId = "48896143"  # reqsys-v2-enterprise-real
 $GitLabApiUrl = "https://gitlab.com/api/v4"

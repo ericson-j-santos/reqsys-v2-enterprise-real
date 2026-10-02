@@ -184,7 +184,11 @@ jobs:
     name: ✅ Post-Deploy Validation
     runs-on: ubuntu-latest
     needs: deploy-staging
-    if: success()
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        success()
+      ) }}
 
     steps:
       - name: 📥 Checkout code

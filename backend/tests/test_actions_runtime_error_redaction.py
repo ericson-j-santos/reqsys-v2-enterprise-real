@@ -7,7 +7,10 @@ from fastapi.testclient import TestClient
 
 from app.core.security import require_admin
 from app.main import app
-from app.services.operational_orchestrator import ManifestError, OperationalOrchestratorError
+from app.services.operational_orchestrator import (
+    ManifestError,
+    OperationalOrchestratorError,
+)
 
 client = TestClient(app)
 
@@ -47,55 +50,16 @@ def test_github_runs_internal_error_is_redacted():
     )
 
 
-def test_deploy_validation_value_error_is_redacted():
-    with patch(
-        "app.api.actions_runtime_center.preparar_deploy_dev",
-        side_effect=ValueError(_INTERNAL_MARKER),
-    ):
-        response = client.post(
-            "/v1/actions-runtime/operational-deploy/validate",
-            json={"aplicacao": "backend"},
-        )
-
-    _assert_redacted(
-        response,
-        status_code=422,
-        detail="Solicitacao de deploy DEV invalida.",
+def test_deploy_retirado_retorna_erro_claro_sem_detalhes_internos():
+    response = client.post(
+        "/v1/actions-runtime/operational-deploy/execute",
+        json={"aplicacao": "backend", "confirmar": True},
     )
 
-
-def test_deploy_execution_value_error_is_redacted():
-    with patch(
-        "app.api.actions_runtime_center.executar_deploy_dev",
-        side_effect=ValueError(_INTERNAL_MARKER),
-    ):
-        response = client.post(
-            "/v1/actions-runtime/operational-deploy/execute",
-            json={"aplicacao": "backend", "confirmar": True},
-        )
-
-    _assert_redacted(
-        response,
-        status_code=422,
-        detail="Solicitacao de deploy DEV invalida.",
-    )
-
-
-def test_deploy_execution_unexpected_error_is_redacted():
-    with patch(
-        "app.api.actions_runtime_center.executar_deploy_dev",
-        side_effect=RuntimeError(_INTERNAL_MARKER),
-    ):
-        response = client.post(
-            "/v1/actions-runtime/operational-deploy/execute",
-            json={"aplicacao": "backend", "confirmar": True},
-        )
-
-    _assert_redacted(
-        response,
-        status_code=502,
-        detail="Falha ao acionar execucao governada.",
-    )
+    assert response.status_code == 410
+    assert "retirada" in response.json()["detail"].lower()
+    assert response.json()['detail'] == 'Implantação operacional retirada: o ReqSys não despacha mais workflows de deploy no Fly.io.'
+    assert _INTERNAL_MARKER not in response.text
 
 
 def test_orchestrator_status_error_is_redacted():

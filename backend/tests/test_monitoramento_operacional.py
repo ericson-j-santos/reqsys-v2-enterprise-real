@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 
 from app.api.monitoramento_operacional import _metric_line
-from app.schemas.monitoramento_operacional import ItemMonitorado
-from app.services.monitoramento_snapshot import classificar_estado_geral
 from app.core.config import settings
 from app.main import app
+from app.schemas.monitoramento_operacional import ItemMonitorado
+from app.services.monitoramento_snapshot import classificar_estado_geral
 
 
 def test_monitoramento_operacional_status_200():
@@ -49,7 +49,8 @@ def test_monitoramento_operacional_expoe_modo_coleta():
     assert isinstance(data.get('coleta_detalhes'), dict)
 
 
-def test_runtime_observability_health_expoe_snapshot_governado():
+def test_runtime_observability_health_bloqueia_sem_govbi_base_url(monkeypatch):
+    monkeypatch.setattr(settings, 'govbi_base_url', '')
     correlation_id = 'corr-runtime-observability-test'
     res = TestClient(app).get('/api/runtime/health', headers={'X-Correlation-ID': correlation_id})
 
@@ -66,12 +67,13 @@ def test_runtime_observability_health_expoe_snapshot_governado():
     assert 0 <= data['risk_score'] <= 100
     assert data['uptime_seconds'] >= 0
     assert data['evidence']['no_secrets'] is True
+    assert data['status'] == 'degraded'
+    assert data['status_raw'] == 'degraded'
+    assert data['critical_counts']['blocked_items'] >= 1
     if settings.is_production:
         assert data['evidence']['deploy_gate_relaxed'] is False
     else:
         assert data['evidence']['deploy_gate_relaxed'] is True
-        assert data['status'] == 'healthy'
-        assert data['status_raw'] in {'attention', 'degraded'}
 
 
 def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
@@ -112,7 +114,8 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert runtime_card['spa_drilldown']['query']['secao'] == 'runtime'
 
 
-def test_runtime_observability_readiness_e_liveness():
+def test_runtime_observability_readiness_bloqueia_sem_govbi_base_url(monkeypatch):
+    monkeypatch.setattr(settings, 'govbi_base_url', '')
     client = TestClient(app)
 
     readiness = client.get('/api/runtime/readiness')
@@ -120,18 +123,15 @@ def test_runtime_observability_readiness_e_liveness():
 
     assert readiness.status_code == 200
     assert liveness.status_code == 200
-    if settings.is_production:
-        assert readiness.json()['data']['ready'] is False
-        assert readiness.json()['data']['readiness_reason'] == 'runtime_degraded'
-    else:
-        assert readiness.json()['data']['ready'] is True
-        assert readiness.json()['data']['readiness_reason'] == 'runtime_healthy'
-        assert readiness.json()['data']['evidence']['deploy_gate_relaxed'] is True
+    assert readiness.json()['data']['ready'] is False
+    assert readiness.json()['data']['readiness_reason'] == 'blocked_items_detected'
+    assert readiness.json()['data']['evidence']['deploy_gate_relaxed'] is (not settings.is_production)
     assert liveness.json()['data']['alive'] is True
 
 
 def test_runtime_observability_readiness_strict_em_producao(monkeypatch):
     monkeypatch.setattr(settings, 'app_environment', 'production')
+    monkeypatch.setattr(settings, 'govbi_base_url', '')
     client = TestClient(app)
 
     readiness = client.get('/api/runtime/readiness')
@@ -140,7 +140,7 @@ def test_runtime_observability_readiness_strict_em_producao(monkeypatch):
     assert readiness.status_code == 200
     assert data['evidence']['deploy_gate_relaxed'] is False
     assert data['ready'] is False
-    assert data['readiness_reason'] == 'runtime_degraded'
+    assert data['readiness_reason'] == 'blocked_items_detected'
     assert data['status'] == 'degraded'
 
 

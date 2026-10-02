@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.core.config import settings
+from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url
 from app.schemas.monitoramento_operacional import (
     ItemMonitorado,
     MonitoramentoOperacional,
@@ -15,11 +15,9 @@ from app.schemas.monitoramento_operacional import (
 from app.services.actions_runtime_monitor import GitHubActionsClient, classificar_runs
 from app.services.connection_broker import listar_conectores, resumo_conectores
 
-DEFAULT_GOVBI_BASE_URL = 'https://govbi-ia-hom.fly.dev'
-
 
 def _govbi_base_url() -> str:
-    return getattr(settings, 'govbi_base_url', '') or DEFAULT_GOVBI_BASE_URL
+    return validate_govbi_base_url(getattr(settings, 'govbi_base_url', ''))
 
 
 def _govbi_timeout() -> float:
@@ -59,7 +57,16 @@ def _estado_conectores() -> tuple[str, dict[str, Any]]:
 
 
 def _estado_govbi() -> tuple[str, dict[str, Any]]:
-    base_url = _govbi_base_url().rstrip('/')
+    try:
+        base_url = _govbi_base_url()
+    except GovBIConfigurationError as exc:
+        return 'bloqueado', {
+            'base_url': None,
+            'fonte': 'configuracao',
+            'modo': 'bloqueado',
+            'motivo': str(exc),
+        }
+
     detalhes: dict[str, Any] = {'base_url': base_url, 'fonte': 'probe-http'}
     try:
         with httpx.Client(timeout=min(_govbi_timeout(), 5.0)) as client:

@@ -34,8 +34,6 @@ gitlab_operational_evidence_gate:
     - job: frontend_dependency_scanning_npm_audit
       optional: true
     - job: container_scanning_trivy
-    - job: deploy_staging_fly
-      optional: true
   variables:
     GITLAB_EVIDENCE_ENVIRONMENT: "staging"
     GITLAB_API_TIMEOUT_SECONDS: "20"

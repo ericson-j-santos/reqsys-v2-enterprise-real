@@ -207,9 +207,6 @@ def _build_sha() -> str:
     github_sha = (os.getenv('GITHUB_SHA') or '').strip()
     if github_sha and github_sha != 'unknown':
         return github_sha
-    image_ref = (os.getenv('FLY_IMAGE_REF') or '').strip()
-    if image_ref:
-        return image_ref
     return 'unknown'
 
 

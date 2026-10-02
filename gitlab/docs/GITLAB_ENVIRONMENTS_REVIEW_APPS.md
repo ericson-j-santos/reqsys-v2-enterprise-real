@@ -11,7 +11,7 @@ Definir a baseline de ambientes da ReqSys v2 Enterprise GitLab Edition para supo
 | `development` | persistente | automática/controlada | integração técnica |
 | `staging` | persistente | manual | validação pré-produção |
 | `production` | protegido | coordenadora obrigatória | runtime público controlado |
-| `review/*` | efêmero | manual placeholder | validação isolada por Merge Request |
+| `review/*` | efêmero | desativado | reservado para futuro runtime substituto |
 
 ## Variáveis esperadas
 
@@ -25,19 +25,20 @@ Definir a baseline de ambientes da ReqSys v2 Enterprise GitLab Edition para supo
 ## Regras de governança
 
 - Produção deve ser protegida e exigir aprovação manual.
-- Review Apps devem ser efêmeros e possuir auto stop.
+- Review Apps permanecem desativados até aprovação do runtime substituto.
 - URLs reais devem vir de GitLab CI/CD Variables.
 - Rollback deve estar documentado antes de ativar deploy real.
 - Deploy real deve publicar artifacts de evidência.
+- Fly.io é proibido como destino, fallback ou contingência.
 
 ## Escopo deste incremento
 
-Este incremento não executa deploy real. Ele cria a estrutura governada para habilitar ambientes quando houver GitLab Runner, variáveis, registry e estratégia de release configurados.
+Este baseline é exclusivamente report-only. `gitlab/ci/environments.yml` não possui jobs de deploy ou de Review App.
 
 ## Próximos passos
 
-1. Configurar variáveis de ambiente no GitLab.
-2. Proteger environment `production`.
-3. Implementar deploy real em `staging`.
-4. Implementar Review Apps com URL real.
-5. Adicionar rollback governado.
+1. Aprovar o runtime substituto e sua estratégia de release.
+2. Proteger o environment `production`.
+3. Definir variáveis e URLs sem dependências do provedor retirado.
+4. Implementar deploy e Review Apps somente após validação do substituto.
+5. Adicionar rollback governado antes da ativação.

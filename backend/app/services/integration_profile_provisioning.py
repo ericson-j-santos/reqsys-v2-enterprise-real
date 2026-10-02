@@ -6,7 +6,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from app.services.integration_profile_generator import PROFILE, validate_profile
+from .integration_profile_generator import PROFILE, validate_profile
 
 FLOW_MANAGEMENT_BASE = "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple"
 ALLOWED_API_IDS = {

@@ -30,6 +30,8 @@ concurrency:
 
 jobs:
   validate-request:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Validate rollback request
     runs-on: ubuntu-latest
     timeout-minutes: 5
