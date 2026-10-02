@@ -169,7 +169,7 @@ def test_workflow_uses_governed_noteri_session_and_gateway() -> None:
         / "noteri-desktop-network-probe.yml"
     ).read_text(encoding="utf-8")
 
-    assert "881d9ca2f8e77025edb7298b22981109c567a730" in workflow
+    assert "d26351458b17c917100efc3b736dcc6d53a646cb" in workflow
     assert "runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]" in workflow
     assert "session_launcher.py" in workflow
     assert "command_gateway.py" in workflow

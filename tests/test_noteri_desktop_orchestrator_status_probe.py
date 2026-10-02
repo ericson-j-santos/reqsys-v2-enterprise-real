@@ -193,3 +193,22 @@ def test_workflow_uses_pinned_portable_python_for_status_job() -> None:
     assert "& $env:REQSYS_PYTHON $gateway @args" in status_block
     assert "actions/setup-python@" not in status_block
     assert status_block.count('"--risk", "2"') == 1
+
+def test_probe_children_use_the_selected_python() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert '"python", $script' not in raw
+    assert '"python", $probeScript' not in raw
+    assert "& python " not in raw
+    assert raw.count('"$env:REQSYS_PYTHON", $script') == 2
+    assert raw.count('"$env:REQSYS_PYTHON", $probeScript') == 2
+    assert raw.count('"$env:REQSYS_PYTHON", "-m", "pytest"') == 2
+
+
+def test_all_probe_jobs_bootstrap_without_registry_installation() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "actions/setup-python@" not in raw
+    assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 4
+    assert raw.count('$env:GITHUB_JOB + "-" + $env:GITHUB_RUN_ID') == 4
+    assert raw.count('"portable_pip_sha256_mismatch"') == 2
+    assert raw.count('"--target", "$env:REQSYS_PYTHON_SITE"') == 2
+    assert raw.count('"--only-binary=:all:"') == 2
