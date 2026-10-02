@@ -82,7 +82,10 @@
     "policy": ".github/self-hosted-runner-policy.json",
     "abandoned_run_cleanup": ".github/workflows/reqsys-authorized-actions-gateway.yml",
     "runtime_auto_watch": ".github/workflows/noteri-runtime-auto-watch.yml",
-    "runtime_repository": "ericson-j-santos/noteri-runtime"
+    "runtime_repository": "ericson-j-santos/noteri-runtime",
+    "premerge_integration_base_sha": "75f19e1239a1cefcb3122bdc99d59b37d679ee0c",
+    "premerge_integration_base_pr": 2196,
+    "premerge_validation": "fresh CI and physical Noteri E2E required after base synchronization"
   },
   "artifacts": {
     "headless_activation_workflow": ".github/workflows/noteri-headless-control-plane-activation.yml",
