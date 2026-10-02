@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "padrao-ouro-maturity-consolidation.yml"
 
 
 def test_delivery_maturity_snapshot_reaches_100_with_consolidated_evidence(tmp_path: Path) -> None:
@@ -134,3 +135,12 @@ def test_in_process_runtime_does_not_claim_public_reachability(monkeypatch: pyte
   command = commands[0]
   strict_gate_index = command.index("--strict-gate-passed")
   assert command[strict_gate_index + 1] == "false"
+
+
+def test_workflow_persists_backend_virtualenv_between_steps() -> None:
+  workflow = WORKFLOW.read_text(encoding="utf-8")
+
+  assert 'echo "$PWD/.venv/bin" >> "$GITHUB_PATH"' in workflow
+  assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in workflow
+  assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
+  assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in workflow
