@@ -37,7 +37,7 @@ def run(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess[str]
     )
 
 
-def probe(url: str, timeout: float = 5.0) -> dict[str, Any]:
+def probe(url: str, timeout: float = 15.0) -> dict[str, Any]:
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "ReqSysDevSupervisor/2.0"})
         with urllib.request.urlopen(request, timeout=timeout) as response:

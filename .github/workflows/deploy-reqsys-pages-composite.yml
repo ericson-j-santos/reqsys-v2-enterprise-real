@@ -155,6 +155,29 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check -r requirements-docs.txt
 
+      - name: Preparar Node.js para o frontend DEV estável
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Compilar frontend DEV para GitHub Pages
+        shell: bash
+        working-directory: frontend
+        env:
+          VITE_BASE_PATH: /reqsys-v2-enterprise-real/dev/
+          VITE_PUBLIC_URL: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev
+          VITE_MSAL_PUBLIC_ORIGIN: https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev
+          VITE_MSAL_CALLBACK_PATH: /auth/callback.html
+          VITE_MSAL_POST_LOGOUT_PATH: /login
+          VITE_MSAL_LOGIN_REDIRECT_START_PATH: /login
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          cp dist/index.html dist/404.html
+
       - name: Montar site composto
         shell: bash
         run: |
@@ -170,7 +193,7 @@ jobs:
           cp -a teams-dashboard-site/. site/
           cp -a docs/public-showcase/reqsys-linkedin/. site/showcase/
           cp -a tools/codex-local-online/. site/codex-local-online/
-          cp -a docs/public-dev-locator/. site/dev/
+          cp -a frontend/dist/. site/dev/
           mkdocs build --strict --site-dir site/docs
           : > site/.nojekyll
 
@@ -189,6 +212,9 @@ jobs:
           test -s site/showcase/assets/styles.css
           test -s site/codex-local-online/index.html
           test -s site/dev/index.html
+          test -s site/dev/404.html
+          test -s site/dev/auth/callback.html
+          test -s site/dev/runtime-locator.json
           test -s site/docs/index.html
 
           grep -Fq 'GitHub' site/index.html
@@ -268,7 +294,7 @@ jobs:
             echo '- `/showcase/`: showcase público ReqSys'
             echo '- `/docs/`: documentação MkDocs'
             echo '- `/codex-local-online/`: interface Codex Local Online'
-            echo '- `/dev/`: locator assinado do runtime DEV PC24x7'
+            echo '- `/dev/`: frontend ReqSys estável; API resolvida pelo locator assinado do runtime DEV PC24x7'
             echo '- Proprietário único: `.github/workflows/deploy-reqsys-pages-composite.yml`.'
             echo '- Run produtor: `${{ steps.producer.outputs.run_id }}`.'
             echo '- Origem da resolução: `${{ steps.producer.outputs.source }}`.'

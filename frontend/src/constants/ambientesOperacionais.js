@@ -1,4 +1,4 @@
-/** Catálogo canônico de ambientes ReqSys. DEV usa locator assinado -> PC24x7; sem fallback Fly.io. */
+/** Catálogo canônico. DEV mantém a SPA no Pages e resolve somente a API pelo locator assinado. */
 export const AMBIENTES_OPERACIONAIS = [
   {
     id: 'local',
@@ -108,9 +108,11 @@ export function montarUrlAmbiente(ambiente, { path = '/', preserveRoute = true }
 
   const suffix = rota.startsWith('/') ? rota : `/${rota}`
   if (alvo.id === 'desenvolvimento') {
-    const locator = new URL(alvo.frontend)
-    locator.searchParams.set('target', suffix)
-    return locator.toString()
+    const pagesPrefix = '/reqsys-v2-enterprise-real/dev'
+    const rotaRelativa = suffix.startsWith(`${pagesPrefix}/`)
+      ? suffix.slice(pagesPrefix.length)
+      : suffix
+    return new URL(rotaRelativa.replace(/^\//, ''), alvo.frontend).toString()
   }
 
   const base = alvo.frontend.replace(/\/$/, '')

@@ -7,6 +7,7 @@ import {
 } from './userJourneyFeedback'
 import { emitDashboardEmptyResult, isEmptyDashboardResponse } from './dashboardEmptyStateIntegration'
 import { GOVBI_EMPTY_EVENT } from './emptyStateEvents'
+import { ensurePublicRuntimeApiBase } from './publicRuntimeLocator'
 
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
 
@@ -77,7 +78,9 @@ function emitGovBIEmptyResult(response) {
   }))
 }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
+  const publicRuntimeBase = await ensurePublicRuntimeApiBase()
+  if (publicRuntimeBase) config.baseURL = publicRuntimeBase
   const token = localStorage.getItem('reqsys_token')
   config.headers['X-Correlation-Id'] = obterCorrelationIdSessao()
   if (token) config.headers.Authorization = `Bearer ${token}`
