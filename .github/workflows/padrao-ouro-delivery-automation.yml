@@ -63,9 +63,9 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
 
@@ -82,7 +82,7 @@ jobs:
 
       - name: Publicar artifact de PR automático
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: auto-pr-request
           path: artifacts/auto-pr-request/
@@ -104,9 +104,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto'))
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
 
@@ -117,7 +117,7 @@ jobs:
             --output artifacts/runtime/runtime-public-validation.json \
             --strict
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: padrao-ouro-runtime-validation
@@ -136,16 +136,16 @@ jobs:
       enforce: ${{ github.event_name == 'workflow_dispatch' }}
 
   configure-prod-secrets:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.validate-runtime.result == 'success' && needs.production-gate.result == 'success' && needs.production-gate.outputs.production_allowed == 'true' && ((github.event_name == 'push' && github.ref_name == 'main') ||
+         (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+         (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+      ) }}
     name: Configurar secrets auth produção
     runs-on: ubuntu-latest
     needs: [validate-runtime, production-gate]
-    if: >-
-      needs.validate-runtime.result == 'success' &&
-      needs.production-gate.result == 'success' &&
-      needs.production-gate.outputs.production_allowed == 'true' &&
-      ((github.event_name == 'push' && github.ref_name == 'main') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     environment: production
     timeout-minutes: 10
     outputs:
@@ -177,13 +177,13 @@ jobs:
             echo "- Reason: ${reason}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         if: steps.preflight.outputs.configured == 'true'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         if: steps.preflight.outputs.configured == 'true'
         with:
           python-version: "3.12"
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         if: steps.preflight.outputs.configured == 'true'
 
       - name: Resolver credencial Fly API produção
@@ -240,24 +240,22 @@ jobs:
           echo "::notice::Configuração de secrets produção ignorada de forma governada; dependência externa ausente."
 
   deploy-fly-prod:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.validate-runtime.result == 'success' && needs.production-gate.result == 'success' && needs.production-gate.outputs.production_allowed == 'true' && needs.configure-prod-secrets.result == 'success' && needs.configure-prod-secrets.outputs.configured == 'true' && ((github.event_name == 'push' && github.ref_name == 'main') ||
+         (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+         (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+      ) }}
     name: Deploy Fly.io produção (runtime)
     runs-on: ubuntu-latest
     needs: [validate-runtime, production-gate, configure-prod-secrets]
-    if: >-
-      needs.validate-runtime.result == 'success' &&
-      needs.production-gate.result == 'success' &&
-      needs.production-gate.outputs.production_allowed == 'true' &&
-      needs.configure-prod-secrets.result == 'success' &&
-      needs.configure-prod-secrets.outputs.configured == 'true' &&
-      ((github.event_name == 'push' && github.ref_name == 'main') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     environment: production
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - name: Resolver credencial Fly API produção
         uses: ./.github/actions/resolve-managed-credential
@@ -315,22 +313,22 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-fly-frontend-prod:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        needs.validate-runtime.result == 'success' && needs.production-gate.result == 'success' && needs.production-gate.outputs.production_allowed == 'true' && ((github.event_name == 'push' && github.ref_name == 'main') ||
+         (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+         (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+      ) }}
     name: Deploy Fly.io produção (frontend)
     runs-on: ubuntu-latest
     needs: [validate-runtime, production-gate]
-    if: >-
-      needs.validate-runtime.result == 'success' &&
-      needs.production-gate.result == 'success' &&
-      needs.production-gate.outputs.production_allowed == 'true' &&
-      ((github.event_name == 'push' && github.ref_name == 'main') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     environment: production
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - name: Resolver credencial Fly frontend produção
         uses: ./.github/actions/resolve-managed-credential
@@ -370,9 +368,9 @@ jobs:
        (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
        (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
 
@@ -423,7 +421,7 @@ jobs:
             --timeout 25 \
             --output login-validation-prod.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: padrao-ouro-public-runtime-smoke

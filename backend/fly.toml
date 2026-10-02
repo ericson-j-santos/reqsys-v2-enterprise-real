@@ -19,6 +19,7 @@ kill_timeout = "5s"
   REQSYS_BOOT_FALLBACK = "true"
   REQSYS_BOOT_FALLBACK_DATABASE_URL = "sqlite:////tmp/reqsys-fallback.db"
   REQSYS_BOOT_MAX_ATTEMPTS = "8"
+  REQSYS_IDENTITY_GOVERNANCE_FILE = "/app/config/identity-governance.runtime.json"
 
 [[mounts]]
   source = "reqsys_data"

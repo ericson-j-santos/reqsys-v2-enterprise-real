@@ -4,6 +4,7 @@ import pytest
 
 from app.core.identity_governance import IdentityGovernanceError
 from app.services import sharepoint_graph_identity as module
+from app.services.microsoft_oauth import MicrosoftOAuthError
 
 
 def test_sharepoint_identity_resolve_contexto_exato(monkeypatch):
@@ -60,6 +61,8 @@ async def test_sharepoint_token_nao_aceita_resposta_sem_access_token(monkeypatch
     monkeypatch.setattr(module, 'resolve_sharepoint_graph_identity', lambda now=None: Identity())
 
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -78,5 +81,5 @@ async def test_sharepoint_token_nao_aceita_resposta_sem_access_token(monkeypatch
 
     monkeypatch.setattr(module.httpx, 'AsyncClient', lambda timeout=10: Client())
 
-    with pytest.raises(IdentityGovernanceError, match='access_token'):
+    with pytest.raises(MicrosoftOAuthError, match='access_token_missing'):
         await module.acquire_sharepoint_graph_token()

@@ -18,14 +18,16 @@ concurrency:
 
 jobs:
   sync:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Sincronizar identidade Microsoft no ReqSys DEV
     runs-on: ubuntu-latest
     environment: reqsys-power-platform-dev
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - name: Resolver credencial Fly da API DEV
         uses: ./.github/actions/resolve-managed-credential
@@ -44,10 +46,20 @@ jobs:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          DATAVERSE_TENANT_ID: ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
+          SHAREPOINT_GRAPH_CLIENT_SECRET: ${{ secrets.SHAREPOINT_GRAPH_CLIENT_SECRET }}
+          SHAREPOINT_SITE_ID: ${{ vars.SHAREPOINT_SITE_ID }}
+          SHAREPOINT_LIST_IA: ${{ vars.SHAREPOINT_LIST_IA }}
         run: |
           set -euo pipefail
           missing=0
-          for name in POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET; do
+          for name in \
+            POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET \
+            DATAVERSE_TENANT_ID DATAVERSE_CLIENT_ID DATAVERSE_CLIENT_SECRET DATAVERSE_ENVIRONMENT_URL \
+            SHAREPOINT_GRAPH_CLIENT_SECRET SHAREPOINT_SITE_ID SHAREPOINT_LIST_IA; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Segredo obrigatório ausente: $name"
               missing=1
@@ -60,12 +72,28 @@ jobs:
           POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
           POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          DATAVERSE_TENANT_ID: ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
+          SHAREPOINT_GRAPH_CLIENT_SECRET: ${{ secrets.SHAREPOINT_GRAPH_CLIENT_SECRET }}
+          SHAREPOINT_SITE_ID: ${{ vars.SHAREPOINT_SITE_ID }}
+          SHAREPOINT_LIST_IA: ${{ vars.SHAREPOINT_LIST_IA }}
         run: |
           set -euo pipefail
+          # Um unico release de secrets evita que o runtime observe uma
+          # combinacao parcial entre identidade e ambiente.
           flyctl secrets set \
-            AZURE_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
-            AZURE_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
-            AZURE_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            POWER_PLATFORM_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
+            POWER_PLATFORM_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
+            POWER_PLATFORM_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            DATAVERSE_TENANT_ID="$DATAVERSE_TENANT_ID" \
+            DATAVERSE_CLIENT_ID="$DATAVERSE_CLIENT_ID" \
+            DATAVERSE_CLIENT_SECRET="$DATAVERSE_CLIENT_SECRET" \
+            DATAVERSE_ENVIRONMENT_URL="$DATAVERSE_ENVIRONMENT_URL" \
+            SHAREPOINT_GRAPH_CLIENT_SECRET="$SHAREPOINT_GRAPH_CLIENT_SECRET" \
+            SHAREPOINT_SITE_ID="$SHAREPOINT_SITE_ID" \
+            SHAREPOINT_LIST_IA="$SHAREPOINT_LIST_IA" \
             -a reqsys-api-dev
 
       - name: Aguardar API DEV saudável
@@ -84,24 +112,36 @@ jobs:
       - name: Confirmar presença das variáveis no runtime sem revelar segredos
         run: |
           set -euo pipefail
-          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"AZURE_TENANT_ID\",\"AZURE_CLIENT_ID\",\"AZURE_CLIENT_SECRET\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'")"
-          echo "$output"
-          echo "$output" | grep -q 'configured'
+          for tentativa in $(seq 1 30); do
+            set +e
+            output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import os; keys=[\"POWER_PLATFORM_TENANT_ID\",\"POWER_PLATFORM_CLIENT_ID\",\"POWER_PLATFORM_CLIENT_SECRET\",\"DATAVERSE_TENANT_ID\",\"DATAVERSE_CLIENT_ID\",\"DATAVERSE_CLIENT_SECRET\",\"DATAVERSE_ENVIRONMENT_URL\",\"SHAREPOINT_GRAPH_CLIENT_SECRET\",\"SHAREPOINT_SITE_ID\",\"SHAREPOINT_LIST_IA\"]; print(\"configured\" if all(os.getenv(k) for k in keys) else \"missing\")'" 2>&1)"
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ] && echo "$output" | grep -q 'configured'; then
+              echo "Variáveis confirmadas no runtime DEV."
+              exit 0
+            fi
+            echo "Runtime ainda reiniciando (tentativa ${tentativa}/30)."
+            sleep 2
+          done
+          echo "::error::Não foi possível confirmar as variáveis no runtime DEV."
+          exit 1
 
       - name: Teste ponta a ponta Microsoft no runtime DEV
         run: |
           set -euo pipefail
           mkdir -p audit
-          payload="$(base64 -w0 backend/app/microsoft_identity_e2e.py)"
-          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import base64; exec(compile(base64.b64decode(\"$payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'")"
+          oauth_payload="$(base64 -w0 backend/app/services/microsoft_oauth.py)"
+          e2e_payload="$(base64 -w0 backend/app/microsoft_identity_e2e.py)"
+          output="$(flyctl ssh console -a reqsys-api-dev --command "python -c 'import base64,sys,types; m=types.ModuleType(\"app.services.microsoft_oauth\"); exec(compile(base64.b64decode(\"$oauth_payload\"), \"microsoft_oauth.py\", \"exec\"),m.__dict__); sys.modules[\"app.services.microsoft_oauth\"]=m; exec(compile(base64.b64decode(\"$e2e_payload\"), \"microsoft_identity_e2e.py\", \"exec\"))'")"
           echo "$output"
           result="$(echo "$output" | tail -n 1)"
           printf '%s\n' "$result" > audit/microsoft-identity-dev-e2e.json
           echo "$result" | grep -q '"status":"PASS"'
           echo "$result" | grep -q '"check":"powerplatform_environments"'
-          echo "$result" | grep -q '"check":"graph_groups"'
+          echo "$result" | grep -q '"check":"dataverse_whoami"'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: microsoft-identity-dev-sync

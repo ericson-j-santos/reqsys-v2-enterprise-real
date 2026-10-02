@@ -7,6 +7,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.identity_governance import IdentityGovernanceError
+from app.services.microsoft_oauth import MicrosoftOAuthError
 from app.services.sharepoint_graph_identity import acquire_sharepoint_graph_token
 
 logger = logging.getLogger('reqsys.sharepoint_packages')
@@ -67,6 +68,15 @@ async def listar_pacotes_ia_governado(limit: int = 20) -> dict[str, Any]:
             'configurado': False,
             'itens': [],
             'erro': str(exc),
+            'identidade': None,
+        }
+    except MicrosoftOAuthError as exc:
+        logger.warning('sharepoint_packages: OAuth SharePoint Graph rejeitado: %s', exc)
+        return {
+            'configurado': True,
+            'itens': [],
+            'erro': str(exc),
+            'erro_oauth': exc.as_dict(),
             'identidade': None,
         }
     except (httpx.HTTPError, ValueError, KeyError) as exc:

@@ -13,8 +13,8 @@ from app.core.identity_governance import (
     IdentityGovernanceError,
 )
 from app.core.secrets import read_secret_from_remote_vault, read_secret_from_vault
+from app.services.microsoft_oauth import acquire_client_credentials_token
 
-_GRAPH_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
 _SHAREPOINT_PURPOSE = 'sharepoint-package-catalog-read'
 _SHAREPOINT_DATA_CLASSIFICATION = DataClassification.CONFIDENTIAL
 
@@ -109,17 +109,12 @@ def sharepoint_graph_identity_status(*, now: datetime | None = None) -> dict[str
 async def acquire_sharepoint_graph_token(*, now: datetime | None = None) -> tuple[str, SharePointGraphIdentity]:
     identity = resolve_sharepoint_graph_identity(now=now)
     async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.post(
-            _GRAPH_TOKEN_URL.format(tenant=identity.tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': identity.client_id,
-                'client_secret': identity.client_secret,
-                'scope': 'https://graph.microsoft.com/.default',
-            },
+        token = await acquire_client_credentials_token(
+            client=client,
+            tenant_id=identity.tenant_id,
+            client_id=identity.client_id,
+            client_secret=identity.client_secret,
+            scope='https://graph.microsoft.com/.default',
+            resource='sharepoint_graph',
         )
-        response.raise_for_status()
-        token = response.json().get('access_token')
-    if not token:
-        raise IdentityGovernanceError('Microsoft Entra não retornou access_token para o perfil SharePoint Graph.')
-    return str(token), identity
+    return token, identity

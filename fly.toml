@@ -24,6 +24,7 @@ kill_timeout = "5s"
   REQSYS_PENTAHO_WORKER_WATCHDOG_SECONDS = "2"
   REQSYS_PENTAHO_PROCESSING_TIMEOUT_SECONDS = "300"
   REQSYS_PENTAHO_MAX_TENTATIVAS = "5"
+  REQSYS_IDENTITY_GOVERNANCE_FILE = "/app/config/identity-governance.runtime.json"
 
 [[mounts]]
   source = "reqsys_data"

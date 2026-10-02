@@ -164,6 +164,15 @@ class Settings(BaseSettings):
     teams_flow_bot_webhook_url: str = Field(default_factory=lambda: get_secret('TEAMS_FLOW_BOT_WEBHOOK_URL', '') or '')
 
     # Hub Low-Code & IA
+    # Identidades confidenciais dedicadas. Nao reutilizar AZURE_*: esse trio
+    # pertence ao login/Graph legado e pode apontar para uma App Registration SPA.
+    power_platform_tenant_id: str = Field(default_factory=lambda: get_secret('POWER_PLATFORM_TENANT_ID', '') or '')
+    power_platform_client_id: str = Field(default_factory=lambda: get_secret('POWER_PLATFORM_CLIENT_ID', '') or '')
+    power_platform_client_secret: str = Field(default_factory=lambda: get_secret('POWER_PLATFORM_CLIENT_SECRET', '') or '')
+    dataverse_tenant_id: str = Field(default_factory=lambda: get_secret('DATAVERSE_TENANT_ID', '') or '')
+    dataverse_client_id: str = Field(default_factory=lambda: get_secret('DATAVERSE_CLIENT_ID', '') or '')
+    dataverse_client_secret: str = Field(default_factory=lambda: get_secret('DATAVERSE_CLIENT_SECRET', '') or '')
+    dataverse_environment_url: str = Field(default_factory=lambda: get_secret('DATAVERSE_ENVIRONMENT_URL', '') or '')
     sharepoint_site_id: str = Field(default_factory=lambda: get_secret('SHAREPOINT_SITE_ID', '') or '')
     sharepoint_list_ia: str = Field(default_factory=lambda: get_secret('SHAREPOINT_LIST_IA', 'IA_Catalogo_Projetos') or 'IA_Catalogo_Projetos')
     github_pat: str = Field(default_factory=lambda: get_secret('GITHUB_PAT', '') or '')
@@ -288,6 +297,39 @@ class Settings(BaseSettings):
         if not self.azure_client_id.strip():
             missing.append('AZURE_CLIENT_ID')
         return missing
+
+    @property
+    def power_platform_configured(self) -> bool:
+        return not self.power_platform_missing_fields
+
+    @property
+    def power_platform_missing_fields(self) -> list[str]:
+        return _missing_fields({
+            'POWER_PLATFORM_TENANT_ID': self.power_platform_tenant_id,
+            'POWER_PLATFORM_CLIENT_ID': self.power_platform_client_id,
+            'POWER_PLATFORM_CLIENT_SECRET': self.power_platform_client_secret,
+        })
+
+    @property
+    def dataverse_configured(self) -> bool:
+        return not self.dataverse_missing_fields
+
+    @property
+    def dataverse_credentials_configured(self) -> bool:
+        return not _missing_fields({
+            'DATAVERSE_TENANT_ID': self.dataverse_tenant_id,
+            'DATAVERSE_CLIENT_ID': self.dataverse_client_id,
+            'DATAVERSE_CLIENT_SECRET': self.dataverse_client_secret,
+        })
+
+    @property
+    def dataverse_missing_fields(self) -> list[str]:
+        return _missing_fields({
+            'DATAVERSE_TENANT_ID': self.dataverse_tenant_id,
+            'DATAVERSE_CLIENT_ID': self.dataverse_client_id,
+            'DATAVERSE_CLIENT_SECRET': self.dataverse_client_secret,
+            'DATAVERSE_ENVIRONMENT_URL': self.dataverse_environment_url,
+        })
 
     @property
     def teams_graph_configurado(self) -> bool:

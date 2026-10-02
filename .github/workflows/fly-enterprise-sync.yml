@@ -50,13 +50,13 @@ jobs:
     name: Validate Fly IaC matrix
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Validate enterprise Fly sync manifest
         run: python scripts/validate_fly_enterprise_sync.py --output fly-enterprise-sync-validation.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: fly-enterprise-sync-evidence
@@ -73,8 +73,8 @@ jobs:
       drift_detected: ${{ steps.check.outputs.drift_detected }}
       skip_reason: ${{ steps.check.outputs.skip_reason }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Verificar drift dev/hml (read-only)
@@ -91,7 +91,7 @@ jobs:
             echo "skip_reason=drift_detected" >> "$GITHUB_OUTPUT"
             echo "::warning::Drift detectado — promoção dev→hml será executada."
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: publication-sync-gate
@@ -169,17 +169,17 @@ jobs:
           echo "skip_reason=${{ needs.publication-sync-gate.outputs.skip_reason || 'already_synced' }}" >> "$GITHUB_OUTPUT"
 
   sync-environment:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.validate-manifest.result == 'success' && needs.plan-environments.result == 'success' && needs.plan-environments.outputs.should_deploy == 'true'
+      ) }}
     name: Sync (${{ matrix.target_environment }})
     runs-on: ubuntu-latest
     needs: [validate-manifest, plan-environments]
     # `plan-environments` usa always() porque gates não aplicáveis ficam skipped.
     # Sem always() aqui, o GitHub propaga esse skipped pela cadeia e ignora o
     # deploy mesmo quando o plano produziu should_deploy=true.
-    if: >-
-      always() &&
-      needs.validate-manifest.result == 'success' &&
-      needs.plan-environments.result == 'success' &&
-      needs.plan-environments.outputs.should_deploy == 'true'
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -188,8 +188,8 @@ jobs:
     environment: ${{ matrix.github_environment }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Preparar pacote OCR externo
@@ -198,7 +198,7 @@ jobs:
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
       - name: Resolver configuração canônica
         id: env
         env:
@@ -272,6 +272,42 @@ jobs:
             --cofre-tenant-key AZURE_TENANT_ID \
             --cofre-client-key AZURE_CLIENT_ID \
             | tee "fly-auth-azure-report-${{ matrix.target_environment }}.json"
+      - name: Aplicar identidades app-only dedicadas
+        if: matrix.target_environment == 'hml' || matrix.target_environment == 'prod'
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          DATAVERSE_TENANT_ID: ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
+          SHAREPOINT_GRAPH_CLIENT_SECRET: ${{ secrets.SHAREPOINT_GRAPH_CLIENT_SECRET }}
+          SHAREPOINT_SITE_ID: ${{ vars.SHAREPOINT_SITE_ID }}
+          SHAREPOINT_LIST_IA: ${{ vars.SHAREPOINT_LIST_IA }}
+        run: |
+          set -euo pipefail
+          for name in \
+            POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET \
+            DATAVERSE_TENANT_ID DATAVERSE_CLIENT_ID DATAVERSE_CLIENT_SECRET DATAVERSE_ENVIRONMENT_URL \
+            SHAREPOINT_GRAPH_CLIENT_SECRET SHAREPOINT_SITE_ID SHAREPOINT_LIST_IA; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Secret dedicado obrigatório ausente: $name"
+              exit 1
+            fi
+          done
+          flyctl secrets set \
+            POWER_PLATFORM_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
+            POWER_PLATFORM_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
+            POWER_PLATFORM_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            DATAVERSE_TENANT_ID="$DATAVERSE_TENANT_ID" \
+            DATAVERSE_CLIENT_ID="$DATAVERSE_CLIENT_ID" \
+            DATAVERSE_CLIENT_SECRET="$DATAVERSE_CLIENT_SECRET" \
+            DATAVERSE_ENVIRONMENT_URL="$DATAVERSE_ENVIRONMENT_URL" \
+            SHAREPOINT_GRAPH_CLIENT_SECRET="$SHAREPOINT_GRAPH_CLIENT_SECRET" \
+            SHAREPOINT_SITE_ID="$SHAREPOINT_SITE_ID" \
+            SHAREPOINT_LIST_IA="$SHAREPOINT_LIST_IA" \
+            -a "${{ steps.env.outputs.fly_app }}"
       - name: Deploy API Fly app
         env:
           FLY_CONFIG: ${{ steps.env.outputs.fly_config }}
@@ -344,7 +380,7 @@ jobs:
         if: always()
         run: |
           python scripts/validar_login_multi_ambiente.py --environment "${{ matrix.target_environment }}" --timeout 25 --output "login-validation-${{ matrix.target_environment }}.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: fly-enterprise-sync-${{ matrix.target_environment }}
@@ -366,8 +402,8 @@ jobs:
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.deploy != 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Resolver URL do ambiente
@@ -385,7 +421,7 @@ jobs:
           PY
       - name: Validate public runtime endpoints
         run: python scripts/validate_public_runtime.py --base-url "${{ steps.env.outputs.api_url }}" --include-optional-evidence --output public-runtime-validation.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: fly-runtime-smoke-${{ github.event.inputs.target_environment }}
@@ -445,9 +481,9 @@ jobs:
             echo "::error::Deploy solicitado, mas o job Sync terminou como '${SYNC_RESULT:-skipped}'."
             exit 1
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         if: needs.plan-environments.outputs.should_deploy == 'true'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         if: needs.plan-environments.outputs.should_deploy == 'true'
         with:
           python-version: "3.12"
@@ -466,7 +502,7 @@ jobs:
           fi
           TEXTO="$(printf 'Ambientes alvo: %s\nResultado: %s\nSHA: %s\nDetalhes: %s/%s/actions/runs/%s' "$TARGETS" "$SYNC_RESULT" "${GITHUB_SHA:0:8}" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
           python scripts/notificar_teams.py --titulo "$TITULO" --texto "$TEXTO" --modo auto --destino-tipo chat --output notify-teams-fly-sync.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && needs.plan-environments.outputs.should_deploy == 'true'
         with:
           name: notify-teams-fly-sync

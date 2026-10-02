@@ -51,9 +51,9 @@ jobs:
             exit 1
           fi
       - name: Checkout sem secrets
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Preparar Python sem ambiente produtivo
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Instalar dependência focada
@@ -98,7 +98,7 @@ jobs:
           PY
       - name: Publicar decisão BACEN
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: bacen-production-hard-gate-deploy-sync
           path: artifacts/bacen-production-hard-gate/deploy-production-sync-decision.json
@@ -124,8 +124,8 @@ jobs:
     outputs:
       prod_synced: ${{ steps.check.outputs.prod_synced }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Validar drift repo ↔ runtime
@@ -144,7 +144,7 @@ jobs:
             echo "prod_synced=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Drift em produção — deploy será executado."
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: publication-sync-pre
@@ -165,8 +165,8 @@ jobs:
         needs.pre-sync-check.outputs.prod_synced != 'true'
       )
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Validar Trilha A
@@ -179,24 +179,22 @@ jobs:
         run: python scripts/validate_fly_enterprise_sync.py --output fly-enterprise-sync-validation.json
 
   configure-prod-secrets:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.gate.result == 'success' && needs.gate.outputs.production_allowed == 'true' && needs.pre-sync-check.result == 'success' && needs.validate-runtime.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
+          (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+        )
+      ) }}
     name: Configurar secrets auth produção
     runs-on: ubuntu-latest
     needs: [gate, pre-sync-check, validate-runtime]
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true' &&
-      needs.pre-sync-check.result == 'success' &&
-      needs.validate-runtime.result == 'success' &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
-        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
-      )
     environment: production
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Resolver credencial Fly API produção
@@ -210,7 +208,42 @@ jobs:
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/deploy-production-configure-api-credential.json
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+      - name: Aplicar identidades app-only dedicadas no reqsys-api
+        env:
+          POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          POWER_PLATFORM_CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          DATAVERSE_TENANT_ID: ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID: ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          DATAVERSE_ENVIRONMENT_URL: ${{ secrets.DATAVERSE_ENVIRONMENT_URL }}
+          SHAREPOINT_GRAPH_CLIENT_SECRET: ${{ secrets.SHAREPOINT_GRAPH_CLIENT_SECRET }}
+          SHAREPOINT_SITE_ID: ${{ vars.SHAREPOINT_SITE_ID }}
+          SHAREPOINT_LIST_IA: ${{ vars.SHAREPOINT_LIST_IA }}
+        run: |
+          set -euo pipefail
+          for name in \
+            POWER_PLATFORM_TENANT_ID POWER_PLATFORM_CLIENT_ID POWER_PLATFORM_CLIENT_SECRET \
+            DATAVERSE_TENANT_ID DATAVERSE_CLIENT_ID DATAVERSE_CLIENT_SECRET DATAVERSE_ENVIRONMENT_URL \
+            SHAREPOINT_GRAPH_CLIENT_SECRET SHAREPOINT_SITE_ID SHAREPOINT_LIST_IA; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Secret dedicado obrigatório ausente: $name"
+              exit 1
+            fi
+          done
+          flyctl secrets set \
+            POWER_PLATFORM_TENANT_ID="$POWER_PLATFORM_TENANT_ID" \
+            POWER_PLATFORM_CLIENT_ID="$POWER_PLATFORM_CLIENT_ID" \
+            POWER_PLATFORM_CLIENT_SECRET="$POWER_PLATFORM_CLIENT_SECRET" \
+            DATAVERSE_TENANT_ID="$DATAVERSE_TENANT_ID" \
+            DATAVERSE_CLIENT_ID="$DATAVERSE_CLIENT_ID" \
+            DATAVERSE_CLIENT_SECRET="$DATAVERSE_CLIENT_SECRET" \
+            DATAVERSE_ENVIRONMENT_URL="$DATAVERSE_ENVIRONMENT_URL" \
+            SHAREPOINT_GRAPH_CLIENT_SECRET="$SHAREPOINT_GRAPH_CLIENT_SECRET" \
+            SHAREPOINT_SITE_ID="$SHAREPOINT_SITE_ID" \
+            SHAREPOINT_LIST_IA="$SHAREPOINT_LIST_IA" \
+            -a reqsys-api
       - name: Aplicar secrets JWT/Azure no reqsys-api
         env:
           COFRE_API_URL: ${{ secrets.COFRE_API_URL }}
@@ -234,7 +267,7 @@ jobs:
             --cofre-tenant-key AZURE_TENANT_ID \
             --cofre-client-key AZURE_CLIENT_ID \
             | tee fly-auth-azure-report-production.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: fly-auth-azure-report-production
@@ -244,24 +277,21 @@ jobs:
           if-no-files-found: warn
 
   deploy-backend:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.gate.result == 'success' && needs.gate.outputs.production_allowed == 'true' && needs.pre-sync-check.result == 'success' && needs.validate-runtime.result == 'success' && needs.configure-prod-secrets.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
+          (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+        )
+      ) }}
     name: Deploy API produção
     runs-on: ubuntu-latest
     needs: [gate, pre-sync-check, validate-runtime, configure-prod-secrets]
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true' &&
-      needs.pre-sync-check.result == 'success' &&
-      needs.validate-runtime.result == 'success' &&
-      needs.configure-prod-secrets.result == 'success' &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == true) ||
-        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
-      )
     environment: production
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Resolver credencial Fly API produção
         uses: ./.github/actions/resolve-managed-credential
         with:
@@ -273,7 +303,7 @@ jobs:
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/deploy-production-api-credential.json
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
       - name: Deploy reqsys-api
         run: |
           set -euo pipefail
@@ -300,7 +330,7 @@ jobs:
             fi
             sleep 60
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: deploy-production-api-credential-${{ github.run_id }}-${{ github.run_attempt }}
@@ -308,23 +338,21 @@ jobs:
           if-no-files-found: warn
 
   deploy-frontend:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.gate.result == 'success' && needs.gate.outputs.production_allowed == 'true' && needs.pre-sync-check.result == 'success' && needs.validate-runtime.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == true) ||
+          (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
+        )
+      ) }}
     name: Deploy frontend produção
     runs-on: ubuntu-latest
     needs: [gate, pre-sync-check, validate-runtime]
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true' &&
-      needs.pre-sync-check.result == 'success' &&
-      needs.validate-runtime.result == 'success' &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == true) ||
-        (github.event_name == 'push' && needs.pre-sync-check.outputs.prod_synced != 'true')
-      )
     environment: production
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Resolver credencial Fly frontend produção
         uses: ./.github/actions/resolve-managed-credential
         with:
@@ -336,11 +364,11 @@ jobs:
           azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
           azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
           evidence-path: audit/deploy-production-frontend-credential.json
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
       - name: Deploy reqsys-app
         working-directory: frontend
         run: flyctl deploy --remote-only --config fly.toml --app reqsys-app
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: deploy-production-frontend-credential-${{ github.run_id }}-${{ github.run_attempt }}
@@ -356,8 +384,8 @@ jobs:
       (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Aguardar estabilização do runtime
@@ -398,7 +426,7 @@ jobs:
           python scripts/validar_frontend_auth_redirect.py \
             --frontend-url "$PUBLIC_FRONTEND_URL" \
             | tee login-frontend-prod-report.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: publication-sync-post
@@ -432,9 +460,9 @@ jobs:
             echo "| Deploy frontend | ${{ needs.deploy-frontend.result || 'skipped' }} |"
             echo "| Pós-sync | ${{ needs.post-sync-check.result || 'skipped' }} |"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         if: needs.gate.outputs.production_allowed == 'true'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         if: needs.gate.outputs.production_allowed == 'true'
         with:
           python-version: "3.12"
@@ -465,7 +493,7 @@ jobs:
             --modo auto \
             --destino-tipo chat \
             --output notify-teams-deploy-producao.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && needs.gate.outputs.production_allowed == 'true'
         with:
           name: notify-teams-deploy-producao

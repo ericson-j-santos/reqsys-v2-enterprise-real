@@ -25,10 +25,10 @@ from app.core.resilience import (
     CircuitBreakerOpenError,
     call_with_retry_async,
 )
+from app.services.microsoft_oauth import acquire_client_credentials_token
 
 logger = logging.getLogger('reqsys.dataverse_queue_client')
 
-_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
 _API_VERSION = 'v9.2'
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_SECONDS = 0.5
@@ -44,7 +44,11 @@ class DataverseError(RuntimeError):
 
 
 def dataverse_configurado() -> bool:
-    return bool(settings.azure_tenant_id and settings.azure_client_id and settings.azure_client_secret)
+    return bool(
+        settings.dataverse_tenant_id
+        and settings.dataverse_client_id
+        and settings.dataverse_client_secret
+    )
 
 
 def _circuit_for(environment_url: str) -> CircuitBreaker:
@@ -67,17 +71,14 @@ def reset_circuit_breakers() -> None:
 async def _token(environment_url: str) -> str:
     scope = environment_url.rstrip('/') + '/.default'
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(
-            _TOKEN_URL.format(tenant=settings.azure_tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': settings.azure_client_id,
-                'client_secret': settings.azure_client_secret,
-                'scope': scope,
-            },
+        return await acquire_client_credentials_token(
+            client=client,
+            tenant_id=settings.dataverse_tenant_id,
+            client_id=settings.dataverse_client_id,
+            client_secret=settings.dataverse_client_secret,
+            scope=scope,
+            resource='dataverse',
         )
-        resp.raise_for_status()
-        return resp.json()['access_token']
 
 
 async def _request(
@@ -89,7 +90,9 @@ async def _request(
     extra_headers: dict[str, str] | None = None,
 ) -> httpx.Response:
     if not dataverse_configurado():
-        raise DataverseError('Azure AD (AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET) não configurado')
+        raise DataverseError(
+            'Dataverse (DATAVERSE_TENANT_ID/DATAVERSE_CLIENT_ID/DATAVERSE_CLIENT_SECRET) não configurado'
+        )
 
     async def _do() -> httpx.Response:
         token = await _token(environment_url)
@@ -177,8 +180,8 @@ async def create_row(environment_url: str, entity_set: str, campos: dict[str, An
 
 async def testar_autenticacao(environment_url: str) -> str:
     """Testa a aquisição de token client-credentials contra este ambiente —
-    usado por scripts de diagnóstico para confirmar AZURE_TENANT_ID/
-    AZURE_CLIENT_ID/AZURE_CLIENT_SECRET antes de qualquer chamada real."""
+    usado por scripts de diagnóstico para confirmar DATAVERSE_TENANT_ID/
+    DATAVERSE_CLIENT_ID/DATAVERSE_CLIENT_SECRET antes de qualquer chamada real."""
     return await _token(environment_url)
 
 
