@@ -126,3 +126,20 @@ def test_main_fluxo_completo_grava_evidencia(monkeypatch, tmp_path, capsys):
     assert resumo['total_pendentes_encontrados'] == 1
     assert resumo['resultados'][0]['desfecho'] == 'publicado'
     assert resumo['total_inesperados'] == 0
+
+
+def test_strict_falha_em_http_200_sem_publicacao(monkeypatch, tmp_path):
+    monkeypatch.setattr(module, 'listar_pendentes', lambda *_: [{'attempt_id': 42}])
+    monkeypatch.setattr(module, 'reprocessar', lambda *_: (200, {'data': {'status': 'falhou_integracao'}}))
+    monkeypatch.setattr(module.time, 'sleep', lambda *_: None)
+    evidence = tmp_path / 'resumo.json'
+    monkeypatch.setattr(sys, 'argv', ['script', '--base-url', 'https://example.test', '--service-token', 'test-only-token', '--strict', '--evidence-file', str(evidence)])
+    with pytest.raises(SystemExit):
+        module.main()
+    assert json.loads(evidence.read_text())['total_falhas_negocio'] == 1
+
+
+def test_listagem_malformada_nao_parece_fila_vazia(monkeypatch):
+    monkeypatch.setattr(module, '_http_request', lambda *_, **__: (200, {'success': False}))
+    with pytest.raises(SystemExit):
+        module.listar_pendentes('https://example.test', 'test-only-token', 10, 5)

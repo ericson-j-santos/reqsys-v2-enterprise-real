@@ -20,7 +20,7 @@ Uso:
 
 Nunca imprime o service token. Best-effort por padrão (exit 0 mesmo com
 falhas individuais de reprocesso) -- use --strict para propagar erro se
-qualquer chamada inesperada (não um 409 de limite/duplicidade) ocorrer.
+qualquer chamada inesperada ou falha de negócio ocorrer.
 """
 from __future__ import annotations
 
@@ -61,8 +61,12 @@ def listar_pendentes(base_url: str, service_token: str, limit: int, timeout: int
         timeout=timeout,
     )
     if status != 200:
-        raise SystemExit(f'Falha ao listar tentativas pendentes: HTTP {status} — {body}')
-    return body.get('data', {}).get('items', [])
+        raise SystemExit(f'Falha ao listar tentativas pendentes: HTTP {status}')
+    data = body.get('data') if isinstance(body, dict) else None
+    items = data.get('items') if isinstance(data, dict) else None
+    if not isinstance(body, dict) or body.get('success') is False or not isinstance(items, list):
+        raise SystemExit('Resposta inválida ao listar pendências; execução bloqueada.')
+    return items
 
 
 def reprocessar(base_url: str, service_token: str, attempt_id: int, timeout: int) -> tuple[int, dict]:
@@ -81,7 +85,7 @@ def main() -> None:
     parser.add_argument('--lote-max', type=int, default=10, help='Máximo de tentativas reprocessadas por execução.')
     parser.add_argument('--timeout', type=int, default=20)
     parser.add_argument('--evidence-file', default=None, help='Caminho para gravar o resumo em JSON.')
-    parser.add_argument('--strict', action='store_true', help='Sai com erro se alguma chamada retornar status inesperado (não 200/409).')
+    parser.add_argument('--strict', action='store_true', help='Sai com erro se houver HTTP inesperado ou falha de negócio, mesmo em HTTP 200.')
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip('/')
@@ -89,11 +93,13 @@ def main() -> None:
 
     resultados: list[dict[str, Any]] = []
     inesperados = 0
+    falhas_negocio = 0
     for item in pendentes[: args.lote_max]:
         attempt_id = item['attempt_id']
         status_http, resposta = reprocessar(base_url, args.service_token, attempt_id, args.timeout)
         if status_http == 200:
-            desfecho = 'publicado' if resposta.get('data', {}).get('status') == 'publicado' else 'ainda_falhando'
+            desfecho = 'publicado' if resposta.get('success') is not False and resposta.get('data', {}).get('status') == 'publicado' else 'ainda_falhando'
+            falhas_negocio += desfecho == 'ainda_falhando'
         elif status_http == 409:
             desfecho = 'recusado_pelo_backend'  # já publicado/duplicado, ou limite de tentativas excedido
         else:
@@ -110,6 +116,7 @@ def main() -> None:
         'total_pendentes_encontrados': len(pendentes),
         'total_processados_neste_lote': len(resultados),
         'total_inesperados': inesperados,
+        'total_falhas_negocio': falhas_negocio,
         'resultados': resultados,
     }
 
@@ -120,8 +127,8 @@ def main() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(resumo, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
-    if args.strict and inesperados:
-        raise SystemExit(f'{inesperados} chamada(s) de reprocesso retornaram status inesperado.')
+    if args.strict and (inesperados or falhas_negocio):
+        raise SystemExit(f'Reprocessamento falhou: {inesperados} HTTP inesperado(s), {falhas_negocio} falha(s) de negócio.')
 
 
 if __name__ == '__main__':
