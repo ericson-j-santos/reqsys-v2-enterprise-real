@@ -257,7 +257,26 @@ jobs:
               return;
             }
 
+            const { data: baseRef } = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: `heads/${pr.base.ref}`,
+            });
+            const liveBaseSha = baseRef.object.sha;
+            const { data: comparison } = await github.rest.repos.compareCommits({
+              owner,
+              repo,
+              base: liveBaseSha,
+              head: triggerHeadSha,
+            });
+
             const failures = [];
+            if (pr.base.sha !== liveBaseSha) {
+              failures.push(`Base da PR está desatualizada: pr=${pr.base.sha}, atual=${liveBaseSha}`);
+            }
+            if (comparison.status === 'diverged' || comparison.status === 'behind' || comparison.behind_by > 0) {
+              failures.push(`PR atrasada ou divergente: status=${comparison.status}, behind_by=${comparison.behind_by}`);
+            }
             if (pr.state !== 'open') failures.push(`PR não está aberto: ${pr.state}`);
             if (pr.draft) failures.push('PR ainda está em draft.');
             if (pr.base.ref !== 'main') failures.push(`Base não autorizada para auto-merge: ${pr.base.ref}`);
@@ -323,11 +342,27 @@ jobs:
               per_page: 100,
             });
             const currentLabelNames = currentLabels.map((label) => label.name);
+            const { data: currentBaseRef } = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: `heads/${current.base.ref}`,
+            });
+            const currentBaseSha = currentBaseRef.object.sha;
+            const { data: currentComparison } = await github.rest.repos.compareCommits({
+              owner,
+              repo,
+              base: currentBaseSha,
+              head: triggerHeadSha,
+            });
             if (
               current.state !== 'open' ||
               current.draft ||
               current.mergeable !== true ||
               current.head.sha !== triggerHeadSha ||
+              current.base.sha !== currentBaseSha ||
+              currentComparison.status === 'diverged' ||
+              currentComparison.status === 'behind' ||
+              currentComparison.behind_by > 0 ||
               !currentLabelNames.includes('merge-queue:eligible')
             ) {
               core.setFailed(
