@@ -14,7 +14,7 @@ on:
       public_url:
         description: "URL pública da API ReqSys"
         required: true
-        default: "https://reqsys-api.fly.dev"
+        default: "https://runtime.invalid"
       strict:
         description: "Executar gate strict"
         required: true
@@ -59,10 +59,9 @@ defaults:
 
 jobs:
   dispatch-public-runtime-evidence:
-    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    # Fly.io retirado definitivamente pelo usuário em 2026-10-02.
     if: ${{ false }}
     name: Dispatch public runtime evidence
-    if: ${{ inputs.operation == 'public-runtime-evidence' }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate governed token

@@ -468,6 +468,9 @@ def test_sign_only_relay_rejects_noncanonical_runtime_urls():
 def test_github_hosted_locator_relay_is_manual_sha_bound_and_fail_closed():
     raw = RELAY_WORKFLOW.read_text(encoding="utf-8")
     trigger_block = raw.split("permissions:", 1)[0]
+    retired_dispatch_job = raw.split("  dispatch-public-runtime-evidence:", 1)[1].split(
+        "\n  relay:", 1
+    )[0]
     assert "workflow_dispatch:" in trigger_block
     assert "operation:" in trigger_block
     assert 'default: "public-runtime-evidence"' in trigger_block
@@ -483,7 +486,11 @@ def test_github_hosted_locator_relay_is_manual_sha_bound_and_fail_closed():
     assert "runs-on: ubuntu-latest" in raw
     assert "self-hosted" not in raw
     assert "RELAY_DEV_LOCATOR" in raw
-    assert "if: ${{ inputs.operation == 'public-runtime-evidence' }}" in raw
+    assert "Fly.io retirado definitivamente" in raw
+    assert "if: ${{ false }}" in retired_dispatch_job
+    assert retired_dispatch_job.count("\n    if:") == 1
+    assert "inputs.operation" not in retired_dispatch_job
+    assert "reqsys-api.fly.dev" not in trigger_block
     assert "if: ${{ inputs.operation == 'relay-dev-locator' }}" in raw
     assert "refs/heads/main" in raw
     assert 'test "$GITHUB_EVENT_NAME" = \'workflow_dispatch\'' in raw
