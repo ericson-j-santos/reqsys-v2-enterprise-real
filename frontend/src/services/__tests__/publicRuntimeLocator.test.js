@@ -69,6 +69,20 @@ describe('publicRuntimeLocator', () => {
     expect(payload.selected_url).toBe('https://runtime-valid.trycloudflare.com')
   })
 
+  it('usa verificação Ed25519 compatível quando o Web Crypto móvel não suporta o algoritmo', async () => {
+    const { envelope, locatorConfig, now } = await signedEnvelope()
+    const cryptoSemEd25519 = {
+      subtle: {
+        importKey: async () => { throw new DOMException('Algorithm not supported', 'NotSupportedError') },
+      },
+    }
+    const payload = await verifyLocatorEnvelope(envelope, locatorConfig, {
+      now,
+      cryptoImpl: cryptoSemEd25519,
+    })
+    expect(payload.selected_url).toBe('https://runtime-valid.trycloudflare.com')
+  })
+
   it('rejeita origem fora de trycloudflare mesmo com assinatura válida', async () => {
     const { envelope, locatorConfig, now } = await signedEnvelope({
       selected_url: 'https://evil.example.com',
