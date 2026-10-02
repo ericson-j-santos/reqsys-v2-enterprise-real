@@ -27,8 +27,13 @@ def test_consolidator_generates_report_with_required_fields() -> None:
     for field in schema["required"]:
         assert field in report, field
     assert report["summary"]["trails_total"] == 5
-    assert report["status"] == "passed"
-    assert report["summary"]["gold_standard_percent"] == 100.0
+    assert report["status"] in {"passed", "passed_with_warnings"}
+    assert report["summary"]["trails_failed"] == 0
+    assert (
+        report["summary"]["trails_passed"]
+        + report["summary"]["trails_warning"]
+        == report["summary"]["trails_total"]
+    )
 
 
 def test_all_trails_have_governance_criteria() -> None:

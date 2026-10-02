@@ -25,6 +25,8 @@ concurrency:
 
 jobs:
   validate-bundle:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Validar bundle local sem callback.html
     runs-on: ubuntu-latest
     steps:
@@ -129,7 +131,11 @@ jobs:
     name: Validar auth Azure em staging
     runs-on: ubuntu-latest
     needs: [deploy-backend, deploy-frontend]
-    if: always() && needs.validate-bundle.result == 'success' && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        always() && needs.validate-bundle.result == 'success' && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
+      ) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065

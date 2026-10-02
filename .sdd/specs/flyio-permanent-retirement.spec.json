@@ -3,16 +3,32 @@
   "project": "ReqSys v2 Enterprise — todos os ambientes",
   "created_at": "2026-10-02",
   "updated_at": "2026-10-02",
-  "phase": "implementation",
+  "phase": "finalization",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Bloqueia os jobs Fly.io identificados em todos os ambientes por decisão explícita do usuário, preservando contratos e condições de autorização.",
-  "scope": "runtime-flyio-retirement",
+  "description": "Finaliza a retirada permanente do Fly.io no ReqSys: bloqueia operações remanescentes, elimina fallbacks e deploys GitLab, torna scripts locais fail-closed e preserva manifestos somente como evidência histórica não executável.",
+  "scope": "runtime-flyio-retirement-finalization",
   "files": [
     ".github/workflows/coleta-requisitos-teams-e2e-dev.yml",
+    ".github/workflows/bacen-human-action-issue-sync.yml",
+    ".github/workflows/dynamic-performance-gate.yml",
+    ".github/workflows/evidence-automation-observability-e2e.yml",
+    ".github/workflows/flow-completion-monitor.yml",
+    ".github/workflows/notify-teams-reqsys-logs.yml",
+    ".github/workflows/planner-publish-reprocess-scheduled.yml",
+    ".github/workflows/public-runtime-evidence.yml",
+    ".github/workflows/qualidade-ia-snapshot.yml",
+    ".github/workflows/reqsys-delivery-completion-controller.yml",
+    ".github/workflows/reqsys-next-increment-auto-evaluation.yml",
+    ".github/workflows/runtime-executive-post-deploy-smoke.yml",
+    ".github/workflows/runtime-operational-health.yml",
+    ".github/workflows/teams-bot-dev-activation-probe.yml",
+    ".github/workflows/teams-recipient-policy-runtime-readiness.yml",
+    ".github/workflows/ux-integrated-runtime-evidence-producer.yml",
+    ".github/workflows/ux-runtime-scheduled-collection.yml",
     ".github/workflows/configurar-fly-auth-azure.yml",
     ".github/workflows/configurar-integracao-github-fly-dev.yml",
     ".github/workflows/control-plane-lifecycle.yml",
@@ -44,14 +60,35 @@
     ".github/workflows/reqsys-free-tier-backup.yml",
     ".github/workflows/sync-microsoft-identity-dev.yml",
     ".github/workflows/teams-gateway-contract-acceptance-dev.yml",
+    ".gitlab-ci.yml",
+    "backend/app/api/actions_runtime_center.py",
+    "backend/app/api/govbi.py",
+    "backend/app/core/config.py",
+    "backend/app/services/monitoramento_snapshot.py",
+    "backend/app/services/operational_deploy.py",
+    "config/control-plane-lifecycle-policy.json",
+    "config/flyio-retirement-policy.json",
+    "gitlab/ci/deploy.yml",
+    "gitlab/ci/ocr-deploy-staging.yml",
+    "infra/fly-environments.json",
+    "scripts/configurar_fly_auth_azure.py",
+    "scripts/credential_control_plane_lifecycle.py",
+    "scripts/cutover_fly_postgres.py",
+    "scripts/fly-deploy.ps1",
+    "scripts/remote_postgres_backup.sh",
+    "scripts/rollback_environment_observability_api.sh",
+    "scripts/run_reqsys_free_tier_backup.sh",
     "tests/test_flyio_permanent_retirement.py",
     "docs/releases/flyio-retirement-20261002.md",
     "tests/test_environment_observability_build_only_contract.py",
-    "tests/test_fly_automatic_promotion_contract.py"
+    "tests/test_fly_automatic_promotion_contract.py",
+    "tests/test_flyio_local_mutation_retirement.py",
+    "gitlab/tests/test_validate_gitlab_governance.py"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
-      "tests/test_flyio_permanent_retirement.py"
+      "tests/test_flyio_permanent_retirement.py",
+      "tests/test_flyio_local_mutation_retirement.py"
     ],
     "tests": [
       "tests/test_flyio_permanent_retirement.py",
@@ -62,9 +99,11 @@
       "tests/test_fly_command_center_bacen_gate_contract.py",
       "tests/test_capture_fly_environment_workload_contract.py",
       "tests/test_environment_observability_build_only_contract.py",
-      "tests/test_fly_automatic_promotion_contract.py"
+      "tests/test_fly_automatic_promotion_contract.py",
+      "tests/test_flyio_local_mutation_retirement.py",
+      "gitlab/tests/test_validate_gitlab_governance.py"
     ],
-    "evidence_contract": "Workflows YAML válidos no SHA do PR; todos os jobs com referências diretas a operações, tokens ou callers Fly.io são bloqueados por condição constante falsa; controle negativo detecta reativação e false || true; demais jobs e contratos permanecem. Não declarar retirada de recursos remotos sem inventário autenticado."
+    "evidence_contract": "Workflows YAML válidos no SHA do PR; jobs e entrypoints com operações, tokens ou callers Fly.io ficam fail-closed; fallbacks fly.dev/fly.io e deploys GitLab são retirados; manifestos restantes são históricos e não executáveis. O estado remoto, a cobrança e a exclusão da conta só podem ser declarados com inventário autenticado e confirmação do provedor."
   },
   "risk": {
     "production": true,

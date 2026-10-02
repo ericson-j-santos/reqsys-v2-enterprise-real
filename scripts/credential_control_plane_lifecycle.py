@@ -33,6 +33,9 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY = ROOT / "config" / "control-plane-lifecycle-policy.json"
 DEFAULT_OUTPUT = ROOT / "audit" / "credential-control-plane-lifecycle.json"
+FLYIO_RETIREMENT_GUARD = (
+    "Fly.io foi retirado definitivamente em 2026-10-02; emissao e revogacao automatica de tokens estao bloqueadas."
+)
 SUPPORTED_PROVIDERS = {"gitlab", "fly"}
 SUPPORTED_STRATEGIES = {
     "gitlab": {"gitlab_self_rotate"},
@@ -314,6 +317,8 @@ class FlyAdapter:
         return env
 
     def create_deploy_token(self, *, app: str, issuer_token: str, name: str, expires_in_days: int) -> tuple[str, str | None]:
+        raise LifecycleError(FLYIO_RETIREMENT_GUARD)
+
         output = self.runner.run([
             "flyctl", "tokens", "create", "deploy", "--app", app,
             "--expiry", f"{expires_in_days * 24}h", "--name", name, "--json",
@@ -333,6 +338,8 @@ class FlyAdapter:
         json.loads(output)
 
     def revoke(self, *, token_id: str, issuer_token: str) -> None:
+        raise LifecycleError(FLYIO_RETIREMENT_GUARD)
+
         self.runner.run(["flyctl", "tokens", "revoke", token_id], env=self._env(issuer_token))
 
 
@@ -487,6 +494,8 @@ def execute_plan(
             continue
 
         if provider == "fly":
+            raise LifecycleError(FLYIO_RETIREMENT_GUARD)
+
             issuer = store.read(str(item["issuer_secret_name"]))
             metadata = store.metadata(str(item["secret_name"]))
             old_id = (metadata.tags or {}).get("provider_token_id") if metadata.exists else None

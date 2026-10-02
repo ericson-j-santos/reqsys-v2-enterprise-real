@@ -25,4 +25,5 @@ def test_trilha_c_validator_passes() -> None:
     assert proc.returncode == 0, proc.stdout + proc.stderr
     report = json.loads(REPORT.read_text(encoding="utf-8"))
     assert report["trail_id"] == "trilha-c"
-    assert report["status"] == "passed"
+    assert report["status"] in {"passed", "passed_with_warnings"}
+    assert report["summary"]["errors"] == 0

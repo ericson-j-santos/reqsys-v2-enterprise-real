@@ -20,6 +20,9 @@ param(
     [string]$BaseUrl = ""
 )
 
+# FLYIO_RETIREMENT_GUARD
+throw "Fly.io foi retirado definitivamente em 2026-10-02; configuracao de secrets Fly esta bloqueada. Use a configuracao local/novo runtime por caminho dedicado."
+
 $fly = "$env:USERPROFILE\.fly\bin\flyctl.exe"
 $root = Split-Path $PSScriptRoot -Parent
 

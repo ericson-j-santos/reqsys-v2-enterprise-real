@@ -30,6 +30,8 @@ concurrency:
 
 jobs:
   runtime-health:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
     name: Runtime health check governado
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -41,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Preparar diretório
         shell: bash
@@ -125,7 +127,7 @@ jobs:
 
       - name: Publicar artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: runtime-operational-health
           path: artifacts/runtime-health

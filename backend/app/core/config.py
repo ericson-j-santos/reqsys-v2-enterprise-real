@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -10,6 +11,7 @@ _env_file = Path(__file__).resolve().parents[3] / '.env'
 
 _TRUE_VALUES = {'1', 'true', 'yes', 'on'}
 _PRODUCTION_ENVIRONMENTS = {'prod', 'prd', 'production'}
+_RETIRED_FLY_HOSTS = {'fly.dev', 'fly.io'}
 _WEAK_SECRETS = {
     'trocar-em-producao',
     'secret',
@@ -25,6 +27,28 @@ def _bool_secret(name: str, default: str = 'false') -> bool:
 
 def _missing_fields(mapping: dict[str, str]) -> list[str]:
     return [name for name, value in mapping.items() if not value.strip()]
+
+
+class GovBIConfigurationError(ValueError):
+    """Indica configuração insegura ou ausente da integração GovBI."""
+
+
+def validate_govbi_base_url(value: str | None) -> str:
+    """Valida a URL explícita do GovBI e bloqueia o provedor Fly retirado."""
+
+    candidate = (value or '').strip().rstrip('/')
+    if not candidate:
+        raise GovBIConfigurationError('GOVBI_BASE_URL deve ser configurada explicitamente.')
+
+    parsed = urlsplit(candidate)
+    if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
+        raise GovBIConfigurationError('GOVBI_BASE_URL deve ser uma URL HTTP(S) absoluta.')
+
+    hostname = parsed.hostname.lower().rstrip('.')
+    if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
+        raise GovBIConfigurationError('GOVBI_BASE_URL não pode apontar para Fly.io ou fly.dev.')
+
+    return candidate
 
 
 class Settings(BaseSettings):
@@ -50,7 +74,7 @@ class Settings(BaseSettings):
     log_format: str = Field(default_factory=lambda: get_secret('LOG_FORMAT', 'text') or 'text')
 
     # Integração GovBI IA — proxy governado backend
-    govbi_base_url: str = Field(default_factory=lambda: get_secret('GOVBI_BASE_URL', 'https://govbi-ia-hom.fly.dev') or 'https://govbi-ia-hom.fly.dev')
+    govbi_base_url: str = Field(default_factory=lambda: get_secret('GOVBI_BASE_URL', '') or '')
     govbi_timeout_seconds: float = Field(default_factory=lambda: float(get_secret('GOVBI_TIMEOUT_SECONDS', '15') or '15'))
 
     # RAG governado — LlamaIndex-ready com fallback offline auditável

@@ -223,7 +223,7 @@ def test_execute_gitlab_persiste_novo_token_e_valida(monkeypatch):
     assert adapter.validated is True
 
 
-def test_execute_fly_valida_persiste_e_revoga_anterior(monkeypatch):
+def test_execute_fly_permanece_bloqueado_apos_retirada(monkeypatch):
     policy = base_policy("fly")
     store = FakeStore(
         metadata={
@@ -242,11 +242,11 @@ def test_execute_fly_valida_persiste_e_revoga_anterior(monkeypatch):
     plan = build_plan(policy, store, now=NOW)
     monkeypatch.setenv("REQSYS_CREDENTIAL_MUTATION_ENABLED", "true")
     adapter = FakeFly()
-    results = execute_plan(policy, store, plan, now=NOW, gitlab=FakeGitLab(), fly=adapter)
-    assert results[0].status == "ROTATED"
-    assert store.writes[0][1] == "new-fly"
-    assert adapter.validated is True
-    assert adapter.revoked == [("old-id", "issuer")]
+    with pytest.raises(LifecycleError, match="retirado definitivamente"):
+        execute_plan(policy, store, plan, now=NOW, gitlab=FakeGitLab(), fly=adapter)
+    assert store.writes == []
+    assert adapter.validated is False
+    assert adapter.revoked == []
 
 
 def test_execute_bloqueado_sem_feature_flag(monkeypatch):
