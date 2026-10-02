@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -92,3 +94,43 @@ def test_padrao_ouro_maturity_consolidator_reaches_100() -> None:
   assert health["public_runtime_readiness"]["readiness_percent"] == 100.0
   assert pareto["current_score"] == 100.0
   assert readiness["readiness_percent"] == 100.0
+
+
+class _StubResponse:
+  def __init__(self, status_code: int) -> None:
+    self.status_code = status_code
+    self.content = b"{}"
+    self.headers: dict[str, str] = {"content-type": "application/json"}
+
+
+class _StubClient:
+  def get(self, endpoint: str) -> _StubResponse:
+    status_code = 503 if endpoint == "/api/runtime/readiness" else 200
+    return _StubResponse(status_code)
+
+
+def test_in_process_runtime_validation_fails_closed_on_required_endpoint() -> None:
+  from scripts.padrao_ouro_maturity_consolidator import (
+      assert_required_runtime_endpoints,
+      build_in_process_runtime_validation,
+  )
+
+  validation = build_in_process_runtime_validation(_StubClient())
+
+  assert validation["validation_mode"] == "asgi_in_process"
+  assert validation["network_reachability_verified"] is False
+  with pytest.raises(RuntimeError, match=r"/api/runtime/readiness: 503"):
+    assert_required_runtime_endpoints(validation)
+
+
+def test_in_process_runtime_does_not_claim_public_reachability(monkeypatch: pytest.MonkeyPatch) -> None:
+  from scripts import padrao_ouro_maturity_consolidator as consolidator
+
+  commands: list[list[str]] = []
+  monkeypatch.setattr(consolidator, "_run", lambda command: commands.append(command))
+
+  consolidator.persist_public_runtime_evidence({"network_reachability_verified": False})
+
+  command = commands[0]
+  strict_gate_index = command.index("--strict-gate-passed")
+  assert command[strict_gate_index + 1] == "false"
