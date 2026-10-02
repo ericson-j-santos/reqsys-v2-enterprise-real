@@ -1,18 +1,23 @@
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMOTION = (ROOT / ".github/workflows/environment-observability-promotion.yml").read_text(encoding="utf-8")
 GATEWAY = (ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml").read_text(encoding="utf-8")
 
 
-def test_promotion_exposes_build_only_without_changing_default_promotion() -> None:
+def test_promotion_preserves_build_only_and_blocks_retired_fly_deploy() -> None:
     assert "build_only:" in PROMOTION
     assert "default: false" in PROMOTION
     assert "type: boolean" in PROMOTION
-    assert "if: ${{ !inputs.build_only }}" in PROMOTION
-    assert "if: ${{ !inputs.build_only && (inputs.promote_to == 'staging' || inputs.promote_to == 'production') }}" in PROMOTION
-    assert "if: ${{ !inputs.build_only && inputs.promote_to == 'production' }}" in PROMOTION
+    jobs = yaml.safe_load(PROMOTION)["jobs"]
+    for name in ("deploy-development", "deploy-staging", "deploy-production"):
+        condition = jobs[name]["if"]
+        assert condition.startswith("${{ false && (")
+        assert "!inputs.build_only" in condition
+    assert jobs["validate-and-publish"].get("if") != "${{ false }}"
 
 
 def test_build_only_still_publishes_immutable_ghcr_image_and_evidence() -> None:

@@ -121,8 +121,12 @@ jobs:
           retention-days: 30
 
   deploy-development:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        !inputs.build_only
+      ) }}
     name: Deploy development
-    if: ${{ !inputs.build_only }}
     needs: validate-and-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -165,8 +169,12 @@ jobs:
           retention-days: 30
 
   deploy-staging:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        !inputs.build_only && (inputs.promote_to == 'staging' || inputs.promote_to == 'production')
+      ) }}
     name: Promote to staging
-    if: ${{ !inputs.build_only && (inputs.promote_to == 'staging' || inputs.promote_to == 'production') }}
     needs:
       - validate-and-publish
       - deploy-development
@@ -211,8 +219,12 @@ jobs:
           retention-days: 30
 
   deploy-production:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: >-
+      ${{ false && (
+        !inputs.build_only && inputs.promote_to == 'production'
+      ) }}
     name: Promote to production
-    if: ${{ !inputs.build_only && inputs.promote_to == 'production' }}
     needs:
       - validate-and-publish
       - deploy-development
