@@ -14,11 +14,12 @@ A autorização operacional permanente do owner está definida nas regras canôn
 4. Todos os workflows obrigatórios definidos em `REQUIRED_WORKFLOWS` devem estar `completed/success` no HEAD exato.
 5. O SHA do PR deve coincidir com o `head_sha` da execução da fila governada.
 6. Imediatamente antes do merge, o PR e suas labels devem ser relidos; HEAD, mergeabilidade e `merge-queue:eligible` devem permanecer válidos. Qualquer divergência bloqueia a mutação.
-7. O merge deve usar `squash` e enviar o SHA esperado à API GitHub (`sha: triggerHeadSha`).
-8. Mudança de SHA deve falhar fechado; o novo ciclo de `synchronize` deve reexecutar os gates antes de nova tentativa.
-9. O workflow não pode executar deploy, promoção de ambiente, alteração de segredos ou permissões administrativas.
-10. O caminho manual existente por `workflow_dispatch` deve permanecer disponível como contingência governada, sem ser pré-requisito para o caminho CI-driven.
-11. O caminho CI-driven não exige label ou solicitação de autorização por PR; a autorização permanente do owner é condicionada aos gates objetivos deste contrato.
+7. A fila deve reler a base real imediatamente antes da elegibilidade, validar `base_sha` contra a referência atual e bloquear PRs `behind` ou `diverged`; a mesma proteção deve ser repetida imediatamente antes do merge CI-driven.
+8. O merge deve usar `squash` e enviar o SHA esperado à API GitHub (`sha: triggerHeadSha`).
+9. Mudança de SHA deve falhar fechado; o novo ciclo de `synchronize` deve reexecutar os gates antes de nova tentativa.
+10. O workflow não pode executar deploy, promoção de ambiente, alteração de segredos ou permissões administrativas.
+11. O caminho manual existente por `workflow_dispatch` deve permanecer disponível como contingência governada, sem ser pré-requisito para o caminho CI-driven.
+12. O caminho CI-driven não exige label ou solicitação de autorização por PR; a autorização permanente do owner é condicionada aos gates objetivos deste contrato.
 
 ## Critérios de aceite
 
