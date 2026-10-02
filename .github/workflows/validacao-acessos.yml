@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: validacao-acessos-${{ github.ref }}
+  group: validacao-acessos-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -238,6 +238,17 @@ jobs:
           if asset_status != 200:
               raise SystemExit("static_asset_unavailable")
 
+          final_status, final_body, final_latency = get("/api/runtime/build-info")
+          if final_status != 200:
+              raise SystemExit(f"/api/runtime/build-info final: HTTP {final_status}")
+          final_payload = json.loads(final_body)
+          final_data = final_payload.get("data", final_payload)
+          final_observed = str(final_data.get("build_sha") or "").lower()
+          if not re.fullmatch(r"[0-9a-f]{40}", final_observed):
+              raise SystemExit("final_build_sha_invalid")
+          if final_observed != classified_observed:
+              raise SystemExit("build_sha_changed_after_validation")
+
           evidence["frontend"] = {
               "http": status,
               "latency_ms": latency,
@@ -246,6 +257,8 @@ jobs:
               "asset_latency_ms": asset_latency,
               "mode": "static_nginx",
           }
+          evidence["final_observed_sha"] = final_observed
+          evidence["final_build_info_latency_ms"] = final_latency
           Path("reports/pc24x7-dev/runtime-smoke.json").write_text(
               json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",

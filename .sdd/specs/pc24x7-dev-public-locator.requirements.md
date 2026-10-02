@@ -52,6 +52,7 @@ PC24x7 --Ed25519--> ntfy.sh
 24. O payload assinado deve declarar `runtime_contract.version=2.0.0`, os quatro endpoints obrigatórios (`/api/health`, `/api/runtime/health`, `/api/runtime/readiness`, `/api/runtime/build-info`), `static_frontend_required=true` e `vite_hmr_forbidden=true`. Pages e o resolver CI devem rejeitar locators antigos que não carreguem esse contrato assinado, mesmo quando assinatura, TTL e host forem válidos.
 25. A publicação do Pages corrigido pode ser acionada pelo Authorized Actions Gateway somente pelo comando exato `/reqsys run deploy-pages-current-main`, fixando `deploy-reqsys-pages-composite.yml`, `ref=main`, `expected_sha` no SHA capturado da main e `authorization=DEPLOY_PAGES`; nenhum SHA, workflow, autorização ou `producer_run_id` pode vir do comentário.
 26. A validação pública deve comparar a árvore do `build_sha` observado com a árvore do SHA validado e exigir igualdade exata quando o delta contiver arquivo de runtime ou caminho desconhecido. A divergência de SHA pode ser apenas informativa quando todo o delta estiver limitado a CI (`.github/`), SDD (`.sdd/`), documentação/evidência ou testes. Escopo ausente, vazio sem igualdade de SHA ou commit observado indisponível deve falhar fechado.
+27. Execuções `pull_request: closed`, `push`, `schedule` e `workflow_dispatch` não podem cancelar entre si; cada prova pós-merge deve preservar seu resultado e artifact. A allowlist não-runtime deve usar apenas raízes explícitas comprovadamente fora do runtime publicado, e o `build_sha` deve ser relido após todos os probes para detectar troca durante a validação.
 
 ## Critérios de aceite
 
@@ -66,6 +67,7 @@ PC24x7 --Ed25519--> ntfy.sh
 - `workflow_dispatch` autorizado opera somente sobre o SHA exato da `main` informado em `expected_sha`;
 - validação pública pós-merge é disparada automaticamente por `pull_request: closed` somente quando `merged=true`, faz checkout do `merge_commit_sha` exato e falha se o alvo obrigatório estiver indisponível;
 - diferença de `build_sha` permanece bloqueante quando o delta acumulado contém runtime ou caminho desconhecido, mas não bloqueia quando todo o delta é comprovadamente apenas CI/SDD/testes/docs;
+- provas de `pull_request: closed` e `push` do mesmo merge não se cancelam, caminhos de teste aninhados no contexto de build permanecem bloqueantes e uma troca de `build_sha` durante os probes torna a execução vermelha;
 - nenhuma dependência paga é introduzida;
 - o workflow de promoção automática resolve o tunnel vigente pelo locator assinado e não usa `vars.PC24X7_DEV_BASE_URL`/`vars.PC24X7_DEV_FRONTEND_URL` como URL efêmera estática;
 - runtime parcial (health básico verde, mas runtime health/build-info ausentes) nunca é republicado pelo locator.

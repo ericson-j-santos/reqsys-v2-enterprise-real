@@ -49,11 +49,13 @@ O workflow **não depende de `workflow_run`** para comprovar pós-merge. Isso ev
 ## Governança
 
 - Permissão mínima: `contents: read`.
-- Concorrência: `validacao-acessos-${{ github.ref }}`.
+- Concorrência isolada por evento e identidade (`pull_request` usa o número do PR; os demais usam o SHA), preservando separadamente as provas `pull_request: closed` e `push` do mesmo merge.
 - O checkout pós-merge usa explicitamente `github.event.pull_request.merge_commit_sha`.
 - A execução falha fechado se o SHA do checkout divergir do SHA esperado.
 - O `build_sha` público é comparado ao SHA validado pelo delta acumulado das duas árvores Git.
-- Delta com runtime ou caminho desconhecido exige igualdade exata; delta limitado a CI, SDD, testes e documentação/evidência mantém a diferença apenas informativa.
+- Delta com runtime ou caminho desconhecido exige igualdade exata; somente raízes explícitas comprovadamente fora do runtime (CI, SDD, testes excluídos do build e documentação/evidência) mantêm a diferença apenas informativa.
+- Caminhos aninhados apenas nomeados `test`, `tests`, `fixture`, `fixtures`, `e2e` ou `__tests__` não recebem isenção automática.
+- O `build_sha` é relido após os probes de API e frontend; troca durante a execução falha fechado.
 - Escopo indisponível, inválido ou vazio com SHAs divergentes continua fail-closed.
 - O relatório é publicado como artifact `validacao-acessos-publicos` mesmo quando a validação encontra falha.
 - O runtime DEV público obrigatório é a entrada estável `/dev/`, que resolve somente locator assinado vigente.

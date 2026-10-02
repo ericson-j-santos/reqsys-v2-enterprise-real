@@ -32,6 +32,9 @@
     "public_access_runtime_exact_sha_when_deploy_required": true,
     "public_access_non_runtime_only_sha_mismatch_allowed": true,
     "public_access_unknown_scope_fails_closed": true,
+    "public_access_postmerge_runs_do_not_cancel_each_other": true,
+    "public_access_non_runtime_scope_uses_explicit_roots": true,
+    "public_access_runtime_sha_rechecked_after_probes": true,
     "public_access_workflow_run_trigger_allowed": false,
     "legacy_dev_fly_fallback_allowed": false,
     "false_green_smoke_allowed": false,
@@ -86,6 +89,7 @@
     "runtime_build_sha_must_equal_validated_sha_when_deploy_required": true,
     "runtime_build_sha_mismatch_allowed_for_non_runtime_only_delta": true,
     "runtime_sha_scope_classifier": ".github/scripts/classify_public_access_runtime_scope.py",
+    "runtime_sha_scope_constraints": "Somente raízes explícitas comprovadamente não-runtime podem liberar divergência; caminhos aninhados nomeados como teste continuam bloqueantes, eventos não cancelam provas pós-merge e o build_sha é relido após os probes.",
     "artifact_path": "reports/pc24x7-dev/runtime-smoke.json"
   },
   "ci_runtime_resolution": {

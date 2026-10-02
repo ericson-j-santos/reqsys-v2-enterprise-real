@@ -14,6 +14,8 @@ SAFE_NON_RUNTIME_PREFIXES = (
     ".sdd/",
     "artifacts/",
     "audit/",
+    "backend/ocr_tests/",
+    "backend/tests/",
     "docs/",
     "docs-site/",
     "e2e/",
@@ -21,15 +23,6 @@ SAFE_NON_RUNTIME_PREFIXES = (
     "reports/",
     "tests/",
 )
-
-TEST_DIRECTORY_NAMES = {
-    "__tests__",
-    "e2e",
-    "fixture",
-    "fixtures",
-    "test",
-    "tests",
-}
 
 DOCUMENTATION_SUFFIXES = {".adoc", ".md", ".rst"}
 
@@ -53,33 +46,11 @@ def is_safe_non_runtime_path(path: str) -> bool:
     if normalized is None:
         return False
 
-    lowered = normalized.casefold()
-    if lowered.startswith(SAFE_NON_RUNTIME_PREFIXES):
+    if normalized.startswith(SAFE_NON_RUNTIME_PREFIXES):
         return True
 
-    candidate = PurePosixPath(lowered)
-    if len(candidate.parts) == 1 and candidate.suffix in DOCUMENTATION_SUFFIXES:
-        return True
-
-    name = candidate.name
-    test_name = (
-        name.startswith("test_")
-        or name.endswith(("_test.py", "_spec.py"))
-        or ".test." in name
-        or ".spec." in name
-    )
-    parts = candidate.parts
-    if not parts:
-        return False
-    if parts[0] in {"backend", "runtime", "services"}:
-        return any(part in TEST_DIRECTORY_NAMES for part in parts[1:-1])
-    if parts[0] == "frontend" and len(parts) > 1:
-        if parts[1] in {"e2e", "test", "tests"}:
-            return True
-        return parts[1] == "src" and (
-            test_name or any(part in TEST_DIRECTORY_NAMES for part in parts[2:-1])
-        )
-    return False
+    candidate = PurePosixPath(normalized)
+    return len(candidate.parts) == 1 and candidate.suffix in DOCUMENTATION_SUFFIXES
 
 
 def classify_paths(

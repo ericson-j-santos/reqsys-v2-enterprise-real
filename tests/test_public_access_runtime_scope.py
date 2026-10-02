@@ -19,14 +19,14 @@ def _classify(paths: list[str], *, scope_available: bool = True) -> dict[str, ob
     )
 
 
-def test_ci_sdd_tests_and_docs_do_not_require_runtime_sha_match() -> None:
+def test_ci_sdd_explicit_test_roots_and_docs_do_not_require_runtime_sha_match() -> None:
     result = _classify(
         [
             ".github/workflows/noteri-desktop-network-probe.yml",
             ".sdd/specs/noteri-desktop-network-probe.spec.json",
             "tests/test_noteri_desktop_orchestrator_status_probe.py",
             "backend/tests/test_runtime_contract.py",
-            "frontend/src/services/__tests__/api.test.js",
+            "backend/ocr_tests/test_runtime_contract.py",
             "docs/runbooks/runtime-public-access-readiness.md",
         ]
     )
@@ -34,6 +34,34 @@ def test_ci_sdd_tests_and_docs_do_not_require_runtime_sha_match() -> None:
     assert result["runtime_sha_required"] is False
     assert result["decision_reason"] == "ci_sdd_test_or_docs_only"
     assert result["runtime_or_unknown_paths"] == []
+
+
+def test_nested_test_named_paths_inside_build_context_remain_runtime() -> None:
+    result = _classify(
+        [
+            "backend/app/fixtures/runtime_policy.json",
+            "frontend/src/__tests__/runtimeBootstrap.js",
+            "frontend/src/services/api.test.js",
+        ]
+    )
+
+    assert result["runtime_sha_required"] is True
+    assert result["decision_reason"] == "runtime_or_unknown_path_changed"
+    assert result["runtime_or_unknown_paths"] == [
+        "backend/app/fixtures/runtime_policy.json",
+        "frontend/src/__tests__/runtimeBootstrap.js",
+        "frontend/src/services/api.test.js",
+    ]
+
+
+def test_case_variant_of_allowlisted_root_fails_closed() -> None:
+    result = _classify(["Docs/runtime.py", "backend/Tests/runtime_policy.py"])
+
+    assert result["runtime_sha_required"] is True
+    assert result["runtime_or_unknown_paths"] == [
+        "Docs/runtime.py",
+        "backend/Tests/runtime_policy.py",
+    ]
 
 
 def test_runtime_change_keeps_exact_sha_requirement() -> None:
