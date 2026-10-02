@@ -181,7 +181,16 @@
         "negative_control": true,
         "rdc_required": false,
         "production_touched": false,
-        "secrets_read": false
+        "secrets_read": false,
+        "source_resolution": {
+          "transport": "GitHub REST API getBranch",
+          "owner": "ericson-j-santos",
+          "repository": "noteri-runtime",
+          "branch": "main",
+          "action": "actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea",
+          "sha_validation": "^[0-9a-f]{40}$",
+          "git_ls_remote_allowed": false
+        }
       },
       "premerge_evidence": {
         "required": true,
@@ -217,5 +226,5 @@
       "secrets_read": false
     }
   },
-  "updated_at": "2026-09-29"
+  "updated_at": "2026-10-02"
 }
