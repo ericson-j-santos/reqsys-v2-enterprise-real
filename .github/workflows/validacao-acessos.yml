@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: validacao-acessos-${{ github.ref }}
+  group: validacao-acessos-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -45,6 +45,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 2
 
       - name: Validar vínculo com o SHA pós-merge
         shell: bash
@@ -78,11 +79,85 @@ jobs:
           }
           echo "base_url=$base_url" >> "$GITHUB_OUTPUT"
 
-      - name: Validar runtime DEV real no SHA exato
+      - name: Classificar defasagem do runtime DEV
+        id: runtime_scope
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.dev_locator.outputs.base_url }}
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          evidence_dir="reports/pc24x7-dev"
+          changed_file="$evidence_dir/runtime-drift-files.txt"
+          scope_file="$evidence_dir/runtime-sha-scope.json"
+          mkdir -p "$evidence_dir"
+
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          request = Request(
+              os.environ["BASE_URL"].rstrip("/") + "/api/runtime/build-info",
+              headers={"User-Agent": "ReqSysPublicAccessScope/1.0", "Accept": "application/json"},
+          )
+          with urlopen(request, timeout=20) as response:
+              if response.status != 200:
+                  raise SystemExit(f"build_info_http_{response.status}")
+              payload = json.loads(response.read(524288).decode("utf-8"))
+          data = payload.get("data", payload)
+          observed = str(data.get("build_sha") or "").lower()
+          if not re.fullmatch(r"[0-9a-f]{40}", observed):
+              raise SystemExit("build_sha_invalid")
+          Path("reports/pc24x7-dev/runtime-build-info.json").write_text(
+              json.dumps({"observed_sha": observed}, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          observed_sha="$(python -c 'import json; from pathlib import Path; print(json.loads(Path("reports/pc24x7-dev/runtime-build-info.json").read_text(encoding="utf-8"))["observed_sha"])')"
+          : > "$changed_file"
+          scope_available=false
+          if git cat-file -e "$observed_sha^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$observed_sha"; then
+            if git diff --no-renames --name-only "$observed_sha" "$EXPECTED_SHA" -- > "$changed_file"; then
+              scope_available=true
+            fi
+          fi
+
+          args=(
+            --changed-files-file "$changed_file"
+            --event-name "$EVENT_NAME"
+            --base-sha "$observed_sha"
+            --head-sha "$EXPECTED_SHA"
+            --output "$scope_file"
+          )
+          if [[ "$scope_available" == "true" ]]; then
+            args+=(--scope-available)
+          fi
+          python .github/scripts/classify_public_access_runtime_scope.py "${args[@]}"
+
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          build = json.loads(Path("reports/pc24x7-dev/runtime-build-info.json").read_text(encoding="utf-8"))
+          scope = json.loads(Path("reports/pc24x7-dev/runtime-sha-scope.json").read_text(encoding="utf-8"))
+          print(f"observed_sha={build['observed_sha']}")
+          print(f"runtime_sha_required={str(scope['runtime_sha_required']).lower()}")
+          print(f"decision_reason={scope['decision_reason']}")
+          PY
+
+      - name: Validar runtime DEV real com política de SHA por escopo
         shell: bash
         env:
           BASE_URL: ${{ steps.dev_locator.outputs.base_url }}
           EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+          CLASSIFIED_OBSERVED_SHA: ${{ steps.runtime_scope.outputs.observed_sha }}
+          RUNTIME_SHA_REQUIRED: ${{ steps.runtime_scope.outputs.runtime_sha_required }}
+          RUNTIME_SCOPE_REASON: ${{ steps.runtime_scope.outputs.decision_reason }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -96,6 +171,9 @@ jobs:
 
           base = os.environ["BASE_URL"].rstrip("/")
           expected = os.environ["EXPECTED_SHA"].lower()
+          classified_observed = os.environ["CLASSIFIED_OBSERVED_SHA"].lower()
+          runtime_sha_required = os.environ["RUNTIME_SHA_REQUIRED"].lower() == "true"
+          runtime_scope_reason = os.environ["RUNTIME_SCOPE_REASON"]
 
           def get(path, timeout=20):
               started = time.monotonic()
@@ -111,7 +189,13 @@ jobs:
                   body = exc.read(524288).decode("utf-8", errors="replace")
                   return exc.code, body, round((time.monotonic() - started) * 1000, 2)
 
-          evidence = {"environment": "dev", "expected_sha": expected, "base_url_kind": "signed_locator"}
+          evidence = {
+              "environment": "dev",
+              "expected_sha": expected,
+              "base_url_kind": "signed_locator",
+              "runtime_sha_required": runtime_sha_required,
+              "runtime_scope_reason": runtime_scope_reason,
+          }
 
           for path in (
               "/api/health",
@@ -127,9 +211,17 @@ jobs:
                   payload = json.loads(body)
                   data = payload.get("data", payload)
                   observed = str(data.get("build_sha") or "").lower()
-                  if observed != expected:
+                  if not re.fullmatch(r"[0-9a-f]{40}", observed):
+                      raise SystemExit("build_sha_invalid")
+                  if observed != classified_observed:
+                      raise SystemExit("build_sha_changed_during_validation")
+                  if runtime_sha_required and observed != expected:
                       raise SystemExit("build_sha_mismatch")
                   evidence["observed_sha"] = observed
+                  evidence["build_sha_matches_expected"] = observed == expected
+                  evidence["build_sha_policy"] = (
+                      "exact_required" if runtime_sha_required else "health_strict_sha_informational"
+                  )
 
           status, html, latency = get("/task-console")
           if status != 200 or "/assets/" not in html or "/src/main.js" in html:
@@ -146,6 +238,17 @@ jobs:
           if asset_status != 200:
               raise SystemExit("static_asset_unavailable")
 
+          final_status, final_body, final_latency = get("/api/runtime/build-info")
+          if final_status != 200:
+              raise SystemExit(f"/api/runtime/build-info final: HTTP {final_status}")
+          final_payload = json.loads(final_body)
+          final_data = final_payload.get("data", final_payload)
+          final_observed = str(final_data.get("build_sha") or "").lower()
+          if not re.fullmatch(r"[0-9a-f]{40}", final_observed):
+              raise SystemExit("final_build_sha_invalid")
+          if final_observed != classified_observed:
+              raise SystemExit("build_sha_changed_after_validation")
+
           evidence["frontend"] = {
               "http": status,
               "latency_ms": latency,
@@ -154,6 +257,8 @@ jobs:
               "asset_latency_ms": asset_latency,
               "mode": "static_nginx",
           }
+          evidence["final_observed_sha"] = final_observed
+          evidence["final_build_info_latency_ms"] = final_latency
           Path("reports/pc24x7-dev/runtime-smoke.json").write_text(
               json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",
