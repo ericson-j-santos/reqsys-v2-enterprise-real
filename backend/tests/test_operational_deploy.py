@@ -52,5 +52,5 @@ def test_execucao_confirmada_retorna_410_sem_despachar_workflow():
         )
 
     assert response.status_code == 410
-    assert 'Fly.io' in response.json()['detail']
+    assert response.json()['detail'] == 'Implantação operacional retirada: o ReqSys não despacha mais workflows de deploy no Fly.io.'
     post.assert_not_called()

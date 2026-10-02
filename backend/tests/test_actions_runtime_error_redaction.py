@@ -58,7 +58,7 @@ def test_deploy_retirado_retorna_erro_claro_sem_detalhes_internos():
 
     assert response.status_code == 410
     assert "retirada" in response.json()["detail"].lower()
-    assert "Fly.io" in response.json()["detail"]
+    assert response.json()['detail'] == 'Implantação operacional retirada: o ReqSys não despacha mais workflows de deploy no Fly.io.'
     assert _INTERNAL_MARKER not in response.text
 
 

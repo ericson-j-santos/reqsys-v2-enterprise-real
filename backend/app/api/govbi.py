@@ -124,8 +124,8 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
     correlation_id = _correlation_id(x_correlation_id)
     try:
         base_url = _govbi_base_url()
-    except GovBIConfigurationError as exc:
-        logger.error('govbi_configuracao_bloqueada correlation_id=%s motivo=%s', correlation_id, exc)
+    except GovBIConfigurationError:
+        logger.error('govbi_configuracao_bloqueada')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail='Integração GovBI indisponível.',

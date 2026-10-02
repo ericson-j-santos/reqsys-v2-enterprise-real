@@ -165,3 +165,39 @@ def test_criar_snapshot_operacional_compoe_itens(_c, _ci, _g):
     assert payload.modo_coleta in {'preview', 'hibrido', 'live'}
     assert payload.resumo.total_itens >= 5
     assert any(item.referencia == 'REQSYS-OPER-004' for item in payload.itens)
+
+
+@pytest.mark.parametrize('estado_geral', ['amarelo', 'verde'])
+def test_estado_conectores_preserva_sinal_operacional(estado_geral):
+    resumo = {'estado_geral': estado_geral, 'total': 2}
+    with patch.object(snapshot, 'resumo_conectores', return_value=resumo):
+        estado, detalhes = snapshot._estado_conectores()
+
+    assert estado == estado_geral
+    assert detalhes == resumo
+
+
+@pytest.mark.parametrize('estado', ['vermelho', 'amarelo', 'desconhecido', 'verde'])
+def test_classificacao_preserva_estado_sem_bloqueio(estado):
+    item = ItemMonitorado(
+        tipo='integracao', referencia='controle', titulo='Controle',
+        estado=estado, severidade='media', origem='teste',
+    )
+    esperado = 'amarelo' if estado == 'desconhecido' else estado
+    assert snapshot.classificar_estado_geral([item]) == esperado
+
+
+@patch.dict('os.environ', {'GITHUB_TOKEN': 'unused-test-token', 'REQSYS_GITHUB_REPO': 'org/repo'})
+def test_estado_ci_verde_exige_sem_falhas_e_sem_execucoes():
+    resumo = {
+        'score_saude': 100, 'decisao': 'ok', 'total_runs': 1,
+        'falhas': [], 'em_execucao': [],
+    }
+    with patch.object(snapshot, 'GitHubActionsClient') as client:
+        client.return_value.listar_runs.return_value = []
+        with patch.object(snapshot, 'classificar_runs', return_value=resumo):
+            estado, detalhes = snapshot._estado_ci()
+
+    assert estado == 'verde'
+    assert detalhes['modo'] == 'live'
+    assert detalhes['falhas'] == 0
