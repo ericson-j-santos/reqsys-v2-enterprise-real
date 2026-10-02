@@ -84,8 +84,7 @@ jobs:
           if ($pipFiles.Count -ne 1) { throw "portable_pip_wheel_selection_failed" }
           $pipFile = $pipFiles[0]
           $pipHash = ([string]$pipFile.digests.sha256).ToLowerInvariant()
-          if ($pipHash -notmatch '^[a-f0-9]{64}
-) { throw "portable_pip_sha256_invalid" }
+          if ($pipHash -notmatch '^[a-f0-9]{64}$') { throw "portable_pip_sha256_invalid" }
           $pipUri = [uri]$pipFile.url
           if (-not $pipUri.IsAbsoluteUri -or $pipUri.Scheme -ne "https" -or $pipUri.DnsSafeHost -ne "files.pythonhosted.org" -or $pipUri.Port -ne 443 -or $pipUri.UserInfo -ne "" -or -not $pipUri.AbsolutePath.EndsWith("/$pipFilename")) { throw "portable_pip_url_rejected" }
           $pipWheel = Join-Path $root $pipFilename
@@ -434,8 +433,7 @@ jobs:
           if ($pipFiles.Count -ne 1) { throw "portable_pip_wheel_selection_failed" }
           $pipFile = $pipFiles[0]
           $pipHash = ([string]$pipFile.digests.sha256).ToLowerInvariant()
-          if ($pipHash -notmatch '^[a-f0-9]{64}
-) { throw "portable_pip_sha256_invalid" }
+          if ($pipHash -notmatch '^[a-f0-9]{64}$') { throw "portable_pip_sha256_invalid" }
           $pipUri = [uri]$pipFile.url
           if (-not $pipUri.IsAbsoluteUri -or $pipUri.Scheme -ne "https" -or $pipUri.DnsSafeHost -ne "files.pythonhosted.org" -or $pipUri.Port -ne 443 -or $pipUri.UserInfo -ne "" -or -not $pipUri.AbsolutePath.EndsWith("/$pipFilename")) { throw "portable_pip_url_rejected" }
           $pipWheel = Join-Path $root $pipFilename
