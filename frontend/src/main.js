@@ -67,18 +67,29 @@ async function inicializarAutenticacao(caminhoInicial, retornoMicrosoft = false)
     if (!idToken && !useAuthStore().autenticado) {
       idToken = await acquireIdTokenSilent()
     }
-    if (!idToken) return
+    if (!idToken) {
+      if (retornoMicrosoft) {
+        throw new Error('O retorno Microsoft chegou ao ReqSys, mas não produziu um ID token. Código: MSAL_CALLBACK_WITHOUT_ID_TOKEN')
+      }
+      return
+    }
 
     const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
     useAuthStore().salvarSessao(data.data)
+    localStorage.removeItem('azure_login_error')
 
     const destino = destinoSeguroAposLogin(caminhoInicial, retornoMicrosoft)
     if (router.currentRoute.value.fullPath !== destino) {
       await router.replace(destino)
     }
   } catch (e) {
-    const msg = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'
+    const errorCode = e.errorCode || e.code || e.response?.status
+    const baseMessage = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'
+    const msg = errorCode && !baseMessage.includes(String(errorCode))
+      ? `${baseMessage} Código: ${errorCode}`
+      : baseMessage
     sessionStorage.setItem('azure_login_error', msg)
+    localStorage.setItem('azure_login_error', msg)
   }
 }
 
