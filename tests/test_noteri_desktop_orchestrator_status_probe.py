@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "noteri_desktop_orchestrator_status_probe.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "noteri-desktop-network-probe.yml"
@@ -212,3 +211,11 @@ def test_all_probe_jobs_bootstrap_without_registry_installation() -> None:
     assert raw.count('"portable_pip_sha256_mismatch"') == 2
     assert raw.count('"--target", "$env:REQSYS_PYTHON_SITE"') == 2
     assert raw.count('"--only-binary=:all:"') == 2
+    assert raw.count('PYTHONNOUSERSITE: "1"') == 2
+    assert raw.count('"portable_python_user_site_not_disabled"') == 2
+    assert (
+        raw.count("6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953717")
+        == 2
+    )
+    assert raw.count("pip-25.2-py3-none-any.whl") == 4
+    assert "https://pypi.org/pypi/pip/25.2/json" not in raw
