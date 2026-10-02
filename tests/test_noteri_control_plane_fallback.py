@@ -172,6 +172,7 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "shell: powershell" in workflow
     assert "shell: pwsh" not in workflow
     assert "workflow_dispatch:" in workflow
+    assert "group: noteri-control-plane-fallback-probe-${{ github.ref }}" in workflow
     assert "push:" in workflow
     assert "github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real'" in workflow
     assert "github.actor == 'ericson-j-santos'" in workflow

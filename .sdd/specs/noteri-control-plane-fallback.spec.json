@@ -197,7 +197,9 @@
         "trigger": "canonical_repo_push",
         "actor": "ericson-j-santos",
         "forbidden_trigger": "pull_request",
-        "exact_branch_sha": true
+        "exact_branch_sha": true,
+        "concurrency_group_scope": "github.ref",
+        "isolated_from_main_auto_watch": true
       },
       "python_runtime": {
         "source": "pinned_portable_python",

@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: noteri-control-plane-fallback-probe
+  group: noteri-control-plane-fallback-probe-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
