@@ -121,7 +121,7 @@ def test_workflow_preserves_dev_http_probe_routing() -> None:
     assert "github.ref_name != 'main'" in raw
     assert "!startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-')" in raw
     assert "!startsWith(github.ref_name, 'hotfix/noteri-desktop-orchestrator-runner-recovery-')" in raw
-    assert "if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') }}" in raw
+    assert "if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-http-8083-') || startsWith(github.ref_name, 'fix/noteri-desktop-network-probe-python-') }}" in raw
     assert "dev_http_probe:" in raw
 
     assert "session_launcher.py" in raw
