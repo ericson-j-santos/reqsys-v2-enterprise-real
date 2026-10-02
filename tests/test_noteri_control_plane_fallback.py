@@ -172,6 +172,7 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "shell: powershell" in workflow
     assert "shell: pwsh" not in workflow
     assert "workflow_dispatch:" in workflow
+    assert "group: noteri-control-plane-fallback-probe-${{ github.ref }}" in workflow
     assert "push:" in workflow
     assert "github.repository == 'ericson-j-santos/reqsys-v2-enterprise-real'" in workflow
     assert "github.actor == 'ericson-j-santos'" in workflow
@@ -181,7 +182,15 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "'.sdd/specs/noteri-control-plane-fallback.requirements.md'" in workflow
     assert "'.sdd/specs/noteri-control-plane-fallback.spec.json'" in workflow
     assert "inputs:" not in workflow
-    assert "git ls-remote https://github.com/ericson-j-santos/noteri-runtime.git refs/heads/main" in workflow
+    assert "actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea" in workflow
+    assert "github.rest.repos.getBranch" in workflow
+    assert "owner: 'ericson-j-santos'" in workflow
+    assert "repo: 'noteri-runtime'" in workflow
+    assert "branch: 'main'" in workflow
+    assert "/^[0-9a-f]{40}$/.test(sha)" in workflow
+    assert "core.setOutput('sha', sha)" in workflow
+    assert "git ls-remote" not in workflow
+    assert "Select-Object -First 1" not in workflow
     assert "repository: ericson-j-santos/noteri-runtime" in workflow
     assert "noteri_runtime_isolated_e2e.py" in workflow
     assert "noteri_runtime_observed_sha_mismatch" in workflow
