@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / "docs" / "public-dev-locator" / "index.html"
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-reqsys-pages-composite.yml"
-RELAY_WORKFLOW = ROOT / ".github" / "workflows" / "pc24x7-dev-locator-relay.yml"
+RELAY_WORKFLOW = ROOT / ".github" / "workflows" / "dispatch-public-runtime-evidence.yml"
 SUPERVISOR = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py"
 INSTALLER = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor_install.py"
 MANIFEST = ROOT / "infra" / "public-access-urls.json"
@@ -469,6 +469,9 @@ def test_github_hosted_locator_relay_is_manual_sha_bound_and_fail_closed():
     raw = RELAY_WORKFLOW.read_text(encoding="utf-8")
     trigger_block = raw.split("permissions:", 1)[0]
     assert "workflow_dispatch:" in trigger_block
+    assert "operation:" in trigger_block
+    assert 'default: "public-runtime-evidence"' in trigger_block
+    assert '          - "relay-dev-locator"' in trigger_block
     assert "expected_sha:" in trigger_block
     assert "authorization:" in trigger_block
     assert "envelope_b64:" in trigger_block
@@ -480,6 +483,8 @@ def test_github_hosted_locator_relay_is_manual_sha_bound_and_fail_closed():
     assert "runs-on: ubuntu-latest" in raw
     assert "self-hosted" not in raw
     assert "RELAY_DEV_LOCATOR" in raw
+    assert "if: ${{ inputs.operation == 'public-runtime-evidence' }}" in raw
+    assert "if: ${{ inputs.operation == 'relay-dev-locator' }}" in raw
     assert "refs/heads/main" in raw
     assert 'test "$GITHUB_EVENT_NAME" = \'workflow_dispatch\'' in raw
     assert 'test "$GITHUB_SHA" = "$EXPECTED_SHA"' in raw

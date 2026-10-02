@@ -78,7 +78,7 @@ jobs:
           git fetch origin "$BASE_REF" --prune
           # Os testes raiz podem ser selecionados mesmo quando o diff também contém backend.
           # Portanto, as dependências mínimas do próprio gate são invariantes de perfil.
-          python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5'
+          python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5' 'cryptography==50.0.0'
           if [[ -f requirements-report-builder.txt ]]; then
             echo "Instalando dependência compartilhada Report Builder Platform fixada por SHA."
             python -m pip install --disable-pip-version-check -r requirements-report-builder.txt

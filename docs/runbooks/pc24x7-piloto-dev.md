@@ -81,7 +81,8 @@ cadência quando houver drift entre a fonte e o runtime endurecido instalado.
 
 Quando o IP do PC24x7 atingir a cota anônima, gere um envelope público temporário
 com `pc24x7_dev_locator_publisher.py --sign-only --envelope-output <arquivo>` e
-despache `pc24x7-dev-locator-relay.yml` na `main` com o SHA exato e a confirmação
+despache `dispatch-public-runtime-evidence.yml` na `main` com
+`operation=relay-dev-locator`, o SHA exato e a confirmação
 `RELAY_DEV_LOCATOR`. O workflow valida a `main` antes do checkout, revalida a
 assinatura, exige pelo menos 300 segundos de TTL, executa o smoke público antes
 do POST e comprova a mensagem exata por readback.

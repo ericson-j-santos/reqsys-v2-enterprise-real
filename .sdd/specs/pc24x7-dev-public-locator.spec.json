@@ -112,8 +112,9 @@
     "fail_closed": true
   },
   "emergency_relay": {
-    "workflow": ".github/workflows/pc24x7-dev-locator-relay.yml",
+    "workflow": ".github/workflows/dispatch-public-runtime-evidence.yml",
     "trigger_event": "workflow_dispatch",
+    "required_operation": "relay-dev-locator",
     "required_ref": "refs/heads/main",
     "required_authorization": "RELAY_DEV_LOCATOR",
     "exact_main_sha_required": true,
