@@ -70,7 +70,12 @@ def test_ci_driven_automerge_e_fail_closed_por_head_sha() -> None:
     block = text.split(marker, maxsplit=1)[1]
     assert 'context.payload.workflow_run.head_sha' in block
     assert 'pr.head.sha !== triggerHeadSha' in block
+    assert 'github.rest.git.getRef' in block
+    assert 'github.rest.repos.compareCommits' in block
+    assert 'PR atrasada ou divergente' in block
     assert 'current.head.sha !== triggerHeadSha' in block
+    assert 'current.base.sha !== currentBaseSha' in block
+    assert 'currentComparison.behind_by > 0' in block
     assert "labelNames.includes('merge-queue:eligible')" in block
     assert "merge_method: 'squash'" in block
     assert 'sha: triggerHeadSha' in block
