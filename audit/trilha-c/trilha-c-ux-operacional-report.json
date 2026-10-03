@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T18:28:04.602233Z",
+  "trail_id": "trilha-c",
+  "trail_name": "UX Operacional",
+  "mode": "report_only",
+  "status": "passed",
+  "summary": {
+    "governance_ok": 4,
+    "ui_ok": 6,
+    "ui_total": 6,
+    "routes_ok": 2,
+    "views_with_trilha_marker": 2,
+    "errors": 0,
+    "warnings": 0
+  },
+  "capabilities": [
+    "semaforo_operacional",
+    "drill_down",
+    "monitoramento_operacional",
+    "analytics_hub",
+    "responsividade"
+  ],
+  "issues": [],
+  "artifacts": {
+    "architecture_as_code": "docs/architecture/trilha-c/architecture-as-code.json",
+    "adr": "docs/adr/ADR-038-trilha-c-ux-operacional.md",
+    "responsive_registry": "frontend/src/constants/rotasResponsivas.js"
+  }
+}

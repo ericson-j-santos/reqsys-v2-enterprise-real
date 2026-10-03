@@ -1,0 +1,43 @@
+{
+  "feature_name": "pc24x7-windows-powershell-shell-compatibility",
+  "project": "ReqSys v2 Enterprise — PC24x7 / Desktop control plane",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Mantém os workflows PC24x7 compatíveis com o shell realmente provisionado no DESKTOP-PDQK954, substituindo a dependência não contratada de PowerShell 7 por Windows PowerShell e bloqueando regressão.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_workflow_shell_compatibility.py",
+      "tests/test_pc24x7_rdc_recovery.py",
+      "tests/test_codex_ollama_e2e_selfhosted.py",
+      "tests/test_figma_github_dev_e2e_contract.py",
+      "tests/test_ollama_ci_triage_workflow.py",
+      "tests/test_codex_worker_pool_handoff_workflow.py",
+      "tests/test_codex_worker_pool_smoke_dev.py"
+    ],
+    "evidence_contract": "Nenhum workflow PC24x7 pode usar shell: pwsh enquanto PowerShell 7 não for parte do bootstrap. O gate estático bloqueia regressão e a evidência runtime exige pickup real do DESKTOP-PDQK954 no SHA exato e execução além da resolução do shell."
+  },
+  "traceability": {
+    "issue": 1927,
+    "requirements": ".sdd/specs/pc24x7-windows-powershell-shell-compatibility.requirements.md",
+    "regression_test": "tests/test_pc24x7_workflow_shell_compatibility.py",
+    "workflows": [
+      ".github/workflows/desktop-rdc-recovery.yml",
+      ".github/workflows/codex-ollama-e2e-dev.yml",
+      ".github/workflows/figma-github-e2e-dev.yml",
+      ".github/workflows/ollama-ci-triage.yml",
+      ".github/workflows/codex-worker-pool-handoff.yml",
+      ".github/workflows/codex-worker-pool-smoke-dev.yml"
+    ],
+    "runtime_evidence_before_fix": {
+      "gateway_run": 35673836812,
+      "pc24x7_run": 35673844428,
+      "observed_failure": "pwsh: command not found"
+    }
+  }
+}

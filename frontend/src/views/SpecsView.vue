@@ -1,21 +1,21 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-specs">
 
     <!-- Cabeçalho -->
     <div class="page-header">
       <div>
-        <h1>Specs SDD</h1>
-        <p class="muted">Especificações de features · my-first-spec-project</p>
+        <h1>Especificações da solução</h1>
+        <p class="muted">Especificações de funcionalidades · meu-primeiro-projeto</p>
       </div>
       <v-btn color="amber" variant="tonal" prepend-icon="mdi-plus" @click="dialogNova = true">
-        Nova Feature
+        Nova Funcionalidade
       </v-btn>
     </div>
 
     <!-- Loading / erro de config -->
     <v-alert v-if="erroConfig" type="warning" variant="tonal" class="mb-4">
       <strong>SDD_SPECS_PATH não configurado.</strong>
-      Adicione ao <code>.env</code> do backend:
+      Adicione ao <code>.env</code> do serviço:
       <code>SDD_SPECS_PATH=../../my-first-spec-project/.sdd</code>
     </v-alert>
 
@@ -26,7 +26,7 @@
       <v-card class="specs-sidebar" elevation="0">
         <v-card-title class="sidebar-title">
           <v-icon size="16" class="mr-1">mdi-folder-multiple-outline</v-icon>
-          Features
+          Funcionalidades
           <v-chip size="x-small" color="amber" variant="tonal" class="ml-auto">
             {{ specs.length }}
           </v-chip>
@@ -175,7 +175,7 @@
 
           <v-text-field
             v-model="nova.titulo"
-            label="Título da feature *"
+            label="Título da funcionalidade *"
             placeholder="ex: Autenticação de Usuários"
             variant="outlined"
             density="compact"
@@ -262,6 +262,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../services/api'
+import { renderMarkdown } from '../utils/markdownRenderer'
 
 // ---------------------------------------------------------------------------
 // Estado
@@ -334,7 +335,7 @@ async function selecionarFeature(slug) {
     const arqs = Object.keys(data.data?.arquivos || {})
     tabAtiva.value = arqs[0] || null
   } catch {
-    mostrarSnack('Erro ao carregar feature', 'error')
+    mostrarSnack('Erro ao carregar funcionalidade', 'error')
   }
 }
 
@@ -391,12 +392,12 @@ async function criarFeature() {
       templates: nova.value.modo === 'template' ? nova.value.templates : [],
     }
     await api.post('/v1/specs', payload)
-    mostrarSnack(`Feature "${nova.value.slug}" criada`)
+    mostrarSnack(`Funcionalidade "${nova.value.slug}" criada`)
     fecharDialogNova()
     await carregarSpecs()
     selecionarFeature(nova.value.slug)
   } catch (e) {
-    const msg = e?.response?.data?.errors?.[0]?.message || 'Erro ao criar feature'
+    const msg = e?.response?.data?.errors?.[0]?.message || 'Erro ao criar funcionalidade'
     mostrarSnack(msg, 'error')
   } finally {
     criando.value = false
@@ -406,58 +407,6 @@ async function criarFeature() {
 function fecharDialogNova() {
   dialogNova.value = false
   nova.value = { titulo: '', slug: '', descricao: '', autor: '', modo: 'template', exemplo_base: null, templates: ['requirements', 'design'] }
-}
-
-// ---------------------------------------------------------------------------
-// Markdown renderer
-// ---------------------------------------------------------------------------
-
-function renderMarkdown(md) {
-  if (!md) return ''
-  let html = md
-    // Remove bloco HTML de comentários (cabeçalho gerado)
-    .replace(/<!--[\s\S]*?-->/g, '')
-    // Mermaid: preserva como bloco de código estilizado
-    .replace(/```mermaid([\s\S]*?)```/g, '<pre class="mermaid-block"><code>mermaid$1</code></pre>')
-    // Blocos de código
-    .replace(/```([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>')
-    // Código inline
-    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-    // Headers
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // Negrito e itálico
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Links — REQ-XXXXX linkados ao ReqSys
-    .replace(/\b(REQ-\d+)\b/g, '<a href="/requisitos" class="req-link" title="Ver requisitos">$1</a>')
-    // Links externos
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // Tabelas
-    .replace(/^\|(.+)\|$/gm, (_, row) => {
-      const cells = row.split('|').map(c => c.trim())
-      const isHeader = cells.some(c => /^[-:]+$/.test(c))
-      if (isHeader) return ''
-      const tag = 'td'
-      return `<tr>${cells.map(c => `<${tag}>${c}</${tag}>`).join('')}</tr>`
-    })
-    // HR
-    .replace(/^---+$/gm, '<hr>')
-    // Listas
-    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-    // Parágrafos
-    .replace(/\n{2,}/g, '</p><p>')
-
-  // Wrap em tabela se tem <tr>
-  if (html.includes('<tr>')) {
-    html = html.replace(/((<tr>.*<\/tr>\s*)+)/gs, '<table class="md-table">$1</table>')
-  }
-  // Wrap listas
-  html = html.replace(/((<li>.*<\/li>\s*)+)/gs, '<ul>$1</ul>')
-
-  return `<p>${html}</p>`
 }
 
 // ---------------------------------------------------------------------------
@@ -503,12 +452,12 @@ function mostrarSnack(msg, cor = 'success') {
 }
 
 .sidebar-title {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--v-theme-on-surface);
   display: flex;
   align-items: center;
-  padding: 12px 16px 8px;
+  padding: var(--space-md) var(--space-lg) var(--space-sm);
 }
 
 .file-chips {
@@ -532,19 +481,19 @@ function mostrarSnack(msg, cor = 'success') {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 20px;
+  padding: 80px var(--space-xl);
 }
 
 .content-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--space-lg) var(--space-xl);
   gap: 12px;
 }
 
 .feature-title {
-  font-size: 16px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   color: rgba(255,255,255,0.9);
 }
@@ -557,52 +506,52 @@ function mostrarSnack(msg, cor = 'success') {
 /* Editor */
 .editor-area :deep(textarea) {
   font-family: 'Fira Code', 'Courier New', monospace !important;
-  font-size: 13px !important;
+  font-size: var(--font-size-md) !important;
   line-height: 1.6 !important;
 }
 
 /* Markdown */
 .markdown-body {
-  padding: 20px 28px;
+  padding: var(--space-xl) var(--space-2xl);
   line-height: 1.7;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   color: rgba(255,255,255,0.87);
 }
 
 .markdown-body :deep(h1) {
-  font-size: 22px;
+  font-size: var(--font-size-2xl);
   font-weight: 700;
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-lg);
   color: rgba(255,255,255,0.95);
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  padding-bottom: 8px;
+  padding-bottom: var(--space-sm);
 }
 
 .markdown-body :deep(h2) {
-  font-size: 17px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
-  margin: 24px 0 10px;
+  margin: var(--space-xl) 0 var(--space-md);
   color: rgba(255,255,255,0.9);
 }
 
 .markdown-body :deep(h3) {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 600;
-  margin: 16px 0 6px;
+  margin: var(--space-lg) 0 var(--space-sm);
   color: rgba(255,193,7,0.9);
 }
 
 .markdown-body :deep(p) {
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-md);
 }
 
 .markdown-body :deep(ul) {
-  padding-left: 20px;
-  margin: 6px 0 10px;
+  padding-left: var(--space-xl);
+  margin: var(--space-sm) 0 var(--space-md);
 }
 
 .markdown-body :deep(li) {
-  margin: 3px 0;
+  margin: var(--space-xs) 0;
 }
 
 .markdown-body :deep(strong) {
@@ -612,35 +561,35 @@ function mostrarSnack(msg, cor = 'success') {
 .markdown-body :deep(hr) {
   border: none;
   border-top: 1px solid rgba(255,255,255,0.08);
-  margin: 20px 0;
+  margin: var(--space-xl) 0;
 }
 
 .markdown-body :deep(.inline-code) {
   background: rgba(255,255,255,0.08);
-  padding: 1px 5px;
+  padding: var(--space-xs) var(--space-xs);
   border-radius: 4px;
   font-family: 'Fira Code', monospace;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .markdown-body :deep(.code-block) {
   background: rgba(0,0,0,0.3);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 6px;
-  padding: 12px 16px;
-  margin: 12px 0;
+  padding: var(--space-md) var(--space-lg);
+  margin: var(--space-md) 0;
   overflow-x: auto;
   font-family: 'Fira Code', monospace;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .markdown-body :deep(.mermaid-block) {
   background: rgba(255,193,7,0.05);
   border: 1px solid rgba(255,193,7,0.2);
   border-radius: 6px;
-  padding: 12px 16px;
-  margin: 12px 0;
-  font-size: 12px;
+  padding: var(--space-md) var(--space-lg);
+  margin: var(--space-md) 0;
+  font-size: var(--font-size-sm);
   color: rgba(255,193,7,0.8);
 }
 
@@ -658,13 +607,13 @@ function mostrarSnack(msg, cor = 'success') {
 .markdown-body :deep(.md-table) {
   border-collapse: collapse;
   width: 100%;
-  margin: 12px 0;
-  font-size: 13px;
+  margin: var(--space-md) 0;
+  font-size: var(--font-size-md);
 }
 
 .markdown-body :deep(.md-table td) {
   border: 1px solid rgba(255,255,255,0.1);
-  padding: 6px 10px;
+  padding: var(--space-sm) var(--space-md);
 }
 
 .markdown-body :deep(.md-table tr:first-child td) {

@@ -1,0 +1,50 @@
+name: Trilha C — UX Operacional
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilha-c-ux-operacional.yml'
+      - 'scripts/trilha_c_ux_operacional.py'
+      - 'docs/architecture/trilha-c/**'
+      - 'docs/adr/ADR-038-trilha-c-ux-operacional.md'
+      - 'docs/runbooks/trilha-c-ux-operacional.md'
+      - 'frontend/src/views/MonitoramentoOperacionalView.vue'
+      - 'frontend/src/views/AnalyticsHubView.vue'
+      - 'frontend/src/components/SemaforoChip.vue'
+      - 'frontend/src/components/OperationalMetricCard.vue'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/trilha-c-ux-operacional.yml'
+      - 'scripts/trilha_c_ux_operacional.py'
+
+concurrency:
+  group: trilha-c-ux-operacional-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-trilha-c:
+    name: Validate Trilha C — UX Operacional (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar Trilha C
+        run: python scripts/trilha_c_ux_operacional.py
+
+      - name: Upload Trilha C report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trilha-c-ux-operacional-${{ github.run_id }}
+          path: audit/trilha-c/
+          retention-days: 30

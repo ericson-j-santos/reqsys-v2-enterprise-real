@@ -13,6 +13,19 @@ Permitir uso totalmente online via GitHub Pages, mantendo o modelo seguro por pa
 - payload rastreável para ReqSys;
 - validação por GitHub Actions.
 
+## Uso local (VS Code + Ollama)
+
+Para codificação gratuita no editor:
+
+```bash
+bash scripts/iniciar_codex_local.sh
+cp infra/codex-local/continue/config.yaml ~/.continue/config.yaml
+```
+
+Runbook completo: `docs/runbooks/codex-vscode-local-inicio-rapido.md`
+
+Tela integrada no ReqSys: `http://127.0.0.1:5173/codex`
+
 ## Publicação
 
 O workflow `.github/workflows/codex-local-online.yml` valida o artefato em Pull Request e publica no GitHub Pages quando a alteração chegar à `main` ou quando o workflow for executado manualmente.

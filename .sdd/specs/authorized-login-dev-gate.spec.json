@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Authorized DEV login gate",
+  "status": "ready_for_validation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/scripts/test_validar_login_multi_ambiente.py"
+    ],
+    "evidence_contract": "Comando exato /reqsys run login-dev-gate; workflow fixo login-multi-ambiente-gate.yml; ref main; input environment=dev; sem HML/PROD; sem workflow/input arbitrário; production_touched=false."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/authorized-login-dev-gate.requirements.md",
+    "authorized_gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "login_workflow": ".github/workflows/login-multi-ambiente-gate.yml",
+    "validator": "scripts/validar_login_multi_ambiente.py"
+  },
+  "scope": {
+    "environment": "dev",
+    "target_ref": "main",
+    "production_touched": false,
+    "arbitrary_workflow_allowed": false,
+    "arbitrary_environment_allowed": false
+  }
+}

@@ -1,0 +1,2 @@
+ci_required=true
+merge_without_green=false

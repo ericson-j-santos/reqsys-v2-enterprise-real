@@ -1,0 +1,330 @@
+name: Rebase governado de pilha
+
+on:
+  workflow_dispatch:
+    inputs:
+      lower_pr_number:
+        description: "PR inferior da pilha"
+        required: true
+        type: string
+      upper_pr_number:
+        description: "PR superior da pilha"
+        required: true
+        type: string
+      expected_lower_sha:
+        description: "SHA atual esperado do PR inferior"
+        required: true
+        type: string
+      expected_upper_sha:
+        description: "SHA atual esperado do PR superior"
+        required: true
+        type: string
+      confirm_atomic_restack:
+        description: "Confirmo o rebase em cascata e a atualização atômica das duas branches"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: governed-stack-rebase-${{ inputs.lower_pr_number }}-${{ inputs.upper_pr_number }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_DIR: artifacts/governed-stack-rebase
+  CORRELATION_ID: governed-stack-rebase-${{ github.run_id }}-${{ github.run_attempt }}
+  API_VERSION: "2026-03-10"
+
+jobs:
+  restack:
+    name: Rebase em cascata e push atômico
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validar configuração da GitHub App
+        shell: bash
+        env:
+          APP_ID: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+
+          if [ -z "$APP_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "Configuração pendente: defina REQSYS_STACK_REBASE_APP_ID e REQSYS_STACK_REBASE_PRIVATE_KEY." >&2
+            exit 1
+          fi
+
+      - name: Gerar token temporário da GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+
+      - name: Checkout com histórico completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Validar entradas e topologia da pilha
+        id: context
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          LOWER_PR: ${{ inputs.lower_pr_number }}
+          UPPER_PR: ${{ inputs.upper_pr_number }}
+          EXPECTED_LOWER_SHA: ${{ inputs.expected_lower_sha }}
+          EXPECTED_UPPER_SHA: ${{ inputs.expected_upper_sha }}
+          CONFIRM_ATOMIC_RESTACK: ${{ inputs.confirm_atomic_restack }}
+        run: |
+          set -euo pipefail
+
+          for value in "$LOWER_PR" "$UPPER_PR"; do
+            if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+              echo "Número de PR inválido: $value" >&2
+              exit 1
+            fi
+          done
+
+          for value in "$EXPECTED_LOWER_SHA" "$EXPECTED_UPPER_SHA"; do
+            if ! [[ "$value" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "SHA esperado inválido: $value" >&2
+              exit 1
+            fi
+          done
+
+          if [ "$LOWER_PR" = "$UPPER_PR" ]; then
+            echo "Os PRs inferior e superior devem ser diferentes." >&2
+            exit 1
+          fi
+
+          if [ "$CONFIRM_ATOMIC_RESTACK" != "true" ]; then
+            echo "Bloqueado: confirme explicitamente o restack atômico." >&2
+            exit 1
+          fi
+
+          gh api             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: $API_VERSION"             "repos/$GITHUB_REPOSITORY/pulls/$LOWER_PR"             > "$EVIDENCE_DIR/lower-pr-before.json"
+
+          gh api             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: $API_VERSION"             "repos/$GITHUB_REPOSITORY/pulls/$UPPER_PR"             > "$EVIDENCE_DIR/upper-pr-before.json"
+
+          DEFAULT_BRANCH="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.default_branch')"
+          LOWER_STATE="$(jq -r '.state' "$EVIDENCE_DIR/lower-pr-before.json")"
+          UPPER_STATE="$(jq -r '.state' "$EVIDENCE_DIR/upper-pr-before.json")"
+          LOWER_DRAFT="$(jq -r '.draft' "$EVIDENCE_DIR/lower-pr-before.json")"
+          UPPER_DRAFT="$(jq -r '.draft' "$EVIDENCE_DIR/upper-pr-before.json")"
+          LOWER_BRANCH="$(jq -r '.head.ref' "$EVIDENCE_DIR/lower-pr-before.json")"
+          UPPER_BRANCH="$(jq -r '.head.ref' "$EVIDENCE_DIR/upper-pr-before.json")"
+          LOWER_BASE="$(jq -r '.base.ref' "$EVIDENCE_DIR/lower-pr-before.json")"
+          UPPER_BASE="$(jq -r '.base.ref' "$EVIDENCE_DIR/upper-pr-before.json")"
+          LOWER_SHA="$(jq -r '.head.sha' "$EVIDENCE_DIR/lower-pr-before.json")"
+          UPPER_SHA="$(jq -r '.head.sha' "$EVIDENCE_DIR/upper-pr-before.json")"
+          LOWER_REPO="$(jq -r '.head.repo.full_name' "$EVIDENCE_DIR/lower-pr-before.json")"
+          UPPER_REPO="$(jq -r '.head.repo.full_name' "$EVIDENCE_DIR/upper-pr-before.json")"
+
+          if [ "$LOWER_STATE" != "open" ] || [ "$UPPER_STATE" != "open" ]; then
+            echo "Bloqueado: ambos os PRs devem estar abertos." >&2
+            exit 1
+          fi
+
+          if [ "$LOWER_DRAFT" = "true" ] || [ "$UPPER_DRAFT" = "true" ]; then
+            echo "Bloqueado: ambos os PRs devem estar prontos para revisão." >&2
+            exit 1
+          fi
+
+          if [ "$LOWER_REPO" != "$GITHUB_REPOSITORY" ] || [ "$UPPER_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "Bloqueado: branches de forks não são suportadas neste incremento." >&2
+            exit 1
+          fi
+
+          if [ "$LOWER_BASE" != "$DEFAULT_BRANCH" ]; then
+            echo "Topologia inválida: PR inferior deve apontar para $DEFAULT_BRANCH, não $LOWER_BASE." >&2
+            exit 1
+          fi
+
+          if [ "$UPPER_BASE" != "$LOWER_BRANCH" ]; then
+            echo "Topologia inválida: PR superior deve apontar para $LOWER_BRANCH, não $UPPER_BASE." >&2
+            exit 1
+          fi
+
+          if [ "$LOWER_SHA" != "${EXPECTED_LOWER_SHA,,}" ]; then
+            echo "SHA do PR inferior mudou: esperado ${EXPECTED_LOWER_SHA,,}, atual $LOWER_SHA." >&2
+            exit 1
+          fi
+
+          if [ "$UPPER_SHA" != "${EXPECTED_UPPER_SHA,,}" ]; then
+            echo "SHA do PR superior mudou: esperado ${EXPECTED_UPPER_SHA,,}, atual $UPPER_SHA." >&2
+            exit 1
+          fi
+
+          git check-ref-format --branch "$DEFAULT_BRANCH" >/dev/null
+          git check-ref-format --branch "$LOWER_BRANCH" >/dev/null
+          git check-ref-format --branch "$UPPER_BRANCH" >/dev/null
+
+          {
+            echo "default_branch=$DEFAULT_BRANCH"
+            echo "lower_branch=$LOWER_BRANCH"
+            echo "upper_branch=$UPPER_BRANCH"
+            echo "lower_sha=$LOWER_SHA"
+            echo "upper_sha=$UPPER_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Preparar rebase em cascata sem alterar branches remotas
+        id: rebase
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ steps.context.outputs.default_branch }}
+          LOWER_BRANCH: ${{ steps.context.outputs.lower_branch }}
+          UPPER_BRANCH: ${{ steps.context.outputs.upper_branch }}
+          LOWER_SHA: ${{ steps.context.outputs.lower_sha }}
+          UPPER_SHA: ${{ steps.context.outputs.upper_sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "reqsys-governed-stack-rebase"
+          git config user.email "actions@github.com"
+
+          git fetch --no-tags origin             "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"             "+refs/heads/$LOWER_BRANCH:refs/remotes/origin/$LOWER_BRANCH"             "+refs/heads/$UPPER_BRANCH:refs/remotes/origin/$UPPER_BRANCH"
+
+          if [ "$(git rev-parse "origin/$LOWER_BRANCH")" != "$LOWER_SHA" ]; then
+            echo "Lease inválido: branch inferior mudou durante a execução." >&2
+            exit 1
+          fi
+
+          if [ "$(git rev-parse "origin/$UPPER_BRANCH")" != "$UPPER_SHA" ]; then
+            echo "Lease inválido: branch superior mudou durante a execução." >&2
+            exit 1
+          fi
+
+          git branch -f tmp/governed-restack-lower "$LOWER_SHA"
+          git switch tmp/governed-restack-lower
+
+          set +e
+          git rebase "origin/$DEFAULT_BRANCH" 2>&1 | tee "$EVIDENCE_DIR/lower-rebase.log"
+          lower_rebase_exit=${PIPESTATUS[0]}
+          set -e
+          if [ "$lower_rebase_exit" -ne 0 ]; then
+            git rebase --abort || true
+            echo "Conflito no rebase do PR inferior; nenhuma branch remota foi alterada." >&2
+            exit 1
+          fi
+
+          LOWER_NEW_SHA="$(git rev-parse HEAD)"
+
+          git branch -f tmp/governed-restack-upper "$UPPER_SHA"
+          git switch tmp/governed-restack-upper
+
+          set +e
+          git rebase --onto "$LOWER_NEW_SHA" "$LOWER_SHA" "$UPPER_SHA"             2>&1 | tee "$EVIDENCE_DIR/upper-rebase.log"
+          upper_rebase_exit=${PIPESTATUS[0]}
+          set -e
+          if [ "$upper_rebase_exit" -ne 0 ]; then
+            git rebase --abort || true
+            echo "Conflito no rebase do PR superior; nenhuma branch remota foi alterada." >&2
+            exit 1
+          fi
+
+          UPPER_NEW_SHA="$(git rev-parse HEAD)"
+
+          if ! git merge-base --is-ancestor "$LOWER_NEW_SHA" "$UPPER_NEW_SHA"; then
+            echo "Contrato violado: a branch superior não ficou descendente da inferior." >&2
+            exit 1
+          fi
+
+          jq -n             --arg correlation_id "$CORRELATION_ID"             --arg lower_old_sha "$LOWER_SHA"             --arg lower_new_sha "$LOWER_NEW_SHA"             --arg upper_old_sha "$UPPER_SHA"             --arg upper_new_sha "$UPPER_NEW_SHA"             '{
+              correlation_id: $correlation_id,
+              lower: {old_sha: $lower_old_sha, new_sha: $lower_new_sha},
+              upper: {old_sha: $upper_old_sha, new_sha: $upper_new_sha},
+              linear_descendant: true,
+              remote_updated: false
+            }' > "$EVIDENCE_DIR/rebase-plan.json"
+
+          {
+            echo "lower_new_sha=$LOWER_NEW_SHA"
+            echo "upper_new_sha=$UPPER_NEW_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Atualizar as duas branches atomicamente
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          LOWER_BRANCH: ${{ steps.context.outputs.lower_branch }}
+          UPPER_BRANCH: ${{ steps.context.outputs.upper_branch }}
+          LOWER_SHA: ${{ steps.context.outputs.lower_sha }}
+          UPPER_SHA: ${{ steps.context.outputs.upper_sha }}
+        run: |
+          set -euo pipefail
+
+          git remote set-url origin             "https://x-access-token:$APP_TOKEN@github.com/$GITHUB_REPOSITORY.git"
+
+          git push --atomic origin             --force-with-lease="refs/heads/$LOWER_BRANCH:$LOWER_SHA"             --force-with-lease="refs/heads/$UPPER_BRANCH:$UPPER_SHA"             "refs/heads/tmp/governed-restack-lower:refs/heads/$LOWER_BRANCH"             "refs/heads/tmp/governed-restack-upper:refs/heads/$UPPER_BRANCH"
+
+          jq             --argjson remote_updated true             '.remote_updated = $remote_updated'             "$EVIDENCE_DIR/rebase-plan.json"             > "$EVIDENCE_DIR/rebase-result.json"
+
+      - name: Confirmar SHAs remotos e topologia final
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          LOWER_PR: ${{ inputs.lower_pr_number }}
+          UPPER_PR: ${{ inputs.upper_pr_number }}
+          LOWER_NEW_SHA: ${{ steps.rebase.outputs.lower_new_sha }}
+          UPPER_NEW_SHA: ${{ steps.rebase.outputs.upper_new_sha }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 12); do
+            LOWER_REMOTE_SHA="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$LOWER_PR" --jq '.head.sha')"
+            UPPER_REMOTE_SHA="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$UPPER_PR" --jq '.head.sha')"
+
+            if [ "$LOWER_REMOTE_SHA" = "$LOWER_NEW_SHA" ] &&                [ "$UPPER_REMOTE_SHA" = "$UPPER_NEW_SHA" ]; then
+              break
+            fi
+
+            if [ "$attempt" -eq 12 ]; then
+              echo "GitHub não refletiu os novos SHAs dentro do timeout." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+          jq -n             --arg correlation_id "$CORRELATION_ID"             --arg lower_pr "$LOWER_PR"             --arg lower_sha "$LOWER_REMOTE_SHA"             --arg upper_pr "$UPPER_PR"             --arg upper_sha "$UPPER_REMOTE_SHA"             '{
+              correlation_id: $correlation_id,
+              lower_pr: ($lower_pr | tonumber),
+              lower_sha: $lower_sha,
+              upper_pr: ($upper_pr | tonumber),
+              upper_sha: $upper_sha,
+              status: "restacked",
+              ci_expected: true
+            }' > "$EVIDENCE_DIR/final.json"
+
+      - name: Publicar resumo
+        if: always()
+        shell: bash
+        run: |
+          {
+            printf '%s\n' '# Rebase governado de pilha'
+            printf '\n'
+            printf '| Correlation ID | `%s` |\n' "$CORRELATION_ID"
+            printf '| PR inferior | #%s |\n' '${{ inputs.lower_pr_number }}'
+            printf '| PR superior | #%s |\n' '${{ inputs.upper_pr_number }}'
+            printf '| SHA inferior novo | `%s` |\n' '${{ steps.rebase.outputs.lower_new_sha }}'
+            printf '| SHA superior novo | `%s` |\n' '${{ steps.rebase.outputs.upper_new_sha }}'
+            printf '| Resultado | `%s` |\n' '${{ job.status }}'
+            printf '\n%s\n' 'As branches só são atualizadas após os dois rebases concluírem sem conflito.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-stack-rebase-${{ inputs.lower_pr_number }}-${{ inputs.upper_pr_number }}-${{ github.run_id }}
+          path: artifacts/governed-stack-rebase/
+          if-no-files-found: warn
+          retention-days: 30

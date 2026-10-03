@@ -1,0 +1,15 @@
+.github/self-hosted-runner-policy.json
+.github/workflows/noteri-study-mode-dev-reconcile.yml
+.github/workflows/reqsys-authorized-actions-gateway.yml
+.sdd/specs/noteri-study-mode-dev-same-origin.requirements.md
+.sdd/specs/noteri-study-mode-dev-same-origin.spec.json
+backend/app/api/noteri_host_profile.py
+backend/app/main.py
+backend/app/services/noteri_host_profile.py
+backend/tests/test_noteri_host_profile_api.py
+docker-compose.noteri-study-mode.yml
+frontend/src/services/__tests__/hostProfileLocalAgent.test.js
+frontend/src/services/hostProfileLocalAgent.js
+scripts/noteri_study_mode_dev_reconcile.py
+tests/test_noteri_study_mode_dev_reconcile.py
+tests/test_reqsys_authorized_actions_gateway.py

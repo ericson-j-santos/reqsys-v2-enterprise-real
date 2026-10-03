@@ -6,7 +6,12 @@ module.exports = defineConfig({
     testDir: './tests/e2e',
     timeout: 30_000,
     fullyParallel: false,
-    reporter: 'list',
+    outputDir: 'test-results',
+    reporter: [
+        ['list'],
+        ['html', { outputFolder: 'playwright-report', open: 'never' }],
+        ['json', { outputFile: 'test-results/playwright-results.json' }],
+    ],
     use: {
         baseURL,
         headless: true,

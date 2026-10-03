@@ -1,0 +1,73 @@
+name: User Experience Empty State Recovery Trend
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_empty_state_recovery_trend.py"
+      - "scripts/smoke_empty_state_recovery_trend.py"
+      - "tests/test_build_empty_state_recovery_trend.py"
+      - ".github/workflows/user-experience-empty-state-recovery-trend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_empty_state_recovery_trend.py"
+      - "scripts/smoke_empty_state_recovery_trend.py"
+      - "tests/test_build_empty_state_recovery_trend.py"
+      - ".github/workflows/user-experience-empty-state-recovery-trend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-empty-state-recovery-trend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/build_empty_state_recovery_trend.py scripts/smoke_empty_state_recovery_trend.py
+          python -m unittest tests/test_build_empty_state_recovery_trend.py -v
+      - name: Build governed recovery evidence
+        run: |
+          mkdir -p .tmp/ux-recovery/output
+          cat > .tmp/ux-recovery/telemetry.json <<'JSON'
+          [
+            {"context":"govbi-results","event":"view","occurredAt":"2026-07-15T10:00:00Z"},
+            {"context":"govbi-results","event":"primary_action","occurredAt":"2026-07-15T10:00:18Z"},
+            {"context":"analytics","event":"view","occurredAt":"2026-07-15T10:01:00Z"},
+            {"context":"analytics","event":"secondary_action","occurredAt":"2026-07-15T10:01:22Z"},
+            {"context":"monitoramento-operacional","event":"view","occurredAt":"2026-07-15T10:02:00Z"},
+            {"context":"monitoramento-operacional","event":"primary_action","occurredAt":"2026-07-15T10:02:25Z"},
+            {"context":"estatisticas","event":"view","occurredAt":"2026-07-15T10:03:00Z"},
+            {"context":"estatisticas","event":"secondary_action","occurredAt":"2026-07-15T10:03:28Z"},
+            {"context":"dashboard","event":"view","occurredAt":"2026-07-15T10:04:00Z"},
+            {"context":"dashboard","event":"primary_action","occurredAt":"2026-07-15T10:04:20Z"}
+          ]
+          JSON
+          printf '%s\n' '{"cards":[]}' > .tmp/ux-recovery/dashboard.json
+          printf '%s\n' '[]' > .tmp/ux-recovery/history.json
+          python scripts/build_empty_state_recovery_trend.py \
+            --telemetry .tmp/ux-recovery/telemetry.json \
+            --dashboard .tmp/ux-recovery/dashboard.json \
+            --history .tmp/ux-recovery/history.json \
+            --output-dir .tmp/ux-recovery/output
+      - name: Smoke governed outputs
+        run: |
+          python scripts/smoke_empty_state_recovery_trend.py \
+            --report .tmp/ux-recovery/output/empty-state-recovery-trend.json \
+            --dashboard .tmp/ux-recovery/output/ops-dashboard.json \
+            --history .tmp/ux-recovery/output/empty-state-recovery-history.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-empty-state-recovery-trend
+          path: .tmp/ux-recovery/output
+          retention-days: 90

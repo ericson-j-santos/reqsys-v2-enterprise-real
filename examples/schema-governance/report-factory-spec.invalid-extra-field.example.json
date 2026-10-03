@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "report": {
+    "name": "RelatorioGovernado",
+    "title": "Relatório Governado",
+    "extra_field": "nao_permitido"
+  },
+  "datasource": {
+    "name": "ReqSysDev",
+    "provider": "SQL",
+    "connect_string": "Data Source=localhost;Initial Catalog=ReqSysDev",
+    "integrated_security": true
+  },
+  "datasets": [
+    {
+      "name": "Resumo",
+      "query": "SELECT 1 AS Valor",
+      "fields": [
+        {
+          "name": "Valor",
+          "data_field": "Valor",
+          "type": "System.Int32"
+        }
+      ]
+    }
+  ],
+  "components": [
+    {
+      "type": "table",
+      "name": "ResumoTable",
+      "dataset": "Resumo",
+      "columns": [
+        {
+          "field": "Valor",
+          "title": "Valor",
+          "width": "2in"
+        }
+      ]
+    }
+  ]
+}

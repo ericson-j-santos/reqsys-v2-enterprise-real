@@ -1,0 +1,172 @@
+name: Power Platform Promotion Readiness Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "config/power-platform/**"
+      - "scripts/validar_ambientes_power_platform.py"
+      - "scripts/limpar-worktrees-orfaos.ps1"
+      - "tests/test_validar_ambientes_power_platform.py"
+      - ".github/workflows/power-platform-promotion-readiness-contract.yml"
+  workflow_dispatch:
+    inputs:
+      exigir_pronto:
+        description: "Falhar se o ambiente indicado ainda nao estiver pronto para promocao"
+        required: false
+        type: choice
+        default: "nenhum"
+        options:
+          - nenhum
+          - test
+          - prod
+
+permissions:
+  contents: read
+
+concurrency:
+  group: power-platform-promotion-readiness-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  registro-de-ambientes:
+    name: Registro de ambientes Power Platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencia focada
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Compilar validador
+        run: python -m py_compile scripts/validar_ambientes_power_platform.py
+
+      - name: Testes focados
+        run: python -m pytest -q tests/test_validar_ambientes_power_platform.py
+
+      - name: Validar registro versionado
+        env:
+          EXIGIR_PRONTO: ${{ inputs.exigir_pronto || 'nenhum' }}
+        run: |
+          set -euo pipefail
+          args=(--output artifacts/governance/power-platform-environment-registry.json)
+          if [ "$EXIGIR_PRONTO" != "nenhum" ]; then
+            args+=(--exigir-pronto "$EXIGIR_PRONTO")
+          fi
+          python scripts/validar_ambientes_power_platform.py "${args[@]}"
+
+      - name: Publicar evidencia do registro
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: power-platform-environment-registry-${{ github.run_id }}
+          path: artifacts/governance/power-platform-environment-registry.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  limpeza-de-worktrees:
+    name: Contrato do limpador de worktrees
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Exercitar o limpador contra worktrees descartaveis
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # O limpador sai com codigo 1 de proposito quando algum alvo fica bloqueado.
+          # Sem isto, o PowerShell 7.3+ transformaria esse exit code em excecao antes
+          # de conseguirmos inspecionar $LASTEXITCODE.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $script = Join-Path $env:GITHUB_WORKSPACE 'scripts/limpar-worktrees-orfaos.ps1'
+
+          $raiz = Join-Path $env:RUNNER_TEMP 'contrato-worktrees'
+          $principal = Join-Path $raiz 'principal'
+          New-Item -ItemType Directory -Force -Path $principal | Out-Null
+
+          git init -b main $principal
+          git -C $principal config user.email 'contrato@example.invalid'
+          git -C $principal config user.name 'Contrato ReqSys'
+          'seed' | Set-Content -LiteralPath (Join-Path $principal 'seed.txt')
+          git -C $principal add -A
+          git -C $principal commit -q -m 'seed'
+          # Referencia de publicacao que o limpador usa quando nao ha upstream.
+          git -C $principal update-ref refs/remotes/origin/main HEAD
+
+          $limpo = Join-Path $raiz 'wt-limpo'
+          $sujo = Join-Path $raiz 'wt-sujo'
+          git -C $principal worktree add -q $limpo -b limpo
+          git -C $principal worktree add -q $sujo -b sujo
+          'trabalho nao commitado' | Set-Content -LiteralPath (Join-Path $sujo 'pendente.txt')
+
+          $alvos = @('wt-limpo', 'wt-sujo', 'wt-inexistente')
+          $evidenciaSimulacao = Join-Path $raiz 'simulacao.json'
+          $evidencia = Join-Path $raiz 'execucao.json'
+
+          # 'pwsh -File' entrega cada argumento como string solta, entao um array em
+          # -Worktrees viraria parametro posicional. Usamos -Command (que parseia
+          # PowerShell de verdade) em processo separado, para poder inspecionar o
+          # exit code que o limpador usa para sinalizar alvo bloqueado.
+          $lista = ($alvos | ForEach-Object { "'$_'" }) -join ','
+          $base = "& '$script' -RepositorioPrincipal '$principal' -Worktrees $lista"
+          $propagarCodigo = '; exit $LASTEXITCODE'
+
+          # 1) Simulacao nao pode remover nada.
+          pwsh -NoProfile -Command "$base -Evidencia '$evidenciaSimulacao' -Simular$propagarCodigo" | Out-Host
+          $codigoSimulacao = $LASTEXITCODE
+          if ($codigoSimulacao -ne 0) {
+            throw "Modo -Simular deveria sair com 0; recebido $codigoSimulacao."
+          }
+          if (-not (Test-Path -LiteralPath $limpo)) {
+            throw 'Modo -Simular removeu um worktree; deveria apenas relatar.'
+          }
+
+          # 2) Execucao real: remove o limpo, protege o sujo, tolera o inexistente.
+          pwsh -NoProfile -Command "$base -Evidencia '$evidencia'$propagarCodigo" | Out-Host
+          $codigo = $LASTEXITCODE
+          if ($codigo -ne 1) {
+            throw "Esperado exit code 1 com um worktree bloqueado; recebido $codigo."
+          }
+
+          $relatorio = Get-Content -LiteralPath $evidencia -Raw | ConvertFrom-Json
+          $porNome = @{}
+          foreach ($item in @($relatorio.resultados)) { $porNome[$item.worktree] = $item }
+
+          if ($porNome['wt-limpo'].resultado -ne 'removido') {
+            throw "wt-limpo deveria ter sido removido; resultado=$($porNome['wt-limpo'].resultado)"
+          }
+          if ($porNome['wt-sujo'].resultado -ne 'bloqueado') {
+            throw "wt-sujo deveria estar bloqueado; resultado=$($porNome['wt-sujo'].resultado)"
+          }
+          if ($porNome['wt-inexistente'].resultado -ne 'ja_removido') {
+            throw "wt-inexistente deveria ser ja_removido; resultado=$($porNome['wt-inexistente'].resultado)"
+          }
+          if ($relatorio.force_utilizado -ne $false -or $relatorio.branches_removidos -ne $false) {
+            throw 'Relatorio precisa afirmar que nao houve --force nem remocao de branch.'
+          }
+          if ($relatorio.concluido -ne $false -or @($relatorio.pendentes) -notcontains 'wt-sujo') {
+            throw 'Relatorio deveria apontar wt-sujo como pendente e concluido=false.'
+          }
+
+          if (Test-Path -LiteralPath $limpo) {
+            throw 'Diretorio do worktree limpo continua existindo.'
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $sujo 'pendente.txt'))) {
+            throw 'O limpador destruiu trabalho nao commitado do worktree sujo.'
+          }
+
+          # Branches preservados: remover worktree nunca apaga historico.
+          $branches = @(git -C $principal branch --format '%(refname:short)')
+          foreach ($esperado in @('limpo', 'sujo')) {
+            if ($branches -notcontains $esperado) {
+              throw "Branch '$esperado' desapareceu apos a limpeza."
+            }
+          }
+
+          Write-Host 'Contrato do limpador de worktrees validado.'

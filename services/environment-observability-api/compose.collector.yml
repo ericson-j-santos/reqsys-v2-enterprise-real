@@ -1,0 +1,42 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      OTEL_UPSTREAM_ENDPOINT: ${OTEL_UPSTREAM_ENDPOINT:?configure OTEL_UPSTREAM_ENDPOINT}
+      OTEL_UPSTREAM_AUTHORIZATION: ${OTEL_UPSTREAM_AUTHORIZATION:-}
+      OTELCOL_LOG_LEVEL: ${OTELCOL_LOG_LEVEL:-info}
+      OTELCOL_MEMORY_LIMIT_MIB: ${OTELCOL_MEMORY_LIMIT_MIB:-256}
+      OTELCOL_MEMORY_SPIKE_MIB: ${OTELCOL_MEMORY_SPIKE_MIB:-64}
+      OTELCOL_QUEUE_SIZE: ${OTELCOL_QUEUE_SIZE:-10000}
+    volumes:
+      - ./collector/config.yaml:/etc/otelcol/config.yaml:ro
+      - otel-queue:/var/lib/otelcol/queue
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:13133:13133"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "components"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+volumes:
+  otel-queue:
+    name: environment-observability-otel-queue-${APP_ENV:-development}

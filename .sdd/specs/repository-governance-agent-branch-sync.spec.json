@@ -1,0 +1,33 @@
+{
+  "feature_name": "repository-governance-agent-branch-sync",
+  "project": "ReqSys v2 Enterprise — GitHub Governance",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Hotfix federado: sincronizar PRs atrasadas com token de GitHub App limitado a contents:write, sem depender de pull_requests:write e mantendo a fila governada como rota exclusiva de integração na main.",
+  "scope": "github-ci-dev",
+  "files": [
+    ".github/workflows/repository-governance-agent.yml",
+    "tests/test_repository_governance_agent.py",
+    "docs/runbooks/governed-merge-queue.md"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_repository_governance_agent.py"
+    ],
+    "evidence_contract": "Provar sincronização somente para PR aberta, same-repo, não-draft, sem conflito e behind_by>0; reler HEAD/base antes da escrita; confirmar os mesmos SHAs no Git remoto; criar merge em repositório bare por merge-tree/commit-tree; push não-forçado exclusivamente para a branch head; leitura pós-ação deve comprovar novo HEAD contendo a base observada e behind_by=0; fan-out máximo 3; nenhum caminho integra PR na main ou executa deploy."
+  },
+  "risk": {
+    "production": false,
+    "merge_to_main": false,
+    "deploy": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "protected_branch_write": false
+  }
+}
