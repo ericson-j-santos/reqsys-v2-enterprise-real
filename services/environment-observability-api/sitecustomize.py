@@ -27,8 +27,8 @@ def configure_opentelemetry() -> bool:
             "service.name": os.getenv("SERVICE_NAME", "environment-observability-api"),
             "service.version": os.getenv("SERVICE_VERSION", "0.1.0"),
             "deployment.environment.name": os.getenv("APP_ENV", "development"),
-            "service.instance.id": os.getenv("FLY_MACHINE_ID", os.getenv("INSTANCE_ID", "unknown")),
-            "cloud.region": os.getenv("FLY_REGION", os.getenv("REGION", "unknown")),
+            "service.instance.id": os.getenv("INSTANCE_ID", "unknown"),
+            "cloud.region": os.getenv("REGION", "unknown"),
         }
     )
     provider = TracerProvider(resource=resource)
@@ -43,6 +43,6 @@ def configure_opentelemetry() -> bool:
 
 try:
     OTEL_CONFIGURED = configure_opentelemetry()
-except Exception:
+except Exception:  # noqa: BLE001 - telemetria opcional nunca bloqueia o processo
     # Telemetria nunca deve impedir a inicialização do serviço.
     OTEL_CONFIGURED = False

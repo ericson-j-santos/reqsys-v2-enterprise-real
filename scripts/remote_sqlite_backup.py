@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a consistent SQLite backup on a running Fly Machine.
+"""Create a consistent SQLite backup on an authorized runtime host.
 
 This script is copied to the Machine and executed there. It never reads
 credentials and writes only a temporary database copy plus non-sensitive
@@ -11,9 +11,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
+import socket
 import sqlite3
 import time
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -49,9 +50,9 @@ def create_backup(source: Path, target: Path, metadata: Path) -> dict[str, objec
 
     started = time.monotonic()
     source_uri = f"file:{source}?mode=ro"
-    with sqlite3.connect(source_uri, uri=True, timeout=30) as src:
+    with closing(sqlite3.connect(source_uri, uri=True, timeout=30)) as src:
         src.execute("PRAGMA busy_timeout=30000")
-        with sqlite3.connect(target, timeout=30) as dst:
+        with closing(sqlite3.connect(target, timeout=30)) as dst:
             src.backup(dst, pages=512, sleep=0.05)
             integrity = str(dst.execute("PRAGMA quick_check").fetchone()[0])
             counts = table_counts(dst)
@@ -71,7 +72,7 @@ def create_backup(source: Path, target: Path, metadata: Path) -> dict[str, objec
         "table_count": len(counts),
         "row_count_total": sum(counts.values()),
         "duration_seconds": round(duration, 6),
-        "hostname": os.uname().nodename,
+        "hostname": socket.gethostname(),
     }
     metadata.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload

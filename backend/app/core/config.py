@@ -394,7 +394,11 @@ class Settings(BaseSettings):
 
     @property
     def azure_expected_redirect_uri(self) -> str:
-        frontend_origin = (self.app_public_url or self.ambiente_atual_info.get('frontend', '')).rstrip('/')
+        frontend_origin = (
+            self.app_public_url
+            if self._is_allowed_public_url(self.app_public_url)
+            else self.ambiente_atual_info.get('frontend', '')
+        ).rstrip('/')
         return f'{frontend_origin}/auth/callback.html' if frontend_origin else ''
 
     @property
@@ -457,29 +461,43 @@ class Settings(BaseSettings):
         }
         return aliases.get(value, value or 'desenvolvimento')
 
+    @staticmethod
+    def _is_allowed_public_url(value: str) -> bool:
+        parsed = urlsplit((value or '').strip())
+        hostname = (parsed.hostname or '').lower().rstrip('.')
+        if parsed.scheme not in {'http', 'https'} or not hostname:
+            return False
+        return not any(
+            hostname == retired or hostname.endswith(f'.{retired}')
+            for retired in _RETIRED_FLY_HOSTS
+        )
+
     @property
     def ambientes_urls(self) -> dict[str, dict[str, str]]:
         return {
             'desenvolvimento': {
                 'frontend': 'https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev/',
                 'api': 'same-origin:/api',
-                'notas': 'PC24x7 DEV via locator assinado + Cloudflare Quick Tunnel; sem fallback Fly.io',
+                'notas': 'PC24x7 DEV via locator assinado + Cloudflare Quick Tunnel',
             },
             'producao': {
-                'frontend': 'https://reqsys-app.fly.dev', 'api': 'https://reqsys-api.fly.dev/docs',
-                'notas': 'Fly producao; local usa docker-compose.yml + docker-compose.prod.yml',
+                'frontend': '', 'api': '',
+                'notas': 'Destino remoto não configurado; publicação bloqueada',
             },
             'testes': {'frontend': 'http://localhost:8084', 'api': 'http://localhost:8212/docs', 'notas': 'Docker test'},
-            'homologacao': {'frontend': 'https://reqsys-app-stg.fly.dev', 'api': 'https://reqsys-api-stg.fly.dev', 'notas': 'Fly staging'},
+            'homologacao': {
+                'frontend': '', 'api': '',
+                'notas': 'Destino remoto não configurado; publicação bloqueada',
+            },
         }
 
     @property
     def ambiente_atual_info(self) -> dict[str, str]:
         ambiente = self.normalized_environment
         info = dict(self.ambientes_urls.get(ambiente, self.ambientes_urls['desenvolvimento']))
-        if self.app_public_url:
+        if self._is_allowed_public_url(self.app_public_url):
             info['frontend'] = self.app_public_url
-        if self.api_public_url:
+        if self._is_allowed_public_url(self.api_public_url):
             info['api'] = self.api_public_url
         return info
 

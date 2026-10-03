@@ -18,9 +18,9 @@ gravar de fato nos ambientes de destino.
 
 Uso:
     python scripts/replicate_requisitos_anonimizado.py \
-        --source https://reqsys-api.fly.dev \
-        --target https://reqsys-api-stg.fly.dev \
-        --target https://reqsys-api-dev.fly.dev
+        --source https://api.prod.example \
+        --target https://api.stg.example \
+        --target https://api.dev.example
         # adicione --execute para gravar de verdade
 """
 
@@ -32,15 +32,22 @@ import json
 import urllib.request
 from typing import Any
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/replicate_requisitos_anonimizado.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 ORIGEM_MARCADOR = 'origem-replicacao-anonimizada'
 
 
 def _get_json(url: str, timeout: float = 10.0) -> dict[str, Any]:
-    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 - URL fixa vinda de argparse, sem input livre de usuario final
+    url = require_authorized_runtime_url(url, label="URL de leitura da replicação")
+    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 - URL operacional validada pela política compartilhada
         return json.loads(resp.read().decode('utf-8'))
 
 
 def _post_json(url: str, body: dict[str, Any], timeout: float = 10.0) -> dict[str, Any]:
+    url = require_authorized_runtime_url(url, label="URL de escrita da replicação")
     data = json.dumps(body).encode('utf-8')
     req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')  # noqa: S310
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
@@ -75,8 +82,10 @@ def ja_replicado(descricoes_existentes: set[str], codigo_origem: str) -> bool:
 
 
 def replicar(source_url: str, target_url: str, execute: bool, limit: int | None) -> dict[str, Any]:
-    origem = _get_json(f'{source_url.rstrip("/")}/v1/requisitos').get('data') or []
-    destino_atual = _get_json(f'{target_url.rstrip("/")}/v1/requisitos').get('data') or []
+    source_url = require_authorized_runtime_url(source_url, label="runtime de origem")
+    target_url = require_authorized_runtime_url(target_url, label="runtime de destino")
+    origem = _get_json(f'{source_url}/v1/requisitos').get('data') or []
+    destino_atual = _get_json(f'{target_url}/v1/requisitos').get('data') or []
     descricoes_existentes = {item.get('descricao', '') for item in destino_atual}
 
     if limit is not None:
@@ -94,7 +103,7 @@ def replicar(source_url: str, target_url: str, execute: bool, limit: int | None)
             'payload': payload,
         })
         if execute:
-            criado = _post_json(f'{target_url.rstrip("/")}/v1/requisitos', payload)
+            criado = _post_json(f'{target_url}/v1/requisitos', payload)
             planejado[-1]['resultado'] = criado.get('data', {}).get('codigo')
 
     return {'source': source_url, 'target': target_url, 'itens': planejado}
@@ -102,18 +111,16 @@ def replicar(source_url: str, target_url: str, execute: bool, limit: int | None)
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--source', default='https://reqsys-api.fly.dev')
-    parser.add_argument('--target', action='append', default=[], help='Repetivel. Padrao: hml + dev')
+    parser.add_argument('--source', required=True, help='Runtime autorizado de origem')
+    parser.add_argument('--target', action='append', required=True, help='Runtime autorizado de destino; repetível')
     parser.add_argument('--limit', type=int, default=None, help='Limitar quantidade de requisitos de origem')
     parser.add_argument('--execute', action='store_true', help='Grava de fato (sem isso, roda em dry-run)')
     args = parser.parse_args(argv)
 
-    targets = args.target or ['https://reqsys-api-stg.fly.dev', 'https://reqsys-api-dev.fly.dev']
-
     if not args.execute:
         print('=== DRY-RUN (nada sera gravado; use --execute para aplicar) ===\n')
 
-    resultados = [replicar(args.source, target, args.execute, args.limit) for target in targets]
+    resultados = [replicar(args.source, target, args.execute, args.limit) for target in args.target]
 
     for r in resultados:
         print(f"## {r['source']} -> {r['target']}")

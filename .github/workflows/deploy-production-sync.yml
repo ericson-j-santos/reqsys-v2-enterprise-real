@@ -114,13 +114,11 @@ jobs:
           exit 1
 
   pre-sync-check:
+    # Fly.io retirado definitivamente; o inventário é apenas histórico.
     name: Diagnóstico pré-sync (read-only)
     runs-on: ubuntu-latest
     needs: gate
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true'
+    if: ${{ false }}
     outputs:
       prod_synced: ${{ steps.check.outputs.prod_synced }}
     steps:
@@ -152,18 +150,11 @@ jobs:
           if-no-files-found: warn
 
   validate-runtime:
+    # O validador público Fly foi aposentado; não declarar Docker/config inertes como runtime pronto.
     name: Validar config Fly/runtime
     runs-on: ubuntu-latest
     needs: [gate, pre-sync-check]
-    if: >-
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.production_allowed == 'true' &&
-      needs.pre-sync-check.result == 'success' &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        needs.pre-sync-check.outputs.prod_synced != 'true'
-      )
+    if: ${{ false }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -376,12 +367,11 @@ jobs:
           if-no-files-found: warn
 
   post-sync-check:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
     name: Validar sync pós-deploy
     runs-on: ubuntu-latest
     needs: [deploy-backend, deploy-frontend]
-    if: >-
-      always() &&
-      (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
+    if: ${{ false }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

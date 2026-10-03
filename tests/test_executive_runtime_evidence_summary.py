@@ -3,13 +3,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.executive_runtime_evidence_summary import build_summary, main, render_markdown
+import pytest
+
+from scripts.executive_runtime_evidence_summary import (
+    build_summary,
+    main,
+    render_markdown,
+)
+from scripts.runtime_url_policy import RuntimeURLPolicyError
 
 
 def _smoke(status: str = "healthy") -> dict:
     return {
         "status": status,
-        "base_url": "https://reqsys-app.fly.dev",
+        "base_url": "https://runtime.example",
         "required_ok": 4,
         "required_total": 4,
         "required_success_percentual": 100.0,
@@ -64,6 +71,14 @@ def test_build_summary_marks_critical_when_smoke_is_degraded() -> None:
     assert payload["summary"]["status"] == "critical"
     assert payload["summary"]["risk"] == "high"
     assert "/api/runtime/health" in payload["cards"]["runtime_smoke"]["blocking_issues"]
+
+
+def test_build_summary_rejects_retired_runtime_artifact() -> None:
+    smoke = _smoke()
+    smoke["base_url"] = "https://reqsys-app.fly.dev"
+
+    with pytest.raises(RuntimeURLPolicyError, match="Fly.io"):
+        build_summary(smoke, _sentinel(), repo="example/repo")
 
 
 def test_render_markdown_exposes_executive_fields() -> None:

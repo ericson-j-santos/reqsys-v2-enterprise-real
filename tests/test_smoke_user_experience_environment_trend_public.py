@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from scripts.runtime_url_policy import RuntimeURLPolicyError
 from scripts.smoke_user_experience_environment_trend_public import build_report
 
 
@@ -21,6 +22,13 @@ class PublicUxTrendSmokeTests(unittest.TestCase):
         report = build_report({"dev": "https://dev", "stg": "https://stg", "prod": "https://prod"})
         self.assertEqual("UX_ENV_TREND_PUBLIC_REVIEW", report["status"])
         self.assertLess(report["availability_rate"], 100)
+
+    @patch("scripts.smoke_user_experience_environment_trend_public.fetch")
+    def test_retired_runtime_is_rejected_before_fetch(self, fetch):
+        with self.assertRaisesRegex(RuntimeURLPolicyError, "Fly.io"):
+            build_report({"dev": "https://dev.example", "prod": "https://reqsys-app.fly.dev"})
+
+        fetch.assert_not_called()
 
 
 if __name__ == "__main__":

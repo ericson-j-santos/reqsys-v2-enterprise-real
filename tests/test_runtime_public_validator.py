@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
-from scripts.runtime_public_validator import build_payload, build_summary, load_fallback_cache
+from scripts.runtime_public_validator import (
+    RETIREMENT_EXIT_CODE,
+    build_payload,
+    build_summary,
+    load_fallback_cache,
+    main,
+)
 
 
 def test_build_summary_config_ready_without_probe():
@@ -70,3 +77,19 @@ def test_build_payload_marks_ok_when_no_blocking():
     assert payload['contract'] == 'trilha-a-runtime-publico'
     assert payload['ok'] is True
     assert payload['summary']['operational_status'] == 'config_ready'
+
+
+def test_main_refuses_retired_validator_before_subprocess(monkeypatch, tmp_path: Path):
+    output = tmp_path / 'retired.json'
+
+    def unexpected_subprocess(*args, **kwargs):
+        raise AssertionError('subprocess não deve ser chamado após a retirada do Fly.io')
+
+    monkeypatch.setattr('scripts.runtime_public_validator.subprocess.run', unexpected_subprocess)
+    monkeypatch.setattr(sys, 'argv', ['runtime_public_validator.py', '--probe', '--output', str(output)])
+
+    assert main() == RETIREMENT_EXIT_CODE
+    payload = json.loads(output.read_text(encoding='utf-8'))
+    assert payload['status'] == 'PERMANENTLY_RETIRED'
+    assert payload['ok'] is False
+    assert payload['base_url'] is None

@@ -3,7 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.main_operational_state_snapshot import build_snapshot, main, render_markdown
+import pytest
+
+from scripts.main_operational_state_snapshot import (
+    build_snapshot,
+    main,
+    render_markdown,
+)
+from scripts.runtime_url_policy import RuntimeURLPolicyError
 
 
 def _validator(status: str = "passed", completeness: float = 100.0) -> dict:
@@ -14,7 +21,7 @@ def _validator(status: str = "passed", completeness: float = 100.0) -> dict:
         "github_run_id": "1",
         "evidence_completeness_percentual": completeness,
         "dominant_blocker": "none" if status == "passed" else "runtime_smoke",
-        "links": {"runtime_public_url": "https://reqsys-app.fly.dev"},
+        "links": {"runtime_public_url": "https://runtime.example"},
     }
 
 
@@ -47,6 +54,14 @@ def test_build_snapshot_blocks_when_runtime_validator_blocks() -> None:
     assert snapshot["status"] == "blocked"
     assert snapshot["dominant_blocker"] == "runtime_smoke"
     assert snapshot["progress"]["operational"] == 50
+
+
+def test_build_snapshot_rejects_retired_runtime_link() -> None:
+    report = _validator()
+    report["links"]["runtime_public_url"] = "https://reqsys-app.fly.dev"
+
+    with pytest.raises(RuntimeURLPolicyError, match="Fly.io"):
+        build_snapshot(report, repo="example/repo", sha="abc", run_id=None)
 
 
 def test_render_markdown_contains_operational_fields() -> None:

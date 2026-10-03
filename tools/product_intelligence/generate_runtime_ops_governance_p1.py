@@ -26,7 +26,7 @@ LOCAL_EVIDENCE = {
     "product_readiness": ROOT / "reports" / "product-intelligence" / "product-intelligence-runtime-readiness-gate.json",
 }
 
-ENVIRONMENTS = ("dev", "hml", "prod", "flyio")
+ENVIRONMENTS = ("dev", "hml", "prod")
 REQUIRED_ENV_KEYS = (
     "APP_ENV",
     "DATABASE_URL",
@@ -35,7 +35,7 @@ REQUIRED_ENV_KEYS = (
     "JWT_EXP_MINUTES",
     "CORS_ORIGINS",
 )
-SECRET_KEYS = ("JWT_SECRET", "FLY_API_TOKEN", "GITHUB_TOKEN")
+SECRET_KEYS = ("JWT_SECRET", "GITHUB_TOKEN")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -43,7 +43,7 @@ def read_json(path: Path) -> dict[str, Any]:
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError(f"json root must be object: {path}")
+        raise ValueError(f"json root must be object: {path}")  # noqa: TRY004
     return payload
 
 
@@ -123,7 +123,7 @@ def build_payload() -> dict[str, Any]:
         "mode": "review_only",
         "runtime_health_center": {
             "sources": inventory,
-            "coverage": ["CI", "PRs", "workflows", "Fly.io", "environments", "coverage", "drift", "evidence", "analytics"],
+            "coverage": ["CI", "PRs", "workflows", "runtime", "environments", "coverage", "drift", "evidence", "analytics"],
         },
         "ci_auto_remediation": {
             "rerun_policy": "one safe rerun only for transient_infrastructure after evidence snapshot",
@@ -228,9 +228,9 @@ Consolidar o primeiro incremento governado de operação autônoma do ReqSys, re
 
 ## Entregas
 
-1. **Runtime Health Center**: agrega evidências locais de CI, workflows, PRs, Fly.io, ambientes, cobertura, drift e analytics.
+1. **Runtime Health Center**: agrega evidências locais de CI, workflows, PRs, runtime, ambientes, cobertura, drift e analytics.
 2. **CI Auto Remediation**: define taxonomia de falhas, política de rerun seguro e escopo permitido para autocorreções leves.
-3. **Environment Drift Detector**: padroniza comparação dev/hml/prod/Fly.io sem persistir valores de segredos.
+3. **Environment Drift Detector**: padroniza comparação dev/hml/prod sem persistir valores de segredos.
 4. **Runtime Evidence Consolidator**: gera snapshots JSON, Markdown e HTML para auditoria e relato executivo.
 5. **Runtime Governance Engine**: calcula health score, confidence de deploy, política de rollback e limites operacionais.
 

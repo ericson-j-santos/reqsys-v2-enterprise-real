@@ -4,20 +4,19 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
-import sys
 import time
+import uuid
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
-import uuid
 
 DEFAULT_API_URL = "https://api.github.com"
 DEFAULT_POLICY = "reqsys-operations"
@@ -586,7 +585,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("TEAMS_GATEWAY_BASE_URL", "https://reqsys-api.fly.dev"),
+        default=os.environ.get("TEAMS_GATEWAY_BASE_URL", ""),
     )
     parser.add_argument("--output", default=os.environ.get("REQSYS_LOG_OUTPUT"))
     parser.add_argument("--timeout", type=float, default=45.0)

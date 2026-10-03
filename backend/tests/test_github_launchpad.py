@@ -8,8 +8,11 @@ from fastapi.testclient import TestClient
 
 from app.db import Base, engine
 from app.main import app
-from app.services.github_launchpad import montar_github_launchpad, normalizar_ambiente_launchpad
 from app.models.agile_runtime import AgileWorkItem
+from app.services.github_launchpad import (
+    montar_github_launchpad,
+    normalizar_ambiente_launchpad,
+)
 
 
 def setup_module():
@@ -48,6 +51,8 @@ def test_montar_github_launchpad_dev_com_branch_sugerida():
     assert 'compare/dev...' in payload['links']['criar_branch']
     assert 'quick_pull=1' in payload['links']['novo_pr']
     assert 'criar_branch_github' in payload['acoes_disponiveis']
+    assert 'abrir_app' in payload['acoes_disponiveis']
+    assert payload['links']['app_ambiente'].startswith('https://ericson-j-santos.github.io/')
     assert payload['somente_leitura'] is False
     assert 'AGI-101' in payload['mensagem_commit_sugerida']
 
@@ -73,8 +78,9 @@ def test_montar_github_launchpad_prod_somente_leitura():
     assert payload['branch_base'] == 'main'
     assert payload['branch_trabalho'] == 'main'
     assert payload['somente_leitura'] is True
-    assert payload['acoes_disponiveis'] == ['abrir_branch', 'abrir_app']
+    assert payload['acoes_disponiveis'] == ['abrir_branch']
     assert 'criar_branch_github' not in payload['acoes_disponiveis']
+    assert payload['links']['app_ambiente'] is None
 
 
 def test_github_launchpad_endpoint():

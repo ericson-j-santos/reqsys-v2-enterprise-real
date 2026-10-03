@@ -1,5 +1,7 @@
 import { verifyAsync as verifyEd25519Fallback } from '@noble/ed25519'
 
+import { isRetiredFlyUrl } from './runtimeUrlPolicy'
+
 const GITHUB_PAGES_HOST = 'ericson-j-santos.github.io'
 const GITHUB_PAGES_PREFIX = '/reqsys-v2-enterprise-real/dev/'
 
@@ -15,7 +17,9 @@ function decodeBase64Json(value) {
 function isAllowedRuntimeUrl(value, suffix) {
   try {
     const parsed = new URL(value)
-    return parsed.protocol === 'https:' && parsed.hostname.endsWith(suffix)
+    return parsed.protocol === 'https:'
+      && !isRetiredFlyUrl(parsed.toString())
+      && parsed.hostname.endsWith(suffix)
   } catch {
     return false
   }

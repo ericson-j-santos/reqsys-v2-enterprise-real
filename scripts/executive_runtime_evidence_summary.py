@@ -14,6 +14,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/executive_runtime_evidence_summary.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEFAULT_SMOKE_PATH = "artifacts/runtime-production-smoke-governed.json"
 DEFAULT_SENTINEL_PATH = "artifacts/post-merge-runtime-smoke-sentinel/post-merge-runtime-smoke-sentinel.json"
 DEFAULT_OUTPUT_DIR = "artifacts/executive-runtime-evidence-summary"
@@ -63,6 +68,7 @@ def summarize_smoke(smoke: dict[str, Any]) -> dict[str, Any]:
             "github_run_id": None,
             "blocking_issues": ["runtime_smoke_artifact_missing"],
         }
+    base_url = require_authorized_runtime_url(smoke.get("base_url"), label="runtime smoke base_url")
     status = normalize(smoke.get("status"))
     checks = smoke.get("checks") or []
     failed_required = [item.get("path") for item in checks if item.get("required") and not item.get("ok")]
@@ -70,7 +76,7 @@ def summarize_smoke(smoke: dict[str, Any]) -> dict[str, Any]:
         "available": True,
         "status": status,
         "risk": risk_from_status(status),
-        "base_url": smoke.get("base_url") or "",
+        "base_url": base_url,
         "required": f"{smoke.get('required_ok', 0)}/{smoke.get('required_total', 0)}",
         "required_success_percentual": smoke.get("required_success_percentual", 0),
         "total_success_percentual": smoke.get("total_success_percentual", 0),
@@ -137,7 +143,7 @@ def build_summary(smoke: dict[str, Any], sentinel: dict[str, Any], *, repo: str,
         "links": {
             "repository": f"https://github.com/{repo}" if repo else "",
             "actions": f"https://github.com/{repo}/actions" if repo else "",
-            "runtime_public_url": smoke_summary.get("base_url") or "https://reqsys-app.fly.dev",
+            "runtime_public_url": smoke_summary.get("base_url") or "",
             "sentinel_run": sentinel_summary.get("run_url") or "",
         },
         "guardrails": [

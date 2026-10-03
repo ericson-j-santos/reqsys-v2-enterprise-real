@@ -2,23 +2,18 @@ import ast
 from pathlib import Path
 
 BACKEND = Path("backend")
-DOCKERFILE = BACKEND / "Dockerfile.fly"
+DOCKERFILE = BACKEND / "Dockerfile"
 
 # Entradas de backend/ que nao sao modulos/pacotes Python a serem embarcados na
 # imagem Fly (config de build, docs, testes, migrations, etc.).
 NON_RUNTIME_ENTRIES = {
     "Dockerfile",
-    "Dockerfile.fly",
     "alembic.ini",
     "alembic",
     "app",
     "config",
     "data",
     "docker-compose.operational-worker.yml",
-    "fly.dev.toml",
-    "fly.staging.toml",
-    "fly.toml",
-    "fly_boot.sh",
     "migrations",
     "ocr_tests",
     "pyproject.toml",
@@ -32,7 +27,7 @@ NON_RUNTIME_ENTRIES = {
 
 
 def _copied_targets() -> set[str]:
-    """Nomes de topo em backend/ que o Dockerfile.fly copia para /app."""
+    """Nomes de topo em backend/ que o Dockerfile canônico copia para /app."""
     targets = set()
     for line in DOCKERFILE.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -46,7 +41,7 @@ def _copied_targets() -> set[str]:
 
 
 def _copia_tudo() -> bool:
-    """True se o Dockerfile.fly usa `COPY . .` (todo o contexto de build)."""
+    """True se o Dockerfile canônico usa `COPY . .` (todo o contexto de build)."""
     return "." in _copied_targets()
 
 
@@ -82,14 +77,14 @@ def _imported_top_level_names(candidates: set[str]) -> set[str]:
     return found
 
 
-def test_dockerfile_fly_copia_todo_modulo_local_importado_pelo_app() -> None:
+def test_backend_dockerfile_copia_todo_modulo_local_importado_pelo_app() -> None:
     """Evita o padrao de incidente ocr_evidencia (2026-08-24) e
     wsjf_workbook_package (2026-09-09): um pacote/modulo local novo em
-    backend/ e importado por backend/app, mas backend/Dockerfile.fly nao e
+    backend/ e importado por backend/app, mas backend/Dockerfile nao e
     atualizado para copia-lo, causando ModuleNotFoundError em crash loop no
-    Fly (dev/staging/prod usam o mesmo Dockerfile.fly).
+    atualizado no artefato provider-neutral.
 
-    Desde a correcao de 2026-09-09 o Dockerfile.fly usa `COPY . .` (com
+    Desde a correcao de 2026-09-09 o Dockerfile usa `COPY . .` (com
     .dockerignore como denylist) em vez de uma allowlist por modulo, o que ja
     elimina essa classe de bug na raiz. Este teste continua existindo como
     guarda de regressao: se alguem voltar para uma allowlist explicita no
@@ -109,9 +104,9 @@ def test_dockerfile_fly_copia_todo_modulo_local_importado_pelo_app() -> None:
     )
 
     assert not missing, (
-        "backend/Dockerfile.fly nao copia modulo(s) local(is) importado(s) por "
+        "backend/Dockerfile nao copia modulo(s) local(is) importado(s) por "
         f"backend/app: {missing}. Adicione "
-        "`COPY <entrada-em-backend/> /app/<entrada-em-backend/>` no Dockerfile.fly, "
+        "`COPY <entrada-em-backend/> /app/<entrada-em-backend/>` no Dockerfile, "
         "ou volte a usar `COPY . .` (com .dockerignore) para eliminar a classe "
         "inteira de bug em vez de corrigir modulo a modulo."
     )

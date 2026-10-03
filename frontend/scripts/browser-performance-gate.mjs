@@ -9,7 +9,7 @@ const VERSION = '1.0.0'
 
 function parseArgs(argv) {
   const options = {
-    url: process.env.REQSYS_APP_URL || 'https://reqsys-app.fly.dev',
+    url: process.env.REQSYS_APP_URL || '',
     output: 'artifacts/performance/browser-performance.json',
     budgets: 'config/runtime-performance-budgets.json',
     strict: false,
@@ -30,6 +30,28 @@ function parseArgs(argv) {
     }
   }
   return options
+}
+
+function requireAuthorizedHttpsUrl(value) {
+  let parsed
+  try {
+    parsed = new URL(String(value || '').trim())
+  } catch {
+    throw new Error('--url ou REQSYS_APP_URL deve informar uma URL HTTPS explícita')
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('A URL do browser performance gate deve usar HTTPS')
+  }
+  const hostname = parsed.hostname.toLowerCase()
+  if (
+    hostname === 'fly.dev' ||
+    hostname === 'fly.io' ||
+    hostname.endsWith('.fly.dev') ||
+    hostname.endsWith('.fly.io')
+  ) {
+    throw new Error('Fly.io foi retirado definitivamente; informe um runtime autorizado')
+  }
+  return parsed.toString().replace(/\/$/, '')
 }
 
 function percentile(values, q) {
@@ -89,6 +111,7 @@ async function measureEventLoopLag(page, intervalMs = 50, samples = 40) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
+  options.url = requireAuthorizedHttpsUrl(options.url)
   const policy = JSON.parse(await fs.readFile(options.budgets, 'utf8'))
   if (policy.schema_version !== '1.0.0' || !policy.browser) {
     throw new Error('Policy de browser ausente ou incompatível')

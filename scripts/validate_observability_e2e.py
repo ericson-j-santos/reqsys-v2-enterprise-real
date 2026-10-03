@@ -18,6 +18,11 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 OBSERVABILITY_E2E_ENDPOINTS = (
     "/api/runtime/metrics",
     "/api/runtime/dashboard",
@@ -44,9 +49,9 @@ class CheckResult:
 
 
 def _normalizar_base_url(base_url: str) -> str:
-    base = base_url.strip().rstrip("/")
-    if not base.startswith(("http://", "https://")):
-        raise ValueError("base-url deve iniciar com http:// ou https://")
+    base = require_authorized_runtime_url(base_url, label="base-url de observabilidade")
+    if not base.startswith("https://"):
+        raise ValueError("base-url de observabilidade deve usar HTTPS")
     return base
 
 
@@ -57,6 +62,7 @@ def _fetch(
     timeout: float,
     headers: dict[str, str] | None = None,
 ) -> tuple[int | None, bytes, dict[str, str], int, str | None]:
+    base_url = _normalizar_base_url(base_url)
     url = f"{base_url}{endpoint}"
     started = time.perf_counter()
     request_headers = {
@@ -67,7 +73,7 @@ def _fetch(
         request_headers.update(headers)
     request = Request(url, headers=request_headers)
     try:
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310
+        with urlopen(request, timeout=timeout) as response:
             raw = response.read(512_000)
             elapsed_ms = round((time.perf_counter() - started) * 1000)
             return int(response.status), raw, dict(response.headers.items()), elapsed_ms, None
@@ -215,7 +221,7 @@ def build_payload(
     if not precondition_ok:
         blocking.insert(
             0,
-            "strict_precondition: Public Runtime Evidence Gate strict ainda não verde (fly_runtime_deploy_lag)",
+            "strict_precondition: Public Runtime Evidence Gate strict ainda não verde (runtime_deploy_lag)",
         )
     return {
         "schema_version": "1.0.0",
@@ -237,7 +243,7 @@ def build_payload(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Valida observabilidade runtime pública (E2E read-only)")
-    parser.add_argument("--base-url", default="https://reqsys-api.fly.dev")
+    parser.add_argument("--base-url", required=True)
     parser.add_argument("--environment", default="prod")
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--skip-precondition", action="store_true")

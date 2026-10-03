@@ -1,14 +1,14 @@
-from datetime import UTC, datetime
 import json
-from pathlib import Path
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts import notify_hitl_approval_teams as module
+from scripts import notify_hitl_approval_teams as module  # noqa: E402
 
 
 class _FakeResponse:
@@ -95,7 +95,7 @@ def test_send_request_prefers_direct_adaptive_webhook(monkeypatch):
         request_url="https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/1116",
         evidence_url="https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/1116/files",
         environment="Governança (não produtivo)",
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://gateway.example",
         destination_id="fallback@example.com",
         webhook_url="https://flow.example.invalid/trigger",
         webhook_recipient="approver@example.com",
@@ -140,7 +140,7 @@ def test_send_request_uses_dynamic_policy_and_existing_gateway(monkeypatch):
         summary="Validar o novo fluxo de aprovacao.",
         request_url="https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1111",
         evidence_url=None,
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://gateway.example",
         destination_id="fallback@example.com",
         recipient_policy="hitl-approvers",
         delivery_mode="all",
@@ -172,7 +172,7 @@ def test_send_request_does_not_require_explicit_destination(monkeypatch):
         summary="Validar o novo fluxo de aprovacao.",
         request_url="https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1111",
         evidence_url=None,
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://gateway.example",
         destination_id=None,
         recipient_policy="hitl-approvers",
         delivery_mode="all",

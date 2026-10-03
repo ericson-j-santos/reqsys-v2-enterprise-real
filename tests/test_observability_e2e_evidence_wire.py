@@ -4,16 +4,32 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.persist_observability_e2e_evidence import build_evidence_index, persist_evidence
+from scripts.persist_observability_e2e_evidence import (
+    build_evidence_index,
+    persist_evidence,
+)
 from scripts.persist_public_runtime_evidence import infer_operational_notes
 from scripts.validate_observability_e2e import (
     CheckResult,
+    _normalizar_base_url,
     build_payload,
+)
+from scripts.validate_observability_e2e import (
     main as validate_main,
 )
 
 
 class ValidateObservabilityE2eTests(unittest.TestCase):
+    def test_base_url_requires_https_and_rejects_retired_provider(self):
+        self.assertEqual(
+            _normalizar_base_url("https://api.example.net/"),
+            "https://api.example.net",
+        )
+        with self.assertRaisesRegex(ValueError, "HTTPS"):
+            _normalizar_base_url("http://api.example.net")
+        with self.assertRaisesRegex(ValueError, "retirado definitivamente"):
+            _normalizar_base_url("https://legacy.fly.dev")
+
     def test_build_payload_gate_passed_when_all_checks_ok(self):
         checks = [
             CheckResult("metrics_text_plain", "/api/runtime/metrics", True, 200, 10),
@@ -33,9 +49,9 @@ class ValidateObservabilityE2eTests(unittest.TestCase):
         ]
         payload = build_payload("https://example.test", "prod", checks, precondition_ok=False)
         self.assertFalse(payload["gate_passed"])
-        self.assertIn("fly_runtime_deploy_lag", payload["blocking_issues"][0])
+        self.assertIn("runtime_deploy_lag", payload["blocking_issues"][0])
 
-    def test_main_returns_zero_on_localhost_with_skip_precondition(self):
+    def test_main_returns_zero_on_explicit_https_runtime_with_skip_precondition(self):
         with patch("scripts.validate_observability_e2e._check_metrics") as metrics, patch(
             "scripts.validate_observability_e2e._check_dashboard"
         ) as dashboard, patch("scripts.validate_observability_e2e._check_analytics") as analytics, patch(
@@ -56,7 +72,7 @@ class ValidateObservabilityE2eTests(unittest.TestCase):
                     [
                         "validate_observability_e2e.py",
                         "--base-url",
-                        "http://127.0.0.1:8000",
+                        "https://runtime.example.net",
                         "--skip-precondition",
                         "--output",
                         str(output),
@@ -71,7 +87,7 @@ class ValidateObservabilityE2eTests(unittest.TestCase):
 class PersistObservabilityE2eEvidenceTests(unittest.TestCase):
     def test_persist_writes_audit_files(self):
         validation = {
-            "base_url": "https://reqsys-api.fly.dev",
+            "base_url": "https://api.example.net",
             "environment": "prod",
             "gate_passed": True,
             "precondition_ok": True,
@@ -99,8 +115,14 @@ class PersistObservabilityE2eEvidenceTests(unittest.TestCase):
             event_name="workflow_run",
             sha="abc",
         )
-        self.assertEqual(index["operational_notes"][0]["id"], "fly_runtime_deploy_lag")
-        self.assertEqual(index["operational_notes"][0]["next_increment"], "fly-runtime-p0-deploy")
+        self.assertEqual(
+            index["operational_notes"][0]["id"],
+            "runtime_precondition_failed",
+        )
+        self.assertEqual(
+            index["operational_notes"][0]["blocks_increment"],
+            "evidence-automation-observability-e2e",
+        )
 
 
 class PublicRuntimeStrictReadyNoteTests(unittest.TestCase):

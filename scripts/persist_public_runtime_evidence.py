@@ -15,14 +15,6 @@ from pathlib import Path
 from typing import Any
 
 RUNTIME_STRICT_ENDPOINTS = ("/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
-FLY_DEPLOY_LAG_NOTE = (
-    "Os 404 nos endpoints strict do Fly indicam deploy anterior ao Runtime Operational "
-    "Observability v1 — bloqueio evidenciado, fora do escopo wire-only (sem deploy). "
-    "Corrigir exige incremento separado via ReqSys Fly Runtime P0 "
-    "(workflow_dispatch deploy=true) antes de declarar produção healthy."
-)
-
-
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -57,13 +49,12 @@ def infer_operational_notes(
     if health_ok and runtime_404s and has_runtime_404_blocking:
         return [
             {
-                "id": "fly_runtime_deploy_lag",
+                "id": "strict_runtime_endpoints_missing",
                 "severity": "blocker",
-                "scope": "fly_runtime_deploy",
+                "scope": "public_runtime_evidence",
                 "wire_scope": False,
-                "message": FLY_DEPLOY_LAG_NOTE,
+                "message": "Endpoints estritos de runtime ausentes; revisar o ambiente e a versão implantada.",
                 "affected_endpoints": runtime_404s,
-                "next_increment": "fly-runtime-p0-deploy",
                 "blocks_increment": "evidence-automation-observability-e2e",
                 "reference": "docs/runbooks/public-runtime-smoke-test.md",
             }

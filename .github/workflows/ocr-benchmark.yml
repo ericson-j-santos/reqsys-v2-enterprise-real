@@ -19,7 +19,6 @@ on:
       - '.github/workflows/fly-dev-fast-deploy.yml'
       - '.github/workflows/fly-enterprise-sync.yml'
       - 'backend/Dockerfile'
-      - 'backend/Dockerfile.fly'
       - 'backend/vendor/ocr-evidence-engine/**'
   workflow_dispatch:
 permissions:
@@ -185,7 +184,7 @@ jobs:
           set -euo pipefail
           set +e
           docker build \
-            --file backend/Dockerfile.fly \
+            --file backend/Dockerfile \
             --tag reqsys-ocr-negative:${{ github.sha }} \
             --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \
             --build-arg "OCR_ENGINE_SHA=$OCR_ENGINE_SHA" \
@@ -209,7 +208,7 @@ jobs:
           set -euo pipefail
           test "${{ steps.ocr-runtime.outputs.ocr-sha }}" = "$OCR_ENGINE_SHA"
           docker build \
-            --file backend/Dockerfile.fly \
+            --file backend/Dockerfile \
             --tag reqsys-ocr-external:${{ github.sha }} \
             --build-arg "GITHUB_SHA=${{ github.sha }}" \
             --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \

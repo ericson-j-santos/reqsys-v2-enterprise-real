@@ -5,9 +5,9 @@ from scripts.evaluate_environment_promotion_capture import evaluate_capture
 SHA = "abcdef123456"
 
 
-def fly_state(**changes):
+def runtime_state(**changes):
     value = {
-        "contract": "fly-environment-state-capture",
+        "contract": "runtime-environment-state-capture",
         "environment": "dev",
         "expected_sha": SHA,
         "ready": True,
@@ -68,7 +68,7 @@ def evaluate(**changes):
     arguments = {
         "environment": "dev",
         "expected_sha": SHA,
-        "fly_state": fly_state(),
+        "runtime_state": runtime_state(),
         "runtime": runtime(),
         "publication": publication(),
         "login": login(),
@@ -98,6 +98,6 @@ def test_login_failure_blocks_promotion() -> None:
 
 
 def test_missing_artifact_is_fail_closed() -> None:
-    report = evaluate(fly_state={}, fly_state_error="artifact_missing")
+    report = evaluate(runtime_state={}, runtime_state_error="artifact_missing")
     assert report["ready"] is False
-    assert "fly_state_integrity" in report["blocking_issues"]
+    assert "runtime_state_integrity" in report["blocking_issues"]

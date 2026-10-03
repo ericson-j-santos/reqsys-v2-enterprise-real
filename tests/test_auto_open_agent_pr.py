@@ -25,6 +25,7 @@ def test_build_body_contains_increment_type():
     assert "increment-type: consolidate" in body
     assert "cursor/padrao-ouro-ciclos-88ba" in body
     assert "Padrão Ouro Delivery Automation" in body
+    assert "ReqSys Fly Runtime P0" not in body
 
 
 def test_is_permission_error_detects_403():

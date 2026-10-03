@@ -10,7 +10,7 @@ Uso local apos build:
 
 Uso contra ambiente publicado:
     python scripts/validar_frontend_auth_redirect.py \
-        --frontend-url https://reqsys-app-stg.fly.dev
+        --frontend-url https://app-stg.example.net
 """
 from __future__ import annotations
 
@@ -23,6 +23,12 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
+
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
 
 
 FORBIDDEN_PATTERNS = (
@@ -74,8 +80,15 @@ def _fetch(url: str, timeout: int = 30) -> str:
         return response.read().decode("utf-8", errors="ignore")
 
 
+def _require_https_url(value: str, *, label: str) -> str:
+    url = require_authorized_runtime_url(value, label=label)
+    if not url.startswith("https://"):
+        raise ValueError(f"{label} deve usar HTTPS")
+    return url
+
+
 def validate_public_frontend(frontend_url: str) -> dict[str, Any]:
-    base = frontend_url.rstrip("/")
+    base = _require_https_url(frontend_url, label="URL pública do frontend")
     try:
         index_html = _fetch(base + "/")
     except urllib.error.URLError as exc:
@@ -87,10 +100,15 @@ def validate_public_frontend(frontend_url: str) -> dict[str, Any]:
 
     errors: list[str] = []
     scanned: list[str] = []
-    for script_path in script_paths:
-        if not script_path.endswith(".js"):
-            continue
-        asset_url = script_path if script_path.startswith("http") else f"{base}{script_path}"
+    asset_urls = [
+        _require_https_url(
+            urljoin(base + "/", script_path),
+            label="URL do bundle frontend",
+        )
+        for script_path in script_paths
+        if script_path.endswith(".js")
+    ]
+    for asset_url in asset_urls:
         try:
             content = _fetch(asset_url)
         except urllib.error.URLError as exc:
@@ -111,7 +129,7 @@ def validate_public_frontend(frontend_url: str) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Valida redirect URI do bundle frontend ReqSys")
     parser.add_argument("--dist-dir", help="Diretorio dist local, ex.: frontend/dist")
-    parser.add_argument("--frontend-url", help="URL publica do frontend, ex.: https://reqsys-app-stg.fly.dev")
+    parser.add_argument("--frontend-url", help="URL HTTPS publica do frontend, ex.: https://app-stg.example.net")
     args = parser.parse_args()
 
     if not args.dist_dir and not args.frontend_url:

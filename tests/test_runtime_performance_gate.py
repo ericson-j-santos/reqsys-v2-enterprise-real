@@ -4,12 +4,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.runtime_performance_gate import (
     build_report,
     evaluate_budget,
     load_policy,
     percentile,
+    run_endpoint,
 )
 
 
@@ -71,6 +73,42 @@ class RuntimePerformanceGateTests(unittest.TestCase):
             path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaises(ValueError):
                 load_policy(path)
+
+    def test_run_endpoint_rejects_retired_provider_before_request(self) -> None:
+        endpoint = {
+            "name": "health",
+            "path": "/health",
+            "expected_status": 200,
+            "budget": {},
+        }
+        with (
+            patch("scripts.runtime_performance_gate._request_once") as request_once,
+            self.assertRaisesRegex(ValueError, "retirado definitivamente"),
+        ):
+            run_endpoint(
+                base_url="https://legacy.fly.dev",
+                endpoint=endpoint,
+                defaults={"samples": 1, "warmup": 0},
+            )
+        request_once.assert_not_called()
+
+    def test_run_endpoint_requires_https_before_request(self) -> None:
+        endpoint = {
+            "name": "health",
+            "path": "/health",
+            "expected_status": 200,
+            "budget": {},
+        }
+        with (
+            patch("scripts.runtime_performance_gate._request_once") as request_once,
+            self.assertRaisesRegex(ValueError, "HTTPS"),
+        ):
+            run_endpoint(
+                base_url="http://api.example.net",
+                endpoint=endpoint,
+                defaults={"samples": 1, "warmup": 0},
+            )
+        request_once.assert_not_called()
 
 
 if __name__ == "__main__":

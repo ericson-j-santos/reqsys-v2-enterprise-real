@@ -12,11 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_ENVIRONMENTS = {
-    "DEV": "https://reqsys-app-dev.fly.dev",
-    "STG": "https://reqsys-app-stg.fly.dev",
-    "PROD": "https://reqsys-app.fly.dev",
-}
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/smoke_user_experience_environments.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 REQUIRED_PATHS = (
     "/health",
     "/api/runtime/health",
@@ -27,6 +27,7 @@ REQUIRED_PATHS = (
 
 
 def probe(url: str, timeout: float = 12.0) -> dict[str, Any]:
+    url = require_authorized_runtime_url(url, label="URL do smoke UX")
     started = time.monotonic()
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "ReqSys-UX-Smoke/1.1"})
@@ -43,9 +44,15 @@ def probe(url: str, timeout: float = 12.0) -> dict[str, Any]:
 
 
 def collect(environments: dict[str, str], timeout: float = 12.0) -> dict[str, Any]:
+    if not environments:
+        raise ValueError("ao menos um ambiente explícito é obrigatório")
+    authorized_environments = {
+        name: require_authorized_runtime_url(base_url, label=f"runtime {name}")
+        for name, base_url in environments.items()
+    }
     results: dict[str, Any] = {}
     fingerprints: dict[str, str] = {}
-    for name, base_url in environments.items():
+    for name, base_url in authorized_environments.items():
         checks = [probe(base_url.rstrip("/") + path, timeout) for path in REQUIRED_PATHS]
         canonical = [{"path": REQUIRED_PATHS[i], "status": c["status"], "ok": c["ok"]} for i, c in enumerate(checks)]
         fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
@@ -87,11 +94,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--timeout", type=float, default=12.0)
-    parser.add_argument("--environments-json")
+    parser.add_argument("--environments-json", required=True, help="Mapa JSON explícito de ambiente para URL autorizada")
     args = parser.parse_args()
-    environments = DEFAULT_ENVIRONMENTS
-    if args.environments_json:
-        environments = json.loads(Path(args.environments_json).read_text(encoding="utf-8"))
+    environments = json.loads(Path(args.environments_json).read_text(encoding="utf-8"))
     report = collect(environments, args.timeout)
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

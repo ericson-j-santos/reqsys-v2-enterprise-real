@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
 
-
 PRE_PR_WORKFLOW = "pre-pr-readiness.yml"
 
 
@@ -52,7 +51,6 @@ increment-type: consolidate
 
 - CI — ReqSys v2 Enterprise (verde)
 - Pipeline Governança + Evidence Snapshot
-- ReqSys Fly Runtime P0 (smoke público após deploy)
 """
 
 
@@ -60,7 +58,7 @@ def append_readiness_body(body: str, evidence: dict[str, Any]) -> str:
     return (
         body.rstrip()
         + "\n\n## READY_FOR_PR\n\n"
-        + f"- Status: `passed`\n"
+        + "- Status: `passed`\n"
         + f"- Head SHA: `{evidence['head_sha']}`\n"
         + f"- Base SHA: `{evidence['base_sha']}`\n"
         + f"- Run: `{evidence['run_id']}`\n"
@@ -145,7 +143,7 @@ class GitHubClient:
     def get_branch_sha(self, branch: str) -> str:
         payload = self._request("GET", f"/branches/{quote(branch, safe='')}")
         if not isinstance(payload, dict):
-            raise RuntimeError(f"Resposta inválida ao consultar branch base: {branch}")
+            raise TypeError(f"Resposta inválida ao consultar branch base: {branch}")
         commit = payload.get("commit")
         if not isinstance(commit, dict) or not str(commit.get("sha") or "").strip():
             raise RuntimeError(f"SHA ausente ao consultar branch base: {branch}")
@@ -154,7 +152,7 @@ class GitHubClient:
     def compare(self, base_sha: str, head_sha: str) -> dict[str, Any]:
         payload = self._request("GET", f"/compare/{base_sha}...{head_sha}")
         if not isinstance(payload, dict):
-            raise RuntimeError("Resposta inválida ao comparar base e HEAD")
+            raise TypeError("Resposta inválida ao comparar base e HEAD")
         return payload
 
     def create_pr(self, *, title: str, body: str, head: str, base: str, draft: bool = True) -> dict[str, Any]:

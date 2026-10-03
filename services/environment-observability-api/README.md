@@ -29,20 +29,12 @@ uvicorn app.main:app --reload
 pytest -q
 ```
 
-## Deploy segregado
+## Publicação segregada
 
-```bash
-fly apps create reqsys-env-api-dev
-fly deploy --config fly.dev.toml
-
-fly apps create reqsys-env-api-stg
-fly deploy --config fly.stg.toml
-
-fly apps create reqsys-env-api-prod
-fly deploy --config fly.prod.toml
-```
-
-Os três aplicativos, secrets, domínios e telemetria devem permanecer separados. O pipeline deve promover a mesma imagem imutável de STG para PROD; os arquivos atuais estabelecem o contrato inicial, mas a criação administrativa dos aplicativos e secrets depende de credencial Fly.io autorizada.
+O antigo procedimento Fly.io foi retirado permanentemente em 2026-10-02. A
+publicação deve usar o provedor corporativo vigente, com endpoint HTTPS
+explícito e segregação de secrets, domínios e telemetria por ambiente. Não há
+manifesto nem comando de deploy Fly suportado neste serviço.
 
 ## Variáveis
 

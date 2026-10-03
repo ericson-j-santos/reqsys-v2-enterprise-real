@@ -9,9 +9,9 @@ e penalizam acuracia/relevancia/consistencia), para que um humano decida a triag
 
 Uso:
     python scripts/relatorio_qualidade_ia_pendentes.py \
-        --api-url https://reqsys-api.fly.dev=prod \
-        --api-url https://reqsys-api-stg.fly.dev=hml \
-        --api-url https://reqsys-api-dev.fly.dev=dev
+        --api-url https://api.example.net=prod \
+        --api-url https://api-stg.example.net=hml \
+        --api-url https://api-dev.example.net=dev
 """
 
 from __future__ import annotations
@@ -20,6 +20,11 @@ import argparse
 import json
 import urllib.request
 from typing import Any
+
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
 
 # Mantido em sincronia manual com backend/app/services/requisitos_metricas.py
 STATUS_APROVADOS = frozenset({
@@ -31,7 +36,7 @@ STATUS_REJEITADOS = frozenset({'rejeitado', 'rejeitados', 'cancelado'})
 
 
 def _get_json(url: str, timeout: float = 10.0) -> dict[str, Any]:
-    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 - URL fixa, sem input de usuario
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
         return json.loads(resp.read().decode('utf-8'))
 
 
@@ -47,6 +52,7 @@ def _classificar(status: str) -> str:
 
 
 def analisar_ambiente(nome: str, api_url: str) -> dict[str, Any]:
+    api_url = _require_https_api_url(api_url)
     payload = _get_json(f'{api_url.rstrip("/")}/v1/requisitos')
     requisitos = payload.get('data') or []
     pendentes = []
@@ -68,6 +74,20 @@ def analisar_ambiente(nome: str, api_url: str) -> dict[str, Any]:
     }
 
 
+def _require_https_api_url(value: str) -> str:
+    api_url = require_authorized_runtime_url(value, label='URL da API de Qualidade IA')
+    if not api_url.startswith('https://'):
+        raise ValueError('URL da API de Qualidade IA deve usar HTTPS')
+    return api_url
+
+
+def _parse_target(value: str) -> tuple[str, str]:
+    url, separator, name = value.partition('=')
+    if not separator or not name.strip():
+        raise ValueError("--api-url deve seguir o formato URL=NOME")
+    return _require_https_api_url(url), name.strip()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -75,23 +95,23 @@ def main(argv: list[str] | None = None) -> int:
         action='append',
         default=[],
         metavar='URL=NOME',
-        help='Ex.: https://reqsys-api.fly.dev=prod (repetivel)',
+        help='Ex.: https://api.example.net=prod (repetivel)',
     )
     args = parser.parse_args(argv)
 
-    alvos = args.api_url or [
-        'https://reqsys-api.fly.dev=prod',
-        'https://reqsys-api-stg.fly.dev=hml',
-        'https://reqsys-api-dev.fly.dev=dev',
-    ]
+    if not args.api_url:
+        parser.error('informe ao menos um --api-url URL=NOME')
+
+    try:
+        alvos = [_parse_target(alvo) for alvo in args.api_url]
+    except ValueError as exc:
+        parser.error(str(exc))
 
     resultados = []
-    for alvo in alvos:
-        url, _, nome = alvo.partition('=')
-        nome = nome or url
+    for url, nome in alvos:
         try:
             resultados.append(analisar_ambiente(nome, url))
-        except Exception as exc:  # noqa: BLE001 - relatorio nao deve derrubar por 1 ambiente fora do ar
+        except Exception as exc:  # noqa: BLE001 - um ambiente indisponível não derruba o relatório
             resultados.append({'ambiente': nome, 'api_url': url, 'erro': str(exc)})
 
     print('# Relatorio de requisitos pendentes de triagem (Qualidade IA)\n')

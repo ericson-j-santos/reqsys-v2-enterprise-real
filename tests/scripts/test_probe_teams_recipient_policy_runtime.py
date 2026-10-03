@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from io import BytesIO
 import json
+from io import BytesIO
 from urllib.error import HTTPError
+
+import pytest
 
 from scripts.probe_teams_recipient_policy_runtime import build_report, probe_policy
 
@@ -33,7 +35,7 @@ def test_probe_confirma_endpoint_e_dry_run() -> None:
         return _Response({"success": True, "data": {"dry_run": True, "entregue": False}})
 
     result = probe_policy(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://api.example.net",
         policy="hitl-approvers",
         opener=opener,
     )
@@ -50,7 +52,7 @@ def test_probe_http_200_sem_confirmacao_nao_declara_prontidao() -> None:
         return _Response({"success": True, "data": {"entregue": False}})
 
     result = probe_policy(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://api.example.net",
         policy="hitl-approvers",
         opener=opener,
     )
@@ -72,7 +74,7 @@ def test_probe_404_mantem_fallback_legado() -> None:
         )
 
     result = probe_policy(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://api.example.net",
         policy="reqsys-operations",
         opener=opener,
     )
@@ -101,7 +103,7 @@ def test_report_exige_todas_as_politicas_prontas() -> None:
         )
 
     report = build_report(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://api.example.net",
         policies=["hitl-approvers", "reqsys-operations"],
         opener=opener,
     )
@@ -117,3 +119,21 @@ def test_report_exige_todas_as_politicas_prontas() -> None:
     assert report["decision"] == "keep_legacy_fallback"
     assert report["automatic_change_allowed"] is False
     assert report["production_touched"] is False
+
+
+def test_probe_rejects_fly_before_opener() -> None:
+    called = False
+
+    def opener(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("network must not be called")
+
+    with pytest.raises(ValueError, match="retirado definitivamente"):
+        probe_policy(
+            base_url="https://legacy.fly.dev",
+            policy="hitl-approvers",
+            opener=opener,
+        )
+
+    assert called is False

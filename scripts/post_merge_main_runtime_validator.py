@@ -14,6 +14,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/post_merge_main_runtime_validator.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEFAULT_SMOKE = "artifacts/runtime-production-smoke-governed.json"
 DEFAULT_EXECUTIVE = "artifacts/executive-runtime-evidence-summary/executive-runtime-evidence-summary.json"
 DEFAULT_OUTPUT = "artifacts/post-merge-main-runtime-validator/post-merge-main-runtime-validator.json"
@@ -43,6 +48,7 @@ def validate_smoke(smoke: dict[str, Any]) -> dict[str, Any]:
             "ok": False,
             "detail": "runtime smoke artifact missing",
         }
+    base_url = require_authorized_runtime_url(smoke.get("base_url"), label="runtime smoke base_url")
     required_ok = int(smoke.get("required_ok") or 0)
     required_total = int(smoke.get("required_total") or 0)
     status = _status(smoke.get("status"))
@@ -52,7 +58,7 @@ def validate_smoke(smoke: dict[str, Any]) -> dict[str, Any]:
         "status": "passed" if ok else "blocked",
         "ok": ok,
         "detail": f"status={status} required={required_ok}/{required_total}",
-        "base_url": smoke.get("base_url") or "",
+        "base_url": base_url,
         "required_success_percentual": smoke.get("required_success_percentual", 0),
     }
 
@@ -133,7 +139,7 @@ def build_report(smoke: dict[str, Any], executive: dict[str, Any], *, repo: str,
         "links": {
             "repository": f"https://github.com/{repo}" if repo else "",
             "actions": f"https://github.com/{repo}/actions" if repo else "",
-            "runtime_public_url": smoke.get("base_url") or "https://reqsys-app.fly.dev",
+            "runtime_public_url": checks[0].get("base_url") or "",
         },
         "guardrails": [
             "post_merge_main_scope",

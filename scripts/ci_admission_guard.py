@@ -19,6 +19,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 WORKFLOW_NAME = "Pre-PR Readiness Gate"
+WORKFLOW_FILE = "pre-pr-readiness.yml"
 MANIFEST_SCHEMA_VERSION = "1.1.0"
 REQUIRED_PREVENTIVE_INVARIANTS = {
     "sdd:contract",
@@ -234,7 +235,8 @@ def assert_base_freshness(repository: str, base_ref: str, head_sha: str, token: 
 
 def verify_evidence(repository: str, head_sha: str, base_sha: str, token: str) -> dict[str, Any]:
     query = urlencode({"head_sha": head_sha, "per_page": 100})
-    runs_payload = github_json(repository, f"actions/runs?{query}", token)
+    workflow = quote(WORKFLOW_FILE, safe="")
+    runs_payload = github_json(repository, f"actions/workflows/{workflow}/runs?{query}", token)
     runs = runs_payload.get("workflow_runs") if isinstance(runs_payload.get("workflow_runs"), list) else []
     matching = [
         run for run in runs

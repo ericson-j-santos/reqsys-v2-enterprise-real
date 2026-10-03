@@ -144,7 +144,11 @@ def validate() -> list[str]:
         errors.append("backend_dev_catalog_not_pc24x7")
 
     msal = read("frontend/scripts/setup-msal-storage-state.mjs")
-    if "resolveDevRuntime" not in msal or "Runtime legado Fly.io é proibido" not in msal:
+    if (
+        "resolveDevRuntime" not in msal
+        or "requireProviderNeutralHttpsUrl" not in msal
+        or "./runtime-url-policy.mjs" not in msal
+    ):
         errors.append("msal_dev_runtime_not_fail_closed")
 
     return errors

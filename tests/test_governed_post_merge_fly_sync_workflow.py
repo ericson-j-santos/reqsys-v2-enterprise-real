@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 WORKFLOW = Path(".github/workflows/governed-post-merge-fly-sync.yml")
 
 
@@ -15,8 +14,8 @@ def test_observa_fly_enterprise_sync_concluido_na_main() -> None:
     assert 'workflows: ["Governed PR Automation"]' not in text
     assert "types: [completed]" in text
     assert "branches: [main]" in text
-    assert "github.event.workflow_run.conclusion == 'success'" in text
-    assert "github.event.workflow_run.event == 'push'" in text
+    publication = text.split("\n  publication-readiness:\n", 1)[1]
+    assert "if: ${{ false }}" in publication
 
 
 def test_tem_fallback_direto_para_push_na_main() -> None:

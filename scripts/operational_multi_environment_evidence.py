@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
-"""Consolidate multi-environment operational evidence (report-only).
-
-Merges environment readiness probes with Fly canonical matrix into a single
-artifact for dashboards, coordenador and drift analysis.
-"""
+"""Consolidate current provider-neutral environment probes (report-only)."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -39,20 +34,13 @@ def normalize_env_name(name: str) -> str:
     return ENV_ALIAS.get(name.strip().lower(), name.strip().lower())
 
 
-def normalize_api_base(url: str) -> str:
-    """Compare probe OpenAPI docs URL with manifest api_url base."""
-    return url.rstrip("/").removesuffix("/docs")
-
-
 def build_env_entry(
     canonical: str,
     probe: dict[str, Any] | None,
-    fly_env: dict[str, Any] | None,
 ) -> dict[str, Any]:
     entry: dict[str, Any] = {
         "canonical": canonical,
         "probe_available": probe is not None,
-        "fly_matrix_available": fly_env is not None,
     }
     if probe:
         entry.update(
@@ -65,33 +53,14 @@ def build_env_entry(
                 "api_url": probe.get("api"),
             }
         )
-    if fly_env:
-        entry.update(
-            {
-                "fly_api_url": fly_env.get("api_url"),
-                "fly_frontend_url": fly_env.get("frontend_url"),
-                "app_env": fly_env.get("app_env"),
-                "smoke_endpoints": fly_env.get("smoke_endpoints", []),
-            }
-        )
-    if probe and fly_env:
-        api_match = normalize_api_base(probe.get("api") or "") == normalize_api_base(
-            fly_env.get("api_url") or ""
-        )
-        frontend_match = (probe.get("frontend") or "").rstrip("/") == (
-            fly_env.get("frontend_url") or ""
-        ).rstrip("/")
-        entry["url_matrix_aligned"] = api_match and frontend_match
-    else:
-        entry["url_matrix_aligned"] = None
     return entry
 
 
 def consolidate(
     environments_validation: dict[str, Any],
-    fly_matrix: dict[str, Any],
     commit_sha: str,
     correlation_id: str | None = None,
+    historical_offline_fly_matrix: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     probes_by_canonical: dict[str, dict[str, Any]] = {}
     for env in environments_validation.get("environments") or []:
@@ -102,16 +71,15 @@ def consolidate(
             canonical = normalize_env_name(str(env.get("name") or ""))
         probes_by_canonical[canonical] = env
 
-    fly_envs = (fly_matrix.get("environments") or {}) if isinstance(fly_matrix, dict) else {}
-    canonical_keys = sorted(set(probes_by_canonical) | set(fly_envs))
+    canonical_keys = sorted(probes_by_canonical)
     environments = [
-        build_env_entry(key, probes_by_canonical.get(key), fly_envs.get(key))
+        build_env_entry(key, probes_by_canonical.get(key))
         for key in canonical_keys
     ]
 
     ready = sum(1 for item in environments if item.get("status") == "ready")
     degraded = sum(1 for item in environments if item.get("status") == "degraded")
-    misaligned = sum(1 for item in environments if item.get("url_matrix_aligned") is False)
+    misaligned = 0
 
     if misaligned > 0 or degraded > 0:
         status = "degraded"
@@ -143,16 +111,28 @@ def consolidate(
             "ready": ready,
             "degraded": degraded,
             "url_matrix_misaligned": misaligned,
-            "promotion_order": fly_matrix.get("promotion_order") or ["dev", "hml", "prod"],
+            "promotion_order": ["dev", "hml", "prod"],
             "overall_probe_status": summary_probe.get("overall_status"),
         },
         "environments": environments,
+        "historical_offline_reference": _historical_offline_reference(historical_offline_fly_matrix),
         "guardrails": [
             "read_only",
             "non_blocking",
             "no_auto_promotion",
             "human_review_required",
         ],
+    }
+
+
+def _historical_offline_reference(matrix: dict[str, Any] | None) -> dict[str, Any] | None:
+    if matrix is None:
+        return None
+    if matrix.get("historical") is not True or matrix.get("offline") is not True:
+        raise ValueError("matriz legada só pode ser lida com historical=true e offline=true")
+    return {
+        "classification": "historical_offline",
+        "environments": matrix.get("environments") or {},
     }
 
 
@@ -163,19 +143,23 @@ def main() -> int:
         type=Path,
         default=Path("docs/ops-dashboard/data/environments-validation.json"),
     )
-    parser.add_argument("--fly-matrix", type=Path, default=Path("infra/fly-environments.json"))
+    parser.add_argument("--historical-offline-fly-matrix", type=Path)
     parser.add_argument("--commit-sha", default="local")
     parser.add_argument("--correlation-id", default="")
     parser.add_argument("--out-dir", type=Path, default=Path("artifacts/operational-multi-environment"))
     args = parser.parse_args()
 
     env_validation = load_json(args.environments_validation, {"environments": [], "summary": {}})
-    fly_matrix = load_json(args.fly_matrix, {"environments": {}})
+    legacy_matrix = (
+        load_json(args.historical_offline_fly_matrix, {})
+        if args.historical_offline_fly_matrix
+        else None
+    )
     report = consolidate(
         env_validation,
-        fly_matrix,
         args.commit_sha,
         args.correlation_id or None,
+        legacy_matrix,
     )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)

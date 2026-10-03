@@ -108,7 +108,7 @@ def test_dev_pc24x7_requires_fresh_same_sha_evidence():
     assert "source_commit_mismatch" in result["findings"]
 
 
-def test_pc24x7_missing_evidence_fails_closed_and_fly_is_explicit_transition():
+def test_pc24x7_missing_evidence_and_fly_retirement_fail_closed():
     missing = resolver.resolve_provider(
         "dev",
         "pc24x7",
@@ -119,9 +119,9 @@ def test_pc24x7_missing_evidence_fails_closed_and_fly_is_explicit_transition():
     assert missing["findings"] == ["pc24x7_evidence_missing"]
 
     fly = resolver.resolve_provider("dev", "fly", expected_sha="abc123")
-    assert fly["allowed"] is True
+    assert fly["allowed"] is False
     assert fly["provider"] == "fly"
-    assert fly["findings"] == ["transitional_fly_provider"]
+    assert fly["findings"] == ["flyio_permanently_retired"]
 
 
 def test_pc24x7_is_rejected_outside_dev():
