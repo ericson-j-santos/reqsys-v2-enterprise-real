@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ReqSys Runtime Operational Center P0</title>
+  <meta name="description" content="Centro operacional do ReqSys com health, ambientes, timeline, indicadores e arquitetura viva.">
+  <link rel="stylesheet" href="./runtime-center.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="../index.html"><span class="brand-mark">R</span><span>ReqSys</span></a>
+    <nav aria-label="Navegacao operacional">
+      <a href="#health">Health</a>
+      <a href="#timeline">Timeline</a>
+      <a href="#analytics">Analytics</a>
+      <a href="#architecture">Arquitetura</a>
+      <a href="#incidents">Incidentes</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Modo de Consolidacao Operacional</p>
+        <h1>Runtime Operational Center P0</h1>
+        <p class="lead">Primeiro corte vertical renderizavel para visualizar saude, ambientes, eventos, indicadores, arquitetura viva e incidentes do ReqSys.</p>
+        <div class="actions">
+          <a class="button primary" href="#health">Ver operacao</a>
+          <a class="button secondary" href="./runtime-health.contract.json">Contrato runtime</a>
+        </div>
+      </div>
+      <aside class="hero-panel" aria-label="Resumo operacional">
+        <div class="hero-metric"><span>Maturidade operacional</span><strong>Consolidando P0</strong></div>
+        <div class="hero-metric active"><span>Foco atual</span><strong>Tela + Evidencia</strong></div>
+        <div class="hero-metric"><span>Proximo apos estabilizar</span><strong>Self-Healing Runtime</strong></div>
+      </aside>
+    </section>
+    <section class="toolbar" aria-label="Contexto de ambiente">
+      <div><span class="label">Ambiente</span><div class="segmented"><button class="active">DEV</button><button>HOMOLOG</button><button>PROD</button></div></div>
+      <div class="context-card"><span>correlation_id</span><strong>rtc-p0-20260621</strong></div>
+      <div class="context-card"><span>Atualizacao</span><strong>2026-06-21 BRT</strong></div>
+    </section>
+    <section id="health" class="section">
+      <div class="section-title"><p class="eyebrow">Runtime Health</p><h2>Health cards operacionais</h2></div>
+      <div class="health-grid">
+        <article class="health-card ok"><span>CI/CD</span><strong>Healthy</strong><small>Esteira preparada</small></article>
+        <article class="health-card ok"><span>Deploy</span><strong>Online</strong><small>Showcase publico disponivel</small></article>
+        <article class="health-card warn"><span>Auth</span><strong>Monitorar</strong><small>Fluxo real ainda exige validacao</small></article>
+        <article class="health-card ok"><span>API</span><strong>Ready</strong><small>Contrato P0 preparado</small></article>
+        <article class="health-card ok"><span>Observabilidade</span><strong>Ativa P0</strong><small>Eventos minimos definidos</small></article>
+        <article class="health-card warn"><span>RAG/IA</span><strong>Stand-by</strong><small>Conexao real fora do P0 publico</small></article>
+      </div>
+    </section>
+    <section id="timeline" class="section split">
+      <div><p class="eyebrow">Operational Timeline</p><h2>Linha do tempo viva</h2><p>Eventos iniciais controlados para validar navegacao operacional antes da conexao com fontes reais.</p></div>
+      <ol class="event-list"><li><time>18:42</time><strong>Branch criada</strong><span>Runtime Center P0 iniciado em branch isolada.</span></li><li><time>18:57</time><strong>Tela operacional criada</strong><span>Health, analytics, arquitetura e incidentes renderizados.</span></li><li><time>19:05</time><strong>Contrato runtime definido</strong><span>JSON preparado para futura API real.</span></li><li><time>19:12</time><strong>Validacao E2E adicionada</strong><span>Playwright verifica renderizacao e responsividade minima.</span></li></ol>
+    </section>
+    <section id="analytics" class="section"><div class="section-title"><p class="eyebrow">Executive Analytics</p><h2>Indicadores executivos P0</h2></div><div class="kpi-grid"><article class="kpi"><span>Runtime Availability</span><strong>99.0%</strong><small>alvo P0</small></article><article class="kpi"><span>CI Success Rate</span><strong>&gt;= 95%</strong><small>meta apos estabilizacao</small></article><article class="kpi"><span>MTTR</span><strong>&lt; 30m</strong><small>meta operacional</small></article><article class="kpi"><span>Incidentes criticos</span><strong>0</strong><small>bloqueio de publicacao</small></article></div></section>
+    <section id="architecture" class="section"><div class="section-title"><p class="eyebrow">Living Architecture</p><h2>Arquitetura viva navegavel</h2></div><div class="architecture-map"><div class="node">Frontend publico</div><div class="edge">→</div><div class="node">Runtime Center</div><div class="edge">→</div><div class="node">Contrato JSON</div><div class="edge">→</div><div class="node">Fontes reais futuras</div></div></section>
+    <section id="incidents" class="section split"><div><p class="eyebrow">Incident Center</p><h2>Centro de incidentes P0</h2><p>Pendencias permanecem visiveis ate validacao real.</p></div><div class="incident-panel"><article><span class="badge warn">Atencao</span><strong>Auth/MSAL</strong><p>Requer validacao com fluxo real de login antes de declarar saudavel.</p></article><article><span class="badge warn">Atencao</span><strong>CI intermitente</strong><p>Manter PR em draft ate evidencia de esteira verde.</p></article><article><span class="badge ok">OK</span><strong>Material publico controlado</strong><p>Tela voltada a demonstracao operacional P0.</p></article></div></section>
+  </main>
+  <footer class="footer"><strong>ReqSys Runtime Center P0</strong><span>Integracoes reais devem entrar por contrato runtime governado.</span></footer>
+</body>
+</html>
