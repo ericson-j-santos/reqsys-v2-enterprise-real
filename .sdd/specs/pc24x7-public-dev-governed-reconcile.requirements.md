@@ -19,8 +19,10 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
    `docker-compose.pages-stable.override.yml` podem ser reutilizados. Compose base,
    DEV, Cofre, Teams e frontend público devem vir do worktree governado.
 5. O workflow deve autenticar por OIDC no environment `development` e reutilizar
-   `reqsys-teams-bot-dev-secret` do Key Vault pelo carregador existente. Não é
-   permitido criar, rotacionar, imprimir ou persistir o valor.
+   `reqsys-teams-bot-dev-secret` do Key Vault pelo carregador existente. A
+   permissão `id-token: write` fica limitada ao job de reconciliação; o smoke
+   público recebe somente `contents: read`. Não é permitido criar, rotacionar,
+   imprimir ou persistir o valor.
 6. Falhas dos comandos Compose executados com credencial devem produzir somente
    erro sanitizado, sem stdout ou stderr do processo sensível.
 7. A reconciliação deve recriar apenas `api`, `frontend` e `nginx` do projeto DEV,
@@ -34,7 +36,7 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
 - o plano Compose real valida com `config --quiet` a partir do worktree limpo;
 - a árvore suja original permanece suja e inalterada antes e depois do preflight;
 - testes cobrem criação/reuso do worktree, allowlist de overrides, injeção efêmera
-  do segredo e redação de erro sensível;
+  do segredo, redação de erro sensível e menor privilégio por job;
 - todos os actions externos do workflow ficam presos a SHAs imutáveis;
 - o artifact declara `production_touched=false` e `secret_value_exposed=false`;
 - o smoke independente confirma o mesmo SHA publicado antes de considerar DEV pronto.

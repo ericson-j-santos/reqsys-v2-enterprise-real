@@ -123,6 +123,12 @@
     "minimum_remaining_ttl_seconds": 300,
     "fixed_transport": "ntfy_signed_ed25519",
     "post_attempts": 1,
+    "readback_max_attempts": 6,
+    "readback_delay_seconds": 2,
+    "readback_request_max_seconds": 5,
+    "readback_deadline_seconds": 40,
+    "readback_filters_by_publish_response_id": true,
+    "readback_only_retry": true,
     "exact_readback_required": true,
     "fail_closed": true
   },
