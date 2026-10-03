@@ -3,7 +3,6 @@
 from __future__ import annotations
 import argparse
 import datetime as dt
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -30,14 +29,14 @@ def collect() -> dict:
                     files.append({"name": file.relative_to(root).as_posix(),
                                   "size": file.stat().st_size})
     manifests = []
-    for filename in ("reqsys-dev-manifest.json", "evidence.json", "restore-evidence.json"):
+    for filename in ("reqsys-dev-manifest.json", "encrypted-backup-evidence.json", "evidence.json", "restore-evidence.json"):
         path = root / filename
         if path.is_file() and not path.is_symlink() and path.stat().st_size <= 65536:
             try:
                 data = json.loads(path.read_text(encoding="utf-8-sig"))
                 safe = {"name": filename, "top_level_fields": sorted(data) if isinstance(data, dict) else []}
                 if isinstance(data, dict):
-                    for key in ("sha256", "snapshot", "snapshot_id", "restored_sha256"):
+                    for key in ("sha256", "snapshot", "snapshot_id", "restic_snapshot", "restored_sha256"):
                         value = data.get(key)
                         if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value):
                             safe[key] = value
