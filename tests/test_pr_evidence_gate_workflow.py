@@ -44,11 +44,12 @@ def test_pr_evidence_gate_lists_artifacts_only_after_gate_passes():
     assert polling_index < artifact_index
 
 
-def test_pr_evidence_gate_uses_single_page_workflow_lookup():
+def test_pr_evidence_gate_paginates_workflow_lookup():
     text = read_workflow()
 
     assert 'github.rest.actions.listWorkflowRunsForRepo' in text
-    assert 'github.paginate(github.rest.actions.listWorkflowRunsForRepo' not in text
+    assert 'const runs = await github.paginate(' in text
+    assert '(response) => response.data.workflow_runs || []' in text
     assert "event: 'pull_request'" in text
     assert 'per_page: 100' in text
 
