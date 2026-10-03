@@ -31,6 +31,7 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/painel-integracao', testId: 'route-painel-integracao', titulo: 'Painel de integração' },
   { path: '/integracoes/pentaho', testId: 'route-integracoes-pentaho', titulo: 'Integrações Pentaho' },
   { path: '/arquitetura', testId: 'route-arquitetura', titulo: 'Arquitetura' },
+  { path: '/arquitetura-viva', testId: 'route-arquitetura-viva', titulo: 'Arquitetura Viva' },
   { path: '/govbi-ia', testId: 'route-govbi-ia', titulo: 'GovBI IA' },
   { path: '/codex', testId: 'route-codex', titulo: 'Codex controlado' },
   { path: '/monitoramento-operacional', testId: 'route-monitoramento-operacional', titulo: 'Monitoramento operacional' },
