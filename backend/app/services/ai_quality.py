@@ -6,7 +6,8 @@ from sqlalchemy import func
 
 from app.models.ai_quality import QualidadeIASnapshot
 from app.models.auditoria import AuditoriaEvento
-from app.models.requisito import Requisito
+from app.repositories.requisito_repository import RequisitoRepository
+from app.services.requisitos_metricas import calcular_metricas_requisitos
 
 
 def _safe_pct(value: int, total: int) -> float:
@@ -20,25 +21,13 @@ def _clip(score: float) -> float:
 
 
 def calcular_resumo_qualidade_ia(db):
-    total = db.query(Requisito).count()
+    metricas_requisitos = calcular_metricas_requisitos(db)
+    total = metricas_requisitos['total']
+    aprovados = metricas_requisitos['aprovados']
+    em_analise = metricas_requisitos['em_analise']
+    pendentes = metricas_requisitos['pendentes']
 
-    aprovados = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).in_(['aprovado', 'aprovados', 'concluido', 'concluida']))
-        .count()
-    )
-    em_analise = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).like('%analise%'))
-        .count()
-    )
-    pendentes = max(total - aprovados, 0)
-
-    cobertura_dados = (
-        db.query(Requisito)
-        .filter(func.length(func.coalesce(Requisito.descricao, '')) >= 40)
-        .count()
-    )
+    cobertura_dados = RequisitoRepository(db).contar_com_descricao_minima(40)
 
     sete_dias_atras = datetime.now(timezone.utc) - timedelta(days=7)
     acao_normalizada = func.lower(func.coalesce(AuditoriaEvento.acao, ''))

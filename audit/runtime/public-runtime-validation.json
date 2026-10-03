@@ -1,0 +1,305 @@
+{
+  "schema_version": "1.3.0",
+  "contract": "public-runtime-smoke-readiness",
+  "environment": "canonical",
+  "base_url": "http://127.0.0.1:8000",
+  "validated_at_epoch": 1782702654,
+  "total": 4,
+  "ok": 4,
+  "failed": 0,
+  "success_percentual": 100.0,
+  "optional_total": 9,
+  "optional_ok": 9,
+  "optional_failed": 0,
+  "optional_success_percentual": 100.0,
+  "required_endpoints": [
+    "/health",
+    "/api/runtime/health",
+    "/api/runtime/readiness",
+    "/api/runtime/liveness"
+  ],
+  "optional_evidence_endpoints": [
+    "/",
+    "/runtime",
+    "/api/runtime/contracts",
+    "/api/runtime/version",
+    "/api/runtime/build-info",
+    "/api/runtime/dependencies",
+    "/api/runtime/metrics",
+    "/api/runtime/dashboard",
+    "/api/runtime/analytics"
+  ],
+  "checks": {
+    "frontend_loading": true,
+    "assets": true,
+    "cors_basic": false,
+    "incident_timeline": true
+  },
+  "readiness": {
+    "environment": "canonical",
+    "base_url": "http://127.0.0.1:8000",
+    "reachable": true,
+    "response_time": 3.23,
+    "dashboard_ready": true,
+    "login_ready": false,
+    "api_ready": true,
+    "runtime_ready": true,
+    "evidence_ready": true,
+    "operational_status": "healthy",
+    "readiness_percent": 100.0,
+    "blocking_issues": [],
+    "next_actions": []
+  },
+  "results": [
+    {
+      "endpoint": "/health",
+      "url": "http://127.0.0.1:8000/health",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 19,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/health",
+      "url": "http://127.0.0.1:8000/api/runtime/health",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 2,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": true,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/readiness",
+      "url": "http://127.0.0.1:8000/api/runtime/readiness",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 2,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": true,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/liveness",
+      "url": "http://127.0.0.1:8000/api/runtime/liveness",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 1,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/",
+      "url": "http://127.0.0.1:8000/",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 2,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": true,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/runtime",
+      "url": "http://127.0.0.1:8000/runtime",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 2,
+      "content_type": "text/html; charset=utf-8",
+      "error": null,
+      "payload_keys": null,
+      "cors_allow_origin": null,
+      "has_asset_reference": true,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/contracts",
+      "url": "http://127.0.0.1:8000/api/runtime/contracts",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 1,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/version",
+      "url": "http://127.0.0.1:8000/api/runtime/version",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 2,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/build-info",
+      "url": "http://127.0.0.1:8000/api/runtime/build-info",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 1,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/dependencies",
+      "url": "http://127.0.0.1:8000/api/runtime/dependencies",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 1,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/metrics",
+      "url": "http://127.0.0.1:8000/api/runtime/metrics",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 1,
+      "content_type": "text/plain; version=0.0.4; charset=utf-8",
+      "error": null,
+      "payload_keys": null,
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": false,
+      "has_incident_marker": false,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/dashboard",
+      "url": "http://127.0.0.1:8000/api/runtime/dashboard",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 3,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": true,
+      "has_incident_marker": true,
+      "has_login_marker": false
+    },
+    {
+      "endpoint": "/api/runtime/analytics",
+      "url": "http://127.0.0.1:8000/api/runtime/analytics",
+      "ok": true,
+      "status_code": 200,
+      "elapsed_ms": 5,
+      "content_type": "application/json",
+      "error": null,
+      "payload_keys": [
+        "data",
+        "errors",
+        "meta",
+        "success"
+      ],
+      "cors_allow_origin": null,
+      "has_asset_reference": false,
+      "has_runtime_dashboard_marker": true,
+      "has_incident_marker": true,
+      "has_login_marker": false
+    }
+  ]
+}

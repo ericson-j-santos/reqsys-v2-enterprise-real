@@ -1,6 +1,9 @@
 name: Actions Dispatcher — ReqSys
 
 on:
+  repository_dispatch:
+    types:
+      - governed_post_merge_validation
   workflow_dispatch:
     inputs:
       ref:
@@ -8,35 +11,44 @@ on:
         required: false
         default: "main"
       mode:
-        description: "Modo de disparo: all ou essential"
+        description: "Modo de disparo: all, essential ou post-merge"
         required: false
         default: "essential"
-  push:
-    branches: [main]
-  pull_request:
-    types: [closed]
-    branches: [main]
+      merge_sha:
+        description: "Merge SHA para recuperação post-merge"
+        required: false
+      pr_number:
+        description: "PR mergeada para recuperação post-merge"
+        required: false
+      head_sha:
+        description: "HEAD pré-merge para recuperação post-merge"
+        required: false
+      test_case:
+        description: "Controle interno: normal, replay ou missing-required-workflow"
+        required: false
+        default: "normal"
 
 permissions:
   actions: write
-  contents: read
+  contents: write
+  pull-requests: read
 
 concurrency:
-  group: actions-dispatcher-${{ github.ref }}
+  group: actions-dispatcher-${{ github.event.client_payload.merge_sha || github.event.inputs.merge_sha || github.event.inputs.ref || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   dispatch:
-    name: Disparar workflows governados
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'post-merge'
+    name: Disparar workflows governados manualmente
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     steps:
       - name: Definir alvo e modo
         id: config
         shell: bash
         run: |
           set -euo pipefail
-          REF="${{ github.event.inputs.ref || github.ref_name || 'main' }}"
+          REF="${{ github.event.inputs.ref || 'main' }}"
           MODE="${{ github.event.inputs.mode || 'essential' }}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
@@ -76,6 +88,8 @@ jobs:
 
           echo "## Actions Dispatcher" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Execução somente manual; gatilhos automáticos redundantes foram removidos." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Ref | $TARGET_REF |" >> "$GITHUB_STEP_SUMMARY"
@@ -103,3 +117,265 @@ jobs:
             echo "Dispatcher concluiu com $failures falha(s) de disparo. Verifique se os workflows possuem workflow_dispatch habilitado." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+
+  materialize-post-merge:
+    if: github.event_name == 'repository_dispatch' || github.event.inputs.mode == 'post-merge'
+    name: Materialize exact-SHA post-merge evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Dispatch, wait, validate and clean temporary ref
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const fs = require('fs');
+            const payload = context.eventName === 'repository_dispatch'
+              ? (context.payload.client_payload || {})
+              : (context.payload.inputs || {});
+
+            const mergeSha = String(payload.merge_sha || '').trim().toLowerCase();
+            const headSha = String(payload.head_sha || '').trim().toLowerCase();
+            const prNumber = Number(payload.pr_number);
+            const testCase = String(payload.test_case || 'normal').trim();
+            const allowedTestCases = new Set(['normal', 'replay', 'missing-required-workflow']);
+            const shaPattern = /^[0-9a-f]{40}$/;
+            const evidence = {
+              schema_version: '1.0.0',
+              generated_at: new Date().toISOString(),
+              repository: context.repo.owner + '/' + context.repo.repo,
+              event_name: context.eventName,
+              merge_sha: mergeSha,
+              head_sha: headSha,
+              pr_number: prNumber,
+              test_case: testCase,
+              required_workflows: [],
+              main_validation: null,
+              dispatches_created: [],
+              reused_run_ids: [],
+              negative_control_detected: false,
+              temporary_ref: null,
+              replay_safe: true,
+              production_touched: false,
+              secrets_exposed: false,
+              status: 'running',
+            };
+
+            fs.mkdirSync('audit', { recursive: true });
+            const required = [
+              { file: 'ci.yml', name: 'CI — ReqSys v2 Enterprise' },
+              { file: 'governance-quality-gates.yml', name: 'Governance Quality Gates' },
+              { file: 'governanca-padrao-ouro.yml', name: 'Governança Padrão Ouro' },
+            ];
+            if (testCase === 'missing-required-workflow') {
+              required.push({
+                file: '__missing-required-workflow-control__.yml',
+                name: 'Missing Required Workflow — negative control',
+                negative_control: true,
+              });
+            }
+            const mainValidation = {
+              file: 'main-post-merge-validation.yml',
+              name: 'Main Post-Merge Validation',
+            };
+            const maxWaitMs = 20 * 60 * 1000;
+            const pollMs = 10000;
+            const temporaryBranch = 'post-merge-validation/' + mergeSha;
+            const temporaryRef = 'heads/' + temporaryBranch;
+            const { owner, repo } = context.repo;
+            let refReady = false;
+
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            async function listRuns() {
+              return await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                owner,
+                repo,
+                head_sha: mergeSha,
+                per_page: 100,
+              });
+            }
+
+            function matchingRuns(runs, workflowName, requiredEvent = null) {
+              return runs
+                .filter((run) => run.name === workflowName)
+                .filter((run) => requiredEvent === null || run.event === requiredEvent)
+                .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+            }
+
+            function classify(matches) {
+              const success = matches.find(
+                (run) => run.status === 'completed' && run.conclusion === 'success'
+              );
+              if (success) return { state: 'success', run: success };
+              const active = matches.find((run) => run.status !== 'completed');
+              if (active) return { state: 'active', run: active };
+              if (matches.length > 0) return { state: 'failed', run: matches[0] };
+              return { state: 'missing', run: null };
+            }
+
+            async function waitFor(workflows, requiredEvent = null) {
+              const deadline = Date.now() + maxWaitMs;
+              while (Date.now() < deadline) {
+                const runs = await listRuns();
+                const states = workflows.map((workflow) => {
+                  const matches = matchingRuns(runs, workflow.name, requiredEvent);
+                  return { workflow, ...classify(matches) };
+                });
+                const failed = states.find((item) => item.state === 'failed');
+                if (failed) {
+                  throw new Error(
+                    'POST_MERGE_WORKFLOW_FAILED ' + failed.workflow.name +
+                    ' run=' + failed.run.id +
+                    ' conclusion=' + String(failed.run.conclusion)
+                  );
+                }
+                if (states.every((item) => item.state === 'success')) return states;
+                await sleep(pollMs);
+              }
+              throw new Error('POST_MERGE_WORKFLOW_TIMEOUT');
+            }
+
+            try {
+              if (!shaPattern.test(mergeSha)) throw new Error('MERGE_SHA_INVALID');
+              if (!shaPattern.test(headSha)) throw new Error('HEAD_SHA_INVALID');
+              if (!Number.isInteger(prNumber) || prNumber <= 0) throw new Error('PR_NUMBER_INVALID');
+              if (!allowedTestCases.has(testCase)) throw new Error('TEST_CASE_INVALID');
+
+              const { data: pr } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+              if (!pr.merged) throw new Error('PR_NOT_MERGED');
+              if (String(pr.merge_commit_sha || '').toLowerCase() !== mergeSha) {
+                throw new Error('MERGE_SHA_DOES_NOT_MATCH_PR');
+              }
+              if (String(pr.head.sha || '').toLowerCase() !== headSha) {
+                throw new Error('HEAD_SHA_DOES_NOT_MATCH_PR');
+              }
+
+              try {
+                const existing = await github.rest.git.getRef({ owner, repo, ref: temporaryRef });
+                if (String(existing.data.object.sha || '').toLowerCase() !== mergeSha) {
+                  throw new Error('TEMP_REF_SHA_MISMATCH');
+                }
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: 'refs/' + temporaryRef,
+                  sha: mergeSha,
+                });
+              }
+              refReady = true;
+              evidence.temporary_ref = temporaryBranch;
+
+              let runs = await listRuns();
+              for (const workflow of required) {
+                const state = classify(matchingRuns(runs, workflow.name));
+                if (state.state === 'failed') {
+                  throw new Error('EXISTING_POST_MERGE_FAILURE ' + workflow.name + ' run=' + state.run.id);
+                }
+                if (state.state === 'success') {
+                  evidence.reused_run_ids.push(state.run.id);
+                  continue;
+                }
+                if (state.state === 'missing' && workflow.negative_control === true) {
+                  throw new Error('NEGATIVE_CONTROL_REQUIRED_WORKFLOW_MISSING');
+                }
+                if (state.state === 'missing') {
+                  await github.rest.actions.createWorkflowDispatch({
+                    owner,
+                    repo,
+                    workflow_id: workflow.file,
+                    ref: temporaryBranch,
+                  });
+                  evidence.dispatches_created.push(workflow.name);
+                }
+              }
+
+              const requiredStates = await waitFor(required);
+              evidence.required_workflows = requiredStates.map((item) => ({
+                name: item.workflow.name,
+                run_id: item.run.id,
+                event: item.run.event,
+                conclusion: item.run.conclusion,
+                head_sha: item.run.head_sha,
+                html_url: item.run.html_url,
+              }));
+
+              runs = await listRuns();
+              const existingMain = classify(matchingRuns(runs, mainValidation.name, 'workflow_dispatch'));
+              if (existingMain.state === 'failed') {
+                throw new Error('EXISTING_MAIN_VALIDATION_FAILURE run=' + existingMain.run.id);
+              }
+              if (existingMain.state === 'success') {
+                evidence.reused_run_ids.push(existingMain.run.id);
+              }
+              if (existingMain.state === 'missing') {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner,
+                  repo,
+                  workflow_id: mainValidation.file,
+                  ref: temporaryBranch,
+                  inputs: { commit_sha: mergeSha },
+                });
+                evidence.dispatches_created.push(mainValidation.name);
+              }
+
+              const mainStates = await waitFor([mainValidation], 'workflow_dispatch');
+              const mainRun = mainStates[0].run;
+              evidence.main_validation = {
+                name: mainValidation.name,
+                run_id: mainRun.id,
+                event: mainRun.event,
+                conclusion: mainRun.conclusion,
+                head_sha: mainRun.head_sha,
+                html_url: mainRun.html_url,
+              };
+              evidence.status = 'passed';
+            } catch (error) {
+              evidence.status = 'failed';
+              evidence.error_code = String(error && error.message ? error.message : error).slice(0, 300);
+              if (evidence.error_code === 'NEGATIVE_CONTROL_REQUIRED_WORKFLOW_MISSING') {
+                evidence.negative_control_detected = true;
+              }
+              core.setFailed(evidence.error_code);
+            } finally {
+              if (refReady) {
+                try {
+                  const current = await github.rest.git.getRef({ owner, repo, ref: temporaryRef });
+                  if (String(current.data.object.sha || '').toLowerCase() === mergeSha) {
+                    await github.rest.git.deleteRef({ owner, repo, ref: temporaryRef });
+                    evidence.temporary_ref_removed = true;
+                  } else {
+                    evidence.temporary_ref_removed = false;
+                    evidence.cleanup_error = 'TEMP_REF_SHA_CHANGED';
+                    core.setFailed(evidence.cleanup_error);
+                  }
+                } catch (error) {
+                  if (error.status === 404) {
+                    evidence.temporary_ref_removed = true;
+                  } else {
+                    evidence.temporary_ref_removed = false;
+                    evidence.cleanup_error = 'TEMP_REF_CLEANUP_FAILED';
+                    core.setFailed(evidence.cleanup_error);
+                  }
+                }
+              }
+              evidence.generated_at = new Date().toISOString();
+              fs.writeFileSync(
+                'audit/governed-post-merge-materialization.json',
+                JSON.stringify(evidence, null, 2) + '\n'
+              );
+            }
+
+      - name: Upload governed post-merge evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: governed-post-merge-materialization-${{ github.event.client_payload.merge_sha || github.event.inputs.merge_sha || github.run_id }}
+          path: audit/governed-post-merge-materialization.json
+          if-no-files-found: error
+          retention-days: 30

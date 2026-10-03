@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PC24x7 Teams DEV runtime self-heal before S2S bootstrap",
+  "status": "ready_for_validation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reconcile_pc24x7_teams_dev_runtime.py",
+      "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ]
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/teams-pc24x7-runtime-self-heal.requirements.md",
+    "implementation": "scripts/reconcile_pc24x7_teams_dev_runtime.py",
+    "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    "recreate_runtime": "scripts/recreate_cofre_dev_pc24x7.py",
+    "issues": [
+      1532
+    ],
+    "self_hosted_policy": ".github/self-hosted-runner-policy.json"
+  },
+  "implementation_constraints": {
+    "environment": "dev",
+    "host": "DESKTOP-PDQK954",
+    "compose_project": "wt-pc24x7-piloto",
+    "git_update_strategy": "fast_forward_only",
+    "force_reset_forbidden": true,
+    "secret_source": "azure_key_vault_existing",
+    "secret_value_exposed": false,
+    "production_touched": false
+  },
+  "validation": {
+    "same_sha_build_info": "required",
+    "runtime_health_http_200": "required",
+    "sanitized_artifact": "required",
+    "bootstrap_after_reconcile": "required",
+    "self_hosted_runner_governance": "required"
+  }
+}

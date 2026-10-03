@@ -1,0 +1,588 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github/workflows/reqsys-authorized-actions-gateway.yml"
+
+
+def _workflow() -> str:
+    return WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_gateway_concurrency_is_scoped_per_issue() -> None:
+    content = _workflow()
+    assert "group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}" in content
+    assert "group: reqsys-authorized-actions-gateway\n" not in content
+
+
+def test_gateway_pickup_timeout_is_not_reported_as_runner_unavailable() -> None:
+    content = _workflow()
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "SELF_HOSTED_RUNNER_UNAVAILABLE" not in content
+    assert "wait_seconds=0" in content
+    assert "pickup_timeout_seconds=60" in content
+    assert "poll_seconds=5" in content
+    assert "seq 1 $((pickup_timeout_seconds / poll_seconds))" in content
+    assert "runner_pickup_wait_seconds" in content
+
+
+def test_gateway_restringe_issue_ator_e_comandos_exatos() -> None:
+    content = _workflow()
+
+    assert "github.event.issue.number == 1705" in content
+    assert "github.event.comment.user.login == 'ericson-j-santos'" in content
+    assert "github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev'" in content
+    assert "github.event.comment.body == '/reqsys run fly-dev-fast-deploy'" in content
+    assert "github.event.comment.body == '/reqsys run login-dev-gate'" in content
+    assert "github.event.comment.body == '/reqsys run deploy-pages-current-main'" in content
+    assert "github.event.comment.body == '/reqsys run validate-public-access-current-main'" in content
+    assert "github.event.comment.body == '/reqsys run runtime-e2e-dev'" in content
+    assert "github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch'" in content
+    assert "github.event.comment.body == '/reqsys run bacen-57-simulation-assessment'" in content
+    assert "github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev'" in content
+    assert "github.event.comment.body == '/reqsys run desktop-rdc-recovery'" in content
+    assert "github.event.comment.body == '/reqsys run noteri-control-plane-probe'" in content
+    assert "github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation'" in content
+    assert "github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe'" in content
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap'" in content
+    assert "github.event.comment.body == '/reqsys run codex-ollama-e2e-dev'" in content
+    assert "github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev'" in content
+    assert "github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev'" in content
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-network-probe'" in content
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair'" in content
+    assert "github.event.comment.body == '/reqsys run noteri-alm-runner-bootstrap'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev'" in content
+    assert "github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev'" in content
+
+
+def test_gateway_usa_allowlist_estatica_sem_workflow_arbitrario() -> None:
+    content = _workflow()
+
+    assert "target='bootstrap-wsjf-m365-dev.yml'" in content
+    assert "target='fly-dev-fast-deploy.yml'" in content
+    assert "target='login-multi-ambiente-gate.yml'" in content
+    assert "target='deploy-reqsys-pages-composite.yml'" in content
+    assert "target='validacao-acessos.yml'" in content
+    assert "target='runtime-e2e-continuous.yml'" in content
+    assert "target='pending-development-agent-pr-permission-watch.yml'" in content
+    assert "target='bacen-57-simulation-assessment.yml'" in content
+    assert "target='cofre-runtime-evidence-gate.yml'" in content
+    assert "target='desktop-rdc-recovery.yml'" in content
+    assert "target='noteri-control-plane-probe.yml'" in content
+    assert "target='noteri-headless-control-plane-activation.yml'" in content
+    assert "target='fabric-oidc-readonly-probe.yml'" in content
+    assert "target='report-factory-fabric-dev-access-bootstrap.yml'" in content
+    assert "target='codex-ollama-e2e-dev.yml'" in content
+    assert "target='codex-worker-pool-smoke-dev.yml'" in content
+    assert "target='codex-worker-pool-handoff.yml'" in content
+    assert "target='noteri-desktop-network-probe.yml'" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "target='pc24x7-runner-registry-repair.yml'" in content
+    assert "'/reqsys run noteri-alm-runner-bootstrap')" in content
+    assert "mode='alm-runner-bootstrap'" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap" in content
+    assert "target='pc24x7-teams-token-bootstrap.yml'" in content
+    assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
+    assert "target='teams-bot-dev-provision.yml'" in content
+    assert (
+        "bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|"
+        "pending-development-agent-pr-permission-watch.yml|"
+        "bacen-57-simulation-assessment.yml|"
+        "cofre-runtime-evidence-gate.yml|"
+        "desktop-rdc-recovery.yml|"
+        "noteri-control-plane-probe.yml|"
+        "noteri-headless-control-plane-activation.yml|"
+        "figma-github-e2e-dev.yml|"
+        "fabric-oidc-readonly-probe.yml|"
+        "report-factory-fabric-dev-access-bootstrap.yml|"
+        "report-factory-fabric-dev-preflight.yml|"
+        "codex-ollama-e2e-dev.yml|"
+        "codex-worker-pool-smoke-dev.yml|"
+        "codex-worker-pool-handoff.yml|"
+        "noteri-desktop-network-probe.yml|"
+        "noteri-desktop-watchdog-recovery.yml|"
+        "noteri-desktop-admin-broker-kick.yml|"
+        "pc24x7-runner-registry-repair.yml|"
+        "todo-global-hourly-cycle.yml|"
+        "pc24x7-teams-token-bootstrap.yml|"
+        "pc24x7-teams-ephemeral-e2e.yml|"
+        "teams-bot-dev-provision.yml|"
+        "noteri-study-mode-dev-reconcile.yml"
+    ) in content
+    assert 'gh workflow run "$TARGET_WORKFLOW"' in content
+    assert "eval " not in content
+
+
+def test_gateway_rsm_service_case_e2e_is_exact_current_main_and_github_hosted() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run rsm-service-case-e2e-current-main'" in content
+    assert "'/reqsys run rsm-service-case-e2e-current-main')" in content
+    assert "target='rsm-service-case-e2e.yml'" in content
+    assert "runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml" in content
+    assert "--ref main" in content
+    assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in content
+    assert "steps.route.outputs.target == 'rsm-service-case-e2e.yml'" not in content
+    assert "-f environment=prod" not in content
+
+
+def test_gateway_bacen_57_permanece_somente_simulacao_nonprod() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run bacen-57-simulation-assessment')" in content
+    assert "target='bacen-57-simulation-assessment.yml'" in content
+    assert "'production_touched': False" in content
+    assert "'secrets_read': False" in content
+
+
+def test_gateway_fixa_main_e_permissoes_minimas() -> None:
+    content = _workflow()
+
+    permissions = content.split("permissions:\n", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
+    assert "actions: write" in permissions
+    assert "contents: read" in permissions
+    assert "contents: write" not in permissions
+    assert "id-token: write" not in permissions
+    assert "--ref main" in content
+    assert "target_ref': 'main'" in content
+
+
+def test_gateway_publica_evidencia_sanitizada() -> None:
+    content = _workflow()
+
+    assert "authorized-action-dispatch.json" in content
+    assert "'secrets_read': False" in content
+    assert "'production_touched': False" in content
+    assert "target_run_url" in content
+    assert "target_sha" in content
+
+
+def test_gateway_cofre_fixa_dev_e_timeout_sem_producao() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run cofre-runtime-evidence-dev')" in content
+    assert "target='cofre-runtime-evidence-gate.yml'" in content
+    assert '-f environment=dev' in content
+    assert '-f timeout_seconds=20' in content
+    assert 'environment=stg' not in content
+    assert 'environment=prod' not in content
+
+
+def test_gateway_desktop_rdc_recovery_is_exact_and_inputless() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run desktop-rdc-recovery')" in content
+    assert "target='desktop-rdc-recovery.yml'" in content
+    assert "desktop-rdc-recovery-dev" not in content
+    assert "-f host=" not in content
+    assert "-f task=" not in content
+
+
+def test_gateway_fly_dev_fast_deploy_fixa_dev_e_input_exato() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run fly-dev-fast-deploy')" in content
+    assert "target='fly-dev-fast-deploy.yml'" in content
+    assert '-f deploy=true' in content
+    assert "'production_touched': False" in content
+    assert 'deploy=false' not in content
+
+
+def test_gateway_desktop_rdc_falha_fechado_sem_runner_e_preserva_evidencia() -> None:
+    content = _workflow()
+
+    assert "Validate self-hosted runner pickup" in content
+    assert 'gh run view "$TARGET_RUN_ID"' in content
+    assert "runner_pickup_status" in content
+    assert "runner_pickup_error" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
+    assert "pending|queued|requested|waiting" in content
+
+
+def test_gateway_vincula_evidencia_ao_run_exato_retornado_pelo_dispatch() -> None:
+    content = _workflow()
+
+    assert "id: dispatch" in content
+    assert 'run_url="$(gh workflow run "$TARGET_WORKFLOW"' in content
+    assert 'run_id="${run_url##*/}"' in content
+    assert "TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}" in content
+    assert "TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}" in content
+    assert 'gh run view "$TARGET_RUN_ID"' in content
+    assert "dispatched_run_id_mismatch" in content
+    assert "dispatched_run_url_mismatch" in content
+    assert "dispatched_run_sha_mismatch" in content
+    assert "dispatched_run_event_mismatch" in content
+    assert "gh run list" not in content
+
+
+def test_gateway_desktop_rdc_considera_pending_como_runner_nao_adquirido() -> None:
+    content = _workflow()
+
+    assert "status='pending'" in content
+    assert "pending|queued|requested|waiting" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'" in content
+
+
+def test_gateway_self_hosted_pickup_usa_watchdog_canonico_60s() -> None:
+    content = _workflow()
+
+    assert "pickup_timeout_seconds=60" in content
+    assert "poll_seconds=5" in content
+    assert "seq 1 $((pickup_timeout_seconds / poll_seconds))" in content
+    assert 'sleep "$poll_seconds"' in content
+    assert "wait_seconds=$((wait_seconds + poll_seconds))" in content
+    assert "seq 1 36" not in content
+
+
+def test_gateway_self_hosted_pickup_aceita_job_iniciado_com_status_agregado_atrasado() -> None:
+    content = _workflow()
+
+    assert 'actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100' in content
+    assert ".started_at != null" in content
+    assert 'index("self-hosted") != null' in content
+    assert '(.runner_name // "") != ""' in content
+    assert '(.conclusion // "") != "skipped"' in content
+    assert "pickup_source='self_hosted_runner_assigned'" in content
+    assert "runner_pickup_source" in content
+    assert "pickup_source='timeout'" in content
+
+
+def test_gateway_noteri_fallback_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run noteri-control-plane-probe')" in content
+    assert "target='noteri-control-plane-probe.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-control-plane-probe.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f host=" not in content
+    assert "-f command=" not in content
+
+
+def test_gateway_cancela_run_self_hosted_sem_pickup_e_registra_cleanup() -> None:
+    content = _workflow()
+
+    assert "Cancel self-hosted run without pickup" in content
+    assert 'gh run cancel "$TARGET_RUN_ID"' in content
+    assert "RUN_CANCEL_REQUEST_FAILED" in content
+    assert "RUN_CANCEL_NOT_CONFIRMED" in content
+    assert "target_cleanup_status" in content
+    assert "target_cleanup_error" in content
+    assert "steps.cleanup.outputs.status" in content
+    assert "steps.cleanup.outputs.error" in content
+    assert "[.status, (.conclusion // \"\")] | @tsv" in content
+    assert "IFS=$'\\t' read -r status conclusion" in content
+    assert "[ \"$status\" = 'completed' ]" in content
+    assert "[ \"$conclusion\" = 'cancelled' ]" in content
+
+
+
+def test_gateway_noteri_headless_activation_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run noteri-headless-control-plane-activation')" in content
+    assert "target='noteri-headless-control-plane-activation.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f host=" not in content
+    assert "-f command=" not in content
+
+
+def test_gateway_teams_ai_dev_dispatches_sao_exatos_e_nonprod() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run pc24x7-teams-token-bootstrap-dev')" in content
+    assert "target='pc24x7-teams-token-bootstrap.yml'" in content
+    assert "'/reqsys run pc24x7-teams-e2e-dev')" in content
+    assert "target='pc24x7-teams-ephemeral-e2e.yml'" in content
+    assert "'production_touched': False" in content
+    assert "'secrets_read': False" in content
+    assert "-f environment=prod" not in content
+    assert "-f environment=stg" not in content
+    assert "-f workflow=" not in content
+    assert "eval " not in content
+
+
+def test_gateway_noteri_desktop_network_probe_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run noteri-desktop-network-probe')" in content
+    assert "target='noteri-desktop-network-probe.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-desktop-network-probe.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f target=" not in content
+
+
+def test_gateway_noteri_desktop_watchdog_recovery_is_exact_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery'" in content
+    assert "'/reqsys run noteri-desktop-watchdog-recovery')" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f host=" not in content
+    assert "-f task=" not in content
+    assert "-f command=" not in content
+
+
+def test_gateway_worker_pool_smoke_dev_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev'" in content
+    assert "'/reqsys run codex-worker-pool-smoke-dev')" in content
+    assert "target='codex-worker-pool-smoke-dev.yml'" in content
+    assert "steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f repository=" not in content
+    assert (
+        'elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && '
+        '[ "$TARGET_MODE" = "restore" ]; then'
+    ) in content
+    assert '[ "$TARGET_MODE" = "smoke" ]' not in content
+
+
+def test_gateway_noteri_desktop_admin_broker_kick_is_exact_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick'" in content
+    assert "'/reqsys run noteri-desktop-admin-broker-kick')" in content
+    assert "target='noteri-desktop-admin-broker-kick.yml'" in content
+    assert "steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+
+
+def test_gateway_report_factory_fabric_access_bootstrap_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap'" in content
+    assert "'/reqsys run report-factory-fabric-dev-access-bootstrap')" in content
+    assert "target='report-factory-fabric-dev-access-bootstrap.yml'" in content
+    assert "steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f workspace=" not in content
+    assert "-f role=" not in content
+    assert "-f principal=" not in content
+
+
+def test_gateway_pc24x7_runner_registry_repair_is_exact_and_github_hosted() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair'" in content
+    assert "'/reqsys run pc24x7-runner-registry-repair')" in content
+    assert "target='pc24x7-runner-registry-repair.yml'" in content
+    assert "steps.route.outputs.target == 'pc24x7-runner-registry-repair.yml'" not in content
+    assert "-f runner=" not in content
+    assert "-f labels=" not in content
+
+
+def test_gateway_report_factory_fabric_dev_e2e_is_exact_main_dev_only() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e'" in content
+    assert "'/reqsys run report-factory-fabric-dev-e2e')" in content
+    assert "target='report-factory-fabric-dev-preflight.yml'" in content
+    assert "report-factory-fabric-dev-preflight.yml" in content
+    assert "-f mode=publish-e2e" in content
+    assert "--ref main" in content
+    assert "-f mode=prod" not in content
+    assert "-f workspace=" not in content
+
+
+def test_gateway_worker_pool_handoff_e2e_is_fixed_main_and_fail_closed() -> None:
+    content = _workflow()
+
+    dispatch_section = content.split(
+        "- name: Dispatch fixed workflow on main", maxsplit=1
+    )[1].split("- name: Validate exact dispatched run evidence", maxsplit=1)[0]
+    assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in dispatch_section
+
+    assert "github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev'" in content
+    assert "'/reqsys run codex-worker-pool-handoff-e2e-dev')" in content
+    assert "target='codex-worker-pool-handoff.yml'" in content
+    assert "mode='work-e2e'" in content
+    assert 'TARGET_WORKFLOW" = "codex-worker-pool-handoff.yml"' in content
+    assert "-f issue_number=2020" in content
+    assert '-f request_id="$request_id"' in content
+    assert "-f base_branch=main" in content
+    assert '-f base_sha="$EXPECTED_SHA"' in content
+    assert '-f correlation_id="$correlation_id"' in content
+    assert 'os.environ["GITHUB_REPOSITORY"]+":2020:main"' in content
+    assert 'correlation_id="work-v1-e2e-${GITHUB_RUN_ID}"' in content
+    assert "steps.route.outputs.target == 'codex-worker-pool-handoff.yml'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f workflow=" not in content
+    assert "-f repository=" not in content
+    assert "-f environment=prod" not in content
+
+
+def test_gateway_desktop_runner_bootstrap_and_pickup_are_exact_and_inputless() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run desktop-runner-recover-via-orchestrator'" in content
+    assert "'/reqsys run desktop-runner-recover-via-orchestrator')" in content
+    assert "mode='runner-recover'" in content
+    assert "github.event.comment.body == '/reqsys run desktop-runner-bootstrap-via-orchestrator'" in content
+    assert "'/reqsys run desktop-runner-bootstrap-via-orchestrator')" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "mode='runner-bootstrap'" in content
+
+    assert "github.event.comment.body == '/reqsys run desktop-runner-pickup-canary'" in content
+    assert "'/reqsys run desktop-runner-pickup-canary')" in content
+    assert "mode='runner-canary'" in content
+
+    assert "runner-bootstrap|runner-canary" in content
+    assert '-f mode="$recovery_mode"' in content
+    assert "-f target_host=" not in content
+    assert "-f endpoint=" not in content
+    assert "-f command=" not in content
+
+
+def test_gateway_environment_observability_build_only_is_exact_and_nonprod() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run environment-observability-build-only-dev'" in content
+    assert "'/reqsys run environment-observability-build-only-dev')" in content
+    assert "target='environment-observability-promotion.yml'" in content
+    assert "mode='build-only'" in content
+    assert 'TARGET_WORKFLOW" = "environment-observability-promotion.yml"' in content
+    assert "-f promote_to=development" in content
+    assert "-f build_only=true" in content
+    assert "steps.route.outputs.target == 'environment-observability-promotion.yml'" not in content
+    assert "-f promote_to=staging" not in content
+    assert "-f promote_to=production" not in content
+
+
+def test_gateway_login_dev_gate_is_exact_dev_only_and_no_production() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run login-dev-gate')" in content
+    assert "target='login-multi-ambiente-gate.yml'" in content
+    assert "mode='dev-only'" in content
+    assert 'test "$TARGET_MODE" = "dev-only"' in content
+    assert '-f environment=dev' in content
+    assert '-f environment=hml' not in content
+    assert '-f environment=prod' not in content
+
+
+def test_gateway_pages_deploy_is_exact_current_main_and_explicitly_authorized() -> None:
+    content = _workflow()
+
+    assert "'/reqsys run deploy-pages-current-main')" in content
+    assert "target='deploy-reqsys-pages-composite.yml'" in content
+    assert "mode='current-main'" in content
+    assert 'test "$TARGET_MODE" = "current-main"' in content
+    assert '--ref main' in content
+    assert '-f expected_sha="$EXPECTED_SHA"' in content
+    assert '-f authorization=DEPLOY_PAGES' in content
+    assert "producer_run_id=" not in content
+
+
+def test_gateway_todo_runtime_reconcile_is_exact_dev_and_fail_closed() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev'" in content
+    assert "'/reqsys run pc24x7-todo-runtime-reconcile-dev')" in content
+    assert "target='todo-global-hourly-cycle.yml'" in content
+    assert "mode='reconcile-runtime'" in content
+    assert "steps.route.outputs.mode == 'reconcile-runtime'" in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f environment=prod" not in content
+    assert "-f target_host=" not in content
+
+
+def test_gateway_todo_global_hourly_cycle_is_exact_github_hosted() -> None:
+    content = _workflow()
+    assert "github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev'" in content
+    assert "'/reqsys run todo-global-hourly-cycle-dev')" in content
+    assert "target='todo-global-hourly-cycle.yml'" in content
+    assert "mode='cycle'" in content
+    assert 'cycle|reconcile-runtime)' in content
+    assert '-f operation="$TARGET_MODE"' in content
+    assert "-f runtime_url=" not in content
+    assert "-f token=" not in content
+
+
+def test_gateway_main_post_merge_current_main_is_exact_and_github_hosted() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run main-post-merge-current-main'" in content
+    assert "'/reqsys run main-post-merge-current-main')" in content
+    assert "target='main-post-merge-validation.yml'" in content
+    assert "mode='exact-main'" in content
+    assert "main-post-merge-validation.yml" in content
+    assert 'test "$TARGET_MODE" = "exact-main"' in content
+    assert '-f commit_sha="$EXPECTED_SHA"' in content
+    assert "EXPECTED_SHA: ${{ steps.main.outputs.sha }}" in content
+    assert "steps.route.outputs.target == 'main-post-merge-validation.yml'" not in content
+    assert "-f environment=prod" not in content
+    assert "-f deploy=true" in content  # legacy route exists elsewhere; this command must not add a deploy mode.
+
+
+def test_gateway_public_access_validation_is_exact_strict_current_main() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run validate-public-access-current-main'" in content
+    assert "'/reqsys run validate-public-access-current-main')" in content
+    assert "target='validacao-acessos.yml'" in content
+    assert "mode='strict-current-main'" in content
+    assert 'test "$TARGET_MODE" = "strict-current-main"' in content
+    assert '--ref main' in content
+    assert '-f fail_on_unavailable=true' in content
+    assert '-f fail_on_unavailable=false' not in content
+    assert '-f url=' not in content
+    assert '-f target=' not in content
+
+
+def test_gateway_desktop_one_time_reboot_dev_is_exact_inputless_and_fail_closed() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run desktop-one-time-reboot-dev'" in content
+    assert "'/reqsys run desktop-one-time-reboot-dev')" in content
+    assert "target='noteri-desktop-watchdog-recovery.yml'" in content
+    assert "mode='reboot-once'" in content
+    assert "runner-recover|runner-bootstrap|runner-canary|reboot-once" in content
+    assert '-f mode="$recovery_mode"' in content
+    assert "SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY" in content
+    assert "-f target_host=" not in content
+    assert "-f action_id=" not in content
+    assert "-f command=" not in content
+
+
+def test_gateway_change_impact_pr2144_is_exact_and_has_no_user_sha_input() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run change-impact-benchmark-pr2144'" in content
+    assert "'/reqsys run change-impact-benchmark-pr2144')" in content
+    assert "target='codex-ollama-e2e-dev.yml'" in content
+    assert "mode='change-impact-pr2144'" in content
+    assert 'gh api "repos/${GITHUB_REPOSITORY}/pulls/2144"' in content
+    assert "change_impact_pr2144_not_closed" in content
+    assert "change_impact_pr2144_not_merged" in content
+    assert 'head.get("ref") != "copilot/change-impact-benchmark-20260928"' in content
+    assert 'pr.get("merge_commit_sha")' in content
+    assert "change_impact_pr2144_merge_sha_invalid" in content
+    assert '-f target_sha="$CHANGE_IMPACT_TARGET_SHA"' in content
+    assert "workload_sha" in content
+    assert "/reqsys run change-impact-benchmark-pr2144 " not in content
+
+
+def test_gateway_post_merge_runtime_controls_are_fixed_and_nonprod() -> None:
+    content = _workflow()
+
+    assert "github.event.comment.body == '/reqsys run post-merge-replay-control'" in content
+    assert "github.event.comment.body == '/reqsys run post-merge-negative-missing-control'" in content
+    assert "'/reqsys run post-merge-replay-control')" in content
+    assert "'/reqsys run post-merge-negative-missing-control')" in content
+    assert "target='actions-dispatcher.yml'" in content
+    assert "mode='post-merge-replay-control'" in content
+    assert "mode='post-merge-negative-missing-control'" in content
+    assert "actions-dispatcher.yml" in content
+    assert "-f mode=post-merge" in content
+    assert "-f merge_sha=2a7f113a1f0677a0ecd27c69c7c3f8a7a5fe5f58" in content
+    assert "-f pr_number=2157" in content
+    assert "-f head_sha=da23ddec0f0afba4fdf123c9e80ab4d831ffc133" in content
+    assert "test_case='replay'" in content
+    assert "test_case='missing-required-workflow'" in content
+    assert '-f test_case="$test_case"' in content
+    assert "-f merge_sha=$" not in content
+    assert "-f pr_number=$" not in content
+    assert "-f head_sha=$" not in content
+    assert "'production_touched': False" in content

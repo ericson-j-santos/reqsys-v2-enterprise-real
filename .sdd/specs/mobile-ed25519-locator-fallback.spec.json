@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Fallback Ed25519 para locator em navegador móvel",
+  "status": "implemented",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/services/__tests__/publicRuntimeLocator.test.js",
+      "frontend/src/services/__tests__/api.test.js"
+    ],
+    "evidence_contract": "A ausência de Ed25519 no Web Crypto ativa verificação local equivalente; todos os demais controles do locator permanecem fail-closed."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/mobile-ed25519-locator-fallback.requirements.md",
+    "implementation": "frontend/src/services/publicRuntimeLocator.js"
+  },
+  "risk": {
+    "production": false,
+    "environment": "dev",
+    "secrets": false
+  }
+}

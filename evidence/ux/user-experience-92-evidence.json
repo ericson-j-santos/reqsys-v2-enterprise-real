@@ -1,0 +1,20 @@
+{
+  "previous_score": 89,
+  "conclusion": "success",
+  "workflow_run_id": 29287848346,
+  "workflow_url": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/29287848346",
+  "scenarios": [
+    "keyboard_focus",
+    "mobile_navigation",
+    "offline_recovery"
+  ],
+  "artifact": {
+    "id": 8293879012,
+    "name": "ux-evidence-b24e75d6135901665f68ebe53f03e29c36ae84fb",
+    "size_in_bytes": 643924,
+    "digest": "sha256:ccf1c1cd72abac1708cedcc2bfc035610a5529a001d7714e9a2a874eee59fe60",
+    "expired": false,
+    "created_at": "2026-07-13T21:51:56Z",
+    "expires_at": "2026-10-11T21:51:01Z"
+  }
+}

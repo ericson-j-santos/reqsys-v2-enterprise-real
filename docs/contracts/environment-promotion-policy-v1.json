@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "reqsys-environment-promotion-policy",
+  "environments": {
+    "dev": {
+      "minimum_readiness": 70.0,
+      "minimum_coverage": 80.0,
+      "blocking": false
+    },
+    "stg": {
+      "minimum_readiness": 85.0,
+      "minimum_coverage": 90.0,
+      "blocking": true,
+      "approval_required": true,
+      "approval_contract": "reqsys-stg-enforcement-approval"
+    },
+    "prod": {
+      "minimum_readiness": 95.0,
+      "minimum_coverage": 100.0,
+      "blocking": true
+    }
+  }
+}

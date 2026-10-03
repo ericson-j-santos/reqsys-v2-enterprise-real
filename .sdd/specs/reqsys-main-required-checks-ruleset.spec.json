@@ -1,0 +1,59 @@
+{
+  "feature_name": "reqsys-main-required-checks-ruleset",
+  "project": "Engineering Control Plane",
+  "created_at": "2026-09-23",
+  "updated_at": "2026-09-24",
+  "phase": "implementation",
+  "increment_type": "gap_fix",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Materializa required status checks nativos no ruleset existente 17998541 da main do ReqSys, preservando as regras atuais e validando o readback de forma fail-closed.",
+  "environment": "GitHub Actions / PC24x7 DEV + Noteri fallback / GitHub Rulesets API",
+  "production_enabled": false,
+  "files": [
+    ".github/workflows/branch-protection-audit.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "scripts/configure_reqsys_main_ruleset_risk3.py",
+    "scripts/run_reqsys_main_ruleset_local.py",
+    "tests/test_reqsys_main_ruleset_protection.py"
+  ],
+  "risk": {
+    "level": 3,
+    "admin_permission": true,
+    "target_repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+    "target_branch": "main",
+    "target_ruleset_id": 17998541,
+    "self_hosted_runner": "DESKTOP-PDQK954",
+    "authorization": "Owner autorizou explicitamente a alteração administrativa do ruleset da main no chat de 23/09/2026.",
+    "rollback": "Restaurar somente a regra required_status_checks anterior, preservando todas as demais regras do ruleset.",
+    "force_push": false,
+    "deletion": false,
+    "secrets_exposed": false,
+    "fallback_self_hosted_runner": "Noteri"
+  },
+  "acceptance_criteria": [
+    "O ruleset alvo permanece o ID 17998541, ativo e aplicado à default branch.",
+    "As regras deletion, non_fast_forward e pull_request existentes são preservadas sem alteração semântica.",
+    "A única regra adicionada ou substituída é required_status_checks.",
+    "Os oito contextos configurados são exatamente os recommended_required_contexts de config/required-checks-inventory-policy.json.",
+    "strict_required_status_checks_policy permanece true e do_not_enforce_on_create permanece false.",
+    "Bypass actors permanece vazio e nenhuma credencial é exposta em comando, log ou artifact.",
+    "A execução administrativa ocorre no PC24x7 exato ou, quando indisponível, no Noteri exato; ambas as rotas exigem Session Launcher + Owner Risk3 Gateway, e o Noteri usa o checkout transitório somente como fonte para materializar base isolada no SHA despachado.",
+    "O SHA da main é lido antes da mutação e confirmado inalterado após a mutação.",
+    "Readback independente do ruleset confirma os oito checks e preservação das regras preexistentes antes de declarar sucesso.",
+    "Reexecução idempotente pode concluir ALREADY_COMPLIANT sem mutação adicional.",
+    "Nenhum deploy, promoção, banco, segredo ou runtime da aplicação é alterado.",
+    "O fallback Noteri é exposto somente pelo comando exato /reqsys run protect-reqsys-main-ruleset-noteri, sem workflow, branch, ruleset ou parâmetro arbitrário.",
+    "Após o merge da PR #2079, o fallback Noteri executa uma única vez pelo evento pull_request closed condicionado a merged=true, número 2079 e branch head exata; nenhum outro PR dispara a mutação.",
+    "No disparo pós-merge, Session Launcher exige o merge_commit_sha da PR como expected_head e origin/main deve apontar exatamente para o mesmo SHA; avanço concorrente falha fechado."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_main_ruleset_protection.py"
+    ],
+    "evidence_contract": "Artifact registra ruleset_id, SHA alvo, oito required checks, strict=true, bypass_actor_count=0, hashes antes/depois, independent_readback=true e secret_value_exposed=false."
+  }
+}

@@ -1,0 +1,55 @@
+name: BACEN Third-Party Ecosystem Concentration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_third_party_ecosystem_concentration.py"
+      - "tests/test_generate_bacen_third_party_ecosystem_concentration.py"
+      - ".github/workflows/bacen-third-party-ecosystem-concentration.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_third_party_ecosystem_concentration.py"
+      - "tests/test_generate_bacen_third_party_ecosystem_concentration.py"
+      - ".github/workflows/bacen-third-party-ecosystem-concentration.yml"
+  schedule:
+    - cron: "53 5 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-third-party-ecosystem-concentration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML pytest
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/generate_bacen_third_party_ecosystem_concentration.py
+          python -m py_compile tests/test_generate_bacen_third_party_ecosystem_concentration.py
+          python -m pytest tests/test_generate_bacen_third_party_ecosystem_concentration.py -q
+      - name: Generate concentration artifact
+        run: |
+          python scripts/generate_bacen_third_party_ecosystem_concentration.py \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --output artifacts/bacen/bacen-05-ecosystem-concentration.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-ecosystem-concentration
+          path: artifacts/bacen/bacen-05-ecosystem-concentration.json
+          if-no-files-found: error
+          retention-days: 365
