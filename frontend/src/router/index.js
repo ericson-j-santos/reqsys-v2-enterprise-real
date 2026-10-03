@@ -80,7 +80,12 @@ export const routes = [
     component: WsjfPlannerExcelInstallerView,
     meta: { recurso: 'auditoria:read' },
   },
-  { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
+  {
+    path: '/painel-integracao',
+    alias: '/painel-projetos',
+    component: PainelIntegracaoView,
+    meta: { recurso: 'dashboard:read' },
+  },
   { path: '/notificacoes', redirect: '/painel-integracao' },
   { path: '/figma-github', component: FigmaGithubView, meta: { recurso: 'dashboard:read' } },
   { path: '/estatisticas', component: EstatisticasView, meta: { recurso: 'dashboard:read' } },

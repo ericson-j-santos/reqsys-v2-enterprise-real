@@ -43,6 +43,14 @@ describe('navTemaPersist', () => {
 })
 
 describe('navCatalog subgrupos', () => {
+  it('oferece o Painel de projetos na área Meu trabalho', () => {
+    const trabalho = NAV_TEMAS.find((tema) => tema.id === 'trabalho')
+    const painel = trabalho.items.find((item) => item.to === '/painel-projetos')
+
+    expect(painel).toMatchObject({ title: 'Painel de projetos' })
+    expect(temaIdPorRota('/painel-projetos')).toBe('trabalho')
+  })
+
   it('define subgrupos para o tema Requisitos', () => {
     const requisitos = NAV_TEMAS.find((t) => t.id === 'requisitos')
     expect(requisitos.subgroups?.length).toBe(3)

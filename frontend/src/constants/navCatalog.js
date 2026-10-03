@@ -18,6 +18,7 @@ export const NAV_TEMAS = [
     icon: 'mdi-clipboard-check-outline',
     items: [
       { to: '/', icon: 'mdi-view-dashboard', title: 'Painel do dia', tip: 'Resumo objetivo das pendências, qualidade e próximos passos.' },
+      { to: '/painel-projetos', icon: 'mdi-briefcase-eye-outline', title: 'Painel de projetos', tip: 'Acompanhar Planner, integrações, eventos, andamento e evidências dos projetos.' },
       { to: '/requisitos', icon: 'mdi-file-document-edit', title: 'Demandas e requisitos', tip: 'Cadastrar, revisar e acompanhar requisitos de negócio.' },
       { to: '/pipeline', icon: 'mdi-pipe', title: 'Fluxo de aprovação', tip: 'Acompanhar a demanda da entrada até a aprovação e publicação.' },
       { to: '/rastreabilidade', icon: 'mdi-vector-link', title: 'Rastreabilidade', tip: 'Ver origem, história, decisão, entrega e evidências.' },
