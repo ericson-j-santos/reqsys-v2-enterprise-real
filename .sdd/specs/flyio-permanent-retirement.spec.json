@@ -58,6 +58,7 @@
     ".github/workflows/fly-governed-command-center.yml",
     ".github/workflows/fly-org-token-successor-probe.yml",
     ".github/workflows/fly-runtime-p0.yml",
+    ".github/workflows/governed-workflow-artifact-promotion.yml",
     ".github/workflows/ocr-deploy-staging.yml",
     ".github/workflows/ocr-secret-rotation.yml",
     ".github/workflows/padrao-ouro-delivery-automation.yml",
@@ -82,11 +83,13 @@
     "scripts/credential_control_plane_lifecycle.py",
     "scripts/cutover_fly_postgres.py",
     "scripts/fly-deploy.ps1",
+    "scripts/plan_governed_workflow_artifact_promotion.py",
     "scripts/remote_postgres_backup.sh",
     "scripts/rollback_environment_observability_api.sh",
     "scripts/run_reqsys_free_tier_backup.sh",
     "backend/tests/test_main_critical_paths.py",
     "tests/test_flyio_permanent_retirement.py",
+    "tests/test_plan_governed_workflow_artifact_promotion.py",
     "docs/releases/flyio-retirement-20261002.md",
     "tests/test_environment_observability_build_only_contract.py",
     "tests/test_fly_automatic_promotion_contract.py",
@@ -96,7 +99,8 @@
   "sdd_gate": {
     "pre_pr_tests": [
       "tests/test_flyio_permanent_retirement.py",
-      "tests/test_flyio_local_mutation_retirement.py"
+      "tests/test_flyio_local_mutation_retirement.py",
+      "tests/test_plan_governed_workflow_artifact_promotion.py"
     ],
     "tests": [
       "tests/test_flyio_permanent_retirement.py",
@@ -109,6 +113,7 @@
       "tests/test_environment_observability_build_only_contract.py",
       "tests/test_fly_automatic_promotion_contract.py",
       "tests/test_flyio_local_mutation_retirement.py",
+      "tests/test_plan_governed_workflow_artifact_promotion.py",
       "gitlab/tests/test_validate_gitlab_governance.py"
     ],
     "evidence_contract": "Workflows YAML válidos no SHA do PR; jobs e entrypoints com operações, tokens ou callers Fly.io ficam fail-closed; fallbacks fly.dev/fly.io, deploys GitLab, 13 manifestos e quatro artefatos de build/boot Fly são retirados; scripts de rede, catálogos e superfícies UI recusam o provedor antes de I/O externo. O estado remoto, a cobrança e a exclusão da conta só podem ser declarados com inventário autenticado e confirmação do provedor."

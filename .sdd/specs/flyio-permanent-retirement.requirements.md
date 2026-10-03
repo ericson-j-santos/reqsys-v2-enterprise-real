@@ -18,6 +18,7 @@ Em 2026-10-02 o usuário determinou retirar Fly.io definitivamente de todas as s
 10. Exigir URL/manifesto explícito de runtime autorizado nas integrações remanescentes e rejeitar `fly.dev`/`fly.io` antes de qualquer chamada de rede.
 11. Retirar links, catálogos, launchpads, manifests Teams e superfícies UI que ainda ofereçam Fly.io como destino.
 12. Jobs skipped e validações locais não comprovam encerramento remoto, migração de dados, faturamento zerado ou exclusão da conta; essas afirmações exigem evidência autenticada do provedor.
+13. A validação de PR do promotor de artefatos deve executar os testes locais sem depender de runs históricos sujeitos a expiração; download, validação por hash e publicação do bundle imutável permanecem obrigatórios no `workflow_dispatch`.
 
 ## Critérios de aceite
 
@@ -30,3 +31,4 @@ Em 2026-10-02 o usuário determinou retirar Fly.io definitivamente de todas as s
 - Builds independentes do Fly.io e contratos de autorização são preservados.
 - A documentação separa a retirada no repositório do encerramento remoto, que só pode ser confirmado por inventário autenticado e prova de cobrança/conta.
 - CI de admissão e revisão de evidência passam antes do merge.
+- O gate de promoção passa em PR sem artefato externo e continua fail-closed no caminho manual de promoção imutável.

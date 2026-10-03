@@ -81,3 +81,27 @@ def test_rejects_missing_governance_gate(tmp_path: Path) -> None:
     digests["padrao_delivery"] = hashlib.sha256(path.read_bytes()).hexdigest()
     with pytest.raises(ValueError, match="governance_marker_missing"):
         build_plan(padrao_dir, "a" * 40, digests, tmp_path / "tests")
+
+
+def test_pull_request_does_not_depend_on_expiring_promotion_artifact() -> None:
+    workflow = Path(
+        ".github/workflows/governed-workflow-artifact-promotion.yml"
+    ).read_text(encoding="utf-8")
+
+    guarded_steps = (
+        "Download Padrão Ouro generated artifact",
+        "Validate hashes, allowlist and governance contracts",
+        "Publish immutable promotion bundle",
+    )
+    for step_name in guarded_steps:
+        step = workflow.index(f"- name: {step_name}")
+        guard = workflow.index(
+            "if: github.event_name == 'workflow_dispatch'",
+            step,
+        )
+        next_step = workflow.find("\n      - name:", step + 1)
+        if next_step < 0:
+            next_step = len(workflow)
+        assert step < guard < next_step
+
+    assert "- name: Run focused planner tests\n        run:" in workflow

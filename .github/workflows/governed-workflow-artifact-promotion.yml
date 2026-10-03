@@ -72,6 +72,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check pytest
 
       - name: Download Padrão Ouro generated artifact
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: padrao-ouro-bacen-gate-generated
@@ -81,6 +82,7 @@ jobs:
           run-id: ${{ env.PADRAO_OURO_RUN_ID }}
 
       - name: Validate hashes, allowlist and governance contracts
+        if: github.event_name == 'workflow_dispatch'
         run: |
           python scripts/plan_governed_workflow_artifact_promotion.py \
             --padrao-dir downloaded/padrao \
@@ -94,6 +96,7 @@ jobs:
         run: python -m pytest -q tests/test_plan_governed_workflow_artifact_promotion.py
 
       - name: Publish immutable promotion bundle
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: governed-workflow-promotion-bundle
