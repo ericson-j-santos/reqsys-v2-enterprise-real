@@ -213,4 +213,21 @@ test.describe(`responsividade padrão ouro — ${ROTAS_RESPONSIVAS.length} rotas
     await expect(page.locator('.req-appbar')).toBeVisible()
     await expectSemOverflowHorizontal(page)
   })
+  test('arquitetura viva navega, filtra e abre inspector sem overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await loginDemo(page)
+
+    await page.goto('/arquitetura-viva')
+    await expect(page.getByTestId('route-arquitetura-viva')).toBeVisible()
+    await expect(page.getByTestId('architecture-live-canvas')).toBeVisible()
+
+    await page.getByTestId('architecture-node-ci').click()
+    await expect(page.getByTestId('architecture-live-inspector')).toContainText('CI/CD')
+
+    await page.getByTestId('architecture-live-filter').locator('input').fill('analytics')
+    await expect(page.getByTestId('architecture-node-analytics')).toBeVisible()
+
+    await expectSemOverflowHorizontal(page)
+  })
+
 })
