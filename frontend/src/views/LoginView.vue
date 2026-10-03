@@ -8,6 +8,21 @@
       <v-card-subtitle class="login-card-subtitle">Acesso corporativo - Tieri659</v-card-subtitle>
 
       <v-card-text>
+        <v-alert
+          v-if="estadoConfigAuth === 'loading'"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          data-testid="auth-config-loading"
+          aria-live="polite"
+        >
+          <div class="d-flex align-center ga-2">
+            <v-progress-circular indeterminate size="18" width="2" aria-hidden="true" />
+            <span>Verificando a autenticacao corporativa...</span>
+          </div>
+        </v-alert>
+
         <v-btn
           v-if="azureDisponivel"
           block
@@ -36,11 +51,12 @@
         </v-btn>
 
         <v-alert
-          v-if="!azureDisponivel && !certificadoDisponivel && !demoLoginDisponivel"
+          v-if="estadoConfigAuth === 'ready' && !azureDisponivel && !certificadoDisponivel && !demoLoginDisponivel"
           type="warning"
           variant="tonal"
           density="compact"
           class="mb-4"
+          data-testid="auth-config-unavailable"
         >
           <div class="font-weight-medium">Autenticacao corporativa indisponivel.</div>
           <div>{{ mensagemDiagnosticoAuth }}</div>
@@ -126,6 +142,7 @@ const erro = ref('')
 const carregandoDemo = ref(false)
 const carregandoAzure = ref(false)
 const carregandoCertificado = ref(false)
+const estadoConfigAuth = ref('loading')
 const mostrarSenha = ref(false)
 const azureDisponivel = ref(false)
 const certificadoDisponivel = ref(false)
@@ -155,8 +172,10 @@ onMounted(async () => {
     azureDisponivel.value = Boolean(data.data.azure_enabled)
     certificadoDisponivel.value = Boolean(data.data.certificate_enabled)
     demoLoginDisponivel.value = Boolean(data.data.demo_login_enabled)
+    estadoConfigAuth.value = 'ready'
   } catch {
-    erro.value = 'Nao foi possivel obter a configuracao de autenticacao do servidor.'
+    estadoConfigAuth.value = 'error'
+    erro.value ||= 'Nao foi possivel obter a configuracao de autenticacao do servidor.'
   }
 })
 
