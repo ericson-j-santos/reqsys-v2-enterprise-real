@@ -51,7 +51,7 @@
       </div>
       <article v-if="projetoSelecionado" class="project-detail">
         <div><h3>{{ projetoSelecionado.name }}</h3><p>{{ projetoSelecionado.summary || 'Sem resumo publicado.' }}</p></div>
-        <dl><div><dt>Origem</dt><dd>{{ projetoSelecionado.origin }}</dd></div><div><dt>Última sincronização</dt><dd>{{ formatarData(projetoSelecionado.updatedAt) }}</dd></div><div><dt>Itens / requisitos</dt><dd>{{ projetoSelecionado.workItems }} / {{ projetoSelecionado.requirements }}</dd></div><div><dt>Branch</dt><dd>{{ projetoSelecionado.branch || 'Não vinculada' }}</dd></div><div><dt>Issue / PR</dt><dd>{{ projetoSelecionado.changeId || 'Não vinculada' }}</dd></div><div><dt>Planner task</dt><dd>{{ projetoSelecionado.plannerTaskId || 'Não vinculada' }}</dd></div><div><dt>Correlação</dt><dd>{{ projetoSelecionado.correlationId || 'Não informada' }}</dd></div></dl>
+        <dl><div><dt>Origem</dt><dd>{{ projetoSelecionado.origin }}</dd></div><div><dt>Última sincronização</dt><dd>{{ formatarData(projetoSelecionado.updatedAt) }}</dd></div><div><dt>Itens / requisitos</dt><dd>{{ projetoSelecionado.workItems }} / {{ projetoSelecionado.requirements }}</dd></div><div><dt>Versão de código</dt><dd>{{ projetoSelecionado.branch || 'Não vinculada' }}</dd></div><div><dt>Issue / Solicitação de integração</dt><dd>{{ projetoSelecionado.changeId || 'Não vinculada' }}</dd></div><div><dt>Planner task</dt><dd>{{ projetoSelecionado.plannerTaskId || 'Não vinculada' }}</dd></div><div><dt>Correlação</dt><dd>{{ projetoSelecionado.correlationId || 'Não informada' }}</dd></div></dl>
         <a v-if="projetoSelecionado.evidenceUrl" :href="projetoSelecionado.evidenceUrl" target="_blank" rel="noreferrer">Abrir evidência ↗</a>
       </article>
     </section>
