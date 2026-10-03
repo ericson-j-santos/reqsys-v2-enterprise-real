@@ -1,0 +1,15 @@
+{
+  "environment": "canonical",
+  "base_url": "http://127.0.0.1:8000",
+  "reachable": true,
+  "response_time": 3.23,
+  "dashboard_ready": true,
+  "login_ready": false,
+  "api_ready": true,
+  "runtime_ready": true,
+  "evidence_ready": true,
+  "operational_status": "healthy",
+  "readiness_percent": 100.0,
+  "blocking_issues": [],
+  "next_actions": []
+}

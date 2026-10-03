@@ -1,0 +1,283 @@
+name: OCR Benchmark Gate
+on:
+  pull_request:
+    paths:
+      - 'backend/ocr_evidencia/**'
+      - 'backend/app/ocr/**'
+      - 'backend/app/api/ocr_review.py'
+      - 'backend/ocr_tests/**'
+      - 'frontend/src/views/OcrReviewView.vue'
+      - 'frontend/src/services/ocrReview.js'
+      - 'frontend/src/router/index.js'
+      - 'frontend/src/constants/navCatalog.js'
+      - 'scripts/ocr_*.py'
+      - 'scripts/prepare_ocr_runtime_package.py'
+      - 'config/ocr-engine-lock.json'
+      - 'benchmark/ocr/**'
+      - '.github/actions/prepare-ocr-runtime/**'
+      - '.github/workflows/ocr-benchmark.yml'
+      - '.github/workflows/fly-dev-fast-deploy.yml'
+      - '.github/workflows/fly-enterprise-sync.yml'
+      - 'backend/Dockerfile'
+      - 'backend/vendor/ocr-evidence-engine/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ocr-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  OCR_ENGINE_SHA: '4329781d38c25787882676f1cd29009303fcd44c'
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Instalar dependências mínimas do contrato OCR
+        working-directory: backend
+        run: |
+          python -m pip install --disable-pip-version-check \
+            pytest==9.0.3 \
+            sqlalchemy==2.0.41 \
+            cryptography==50.0.0 \
+            pydantic==2.13.4 \
+            pydantic-settings==2.7.1
+      - name: Testar bounded context, criptografia e políticas
+        working-directory: backend
+        run: pytest -q ocr_tests
+      - name: Provar fail-closed de datasets restritos no CI corporativo
+        run: |
+          set +e
+          python scripts/ocr_dataset_policy.py midv-2020 --context corporate-ci --accepted; midv=$?
+          python scripts/ocr_dataset_policy.py xfund-pt --context corporate-ci --accepted; xfund=$?
+          python scripts/ocr_dataset_policy.py funsd --context corporate-ci --accepted; funsd=$?
+          set -e
+          test "$midv" -eq 3
+          test "$xfund" -eq 3
+          test "$funsd" -eq 3
+  external-package-contract:
+    name: OCR External Package Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout ReqSys
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências mínimas do consumidor
+        run: |
+          python -m pip install --disable-pip-version-check \
+            pytest==9.0.3 \
+            sqlalchemy==2.0.41 \
+            cryptography==50.0.0 \
+            pydantic==2.13.4 \
+            pydantic-settings==2.7.1
+
+      - name: Isolar a cópia local e provar ausência do pacote
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d backend/ocr_evidencia
+          mv backend/ocr_evidencia "$RUNNER_TEMP/ocr_evidencia_local_copy"
+          set +e
+          PYTHONPATH=backend python -c 'import ocr_evidencia' >/tmp/ocr-local-negative.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          echo "OCR_EXTERNAL_NEGATIVE_CONTROL_OK"
+
+      - name: Identificar instalação governada do ReqSys
+        id: reqsys-app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: reqsys-v2-enterprise-real
+          permission-contents: read
+
+      - name: Registrar identificadores não sensíveis da instalação
+        shell: bash
+        run: |
+          echo "REQSYS_GITHUB_APP_SLUG=${{ steps.reqsys-app-token.outputs.app-slug }}"
+          echo "REQSYS_GITHUB_APP_INSTALLATION_ID=${{ steps.reqsys-app-token.outputs.installation-id }}"
+
+      - name: Emitir token temporário somente leitura
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            reqsys-v2-enterprise-real
+            ocr-evidence-engine
+          permission-contents: read
+
+      - name: Checkout do OCR privado no SHA pinado
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ericson-j-santos/ocr-evidence-engine
+          ref: ${{ env.OCR_ENGINE_SHA }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: .external/ocr-evidence-engine
+          persist-credentials: false
+
+      - name: Validar SHA e instalar o pacote externo
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C .external/ocr-evidence-engine rev-parse HEAD)"
+          test "$actual" = "$OCR_ENGINE_SHA"
+          python -m pip install --disable-pip-version-check --no-deps .external/ocr-evidence-engine
+
+      - name: Provar origem externa e executar contratos do ReqSys
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=backend python - <<'PY'
+          from pathlib import Path
+          import ocr_evidencia
+
+          origin = Path(ocr_evidencia.__file__).resolve()
+          repository = Path.cwd().resolve()
+          local_copy = repository / "backend" / "ocr_evidencia"
+          external_checkout = repository / ".external" / "ocr-evidence-engine"
+
+          if str(origin).startswith(str(local_copy)):
+              raise SystemExit(f"ocr_origin_is_local_copy:{origin}")
+          if str(origin).startswith(str(external_checkout)):
+              raise SystemExit(f"ocr_origin_is_checkout_not_installed_package:{origin}")
+          if "site-packages" not in origin.parts:
+              raise SystemExit(f"ocr_origin_is_not_site_packages:{origin}")
+          if ocr_evidencia.__version__ != "1.2.0":
+              raise SystemExit(f"ocr_version_mismatch:{ocr_evidencia.__version__}")
+
+          print(f"OCR_EXTERNAL_IMPORT_OK origin={origin.name} version={ocr_evidencia.__version__}")
+          PY
+          PYTHONPATH=backend python -m pytest -q backend/ocr_tests
+
+  external-runtime-image-contract:
+    name: OCR External Runtime Image Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout ReqSys
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: "Controle negativo: build externo sem wheel deve falhar"
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          docker build \
+            --file backend/Dockerfile \
+            --tag reqsys-ocr-negative:${{ github.sha }} \
+            --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \
+            --build-arg "OCR_ENGINE_SHA=$OCR_ENGINE_SHA" \
+            --build-arg "OCR_ENGINE_VERSION=1.2.0" \
+            backend > /tmp/ocr-negative-build.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          echo "OCR_EXTERNAL_RUNTIME_NEGATIVE_CONTROL_OK"
+
+      - name: Preparar pacote OCR externo
+        id: ocr-runtime
+        uses: ./.github/actions/prepare-ocr-runtime
+        with:
+          app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
+          private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
+
+      - name: Build da imagem com OCR externo obrigatório
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.ocr-runtime.outputs.ocr-sha }}" = "$OCR_ENGINE_SHA"
+          docker build \
+            --file backend/Dockerfile \
+            --tag reqsys-ocr-external:${{ github.sha }} \
+            --build-arg "GITHUB_SHA=${{ github.sha }}" \
+            --build-arg "OCR_EXTERNAL_PACKAGE_REQUIRED=1" \
+            --build-arg "OCR_ENGINE_SHA=${{ steps.ocr-runtime.outputs.ocr-sha }}" \
+            --build-arg "OCR_ENGINE_VERSION=${{ steps.ocr-runtime.outputs.ocr-version }}" \
+            backend
+
+      - name: Provar import externo dentro da imagem
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint python reqsys-ocr-external:${{ github.sha }} -c '
+          from pathlib import Path
+          import ocr_evidencia
+
+          origin = Path(ocr_evidencia.__file__).resolve()
+          if Path("/app/ocr_evidencia").exists():
+              raise SystemExit("local_ocr_copy_present")
+          if "site-packages" not in origin.parts:
+              raise SystemExit(f"ocr_origin_not_site_packages:{origin}")
+          if ocr_evidencia.__version__ != "1.2.0":
+              raise SystemExit(f"ocr_version_mismatch:{ocr_evidencia.__version__}")
+          print(f"OCR_EXTERNAL_RUNTIME_OK origin={origin.name} version={ocr_evidencia.__version__}")
+          '
+
+  synthetic-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Instalar runtime OCR
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por imagemagick poppler-utils fonts-dejavu-core
+      - name: Executar CER, Exact Match e False AUTO
+        run: |
+          python scripts/ocr_benchmark.py --output artifacts/ocr-benchmark.json synthetic --workdir artifacts/ocr-work
+      - name: Publicar evidência do benchmark
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ocr-benchmark
+          path: artifacts/ocr-benchmark.json
+          if-no-files-found: error
+  evidence-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Instalar runtime do Evidence Gate v2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por imagemagick poppler-utils fonts-dejavu-core
+          python -m pip install --disable-pip-version-check reportlab==5.0.1
+      - name: Executar os 10 cenários documentais governados
+        run: |
+          python scripts/ocr_evidence_gate_v2.py \
+            --output artifacts/ocr-evidence-v2.json \
+            --workdir artifacts/ocr-evidence-v2-work
+      - name: Publicar evidência sem texto OCR bruto
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ocr-evidence-v2
+          path: artifacts/ocr-evidence-v2.json
+          if-no-files-found: error

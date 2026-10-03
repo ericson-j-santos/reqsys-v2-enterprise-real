@@ -1,0 +1,22 @@
+{
+  "feature_name": "rsm-04-service-operations",
+  "project": "ReqSys Service Management",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "SLA determinístico por política e prioridade, atribuição auditável append-only, aprovação opcional com rejeição preservada, portão de transição fail-closed e idempotência por event_id, com E2E HTTP real contra PostgreSQL e leitura independente.",
+  "runtime_target": "github-actions-ephemeral-postgres",
+  "environment": "CI/DEV",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_service_operations_domain.py",
+      "backend/tests/test_service_case_operations_api.py"
+    ],
+    "evidence_contract": "Provar HTTP real -> SLA determinístico recalculado por fora do código sob teste -> atribuição auditada -> portão de aprovação fail-closed com rejeição preservada -> replay sem segundo efeito -> leitura PostgreSQL independente de estado, histórico e contagem de eventos, sempre vinculados ao SHA atual."
+  }
+}

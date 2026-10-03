@@ -1,0 +1,119 @@
+schema_version: 1.0.0
+mode: structural_only
+baseline_uid: baseline-2026-09-02-v2
+semantics:
+  mapping_meaning: "Vínculo arquitetural candidato; não é evidência nem declaração de conformidade."
+  assessment_promotion: false
+  does_not_mean: [aplicabilidade_decidida, controle_implementado, evidencia_valida, conformidade_regulatoria]
+
+reference_catalog:
+  controls: [BACEN-01, BACEN-02, BACEN-03, BACEN-04, BACEN-05, BACEN-06, BACEN-07, BACEN-08]
+  adrs:
+    - docs/adr/ADR-0001-arquitetura-padrao-ouro.md
+    - docs/adr/ADR-0003-ambientes-dev-hml-prod.md
+    - docs/adr/ADR-0004-ci-cd-qualidade.md
+    - docs/adrs/ADR-023-nginx-secure-profile.md
+    - docs/adr/ADR-041-cofre-segredos-locais.md
+  pdrs:
+    - docs/prompts/security/PDR-SEC-001-alteracao-seguranca.md
+    - docs/prompts/development/PDR-DEV-001-implementar-incremento-governado.md
+    - docs/prompts/review/PDR-REV-001-revisar-codigo-pr.md
+    - docs/prompts/ci-cd/PDR-CICD-001-corrigir-falha-github-actions.md
+
+control_mappings:
+  CMN4893-ART3-P2-I: [BACEN-02]
+  CMN4893-ART3-P2-II: [BACEN-06, BACEN-07]
+  CMN4893-ART3-P2-III: [BACEN-03, BACEN-06]
+  CMN4893-ART3-P2-IV: [BACEN-06, BACEN-07]
+  CMN4893-ART3-P2-V: [BACEN-06]
+  CMN4893-ART3-P2-VI: [BACEN-07]
+  CMN4893-ART3-P2-VII: [BACEN-04, BACEN-07]
+  CMN4893-ART3-P2-VIII: [BACEN-06]
+  CMN4893-ART3-P2-IX: [BACEN-02, BACEN-07]
+  CMN4893-ART3-P2-X: [BACEN-06]
+  CMN4893-ART3-P2-XI: [BACEN-03, BACEN-06]
+  CMN4893-ART3-P2-XII: [BACEN-02, BACEN-06, BACEN-07]
+  CMN4893-ART3-P2-XIII: [BACEN-02, BACEN-06, BACEN-07]
+  CMN4893-ART3-P2-XIV: [BACEN-03, BACEN-06]
+  CMN4893-ART3-P6: [BACEN-05, BACEN-06]
+  CMN4893-ART3-P7-I: [BACEN-07, BACEN-03]
+  CMN4893-ART3-P7-II: [BACEN-07]
+  CMN4893-ART3-P7-III: [BACEN-07]
+  CMN4893-ART3-P8-I: [BACEN-06]
+  CMN4893-ART3-P8-II: [BACEN-06]
+  CMN4893-ART3-P8-III: [BACEN-06]
+  CMN4893-ART3-P8-IV: [BACEN-06, BACEN-07]
+  CMN4893-ART3-P8-V: [BACEN-06]
+  CMN4893-ART3-P9-I: [BACEN-02, BACEN-07]
+  CMN4893-ART3-P9-II: [BACEN-02, BACEN-07]
+  CMN4893-ART3-P9-III: [BACEN-02, BACEN-07]
+  CMN4893-ART3-P10-I: [BACEN-06]
+  CMN4893-ART3-P10-II: [BACEN-06]
+  CMN4893-ART3-P10-III: [BACEN-06]
+  CMN4893-ART3-P10-IV: [BACEN-02, BACEN-06]
+  CMN4893-ART3-P11-I: [BACEN-03, BACEN-06]
+  CMN4893-ART3-P11-II: [BACEN-03, BACEN-06]
+  CMN4893-ART3-P11-III: [BACEN-03, BACEN-06]
+  CMN4893-ART3-P11-IV: [BACEN-03, BACEN-06]
+  CMN4893-ART3-P11-V: [BACEN-02, BACEN-03, BACEN-07]
+  CMN4893-ART3-P11-VI: [BACEN-02, BACEN-06]
+  CMN4893-ART3-P12-I: [BACEN-02, BACEN-07]
+  CMN4893-ART3-P12-II: [BACEN-02, BACEN-06]
+  CMN4893-ART3-P12-III: [BACEN-02, BACEN-06]
+  CMN4893-ART3-P12-IV: [BACEN-02, BACEN-06, BACEN-07]
+  CMN4893-ART3A-I-A: [BACEN-02]
+  CMN4893-ART3A-I-B: [BACEN-05, BACEN-06]
+  CMN4893-ART3A-I-C: [BACEN-05, BACEN-06]
+  CMN4893-ART3A-I-D: [BACEN-02, BACEN-07]
+  CMN4893-ART3A-I-E: [BACEN-06, BACEN-07]
+  CMN4893-ART3A-I-F: [BACEN-02, BACEN-05, BACEN-06]
+  CMN4893-ART3A-II: [BACEN-03, BACEN-06, BACEN-07]
+  CMN4893-ART3A-PU-I: [BACEN-01, BACEN-08]
+  CMN4893-ART3A-PU-II: [BACEN-01, BACEN-08]
+  CMN4893-ART3A-PU-III: [BACEN-01, BACEN-06, BACEN-07]
+  CMN4893-ART22A-I: [BACEN-06, BACEN-07]
+  CMN4893-ART22A-II: [BACEN-01, BACEN-06, BACEN-08]
+  CMN4893-ART22A-III: [BACEN-06, BACEN-07]
+  CMN4893-ART22B-CAPUT: [BACEN-01, BACEN-04, BACEN-05]
+  CMN4893-ART22B-P1: [BACEN-01, BACEN-05]
+  CMN4893-ART22B-P2: [BACEN-01, BACEN-04, BACEN-05]
+  CMN4893-ART23-X: [BACEN-06, BACEN-07]
+
+design_link_groups:
+  - id: arquitetura-base
+    match: {all: true}
+    adr_refs: [docs/adr/ADR-0001-arquitetura-padrao-ouro.md]
+    pdr_refs: [docs/prompts/development/PDR-DEV-001-implementar-incremento-governado.md]
+
+  - id: autenticacao-acesso-certificados
+    prefixes: [CMN4893-ART3-P9-, CMN4893-ART3-P12-]
+    codes: [CMN4893-ART3-P2-I, CMN4893-ART3-P2-IX, CMN4893-ART3-P2-XII, CMN4893-ART3A-I-A, CMN4893-ART3A-I-D, CMN4893-ART3A-I-F]
+    adr_refs: [docs/adr/ADR-041-cofre-segredos-locais.md]
+    pdr_refs: [docs/prompts/security/PDR-SEC-001-alteracao-seguranca.md]
+
+  - id: rede-criptografia-isolamento
+    prefixes: [CMN4893-ART3-P11-]
+    codes: [CMN4893-ART3-P2-II, CMN4893-ART3-P2-III, CMN4893-ART3-P2-X, CMN4893-ART3-P2-XI, CMN4893-ART3-P2-XIII, CMN4893-ART3A-I-B, CMN4893-ART3A-I-C, CMN4893-ART3A-I-E]
+    adr_refs: [docs/adrs/ADR-023-nginx-secure-profile.md, docs/adr/ADR-0003-ambientes-dev-hml-prod.md]
+    pdr_refs: [docs/prompts/security/PDR-SEC-001-alteracao-seguranca.md]
+
+  - id: vulnerabilidade-desenvolvimento-seguro
+    prefixes: [CMN4893-ART3-P8-, CMN4893-ART3-P10-, CMN4893-ART22A-]
+    codes: [CMN4893-ART3-P2-V, CMN4893-ART3-P2-VIII, CMN4893-ART3-P2-XIV, CMN4893-ART3-P6]
+    adr_refs: [docs/adr/ADR-0004-ci-cd-qualidade.md]
+    pdr_refs: [docs/prompts/security/PDR-SEC-001-alteracao-seguranca.md, docs/prompts/review/PDR-REV-001-revisar-codigo-pr.md, docs/prompts/ci-cd/PDR-CICD-001-corrigir-falha-github-actions.md]
+
+  - id: auditoria-rastreabilidade-retencao
+    prefixes: [CMN4893-ART3-P7-]
+    codes: [CMN4893-ART3-P2-VI, CMN4893-ART3-P2-VII, CMN4893-ART3-P2-IX, CMN4893-ART3-P2-XII, CMN4893-ART3-P2-XIII, CMN4893-ART3A-I-D, CMN4893-ART3A-I-E, CMN4893-ART3A-II, CMN4893-ART22A-III, CMN4893-ART23-X]
+    adr_refs: [docs/adr/ADR-0004-ci-cd-qualidade.md]
+    pdr_refs: [docs/prompts/security/PDR-SEC-001-alteracao-seguranca.md]
+
+  - id: governanca-regulatoria
+    prefixes: [CMN4893-ART3A-PU-, CMN4893-ART22B-]
+    codes: [CMN4893-ART22A-II]
+    adr_refs: [docs/adr/ADR-0001-arquitetura-padrao-ouro.md]
+    pdr_refs: [docs/prompts/review/PDR-REV-001-revisar-codigo-pr.md]
+
+evidence_claim: false
+assessment_promotion: false

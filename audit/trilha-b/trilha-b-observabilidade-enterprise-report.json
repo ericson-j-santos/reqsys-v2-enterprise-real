@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T18:28:04.580951Z",
+  "trail_id": "trilha-b",
+  "trail_name": "Observabilidade Enterprise",
+  "mode": "report_only",
+  "status": "passed",
+  "summary": {
+    "governance_ok": 4,
+    "code_ok": 5,
+    "code_total": 5,
+    "errors": 0,
+    "warnings": 0
+  },
+  "capabilities": [
+    "correlation_id",
+    "feature_metrics",
+    "operational_telemetry",
+    "distributed_tracing"
+  ],
+  "issues": [],
+  "artifacts": {
+    "architecture_as_code": "docs/architecture/trilha-b/architecture-as-code.json",
+    "adr": "docs/adr/ADR-037-trilha-b-observabilidade-enterprise.md",
+    "tests": "backend/tests/test_observability_enterprise.py"
+  }
+}

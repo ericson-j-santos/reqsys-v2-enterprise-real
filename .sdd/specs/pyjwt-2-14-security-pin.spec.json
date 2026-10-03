@@ -1,0 +1,15 @@
+{
+  "feature_name": "PyJWT 2.14.0 security pin",
+  "approvals": {
+    "requirements": true
+  },
+  "description": "Align canonical backend and token-broker PyJWT pins to the patched 2.14.0 release after pip-audit reported CVE-2026-102274 on 2.13.0.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pyjwt_security_pin.py"
+    ],
+    "pre_pr_tests": [
+      "tests/test_pyjwt_security_pin.py"
+    ]
+  }
+}

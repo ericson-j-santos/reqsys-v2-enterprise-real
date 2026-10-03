@@ -1,0 +1,53 @@
+name: Self-Hosted Runner Governance Guard
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/self-hosted-runner-policy.json"
+      - "scripts/check_self_hosted_runner_governance.py"
+      - "tests/test_self_hosted_runner_governance.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/self-hosted-runner-policy.json"
+      - "scripts/check_self_hosted_runner_governance.py"
+      - "tests/test_self_hosted_runner_governance.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: Validate self-hosted runner governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/check_self_hosted_runner_governance.py
+          python -m unittest tests/test_self_hosted_runner_governance.py
+
+      - name: Validate repository policy
+        run: |
+          python scripts/check_self_hosted_runner_governance.py \
+            --output artifacts/self-hosted-runner-governance.json
+
+      - name: Publish governance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-hosted-runner-governance-evidence
+          path: artifacts/self-hosted-runner-governance.json
+          if-no-files-found: warn
+          retention-days: 90

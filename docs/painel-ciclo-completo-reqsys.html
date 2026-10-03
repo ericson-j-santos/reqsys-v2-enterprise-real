@@ -3,43 +3,185 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ReqSys - Painel do Ciclo Completo</title>
+  <title>ReqSys - Painel Central de Andamentos</title>
   <style>
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f6f8fb;color:#182033}header{background:#0d233d;color:#fff;padding:28px clamp(16px,4vw,48px)}main{padding:22px clamp(16px,4vw,48px)}.grid{display:grid;gap:14px}.cards{grid-template-columns:repeat(4,minmax(0,1fr))}.card{background:#fff;border:1px solid #d9e1ee;border-radius:16px;padding:16px;box-shadow:0 8px 20px rgba(15,42,77,.08)}.badge{display:inline-block;border-radius:999px;padding:4px 9px;font-size:.76rem;font-weight:700;border:1px solid}.ok{color:#0a7a43;background:#eaf7ef}.warn{color:#9a6700;background:#fff6df}.info{color:#2459a9;background:#eef5ff}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #d9e1ee;padding:10px;text-align:left;vertical-align:top}.scroll{overflow-x:auto}.progress{height:10px;background:#e7edf7;border-radius:999px;overflow:hidden}.progress span{display:block;height:100%;background:#0f4c81;width:var(--w)}@media(max-width:800px){.cards{grid-template-columns:1fr}.scroll table{min-width:760px}}
+    :root{--bg:#0f172a;--panel:#111827;--border:#334155;--text:#e5e7eb;--muted:#94a3b8;--green:#22c55e;--yellow:#f59e0b;--red:#ef4444;--blue:#38bdf8}
+    *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+    header{padding:24px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,#111827,#1e293b)}
+    main{max-width:1440px;margin:0 auto;padding:24px}h1{margin:0 0 8px}.muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+    .kpi-label{font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:.06em}.kpi-value{font-size:26px;font-weight:700;margin-top:8px;word-break:break-word}
+    .badge{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700}.ok{color:var(--green)}.warn{color:var(--yellow)}.bad{color:var(--red)}.unknown{color:var(--muted)}
+    table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}th{color:var(--muted);font-size:12px;text-transform:uppercase}.scroll{overflow-x:auto}
+    a{color:var(--blue);text-decoration:none}.links{display:flex;gap:10px;flex-wrap:wrap}.link{border:1px solid var(--border);border-radius:9px;padding:8px 10px}
+    .notice{border-left:4px solid var(--yellow);padding:10px 12px;background:#171b27}.error{border-left-color:var(--red)}
+    code{color:#cbd5e1}.small{font-size:13px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:620px){main,header{padding:16px}.grid{grid-template-columns:1fr}table{min-width:760px}}
   </style>
 </head>
 <body>
-<header><div>REQ-CYCLE#001 - v0.2.2</div><h1>ReqSys - Painel de Acompanhamento do Ciclo Completo</h1><p>Visão única para PRs, CI, gates, evidências, deploy, validação pública e operação.</p></header>
+<header>
+  <h1>ReqSys — Painel Central de Andamentos</h1>
+  <p class="muted">Projeção operacional atual de GitHub, PRs/CI, TODO Global, Microsoft Teams, Runtime PC24x7, Power BI e demais projetos configurados.</p>
+</header>
 <main>
-  <section class="grid cards" id="metricas"></section>
-  <section class="card" style="margin-top:14px"><h2>Decisão atual</h2><p id="decisao"></p></section>
-  <section class="card" style="margin-top:14px"><h2>Gates bloqueantes</h2><div id="gates"></div></section>
-  <section class="card" style="margin-top:14px"><h2>Frentes de trabalho</h2><div class="scroll"><table><thead><tr><th>ID</th><th>Frente</th><th>Status</th><th>Progresso</th><th>PR</th><th>Pendência</th><th>Decisão</th></tr></thead><tbody id="frentes"></tbody></table></div></section>
-  <section class="card" style="margin-top:14px"><h2>Checks</h2><div class="scroll"><table><thead><tr><th>Check</th><th>Status</th><th>Evidência</th></tr></thead><tbody id="checks"></tbody></table></div></section>
+  <div id="load-state" class="card notice">Carregando <code>global-status.json</code> gerado pelo workflow atual.</div>
+
+  <section class="grid">
+    <div class="card"><div class="kpi-label">Cobertura das fontes</div><div id="coverage" class="kpi-value">-</div></div>
+    <div class="card"><div class="kpi-label">ReqSys main</div><div id="main-sha" class="kpi-value">-</div></div>
+    <div class="card"><div class="kpi-label">PRs abertos ReqSys</div><div id="open-prs" class="kpi-value">-</div></div>
+    <div class="card"><div class="kpi-label">Atualização</div><div id="generated-at" class="kpi-value small">-</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Decisão baseada em evidência</h2>
+    <p class="muted">O painel não converte ausência de dados em sucesso. Fontes inacessíveis ficam explicitamente indisponíveis; CI verde isolado não prova E2E físico.</p>
+    <div class="links">
+      <a class="link" href="teams/">Detalhe Microsoft Teams</a>
+      <a class="link" id="source-run" href="#">Run produtor</a>
+      <a class="link" id="main-commit" href="#">Commit da main</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Microsoft Teams — Certificação e SLO</h2>
+    <div class="grid">
+      <div><div class="kpi-label">Certificação</div><div id="teams-state" class="kpi-value">-</div></div>
+      <div><div class="kpi-label">SLO entregas</div><div id="teams-delivery" class="kpi-value">-</div></div>
+      <div><div class="kpi-label">SLO monitor</div><div id="teams-monitor" class="kpi-value">-</div></div>
+      <div><div class="kpi-label">Bloqueios</div><div id="teams-blockers" class="kpi-value">-</div></div>
+    </div>
+    <p id="teams-note" class="muted small"></p>
+  </section>
+
+  <section class="card">
+    <h2>TODO Global</h2>
+    <div class="notice">
+      <strong>Fonte canônica preservada.</strong>
+      Este dashboard é somente consumidor/projeção. O estado dos TODOs continua pertencendo ao TODO Global.
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <div><div class="kpi-label">Saúde da projeção</div><div id="todo-status" class="kpi-value">-</div></div>
+      <div><div class="kpi-label">Último ciclo</div><div id="todo-conclusion" class="kpi-value">-</div></div>
+      <div><div class="kpi-label">SHA observado</div><div id="todo-sha" class="kpi-value small">-</div></div>
+      <div><div class="kpi-label">Evidência</div><div id="todo-link" class="small">-</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Runtime PC24x7</h2>
+    <p class="muted small">Workflows são evidência de automação. Quando o critério exige execução física same-SHA, o painel não promove um workflow verde a sucesso físico por inferência.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Workflow</th><th>Estado</th><th>Conclusão</th><th>SHA</th><th>Execução</th></tr></thead>
+      <tbody id="runtime-rows"></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Projetos e frentes</h2>
+    <p class="muted small">Inclui ReqSys, Runtime/Desktop, Noteri, Power BI, e-mail, Portal, Worker Pool, observabilidade, E2E, governança e demais repositórios operacionais versionados na configuração.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Prioridade</th><th>Projeto</th><th>Fonte</th><th>Main</th><th>PRs</th><th>Último CI</th><th>Atualização</th></tr></thead>
+      <tbody id="project-rows"></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>PRs abertos — ReqSys</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>PR</th><th>Título</th><th>Draft</th><th>HEAD</th><th>Atualização</th></tr></thead>
+      <tbody id="pr-rows"></tbody>
+    </table></div>
+  </section>
 </main>
-<script id="estado-ciclo" type="application/json">
-{
-  "produto":"ReqSys v2 Enterprise Real",
-  "visao_executiva":{"id":"REQ-CYCLE#001","status":"em_evolucao","progresso_percentual":78,"decisao_atual":"Encerrar PR #18/#20 e priorizar atualização e validação do PR #19.","proxima_decisao_recomendada":"Atualizar PR #19 contra a main atual, validar CI completo e decidir merge.","gates_bloqueantes":["Auth desligada em produção","CORS wildcard em produção","JWT sem issuer/audience","JWT_EXP_MINUTES inválido","Login demo em produção","Resposta sem fonte","Ingestão sem permissão","Log com dado sensível","Auditoria sem correlation_id","Admin exposto sem autorização"]},
-  "indicadores":{"prs_relevantes":3,"prs_concluidos":2,"prs_abertos_prioritarios":1,"ci_verdes_confirmados":2,"frontend_responsive_e2e_verde":true},
-  "frentes":[
-    {"id":"REQ#018","titulo":"Production Security Gates","status":"concluido","progresso":100,"pr":18,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/18","pendencia":"Validar acesso público.","decisao":"Encerrado."},
-    {"id":"REQ#020","titulo":"Evidências pós-merge","status":"concluido","progresso":100,"pr":20,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/20","pendencia":"Validar acesso público.","decisao":"Encerrado."},
-    {"id":"REQ#019","titulo":"Cobertura de testes backend","status":"em_validacao","progresso":72,"pr":19,"url":"https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/pull/19","pendencia":"Atualizar contra main e reexecutar CI.","decisao":"Merge se CI verde."},
-    {"id":"REQ#021","titulo":"Validação pública","status":"pendente","progresso":35,"pr":null,"url":"","pendencia":"Gerar artifact.","decisao":"Bloquear declaração final sem artifact."},
-    {"id":"REQ#022","titulo":"Painel de ciclo","status":"em_versionamento","progresso":60,"pr":null,"url":"","pendencia":"Abrir PR e validar CI.","decisao":"Adotar como SSOT visual."}
-  ],
-  "checks":[
-    {"nome":"Backend Lint & Security","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
-    {"nome":"Backend Tests + Coverage","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
-    {"nome":"Frontend Build + Security Audit","status":"verde","evidencia":"PR #18 run #72; PR #19 run #63"},
-    {"nome":"Frontend Responsive E2E","status":"verde","evidencia":"PR #18 run #72"},
-    {"nome":"Validação de Acessos Públicos","status":"pendente","evidencia":"Artifact pendente"}
-  ]
-}
-</script>
 <script>
-const estado=JSON.parse(document.getElementById('estado-ciclo').textContent);const $=id=>document.getElementById(id);function cls(s){return ['concluido','verde'].includes(String(s))?'ok':['em_validacao','em_versionamento'].includes(String(s))?'warn':'info'}function badge(s){return `<span class="badge ${cls(s)}">${String(s).replaceAll('_',' ')}</span>`}const i=estado.indicadores;$('metricas').innerHTML=[['Progresso',estado.visao_executiva.progresso_percentual+'%'],['PRs concluídos',i.prs_concluidos+'/'+i.prs_relevantes],['PR prioritário',i.prs_abertos_prioritarios],['E2E',i.frontend_responsive_e2e_verde?'Verde':'Pendente']].map(x=>`<article class="card"><small>${x[0]}</small><h2>${x[1]}</h2></article>`).join('');$('decisao').textContent=estado.visao_executiva.decisao_atual+' '+estado.visao_executiva.proxima_decisao_recomendada;$('gates').innerHTML=estado.visao_executiva.gates_bloqueantes.map(g=>`<p>${badge('bloqueante')} ${g}</p>`).join('');$('frentes').innerHTML=estado.frentes.map(f=>`<tr><td>${f.id}</td><td>${f.titulo}</td><td>${badge(f.status)}</td><td>${f.progresso}%<div class="progress"><span style="--w:${f.progresso}%"></span></div></td><td>${f.pr?`<a href="${f.url}">#${f.pr}</a>`:'-'}</td><td>${f.pendencia}</td><td>${f.decisao}</td></tr>`).join('');$('checks').innerHTML=estado.checks.map(c=>`<tr><td>${c.nome}</td><td>${badge(c.status)}</td><td>${c.evidencia}</td></tr>`).join('');
+(function () {
+  "use strict";
+  function text(id, value) {
+    var node = document.getElementById(id);
+    if (node) node.textContent = value == null || value === "" ? "-" : String(value);
+  }
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+  }
+  function shortSha(value) { return value ? String(value).slice(0, 8) : "-"; }
+  function link(url, label) {
+    return url ? '<a href="' + esc(url) + '">' + esc(label) + "</a>" : esc(label || "-");
+  }
+  function runBadge(run) {
+    if (!run) return '<span class="badge unknown">sem evidência</span>';
+    var conclusion = run.conclusion || run.status || "unknown";
+    var cls = conclusion === "success" ? "ok" : (conclusion === "failure" || conclusion === "cancelled" ? "bad" : "warn");
+    return '<span class="badge ' + cls + '">' + esc(conclusion) + "</span>";
+  }
+  function render(state) {
+    document.getElementById("load-state").style.display = "none";
+    var coverage = state.coverage || {};
+    text("coverage", (coverage.percent == null ? "-" : coverage.percent + "%") + " (" + (coverage.available_projects || 0) + "/" + (coverage.total_projects || 0) + ")");
+    text("main-sha", shortSha(state.reqsys && state.reqsys.main_sha));
+    text("open-prs", state.reqsys && state.reqsys.open_pr_count);
+    text("generated-at", state.generated_at);
+
+    var run = state.source && state.source.run_url;
+    var runNode = document.getElementById("source-run");
+    if (run) runNode.href = run; else runNode.removeAttribute("href");
+    var commitNode = document.getElementById("main-commit");
+    var commitUrl = state.reqsys && state.reqsys.main_commit_url;
+    if (commitUrl) commitNode.href = commitUrl; else commitNode.removeAttribute("href");
+
+    var teams = state.teams || {};
+    var cert = teams.certification || {};
+    text("teams-state", cert.state || teams.source_status || "indisponível");
+    text("teams-delivery", cert.delivery_rate == null ? "-" : cert.delivery_rate + "%");
+    text("teams-monitor", cert.monitor_rate == null ? "-" : cert.monitor_rate + "%");
+    text("teams-blockers", Array.isArray(cert.blockers) ? cert.blockers.length : "-");
+    text("teams-note", teams.note || "");
+
+    var todo = state.todo_global || {};
+    var todoWf = todo.workflow || {};
+    var todoRun = todoWf.latest_run || {};
+    text("todo-status", todoWf.source_status || "indisponível");
+    text("todo-conclusion", todoRun.conclusion || todoRun.status || "-");
+    text("todo-sha", shortSha(todoRun.head_sha));
+    document.getElementById("todo-link").innerHTML = link(todoRun.url, todoRun.id ? "Run " + todoRun.id : "-");
+
+    var runtimeRows = document.getElementById("runtime-rows");
+    var runtime = state.runtime_pc24x7 && Array.isArray(state.runtime_pc24x7.workflows) ? state.runtime_pc24x7.workflows : [];
+    runtimeRows.innerHTML = runtime.length ? runtime.map(function (item) {
+      var itemRun = item.latest_run || {};
+      return "<tr><td>" + esc(item.workflow) + "</td><td>" + esc(item.source_status || "-") + "</td><td>" + runBadge(itemRun) + "</td><td><code>" + esc(shortSha(itemRun.head_sha)) + "</code></td><td>" + link(itemRun.url, itemRun.id ? "Run " + itemRun.id : "-") + "</td></tr>";
+    }).join("") : '<tr><td colspan="5">Sem evidência disponível.</td></tr>';
+
+    var projectRows = document.getElementById("project-rows");
+    var projects = Array.isArray(state.projects) ? state.projects : [];
+    projectRows.innerHTML = projects.length ? projects.map(function (item) {
+      var ci = item.latest_ci || {};
+      var sourceClass = item.source_status === "available" ? "ok" : (item.source_status === "partial" ? "warn" : "bad");
+      var projectName = item.html_url ? link(item.html_url, item.label || item.repository) : esc(item.label || item.repository);
+      return "<tr><td>" + esc(item.priority || "-") + "</td><td>" + projectName + '<div class="muted small">' + esc(item.repository) + "</div></td><td><span class=\"badge " + sourceClass + "\">" + esc(item.source_status || "unknown") + "</span></td><td><code>" + esc(shortSha(item.main_sha)) + "</code></td><td>" + esc(item.open_pr_count == null ? "-" : item.open_pr_count) + "</td><td>" + runBadge(ci) + "</td><td>" + esc(item.pushed_at || item.updated_at || "-") + "</td></tr>";
+    }).join("") : '<tr><td colspan="7">Nenhum projeto configurado.</td></tr>';
+
+    var prRows = document.getElementById("pr-rows");
+    var prs = state.reqsys && Array.isArray(state.reqsys.open_prs) ? state.reqsys.open_prs : [];
+    prRows.innerHTML = prs.length ? prs.map(function (item) {
+      return "<tr><td>" + link(item.url, "#" + item.number) + "</td><td>" + esc(item.title) + "</td><td>" + (item.draft ? "sim" : "não") + "</td><td><code>" + esc(shortSha(item.head_sha)) + "</code></td><td>" + esc(item.updated_at || "-") + "</td></tr>";
+    }).join("") : '<tr><td colspan="5">Nenhum PR aberto ou fonte indisponível.</td></tr>';
+  }
+  fetch("global-status.json", {cache: "no-store"})
+    .then(function (response) {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    })
+    .then(render)
+    .catch(function (error) {
+      var state = document.getElementById("load-state");
+      state.classList.add("error");
+      state.textContent = "Dados ao vivo indisponíveis: " + error.message + ". Não será exibido estado operacional antigo como fallback.";
+    });
+}());
 </script>
 </body>
 </html>

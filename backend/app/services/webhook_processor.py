@@ -2,13 +2,13 @@ import json
 
 from sqlalchemy.orm import Session
 
-from app.models.requisito import Requisito
 from app.models.vinculo_git import VinculoGit
+from app.repositories.requisito_repository import RequisitoRepository
 from app.services.auditoria import registrar_evento
 
 
 def _resolver_requisito_id(db: Session, codigo: str) -> int | None:
-    req = db.query(Requisito).filter(Requisito.codigo == codigo).first()
+    req = RequisitoRepository(db).buscar_por_codigo(codigo)
     return req.id if req else None
 
 
@@ -57,7 +57,7 @@ def salvar_vinculos(db: Session, vinculos: list[dict]) -> list[int]:
         # PR/MR mergeado → marca requisito como implementado se ainda não estava encerrado
         if v.get('pr_merged') or v.get('mr_merged'):
             if req_id:
-                req = db.query(Requisito).filter(Requisito.id == req_id).first()
+                req = RequisitoRepository(db).buscar_por_id(req_id)
                 if req and req.status not in ('encerrado', 'implementado'):
                     status_anterior = req.status
                     req.status = 'implementado'

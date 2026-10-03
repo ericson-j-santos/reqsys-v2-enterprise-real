@@ -1,0 +1,38 @@
+name: Governance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f SECURITY.md
+          test -f .github/CODEOWNERS
+          test -f pyproject.toml
+
+      - name: Production guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R "CORS.*\*" -n src docs .github 2>/dev/null; then
+            echo "CORS wildcard detected"
+            exit 1
+          fi
+          if grep -R "password\|token\|connection string" -n src docs .github 2>/dev/null | grep -vi "guardrail"; then
+            echo "Potential sensitive log/string detected"
+            exit 1
+          fi

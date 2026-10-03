@@ -1,355 +1,707 @@
 <template>
-  <section class="page">
-    <div class="page-header">
+  <section class="dashboard-operacional" data-testid="route-dashboard" aria-labelledby="titulo-dashboard">
+    <div class="dashboard-header">
       <div>
-        <h1>Dashboard de Requisitos</h1>
-        <p class="muted dashboard-subtitle">Visão consolidada de métricas, pipeline operacional e informações do sistema.</p>
+        <p class="figma-eyebrow">ReqSys · Uso real · Painel do dia</p>
+        <h1 id="titulo-dashboard">Painel do dia</h1>
+        <p class="muted dashboard-subtitle">
+          Foque no que precisa de decisão: novas demandas, requisitos com baixa qualidade, aprovações, rastreabilidade e próximos passos.
+        </p>
       </div>
-      <v-chip size="small" color="amber" variant="tonal" data-testid="ambiente-chip">
-        {{ ambienteLabel }}
-      </v-chip>
+      <div class="header-actions">
+        <v-btn
+          color="info"
+          variant="tonal"
+          prepend-icon="mdi-briefcase-eye-outline"
+          data-testid="dashboard-abrir-painel-projetos"
+          @click="irPara({ path: '/painel-projetos' })"
+        >
+          Abrir Painel de projetos
+        </v-btn>
+        <AmbienteNavigator :environment-hint="ambienteLabel" test-id="ambiente-chip" />
+        <div
+          class="figma-semaforo-geral"
+          :class="`figma-semaforo-geral--${semaforoGeralValor}`"
+          data-testid="dashboard-semaforo-geral"
+        >
+          <span class="figma-semaforo-dot" :class="`figma-semaforo-dot--${semaforoGeralValor}`" />
+          Prontidão: {{ semaforoGeralLabel }}
+        </div>
+        <v-btn
+          color="primary"
+          variant="flat"
+          class="figma-btn-atualizar"
+          :loading="carregando"
+          data-testid="dashboard-atualizar"
+          @click="carregarTudo"
+        >
+          Atualizar
+        </v-btn>
+      </div>
     </div>
 
-    <v-row>
-      <v-col
+    <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
+
+    <section class="jornada-card figma-panel" aria-labelledby="titulo-jornada-real">
+      <div>
+        <h2 id="titulo-jornada-real">Jornada principal do requisito</h2>
+        <p class="panel-lead">
+          Entrada estruturada → Refinamento → Critérios de aceite → Aprovação → Rastreabilidade → Publicação.
+        </p>
+      </div>
+      <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus-circle-outline" data-testid="dashboard-novo-requisito" @click="irPara({ path: '/requisitos/coleta' })">
+        Nova demanda
+      </v-btn>
+    </section>
+
+    <div class="metrics-grid">
+      <OperationalMetricCard
         v-for="card in cards"
-        :key="card.titulo"
-        cols="12"
-        sm="6"
-        lg="3"
-      >
-        <v-menu open-on-hover open-on-click location="bottom" :offset="8">
-          <template #activator="{ props }">
-            <v-card
-              v-bind="props"
-              class="metric metric-interactive"
-              :data-testid="`metric-card-${card.id}`"
-              role="button"
-              tabindex="0"
-              @keyup.enter="irPara(card.rota)"
-              @keyup.space.prevent="irPara(card.rota)"
+        :key="card.id"
+        :label="card.label"
+        :value="card.value"
+        :semaforo="card.semaforo"
+        :icon="card.icon"
+        :hint="card.hint"
+        :test-id="`metric-card-${card.id}`"
+        @drilldown="irPara(card.rota)"
+      />
+    </div>
+
+    <section class="figma-panel coleta-panel" data-testid="dashboard-coleta-requisitos" aria-labelledby="titulo-coleta-requisitos">
+      <div class="coleta-header">
+        <div>
+          <p class="figma-eyebrow">Entrada governada · últimos {{ coletaMetricas.janela_dias || 30 }} dias</p>
+          <h2 id="titulo-coleta-requisitos">Qualidade da coleta de requisitos</h2>
+          <p class="panel-lead">
+            Mede a qualidade antes da criação do requisito e acompanha a entrega das mensagens no Teams usando a fila central já governada.
+          </p>
+        </div>
+        <v-btn variant="outlined" prepend-icon="mdi-file-document-plus-outline" @click="irPara({ path: '/requisitos/coleta' })">
+          Abrir nova demanda
+        </v-btn>
+      </div>
+
+      <v-alert v-if="coletaSemDados" type="info" variant="tonal" data-testid="coleta-sem-dados">
+        Ainda não há avaliações de coleta registradas nesta janela. Percentuais e tempo de refinamento permanecem sem valor até existirem evidências.
+      </v-alert>
+
+      <template v-else>
+        <div class="coleta-metrics-grid">
+          <div v-for="indicador in coletaIndicadores" :key="indicador.id" class="coleta-metric" :data-testid="`coleta-kpi-${indicador.id}`">
+            <span class="muted">{{ indicador.label }}</span>
+            <strong>{{ indicador.value }}</strong>
+            <small>{{ indicador.hint }}</small>
+          </div>
+        </div>
+
+        <div class="coleta-detail-grid">
+          <div class="coleta-detail-card">
+            <strong>Origem das coletas</strong>
+            <div v-if="origensColeta.length" class="coleta-lista">
+              <div v-for="item in origensColeta" :key="item.origem" class="coleta-lista-item">
+                <span>{{ rotuloOrigem(item.origem) }}</span>
+                <strong>{{ item.quantidade }}</strong>
+              </div>
+            </div>
+            <span v-else class="muted">Sem origem registrada na janela.</span>
+          </div>
+
+          <div class="coleta-detail-card">
+            <strong>Pendências atuais mais frequentes</strong>
+            <div v-if="pendenciasColeta.length" class="coleta-lista">
+              <div v-for="item in pendenciasColeta" :key="item.codigo" class="coleta-lista-item">
+                <span>{{ item.rotulo }}</span>
+                <strong>{{ item.quantidade }}</strong>
+              </div>
+            </div>
+            <span v-else class="muted">Nenhuma pendência de coleta em aberto na janela.</span>
+          </div>
+
+          <div class="coleta-detail-card" data-testid="coleta-teams-acompanhamento">
+            <strong>Acompanhamento no Teams</strong>
+            <div v-if="teamsColeta.notificacoes_total" class="coleta-lista">
+              <div class="coleta-lista-item">
+                <span>Enviadas</span>
+                <strong>{{ teamsColeta.enviadas ?? 0 }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Pendentes/processando</span>
+                <strong>{{ (teamsColeta.pendentes ?? 0) + (teamsColeta.processando ?? 0) }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Falhas</span>
+                <strong>{{ teamsColeta.falhas ?? 0 }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Taxa de sucesso</span>
+                <strong>{{ percentual(teamsColeta.taxa_sucesso_percentual) }}</strong>
+              </div>
+              <div class="coleta-lista-item">
+                <span>Latência média</span>
+                <strong>{{ latencia(teamsColeta.latencia_media_ms) }}</strong>
+              </div>
+            </div>
+            <span v-else class="muted">Nenhuma mensagem de acompanhamento registrada na janela.</span>
+            <v-btn
+              class="coleta-teams-link"
+              size="small"
+              variant="text"
+              prepend-icon="mdi-microsoft-teams"
+              @click="irPara({ path: '/notificacoes' })"
             >
-              <div class="metric-head">
-                <v-icon size="18" :icon="card.icone" class="metric-icon" />
-                <div class="metric-title-wrap">
-                  <div class="muted metric-title">{{ card.titulo }}</div>
-                </div>
-                <v-tooltip :text="card.tooltip" location="top">
-                  <template #activator="{ props: tooltipProps }">
-                    <v-btn
-                      v-bind="tooltipProps"
-                      icon="mdi-information-outline"
-                      variant="text"
-                      density="compact"
-                      size="x-small"
-                      :data-testid="`tooltip-${card.id}`"
-                      aria-label="Informação da métrica"
-                      @click.stop
-                    />
-                  </template>
-                </v-tooltip>
-              </div>
-
-              <div class="metric-value-row">
-                <div class="metric-value">{{ card.valor }}</div>
-                <v-tooltip text="Abrir analítico filtrado" location="top">
-                  <template #activator="{ props: actionProps }">
-                    <v-btn
-                      v-bind="actionProps"
-                      icon="mdi-open-in-new"
-                      variant="tonal"
-                      size="small"
-                      color="amber"
-                      aria-label="Abrir analítico filtrado da métrica"
-                      @click.stop="irPara(card.rota)"
-                    />
-                  </template>
-                </v-tooltip>
-              </div>
-            </v-card>
-          </template>
-
-          <v-card class="metric-preview pa-3">
-            <div class="preview-title">{{ card.titulo }}</div>
-            <div class="muted preview-text">{{ card.resumo }}</div>
-            <v-divider class="my-2" />
-            <div class="preview-value">Valor atual: {{ card.valor }}</div>
-            <v-btn class="mt-2" size="small" color="amber" variant="flat" @click="irPara(card.rota)">
-              Ver analítico
+              Abrir Control Center
             </v-btn>
-          </v-card>
-        </v-menu>
-      </v-col>
-    </v-row>
+          </div>
+        </div>
+      </template>
 
-    <v-row class="mt-1">
-      <v-col cols="12" lg="7">
-        <v-card class="mt-4">
-          <v-card-title>Pipeline operacional</v-card-title>
-          <v-card-text>
-            <v-timeline density="compact" side="end" truncate-line="both">
-              <v-timeline-item
-                v-for="step in pipelineSteps"
-                :key="step.titulo"
-                :dot-color="step.cor"
-              >
-                <div class="step-row">
-                  <strong>{{ step.titulo }}</strong>
-                  <v-tooltip :text="step.tooltip" location="top">
-                    <template #activator="{ props }">
-                      <v-icon v-bind="props" icon="mdi-help-circle-outline" size="16" class="step-help" />
-                    </template>
-                  </v-tooltip>
-                </div>
-                <div class="muted">{{ step.descricao }}</div>
-              </v-timeline-item>
-            </v-timeline>
-          </v-card-text>
-        </v-card>
-      </v-col>
+      <small class="muted coleta-nota">{{ coletaMetricas.nota_dados || 'Os indicadores são derivados da auditoria da coleta governada.' }}</small>
+    </section>
 
-      <v-col cols="12" lg="5">
-        <v-card class="mt-4" data-testid="dashboard-info-card">
-          <v-card-title>Informações do sistema</v-card-title>
-          <v-card-text>
-            <div class="info-line">
-              <span class="muted">Total de requisitos:</span>
-              <strong>{{ totalRequisitosInfo }}</strong>
+    <div class="lower-panels">
+      <section class="figma-panel pipeline-panel">
+        <h2>Próximas ações</h2>
+        <p class="panel-lead">Etapas orientadas à rotina do analista, sem exigir leitura de detalhes técnicos de ambiente, CI ou runtime.</p>
+        <div class="timeline-steps">
+          <div
+            v-for="step in pipelineSteps"
+            :key="step.id"
+            class="timeline-step"
+            role="button"
+            tabindex="0"
+            :data-testid="`pipeline-step-${step.id}`"
+            @click="irPara(step.rota)"
+            @keyup.enter="irPara(step.rota)"
+            @keyup.space.prevent="irPara(step.rota)"
+          >
+            <div>
+              <strong>{{ step.titulo }}</strong>
+              <span>{{ step.descricao }}</span>
             </div>
-            <div class="info-line">
-              <span class="muted">Status:</span>
-              <strong>{{ sistemaStatus }}</strong>
-            </div>
-            <div class="info-line">
-              <span class="muted">Atualizado em:</span>
-              <strong>{{ timestampLabel }}</strong>
-            </div>
+            <span class="step-btn">Abrir</span>
+          </div>
+        </div>
+      </section>
 
-            <v-divider class="my-3" />
-
-            <div class="muted mb-2">Endpoints críticos</div>
-            <v-list density="compact" class="dashboard-list">
-              <v-list-item
-                v-for="ep in endpointsCriticos"
-                :key="`${ep.metodo}-${ep.url}`"
-                :title="ep.titulo"
-                :subtitle="`${ep.metodo} ${ep.url}`"
-              />
-            </v-list>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
+      <section class="figma-panel info-panel" data-testid="dashboard-info-card">
+        <h2>Atalhos de decisão</h2>
+        <p class="panel-lead">Acessos úteis para transformar demanda em requisito pronto para desenvolvimento.</p>
+        <div class="figma-list">
+          <div
+            v-for="item in painelDireito"
+            :key="item.id"
+            class="figma-list-item"
+            role="button"
+            tabindex="0"
+            :data-testid="item.testId"
+            @click="irPara(item.rota)"
+            @keyup.enter="irPara(item.rota)"
+            @keyup.space.prevent="irPara(item.rota)"
+          >
+            <strong>{{ item.title }}</strong>
+            <small>{{ item.subtitle }}</small>
+          </div>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
+
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import OperationalMetricCard from '../components/OperationalMetricCard.vue'
+import AmbienteNavigator from '../components/AmbienteNavigator.vue'
 import { useRequisitosStore } from '../stores/requisitos'
+import { semaforoGeral, normalizarSemaforo } from '../utils/filtrosMonitoramento'
 
 const store = useRequisitosStore()
 const router = useRouter()
+const carregando = ref(false)
+const erro = ref('')
 
-onMounted(async () => {
-  await Promise.all([store.carregarMetricas(), store.carregarDashboardInfo(), store.carregarQualidadeIA()])
+onMounted(carregarTudo)
+
+async function carregarTudo() {
+  carregando.value = true
+  erro.value = ''
+  try {
+    await Promise.all([
+      store.carregarMetricas(),
+      store.carregarMetricasColeta(30),
+      store.carregarDashboardInfo(),
+      store.carregarQualidadeIA(),
+    ])
+  } catch (e) {
+    erro.value = e?.message || 'Erro ao carregar o painel do dia'
+  } finally {
+    carregando.value = false
+  }
+}
+
+function semaforoQualidadeIA(score) {
+  const valor = Number(score ?? 0)
+  if (valor < 70) return 'vermelho'
+  if (valor < 90) return 'amarelo'
+  return 'verde'
+}
+
+function semaforoContagem(valor, limiarAtencao = 0) {
+  return Number(valor) > limiarAtencao ? 'amarelo' : 'verde'
+}
+
+function semaforoProntidao(valor, limiarBloqueio = 0) {
+  return Number(valor) > limiarBloqueio ? 'vermelho' : 'verde'
+}
+
+function percentual(valor) {
+  if (valor === null || valor === undefined) return '—'
+  return `${Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+}
+
+function pontuacao(valor) {
+  if (valor === null || valor === undefined) return '—'
+  return Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+}
+
+function tempoRefinamento(valor) {
+  if (valor === null || valor === undefined) return '—'
+  const minutos = Number(valor)
+  if (minutos < 60) return `${Math.round(minutos)} min`
+  return `${(minutos / 60).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`
+}
+
+function latencia(valor) {
+  if (valor === null || valor === undefined) return '—'
+  return `${Math.round(Number(valor))} ms`
+}
+
+function rotuloOrigem(origem) {
+  return ({
+    reqsys: 'ReqSys',
+    microsoft_forms: 'Microsoft Forms',
+    power_apps: 'Power Apps',
+    teams: 'Teams',
+    power_automate: 'Power Automate',
+    outro: 'Outro',
+  })[origem] || origem || 'Desconhecida'
+}
+
+const cards = computed(() => {
+  const scoreIA = Math.round(store.qualidadeIAResumo.score_geral ?? 0)
+  const pendentes = store.metricas.pendentes ?? 0
+  const emAnalise = store.metricas.em_analise ?? 0
+  const aprovados = store.metricas.aprovados ?? 0
+  const total = store.metricas.total ?? 0
+  const baixaQualidade = scoreIA < 70 ? emAnalise || pendentes || 1 : 0
+
+  return [
+    {
+      id: 'minhas-demandas',
+      label: 'Demandas abertas',
+      value: total,
+      semaforo: 'verde',
+      icon: 'mdi-file-document-edit-outline',
+      hint: 'Demandas e requisitos cadastrados para acompanhamento',
+      rota: { path: '/requisitos' },
+    },
+    {
+      id: 'aguardando-refinamento',
+      label: 'Em refinamento',
+      value: emAnalise,
+      semaforo: semaforoContagem(emAnalise),
+      icon: 'mdi-clipboard-text-search-outline',
+      hint: 'Itens que precisam virar requisito testável, história ou critério de aceite',
+      rota: { path: '/requisitos', query: { status: 'em_analise' } },
+    },
+    {
+      id: 'baixa-qualidade',
+      label: 'Baixa qualidade',
+      value: baixaQualidade,
+      semaforo: semaforoProntidao(baixaQualidade),
+      icon: 'mdi-alert-decagram-outline',
+      hint: 'Itens que exigem revisão por clareza, completude ou testabilidade',
+      rota: { path: '/qualidade-ia' },
+    },
+    {
+      id: 'aprovados',
+      label: 'Aprovados',
+      value: aprovados,
+      semaforo: 'verde',
+      icon: 'mdi-check-decagram-outline',
+      hint: 'Requisitos prontos para execução ou publicação',
+      rota: { path: '/requisitos', query: { status: 'aprovado' } },
+    },
+    {
+      id: 'rastreabilidade',
+      label: 'Rastreabilidade',
+      value: aprovados,
+      semaforo: aprovados > 0 ? 'verde' : 'amarelo',
+      icon: 'mdi-vector-link',
+      hint: 'Itens que devem manter origem, decisão, história, entrega e evidência',
+      rota: { path: '/rastreabilidade' },
+    },
+    {
+      id: 'pendencias',
+      label: 'Pendências',
+      value: pendentes,
+      semaforo: semaforoContagem(pendentes),
+      icon: 'mdi-alert-circle-outline',
+      hint: 'Itens aguardando triagem, decisão ou complementação',
+      rota: { path: '/requisitos', query: { status: 'recebido' } },
+    },
+  ]
 })
 
-const cards = computed(() => [
+const coletaMetricas = computed(() => store.metricasColeta || {})
+const coletaSemDados = computed(() => coletaMetricas.value.sem_dados !== false)
+const origensColeta = computed(() => coletaMetricas.value.origens || [])
+const pendenciasColeta = computed(() => coletaMetricas.value.principais_pendencias || [])
+const teamsColeta = computed(() => coletaMetricas.value.acompanhamento_teams || {})
+const coletaIndicadores = computed(() => [
   {
-    id: 'requisitos',
-    titulo: 'Requisitos',
-    valor: store.metricas.total ?? 0,
-    icone: 'mdi-file-document-outline',
-    tooltip: 'Quantidade total de requisitos cadastrados.',
-    resumo: 'Acompanhe a base completa de requisitos e entre no módulo para filtrar por área, urgência e status.',
-    rota: { path: '/requisitos' },
+    id: 'total',
+    label: 'Coletas',
+    value: coletaMetricas.value.coletas_total ?? 0,
+    hint: 'Necessidades únicas avaliadas na janela',
   },
   {
-    id: 'em-analise',
-    titulo: 'Em análise',
-    valor: store.metricas.em_analise ?? 0,
-    icone: 'mdi-chart-timeline-variant',
-    tooltip: 'Requisitos atualmente em avaliação técnica/funcional.',
-    resumo: 'Abre o analítico de requisitos filtrado por status em análise.',
-    rota: { path: '/requisitos', query: { status: 'em_analise' } },
+    id: 'primeira-submissao',
+    label: 'Aprovadas na 1ª submissão',
+    value: percentual(coletaMetricas.value.taxa_aprovacao_primeira_submissao_percentual),
+    hint: 'Coletas que atingiram o verificação obrigatória mínimo já na primeira avaliação',
   },
   {
-    id: 'aprovados',
-    titulo: 'Aprovados',
-    valor: store.metricas.aprovados ?? 0,
-    icone: 'mdi-check-decagram-outline',
-    tooltip: 'Requisitos aprovados para execução.',
-    resumo: 'Abre o analítico de requisitos aprovados para execução e rastreabilidade.',
-    rota: { path: '/requisitos', query: { status: 'aprovado' } },
+    id: 'pontuacao-media',
+    label: 'Pontuação média atual',
+    value: pontuacao(coletaMetricas.value.pontuacao_media_atual),
+    hint: 'Última avaliação conhecida de cada coleta',
   },
   {
-    id: 'qualidade-ia',
-    titulo: 'Qualidade IA',
-    valor: `${Math.round((store.qualidadeIAResumo.score_geral ?? 0))}%`,
-    icone: 'mdi-brain',
-    tooltip: 'Score geral de qualidade do módulo de IA monitorado no backend.',
-    resumo: 'Monitore acurácia, consistência, segurança e tendência de qualidade dos resultados de IA.',
+    id: 'refinamento',
+    label: 'Em refinamento',
+    value: coletaMetricas.value.em_refinamento ?? 0,
+    hint: 'Coletas ainda abaixo do verificação obrigatória e sem requisito gerado',
+  },
+  {
+    id: 'tempo-refinamento',
+    label: 'Tempo médio de refinamento',
+    value: tempoRefinamento(coletaMetricas.value.tempo_medio_refinamento_minutos),
+    hint: 'Do primeiro bloqueio até a geração, somente quando houve refinamento',
+  },
+  {
+    id: 'gerados',
+    label: 'Requisitos gerados',
+    value: coletaMetricas.value.requisitos_gerados ?? 0,
+    hint: 'Gerações idempotentes originadas da coleta governada',
+  },
+])
+
+const resumoSemaforo = computed(() => {
+  return cards.value.reduce((acc, card) => {
+    const chave = card.semaforo || 'desconhecido'
+    acc[chave] = (acc[chave] || 0) + 1
+    return acc
+  }, { verde: 0, amarelo: 0, vermelho: 0, bloqueado: 0 })
+})
+
+const semaforoGeralValor = computed(() => semaforoGeral(resumoSemaforo.value))
+const semaforoGeralLabel = computed(() => normalizarSemaforo(semaforoGeralValor.value).label)
+
+const pipelineSteps = [
+  {
+    id: 'entrada',
+    titulo: 'Registrar ou revisar entrada',
+    descricao: 'Capturar problema, objetivo, regras, critérios de aceite e dependências antes de gerar o requisito.',
+    rota: { path: '/requisitos/coleta' },
+  },
+  {
+    id: 'refinamento',
+    titulo: 'Refinar para requisito testável',
+    descricao: 'Melhorar clareza, remover ambiguidade e gerar critérios de aceite.',
     rota: { path: '/qualidade-ia' },
   },
   {
-    id: 'pendencias',
-    titulo: 'Pendências',
-    valor: store.metricas.pendentes ?? 0,
-    icone: 'mdi-alert-circle-outline',
-    tooltip: 'Itens que ainda demandam ajuste ou decisão.',
-    resumo: 'Abre o analítico de requisitos recebidos, que normalmente ainda exigem triagem ou decisão.',
-    rota: { path: '/requisitos', query: { status: 'recebido' } },
+    id: 'aprovacao',
+    titulo: 'Aprovar ou devolver',
+    descricao: 'Decidir se o item está pronto para execução ou precisa de complemento.',
+    rota: { path: '/pipeline' },
+  },
+  {
+    id: 'rastreio',
+    titulo: 'Rastrear entrega',
+    descricao: 'Conectar requisito, história, Solicitação de integração, evidência e publicação.',
+    rota: { path: '/rastreabilidade' },
+  },
+]
+
+const painelDireito = computed(() => [
+  {
+    id: 'novo-requisito',
+    title: 'Cadastrar nova demanda',
+    subtitle: 'Comece pela necessidade de negócio e passe pelo verificação obrigatória de qualidade da coleta',
+    rota: { path: '/requisitos/coleta' },
+    testId: 'destino-novo-requisito',
+  },
+  {
+    id: 'criterios-aceite',
+    title: 'Validar critérios de aceite',
+    subtitle: 'Revise BDD, DoD, ambiguidade e completude',
+    rota: { path: '/qualidade-ia' },
+    testId: 'destino-criterios-aceite',
+  },
+  {
+    id: 'publicar-integracao',
+    title: 'Painel de projetos',
+    subtitle: 'Acompanhar Planner, integrações, andamento e evidências dos projetos',
+    rota: { path: '/painel-projetos' },
+    testId: 'destino-publicar-integracao',
+  },
+  {
+    id: 'auditar-decisao',
+    title: 'Auditar decisão',
+    subtitle: 'Ver linha do tempo, responsável e evidência da mudança',
+    rota: { path: '/auditoria' },
+    testId: 'destino-auditar-decisao',
   },
 ])
 
 function irPara(rota) {
-  if (!rota) return
+  if (!rota?.path) return
   router.push(rota)
 }
 
-const pipelineSteps = [
-  {
-    titulo: 'Entrada',
-    descricao: 'SharePoint, Forms e planilhas Excel',
-    cor: 'blue',
-    tooltip: 'Fontes de entrada da demanda de negócio.',
-  },
-  {
-    titulo: 'Normalização e validação',
-    descricao: 'Padronização e checagens de consistência',
-    cor: 'green',
-    tooltip: 'Aplicação de regras para garantir qualidade dos dados.',
-  },
-  {
-    titulo: 'Estruturação do requisito',
-    descricao: 'Requisito, histórias e backlog',
-    cor: 'orange',
-    tooltip: 'Transformação da demanda em artefatos rastreáveis.',
-  },
-  {
-    titulo: 'Publicação e auditoria',
-    descricao: 'Redmine, Planner e trilha de auditoria',
-    cor: 'purple',
-    tooltip: 'Distribuição para execução e registro de governança.',
-  },
-]
-
 const dashboardInfo = computed(() => store.dashboardInfo || {})
 const resumo = computed(() => dashboardInfo.value.resumo || {})
-
-const totalRequisitosInfo = computed(() => resumo.value.total_requisitos ?? store.metricas.total ?? 0)
-const sistemaStatus = computed(() => resumo.value.sistema_status || 'indisponível')
-const ambienteLabel = computed(() => (resumo.value.ambiente || 'desconhecido').replace('_', ' '))
-const endpointsCriticos = computed(() => dashboardInfo.value.endpoints_criticos || [])
-
-const timestampLabel = computed(() => {
-  const raw = dashboardInfo.value.timestamp
-  if (!raw) return '—'
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) return raw
-  return date.toLocaleString('pt-BR')
-})
+const ambienteLabel = computed(() => (resumo.value.ambiente || 'desenvolvimento').replace(/_/g, ' '))
 </script>
 
 <style scoped>
-.dashboard-subtitle {
-  max-width: 58ch;
-}
-
-.metric {
-  height: 100%;
-  min-height: 132px;
-  padding: 14px;
-}
-
-.metric-interactive {
-  cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.metric-interactive:hover,
-.metric-interactive:focus-visible {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 2px;
-}
-
-.metric-head {
+.dashboard-operacional {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
+  padding: var(--space-xs);
 }
 
-.metric-title-wrap {
-  flex: 1;
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
-.metric-title {
-  font-size: 13px;
-}
-
-.metric-value-row {
+.header-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.metric-preview {
-  width: min(360px, calc(100vw - 32px));
-  border-radius: 12px;
-}
-
-.preview-title {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.preview-text {
-  margin-top: 6px;
-  line-height: 1.45;
-}
-
-.preview-value {
-  font-weight: 700;
-}
-
-.metric-icon {
-  color: var(--accent);
-}
-
-.step-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-}
-
-.step-help {
-  color: var(--muted);
-  cursor: help;
-}
-
-.info-line {
-  display: flex;
-  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
-.dashboard-list {
-  background: transparent !important;
+.dashboard-subtitle {
+  max-width: 72ch;
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-base);
 }
 
-@media (max-width: 600px) {
-  .metric-value {
-    font-size: 28px;
+.jornada-card,
+.coleta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.jornada-card {
+  margin-top: var(--space-lg);
+}
+
+.jornada-card h2,
+.coleta-panel h2 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: var(--space-lg);
+}
+
+.coleta-panel {
+  margin-top: var(--space-lg);
+}
+
+.coleta-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: var(--space-lg);
+}
+
+.coleta-metric,
+.coleta-detail-card {
+  border: 1px solid rgba(128, 128, 128, 0.24);
+  border-radius: 12px;
+  padding: var(--space-lg);
+}
+
+.coleta-metric {
+  display: grid;
+  gap: 4px;
+}
+
+.coleta-metric strong {
+  font-size: var(--font-size-2xl);
+  line-height: 1.1;
+}
+
+.coleta-metric small,
+.coleta-nota {
+  color: var(--muted);
+}
+
+.coleta-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: var(--space-md);
+}
+
+.coleta-lista {
+  display: grid;
+  gap: 8px;
+  margin-top: var(--space-md);
+}
+
+.coleta-lista-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.coleta-teams-link {
+  margin-top: var(--space-sm);
+}
+
+.coleta-nota {
+  display: block;
+  margin-top: var(--space-md);
+}
+
+.lower-panels {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 16px;
+  margin-top: var(--space-lg);
+}
+
+.pipeline-panel h2,
+.info-panel h2 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+}
+
+.panel-lead {
+  margin: 0 0 var(--space-lg);
+  color: var(--muted);
+  font-size: var(--font-size-md);
+}
+
+.timeline-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.timeline-step {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: var(--space-md) var(--space-md);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.timeline-step:hover,
+.timeline-step:focus-visible {
+  background: rgba(243, 146, 0, 0.08);
+  outline: none;
+}
+
+.timeline-step strong {
+  display: block;
+}
+
+.timeline-step span {
+  color: var(--muted);
+  font-size: var(--font-size-md);
+}
+
+.step-btn {
+  color: var(--accent);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.figma-list {
+  display: grid;
+  gap: 8px;
+}
+
+.figma-btn-atualizar {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  padding-inline: var(--space-lg) !important;
+}
+
+.erro {
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  color: var(--red);
+  padding: 0.75rem;
+}
+
+@media (max-width: 1100px) {
+  .metrics-grid,
+  .coleta-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .metric-preview {
-    width: calc(100vw - 24px);
+  .lower-panels,
+  .coleta-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .dashboard-header,
+  .jornada-card,
+  .coleta-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .metrics-grid,
+  .coleta-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .figma-pill,
+  .figma-btn-atualizar {
+    width: 100%;
+    text-align: center;
   }
 }
 </style>
