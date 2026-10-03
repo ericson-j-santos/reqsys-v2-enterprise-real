@@ -97,7 +97,7 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     try:
-        portable = portable_dev.verify_if_active()
+        portable = portable_dev.control_if_active(apply=args.apply, publish=args.apply)
     except portable_dev.PortableRuntimeError as exc:
         print(json.dumps({
             "ready": False, "runtime_provider": "self_hosted_dev",
@@ -107,8 +107,9 @@ def main() -> int:
         }, sort_keys=True))
         return 2
     if portable is not None:
-        print(json.dumps({**portable, "ready": False, "apply": args.apply,
-                          "legacy_supervision_deferred": True}, sort_keys=True))
+        print(json.dumps({**portable, "ready": portable.get("local_runtime_contract_ready") is True
+                          and (portable.get("published") is True if args.apply else True),
+                          "apply": args.apply, "legacy_supervision_deferred": False}, sort_keys=True))
         return 0
 
     payload: dict[str, Any] = {

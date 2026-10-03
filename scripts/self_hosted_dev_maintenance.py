@@ -352,3 +352,24 @@ def verify_if_active(expected_sha: str | None = None) -> dict[str, Any] | None:
         "secrets_read": False,
         "secret_value_exposed": False,
     }
+
+
+def control_if_active(expected_sha=None, *, apply=False, publish=False, sign_only_output=None):
+    """Use the receipt-bound candidate controller only after an active marker exists."""
+    # Preserve the absent/invalid-marker boundary before importing dependencies.
+    marker = read_marker()
+    if marker is None:
+        return None
+    if expected_sha is not None and expected_sha != marker["source_sha"]:
+        raise PortableRuntimeError("portable_cutover_expected_sha_mismatch")
+    try:
+        from scripts import self_hosted_dev_candidate_control as candidate
+    except ModuleNotFoundError:
+        import self_hosted_dev_candidate_control as candidate
+    try:
+        return candidate.Controller(marker["source_sha"]).maintain(
+            marker, publish=publish, apply=apply, sign_only_output=sign_only_output)
+    except PortableRuntimeError:
+        raise
+    except Exception:
+        raise PortableRuntimeError("portable_cutover_controller_failed") from None

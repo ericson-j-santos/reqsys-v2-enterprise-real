@@ -293,15 +293,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        portable = portable_dev.verify_if_active()
+        portable = portable_dev.control_if_active(
+            publish=True, sign_only_output=args.envelope_output if args.sign_only else None)
     except portable_dev.PortableRuntimeError as exc:
         print(json.dumps({"published": False, "usable": False,
                           "runtime_provider": "self_hosted_dev",
                           "error": exc.code, "legacy_runtime_touched": False}, sort_keys=True))
         return 2
     if portable is not None:
-        print(json.dumps({**portable, "published": False, "signed": False,
-                          "candidate_locator_publication_deferred": True}, sort_keys=True))
+        print(json.dumps({**portable, "candidate_locator_publication_deferred": False}, sort_keys=True))
         return 0
     key, cfg = ensure_identity()
     urls = healthy_urls()

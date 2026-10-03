@@ -213,7 +213,7 @@ def test_public_entrypoints_do_not_touch_legacy_runtime_with_valid_marker(
     if filename == "pc24x7_dev_locator_publisher.py":
         pytest.importorskip("cryptography")
     module = _load(filename)
-    monkeypatch.setattr(module.portable_dev, "verify_if_active", lambda *args: _ready())
+    monkeypatch.setattr(module.portable_dev, "control_if_active", lambda *args, **kwargs: _ready())
     monkeypatch.setattr(module, blocked_name, _forbidden)
     monkeypatch.setattr(sys, "argv", [filename])
     assert module.main() == 0
@@ -229,10 +229,10 @@ def test_invalid_marker_cli_fails_without_discovering_legacy_resources(monkeypat
         pytest.importorskip("cryptography")
     module = _load(filename)
 
-    def invalid(*args):
+    def invalid(*args, **kwargs):
         raise maintenance.PortableRuntimeError("portable_runtime_marker_identity_invalid")
 
-    monkeypatch.setattr(module.portable_dev, "verify_if_active", invalid)
+    monkeypatch.setattr(module.portable_dev, "control_if_active", invalid)
     monkeypatch.setattr(sys, "argv", [filename])
     assert module.main() == 2
 

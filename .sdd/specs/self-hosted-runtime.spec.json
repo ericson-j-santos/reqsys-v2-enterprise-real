@@ -48,7 +48,9 @@
     "scripts/restore_self_hosted_dev_postgres.py",
     "tests/test_restore_self_hosted_dev_postgres.py",
     "scripts/verify_self_hosted_dev_azure_auth.py",
-    "tests/test_verify_self_hosted_dev_azure_auth.py"
+    "tests/test_verify_self_hosted_dev_azure_auth.py",
+    "scripts/self_hosted_dev_candidate_control.py",
+    "tests/test_self_hosted_dev_candidate_control.py"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
@@ -61,7 +63,8 @@
       "tests/test_pc24x7_dev_runtime_supervisor.py",
       "tests/test_reqsys_dev_runtime_key_handoff.py",
       "tests/test_restore_self_hosted_dev_postgres.py",
-      "tests/test_verify_self_hosted_dev_azure_auth.py"
+      "tests/test_verify_self_hosted_dev_azure_auth.py",
+      "tests/test_self_hosted_dev_candidate_control.py"
     ],
     "tests": [
       "tests/test_self_hosted_runtime.py",
@@ -73,9 +76,10 @@
       "tests/test_pc24x7_dev_runtime_supervisor.py",
       "tests/test_reqsys_dev_runtime_key_handoff.py",
       "tests/test_restore_self_hosted_dev_postgres.py",
-      "tests/test_verify_self_hosted_dev_azure_auth.py"
+      "tests/test_verify_self_hosted_dev_azure_auth.py",
+      "tests/test_self_hosted_dev_candidate_control.py"
     ],
-    "evidence_contract": "Diagnóstico físico governado, PostgreSQL atual e backup consistente protegido. Restauração e leitura independente de todas as tabelas, sequências e conteúdo; fidelidade de JWT/cofre/chaves cifradas. Ações Owner Risk3 específicas e temporárias. Manutenção, login Microsoft real e ingresso público têm provas distintas no mesmo SHA. Nenhuma promoção de produção."
+    "evidence_contract": "Diagnóstico físico governado, PostgreSQL atual e backup consistente protegido. Restauração e leitura independente de todas as tabelas, sequências e conteúdo; fidelidade de JWT/cofre/chaves cifradas. Ações Owner Risk3 específicas e temporárias. Manutenção, login Microsoft real e ingresso público têm provas distintas no mesmo SHA. Nenhuma promoção de produção. Controller portátil mantém somente serviços, projeto, instância DEV e túneis candidatos próprios. Publicação exige restauração PostgreSQL, autenticação Azure real, congelamento autoritativo e recibo privado; nenhum retorno ao legado após marcador válido."
   },
   "risk": {
     "production": false,

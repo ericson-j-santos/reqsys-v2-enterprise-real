@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SCRIPTS = (
     "pc24x7_dev_runtime_supervisor.py",
     "self_hosted_dev_maintenance.py",
+    "self_hosted_dev_candidate_control.py",
+    "reqsys_self_hosted_dev_publish.py",
     "pc24x7_public_dev_tunnel.py",
     "pc24x7_dev_locator_publisher.py",
 )

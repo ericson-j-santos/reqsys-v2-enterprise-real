@@ -37,3 +37,6 @@ Fly.io definitivamente em todas as solucoes. OPS-GAP-FLY-RETIREMENT.
 - O Owner Gateway mantém a negação padrão; ações locais críticas usam autorizações específicas, temporárias, vinculadas ao código revisado.
 
 O ensaio PostgreSQL usa o arquivo DPAPI da base atual, restaura apenas candidato vazio e inativo, verifica COPY por conteúdo e estado de sequências. A configuração exige fidelidade exata de JWT, issuer/audience, cofre e chave de histórico. Prova de sessão Azure exige IdToken explicitamente provisionado e controles negativos; teste de callback interativo permanece separado. Nenhum resultado de preparação permite cutover sem prova recente de congelamento da origem e validação do ingresso público.
+
+
+O controlador permanente atua somente no projeto e nos túneis DEV próprios. A publicação oficial exige provas privadas da restauração PostgreSQL, do login Azure real e de congelamento da origem, vinculadas ao mesmo SHA. O recibo antecede o marcador e a publicação; falha da publicação preserva o marcador novo para retomada segura. A manutenção verifica a identidade do cluster e permite alterações legítimas nas tabelas e no cofre após a ativação. Evidência histórica de autenticação não equivale a novo teste de login nem a validação interativa do callback.
