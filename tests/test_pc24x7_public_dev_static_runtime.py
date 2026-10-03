@@ -48,7 +48,15 @@ def test_public_gateway_defers_optional_runtime_core_dns_resolution() -> None:
     assert "proxy_pass http://$reqsys_runtime_upstream/health;" in raw
     assert "proxy_pass http://$reqsys_runtime_upstream/api/runtime/build-info;" in raw
     assert "proxy_pass http://$reqsys_runtime_upstream/api/todo-events;" in raw
-    assert "proxy_pass http://$reqsys_runtime_upstream/api/todo-events/;" in raw
+
+
+def test_public_gateway_preserves_runtime_todo_subpath_and_query() -> None:
+    raw = NGINX.read_text(encoding="utf-8")
+    assert "location ^~ /runtime-core/api/todo-events/" in raw
+    # A rewrite replacement without '?' retains the original query string.
+    assert "rewrite ^/runtime-core(/api/todo-events/.*)$ $1 break;" in raw
+    assert "proxy_pass http://$reqsys_runtime_upstream;" in raw
+    assert "proxy_pass http://$reqsys_runtime_upstream/api/todo-events/;" not in raw
 
 
 def test_reconciler_is_dev_only_fast_forward_and_recreates_only_public_surface() -> None:
