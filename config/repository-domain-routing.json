@@ -1,0 +1,194 @@
+{
+  "schema_version": "1.0.0",
+  "source_repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "strategy": {
+    "mode": "strangler",
+    "shared_ci_repository": "ericson-j-santos/reqsys-ci-platform",
+    "compatibility_window_required": true,
+    "remove_source_only_after_equivalence": true,
+    "preserve_required_core_gates": true,
+    "repository_creation_default_visibility": "public"
+  },
+  "workflow_inventory": {
+    "baseline_main_sha": "e41076b611450f2e49d5e9988045e65cb91a17fe",
+    "baseline_count": 575,
+    "enforce_exact_count": true,
+    "purpose": "Qualquer adição/remoção de workflow ativo exige atualização explícita deste inventário."
+  },
+  "migration_order": [
+    "ci-platform",
+    "bacen",
+    "m365",
+    "runtime-platform",
+    "product-intelligence"
+  ],
+  "protected_core_workflows": [
+    "ReqSys Required Fast Gate",
+    "CI — ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "PR Evidence Gate",
+    "Governed Merge Queue",
+    "Security Baseline Gate",
+    "Branch Protection Audit"
+  ],
+  "domains": [
+    {
+      "id": "core",
+      "target_repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+      "migration_state": "retain",
+      "source_paths": [
+        "backend/**",
+        "frontend/**",
+        "contracts/openapi/**",
+        "e2e/**",
+        "frontend/tests/e2e/**"
+      ],
+      "workflow_globs": [],
+      "rationale": "Produto ReqSys e E2E central permanecem juntos para evitar coordenação cross-repo prematura."
+    },
+    {
+      "id": "ci-platform",
+      "target_repository": "ericson-j-santos/reqsys-ci-platform",
+      "migration_state": "prepared",
+      "source_paths": [
+        "platform/reqsys-ci-platform/**"
+      ],
+      "workflow_globs": [],
+      "rationale": "Reusable workflows, contratos e guardrails compartilhados sem duplicar CI por domínio."
+    },
+    {
+      "id": "bacen",
+      "target_repository": "ericson-j-santos/reqsys-governance-bacen",
+      "migration_state": "prepared_for_shadow_copy",
+      "source_paths": [
+        "governance/bacen/**",
+        "docs/**/bacen*",
+        "scripts/*bacen*",
+        "tests/*bacen*"
+      ],
+      "workflow_globs": [
+        "bacen-*.yml",
+        "bacen-*.yaml"
+      ],
+      "workflow_files": [
+        "bacen-02-consolidated-readiness.yml",
+        "bacen-02-governed-mfa-ingestion.yml",
+        "bacen-05-consolidated-readiness.yml",
+        "bacen-05-governed-dpa-ingestion.yml",
+        "bacen-08-consolidated-readiness.yml",
+        "bacen-57-simulation-assessment.yml",
+        "bacen-access-control-baseline.yml",
+        "bacen-access-exception-lifecycle-readiness.yml",
+        "bacen-access-review-approval-reference-readiness.yml",
+        "bacen-access-review-integrity-readiness.yml",
+        "bacen-access-review-readiness.yml",
+        "bacen-access-review-segregation-readiness.yml",
+        "bacen-annual-report-action-plan-traceability.yml",
+        "bacen-annual-report-cycle-readiness.yml",
+        "bacen-annual-report-gate.yml",
+        "bacen-annual-report-incident-linkage.yml",
+        "bacen-annual-report-narrative-readiness.yml",
+        "bacen-annual-report-signoff-readiness.yml",
+        "bacen-audit-evidence-index.yml",
+        "bacen-backup-restore-evidence.yml",
+        "bacen-critical-vendor-due-diligence.yml",
+        "bacen-data-residency-readiness.yml",
+        "bacen-derived-status-gate.yml",
+        "bacen-dpa-evidence-contract.yml",
+        "bacen-dpa-lifecycle-readiness.yml",
+        "bacen-dpa-reference-integrity.yml",
+        "bacen-executive-designation-lifecycle.yml",
+        "bacen-executive-readiness.yml",
+        "bacen-external-evidence-consolidation.yml",
+        "bacen-gate-1-5.yml",
+        "bacen-hitl-formal-completion-proposal.yml",
+        "bacen-human-action-issue-sync.yml",
+        "bacen-human-actions-backlog.yml",
+        "bacen-idp-mfa-evidence.yml",
+        "bacen-incident-exercise.yml",
+        "bacen-legal-signoff-segregation-readiness.yml",
+        "bacen-mfa-evidence-provenance-readiness.yml",
+        "bacen-minimum-controls-gate.yml",
+        "bacen-nonprod-tolerance-guard.yml",
+        "bacen-normative-axis-gate.yml",
+        "bacen-policy-approval-authority-readiness.yml",
+        "bacen-policy-governance-attestation.yml",
+        "bacen-policy-review-cycle-readiness.yml",
+        "bacen-policy-signed-attestation-readiness.yml",
+        "bacen-production-formal-gate.yml",
+        "bacen-production-hard-gate.yml",
+        "bacen-production-readiness-gate2.yml",
+        "bacen-reference-hash-capture.yml",
+        "bacen-regulatory-no-regression-gate.yml",
+        "bacen-service-account-review-readiness.yml",
+        "bacen-stg-restore-test.yml",
+        "bacen-structural-gate.yml",
+        "bacen-subprocessor-readiness.yml",
+        "bacen-third-party-classification-risk.yml",
+        "bacen-third-party-config-source-integrity.yml",
+        "bacen-third-party-ecosystem-concentration.yml",
+        "bacen-third-party-register-gate.yml",
+        "bacen-vendor-accountability-readiness.yml",
+        "bacen-vendor-data-classification-readiness.yml",
+        "bacen-vendor-dpa-readiness.yml",
+        "bacen-vendor-exit-readiness.yml",
+        "bacen-vendor-incident-notification-readiness.yml",
+        "bacen-vendor-processing-terms-readiness.yml",
+        "bacen-vendor-review-sla.yml",
+        "bacen-vendor-risk-assessment.yml"
+      ],
+      "inventory_baseline_count": 65,
+      "compatibility_mode": "source_remains_authoritative_until_target_equivalence",
+      "cutover_requirements": [
+        "target_default_branch_protected",
+        "target_ci_green_on_same_extraction_manifest",
+        "source_and_target_workflow_inventory_equivalent",
+        "required_evidence_contracts_preserved",
+        "no_secrets_in_history_or_manifest",
+        "rollback_documented"
+      ]
+    },
+    {
+      "id": "m365",
+      "target_repository": "ericson-j-santos/reqsys-integrations-m365",
+      "migration_state": "planned",
+      "source_paths": [
+        "docs/**/teams*",
+        "scripts/*teams*",
+        "scripts/*planner*",
+        "scripts/*m365*"
+      ],
+      "workflow_globs": [
+        "teams-*.yml",
+        "planner-*.yml",
+        "*m365*.yml"
+      ]
+    },
+    {
+      "id": "runtime-platform",
+      "target_repository": "ericson-j-santos/reqsys-runtime-platform",
+      "migration_state": "planned",
+      "source_paths": [
+        "runtime/**",
+        "services/environment-observability-api/**",
+        "ops-dashboard/**"
+      ],
+      "workflow_globs": [
+        "runtime-*.yml",
+        "operational-*.yml",
+        "pc24x7-*.yml"
+      ]
+    },
+    {
+      "id": "product-intelligence",
+      "target_repository": "ericson-j-santos/reqsys-product-intelligence",
+      "migration_state": "planned",
+      "source_paths": [
+        "tools/product_intelligence/**"
+      ],
+      "workflow_globs": [
+        "product-intelligence-*.yml"
+      ]
+    }
+  ]
+}

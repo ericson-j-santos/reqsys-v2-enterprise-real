@@ -30,3 +30,6 @@ O ReqSys pode utilizar multiagentes para:
 
 - docs/ai-governance/00_PRIORITY_RULES.md
 - docs/ai-governance/06-DEVOPS/QUALITY_GATES.md
+- docs/ai-governance/08-IA/ARQUITETURA_MULTIAGENTE_ENTERPRISE.md
+- docs/ai-governance/08-IA/agents/README.md
+- docs/contracts/agent-output.schema.json

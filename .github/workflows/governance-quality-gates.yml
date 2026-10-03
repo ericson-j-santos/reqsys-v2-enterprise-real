@@ -16,6 +16,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Validate governance structure
         run: |
@@ -47,3 +54,18 @@ jobs:
           grep -qi "LGPD" docs/ai-governance/02-SEGURANCA/SECURITY_BASELINE.md
 
           echo "[OK] Conteúdo de governança validado com sucesso."
+
+      - name: Test JavaScript performance gate
+        run: python -m unittest discover -s tests -p "test_js_performance_gate.py" -v
+
+      - name: Fetch PR base branch
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+      - name: Validate JavaScript performance architecture
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p artifacts/js-performance-gate
+          python scripts/js_performance_gate.py \
+            --base-ref "origin/${{ github.base_ref }}" \
+            --report artifacts/js-performance-gate/report.json

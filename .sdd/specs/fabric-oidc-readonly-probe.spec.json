@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Fabric OIDC Read-only Probe",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_fabric_oidc_readonly_probe.py"
+    ],
+    "evidence_contract": "Probe OIDC somente leitura em development, sem segredo estático e sem mutação, com evidência Fabric/Power BI/Graph sanitizada."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/fabric-oidc-readonly-probe.yml",
+    "pull_request": "#1888"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}

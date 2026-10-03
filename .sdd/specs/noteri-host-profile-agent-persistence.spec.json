@@ -1,0 +1,21 @@
+{
+  "feature_name": "noteri-host-profile-agent-persistence",
+  "project": "ReqSys v2 Enterprise — Noteri NORMAL/ESTUDO",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Persiste o agente NORMAL/ESTUDO após reinício e adiciona instalação headless AtStartup + S4U, administrativamente provisionada, sem senha e com caminhos de runtime explícitos.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_host_profile_agent_persistence.py",
+      "tests/test_noteri_host_profile_agent_control.py",
+      "tests/test_noteri_headless_uac_launcher.py"
+    ],
+    "evidence_contract": "READY_FOR_PR no HEAD exato, testes de falha fechada sem admin/confirmação, contrato real AtStartup+S4U e evidência física pós-reboot. Headless só é concluído com prova de execução antes do login; E2E NORMAL→ESTUDO→NORMAL deve terminar em NORMAL."
+  }
+}

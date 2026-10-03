@@ -1,0 +1,422 @@
+{
+  "components": {
+    "schemas": {
+      "AsyncJobAcceptedResponse": {
+        "properties": {
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "message": {
+            "default": "Processamento recebido e enfileirado.",
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "default": "queued"
+          },
+          "status_url": {
+            "title": "Status Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "correlation_id",
+          "status_url"
+        ],
+        "title": "AsyncJobAcceptedResponse",
+        "type": "object"
+      },
+      "AsyncJobCreateRequest": {
+        "properties": {
+          "destino": {
+            "examples": [
+              "reqsys_runtime"
+            ],
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Destino",
+            "type": "string"
+          },
+          "destino_url": {
+            "anyOf": [
+              {
+                "format": "uri",
+                "maxLength": 2083,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL externa opcional para POST via httpx.",
+            "title": "Destino Url"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataEntrada"
+          },
+          "origem": {
+            "examples": [
+              "power_automate"
+            ],
+            "maxLength": 80,
+            "minLength": 2,
+            "title": "Origem",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "tipo_operacao": {
+            "$ref": "#/components/schemas/TipoOperacao"
+          }
+        },
+        "required": [
+          "origem",
+          "tipo_operacao",
+          "destino"
+        ],
+        "title": "AsyncJobCreateRequest",
+        "type": "object"
+      },
+      "AsyncJobStatusResponse": {
+        "properties": {
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "max_tentativas": {
+            "title": "Max Tentativas",
+            "type": "integer"
+          },
+          "resultado": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "tentativas": {
+            "title": "Tentativas",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "correlation_id",
+          "tentativas",
+          "max_tentativas",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AsyncJobStatusResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JobStatus": {
+        "enum": [
+          "queued",
+          "processing",
+          "completed",
+          "retrying",
+          "failed",
+          "dead_letter"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "MetadataEntrada": {
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "versao_contrato": {
+            "default": "0.5.0",
+            "title": "Versao Contrato",
+            "type": "string"
+          }
+        },
+        "title": "MetadataEntrada",
+        "type": "object"
+      },
+      "TipoOperacao": {
+        "enum": [
+          "enviar_resposta",
+          "sincronizar_requisito",
+          "notificar_status"
+        ],
+        "title": "TipoOperacao",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Runtime executável com workflow assíncrono, fila em memória DEV, worker local e httpx.",
+    "title": "ReqSys Runtime API",
+    "version": "0.5.0",
+    "x-reqsys-contract-source": "runtime-fastapi",
+    "x-reqsys-generated-by": "runtime/scripts/export_openapi.py"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/jobs": {
+      "post": {
+        "operationId": "criar_job_assincrono_api_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsyncJobCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJobAcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Criar Job Assincrono",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "operationId": "consultar_job_assincrono_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJobStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Consultar Job Assincrono",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/runtime/analytics": {
+      "get": {
+        "operationId": "runtime_analytics_api_runtime_analytics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Runtime Analytics Api Runtime Analytics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Runtime Analytics",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/api/runtime/health": {
+      "get": {
+        "operationId": "runtime_health_api_runtime_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Runtime Health Api Runtime Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Runtime Health",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "runtime"
+        ]
+      }
+    }
+  }
+}

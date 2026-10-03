@@ -1,0 +1,25 @@
+name: Runtime Evidence Burndown Visual
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ops-dashboard/runtime-evidence-burndown.html'
+      - 'docs/ops-dashboard/data/runtime-evidence-burndown.json'
+      - 'scripts/validate_runtime_evidence_burndown_visual.py'
+      - '.github/workflows/runtime-evidence-burndown-visual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-runtime-evidence-burndown-visual:
+    name: Validate Runtime Evidence Burndown Visual
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate visual page
+        run: python3 scripts/validate_runtime_evidence_burndown_visual.py

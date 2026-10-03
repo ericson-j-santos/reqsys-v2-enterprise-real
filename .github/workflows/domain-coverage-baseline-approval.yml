@@ -1,0 +1,133 @@
+name: Domain Coverage Baseline Approval
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "config/domain-coverage-policy.json"
+      - "docs/ops-dashboard/data/domain-coverage-baseline-diff.json"
+      - ".github/workflows/domain-coverage-baseline-approval.yml"
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+env:
+  # Temporário enquanto o repositório possuir somente um mantenedor.
+  # Ao adicionar outro mantenedor, alterar para "false" para voltar a exigir revisão de outra pessoa.
+  SOLO_MAINTAINER_MODE: "true"
+
+jobs:
+  scope-router:
+    name: Detectar alteração de baseline
+    runs-on: ubuntu-latest
+    outputs:
+      run_gate: ${{ steps.scope.outputs.run_gate }}
+    steps:
+      - name: Verificar arquivos alterados no PR
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "run_gate=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RUN_GATE="$(gh api \
+            --paginate \
+            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
+            --jq '[.[].filename | select(
+              . == "config/domain-coverage-policy.json" or
+              . == "docs/ops-dashboard/data/domain-coverage-baseline-diff.json" or
+              . == ".github/workflows/domain-coverage-baseline-approval.yml"
+            )] | length > 0')"
+
+          echo "run_gate=${RUN_GATE}" >> "$GITHUB_OUTPUT"
+
+  validate-approved-baseline:
+    name: Validar baseline aprovado
+    needs: scope-router
+    if: needs.scope-router.outputs.run_gate == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Validar escopo e política
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          policy_path = Path('config/domain-coverage-policy.json')
+          diff_path = Path('docs/ops-dashboard/data/domain-coverage-baseline-diff.json')
+
+          assert policy_path.is_file(), f'política ausente: {policy_path}'
+          assert diff_path.is_file(), f'evidência de diff ausente: {diff_path}'
+
+          policy = json.loads(policy_path.read_text(encoding='utf-8'))
+          diff = json.loads(diff_path.read_text(encoding='utf-8'))
+
+          assert policy.get('mode') == 'regression_gate', 'modo regression_gate não ativado'
+          assert policy.get('baseline'), 'baseline não pode ser vazio'
+          assert diff.get('requires_human_approval') is True, 'diff deve exigir aprovação humana'
+          assert set(policy['baseline']) == set(policy.get('domains', {})), 'baseline incompleto'
+          for name, value in policy['baseline'].items():
+              assert 0.0 <= float(value) <= 100.0, f'baseline inválido para {name}'
+          PY
+
+      - name: Validar aprovação ou confirmação do mantenedor único
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PR_JSON="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}")"
+          PR_AUTHOR="$(jq -r '.user.login' <<<"${PR_JSON}")"
+          HEAD_SHA="$(jq -r '.head.sha' <<<"${PR_JSON}")"
+
+          APPROVALS="$(gh api \
+            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews?per_page=100" \
+            --jq '[.[] | select(.state == "APPROVED")] | length')"
+
+          if [[ "${APPROVALS}" -ge 1 ]]; then
+            echo "Aprovação encontrada."
+            exit 0
+          fi
+
+          if [[ "${SOLO_MAINTAINER_MODE}" != "true" ]]; then
+            echo "Nenhuma aprovação encontrada."
+            exit 1
+          fi
+
+          if [[ "${PR_AUTHOR}" != "${REPOSITORY_OWNER}" ]]; then
+            echo "Confirmação individual só é aceita para PR do proprietário do repositório."
+            exit 1
+          fi
+
+          EXPECTED="/confirm-domain-baseline ${HEAD_SHA}"
+          CONFIRMATIONS="$(gh api \
+            "/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments?per_page=100" \
+            --jq "[.[] | select(.user.login == \"${REPOSITORY_OWNER}\" and .body == \"${EXPECTED}\")] | length")"
+
+          echo "Confirmações do mantenedor para o SHA atual: ${CONFIRMATIONS}"
+          test "${CONFIRMATIONS}" -ge 1
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "## Domain Coverage Baseline Approval" >> "$GITHUB_STEP_SUMMARY"
+          echo "Aceita revisão APPROVED ou, em modo de mantenedor único, confirmação explícita do proprietário vinculada ao SHA atual." >> "$GITHUB_STEP_SUMMARY"

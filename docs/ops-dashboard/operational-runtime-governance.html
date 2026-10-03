@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Operational Runtime Governance</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --blue: #38bdf8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 24px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, #111827, #1e293b); }
+    main { padding: 24px; max-width: 1280px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin-top: 0; }
+    .subtitle, .small { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .card { border: 1px solid var(--border); background: var(--panel); border-radius: 14px; padding: 18px; box-shadow: 0 10px 24px rgba(0,0,0,.25); margin-top: 18px; }
+    .kpi-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .kpi-value { font-size: 30px; font-weight: 700; margin-top: 8px; }
+    .status { display: inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+    .passed, .green, .low, .safe, .consolidated { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
+    .yellow, .warning, .medium, .planned, .attention { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
+    .red, .failed, .critical, .high, .blocked { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
+    .unknown { background: rgba(148,163,184,.16); color: var(--muted); border: 1px solid rgba(148,163,184,.45); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 12px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    a { color: var(--blue); text-decoration: none; }
+    code { color: #dbeafe; }
+    .links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+    .link-btn { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #0b1220; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #020617; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { main, header { padding: 16px; } .grid { grid-template-columns: 1fr; } table { font-size: 13px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Operational Runtime Governance — Pareto Layer</h1>
+    <p class="subtitle">Renderização executiva do contrato <code>operational-runtime-governance-consolidation.json</code>, com lanes Pareto, semáforo, risco, fontes canônicas, próximos incrementos e guardrails.</p>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Resumo executivo</h2>
+      <div class="grid">
+        <div><div class="kpi-label">Status geral</div><div id="overall-status" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Maturidade alvo</div><div id="maturity-target" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Risco operacional</div><div id="operational-risk" class="kpi-value">-</div></div>
+        <div><div class="kpi-label">Confiança</div><div id="confidence" class="kpi-value">-</div></div>
+      </div>
+      <p class="small" id="bottleneck">Carregando gargalo dominante...</p>
+      <div class="links" id="executive-links"></div>
+    </section>
+
+    <section class="card">
+      <h2>Lanes Pareto — cards operacionais</h2>
+      <div class="grid" id="lane-cards"></div>
+      <table>
+        <thead><tr><th>Prioridade</th><th>Lane</th><th>Status</th><th>Impacto</th><th>Risco</th><th>Resultado alvo</th></tr></thead>
+        <tbody id="lane-table"><tr><td colspan="6">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Próximas ações executáveis</h2>
+      <table>
+        <thead><tr><th>Lane</th><th>Ação</th><th>Semáforo</th></tr></thead>
+        <tbody id="actions-table"><tr><td colspan="3">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Fontes canônicas e evidências</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Tipo</th><th>Obrigatório</th><th>Caminho</th></tr></thead>
+        <tbody id="sources-table"><tr><td colspan="4">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Guardrails</h2>
+      <table>
+        <thead><tr><th>Regra</th><th>Política</th><th>Semáforo</th></tr></thead>
+        <tbody id="guardrails-table"><tr><td colspan="3">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Contrato bruto</h2>
+      <pre id="raw-json">{}</pre>
+    </section>
+  </main>
+
+  <script>
+    const DATA_PATH = './data/operational-runtime-governance-consolidation.json';
+    const fallback = {
+      schema_version: '0.1.0',
+      generated_at: null,
+      repo: 'ericson-j-santos/reqsys-v2-enterprise-real',
+      strategy: 'pareto_operational_runtime_governance',
+      mode: 'assisted_read_only_by_default',
+      overall: { status: 'unknown', maturity_percent_target: 0, confidence_level: 'low', operational_risk: 'medium', primary_bottleneck: 'artifact_unavailable' },
+      canonical_sources: [],
+      pareto_lanes: [],
+      guardrails: {}
+    };
+
+    function cssStatus(value) {
+      const key = String(value || 'unknown').toLowerCase();
+      if (['passed', 'green', 'low', 'safe', 'consolidated', 'success', 'true'].includes(key)) return 'passed';
+      if (['yellow', 'warning', 'medium', 'planned', 'attention', 'unknown'].includes(key)) return 'warning';
+      if (['red', 'failed', 'critical', 'high', 'blocked', 'false'].includes(key)) return 'failed';
+      return 'unknown';
+    }
+
+    function statusBadge(value) {
+      const label = value == null ? 'unknown' : String(value);
+      return `<span class="status ${cssStatus(value)}">${label}</span>`;
+    }
+
+    function addLink(container, label, url) {
+      const anchor = document.createElement('a');
+      anchor.className = 'link-btn';
+      anchor.href = url;
+      anchor.textContent = label;
+      if (url.startsWith('http')) {
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+      }
+      container.appendChild(anchor);
+    }
+
+    function expectedRiskFrom(lane) {
+      const status = String(lane.status || '').toLowerCase();
+      if (status === 'planned') return 'medium';
+      return lane.risk || 'medium';
+    }
+
+    async function loadData() {
+      try {
+        const response = await fetch(DATA_PATH, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return { data: await response.json(), available: true, error: null };
+      } catch (error) {
+        return { data: fallback, available: false, error: error.message };
+      }
+    }
+
+    function renderExecutive(payload, available, error) {
+      const overall = payload.overall || fallback.overall;
+      document.getElementById('overall-status').innerHTML = statusBadge(overall.status);
+      document.getElementById('maturity-target').textContent = `${overall.maturity_percent_target ?? 0}%`;
+      document.getElementById('operational-risk').innerHTML = statusBadge(overall.operational_risk);
+      document.getElementById('confidence').innerHTML = statusBadge(overall.confidence_level);
+      document.getElementById('bottleneck').textContent = [
+        `Estratégia: ${payload.strategy || '-'}`,
+        `Modo: ${payload.mode || '-'}`,
+        `Gargalo dominante: ${overall.primary_bottleneck || '-'}`,
+        `Fonte: ${available ? DATA_PATH : 'fallback_local'}`,
+        error ? `Erro: ${error}` : ''
+      ].filter(Boolean).join(' · ');
+
+      const links = document.getElementById('executive-links');
+      links.innerHTML = '';
+      addLink(links, 'Contrato JSON', DATA_PATH);
+      addLink(links, 'Ops Dashboard', './index.html');
+      addLink(links, 'Operational Evidence Hub', '../dashboard/operational-evidence-hub.html');
+      addLink(links, 'Runbook', '../runbooks/operational-runtime-governance-consolidation.md');
+    }
+
+    function renderLanes(payload) {
+      const lanes = payload.pareto_lanes || [];
+      const cards = document.getElementById('lane-cards');
+      const table = document.getElementById('lane-table');
+      const actions = document.getElementById('actions-table');
+      cards.innerHTML = '';
+      table.innerHTML = '';
+      actions.innerHTML = '';
+
+      if (!lanes.length) {
+        cards.innerHTML = '<div class="card"><div class="kpi-label">Fallback</div><div class="kpi-value">sem lanes</div></div>';
+        table.innerHTML = '<tr><td colspan="6">Nenhuma lane Pareto publicada.</td></tr>';
+        actions.innerHTML = '<tr><td colspan="3">Nenhuma ação publicada.</td></tr>';
+        return;
+      }
+
+      lanes.sort((a, b) => Number(a.priority || 99) - Number(b.priority || 99)).forEach((lane) => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `<div class="kpi-label">#${lane.priority ?? '-'} · ${lane.impact || '-'}</div><div class="kpi-value">${lane.id || '-'}</div>${statusBadge(lane.status)}<p class="small">Risco: ${lane.risk || '-'} · Evidências: ${(lane.minimum_evidence || []).length}</p>`;
+        cards.appendChild(div);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${lane.priority ?? '-'}</td><td><code>${lane.id || '-'}</code></td><td>${statusBadge(lane.status)}</td><td>${lane.impact || '-'}</td><td>${statusBadge(lane.risk)}</td><td>${lane.target_outcome || '-'}</td>`;
+        table.appendChild(tr);
+
+        (lane.next_actions || []).forEach((action) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `<td><code>${lane.id || '-'}</code></td><td>${action}</td><td>${statusBadge(expectedRiskFrom(lane))}</td>`;
+          actions.appendChild(row);
+        });
+      });
+    }
+
+    function renderSources(payload) {
+      const sources = payload.canonical_sources || [];
+      const table = document.getElementById('sources-table');
+      table.innerHTML = '';
+      if (!sources.length) {
+        table.innerHTML = '<tr><td colspan="4">Nenhuma fonte canônica publicada.</td></tr>';
+        return;
+      }
+      sources.forEach((source) => {
+        const href = '../' + String(source.path || '').replace(/^\//, '');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><code>${source.id || '-'}</code></td><td>${source.type || '-'}</td><td>${statusBadge(Boolean(source.required))}</td><td><a href="${href}"><code>${source.path || '-'}</code></a></td>`;
+        table.appendChild(tr);
+      });
+    }
+
+    function renderGuardrails(payload) {
+      const guardrails = payload.guardrails || {};
+      const table = document.getElementById('guardrails-table');
+      table.innerHTML = '';
+      const entries = Object.entries(guardrails);
+      if (!entries.length) {
+        table.innerHTML = '<tr><td colspan="3">Nenhum guardrail publicado.</td></tr>';
+        return;
+      }
+      entries.forEach(([rule, policy]) => {
+        const tr = document.createElement('tr');
+        const status = String(policy).includes('forbidden') ? 'high' : 'medium';
+        tr.innerHTML = `<td><code>${rule}</code></td><td>${policy}</td><td>${statusBadge(status)}</td>`;
+        table.appendChild(tr);
+      });
+    }
+
+    async function render() {
+      const response = await loadData();
+      const payload = response.data || fallback;
+      renderExecutive(payload, response.available, response.error);
+      renderLanes(payload);
+      renderSources(payload);
+      renderGuardrails(payload);
+      document.getElementById('raw-json').textContent = JSON.stringify({ available: response.available, error: response.error, payload }, null, 2);
+    }
+
+    render().catch((error) => {
+      document.getElementById('overall-status').innerHTML = statusBadge('failed');
+      document.getElementById('raw-json').textContent = JSON.stringify({ error: error.message }, null, 2);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+name: Security Baseline Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Falhar quando houver achados críticos"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      scope:
+        description: "Escopo da varredura"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - "all"
+          - "changed"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-baseline-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-baseline:
+    name: Security Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile validators
+        run: |
+          python -m py_compile scripts/validate_security_baseline.py
+          python -m py_compile scripts/vibe_security_gate.py
+
+      - name: Resolve scan scope
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_SCOPE: ${{ inputs.scope || 'all' }}
+        run: |
+          mkdir -p artifacts/security-baseline
+
+          diff_range=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            diff_range="origin/${{ github.base_ref }}...HEAD"
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            diff_range="${{ github.event.merge_group.base_sha }}...${{ github.event.merge_group.head_sha }}"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+            if [[ "$before" =~ ^0+$ ]]; then
+              diff_range="HEAD~1...HEAD"
+            else
+              diff_range="${before}...${after}"
+            fi
+          elif [ "$WORKFLOW_SCOPE" = "changed" ]; then
+            diff_range="HEAD~1...HEAD"
+          fi
+
+          if [ -n "$diff_range" ]; then
+            git diff --name-only "$diff_range" > artifacts/security-baseline/changed-files.txt
+            python - "$diff_range" <<'PY'
+          import json
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          diff_range = sys.argv[1]
+          output = subprocess.check_output(
+              ["git", "-c", "core.quotePath=false", "diff", "--unified=0", "--no-color", diff_range, "--"],
+              text=True,
+          )
+          hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+          current = None
+          result = {}
+          for line in output.splitlines():
+              if line.startswith("+++ "):
+                  raw = line[4:].strip()
+                  current = None if raw == "/dev/null" else (raw[2:] if raw.startswith("b/") else raw)
+                  if current is not None:
+                      result.setdefault(current, set())
+                  continue
+              match = hunk.match(line)
+              if current is None or not match:
+                  continue
+              start = int(match.group(1))
+              count = int(match.group(2) or "1")
+              if count > 0:
+                  result[current].update(range(start, start + count))
+          serializable = {path: sorted(lines) for path, lines in sorted(result.items())}
+          Path("artifacts/security-baseline/changed-lines.json").write_text(
+              json.dumps(serializable, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+            echo "scope=changed" >> "$GITHUB_OUTPUT"
+            echo "changed_files=artifacts/security-baseline/changed-files.txt" >> "$GITHUB_OUTPUT"
+            echo "changed_lines=artifacts/security-baseline/changed-lines.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "scope=all" >> "$GITHUB_OUTPUT"
+            echo "changed_files=" >> "$GITHUB_OUTPUT"
+            echo "changed_lines=" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "### Security Baseline - arquivos alterados" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s artifacts/security-baseline/changed-files.txt ]; then
+            sed 's/^/- `/' artifacts/security-baseline/changed-files.txt | sed 's/$/`/' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Nenhum arquivo alterado identificado para escopo incremental." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Run Security Baseline Gate
+        env:
+          STRICT_INPUT: ${{ inputs.strict || 'true' }}
+          SCAN_SCOPE: ${{ steps.scope.outputs.scope }}
+          CHANGED_FILES: ${{ steps.scope.outputs.changed_files }}
+        shell: bash
+        run: |
+          args=("--output-dir" "artifacts/security-baseline" "--scope" "$SCAN_SCOPE")
+          if [ "$SCAN_SCOPE" = "changed" ]; then
+            args+=("--changed-files" "$CHANGED_FILES")
+          fi
+
+          if [ "$STRICT_INPUT" = "false" ]; then
+            python scripts/validate_security_baseline.py "${args[@]}"
+          else
+            python scripts/validate_security_baseline.py --strict "${args[@]}"
+          fi
+
+      - name: Run Vibe Coding 12-risk gate
+        env:
+          SCAN_SCOPE: ${{ steps.scope.outputs.scope }}
+          CHANGED_FILES: ${{ steps.scope.outputs.changed_files }}
+          CHANGED_LINES: ${{ steps.scope.outputs.changed_lines }}
+        shell: bash
+        run: |
+          python scripts/vibe_security_gate.py --self-test-negative
+          args=("--output-dir" "artifacts/security-baseline/vibe-security" "--scope" "$SCAN_SCOPE")
+          if [ "$SCAN_SCOPE" = "changed" ]; then
+            args+=("--changed-files" "$CHANGED_FILES" "--changed-lines" "$CHANGED_LINES")
+          fi
+          python scripts/vibe_security_gate.py --strict "${args[@]}"
+
+      - name: Snapshot full security posture (report only)
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/validate_security_baseline.py \
+            --output-dir artifacts/security-baseline/posture \
+            --scope all
+          python scripts/vibe_security_gate.py \
+            --output-dir artifacts/security-baseline/posture/vibe-security \
+            --scope all
+
+      - name: Publish security baseline artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-baseline-report
+          path: artifacts/security-baseline/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Append security summary
+        if: always()
+        run: |
+          if [ -f artifacts/security-baseline/security-baseline-report.md ]; then
+            cat artifacts/security-baseline/security-baseline-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Security baseline report não foi gerado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if [ -f artifacts/security-baseline/vibe-security/vibe-security-report.md ]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/security-baseline/vibe-security/vibe-security-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Vibe security report não foi gerado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

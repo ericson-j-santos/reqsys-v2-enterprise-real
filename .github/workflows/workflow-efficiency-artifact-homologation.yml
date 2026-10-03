@@ -1,0 +1,95 @@
+name: Workflow Efficiency Artifact Homologation
+
+on:
+  workflow_run:
+    workflows:
+      - "Ops Dashboard"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID do workflow Ops Dashboard"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: workflow-efficiency-artifact-homologation-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  homologate:
+    name: Homologate Workflow Efficiency artifact
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate homologation implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/homologate_workflow_efficiency_artifact.py
+          python -m unittest tests/test_homologate_workflow_efficiency_artifact.py
+
+      - name: Resolve source run
+        id: source
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_RUN_ID"
+          echo "run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download ops dashboard artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: artifacts/ops-dashboard
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Homologate packaged Workflow Efficiency
+        run: |
+          set -euo pipefail
+          python scripts/homologate_workflow_efficiency_artifact.py \
+            --root artifacts/ops-dashboard \
+            --output artifacts/workflow-efficiency-artifact-homologation/evidence.json \
+            --correlation-id "${{ steps.source.outputs.run_id }}-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Publish homologation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-efficiency-artifact-homologation
+          path: artifacts/workflow-efficiency-artifact-homologation
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize homologation
+        if: always()
+        run: |
+          {
+            echo "# Workflow Efficiency Artifact Homologation"
+            echo ""
+            echo "- Artifact fonte: ops-dashboard-static"
+            echo "- Run fonte: ${{ steps.source.outputs.run_id }}"
+            echo "- Evidência: workflow-efficiency-artifact-homologation"
+            echo "- Fonte canônica: runtime-executive-index.json"
+            echo "- Modo: validação pós-empacotamento"
+          } >> "$GITHUB_STEP_SUMMARY"

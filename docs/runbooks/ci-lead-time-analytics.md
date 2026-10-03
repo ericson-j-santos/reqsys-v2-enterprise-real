@@ -1,0 +1,216 @@
+# CI Lead Time Analytics
+
+## Objetivo
+
+Medir melhoria do processo de CI/CD do ReqSys com janelas temporais homogêneas. O mecanismo permanece `report-only`: mede e publica evidência, sem criar ou relaxar gates.
+
+## Política de coleta horária
+
+A partir deste incremento, a amostra principal deixa de depender dos últimos N workflows e passa a usar a política:
+
+`fixed-60m-settle-5m-min30-v1`
+
+| Regra | Valor |
+|---|---:|
+| Duração da janela | 60 minutos |
+| Âncora UTC | minuto `:40` |
+| Maturação antes da coleta | 5 minutos |
+| Execuções concluídas mínimas | 30 |
+| Cobertura mínima de conclusão | 90% |
+| Paginação máxima da API | 20 × 100 runs |
+
+O workflow continua agendado no minuto `:45`. Assim, uma execução normal às 15:45 mede exatamente `14:40–15:40`. Se o runner iniciar atrasado, por exemplo 15:58, a janela continua `14:40–15:40`; o atraso não desloca a amostra.
+
+As janelas são definidas por `created_at` em intervalo fechado-aberto: `start_at <= created_at < end_at`.
+
+## Elegibilidade da amostra
+
+`collection_window.sample_eligible=true` somente quando todas as condições forem satisfeitas:
+
+1. A paginação alcançou dados anteriores ao início da janela (`collection_complete=true`).
+2. Existem pelo menos 30 execuções concluídas.
+3. Pelo menos 90% das execuções criadas na janela já terminaram no momento da coleta.
+
+Se alguma condição falhar, a medição é preservada no histórico como contexto, recebe `eligibility_reason_codes` e não participa da sustentabilidade.
+
+A maturação de 5 minutos reduz o risco de contar como incompletos workflows criados imediatamente antes do fechamento da janela.
+
+## Deduplicação
+
+O workflow também pode rodar em `push` ou execução manual. Por isso, o histórico deduplica observações fixas por `collection_window.window_id`, formado por política + início + fim da janela. Duas execuções que medem a mesma hora representam uma única observação; a mais recente substitui a anterior.
+
+## Métricas
+
+Os cálculos existentes são preservados:
+
+- sucesso e falha;
+- sucesso na primeira tentativa e reexecução;
+- média, P50, P90, P95 e máximo;
+- desvio-padrão e coeficiente de variação;
+- fila média e P95;
+- throughput;
+- Pareto de falhas;
+- gargalos por workflow;
+- tendência interna da amostra.
+
+Na política horária, `throughput.window_span_hours=1.0` por definição, em vez de inferir a janela pela distância entre timestamps dos workflows observados.
+
+## Baseline congelado de 02/09/2026
+
+O arquivo `audit/baselines/ci-process-improvement-baseline-2026-09-02.json` permanece imutável.
+
+Esse baseline foi coletado pelo método anterior, baseado em quantidade de runs. Portanto:
+
+- continua disponível como referência histórica descritiva;
+- `baseline_comparison` continua sendo produzido;
+- `window_comparability` continua mostrando se a amostra atual seria estruturalmente equivalente ao baseline antigo;
+- ele **não** é usado para decidir sustentabilidade das novas janelas horárias.
+
+Nenhuma tentativa é feita de reclassificar artificialmente o baseline antigo como uma janela fixa de 60 minutos.
+
+## Sustentabilidade
+
+O Command Center passa a usar `homogeneous_fixed_time_windows`.
+
+Somente janelas que sejam:
+
+- `mode=fixed_time`;
+- `sample_eligible=true`;
+- `collection_complete=true`;
+- da mesma `policy_id` ativa;
+
+podem participar da decisão.
+
+Cada janela é comparada à janela horária elegível imediatamente anterior em quatro dimensões:
+
+- taxa de sucesso;
+- taxa de falha;
+- P95;
+- coeficiente de variação (CV).
+
+A transição é classificada como `improved`, `stable`, `regressed` ou `mixed`. São necessárias pelo menos **3 janelas horárias elegíveis** antes de sair de `insufficient_data`.
+
+Critério observacional atual:
+
+- `sustained_improvement`: pelo menos 60% das transições são melhoria e nenhuma é regressão;
+- `regression_watch`: pelo menos 40% das transições são regressão;
+- demais casos: `mixed`;
+- menos de 3 janelas: `insufficient_data`.
+
+Esse critério ainda não representa significância estatística nem prova causal e não cria gate.
+
+## Artefatos
+
+- `audit/ci-lead-time-analytics.json`
+- `audit/ci-lead-time-analytics.md`
+- `audit/history/ci-process-improvement-history.jsonl`
+- `artifacts/workflow-command-center/ci-process-improvement-history.json`
+- `artifacts/workflow-command-center/ci-process-improvement-history.md`
+
+`collection_window` é um campo aditivo. O contrato final continua `1.0.3`, compatível com o schema atual que permite propriedades adicionais.
+
+Novos registros do histórico usam `schema_version=1.0.2` e preservam registros antigos sem migração destrutiva.
+
+
+## Confiabilidade da Merge Queue
+
+A seção `pr_efficiency.merge_queue_reliability` é observacional e `report-only`. Ela reutiliza a mesma amostra de PRs e acrescenta evidência específica do caminho nativo `merge_group`.
+
+Métricas registradas:
+
+- `canary_e2e_observed`: só é `true` quando existe workflow run real com `event=merge_group` associado a PR;
+- `queue_attempts`: quantidade de HEAD SHAs distintos de `merge_group`; vários workflows no mesmo HEAD contam como uma tentativa;
+- `queue_wait_p50_seconds` e `queue_wait_p95_seconds`: espera entre `created_at` e `run_started_at` dos workflows `merge_group`; mede espera do GitHub Actions, não permanência total na Merge Queue;
+- `green_pr_but_queue_failed_count`: PR cujo HEAD observado estava verde nos workflows bloqueantes, mas teve workflow `merge_group` falho;
+- `queue_failure_causes`: contagem por workflow e conclusão observada;
+- `requeue_pr_count`: PR associado a mais de um HEAD SHA de `merge_group`;
+- `post_merge_failed_pr_count`: PR verde, mergeada na janela, cujo `merge_commit_sha` teve workflow `push` com `failure`, `timed_out`, `action_required` ou `startup_failure`;
+- `post_merge_cancelled_runs`: workflows `push` cancelados no `merge_commit_sha`, observados separadamente e sem serem classificados como falha.
+
+Ausência de `merge_group` é fail-closed para o canário: `available=false`, `canary_e2e_observed=false` e `observation_reason=no_merge_group_candidate_observed`. Zero eventos nunca é apresentado como canário aprovado.
+
+A coleta pós-merge consulta somente os PRs da amostra e o `merge_commit_sha` exato de cada um, evitando varredura global e evitando atribuir falha de outro commit ao PR. Cancelamentos permanecem visíveis para diagnóstico, mas não elevam `post_merge_failure_runs` nem `post_merge_failed_pr_count`.
+
+Quando a coleta global de workflow runs para a janela ampliada de PRs atinge o limite de paginação antes de alcançar o início da janela, o enriquecimento não tenta ampliar uma varredura global nem falha antes da contingência. Ele usa diretamente o `recent_prs_fallback`, limitado aos PRs recentes, seus commits e runs por `head_sha`. Se essa coleta bounded também não produzir a amostra mínima, `baseline_sample_valid=false`; como o analytics é report-only, a insuficiência permanece evidenciada sem inventar completude.
+
+
+## Governança
+
+- Permissões do analytics permanecem `actions: read` e `contents: read`.
+- Nenhum token ou segredo é persistido.
+- `creates_gate=false` é preservado.
+- O baseline congelado não é sobrescrito.
+- Janelas inelegíveis permanecem visíveis como contexto, mas não influenciam sustentabilidade.
+- Mudanças futuras de política devem alterar `policy_id`; políticas diferentes não são misturadas na mesma série de sustentabilidade.
+
+## Validação
+
+O workflow executa as suítes legadas e as novas suítes específicas:
+
+```bash
+python tests/scripts/test_build_ci_process_improvement_analytics.py
+python tests/scripts/test_build_ci_fixed_window_analytics.py
+python tests/scripts/test_compare_ci_process_baseline.py
+python tests/scripts/test_annotate_ci_window_comparability.py
+python tests/scripts/test_update_ci_process_history.py
+python tests/scripts/test_update_ci_fixed_window_history.py
+python tests/scripts/test_restore_ci_process_history.py
+python tests/scripts/test_enrich_command_center_ci_history.py
+python tests/scripts/test_ci_fixed_window_sustainability.py
+```
+
+Os testes novos cobrem: estabilidade da âncora temporal, maturação, filtro do cohort, quantidade mínima, cobertura mínima, paginação, persistência da política, deduplicação por janela, isolamento entre versões de política e classificação de sustentabilidade.
+
+## Próximo critério de avanço
+
+Depois de acumular pelo menos 3 janelas horárias elegíveis na `main`, o Command Center poderá sair de `insufficient_data`. Apenas após série temporal maior deve ser avaliado um critério estatístico formal, como mediana móvel, P95 móvel e limites de controle. Nenhuma promoção automática a gate faz parte deste incremento.
+
+
+## Engineering Control Plane — Baseline v2
+
+A janela fixa global continua sendo a fonte das métricas históricas. A seção `pr_efficiency` possui uma política separada para baixa atividade: usa 60 minutos, amplia para 120, 240 e 360 minutos e, se ainda não houver 3 PRs, usa `recent_prs_fallback` limitado aos últimos 7 dias. O fallback lista PRs recentes, consulta seus commits e coleta workflow runs por `head_sha`, parando ao atingir 3 PRs; evita varredura global ilimitada. O artifact registra `sample_window.mode`, janela efetiva, meta, `selected_pr_numbers` e `baseline_sample_valid`; se a meta não for atingida, a amostra permanece explicitamente insuficiente.
+
+A taxa de rerun é publicada como `rerun_rate_percent = workflow_runs_de_PR_com_run_attempt_maior_que_1 / workflow_runs_de_PR_observados * 100`. Trata-se de taxa observacional de rerun, não de causalidade do commit.
+
+O `Pre-PR Readiness Gate` trata exclusivamente `HEAD == origin/main`, `behind_by=0` e diff vazio como `not_applicable`. Esse caminho evita dependências e testes pesados e termina verde com evidência própria. SHA diferente da base, branch atrás, HEAD divergente ou diff real continuam bloqueando normalmente.
+
+
+### Semântica de duração em reruns
+
+Para `run_attempt=1`, minutos observados usam `created_at → updated_at`. Em `run_attempt>1`, usam `run_started_at → updated_at`. O GitHub mantém `created_at` do disparo original quando um workflow é reexecutado; usar esse timestamp em reruns contabilizaria indevidamente o intervalo parado entre tentativas como tempo ativo de CI. A taxa de rerun continua sendo derivada de `run_attempt>1`.
+
+
+## Monitor de regressão material — janela móvel de 14 dias
+
+O próprio `CI Lead Time Analytics` executa `scripts/ci_health_regression_monitor.py`; não existe workflow adicional para o monitor. A coleta usa uma janela móvel de 14 dias, dividida em 7 dias anteriores e 7 dias recentes.
+
+Sinais monitorados:
+
+- tempo até primeira falha nos workflows bloqueantes: alerta somente com pelo menos 3 amostras por metade, piora de pelo menos 120 segundos e 25%;
+- reruns no mesmo run/HEAD (`run_attempt > 1`): alerta somente com pelo menos 20 runs por metade, piora de pelo menos 5 pontos percentuais e 25% relativo;
+- falso verde pós-merge: exige HEAD exato do PR verde e falha real no `merge_commit_sha` exato; cancelamento não é falha pós-merge;
+- divergência de SHA: compara o HEAD atual do PR com SHA verde anterior, mas não alerta nos primeiros 30 minutos após atualização nem enquanto houver run do HEAD atual em fila ou execução.
+
+A coleta falha fechada quando não consegue cobrir toda a janela dentro dos limites configurados. O relatório é persistido em `audit/ci-health-regression-watch/` junto ao artifact já existente do analytics.
+
+Em `main`, uma issue marcada por `reqsys-ci-health-regression-watch` representa o episódio ativo. Ela é criada apenas quando existe regressão material, é atualizada apenas quando a assinatura do episódio muda e é fechada sem comentário quando todos os sinais materiais desaparecem. Cada alerta contém tendência, evidência atual por run/SHA, impacto, risco e a menor correção sistêmica segura e idempotente.
+
+## Monitor de governança material
+
+O mesmo `CI Lead Time Analytics` executa `scripts/governance_drift_monitor.py` na agenda horária e quando os controles versionados relevantes mudam. Não é criado um workflow adicional.
+
+O alerta é restrito aos desvios solicitados:
+
+- ausência de `CI — ReqSys v2 Enterprise`;
+- ausência de `Governance Quality Gates`;
+- ausência de `Branch Protection Audit`, que é o equivalente versionado atual do nome lógico **Settings Hardening Evidence**;
+- ausência de `PR Evidence Gate`;
+- ruleset ativo da branch padrão ausente ou com bypass actors, tratado como alteração da proteção administrativa;
+- ausência da regra `non_fast_forward`, tratada como force-push liberado;
+- ausência da regra `deletion`, tratada como exclusão da branch liberada;
+- `allow_auto_merge` diferente de `true`;
+- perda de qualquer parte do contrato de SHA esperado no `Governed PR Automation`: captura do SHA avaliado, comparação inicial, releitura imediatamente antes do merge e `sha: triggerHeadSha` na mutação.
+
+O monitor lê o estado do repositório e dos rulesets pela API do GitHub e falha fechado se a coleta não puder ser comprovada. Falha de coleta não cria issue de drift, pois não é evidência de um desvio material.
+
+A evidência é gravada em `audit/governance-drift-monitor/report.json` e `report.md`. O summary do workflow sempre recebe o relatório quando ele existe. Em `main`, uma única issue marcada por `reqsys-governance-drift-monitor` representa o episódio ativo: ela só é criada/atualizada quando `material_drift=true`, não muda quando a assinatura de evidência permanece igual e é fechada sem comentário quando a conformidade retorna.
