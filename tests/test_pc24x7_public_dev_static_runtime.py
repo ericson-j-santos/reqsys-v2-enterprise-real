@@ -68,7 +68,12 @@ def test_reconciler_is_dev_only_fast_forward_and_recreates_only_public_surface()
     assert '"merge", "--ff-only", expected' in raw
     assert 'reset", "--hard' not in raw
     assert '"--no-deps"' in raw
-    assert '"api",' in raw and '"frontend",' in raw and '"nginx",' in raw
+    assert '"api",' in raw and '"frontend",' in raw
+    assert (
+        'base + ["up", "-d", "--no-deps", "--force-recreate", "nginx"]'
+        in raw
+    )
+    assert "_wait_for_api_ready(expected_sha)" in raw
     assert "environment_must_be_dev" in raw
     assert "non_dev_runtime_target_blocked" in raw
     assert module.CLEAN_RUNTIME_DIRNAME == "wt-pc24x7-public-dev-governed"
@@ -229,14 +234,27 @@ def test_recreate_resolves_teams_secret_only_in_child_environment(
         lambda *_args, **_kwargs: ["docker", "compose"],
     )
     child_environments: list[dict[str, str]] = []
+    events: list[str] = []
 
-    def fake_run(_args, *, cwd, env=None, timeout=300, check=True, sensitive=False):
+    def fake_run(args, *, cwd, env=None, timeout=300, check=True, sensitive=False):
         child_environments.append(dict(env or {}))
+        events.append(" ".join(args))
         assert cwd == governed
         assert sensitive is True
         return SimpleNamespace(stdout="", returncode=0)
 
     monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(
+        module,
+        "_wait_for_api_ready",
+        lambda _sha: events.append("api-ready")
+        or {
+            "strategy": "api_frontend_then_nginx",
+            "attempts": 2,
+            "build_sha": "a" * 40,
+            "health": "ok",
+        },
+    )
 
     result = module._recreate_public_stack(
         governed,
@@ -248,14 +266,97 @@ def test_recreate_resolves_teams_secret_only_in_child_environment(
         "tenant-placeholder",
     )
 
-    assert len(child_environments) == 2
+    assert len(child_environments) == 3
     assert all(env["TEAMS_BOT_SECRET"] == "secret-placeholder" for env in child_environments)
     assert all(env["TEAMS_BOT_APP_ID"] == "app-placeholder" for env in child_environments)
+    assert events[1].endswith("up -d --build --no-deps api frontend")
+    assert events[2] == "api-ready"
+    assert events[3].endswith("up -d --no-deps --force-recreate nginx")
     assert result == {
         "credential_source": "azure_key_vault_existing",
         "credential_rotated": False,
         "secret_value_exposed": False,
+        "api_startup": {
+            "strategy": "api_frontend_then_nginx",
+            "attempts": 2,
+            "build_sha": "a" * 40,
+            "health": "ok",
+        },
     }
+
+
+def test_wait_for_api_ready_retries_until_same_sha_is_healthy(monkeypatch) -> None:
+    module = _load()
+    expected = "a" * 40
+    calls: list[str] = []
+
+    def fake_probe(url: str):
+        calls.append(url)
+        if len(calls) == 1:
+            raise module.ReconcileError("probe_failed:ConnectionRefusedError")
+        if url.endswith("/api/runtime/build-info"):
+            return {
+                "status": 200,
+                "body": '{"data":{"build_sha":"' + expected + '"}}',
+            }
+        return {"status": 200, "body": '{"data":{"status":"ok"}}'}
+
+    monkeypatch.setattr(module, "_probe", fake_probe)
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+
+    result = module._wait_for_api_ready(expected, timeout_seconds=1, poll_seconds=0)
+
+    assert result == {
+        "strategy": "api_frontend_then_nginx",
+        "attempts": 2,
+        "build_sha": expected,
+        "health": "ok",
+    }
+    assert calls == [
+        f"http://127.0.0.1:{module.DEV_API_PORT}/api/runtime/build-info",
+        f"http://127.0.0.1:{module.DEV_API_PORT}/api/runtime/build-info",
+        f"http://127.0.0.1:{module.DEV_API_PORT}/api/runtime/health",
+    ]
+
+
+def test_wait_for_api_ready_fails_closed_when_sha_never_matches(monkeypatch) -> None:
+    module = _load()
+    clock = [0.0]
+
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        module.time,
+        "sleep",
+        lambda seconds: clock.__setitem__(0, clock[0] + seconds),
+    )
+    monkeypatch.setattr(
+        module,
+        "_probe",
+        lambda url: {
+            "status": 200,
+            "body": (
+                '{"data":{"build_sha":"' + "b" * 40 + '"}}'
+                if url.endswith("/api/runtime/build-info")
+                else '{"data":{"status":"ok"}}'
+            ),
+        },
+    )
+
+    with pytest.raises(module.ReconcileError, match="api_startup_timeout") as caught:
+        module._wait_for_api_ready("a" * 40, timeout_seconds=2, poll_seconds=1)
+
+    assert "b" * 40 in str(caught.value)
+
+
+def test_failure_evidence_preserves_only_sanitized_reconcile_details() -> None:
+    module = _load()
+
+    assert module._safe_failure_detail(
+        module.ReconcileError("api_startup_timeout:direct_api_probe_failed")
+    ) == "api_startup_timeout:direct_api_probe_failed"
+    assert module._safe_failure_detail(
+        RuntimeError("external exception could contain a secret")
+    ) == "reconciliation_failed"
 
 
 def test_sensitive_compose_failure_never_echoes_secret(
