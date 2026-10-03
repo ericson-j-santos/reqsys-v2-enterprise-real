@@ -106,7 +106,7 @@
                 <v-divider class="my-4" />
 
                 <div class="subsection-title mb-2">
-                  <v-icon size="15">mdi-source-branch</v-icon>
+                  <v-icon size="15">mdi-source-versão de código</v-icon>
                   Dependências diretas
                 </div>
                 <div class="dependency-list">
@@ -200,11 +200,11 @@ const nodes = [
   { id: 'ia', lane: 'negocio', icon: '🤖', label: 'Análise IA', type: 'ai', owner: 'IA Governada', environment: 'dev', source: 'Qualidade IA', description: 'Análise assistida para critérios, ambiguidades, riscos e recomendações com nota de confiança.' },
   { id: 'backlog', lane: 'delivery', icon: '📋', label: 'Backlog', type: 'delivery', owner: 'PO/Tech Lead', environment: 'dev', source: 'ReqSys/Pipeline', description: 'Priorização, refinamento e preparação da entrega com vínculo ao requisito original.' },
   { id: 'branch', lane: 'delivery', icon: '🌿', label: 'Versão de código', type: 'code', owner: 'Dev', environment: 'dev', source: 'GitHub', description: 'Versão de código criada a partir da linha base governada.' },
-  { id: 'pr', lane: 'delivery', icon: '🔀', label: 'Solicitação de integração', type: 'code', owner: 'Dev/Reviewer', environment: 'dev', source: 'GitHub PR', description: 'Solicitação de integração em elaboração ou revisão, com lista de verificação, evidências, verificações automáticas e discussão técnica.' },
+  { id: 'pr', lane: 'delivery', icon: '🔀', label: 'Solicitação de integração', type: 'code', owner: 'Dev/Reviewer', environment: 'dev', source: 'GitHub Solicitação de integração', description: 'Solicitação de integração em elaboração ou revisão, com lista de verificação, evidências, verificações automáticas e discussão técnica.' },
   { id: 'ci', lane: 'runtime', icon: '✅', label: 'Verificações automáticas', type: 'runtime', owner: 'DevOps', environment: 'dev', source: 'GitHub Actions', description: 'Validação automatizada de compilação, testes, segurança e responsividade.' },
-  { id: 'deploy', lane: 'runtime', icon: '🚀', label: 'Deploy', type: 'runtime', owner: 'DevOps', environment: 'homologacao', source: 'Pipeline', description: 'Publicação controlada para ambiente alvo após verificações técnicas obrigatórias aprovadas.' },
+  { id: 'deploy', lane: 'runtime', icon: '🚀', label: 'Deploy', type: 'runtime', owner: 'DevOps', environment: 'homologacao', source: 'Fluxo', description: 'Publicação controlada para ambiente alvo após verificações técnicas obrigatórias aprovadas.' },
   { id: 'obs', lane: 'operacao', icon: '📡', label: 'Observabilidade', type: 'runtime', owner: 'SRE/Suporte', environment: 'producao', source: 'Logs/Traces', description: 'Monitoramento por logs, métricas, correlation_id, incidentes e saúde operacional.' },
-  { id: 'analytics', lane: 'operacao', icon: '📊', label: 'Indicadores', type: 'analytics', owner: 'BI/Gestão', environment: 'producao', source: 'Dashboard', description: 'Indicadores, linhagem, drill-down e análise de impacto a partir dos dados operacionais.' },
+  { id: 'analytics', lane: 'operacao', icon: '📊', label: 'Indicadores', type: 'analytics', owner: 'BI/Gestão', environment: 'producao', source: 'Painel', description: 'Indicadores, linhagem, drill-down e análise de impacto a partir dos dados operacionais.' },
 ]
 
 const edges = [
@@ -230,7 +230,7 @@ const gates = [
   { nome: 'Fonte rastreável declarada', ok: true },
   { nome: 'Ambiente identificado', ok: true },
   { nome: 'Metadados auditáveis exibidos', ok: true },
-  { nome: 'Sem secrets ou PII no grafo', ok: true },
+  { nome: 'Sem secrets ou dados pessoais no grafo', ok: true },
   { nome: 'Drill-down por nó disponível', ok: true },
   { nome: 'Execução real integrada', ok: false },
 ]
