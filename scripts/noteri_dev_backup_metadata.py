@@ -10,6 +10,7 @@ import re
 import shutil
 import socket
 import subprocess
+import urllib.request
 
 def collect() -> dict:
     if socket.gethostname().casefold() != "noteri":
@@ -61,11 +62,24 @@ def collect() -> dict:
             restic["version"] = match.group(1) if result.returncode == 0 and match else "unverified"
         except (OSError, subprocess.TimeoutExpired):
             restic["version"] = "unavailable"
+    distribution = {"version": "0.18.0", "zip_sha256": None}
+    try:
+        url = "https://github.com/restic/restic/releases/download/v0.18.0/SHA256SUMS"
+        with urllib.request.urlopen(url, timeout=20) as response:
+            final = response.geturl()
+            if not final.startswith("https://"):
+                raise ValueError("checksum_transport_invalid")
+            sums = response.read(16384).decode("ascii")
+        match = re.search(r"^([0-9a-f]{64})\s+\*?restic_0\.18\.0_windows_amd64\.zip$", sums, re.M)
+        if match:
+            distribution["zip_sha256"] = match.group(1)
+    except (OSError, ValueError):
+        pass
     return {"schema_version": 1, "host": "Noteri", "source_sha": os.environ.get("GITHUB_SHA"),
             "correlation_id": os.environ.get("CORRELATION_ID"),
             "observed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "backup_directory_present": root.is_dir(), "relative_files": files,
-            "manifest_metadata": manifests, "restic": restic,
+            "manifest_metadata": manifests, "restic": restic, "restic_distribution": distribution,
             "password_values_read": False, "database_rows_read": False,
             "data_transferred": False, "phase": "backup_metadata_preflight"}
 

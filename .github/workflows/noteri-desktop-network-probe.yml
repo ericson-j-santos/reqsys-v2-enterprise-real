@@ -702,7 +702,6 @@ jobs:
       TARGET_REPO: ${{ github.workspace }}
       RULES_SHA: d26351458b17c917100efc3b736dcc6d53a646cb
       CORRELATION_ID: noteri-dev-backup-metadata-${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_REL: ${{ runner.temp }}\noteri-dev-backup-metadata-${{ github.run_id }}\evidence.json
       PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
@@ -794,6 +793,8 @@ jobs:
           "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
           "session_id=$($data.session_id)" | Add-Content $env:GITHUB_OUTPUT
           "anchor_sha=$anchorSha" | Add-Content $env:GITHUB_OUTPUT
+          $evidence = Join-Path $env:RUNNER_TEMP ("noteri-dev-backup-metadata-" + $env:GITHUB_RUN_ID + "\evidence.json")
+          "EVIDENCE_REL=$evidence" | Add-Content $env:GITHUB_ENV
 
       - name: Inspect fixed validated-backup metadata through Command Gateway
         shell: powershell
