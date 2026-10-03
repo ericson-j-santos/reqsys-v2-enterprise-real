@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "capability": "ReqSys Copilot Studio HITL Agent Network",
+  "solution_name": "ReqSysCopilotHITL",
+  "display_name": "ReqSys - Rede Corporativa de Agentes HITL",
+  "target": "Microsoft Copilot Studio + Power Automate + Dataverse",
+  "language": "pt-BR",
+  "status": "ready_for_materialization",
+  "governance": {
+    "sandbox_first": true,
+    "human_approval_required": true,
+    "production_blocker": true,
+    "immutable_approval_history": true,
+    "workflow_state_versioning": true,
+    "rbac_required": true,
+    "correlation_id_required": true,
+    "external_writes_require_approval": true
+  },
+  "components": {
+    "agents_contract": "copilot/agents.json",
+    "flows_contract": "powerautomate/flows.json",
+    "dataverse_contract": "dataverse/schema.json",
+    "deployment_guide": "README.md"
+  },
+  "integrations": [
+    "Microsoft Teams",
+    "GitHub",
+    "Azure DevOps",
+    "Redmine API",
+    "Power Platform Approvals"
+  ],
+  "environments": ["dev", "stg", "prod"],
+  "publisher": {
+    "name": "ReqSys",
+    "prefix": "reqsys"
+  }
+}

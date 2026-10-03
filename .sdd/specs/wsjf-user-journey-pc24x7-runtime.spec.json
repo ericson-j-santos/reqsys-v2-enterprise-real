@@ -1,0 +1,26 @@
+{
+  "feature_name": "wsjf-user-journey-pc24x7-runtime",
+  "project": "ReqSys v2 Enterprise — WSJF Planner → Excel DEV",
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-27",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Migra o aceite real WSJF DEV para o locator PC24x7 assinado, remove URLs efêmeras estáticas e fixa API/frontend same-origin no endereço resolvido.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_user_journey_acceptance_oidc_contract.py",
+      "tests/test_dev_runtime_cutover.py",
+      "tests/test_planner_teams_dev_acceptance_pc24x7.py",
+      "tests/test_wsjf_business_effect_probe.py"
+    ],
+    "evidence_contract": "Aceite resolve o locator assinado vigente, proíbe PC24X7_DEV_BASE_URL/FRONTEND_URL como fonte operacional, fixa API/frontend same-origin, exige same-SHA e health público, usa OIDC Microsoft e proíbe qualquer dependência Fly."
+  },
+  "traceability": {
+    "issue": "#2062",
+    "runtime_contract": "pc24x7-dev-signed-locator"
+  }
+}

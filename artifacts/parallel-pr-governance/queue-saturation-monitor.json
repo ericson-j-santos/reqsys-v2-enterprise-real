@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:54:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "queue_saturation_monitor",
+  "thresholds": {
+    "green": {
+      "open_low_risk_prs": "0-6",
+      "action": "continue"
+    },
+    "yellow": {
+      "open_low_risk_prs": "7-10",
+      "action": "continue only exclusive-path PRs"
+    },
+    "red": {
+      "open_low_risk_prs": ">10",
+      "action": "pause new PRs until merge queue drains"
+    }
+  },
+  "hard_stop_rules": [
+    "do not open new PR when same file is already changed by open PR",
+    "do not open runtime or frontend PR when competing runtime PRs are open",
+    "do not edit workflows while CI stabilization PRs are open"
+  ],
+  "dashboard_status": "ready_for_visualization"
+}

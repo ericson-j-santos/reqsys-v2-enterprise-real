@@ -1,0 +1,21 @@
+{
+  "profile": "excel_sql_sharepoint_sync",
+  "state": "partially_validated",
+  "implemented": [
+    "contract_validation",
+    "office_script_generator",
+    "sql_openjson_template_generator",
+    "power_automate_upsert_contract",
+    "correlation_id_contract",
+    "idempotency_contract",
+    "automated_unit_tests",
+    "e2e_acceptance_specification"
+  ],
+  "pending": [
+    "ci_current_sha",
+    "real_excel_binding_dev",
+    "real_sql_query_binding_dev",
+    "real_sharepoint_binding_dev",
+    "real_e2e_positive_negative_idempotency"
+  ]
+}

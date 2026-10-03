@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:50:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "throughput_analytics",
+  "observed_batch": {
+    "merged_prs": [412, 413, 414, 415, 416, 417],
+    "batch_size": 6,
+    "merge_result": "all_merged",
+    "conflict_result": "none_observed"
+  },
+  "target_metrics": {
+    "safe_parallel_prs": "6-8",
+    "governed_parallel_prs": "10-12",
+    "max_files_per_low_risk_pr": 1,
+    "preferred_change_type": "new_file_only"
+  },
+  "next_measurements": [
+    "time_to_green",
+    "time_to_merge",
+    "rerun_count",
+    "conflict_count",
+    "auto_merge_enabled_count"
+  ]
+}

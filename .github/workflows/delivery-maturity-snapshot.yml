@@ -1,0 +1,52 @@
+name: Delivery Maturity Snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '35 */6 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/delivery-maturity-snapshot.yml'
+      - 'scripts/delivery_maturity_snapshot.py'
+      - 'docs/contracts/delivery-maturity-snapshot.schema.json'
+      - 'docs/runbooks/delivery-maturity-snapshot.md'
+      - 'docs/dashboard/live-operational-dashboard.dynamic.html'
+
+concurrency:
+  group: delivery-maturity-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  delivery-maturity:
+    name: Build delivery maturity snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate delivery maturity snapshot
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: python scripts/delivery_maturity_snapshot.py
+
+      - name: Validate JSON syntax
+        run: python -m json.tool audit/delivery-maturity/delivery-maturity-snapshot.json >/tmp/delivery-maturity-snapshot.pretty.json
+
+      - name: Publish summary
+        run: cat audit/delivery-maturity/delivery-maturity-snapshot.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload delivery maturity artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-maturity-snapshot-${{ github.run_id }}
+          path: audit/delivery-maturity/
+          if-no-files-found: error
+          retention-days: 30

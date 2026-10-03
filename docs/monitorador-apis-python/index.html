@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monitorador de APIs Python</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f8fafc; color: #111827; }
+    header { background: #111827; color: #fff; padding: 28px; }
+    main { padding: 24px; max-width: 1080px; margin: auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .ok { background: #dcfce7; border-color: #86efac; }
+    .warn { background: #fef9c3; border-color: #fde047; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: #fff; }
+    th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+    th { background: #111827; color: #fff; }
+    a { color: #005CA9; font-weight: 700; }
+    code { background: #e5e7eb; padding: 2px 5px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Monitorador de APIs Python</h1>
+    <p>FastAPI, health check, dashboard HTML, Dockerfile, Render/Railway e CI.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card ok"><strong>FastAPI</strong><br>Endpoint web incluído</div>
+      <div class="card ok"><strong>/health</strong><br>Pronto para health check</div>
+      <div class="card ok"><strong>/dashboard</strong><br>Relatório visual runtime</div>
+      <div class="card warn"><strong>URL pública</strong><br>Pendente autenticação no provedor</div>
+    </section>
+
+    <h2>Fluxo operacional</h2>
+    <pre><code>APIs alvo → FastAPI → Async client → Retry/backoff → Cache TTL → SQLite → Logs → Dashboard HTML → CI/Docker</code></pre>
+
+    <h2>Rotas</h2>
+    <table>
+      <thead><tr><th>Rota</th><th>Finalidade</th></tr></thead>
+      <tbody>
+        <tr><td>/</td><td>Home operacional</td></tr>
+        <tr><td>/health</td><td>Health check</td></tr>
+        <tr><td>/api/monitorar</td><td>Executa monitoramento e retorna JSON</td></tr>
+        <tr><td>/api/resultados</td><td>Lista resultados persistidos</td></tr>
+        <tr><td>/dashboard</td><td>Dashboard HTML</td></tr>
+        <tr><td>/docs</td><td>Swagger/OpenAPI</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Matriz de entrega</h2>
+    <table>
+      <thead><tr><th>Capacidade</th><th>Estado evidenciado</th><th>Estado alvo</th></tr></thead>
+      <tbody>
+        <tr><td>Fonte no GitHub</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>FastAPI</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>Testes automatizados</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>CI dedicado com Docker build</td><td>VERDE após execução do PR</td><td>VERDE</td></tr>
+        <tr><td>Dockerfile</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>Render/Railway config</td><td>VERDE</td><td>VERDE</td></tr>
+        <tr><td>URL pública executável</td><td>AMARELO</td><td>VERDE após deploy no provedor</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Comandos</h2>
+    <pre><code>cd examples/monitorador_apis_python
+pip install -r requirements.txt
+uvicorn app.api:app --host 0.0.0.0 --port 8000
+pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+docker build -t monitorador-apis-python .</code></pre>
+  </main>
+</body>
+</html>
