@@ -38,6 +38,8 @@
     "A composicao reutiliza apenas overrides locais DEV permitidos e usa os arquivos versionados do worktree governado.",
     "O segredo Teams DEV existente e resolvido por Azure OIDC e Key Vault, usado apenas no ambiente filho e nunca exposto em erro ou evidencia.",
     "A permissao id-token: write fica limitada ao job reconcile; o smoke publico recebe somente contents: read.",
+    "A ausencia do servico opcional reqsys-runtime nao impede o nginx publico de iniciar; apenas as rotas runtime-core falham fechadas com HTTP 502.",
+    "O proxy TODO events preserva o sufixo de caminho e a query ao encaminhar uma rota runtime-core permitida.",
     "Somente api, frontend e nginx DEV sao recriados; HML e PROD permanecem fora de escopo.",
     "Health, readiness, build-info, frontend estatico e controle negativo de Vite validam o SHA exato antes de publicar o locator."
   ]
