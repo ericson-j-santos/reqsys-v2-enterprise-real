@@ -85,7 +85,12 @@ despache `dispatch-public-runtime-evidence.yml` na `main` com
 `operation=relay-dev-locator`, o SHA exato e a confirmação
 `RELAY_DEV_LOCATOR`. O workflow valida a `main` antes do checkout, revalida a
 assinatura, exige pelo menos 300 segundos de TTL, executa o smoke público antes
-do POST e comprova a mensagem exata por readback.
+do POST e comprova a mensagem exata por readback. O `id` devolvido pelo POST é
+validado e salvo apenas como metadado sanitizado. Para absorver a consistência
+eventual do ntfy, somente o readback desse `id` faz polling: no máximo seis
+consultas com intervalo fixo de dois segundos, limitado a 40 segundos. O POST
+continua único e qualquer divergência de `id`, hash, assinatura ou TTL falha
+fechado.
 
 O envelope assinado e sua codificação Base64 são material público de curta
 duração; a chave privada DPAPI nunca deixa o PC24x7. Apague o arquivo temporário

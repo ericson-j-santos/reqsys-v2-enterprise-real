@@ -512,6 +512,30 @@ def test_github_hosted_locator_relay_is_manual_sha_bound_and_fail_closed():
     assert raw.count("--request POST") == 1
     assert "--retry" not in raw
     assert "--location" not in raw
+    assert 'READBACK_MAX_ATTEMPTS: "6"' in raw
+    assert 'READBACK_DELAY_SECONDS: "2"' in raw
+    assert 'READBACK_REQUEST_MAX_SECONDS: "5"' in raw
+    assert 'READBACK_DEADLINE_SECONDS: "40"' in raw
+    assert 'for attempt in $(seq 1 "$READBACK_MAX_ATTEMPTS")' in raw
+    assert 'readback_deadline_at=$((SECONDS + READBACK_DEADLINE_SECONDS))' in raw
+    assert 'remaining_seconds=$((readback_deadline_at - SECONDS))' in raw
+    assert '--max-time "$request_max_seconds"' in raw
+    assert "exact_relay_envelope_readback_deadline_exceeded" in raw
+    assert 'json?poll=1&id=$message_id' in raw
+    assert "relay_publish_message_id_invalid" in raw
+    assert "relay_publish_response_envelope_mismatch" in raw
+    assert "safe.publish = {" in raw
+    assert "item?.id !== expectedMessageId" in raw
+    assert "process.exit(42)" in raw
+    assert "exact_relay_envelope_not_found_after_bounded_poll" in raw
+    assert raw.index("--request POST") < raw.index('for attempt in $(seq 1 "$READBACK_MAX_ATTEMPTS")')
+    readback = raw.split("- name: Read back exact envelope and reverify", 1)[1].split(
+        "- name: Cleanup relay temporary files", 1
+    )[0]
+    assert "--request POST" not in readback
+    assert "--data-binary" not in readback
+    assert "--max-filesize 65536" in readback
+    assert 'test "$(wc -c < "$NTFY_READBACK_PATH")" -le 65536' in readback
     assert "exact_relay_envelope_not_found" in raw
     assert "exact_envelope_sha256" in raw
     assert "signature_reverified: true" in raw

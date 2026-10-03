@@ -64,8 +64,11 @@ PC24x7 --Ed25519--> ntfy.sh
 30. O relay deve exigir `workflow_dispatch` em `main`, autorização literal,
     `expected_sha` igual ao HEAD atual, assinatura/TTL válidos, ao menos 300 segundos
     restantes, smoke público sem redirects antes do POST, publicação única em
-    endpoint fixo e readback do hash exato. Falha ou HTTP 429 não autoriza fallback
-    por Gist, Issue, Pages ou outro provedor.
+    endpoint fixo e readback do hash exato. O `id` retornado pelo POST deve ser
+    validado e persistido apenas como metadado sanitizado; somente o readback desse
+    `id` pode repetir, em no máximo seis consultas com intervalo fixo de dois
+    segundos e deadline de até 40 segundos. O POST permanece único. Falha ou HTTP
+    429 não autoriza fallback por Gist, Issue, Pages ou outro provedor.
 
 ## Critérios de aceite
 
@@ -82,7 +85,8 @@ PC24x7 --Ed25519--> ntfy.sh
   estado local de publicação;
 - relay emergencial executa em runner hospedado pelo GitHub, não depende do runner
   self-hosted, valida a `main` antes de executar código do checkout e comprova o
-  POST por readback assinado do envelope exato;
+  POST por polling limitado do `id` retornado e do envelope assinado exato, sem
+  repetir a publicação;
 - merge, push, schedule e `workflow_run` não disparam publicação de Pages;
 - `workflow_dispatch` com autorização ausente/incorreta ou SHA divergente falha fechado antes da publicação;
 - `workflow_dispatch` autorizado opera somente sobre o SHA exato da `main` informado em `expected_sha`;
