@@ -38,7 +38,16 @@ async def observability_middleware(request: Request, call_next) -> Response:
     )
     anotar_span_correlation()
 
-    response.headers['X-Correlation-Id'] = obter_correlation_id()
+    correlation_id = obter_correlation_id()
+    response.headers['X-Correlation-Id'] = correlation_id
+    response.headers['X-Request-ID'] = correlation_id
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    if request.url.scheme == 'https':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+
     log_evento(
         'http.request.completed',
         method=request.method,

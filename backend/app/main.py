@@ -61,6 +61,7 @@ from app.api import (
     wiki,
 )
 from app.core.config import settings
+from app.core.correlation import obter_correlation_id
 from app.core.envelope import ok
 from app.core.otel import configurar_opentelemetry
 from app.core.runtime_boot import build_health_payload, probe_database
@@ -115,7 +116,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allow_headers=['Authorization', 'Content-Type', 'Accept', 'X-Requested-With', 'X-Correlation-Id', 'X-Power-Platform-Token', 'X-Power-Automate-Token'],
+    allow_headers=['Authorization', 'Content-Type', 'Accept', 'X-Requested-With', 'X-Correlation-Id', 'X-Request-ID', 'X-Power-Platform-Token', 'X-Power-Automate-Token'],
     expose_headers=['X-Request-ID', 'X-Correlation-Id'],
 )
 
@@ -182,11 +183,12 @@ async def log_security_events(request: Request, call_next):
     response = await call_next(request)
     if response.status_code in (401, 403):
         sec_logger.warning(
-            'acesso negado status=%s method=%s path=%s ip=%s',
+            'acesso negado status=%s method=%s path=%s ip=%s correlation_id=%s',
             response.status_code,
             request.method,
             request.url.path,
             request.client.host if request.client else 'unknown',
+            obter_correlation_id(),
         )
     return response
 
@@ -427,6 +429,30 @@ def root():
 def health():
     database_ok, database_detail = probe_database(max_attempts=1, delay_seconds=0)
     payload = build_health_payload(database_ok=database_ok, database_detail=database_detail)
+    if not database_ok:
+        return JSONResponse(status_code=503, content=ok(payload))
+    return ok(payload)
+
+
+@app.get('/health/live')
+def health_live():
+    """Alias de liveness preservado para compatibilidade operacional."""
+    return ok({'status': 'alive', 'service': 'reqsys-api'})
+
+
+@app.get('/health/ready')
+def health_ready():
+    """Readiness com verificação real do banco; falha fechada quando indisponível."""
+    database_ok, database_detail = probe_database(max_attempts=1, delay_seconds=0)
+    payload = {
+        'status': 'ready' if database_ok else 'degraded',
+        'service': 'reqsys-api',
+        'checks': {'database': 'ok' if database_ok else 'error'},
+        'database': {
+            'status': 'ok' if database_ok else 'unavailable',
+            'detail': database_detail,
+        },
+    }
     if not database_ok:
         return JSONResponse(status_code=503, content=ok(payload))
     return ok(payload)
