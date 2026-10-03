@@ -5,7 +5,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -189,7 +188,8 @@ class ArchiveTests(unittest.TestCase):
             publisher = SimpleNamespace(root=root, private=SimpleNamespace(), require_key_handoff=lambda source: {})
             restorer = restore.Restorer(publisher)
             identity = {"container_id": "d" * 64}
-            binary = lambda program, args, payload, *extra: TOC if "--list" in args else DATA
+            def binary(program, args, payload, *extra):
+                return TOC if "--list" in args else DATA
             proof = self.backup()
             proof["archive"]["toc_table_data_count"] = 1
             with (
