@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -15,6 +16,19 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+
+def _load_provision_module():
+    module_path = Path(__file__).resolve().with_name("provision_pc24x7_teams_bot_runtime.py")
+    spec = importlib.util.spec_from_file_location("reqsys_pc24x7_public_provision", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("provision_module_loader_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+provision = _load_provision_module()
+
 EXPECTED_HOST = "DESKTOP-PDQK954"
 EXPECTED_REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEV_API_PORT = "8210"
@@ -22,6 +36,10 @@ DEV_GATEWAY_PORT = "8083"
 CONFIRMATION = "RECONCILE-PC24X7-PUBLIC-DEV"
 OVERLAY = Path("docker-compose.pc24x7-public-dev.yml")
 STATIC_NGINX = Path("infra/nginx/default.pc24x7-public-dev.conf")
+TEAMS_OVERRIDE = Path("config/pc24x7-teams-bot-runtime.override.yml")
+CLEAN_RUNTIME_DIRNAME = "wt-pc24x7-public-dev-governed"
+ADMIN_OVERRIDE_NAME = "docker-compose.admin-dev.override.yml"
+PAGES_OVERRIDE_NAME = "docker-compose.pages-stable.override.yml"
 
 
 class ReconcileError(RuntimeError):
@@ -43,6 +61,7 @@ def _run(
     env: dict[str, str] | None = None,
     timeout: int = 300,
     check: bool = True,
+    sensitive: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(
         args,
@@ -57,6 +76,10 @@ def _run(
         shell=False,
     )
     if check and completed.returncode != 0:
+        if sensitive:
+            raise ReconcileError(
+                f"sensitive_command_failed:{Path(args[0]).name}:exit_{completed.returncode}"
+            )
         detail = (completed.stderr or completed.stdout or "").strip().replace("\n", " ")
         raise ReconcileError(
             f"command_failed:{Path(args[0]).name}:exit_{completed.returncode}:{detail[:240]}"
@@ -222,6 +245,106 @@ def _sync_repo(runtime_root: Path, expected_sha: str) -> dict[str, Any]:
     }
 
 
+def _governed_runtime_root(discovered_runtime_root: Path) -> Path:
+    if discovered_runtime_root.name.casefold() == CLEAN_RUNTIME_DIRNAME.casefold():
+        return discovered_runtime_root.resolve()
+    return (discovered_runtime_root.parent / CLEAN_RUNTIME_DIRNAME).resolve()
+
+
+def _prepare_governed_runtime_repo(
+    discovered_runtime_root: Path,
+    expected_sha: str,
+) -> tuple[Path, dict[str, Any]]:
+    governed_root = _governed_runtime_root(discovered_runtime_root)
+    created = False
+
+    if not governed_root.exists():
+        if not re.fullmatch(r"[0-9a-fA-F]{40}", expected_sha):
+            raise ReconcileError("expected_sha_invalid")
+        origin = _git(discovered_runtime_root, "remote", "get-url", "origin").stdout.strip()
+        if not _origin_is_expected(origin):
+            raise ReconcileError("runtime_origin_mismatch")
+        _git(discovered_runtime_root, "fetch", "--prune", "origin", "main")
+        remote_main = _git(
+            discovered_runtime_root,
+            "rev-parse",
+            "origin/main",
+        ).stdout.strip().lower()
+        expected = expected_sha.lower()
+        on_main = _git(
+            discovered_runtime_root,
+            "merge-base",
+            "--is-ancestor",
+            expected,
+            remote_main,
+            check=False,
+        )
+        if on_main.returncode != 0:
+            raise ReconcileError("expected_sha_not_on_origin_main")
+        _git(
+            discovered_runtime_root,
+            "worktree",
+            "add",
+            "--detach",
+            str(governed_root),
+            expected,
+        )
+        created = True
+
+    if not governed_root.is_dir():
+        raise ReconcileError("governed_runtime_root_invalid")
+    sync = _sync_repo(governed_root, expected_sha)
+    sync.update(
+        {
+            "governed_worktree_created": created,
+            "dirty_runtime_checkout_preserved": governed_root
+            != discovered_runtime_root.resolve(),
+        }
+    )
+    return governed_root, sync
+
+
+def _select_compose_files(
+    governed_root: Path,
+    discovered_config_files: list[Path],
+) -> list[Path]:
+    allowed_local = {
+        ADMIN_OVERRIDE_NAME.casefold(): ADMIN_OVERRIDE_NAME,
+        PAGES_OVERRIDE_NAME.casefold(): PAGES_OVERRIDE_NAME,
+    }
+    selected_local: dict[str, Path] = {}
+    for path in discovered_config_files:
+        key = path.name.casefold()
+        if key not in allowed_local:
+            continue
+        resolved = path.resolve()
+        previous = selected_local.get(key)
+        if previous is not None and previous != resolved:
+            raise ReconcileError(f"local_override_not_unique:{allowed_local[key]}")
+        if not resolved.is_file():
+            raise ReconcileError(f"local_override_missing:{allowed_local[key]}")
+        selected_local[key] = resolved
+
+    admin = selected_local.get(ADMIN_OVERRIDE_NAME.casefold())
+    if admin is None:
+        raise ReconcileError("admin_override_missing")
+
+    files = [
+        governed_root / "docker-compose.yml",
+        governed_root / "docker-compose.dev.yml",
+        admin,
+        governed_root / TEAMS_OVERRIDE,
+        governed_root / "docker-compose.pc24x7-cofre.yml",
+    ]
+    pages = selected_local.get(PAGES_OVERRIDE_NAME.casefold())
+    if pages is not None:
+        files.append(pages)
+    for path in files:
+        if not path.is_file():
+            raise ReconcileError(f"compose_file_missing:{path.name}")
+    return [path.resolve() for path in files]
+
+
 def _compose_base(
     runtime_root: Path,
     project: str,
@@ -245,39 +368,65 @@ def _compose_base(
 
 
 def _recreate_public_stack(
-    runtime_root: Path,
+    governed_root: Path,
     project: str,
     config_files: list[Path],
     env_files: list[Path],
     expected_sha: str,
-) -> None:
-    overlay = runtime_root / OVERLAY
-    nginx = runtime_root / STATIC_NGINX
+    vault_name: str,
+    expected_tenant_id: str,
+) -> dict[str, Any]:
+    overlay = governed_root / OVERLAY
+    nginx = governed_root / STATIC_NGINX
     if not overlay.is_file():
         raise ReconcileError("public_dev_overlay_missing")
     if not nginx.is_file():
         raise ReconcileError("public_dev_nginx_missing")
 
+    app_id, bot_secret = provision._load_existing_bot_secret(
+        vault_name,
+        expected_tenant_id,
+    )
     env = os.environ.copy()
     env["REQSYS_BUILD_SHA"] = expected_sha
-    base = _compose_base(runtime_root, project, config_files, env_files)
+    env["TEAMS_BOT_APP_ID"] = app_id
+    env["TEAMS_BOT_APP_TENANT_ID"] = expected_tenant_id
+    env["TEAMS_BOT_SECRET"] = bot_secret
+    base = _compose_base(governed_root, project, config_files, env_files)
 
-    _run(base + ["config", "--quiet"], cwd=runtime_root, env=env, timeout=90)
-    _run(
-        base
-        + [
-            "up",
-            "-d",
-            "--build",
-            "--no-deps",
-            "api",
-            "frontend",
-            "nginx",
-        ],
-        cwd=runtime_root,
-        env=env,
-        timeout=900,
-    )
+    try:
+        _run(
+            base + ["config", "--quiet"],
+            cwd=governed_root,
+            env=env,
+            timeout=90,
+            sensitive=True,
+        )
+        _run(
+            base
+            + [
+                "up",
+                "-d",
+                "--build",
+                "--no-deps",
+                "api",
+                "frontend",
+                "nginx",
+            ],
+            cwd=governed_root,
+            env=env,
+            timeout=900,
+            sensitive=True,
+        )
+    finally:
+        env["TEAMS_BOT_SECRET"] = ""
+        bot_secret = ""
+
+    return {
+        "credential_source": "azure_key_vault_existing",
+        "credential_rotated": False,
+        "secret_value_exposed": False,
+    }
 
 
 def _probe(url: str, *, timeout: float = 15.0, max_bytes: int = 524_288) -> dict[str, Any]:
@@ -381,16 +530,26 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         raise ReconcileError(f"confirmation_required:{CONFIRMATION}")
     if args.environment != "dev":
         raise ReconcileError("environment_must_be_dev")
+    if not args.vault_name.strip():
+        raise ReconcileError("vault_name_missing")
+    if not args.expected_tenant_id.strip():
+        raise ReconcileError("expected_tenant_id_missing")
     _require_host()
 
-    project, runtime_root, config_files, env_files = _discover_runtime()
-    sync = _sync_repo(runtime_root, args.expected_sha)
-    _recreate_public_stack(
-        runtime_root,
+    project, discovered_runtime_root, discovered_config_files, env_files = _discover_runtime()
+    governed_root, sync = _prepare_governed_runtime_repo(
+        discovered_runtime_root,
+        args.expected_sha,
+    )
+    config_files = _select_compose_files(governed_root, discovered_config_files)
+    credentials = _recreate_public_stack(
+        governed_root,
         project,
         config_files,
         env_files,
         args.expected_sha,
+        args.vault_name,
+        args.expected_tenant_id,
     )
     runtime = _verify(args.expected_sha)
 
@@ -403,11 +562,15 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "expected_sha": args.expected_sha.lower(),
         "correlation_id": args.correlation_id,
         "sync": sync,
+        "governed_runtime_worktree": True,
+        "runtime_checkout_discovered_from_compose": True,
         "runtime": runtime,
+        "credentials": credentials,
         "frontend_mode": "static_nginx",
         "vite_hmr_exposed": False,
         "production_touched": False,
-        "secrets_read": False,
+        "secrets_read": True,
+        "secret_value_exposed": False,
     }
     args.evidence_file.parent.mkdir(parents=True, exist_ok=True)
     args.evidence_file.write_text(
@@ -423,6 +586,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--environment", default="dev")
     parser.add_argument("--expected-sha", required=True)
+    parser.add_argument("--vault-name", required=True)
+    parser.add_argument("--expected-tenant-id", required=True)
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--evidence-file", type=Path, required=True)
     return parser.parse_args()
@@ -433,7 +598,7 @@ def main() -> int:
     try:
         execute(args)
         return 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI must always persist sanitized evidence
         failure = {
             "schema_version": "1.0.0",
             "status": "blocked",
@@ -443,7 +608,7 @@ def main() -> int:
             "reason": type(exc).__name__,
             "detail": "reconciliation_failed",
             "production_touched": False,
-            "secrets_read": False,
+            "secret_value_exposed": False,
         }
         args.evidence_file.parent.mkdir(parents=True, exist_ok=True)
         args.evidence_file.write_text(
