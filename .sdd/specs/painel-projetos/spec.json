@@ -1,0 +1,12 @@
+{
+  "feature_name": "Painel de projetos no acesso público DEV",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/router/painelProjetosRoute.spec.js",
+      "frontend/src/constants/navCatalog.test.js"
+    ]
+  }
+}
