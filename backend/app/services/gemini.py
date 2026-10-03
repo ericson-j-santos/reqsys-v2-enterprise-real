@@ -1,13 +1,20 @@
 """
 Serviço IA — Gemini (primary) + Groq/Llama (fallback automático).
-Fluxo: tenta Gemini → se quota esgotada, usa Groq transparentemente.
-Limites free tier: Gemini 15 req/min / 1.500/dia | Groq 30 req/min / 14.400/dia.
+
+A chamada externa passa pela porta comum `LLMGateway`.
+O serviço mantém apenas regras específicas da IA Assistente: cota, fallback
+Gemini -> Groq e normalização de exceções para a API existente.
 """
 import logging
 import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+
+from app.services.ai_provider_router import AIProviderRouter
+from app.services.llm_provider import LLMGateway
+from app.services.llm_provider import _post_json as _llm_post_json
+from app.services.llm_telemetry import registrar_evento_llm
 
 logger = logging.getLogger('reqsys.ia')
 
@@ -18,6 +25,31 @@ _GEMINI_LIMITE_MIN = 15
 _GEMINI_LIMITE_DIA = 1_500
 _GROQ_LIMITE_MIN = 30
 _GROQ_LIMITE_DIA = 14_400
+
+# ---------------------------------------------------------------------------
+# Modelos alternativos — usados automaticamente quando o provider responde que o
+# modelo configurado não existe/foi descontinuado (404 model_not_found,
+# model_decommissioned). Evita que a IA Assistente fique fora do ar só porque
+# GEMINI_MODEL/GROQ_MODEL apontam para um modelo aposentado.
+# ---------------------------------------------------------------------------
+GEMINI_MODELOS_ALTERNATIVOS: tuple[str, ...] = (
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+)
+GROQ_MODELOS_ALTERNATIVOS: tuple[str, ...] = (
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+)
+
+
+def _modelos_candidatos(model: str, alternativos: tuple[str, ...]) -> list[str]:
+    """Modelo configurado primeiro, seguido dos alternativos (sem repetição)."""
+    candidatos = [model] if model else []
+    candidatos.extend(alt for alt in alternativos if alt and alt != model)
+    return candidatos
 
 
 class GeminiIndisponivel(Exception):
@@ -97,88 +129,166 @@ def get_uso_groq() -> dict:
     return _groq_tracker.snapshot()
 
 
+def _post_json(url: str, payload: dict, headers: dict[str, str] | None = None, timeout: int = 45) -> dict:
+    return _llm_post_json(url, payload, headers, timeout)
+
+
+def _gateway() -> LLMGateway:
+    return LLMGateway(post_json=_post_json)
+
+
+def _router() -> AIProviderRouter:
+    return AIProviderRouter(gateway=_gateway())
+
+
+def _is_quota_error(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return (
+        '429' in msg
+        or 'resource_exhausted' in msg_lower
+        or 'quota exceeded' in msg_lower
+        or 'rate_limit_exceeded' in msg_lower
+        or 'rate limit' in msg_lower
+        or 'too many requests' in msg_lower
+    )
+
+
+def _is_bad_key_error(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return (
+        '400' in msg
+        or '401' in msg
+        or 'api_key' in msg_lower
+        or 'invalid api key' in msg_lower
+        or 'authentication' in msg_lower
+        or 'invalid' in msg_lower
+    )
+
+
+def _is_model_error(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return (
+        '404' in msg
+        or 'not found' in msg_lower
+        or 'not supported' in msg_lower
+        or 'model_not_found' in msg_lower
+        or 'model_decommissioned' in msg_lower
+        or 'decommissioned' in msg_lower
+        or 'does not exist' in msg_lower
+    )
+
+
 # ---------------------------------------------------------------------------
-# Client Gemini
+# Client Gemini via porta comum
 # ---------------------------------------------------------------------------
+class _ModeloIndisponivel(Exception):
+    """Interno: o provider respondeu que o modelo não existe/foi descontinuado."""
+
+
 def _gerar(api_key: str, model: str, prompt: str) -> str:
     if not api_key:
+        registrar_evento_llm('gemini', 'falha', 'api_key_ausente')
         raise GeminiIndisponivel('GEMINI_API_KEY não configurada no .env')
+    candidatos = _modelos_candidatos(model, GEMINI_MODELOS_ALTERNATIVOS)
+    modelos_indisponiveis: list[str] = []
+    for candidato in candidatos:
+        try:
+            return _gerar_gemini_modelo(api_key, candidato, prompt)
+        except _ModeloIndisponivel:
+            modelos_indisponiveis.append(candidato)
+            logger.warning('Modelo Gemini "%s" indisponível — tentando alternativa.', candidato)
+    registrar_evento_llm('gemini', 'falha', 'modelo_indisponivel')
+    raise GeminiIndisponivel(
+        f'Modelo Gemini "{model}" não disponível (também tentados: '
+        f'{", ".join(modelos_indisponiveis[1:]) or "nenhum"}). '
+        'Ajuste GEMINI_MODEL para um modelo ativo (ex.: gemini-2.5-flash).'
+    )
+
+
+def _gerar_gemini_modelo(api_key: str, model: str, prompt: str) -> str:
     try:
-        import google.generativeai as genai  # type: ignore
-        genai.configure(api_key=api_key)
-        cliente = genai.GenerativeModel(model)
-        resposta = cliente.generate_content(prompt)
+        texto = _router().generate_text(
+            provider='gemini',
+            model=model,
+            prompt=prompt,
+            api_key=api_key,
+        ).text
         _gemini_tracker.registrar()
-        return resposta.text.strip()
+        registrar_evento_llm('gemini', 'sucesso')
+        return texto.strip()
     except GeminiIndisponivel:
+        registrar_evento_llm('gemini', 'falha', 'gemini_indisponivel')
         raise
-    except ImportError:
-        raise GeminiIndisponivel('Pacote google-generativeai não instalado.')
     except Exception as exc:
         msg = str(exc)
-        msg_lower = msg.lower()
-        is_quota = (
-            '429' in msg
-            or 'resource_exhausted' in msg_lower
-            or 'quota exceeded' in msg_lower
-            or 'rate limit' in msg_lower
-            or 'too many requests' in msg_lower
-        )
-        if is_quota:
+        if _is_quota_error(msg):
+            registrar_evento_llm('gemini', 'falha', 'quota_esgotada')
             raise GeminiIndisponivel(
                 f'Quota Gemini esgotada (free tier: {_GEMINI_LIMITE_MIN} req/min, '
                 f'{_GEMINI_LIMITE_DIA} req/dia). Ativando fallback Groq...'
             )
-        is_bad_key = '400' in msg or 'api_key' in msg_lower or 'invalid' in msg_lower
-        is_not_found = '404' in msg or 'not found' in msg_lower or 'not supported' in msg_lower
-        if is_bad_key:
+        if _is_model_error(msg):
+            raise _ModeloIndisponivel(msg) from exc
+        if _is_bad_key_error(msg):
+            registrar_evento_llm('gemini', 'falha', 'api_key_invalida')
             raise GeminiIndisponivel('GEMINI_API_KEY inválida. Verifique a chave em aistudio.google.com.')
-        if is_not_found:
-            raise GeminiIndisponivel(
-                f'Modelo Gemini "{model}" não disponível. '
-                'Modelos válidos: gemini-2.0-flash, gemini-2.5-flash.'
-            )
         logger.exception('Erro inesperado ao chamar Gemini')
+        registrar_evento_llm('gemini', 'falha', 'erro_inesperado')
         raise GeminiIndisponivel(f'Gemini indisponível: {msg}')
 
 
 # ---------------------------------------------------------------------------
-# Client Groq
+# Client Groq via porta comum
 # ---------------------------------------------------------------------------
 def _gerar_groq(api_key: str, model: str, prompt: str) -> str:
     if not api_key:
+        registrar_evento_llm('groq', 'falha', 'api_key_ausente')
         raise GeminiIndisponivel('GROQ_API_KEY não configurada no .env')
+    candidatos = _modelos_candidatos(model, GROQ_MODELOS_ALTERNATIVOS)
+    modelos_indisponiveis: list[str] = []
+    for candidato in candidatos:
+        try:
+            return _gerar_groq_modelo(api_key, candidato, prompt)
+        except _ModeloIndisponivel:
+            modelos_indisponiveis.append(candidato)
+            logger.warning('Modelo Groq "%s" indisponível — tentando alternativa.', candidato)
+    registrar_evento_llm('groq', 'falha', 'modelo_indisponivel')
+    raise GeminiIndisponivel(
+        f'Modelo Groq "{model}" não disponível (também tentados: '
+        f'{", ".join(modelos_indisponiveis[1:]) or "nenhum"}). '
+        'Ajuste GROQ_MODEL para um modelo ativo em console.groq.com/docs/models.'
+    )
+
+
+def _gerar_groq_modelo(api_key: str, model: str, prompt: str) -> str:
     try:
-        from groq import Groq  # type: ignore
-        client = Groq(api_key=api_key)
-        completion = client.chat.completions.create(
+        texto = _router().generate_text(
+            provider='groq',
             model=model,
-            messages=[{'role': 'user', 'content': prompt}],
-        )
+            prompt=prompt,
+            api_key=api_key,
+        ).text
         _groq_tracker.registrar()
-        return completion.choices[0].message.content.strip()
+        registrar_evento_llm('groq', 'sucesso')
+        return texto.strip()
     except GeminiIndisponivel:
+        registrar_evento_llm('groq', 'falha', 'groq_indisponivel')
         raise
-    except ImportError:
-        raise GeminiIndisponivel('Pacote groq não instalado. Execute: pip install groq')
     except Exception as exc:
         msg = str(exc)
-        msg_lower = msg.lower()
-        is_quota = (
-            '429' in msg
-            or 'rate_limit_exceeded' in msg_lower
-            or 'rate limit' in msg_lower
-            or 'too many requests' in msg_lower
-        )
-        if is_quota:
+        if _is_quota_error(msg):
+            registrar_evento_llm('groq', 'falha', 'quota_esgotada')
             raise GeminiIndisponivel(
                 f'Quota Groq esgotada (free tier: {_GROQ_LIMITE_MIN} req/min, '
                 f'{_GROQ_LIMITE_DIA} req/dia). Tente novamente em instantes.'
             )
-        is_bad_key = '401' in msg or 'invalid api key' in msg_lower or 'authentication' in msg_lower
-        if is_bad_key:
+        if _is_model_error(msg):
+            raise _ModeloIndisponivel(msg) from exc
+        if _is_bad_key_error(msg):
+            registrar_evento_llm('groq', 'falha', 'api_key_invalida')
             raise GeminiIndisponivel('GROQ_API_KEY inválida. Verifique a chave em console.groq.com.')
         logger.exception('Erro inesperado ao chamar Groq')
+        registrar_evento_llm('groq', 'falha', 'erro_inesperado')
         raise GeminiIndisponivel(f'Groq indisponível: {msg}')
 
 
@@ -193,11 +303,17 @@ def _gerar_com_fallback(
     """Tenta Gemini; se indisponível e groq_key configurada, usa Groq. Retorna (texto, provedor)."""
     try:
         return _gerar(gemini_key, gemini_model, prompt), 'gemini'
-    except GeminiIndisponivel as exc:
-        if groq_key:
-            logger.info('Gemini indisponível (%s) — usando Groq como fallback.', exc)
+    except GeminiIndisponivel as exc_gemini:
+        if not groq_key:
+            raise
+        logger.info('Gemini indisponível (%s) — usando Groq como fallback.', exc_gemini)
+        registrar_evento_llm('gemini', 'fallback_acionado')
+        try:
             return _gerar_groq(groq_key, groq_model, prompt), 'groq'
-        raise
+        except GeminiIndisponivel as exc_groq:
+            raise GeminiIndisponivel(
+                f'Nenhum provider IA disponível. Gemini: {exc_gemini} | Groq: {exc_groq}'
+            ) from exc_groq
 
 
 # ---------------------------------------------------------------------------

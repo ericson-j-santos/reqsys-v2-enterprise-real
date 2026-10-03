@@ -43,7 +43,7 @@ Foram implementadas mudanças estruturais na aplicação ReqSys Enterprise para:
 #### 5. **frontend/.env.example**
 
 - Template atualizado com exemplos dev e prod
-- Facilita onboarding de novos desenvolvedores
+- Facilita a integração de novos desenvolvedores
 - **Status**: ✅ Implementado
 
 #### 6. **.env.example (root)**
@@ -156,7 +156,7 @@ Foram implementadas mudanças estruturais na aplicação ReqSys Enterprise para:
    - Retorna credenciais de teste
    - Retorna URLs dos ambientes dev e prod
    - **Autenticação**: Não requerida
-   - **Uso**: Onboarding de desenvolvedores
+   - **Uso**: Integração de desenvolvedores
 
 2. **GET /v1/sistema/health-check**
    - Verifica saúde de 3 componentes:

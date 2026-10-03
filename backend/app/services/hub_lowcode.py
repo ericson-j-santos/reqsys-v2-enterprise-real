@@ -7,33 +7,79 @@ retornando listas vazias com flag `configurado=False` em vez de lançar exceçã
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.identity_governance import IdentityGovernanceError
+from app.core.resilience import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    call_with_retry_async,
+)
 from app.models.configuracao_lowcode import ConfiguracaoLowCode
 from app.models.integracao_log import IntegracaoLog
+from app.services.microsoft_oauth import (
+    MicrosoftOAuthError,
+    acquire_client_credentials_token,
+)
+from app.services.sharepoint_packages import listar_pacotes_ia_governado
+from app.services.teams_graph_identity import (
+    acquire_teams_graph_token,
+    teams_graph_identity_status,
+)
 
 logger = logging.getLogger('reqsys.hub_lowcode')
 
 _GRAPH_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
 _GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
-_PA_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
-_PA_BASE = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
+_POWER_PLATFORM_BASE = 'https://api.powerplatform.com'
+_POWER_PLATFORM_ENVIRONMENTS_PATH = '/environmentmanagement/environments?api-version=2024-10-01'
+_POWER_PLATFORM_LEGACY_SCOPE = 'https://service.powerapps.com/.default'
+_POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL = (
+    'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/'
+    'scopes/admin/environments?api-version=2020-10-01'
+)
 _GH_BASE = 'https://api.github.com'
-_TIERI_URL = 'https://orga258f260.crm2.dynamics.com'
 
 _CHAVE_WEBHOOK_URL = 'planner_webhook_url'
 _CHAVE_WEBHOOK_KEY = 'planner_webhook_key'
 _CHAVE_TEAMS_WEBHOOK = 'teams_webhook_url'
+_FLOW_BOT_LIMITE_ACOES_DIA = 6000
+_FLOW_BOT_ACOES_SUCESSO = 9
+_FLOW_BOT_ACOES_ERRO = 3
 
 
 def _tem_credenciais_graph() -> bool:
     return bool(settings.azure_tenant_id and settings.azure_client_id and settings.azure_client_secret)
+
+
+def _tem_credenciais_power_platform() -> bool:
+    return settings.power_platform_configured
+
+
+def _tem_credenciais_dataverse() -> bool:
+    return settings.dataverse_configured
+
+
+def _dataverse_base_url() -> str:
+    raw_url = settings.dataverse_environment_url.strip().rstrip('/')
+    parsed = urlsplit(raw_url)
+    if (
+        parsed.scheme.lower() != 'https'
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError('DATAVERSE_ENVIRONMENT_URL deve ser uma URL HTTPS de ambiente sem credenciais, query ou fragmento')
+    return raw_url
 
 
 async def _token_grafico() -> str:
@@ -51,35 +97,29 @@ async def _token_grafico() -> str:
         return resp.json()['access_token']
 
 
-async def _token_power_automate() -> str:
+async def token_power_platform(scope: str = 'https://api.powerplatform.com/.default') -> str:
     async with httpx.AsyncClient(timeout=10) as c:
-        resp = await c.post(
-            _PA_TOKEN_URL.format(tenant=settings.azure_tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': settings.azure_client_id,
-                'client_secret': settings.azure_client_secret,
-                'scope': 'https://service.flow.microsoft.com/.default',
-            },
+        return await acquire_client_credentials_token(
+            client=c,
+            tenant_id=settings.power_platform_tenant_id,
+            client_id=settings.power_platform_client_id,
+            client_secret=settings.power_platform_client_secret,
+            scope=scope,
+            resource='power_platform',
         )
-        resp.raise_for_status()
-        return resp.json()['access_token']
 
 
 async def _token_dataverse(instance_url: str) -> str:
     scope = instance_url.rstrip('/') + '/.default'
     async with httpx.AsyncClient(timeout=10) as c:
-        resp = await c.post(
-            _GRAPH_TOKEN_URL.format(tenant=settings.azure_tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': settings.azure_client_id,
-                'client_secret': settings.azure_client_secret,
-                'scope': scope,
-            },
+        return await acquire_client_credentials_token(
+            client=c,
+            tenant_id=settings.dataverse_tenant_id,
+            client_id=settings.dataverse_client_id,
+            client_secret=settings.dataverse_client_secret,
+            scope=scope,
+            resource='dataverse',
         )
-        resp.raise_for_status()
-        return resp.json()['access_token']
 
 
 # ---------------------------------------------------------------------------
@@ -87,44 +127,9 @@ async def _token_dataverse(instance_url: str) -> str:
 # ---------------------------------------------------------------------------
 
 async def listar_pacotes_ia(limit: int = 20) -> dict[str, Any]:
-    if not _tem_credenciais_graph() or not settings.sharepoint_site_id:
-        return {'configurado': False, 'itens': [], 'erro': 'Credenciais Graph ou SHAREPOINT_SITE_ID não configurados'}
-
-    try:
-        token = await _token_grafico()
-        url = (
-            f'{_GRAPH_BASE}/sites/{settings.sharepoint_site_id}'
-            f'/lists/{settings.sharepoint_list_ia}/items'
-            f'?$expand=fields'
-            f'&$orderby=lastModifiedDateTime desc'
-            f'&$top={limit}'
-        )
-        async with httpx.AsyncClient(timeout=15) as c:
-            resp = await c.get(url, headers={'Authorization': f'Bearer {token}'})
-            resp.raise_for_status()
-            raw = resp.json().get('value', [])
-
-        itens = []
-        for item in raw:
-            f = item.get('fields', {})
-            itens.append({
-                'id': item.get('id'),
-                'projeto': f.get('Projeto', ''),
-                'branch': f.get('Branch', ''),
-                'commit': (f.get('CommitHash') or '')[:12],
-                'tech_stack': f.get('TechStack', ''),
-                'total_arquivos': f.get('TotalArquivos', 0),
-                'tamanho_mb': f.get('TamanhoPacoteMb', 0),
-                'status': f.get('Status', ''),
-                'chave': f.get('ChaveIdempotencia', ''),
-                'gerado_em': f.get('DataGeracaoUtc', ''),
-                'processado_em': f.get('ProcessadoEmUtc', ''),
-            })
-        return {'configurado': True, 'itens': itens, 'erro': None}
-
-    except Exception as exc:
-        logger.warning('hub_lowcode: erro ao ler pacotes SP: %s', exc)
-        return {'configurado': True, 'itens': [], 'erro': str(exc)}
+    """Delega ao adaptador SharePoint governado (identidade dedicada, sem
+    fallback para AZURE_CLIENT_ID/AZURE_CLIENT_SECRET genéricos)."""
+    return await listar_pacotes_ia_governado(limit)
 
 
 # ---------------------------------------------------------------------------
@@ -132,13 +137,20 @@ async def listar_pacotes_ia(limit: int = 20) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 async def listar_flows_pa() -> dict[str, Any]:
-    if not _tem_credenciais_graph():
-        return {'configurado': False, 'flows': [], 'execucoes': [], 'erro': 'Credenciais Azure AD não configuradas'}
+    if not _tem_credenciais_dataverse():
+        return {
+            'configurado': False,
+            'flows': [],
+            'execucoes': [],
+            'erro': 'Credenciais Dataverse não configuradas',
+            'campos_ausentes': settings.dataverse_missing_fields,
+        }
 
     try:
-        token = await _token_dataverse(_TIERI_URL)
+        dataverse_url = _dataverse_base_url()
+        token = await _token_dataverse(dataverse_url)
         headers = {'Authorization': f'Bearer {token}', 'OData-MaxVersion': '4.0', 'OData-Version': '4.0'}
-        base = f'{_TIERI_URL}/api/data/v9.2'
+        base = f'{dataverse_url}/api/data/v9.2'
 
         async with httpx.AsyncClient(timeout=15) as c:
             r_flows = await c.get(
@@ -163,38 +175,76 @@ async def listar_flows_pa() -> dict[str, Any]:
         ]
         return {'configurado': True, 'flows': flows, 'execucoes': [], 'erro': None}
 
+    except MicrosoftOAuthError as exc:
+        logger.warning('hub_lowcode: OAuth Dataverse rejeitado: %s', exc)
+        return {
+            'configurado': True,
+            'flows': [],
+            'execucoes': [],
+            'erro': str(exc),
+            'erro_oauth': exc.as_dict(),
+        }
     except Exception as exc:
         logger.warning('hub_lowcode: erro ao ler flows via Dataverse: %s', exc)
         return {'configurado': True, 'flows': [], 'execucoes': [], 'erro': str(exc)}
 
 
 async def listar_ambientes_powerplatform() -> dict[str, Any]:
-    if not _tem_credenciais_graph():
-        return {'configurado': False, 'ambientes': [], 'erro': 'Credenciais Azure AD não configuradas'}
+    if not _tem_credenciais_power_platform():
+        return {
+            'configurado': False,
+            'ambientes': [],
+            'erro': 'Credenciais Power Platform não configuradas',
+            'campos_ausentes': settings.power_platform_missing_fields,
+        }
 
     try:
-        token = await _token_power_automate()
-        headers = {'Authorization': f'Bearer {token}'}
         async with httpx.AsyncClient(timeout=15) as c:
+            token = await token_power_platform()
             resp = await c.get(
-                f'{_PA_BASE}/environments?api-version=2016-11-01',
-                headers=headers,
+                f'{_POWER_PLATFORM_BASE}{_POWER_PLATFORM_ENVIRONMENTS_PATH}',
+                headers={'Authorization': f'Bearer {token}'},
             )
-            resp.raise_for_status()
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError:
+                if resp.status_code not in {401, 403}:
+                    raise
+                # Compatibilidade controlada para tenants onde o RBAC v2 já
+                # existe, mas o endpoint moderno ainda rejeita service principals.
+                # A identidade continua dedicada e o consumidor executa apenas GET.
+                legacy_token = await token_power_platform(_POWER_PLATFORM_LEGACY_SCOPE)
+                resp = await c.get(
+                    _POWER_PLATFORM_LEGACY_ENVIRONMENTS_URL,
+                    headers={'Authorization': f'Bearer {legacy_token}'},
+                )
+                resp.raise_for_status()
             raw = resp.json().get('value', [])
 
         ambientes = [
             {
-                'id': e.get('name'),
-                'nome': e.get('properties', {}).get('displayName', ''),
-                'regiao': e.get('location', ''),
-                'tipo': e.get('properties', {}).get('environmentSku', ''),
-                'estado': e.get('properties', {}).get('provisioningState', ''),
+                'id': e.get('name') or e.get('id'),
+                'nome': e.get('properties', {}).get('displayName') or e.get('displayName', ''),
+                'regiao': (
+                    e.get('location')
+                    or e.get('properties', {}).get('azureRegion')
+                    or e.get('geo', '')
+                ),
+                'tipo': e.get('properties', {}).get('environmentSku') or e.get('type', ''),
+                'estado': e.get('properties', {}).get('provisioningState') or e.get('state', ''),
             }
             for e in raw
         ]
         return {'configurado': True, 'ambientes': ambientes, 'erro': None}
 
+    except MicrosoftOAuthError as exc:
+        logger.warning('hub_lowcode: OAuth Power Platform rejeitado: %s', exc)
+        return {
+            'configurado': True,
+            'ambientes': [],
+            'erro': str(exc),
+            'erro_oauth': exc.as_dict(),
+        }
     except Exception as exc:
         logger.warning('hub_lowcode: erro ao listar ambientes PA: %s', exc)
         return {'configurado': True, 'ambientes': [], 'erro': str(exc)}
@@ -309,6 +359,16 @@ def salvar_planner_webhook_config(
 # Publicar tarefas no Planner via PA flow
 # ---------------------------------------------------------------------------
 
+async def _postar_webhook_planner(url: str, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+    """POST cru ao webhook do Power Automate do Planner. Levanta `httpx.HTTPStatusError`
+    em resposta não-2xx e qualquer outra exceção de rede/parsing sem tratar — quem chama
+    decide como logar/persistir o erro."""
+    async with httpx.AsyncClient(timeout=60) as c:
+        resp = await c.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def publicar_tarefas_planner(
     db: Session,
     tarefas_texto: str,
@@ -341,10 +401,7 @@ async def publicar_tarefas_planner(
         headers['x-webhook-key'] = webhook_key
 
     try:
-        async with httpx.AsyncClient(timeout=60) as c:
-            resp = await c.post(webhook_url, json=payload, headers=headers)
-            resp.raise_for_status()
-            resposta = resp.json()
+        resposta = await _postar_webhook_planner(webhook_url, payload, headers)
 
         criadas = resposta.get('criadas', 0)
         teams_notificado = resposta.get('teams_notificado', False)
@@ -419,6 +476,18 @@ def _try_json(val: Any) -> str:
         return str(val)
 
 
+def _try_parse_json(val: Any) -> dict[str, Any]:
+    if isinstance(val, dict):
+        return val
+    if not isinstance(val, str) or not val.strip():
+        return {}
+    try:
+        parsed = json.loads(val)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
 def salvar_log_integracao(
     db: Session,
     tipo: str,
@@ -485,6 +554,96 @@ def listar_historico_integracoes(
         return {'configurado': True, 'eventos': [], 'total': 0, 'erro': str(exc)}
 
 
+def resumo_uso_flow_bot_hoje(
+    db: Session,
+    *,
+    limite_acoes_dia: int = _FLOW_BOT_LIMITE_ACOES_DIA,
+    agora: datetime | None = None,
+) -> dict[str, Any]:
+    """Calcula uso diario do flow_bot a partir do integracao_log.
+
+    O flow real `robo_envia_teamsv1` foi contado em 2026-07-09:
+    sucesso = 9 acoes; erro = 3 acoes.
+    """
+    try:
+        agora_ref = agora or datetime.now(timezone.utc)
+        inicio_dia = datetime.combine(agora_ref.date(), time.min, tzinfo=agora_ref.tzinfo)
+        fim_dia = datetime.combine(agora_ref.date(), time.max, tzinfo=agora_ref.tzinfo)
+
+        q = (
+            select(IntegracaoLog)
+            .where(IntegracaoLog.criado_em >= inicio_dia)
+            .where(IntegracaoLog.criado_em <= fim_dia)
+            .where(IntegracaoLog.tipo == 'teams_gateway')
+            .order_by(IntegracaoLog.criado_em.desc())
+        )
+        rows = db.execute(q).scalars().all()
+
+        por_dono: dict[str, dict[str, Any]] = {}
+        total_mensagens = 0
+        total_acoes = 0
+        for row in rows:
+            detalhes = _try_parse_json(row.detalhes)
+            if detalhes.get('canal_usado') != 'flow_bot':
+                continue
+
+            total_mensagens += 1
+            provider = _try_parse_json(detalhes.get('provider_response'))
+            dono = (
+                provider.get('owner')
+                or detalhes.get('owner')
+                or row.autor
+                or 'env:TEAMS_FLOW_BOT_WEBHOOK_URL'
+            )
+            acoes = _FLOW_BOT_ACOES_SUCESSO if row.status == 'sucesso' else _FLOW_BOT_ACOES_ERRO
+            item = por_dono.setdefault(
+                dono,
+                {
+                    'dono': dono,
+                    'mensagens': 0,
+                    'sucessos': 0,
+                    'erros': 0,
+                    'acoes_usadas': 0,
+                    'limite_acoes_dia': limite_acoes_dia,
+                    'percentual_usado': 0,
+                    'mensagens_restantes_estimadas': 0,
+                },
+            )
+            item['mensagens'] += 1
+            item['sucessos'] += 1 if row.status == 'sucesso' else 0
+            item['erros'] += 1 if row.status != 'sucesso' else 0
+            item['acoes_usadas'] += acoes
+            total_acoes += acoes
+
+        for item in por_dono.values():
+            restante = max(limite_acoes_dia - item['acoes_usadas'], 0)
+            item['percentual_usado'] = round((item['acoes_usadas'] / limite_acoes_dia) * 100, 1) if limite_acoes_dia else 0
+            item['mensagens_restantes_estimadas'] = restante // _FLOW_BOT_ACOES_SUCESSO
+
+        owners = sorted(por_dono.values(), key=lambda item: item['acoes_usadas'], reverse=True)
+        capacidade_total = limite_acoes_dia * max(len(owners), 1)
+        return {
+            'configurado': True,
+            'data': agora_ref.date().isoformat(),
+            'janela_inicio': inicio_dia.isoformat(),
+            'janela_fim': fim_dia.isoformat(),
+            'limite_acoes_dia_por_dono': limite_acoes_dia,
+            'acoes_por_mensagem_sucesso': _FLOW_BOT_ACOES_SUCESSO,
+            'acoes_por_mensagem_erro': _FLOW_BOT_ACOES_ERRO,
+            'mensagens': total_mensagens,
+            'acoes_usadas': total_acoes,
+            'capacidade_acoes_total_estimado': capacidade_total,
+            'percentual_usado_total': round((total_acoes / capacidade_total) * 100, 1) if capacidade_total else 0,
+            'mensagens_restantes_estimadas': max(capacidade_total - total_acoes, 0) // _FLOW_BOT_ACOES_SUCESSO,
+            'owners': owners,
+            'erro': None,
+        }
+
+    except Exception as exc:
+        logger.warning('hub_lowcode: erro ao calcular uso flow_bot: %s', exc)
+        return {'configurado': True, 'owners': [], 'mensagens': 0, 'acoes_usadas': 0, 'erro': str(exc)}
+
+
 # ---------------------------------------------------------------------------
 # Testar webhook Teams
 # ---------------------------------------------------------------------------
@@ -529,3 +688,324 @@ async def testar_teams_webhook(teams_webhook_url: str) -> dict[str, Any]:
         return {'ok': False, 'erro': f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'}
     except Exception as exc:
         return {'ok': False, 'erro': str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Teams via Graph API — mensagens em chat 1:1/grupo
+#
+# O fluxo app-only usa uma App Registration dedicada resolvida pelo
+# ApplicationIdentityRegistry. O login/MSAL delegado continua separado.
+# ---------------------------------------------------------------------------
+
+_TEAMS_GRAPH_MAX_RETRIES = 3
+_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS = 0.5
+_teams_graph_circuit = CircuitBreaker(name='teams_graph', failure_threshold=3, cooldown_seconds=60)
+
+
+def reset_teams_graph_circuit_breaker() -> None:
+    """Reseta o circuit breaker do Teams Graph (uso em testes)."""
+    _teams_graph_circuit.reset()
+
+
+def _normalizar_content_type_teams(content_type: str) -> str:
+    return content_type if content_type in ('text', 'html') else 'text'
+
+
+async def _postar_mensagem_chat_graph(
+    chat_id: str,
+    texto: str,
+    tipo_conteudo: str,
+    access_token: str,
+) -> dict[str, Any]:
+    payload = {'body': {'contentType': tipo_conteudo, 'content': texto}}
+
+    async def _enviar() -> dict[str, Any]:
+        headers = {'Authorization': f'Bearer {access_token}'}
+        async with httpx.AsyncClient(timeout=15) as c:
+            resp = await c.post(f'{_GRAPH_BASE}/chats/{chat_id}/messages', json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    return await call_with_retry_async(
+        _enviar,
+        max_retries=_TEAMS_GRAPH_MAX_RETRIES,
+        backoff_seconds=_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS,
+        retry_on=(httpx.TimeoutException, httpx.ConnectError),
+        circuit=_teams_graph_circuit,
+    )
+
+
+async def enviar_mensagem_chat_teams(
+    chat_id: str,
+    texto: str,
+    content_type: str = 'text',
+    db: Session | None = None,
+    autor: str = '',
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Envia mensagem app-only usando identidade dedicada e governada."""
+    corr = correlation_id or str(uuid.uuid4())
+    if not chat_id:
+        identity_status = teams_graph_identity_status()
+        return {
+            'configurado': bool(identity_status.get('configured')),
+            'enviado': False,
+            'erro': 'chat_id não fornecido',
+            'correlation_id': corr,
+            'identity': identity_status,
+        }
+
+    tipo_conteudo = _normalizar_content_type_teams(content_type)
+
+    try:
+        token, identity = await acquire_teams_graph_token()
+        identity_evidence = identity.evidence()
+        resposta = await _postar_mensagem_chat_graph(chat_id, texto, tipo_conteudo, token)
+        if db is not None:
+            salvar_log_integracao(
+                db, tipo='teams_graph', status='sucesso', autor=autor,
+                titulo=f'Mensagem enviada ao chat {chat_id}',
+                mensagem=texto[:200],
+                detalhes={
+                    'chat_id': chat_id,
+                    'content_type': tipo_conteudo,
+                    'message_id': resposta.get('id'),
+                    'identity': identity_evidence,
+                },
+                correlation_id=corr,
+            )
+        return {
+            'configurado': True,
+            'enviado': True,
+            'message_id': resposta.get('id'),
+            'chat_id': chat_id,
+            'correlation_id': corr,
+            'identity': identity_evidence,
+        }
+    except IdentityGovernanceError as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor,
+                                  mensagem=msg, correlation_id=corr)
+        return {'configurado': False, 'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except CircuitBreakerOpenError as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'configurado': True, 'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except httpx.HTTPStatusError as exc:
+        msg = f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'configurado': True, 'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except Exception as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'configurado': True, 'enviado': False, 'erro': msg, 'correlation_id': corr}
+
+
+async def enviar_mensagem_chat_teams_como_usuario(
+    chat_id: str,
+    texto: str,
+    usuario_access_token: str,
+    content_type: str = 'text',
+    db: Session | None = None,
+    autor: str = '',
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Envia mensagem com access_token delegado; não usa segredo app-only."""
+    corr = correlation_id or str(uuid.uuid4())
+    if not usuario_access_token:
+        return {'enviado': False, 'erro': 'usuario_access_token não fornecido', 'correlation_id': corr}
+    if not chat_id:
+        return {'enviado': False, 'erro': 'chat_id não fornecido', 'correlation_id': corr}
+
+    tipo_conteudo = _normalizar_content_type_teams(content_type)
+
+    try:
+        resposta = await _postar_mensagem_chat_graph(chat_id, texto, tipo_conteudo, usuario_access_token)
+        if db is not None:
+            salvar_log_integracao(
+                db, tipo='teams_graph_delegado', status='sucesso', autor=autor,
+                titulo=f'Mensagem enviada ao chat {chat_id} (delegado)',
+                mensagem=texto[:200],
+                detalhes={'chat_id': chat_id, 'content_type': tipo_conteudo, 'message_id': resposta.get('id')},
+                correlation_id=corr,
+            )
+        return {'enviado': True, 'message_id': resposta.get('id'), 'chat_id': chat_id, 'correlation_id': corr}
+    except CircuitBreakerOpenError as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph_delegado', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except httpx.HTTPStatusError as exc:
+        msg = f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph_delegado', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'enviado': False, 'erro': msg, 'correlation_id': corr}
+    except Exception as exc:
+        msg = str(exc)
+        if db is not None:
+            salvar_log_integracao(db, tipo='teams_graph_delegado', status='erro', autor=autor, mensagem=msg, correlation_id=corr)
+        return {'enviado': False, 'erro': msg, 'correlation_id': corr}
+
+
+def _extrair_membros_chat(chat: dict[str, Any]) -> list[dict[str, Any]]:
+    membros = []
+    for m in chat.get('members') or []:
+        membros.append({
+            'user_id': m.get('userId'),
+            'nome': m.get('displayName') or '',
+            'email': m.get('email') or '',
+        })
+    return membros
+
+
+async def listar_chats_como_usuario(
+    usuario_access_token: str,
+    top: int = 50,
+) -> dict[str, Any]:
+    """Lista chats do usuário logado usando somente o token delegado."""
+    if not usuario_access_token:
+        return {'chats': [], 'erro': 'usuario_access_token não fornecido'}
+
+    async def _listar() -> dict[str, Any]:
+        headers = {'Authorization': f'Bearer {usuario_access_token}'}
+        async with httpx.AsyncClient(timeout=15) as c:
+            resp = await c.get(
+                f'{_GRAPH_BASE}/me/chats',
+                params={'$top': top, '$expand': 'members'},
+                headers=headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    try:
+        resposta = await call_with_retry_async(
+            _listar,
+            max_retries=_TEAMS_GRAPH_MAX_RETRIES,
+            backoff_seconds=_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS,
+            retry_on=(httpx.TimeoutException, httpx.ConnectError),
+            circuit=_teams_graph_circuit,
+        )
+        chats = [
+            {
+                'id': item.get('id'),
+                'topico': item.get('topic'),
+                'tipo': item.get('chatType'),
+                'membros': _extrair_membros_chat(item),
+            }
+            for item in resposta.get('value', [])
+        ]
+        return {'chats': chats}
+    except CircuitBreakerOpenError as exc:
+        return {'chats': [], 'erro': str(exc)}
+    except httpx.HTTPStatusError as exc:
+        return {'chats': [], 'erro': f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'}
+    except Exception as exc:
+        return {'chats': [], 'erro': str(exc)}
+
+
+async def criar_chat_individual_teams(
+    usuario_a_aad_object_id: str,
+    usuario_b_aad_object_id: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Cria/obtém um chat 1:1 usando a identidade app-only governada."""
+    corr = correlation_id or str(uuid.uuid4())
+    if not usuario_a_aad_object_id or not usuario_b_aad_object_id:
+        identity_status = teams_graph_identity_status()
+        return {
+            'configurado': bool(identity_status.get('configured')),
+            'ok': False,
+            'erro': 'usuario_a_aad_object_id e usuario_b_aad_object_id são obrigatórios',
+            'correlation_id': corr,
+            'identity': identity_status,
+        }
+
+    payload = {
+        'chatType': 'oneOnOne',
+        'members': [
+            {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                'roles': ['owner'],
+                'user@odata.bind': f"https://graph.microsoft.com/v1.0/users('{usuario_a_aad_object_id}')",
+            },
+            {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                'roles': ['owner'],
+                'user@odata.bind': f"https://graph.microsoft.com/v1.0/users('{usuario_b_aad_object_id}')",
+            },
+        ],
+    }
+
+    try:
+        token, identity = await acquire_teams_graph_token()
+        identity_evidence = identity.evidence()
+
+        async def _criar() -> dict[str, Any]:
+            headers = {'Authorization': f'Bearer {token}'}
+            async with httpx.AsyncClient(timeout=15) as c:
+                resp = await c.post(f'{_GRAPH_BASE}/chats', json=payload, headers=headers)
+                resp.raise_for_status()
+                return resp.json()
+
+        resposta = await call_with_retry_async(
+            _criar,
+            max_retries=_TEAMS_GRAPH_MAX_RETRIES,
+            backoff_seconds=_TEAMS_GRAPH_RETRY_BACKOFF_SECONDS,
+            retry_on=(httpx.TimeoutException, httpx.ConnectError),
+            circuit=_teams_graph_circuit,
+        )
+        return {
+            'configurado': True,
+            'ok': True,
+            'chat_id': resposta.get('id'),
+            'correlation_id': corr,
+            'identity': identity_evidence,
+        }
+    except IdentityGovernanceError as exc:
+        return {'configurado': False, 'ok': False, 'erro': str(exc), 'correlation_id': corr}
+    except CircuitBreakerOpenError as exc:
+        return {'configurado': True, 'ok': False, 'erro': str(exc), 'correlation_id': corr}
+    except httpx.HTTPStatusError as exc:
+        return {
+            'configurado': True, 'ok': False,
+            'erro': f'HTTP {exc.response.status_code}: {exc.response.text[:300]}',
+            'correlation_id': corr,
+        }
+    except Exception as exc:
+        return {'configurado': True, 'ok': False, 'erro': str(exc), 'correlation_id': corr}
+
+
+async def criar_chat_e_enviar_como_usuario(
+    usuario_a_aad_object_id: str,
+    usuario_b_aad_object_id: str,
+    texto: str,
+    usuario_access_token: str,
+    content_type: str = 'text',
+    db: Session | None = None,
+    autor: str = '',
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Cria o chat com identidade app-only governada e envia com token delegado."""
+    corr = correlation_id or str(uuid.uuid4())
+    chat = await criar_chat_individual_teams(usuario_a_aad_object_id, usuario_b_aad_object_id, correlation_id=corr)
+    if not chat.get('ok'):
+        if db is not None and chat.get('configurado'):
+            salvar_log_integracao(db, tipo='teams_graph', status='erro', autor=autor,
+                                  mensagem=chat.get('erro', 'falha ao criar chat 1:1'), correlation_id=corr)
+        return {
+            'configurado': chat.get('configurado', False),
+            'enviado': False,
+            'erro': chat.get('erro'),
+            'correlation_id': corr,
+        }
+
+    resultado = await enviar_mensagem_chat_teams_como_usuario(
+        chat['chat_id'], texto, usuario_access_token,
+        content_type=content_type, db=db, autor=autor, correlation_id=corr,
+    )
+    resultado['identity'] = chat.get('identity')
+    return resultado

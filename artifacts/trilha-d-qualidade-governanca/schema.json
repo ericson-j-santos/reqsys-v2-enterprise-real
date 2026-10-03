@@ -1,0 +1,31 @@
+{
+  "dimension": "schema",
+  "status": "passed",
+  "score": 100.0,
+  "duration_seconds": 0.04,
+  "summary": "33/33 schemas JSON validos",
+  "details": {
+    "schemas_validated": 33,
+    "schemas_failed": [],
+    "registry_version": "1.0.0",
+    "required_gates": [
+      "schema_contract_gate",
+      "schema_version_gate",
+      "example_validation_gate",
+      "breaking_change_gate",
+      "additional_properties_gate",
+      "required_fields_gate",
+      "enum_evolution_gate",
+      "contract_registry_gate",
+      "ci_artifact_gate",
+      "runtime_validation_gate"
+    ],
+    "schemas_total": 33,
+    "schema_governance_gate": {
+      "status": "passed",
+      "exit_code": 0
+    }
+  },
+  "blockers": [],
+  "recommendations": []
+}

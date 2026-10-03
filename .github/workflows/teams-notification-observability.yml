@@ -1,0 +1,158 @@
+name: Teams Notification Observability
+
+on:
+  workflow_run:
+    workflows:
+      - Teams Commit Notification
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: teams-notification-observability
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      INCIDENT_TITLE: "[Teams] Falha na notificação de commits"
+
+    steps:
+      - name: Gerar evidência operacional
+        id: evidence
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          manual = os.environ["EVENT_NAME"] == "workflow_dispatch"
+          conclusion = "manual_validation" if manual else (os.environ.get("RUN_CONCLUSION") or "unknown")
+          run_id = "manual" if manual else (os.environ.get("RUN_ID") or "unknown")
+          run_url = (
+              f"https://github.com/{os.environ['REPOSITORY']}/actions"
+              if manual
+              else os.environ.get("RUN_URL", "")
+          )
+          payload = {
+              "schema_version": "1.0.0",
+              "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+              "repository": os.environ["REPOSITORY"],
+              "workflow": "Teams Commit Notification" if manual else os.environ.get("WORKFLOW_NAME"),
+              "run_id": run_id,
+              "run_url": run_url,
+              "event": "workflow_dispatch" if manual else os.environ.get("RUN_EVENT"),
+              "conclusion": conclusion,
+              "head_sha": "manual" if manual else os.environ.get("HEAD_SHA"),
+              "head_branch": "manual" if manual else os.environ.get("HEAD_BRANCH"),
+              "healthy": conclusion in {"success", "manual_validation"},
+          }
+          Path("evidence").mkdir(exist_ok=True)
+          Path("evidence/teams-notification-delivery.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"conclusion={conclusion}\n")
+              output.write(f"run_id={run_id}\n")
+              output.write(f"run_url={run_url}\n")
+              output.write(f"healthy={'true' if payload['healthy'] else 'false'}\n")
+          print(json.dumps(payload, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Publicar evidência
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-notification-evidence-${{ steps.evidence.outputs.run_id }}
+          path: evidence/teams-notification-delivery.json
+          retention-days: 30
+
+      - name: Abrir ou atualizar incidente
+        if: steps.evidence.outputs.healthy != 'true'
+        env:
+          CONCLUSION: ${{ steps.evidence.outputs.conclusion }}
+          RUN_URL: ${{ steps.evidence.outputs.run_url }}
+          RUN_ID: ${{ steps.evidence.outputs.run_id }}
+        shell: bash
+        run: |
+          body=$(cat <<EOF
+          ## Falha automática na entrega ao Microsoft Teams
+
+          - Conclusão: **${CONCLUSION}**
+          - Workflow run: ${RUN_URL}
+          - Run ID: ${RUN_ID}
+          - Detectado em: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+          A automação de commits não confirmou entrega ao Teams. Validar primeiro o secret \`TEAMS_WEBHOOK_URL\`, a disponibilidade do Workflow/Webhook no canal e o log do gateway.
+          EOF
+          )
+
+          issue_number=$(gh issue list \
+            --repo "$REPOSITORY" \
+            --state open \
+            --search "${INCIDENT_TITLE} in:title" \
+            --json number,title \
+            --jq ".[] | select(.title == \"${INCIDENT_TITLE}\") | .number" \
+            | head -n1)
+
+          if [[ -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" --repo "$REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$REPOSITORY" --title "$INCIDENT_TITLE" --body "$body"
+          fi
+
+      - name: Fechar incidente após recuperação
+        if: steps.evidence.outputs.healthy == 'true' && github.event_name == 'workflow_run'
+        env:
+          RUN_URL: ${{ steps.evidence.outputs.run_url }}
+        shell: bash
+        run: |
+          issue_number=$(gh issue list \
+            --repo "$REPOSITORY" \
+            --state open \
+            --search "${INCIDENT_TITLE} in:title" \
+            --json number,title \
+            --jq ".[] | select(.title == \"${INCIDENT_TITLE}\") | .number" \
+            | head -n1)
+
+          if [[ -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" \
+              --repo "$REPOSITORY" \
+              --body "Recuperação confirmada automaticamente. Execução verde: ${RUN_URL}"
+            gh issue close "$issue_number" \
+              --repo "$REPOSITORY" \
+              --reason completed
+          fi
+
+      - name: Resumo operacional
+        shell: bash
+        run: |
+          {
+            echo "### Teams Notification Observability"
+            echo "- Saudável: ${{ steps.evidence.outputs.healthy }}"
+            echo "- Conclusão: ${{ steps.evidence.outputs.conclusion }}"
+            echo "- Execução observada: ${{ steps.evidence.outputs.run_url }}"
+            echo "- Evidência: artifact teams-notification-evidence-${{ steps.evidence.outputs.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"

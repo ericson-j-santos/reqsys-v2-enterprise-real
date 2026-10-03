@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-20T00:00:00-03:00",
+  "capabilities": [
+    {
+      "ambiente": "dev",
+      "conector": "repository_provider",
+      "capability": "repository.read",
+      "status": "ready",
+      "criticidade": "high",
+      "acao_sugerida": "Executar com auditoria e rastreabilidade.",
+      "requires_human_confirmation": false
+    },
+    {
+      "ambiente": "homolog",
+      "conector": "repository_provider",
+      "capability": "repository.write",
+      "status": "missing_permission",
+      "criticidade": "critical",
+      "acao_sugerida": "Solicitar autorizacao contextual antes de escrita governada.",
+      "requires_human_confirmation": true
+    },
+    {
+      "ambiente": "prod",
+      "conector": "document_provider",
+      "capability": "document.read",
+      "status": "ready",
+      "criticidade": "medium",
+      "acao_sugerida": "Manter health-check periodico.",
+      "requires_human_confirmation": false
+    },
+    {
+      "ambiente": "prod",
+      "conector": "communication_provider",
+      "capability": "message.compose",
+      "status": "blocked",
+      "criticidade": "high",
+      "acao_sugerida": "Exigir confirmacao humana antes de envio.",
+      "requires_human_confirmation": true
+    }
+  ]
+}

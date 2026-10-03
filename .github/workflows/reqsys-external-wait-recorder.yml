@@ -1,0 +1,172 @@
+name: ReqSys External Wait Recorder
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Transição do bloqueio"
+        required: true
+        type: choice
+        options:
+          - blocked
+          - unblocked
+      category:
+        description: "Categoria do bloqueio"
+        required: true
+        type: choice
+        options:
+          - human_gate
+          - external_provider
+          - permission_admin
+          - secret_or_credential
+          - infrastructure_external
+      wait_id:
+        description: "Identificador estável desta ocorrência de bloqueio"
+        required: true
+        type: string
+      correlation_id:
+        description: "Correlation ID do fluxo afetado"
+        required: true
+        type: string
+      ledger_issue:
+        description: "Issue ledger para eventos estruturados"
+        required: true
+        default: "1683"
+        type: string
+      sha:
+        description: "SHA relacionado, quando aplicável"
+        required: false
+        default: ""
+        type: string
+      source_reference:
+        description: "Referência auditável adicional, sem segredos"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: external-wait-${{ inputs.wait_id }}-${{ inputs.action }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      COMMENT_MAX_PAGES: "3"
+      API_TIMEOUT_SECONDS: "30"
+
+    steps:
+      - name: Validate structured inputs
+        env:
+          WAIT_ID: ${{ inputs.wait_id }}
+          CORRELATION_ID: ${{ inputs.correlation_id }}
+          LEDGER_ISSUE: ${{ inputs.ledger_issue }}
+          SHA_VALUE: ${{ inputs.sha }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+
+          wait_id = os.environ["WAIT_ID"].strip()
+          correlation_id = os.environ["CORRELATION_ID"].strip()
+          ledger_issue = os.environ["LEDGER_ISSUE"].strip()
+          sha = os.environ["SHA_VALUE"].strip()
+
+          token = re.compile(r"^[A-Za-z0-9._:/-]{1,120}$")
+          if not token.fullmatch(wait_id):
+              raise SystemExit("wait_id inválido")
+          if not token.fullmatch(correlation_id):
+              raise SystemExit("correlation_id inválido")
+          if not ledger_issue.isdigit() or int(ledger_issue) <= 0:
+              raise SystemExit("ledger_issue inválido")
+          if sha and not re.fullmatch(r"[0-9a-fA-F]{7,64}", sha):
+              raise SystemExit("sha inválido")
+          PY
+
+      - name: Build immutable event payload
+        id: event
+        env:
+          ACTION: ${{ inputs.action }}
+          CATEGORY: ${{ inputs.category }}
+          WAIT_ID: ${{ inputs.wait_id }}
+          CORRELATION_ID: ${{ inputs.correlation_id }}
+          SHA_VALUE: ${{ inputs.sha }}
+          SOURCE_REFERENCE: ${{ inputs.source_reference }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/external-wait .tmp
+          EVENT_ID="wait-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export EVENT_ID
+          echo "event_id=${EVENT_ID}" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          event = {
+              "schema_version": "1.0.0",
+              "event_id": os.environ["EVENT_ID"],
+              "wait_id": os.environ["WAIT_ID"],
+              "action": os.environ["ACTION"],
+              "category": os.environ["CATEGORY"],
+              "correlation_id": os.environ["CORRELATION_ID"],
+              "sha": os.environ["SHA_VALUE"] or None,
+              "source_reference": os.environ["SOURCE_REFERENCE"] or None,
+              "recorder_run_id": os.environ["GITHUB_RUN_ID"],
+              "recorder_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+          }
+          Path("artifacts/external-wait/event.json").write_text(
+              json.dumps(event, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+          body = (
+              "<!-- reqsys-external-wait-event:v1 -->\n"
+              "```json\n"
+              + json.dumps(event, indent=2, ensure_ascii=False)
+              + "\n```\n"
+          )
+          Path(".tmp/comment.md").write_text(body, encoding="utf-8")
+          PY
+
+      - name: Persist event in GitHub issue ledger
+        env:
+          LEDGER_ISSUE: ${{ inputs.ledger_issue }}
+        run: |
+          set -euo pipefail
+          gh issue comment "$LEDGER_ISSUE" --body-file .tmp/comment.md
+
+      - name: Verify persisted event independently
+        env:
+          LEDGER_ISSUE: ${{ inputs.ledger_issue }}
+          EVENT_ID: ${{ steps.event.outputs.event_id }}
+        run: |
+          set -euo pipefail
+          found=""
+          for page in $(seq 1 "$COMMENT_MAX_PAGES"); do
+            ids="$(timeout "${API_TIMEOUT_SECONDS}s" gh api \
+              "repos/${{ github.repository }}/issues/${LEDGER_ISSUE}/comments?per_page=100&page=${page}" \
+              --jq ".[] | select(.body | contains(\"${EVENT_ID}\")) | .id")"
+            if [ -n "$ids" ]; then
+              found="$(printf '%s\n' "$ids" | tail -1)"
+              break
+            fi
+          done
+          test -n "$found" || {
+            echo "Evento persistido não foi reencontrado na fonte independente."
+            exit 1
+          }
+          echo "verified_comment_id=$found" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish recorder evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-wait-${{ steps.event.outputs.event_id }}
+          path: artifacts/external-wait/event.json
+          retention-days: 90

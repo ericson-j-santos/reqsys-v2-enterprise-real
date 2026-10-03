@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/delivery-finalization-report.schema.json",
+  "title": "ReqSys Delivery Finalization Report",
+  "type": "object",
+  "required": ["schema_version","generated_at","score_percent","status","remaining_gap_pp","indicators","mode"],
+  "properties": {
+    "schema_version": {"type":"string"},
+    "generated_at": {"type":"string","format":"date-time"},
+    "score_percent": {"type":"number","minimum":0,"maximum":100},
+    "status": {"type":"string"},
+    "remaining_gap_pp": {"type":"number"},
+    "indicators": {"type":"array","items":{"type":"object"}},
+    "mode": {"type":"string","enum":["report_only"]}
+  }
+}

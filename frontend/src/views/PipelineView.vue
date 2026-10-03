@@ -1,5 +1,5 @@
 <template>
-  <div class="page">
+  <div class="page" data-testid="route-pipeline">
     <!-- Toast container -->
     <div class="toast-container">
       <transition-group name="toast">
@@ -17,15 +17,15 @@
     </div>
 
     <div class="page-header">
-      <h1>◈ Pipeline de Requisitos</h1>
+      <h1>◈ Fluxo de Requisitos</h1>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;row-gap:6px">
         <v-btn-toggle v-model="nivelFiltro" mandatory density="compact" variant="outlined" color="amber">
-          <v-tooltip text="Visão detalhada por step individual" location="top">
+          <v-tooltip text="Visão detalhada por step individual" location="top" aria-label="Visão detalhada por step individual">
             <template #activator="{ props }">
               <v-btn v-bind="props" value="micro" size="small">Micro</v-btn>
             </template>
           </v-tooltip>
-          <v-tooltip text="Visão agrupada por categoria de log" location="top">
+          <v-tooltip text="Visão agrupada por categoria de log" location="top" aria-label="Visão agrupada por categoria de log">
             <template #activator="{ props }">
               <v-btn v-bind="props" value="macro" size="small">Macro</v-btn>
             </template>
@@ -47,14 +47,14 @@
           prepend-icon="mdi-identifier"
           @click="copiarCorrelation"
         >{{ correlatioId.slice(0, 12) }}…</v-btn>
-        <v-tooltip v-if="statusOrigemDemanda" text="Status recebido da tela Ver Demanda e aplicado no snapshot inicial dos steps" location="top">
+        <v-tooltip v-if="statusOrigemDemanda" text="Status recebido da tela Ver Demanda e aplicado no snapshot inicial dos steps" location="top" aria-label="Status recebido da tela Ver Demanda e aplicado no snapshot inicial dos steps">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="small" :color="statusOrigemColor(statusOrigemDemanda)" variant="flat" prepend-icon="mdi-source-branch">
               Origem: {{ statusOrigemLabel(statusOrigemDemanda) }}
             </v-chip>
           </template>
         </v-tooltip>
-        <v-tooltip v-if="statusOrigemDemanda" text="Remove o contexto importado e volta os steps para estado neutro" location="top">
+        <v-tooltip v-if="statusOrigemDemanda" text="Remove o contexto importado e volta os steps para estado neutro" location="top" aria-label="Remove o contexto importado e volta os steps para estado neutro">
           <template #activator="{ props }">
             <v-btn v-bind="props" size="small" variant="text" prepend-icon="mdi-close-circle-outline" @click="limparContextoOrigem">
               Limpar contexto
@@ -68,25 +68,25 @@
     <v-card class="mb-5 pa-4" style="background:var(--card)!important;border:1px solid var(--border)!important">
       <div
         v-if="statusOrigemDemanda && snapshotAplicado"
-        style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#1b2536"
+        style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:var(--space-md);padding:var(--space-sm) var(--space-md);border:1px solid var(--border);border-radius:8px;background:#1b2536"
       >
-        <div style="display:flex;align-items:center;gap:6px;color:#cbd5e1;font-size:12px">
+        <div style="display:flex;align-items:center;gap:6px;color:#cbd5e1;font-size:var(--font-size-sm)">
           <v-icon size="15" color="amber">mdi-timeline-check-outline</v-icon>
           Snapshot inicial aplicado a partir do status {{ statusOrigemLabel(statusOrigemDemanda) }}
         </div>
-        <v-tooltip text="Ao clicar em Executar Pipeline, o fluxo roda normalmente e recalcula os steps em tempo real" location="top">
+        <v-tooltip text="Ao clicar em Executar Fluxo, o fluxo roda normalmente e recalcula os steps em tempo real" location="top" aria-label="Ao clicar em Executar Fluxo, o fluxo roda normalmente e recalcula os steps em tempo real">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="x-small" color="amber" variant="outlined">Snapshot ativo</v-chip>
           </template>
         </v-tooltip>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:var(--space-md)">
+        <div style="font-size:var(--font-size-xs);color:var(--muted);display:flex;align-items:center;gap:6px">
           <v-icon size="14" color="grey">mdi-information-outline</v-icon>
           Legenda de status da demanda (clique para simular)
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <v-tooltip text="Entrada inicial da demanda" location="top">
+          <v-tooltip text="Entrada inicial da demanda" location="top" aria-label="Entrada inicial da demanda">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -97,7 +97,7 @@
               >Recebido</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Demanda em análise funcional/técnica" location="top">
+          <v-tooltip text="Demanda em análise funcional/técnica" location="top" aria-label="Demanda em análise funcional/técnica">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -108,7 +108,7 @@
               >Em análise</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Aprovada para seguir no fluxo" location="top">
+          <v-tooltip text="Aprovada para seguir no fluxo" location="top" aria-label="Aprovada para seguir no fluxo">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -119,7 +119,7 @@
               >Aprovado</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Interrompida por reprovação ou inconsistência" location="top">
+          <v-tooltip text="Interrompida por reprovação ou inconsistência" location="top" aria-label="Interrompida por reprovação ou inconsistência">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -130,7 +130,7 @@
               >Rejeitado</v-chip>
             </template>
           </v-tooltip>
-          <v-tooltip text="Publicada no destino final (ex.: Redmine)" location="top">
+          <v-tooltip text="Publicada no destino final (ex.: Redmine)" location="top" aria-label="Publicada no destino final (ex.: Redmine)">
             <template #activator="{ props }">
               <v-chip
                 v-bind="props"
@@ -170,9 +170,9 @@
       <!-- Formulário -->
       <v-col cols="12" md="5">
         <v-card style="background:var(--card)!important;border:1px solid var(--border)!important">
-          <v-card-title class="py-3 px-4" style="font-size:15px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <v-card-title class="py-3 px-4" style="font-size:var(--font-size-lg);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             Solicitação de Requisito
-            <v-tooltip text="Preencha todos os campos obrigatórios (*) e clique em Executar Pipeline" location="top">
+            <v-tooltip text="Preencha todos os campos obrigatórios (*) e clique em Executar Fluxo" location="top" aria-label="Preencha todos os campos obrigatórios (*) e clique em Executar Fluxo">
               <template #activator="{ props }">
                 <v-icon v-bind="props" size="18" color="grey">mdi-information-outline</v-icon>
               </template>
@@ -191,7 +191,7 @@
                 class="mb-4"
                 icon="mdi-alert-circle-outline"
               >
-                <div style="font-weight:600;margin-bottom:6px">Campos com erro — clique para ir ao campo:</div>
+                <div style="font-weight:600;margin-bottom:var(--space-sm)">Campos com erro — clique para ir ao campo:</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">
                   <v-chip
                     v-for="campo in Object.keys(errosApiCampos)"
@@ -207,7 +207,7 @@
                 </div>
               </v-alert>
 
-              <v-tooltip text="Canal de entrada da demanda (e-mail, reunião, sistema externo etc.)" location="top">
+              <v-tooltip text="Canal de entrada da demanda (e-mail, reunião, sistema externo etc.)" location="top" aria-label="Canal de entrada da demanda (e-mail, reunião, sistema externo etc.)">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-select
@@ -226,7 +226,7 @@
                 </template>
               </v-tooltip>
 
-              <v-tooltip text="Descreva o objetivo da demanda em até 120 caracteres" location="top">
+              <v-tooltip text="Descreva o objetivo da demanda em até 120 caracteres" location="top" aria-label="Descreva o objetivo da demanda em até 120 caracteres">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-text-field
@@ -249,7 +249,7 @@
                 </template>
               </v-tooltip>
 
-              <v-tooltip text="Prioridade: crítica (bloqueador), alta (impacto relevante), média, baixa" location="top">
+              <v-tooltip text="Prioridade: crítica (bloqueador), alta (impacto relevante), média, baixa" location="top" aria-label="Prioridade: crítica (bloqueador), alta (impacto relevante), média, baixa">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-select
@@ -268,7 +268,7 @@
                 </template>
               </v-tooltip>
 
-              <v-tooltip text="Descreva o contexto, objetivo e impacto da demanda (20–2000 chars)" location="top">
+              <v-tooltip text="Descreva o contexto, objetivo e impacto da demanda (20–2000 chars)" location="top" aria-label="Descreva o contexto, objetivo e impacto da demanda (20–2000 chars)">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-textarea
@@ -367,7 +367,7 @@
 
               <v-checkbox
                 v-model="form.impacto_regulatorio"
-                label="Impacto regulatório / compliance"
+                label="Impacto regulatório / conformidade"
                 density="compact"
                 color="amber"
                 hide-details
@@ -375,7 +375,7 @@
               />
 
               <v-divider class="my-3" />
-              <div style="font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+              <div style="font-size:var(--font-size-sm);font-weight:700;color:#e2e8f0;margin-bottom:var(--space-sm);display:flex;align-items:center;gap:6px">
                 <v-icon size="16" color="amber">mdi-source-pull</v-icon>
                 Integração GitHub para publicação no Redmine
               </div>
@@ -463,7 +463,7 @@
                   </v-col>
                 </v-row>
 
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:var(--space-xs) 0 var(--space-sm)">
                   <v-btn
                     size="small"
                     variant="outlined"
@@ -471,12 +471,12 @@
                     :loading="githubLoading"
                     @click="carregarIssuesGithub"
                   >Carregar issues</v-btn>
-                  <span style="font-size:11px;color:var(--muted)">
+                  <span style="font-size:var(--font-size-xs);color:var(--muted)">
                     {{ githubIssues.length }} issue(s) carregada(s) {{ githubSelecionadasCount > 0 ? `· ${githubSelecionadasCount} selecionada(s)` : '' }}
                   </span>
                 </div>
 
-                <div v-if="githubIssues.length" style="max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#121a27">
+                <div v-if="githubIssues.length" style="max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:var(--space-sm) var(--space-md);margin-bottom:var(--space-sm);background:#121a27">
                   <v-checkbox
                     v-for="issue in githubIssues"
                     :key="issue.number"
@@ -488,8 +488,8 @@
                   >
                     <template #label>
                       <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                        <span style="font-size:11px;color:#94a3b8">#{{ issue.number }}</span>
-                        <span style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ issue.title }}</span>
+                        <span style="font-size:var(--font-size-xs);color:#94a3b8">#{{ issue.number }}</span>
+                        <span style="font-size:var(--font-size-sm);color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ issue.title }}</span>
                       </div>
                     </template>
                   </v-checkbox>
@@ -516,7 +516,7 @@
               @click="executarPipeline"
               prepend-icon="mdi-play"
             >
-              Executar Pipeline
+              Executar Fluxo
             </v-btn>
           </v-card-actions>
         </v-card>
@@ -525,14 +525,14 @@
       <!-- Resultado / log -->
       <v-col cols="12" md="7">
         <v-card style="background:var(--card)!important;border:1px solid var(--border)!important">
-          <v-card-title class="py-3 px-4" style="font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <v-card-title class="py-3 px-4" style="font-size:var(--font-size-lg);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             Resultado da Execução
             <v-chip v-if="resultado" :color="resultadoColor" size="x-small" class="ml-2">
               {{ resultadoStatus }}
             </v-chip>
             <v-spacer />
             <div v-if="resultado" style="display:flex;gap:4px;flex-wrap:wrap">
-              <v-tooltip v-for="cat in logCategorias" :key="cat.value" :text="cat.hint" location="top">
+              <v-tooltip v-for="cat in logCategorias" :key="cat.value" :text="cat.hint" location="top" :aria-label="cat.hint">
                 <template #activator="{ props }">
                   <v-chip
                     v-bind="props"
@@ -550,7 +550,7 @@
           <!-- Idle state -->
           <div v-if="!resultado && !executando" class="empty-state">
             <v-icon size="48" color="grey">mdi-pipe</v-icon>
-            <div class="mt-2" style="color:var(--muted)">Preencha o formulário e execute o pipeline</div>
+            <div class="mt-2" style="color:var(--muted)">Preencha o formulário e execute o fluxo</div>
           </div>
 
           <!-- Log de execução -->
@@ -560,7 +560,7 @@
             <div v-for="step in stepsFiltrados" :key="step.key" class="step-log-item" v-show="step.log || step.status !== 'idle'">
               <div class="step-log-header" @click="step.expanded = !step.expanded" style="cursor:pointer">
                 <v-icon size="14" :color="stepColor(step.status)" class="mr-1">{{ stepIcon(step.status) }}</v-icon>
-                <span style="font-size:13px;font-weight:600">{{ step.label }}</span>
+                <span style="font-size:var(--font-size-md);font-weight:600">{{ step.label }}</span>
                 <v-chip v-if="step.duration" size="x-small" variant="text" class="ml-1" style="color:var(--muted)">
                   {{ step.duration }}ms
                 </v-chip>
@@ -600,7 +600,7 @@
               </div>
               <div class="result-row" v-if="correlatioId">
                 <span class="result-key">Correlation ID</span>
-                <code class="result-val" style="font-size:11px">{{ correlatioId }}</code>
+                <code class="result-val" style="font-size:var(--font-size-xs)">{{ correlatioId }}</code>
               </div>
             </div>
 
@@ -608,7 +608,7 @@
             <div v-if="resultado?.alertas?.length" class="mt-3">
               <div class="result-row" v-for="alerta in resultado.alertas" :key="alerta">
                 <v-icon size="14" color="warning" class="mr-1">mdi-alert</v-icon>
-                <span style="font-size:12px;color:#fbbf24">{{ alerta }}</span>
+                <span style="font-size:var(--font-size-sm);color:#fbbf24">{{ alerta }}</span>
               </div>
             </div>
 
@@ -616,14 +616,147 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-card v-if="historicoExecucoes.length" class="mt-4 pa-4" style="background:var(--card)!important;border:1px solid var(--border)!important">
+      <div class="d-flex align-center flex-wrap gap-2 mb-3">
+        <strong>Analítico de execuções do fluxo</strong>
+        <v-chip size="x-small" variant="tonal">{{ etapasHistoricoFiltradas.length }} etapas</v-chip>
+        <v-spacer />
+        <v-chip v-if="temFiltroHistoricoPipeline" size="x-small" color="amber" variant="tonal">Filtro ativo</v-chip>
+      </div>
+      <v-row dense class="mb-2">
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filtrosHistoricoPipeline.etapa"
+            :items="etapaOptions"
+            item-title="label"
+            item-value="value"
+            label="Etapa"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filtrosHistoricoPipeline.status"
+            :items="statusEtapaOptions"
+            item-title="label"
+            item-value="value"
+            label="Situação"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filtrosHistoricoPipeline.categoria"
+            :items="logCategorias"
+            item-title="label"
+            item-value="value"
+            label="Categoria"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-text-field
+            v-model="filtrosHistoricoPipeline.data"
+            label="Data"
+            type="date"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-text-field
+            v-model="filtrosHistoricoPipeline.correlation_id"
+            label="Correlation ID"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+          <v-text-field
+            v-model="filtrosHistoricoPipeline.duracao_min"
+            label="Duração mín. (ms)"
+            type="number"
+            min="0"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            @update:model-value="sincronizarQueryHistoricoPipeline"
+          />
+        </v-col>
+      </v-row>
+      <div class="d-flex justify-end mb-2">
+        <v-btn variant="text" size="small" prepend-icon="mdi-filter-off" :disabled="!temFiltroHistoricoPipeline" @click="limparFiltrosHistoricoPipeline">
+          Limpar filtros
+        </v-btn>
+      </div>
+      <v-data-table
+        :headers="historicoPipelineHeaders"
+        :items="etapasHistoricoFiltradas"
+        density="compact"
+        :items-per-page="10"
+      >
+        <template #item.executadoEm="{ item }">
+          <span style="font-size:var(--font-size-xs)">{{ formatarDataPipeline(item.executadoEm) }}</span>
+        </template>
+        <template #item.duration="{ item }">
+          <span>{{ item.duration ?? '—' }} ms</span>
+        </template>
+        <template #item.status="{ item }">
+          <v-chip size="x-small" :color="stepColor(item.status)" variant="tonal">{{ item.status }}</v-chip>
+        </template>
+        <template #item.correlationId="{ item }">
+          <span
+            v-if="item.correlationId"
+            class="correlation-link"
+            role="button"
+            tabindex="0"
+            @click="filtrarPipelinePorCorrelation(item.correlationId)"
+          >{{ item.correlationId.slice(0, 12) }}…</span>
+          <span v-else>—</span>
+        </template>
+      </v-data-table>
+    </v-card>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '../composables/useToast'
 import { api } from '../services/api'
+import {
+  achatarHistoricoPipeline,
+  carregarHistoricoPipeline,
+  criarQueryFiltrosPipeline,
+  criarRegistroExecucaoPipeline,
+  filtrarEtapasPipeline,
+  normalizarFiltrosPipeline,
+  possuiFiltroAtivo,
+  salvarHistoricoPipeline,
+} from '../utils/filtrosPipeline'
 
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const formRef = ref(null)
 const formValido = ref(false)
@@ -648,6 +781,42 @@ const refSolicitante = ref(null)
 const refIdExterno = ref(null)
 const githubLoading = ref(false)
 const githubIssues = ref([])
+const historicoExecucoes = ref([])
+const filtrosHistoricoPipeline = reactive(normalizarFiltrosPipeline(route.query))
+
+const etapaOptions = [
+  { label: 'Normalização', value: 'normalizar' },
+  { label: 'Solicitação', value: 'solicitacao' },
+  { label: 'Validação', value: 'validar' },
+  { label: 'Estruturação', value: 'estruturar' },
+  { label: 'Publicar', value: 'publicar' },
+]
+const statusEtapaOptions = [
+  { label: 'OK', value: 'ok' },
+  { label: 'Aviso', value: 'warn' },
+  { label: 'Erro', value: 'error' },
+  { label: 'Executando', value: 'running' },
+]
+const historicoPipelineHeaders = [
+  { title: 'Data', key: 'executadoEm', width: '130px' },
+  { title: 'Etapa', key: 'label' },
+  { title: 'Situação', key: 'status', width: '90px' },
+  { title: 'Duração', key: 'duration', width: '90px' },
+  { title: 'Responsável', key: 'solicitante', width: '120px' },
+  { title: 'Correlation ID', key: 'correlationId', width: '130px' },
+  { title: 'Log', key: 'log' },
+]
+
+const etapasHistoricoFiltradas = computed(() => filtrarEtapasPipeline(
+  achatarHistoricoPipeline(historicoExecucoes.value),
+  filtrosHistoricoPipeline,
+))
+const temFiltroHistoricoPipeline = computed(() => possuiFiltroAtivo(filtrosHistoricoPipeline))
+
+watch(
+  () => route.query,
+  (query) => Object.assign(filtrosHistoricoPipeline, normalizarFiltrosPipeline(query)),
+)
 
 const githubForm = reactive({
   enabled: false,
@@ -671,9 +840,9 @@ const githubLabelsArray = computed(() => {
 const githubSelecionadasCount = computed(() => githubForm.selectedIssueNumbers.length)
 
 const logCategorias = [
-  { value: 'erro',      label: 'Erro',       color: 'red',    hint: 'Steps com falha ou status de erro' },
+  { value: 'erro',      label: 'Erro',       color: 'red',    hint: 'Steps com falha ou situação de erro' },
   { value: 'aviso',     label: 'Aviso',      color: 'orange', hint: 'Steps com atenção ou warnings' },
-  { value: 'pipeline',  label: 'Pipeline',   color: 'blue',   hint: 'Steps de publicação e integração' },
+  { value: 'pipeline',  label: 'Fluxo',   color: 'blue',   hint: 'Steps de publicação e integração' },
   { value: 'ok',        label: 'Concluídos', color: 'green',  hint: 'Steps finalizados com sucesso' },
 ]
 
@@ -731,6 +900,8 @@ watch([form, githubForm], () => {
 }, { deep: true })
 
 onMounted(() => {
+  historicoExecucoes.value = carregarHistoricoPipeline()
+
   const saved = localStorage.getItem(DRAFT_KEY)
   if (saved) {
     try {
@@ -772,7 +943,7 @@ onMounted(() => {
       })
       aplicarStatusInicialDemanda(data.status_demanda)
       rascunhoSalvo.value = true
-      toast.success(`Demanda carregada no Pipeline (status: ${data.status_demanda || 'recebido'})`)
+      toast.success(`Demanda carregada no Fluxo (situação: ${data.status_demanda || 'recebido'})`)
     } catch {}
     sessionStorage.removeItem(PREFILL_KEY)
     return
@@ -828,7 +999,7 @@ function aplicarStatusInicialDemanda(statusDemanda) {
     resetSteps()
     steps.forEach((s, idx) => {
       s.status = status
-      s.log = `Status inicial importado da demanda: ${status}`
+      s.log = `Situação inicial importado da demanda: ${situação}`
       currentStep.value = idx
     })
     snapshotAplicado.value = true
@@ -856,7 +1027,7 @@ function aplicarStatusInicialDemanda(statusDemanda) {
   resetSteps()
   steps.forEach((s, idx) => {
     s.status = statusPorStep[idx]
-    s.log = `Snapshot inicial da demanda (${status})`
+    s.log = `Snapshot inicial da demanda (${situação})`
     if (statusPorStep[idx] === 'running' || statusPorStep[idx] === 'error') {
       currentStep.value = idx
     }
@@ -915,7 +1086,7 @@ function toggleLegendaStatus(status) {
     return
   }
   aplicarStatusInicialDemanda(status)
-  toast.info(`Preview aplicado: ${statusOrigemLabel(status)}`)
+  toast.info(`Preview aplicado: ${statusOrigemLabel(situação)}`)
 }
 
 async function copiarCorrelation() {
@@ -946,7 +1117,7 @@ async function executarPipeline() {
     }
     resultadoStatus.value = 'CONCLUÍDO'
     resultadoColor.value = 'success'
-    toast.success('Pipeline executado com sucesso!')
+    toast.success('Fluxo executado com sucesso!')
     localStorage.removeItem(DRAFT_KEY)
     rascunhoSalvo.value = false
   } catch (err) {
@@ -958,8 +1129,43 @@ async function executarPipeline() {
     registrarErroNoStepAtual(mensagem)
     toast.error(mensagem)
   } finally {
+    registrarHistoricoExecucao()
     executando.value = false
   }
+}
+
+function registrarHistoricoExecucao() {
+  if (!correlatioId.value) return
+  const registro = criarRegistroExecucaoPipeline({
+    correlationId: correlatioId.value,
+    steps: steps.map((step) => ({ ...step })),
+    solicitante: form.solicitante,
+    modoDemo: demoMode.value,
+    statusGeral: resultadoStatus.value === 'CONCLUÍDO' ? 'CONCLUIDO' : 'ERRO',
+  })
+  historicoExecucoes.value = [registro, ...historicoExecucoes.value].slice(0, 30)
+  salvarHistoricoPipeline(historicoExecucoes.value)
+}
+
+function sincronizarQueryHistoricoPipeline() {
+  router.replace({ path: route.path, query: criarQueryFiltrosPipeline(filtrosHistoricoPipeline) })
+}
+
+function limparFiltrosHistoricoPipeline() {
+  Object.assign(filtrosHistoricoPipeline, {
+    etapa: '', status: '', categoria: '', correlation_id: '', data: '', busca: '', duracao_min: 0,
+  })
+  sincronizarQueryHistoricoPipeline()
+}
+
+function filtrarPipelinePorCorrelation(correlationId) {
+  filtrosHistoricoPipeline.correlation_id = correlationId
+  sincronizarQueryHistoricoPipeline()
+}
+
+function formatarDataPipeline(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 async function executarReal() {
@@ -1084,7 +1290,7 @@ async function executarDemo() {
     { log: 'Solicitação criada: SOL-1746000001 · normalização aplicada', dur: 380 },
     { log: 'Semântica válida · nenhum termo ambíguo · 2 RFs inferidas (RF-AUTH, RF-RELAT)', dur: 510, status: 'ok' },
     { log: 'Estruturado · 2 RFs · 3 RNFs · 4 regras de negócio · 5 critérios de aceite', dur: 720 },
-    { log: 'Story #42 criado · 4 subtarefas (Frontend, Backend, Dados, QA) · redmine-deveri.local/issues/42', dur: 640 },
+    { log: 'Story #42 criado · 4 subtarefas (Aplicação, Serviço, Dados, QA) · redmine-deveri.local/issues/42', dur: 640 },
   ]
 
   for (let i = 0; i < demoPipeline.length; i++) {
@@ -1220,14 +1426,14 @@ function formatarErroApi(err) {
   }
 
   if (typeof detail === 'string' && detail.trim()) {
-    return `Erro ${status || ''}: ${detail}`.trim()
+    return `Erro ${situação || ''}: ${detail}`.trim()
   }
 
   if (err?.message) {
     return err.message
   }
 
-  return 'Erro ao executar pipeline'
+  return 'Erro ao executar fluxo'
 }
 
 function delay(ms) {
@@ -1273,9 +1479,9 @@ function toastIcon(type) {
   z-index: 1;
 }
 .step-label {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
-  margin-top: 6px;
+  margin-top: var(--space-sm);
   text-align: center;
 }
 .step-connector {
@@ -1296,28 +1502,29 @@ function toastIcon(type) {
 .step-running .step-badge { background: #451a03; border: 1px solid #f59e0b; }
 .step-active .step-badge  { border: 2px solid var(--accent); }
 
-.step-log-item { border-left: 2px solid var(--border); padding: 6px 10px; margin-bottom: 4px; border-radius: 0 6px 6px 0; }
+.step-log-item { border-left: 2px solid var(--border); padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-xs); border-radius: 0 6px 6px 0; }
 .step-log-header { display: flex; align-items: center; gap: 4px; }
-.step-log-body { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; white-space: pre-wrap; }
+.step-log-body { font-size: var(--font-size-xs); color: var(--muted); margin-top: var(--space-xs); font-family: 'JetBrains Mono', monospace; white-space: pre-wrap; }
 
-.result-box { background: #0a1628; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-.result-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-.result-key { font-size: 11px; color: var(--muted); min-width: 90px; }
-.result-val { font-size: 12px; color: var(--accent); background: #1a2640; padding: 2px 6px; border-radius: 4px; }
-.result-link { font-size: 12px; color: #60a5fa; text-decoration: underline; }
+.result-box { background: #0a1628; border: 1px solid var(--border); border-radius: 8px; padding: var(--space-md); }
+.result-row { display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-sm); flex-wrap: wrap; }
+.result-key { font-size: var(--font-size-xs); color: var(--muted); min-width: 90px; }
+.result-val { font-size: var(--font-size-sm); color: var(--accent); background: #1a2640; padding: var(--space-xs) var(--space-sm); border-radius: 4px; }
+.result-link { font-size: var(--font-size-sm); color: #60a5fa; text-decoration: underline; }
 
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; }
 
-.demo-badge { background: #7c3aed; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; }
-.draft-info { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+.demo-badge { background: #7c3aed; color: white; font-size: var(--font-size-xs); padding: var(--space-xs) var(--space-sm); border-radius: 4px; font-weight: 700; letter-spacing: 1px; }
+.draft-info { font-size: var(--font-size-xs); color: var(--muted); display: flex; align-items: center; gap: 4px; }
 
 /* Toasts */
-.toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
-.toast-item { padding: 10px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; min-width: 220px; max-width: 360px; box-shadow: 0 4px 16px #0008; }
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: var(--z-toast); display: flex; flex-direction: column; gap: 8px; }
+.toast-item { padding: var(--space-md) var(--space-lg); border-radius: 8px; font-size: var(--font-size-md); cursor: pointer; display: flex; align-items: center; min-width: 220px; max-width: 360px; box-shadow: 0 4px 16px #0008; }
 .toast-success  { background: #14532d; border: 1px solid #4ade80; color: #bbf7d0; }
 .toast-error    { background: #7f1d1d; border: 1px solid #f87171; color: #fecaca; }
 .toast-warning  { background: #451a03; border: 1px solid #fbbf24; color: #fef3c7; }
 .toast-info     { background: #1e3a5f; border: 1px solid #60a5fa; color: #bfdbfe; }
 .toast-enter-active, .toast-leave-active { transition: all .25s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(40px); }
+.correlation-link { color: var(--accent); cursor: pointer; text-decoration: underline dotted; font-size: var(--font-size-xs); }
 </style>

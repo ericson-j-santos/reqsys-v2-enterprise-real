@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposto
+Aceito
 
 ## Contexto
 
@@ -37,14 +37,14 @@ A tela deve apresentar:
 
 - A tela depende da disponibilidade dos endpoints de backend.
 - Sem configuração Figma/GitHub no ambiente, o sync pode retornar erro governado.
-- O item de menu ainda precisa ser atualizado em `AppLayout.vue`; a tentativa foi bloqueada pelo conector nesta execução.
+- O tópico Copilot Studio "Sincronizar Figma GitHub" ainda precisa ser provisionado na solution ReqSysAutomacao quando o bot for estendido.
 
 ## Gates
 
 - Não publicar em produção sem CI verde.
 - Não marcar PR como ready for review sem build frontend e validação E2E.
 - Não expor tokens, file secrets ou credenciais no frontend.
-- Manter PR em draft enquanto houver pendência de menu, rebase ou CI.
+- Manter PR em draft enquanto houver pendência de CI ou provisionamento do tópico Copilot Studio em produção.
 
 ## Ambiente
 

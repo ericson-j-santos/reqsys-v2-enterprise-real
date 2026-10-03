@@ -65,7 +65,7 @@ Diretrizes resumidas:
 - PRs backend pequenos deixam de aguardar Playwright.
 - PRs apenas de documentação deixam de executar suites desnecessárias.
 - PRs de workflow pequenos deixam de aguardar revisão profunda quando CI Fast é suficiente.
-- O tempo principal de feedback passa a depender do fast path.
+- O tempo principal de retorno passa a depender do fast path.
 - CodeRabbit passa a agregar valor em mudanças relevantes sem bloquear todo incremento trivial.
 
 ## Regras de governança
@@ -80,7 +80,7 @@ Diretrizes resumidas:
 ## Próximos incrementos recomendados
 
 1. separar `ci-security.yml` para auditorias profundas;
-2. separar `ci-e2e.yml` com `workflow_dispatch`, pós-merge e label `e2e`;
+2. separar `ci-e2e-governado.yml` com `workflow_dispatch`, pós-merge e label `e2e`;
 3. ativar testes afetados no backend;
 4. habilitar merge queue quando a proteção de branch permitir;
 5. criar dashboard de métricas de duração de CI;
