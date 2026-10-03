@@ -94,6 +94,19 @@ def test_workflow_has_physical_then_independent_public_evidence() -> None:
     assert '--expected-tenant-id "$env:CCP_AZURE_TENANT_ID"' in raw
 
 
+def test_workflow_limits_oidc_permission_to_reconcile_job() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    workflow_permissions = raw.split("\nconcurrency:", 1)[0].split("\npermissions:", 1)[1]
+    reconcile = raw.split("\n  reconcile:", 1)[1].split("\n  public-smoke:", 1)[0]
+    public_smoke = raw.split("\n  public-smoke:", 1)[1]
+
+    assert "contents: read" in workflow_permissions
+    assert "id-token:" not in workflow_permissions
+    assert "permissions:\n      contents: read\n      id-token: write" in reconcile
+    assert "permissions:\n      contents: read" in public_smoke
+    assert "id-token:" not in public_smoke
+
+
 def test_governed_worktree_is_created_without_cleaning_discovered_runtime(
     monkeypatch,
     tmp_path: Path,
