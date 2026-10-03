@@ -131,6 +131,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
 import { loginMicrosoftRedirect } from '../auth/msal'
+import { persistPostLoginRedirect } from '../auth/postLoginRedirect'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
@@ -185,6 +186,7 @@ async function entrarMicrosoft() {
   erro.value = ''
   localStorage.removeItem('azure_login_error')
   try {
+    persistPostLoginRedirect(route.query.redirect)
     await loginMicrosoftRedirect()
   } catch (e) {
     erro.value = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'

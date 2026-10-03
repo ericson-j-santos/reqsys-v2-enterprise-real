@@ -2,9 +2,9 @@
   <div class="painel-page" data-testid="route-painel-integracao">
     <div class="page-header">
       <div>
-        <div class="text-h5 font-weight-bold mb-1">Painel de Integrações</div>
+        <div class="text-h5 font-weight-bold mb-1">Painel de projetos e integrações</div>
         <div class="text-body-2 text-medium-emphasis">
-          Histórico de tarefas enviadas ao Planner e notificações Teams com analítico filtrável.
+          Acompanhe o andamento dos projetos pelo histórico do Planner, integrações, notificações e evidências rastreáveis.
         </div>
       </div>
       <div class="page-actions">
