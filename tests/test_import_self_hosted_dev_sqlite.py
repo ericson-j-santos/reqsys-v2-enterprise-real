@@ -10,7 +10,10 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Column, Integer, JSON, MetaData, String, Table, Boolean, Numeric, DateTime, create_engine, select, text
+
+# Full PostgreSQL validation runs in the bounded Desktop preparation workflow.
+pytest.importorskip("sqlalchemy", reason="requires the dedicated PostgreSQL restore contract environment")
+from sqlalchemy import Column, Integer, JSON, MetaData, String, Table, Boolean, Numeric, DateTime, create_engine, text
 from sqlalchemy.engine import make_url
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "import_self_hosted_dev_sqlite.py"

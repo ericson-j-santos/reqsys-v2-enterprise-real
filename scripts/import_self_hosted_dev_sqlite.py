@@ -23,7 +23,7 @@ from pathlib import Path
 from sqlalchemy import (
     JSON, Boolean, Date, DateTime, Enum, Float, Integer, LargeBinary,
     MetaData, Numeric, String, Text, Time, Uuid, cast, create_engine,
-    func, inspect, select, text, type_coerce,
+    func, select, text, type_coerce,
 )
 
 from sqlalchemy.types import NullType
