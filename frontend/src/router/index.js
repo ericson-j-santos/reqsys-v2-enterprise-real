@@ -20,6 +20,7 @@ import WsjfPlannerExcelInstallerView from '../views/WsjfPlannerExcelInstallerVie
 import GovBIView from '../views/GovBIView.vue'
 import CodexView from '../views/CodexView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
+import PainelProjetosView from '../views/PainelProjetosView.vue'
 import MonitoramentoOperacionalView from '../views/MonitoramentoOperacionalView.vue'
 import PentahoIntegracoesView from '../views/PentahoIntegracoesView.vue'
 import FigmaGithubView from '../views/FigmaGithubView.vue'
@@ -80,12 +81,8 @@ export const routes = [
     component: WsjfPlannerExcelInstallerView,
     meta: { recurso: 'auditoria:read' },
   },
-  {
-    path: '/painel-integracao',
-    alias: '/painel-projetos',
-    component: PainelIntegracaoView,
-    meta: { recurso: 'dashboard:read' },
-  },
+  { path: '/painel-projetos', component: PainelProjetosView, meta: { recurso: 'dashboard:read' } },
+  { path: '/painel-integracao', component: PainelIntegracaoView, meta: { recurso: 'dashboard:read' } },
   { path: '/notificacoes', redirect: '/painel-integracao' },
   { path: '/figma-github', component: FigmaGithubView, meta: { recurso: 'dashboard:read' } },
   { path: '/estatisticas', component: EstatisticasView, meta: { recurso: 'dashboard:read' } },

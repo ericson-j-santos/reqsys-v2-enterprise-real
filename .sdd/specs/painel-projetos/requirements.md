@@ -9,8 +9,8 @@ anteriores.
 ## Critérios de aceite
 
 1. O menu **Meu trabalho** apresenta o item **Painel de projetos**.
-2. A rota `/painel-projetos` exige o recurso `dashboard:read` e reutiliza a tela
-   consolidada de projetos e integrações.
+2. A rota `/painel-projetos` exige o recurso `dashboard:read` e apresenta a
+   experiência Pulso, distinta da tela operacional de integrações.
 3. A rota legada `/painel-integracao` continua funcionando.
 4. A tela identifica claramente o acompanhamento de Planner, integrações,
    notificações e evidências.
@@ -21,6 +21,9 @@ anteriores.
 8. Destinos externos, recursivos ou inválidos não são aceitos no retorno do login.
 9. A tela inicial apresenta, no topo e sem depender da expansão do menu lateral,
    um botão explícito **Abrir Painel de projetos** que leva à rota canônica.
+10. O Pulso consolida somente dados retornados por ReqSys, Agile Runtime e
+    rastreabilidade, vinculando-os por `requisito_id`, e mostra ambiente, origem,
+    última sincronização, Planner, correlação e evidência quando disponíveis.
 
 ## Fora de escopo
 
