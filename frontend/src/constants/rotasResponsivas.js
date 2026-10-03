@@ -27,6 +27,7 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/hub-lowcode', testId: 'route-hub-lowcode', titulo: 'Central de automações' },
   { path: '/hub-lowcode/copilot-memory/instalar', testId: 'route-copilot-memory-installer', titulo: 'Instalar memória do Copilot' },
   { path: '/hub-lowcode/wsjf/planner-excel/instalar', testId: 'route-wsjf-planner-excel-installer', titulo: 'Instalar Planner para Excel WSJF' },
+  { path: '/painel-projetos', testId: 'route-painel-projetos', titulo: 'Painel de projetos' },
   { path: '/painel-integracao', testId: 'route-painel-integracao', titulo: 'Painel de integração' },
   { path: '/integracoes/pentaho', testId: 'route-integracoes-pentaho', titulo: 'Integrações Pentaho' },
   { path: '/arquitetura', testId: 'route-arquitetura', titulo: 'Arquitetura' },

@@ -12,7 +12,7 @@ describe('portfolio do Pulso no ReqSys', () => {
 
     expect(result.projects[0]).toMatchObject({
       code: 'REQ-007', progress: 78, environment: 'DEV', plannerTaskId: 'planner-7',
-      correlationId: 'corr-7', evidenceUrl: 'https://evidence.example/run', origin: 'ReqSys + Agile Runtime',
+      correlationId: 'corr-7', evidenceUrl: 'https://evidence.example/run', origin: 'ReqSys + Agile Execução',
     })
     expect(result.solutions[0]).toMatchObject({ name: 'Portal', projects: 1, progress: 78 })
   })
