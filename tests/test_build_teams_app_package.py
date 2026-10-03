@@ -33,10 +33,8 @@ def test_builder_gera_zip_instalavel_com_rsc_minimo(tmp_path: Path) -> None:
         {"name": "ChannelMessage.Read.Group", "type": "Application"}
     ]
     assert "ChannelMessage.Read.All" not in json.dumps(manifest)
-    assert {
-        "reqsys-api-dev.fly.dev",
-        "token.botframework.com",
-    }.issubset(set(manifest["validDomains"]))
+    assert set(manifest["validDomains"]) == {"token.botframework.com"}
+    assert "fly.dev" not in json.dumps(manifest).lower()
 
 
 def test_builder_rejeita_permissao_organizacional_ampla(tmp_path: Path) -> None:
@@ -58,3 +56,22 @@ def test_builder_rejeita_permissao_organizacional_ampla(tmp_path: Path) -> None:
         )
 
     assert not (tmp_path / "invalid.zip").exists()
+
+
+def test_builder_rejeita_dominio_de_provedor_retirado(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    shutil.copytree(SOURCE, source)
+    manifest_path = source / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["validDomains"].append("reqsys-api.fly.dev")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="teams_manifest_retired_provider_forbidden"):
+        build_package(
+            source,
+            tmp_path / "package",
+            tmp_path / "invalid-provider.zip",
+            APP_ID,
+        )
+
+    assert not (tmp_path / "invalid-provider.zip").exists()

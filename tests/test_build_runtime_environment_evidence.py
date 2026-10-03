@@ -8,6 +8,8 @@ class RuntimeEnvironmentEvidenceTests(unittest.TestCase):
     def evidence(self):
         return {
             "contract": "fly-environment-homologation-gate",
+            "historical": True,
+            "offline": True,
             "ok": True,
             "environment": "stg",
             "expected_sha": "abcdef1234567890",
@@ -33,7 +35,8 @@ class RuntimeEnvironmentEvidenceTests(unittest.TestCase):
 
     def test_builds_runtime_record_with_digest(self):
         record = self.build()
-        self.assertEqual(record["evidence_source"], "runtime")
+        self.assertEqual(record["evidence_source"], "historical_offline")
+        self.assertTrue(record["historical"] and record["offline"])
         self.assertEqual(record["environment"], "stg")
         self.assertEqual(len(record["evidence_sha256"]), 64)
         self.assertEqual(record["attestation_provider"], "github-artifact-attestations")
@@ -49,6 +52,12 @@ class RuntimeEnvironmentEvidenceTests(unittest.TestCase):
         evidence = self.evidence()
         evidence["ok"] = False
         with self.assertRaises(ValueError):
+            self.build(evidence)
+
+    def test_rejects_unmarked_legacy_evidence(self):
+        evidence = self.evidence()
+        evidence.pop("historical")
+        with self.assertRaisesRegex(ValueError, "historical=true e offline=true"):
             self.build(evidence)
 
     def test_rejects_sha_mismatch(self):

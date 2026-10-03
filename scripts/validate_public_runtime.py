@@ -15,6 +15,11 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEFAULT_ENDPOINTS = ("/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
 OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS = (
     "/", "/runtime", "/api/runtime/contracts", "/api/runtime/version", "/api/runtime/build-info",
@@ -47,16 +52,16 @@ class EndpointResult:
 
 
 def _normalizar_base_url(base_url: str) -> str:
-    base = base_url.strip().rstrip("/")
-    if not base.startswith(("http://", "https://")):
-        raise ValueError("base-url deve iniciar com http:// ou https://")
+    base = require_authorized_runtime_url(base_url, label="base-url do runtime público")
+    if not base.startswith("https://"):
+        raise ValueError("base-url do runtime público deve usar HTTPS")
     return base
 
 
 def _ler_json_seguro(raw: bytes) -> tuple[dict[str, Any] | None, list[str] | None]:
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except Exception:
+    except (UnicodeDecodeError, json.JSONDecodeError):
         return None, None
     if isinstance(payload, dict):
         return payload, sorted(payload.keys())
@@ -74,6 +79,7 @@ def _text_markers(raw: bytes) -> dict[str, bool]:
 
 
 def validar_endpoint(base_url: str, endpoint: str, timeout: float, origin: str | None = None) -> EndpointResult:
+    base_url = _normalizar_base_url(base_url)
     url = f"{base_url}{endpoint}"
     started = time.perf_counter()
     headers = {"Accept": "application/json, text/html", "User-Agent": "reqsys-runtime-smoke/1.1"}
@@ -81,7 +87,7 @@ def validar_endpoint(base_url: str, endpoint: str, timeout: float, origin: str |
         headers["Origin"] = origin
     request = Request(url, headers=headers)
     try:
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL fornecida explicitamente pelo operador
+        with urlopen(request, timeout=timeout) as response:
             raw = response.read(512_000)
             elapsed_ms = round((time.perf_counter() - started) * 1000)
             payload, payload_keys = _ler_json_seguro(raw)
@@ -207,23 +213,24 @@ def build_payload(base_url: str, environment: str, results: list[EndpointResult]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Valida smoke público do ReqSys no Fly/DuckDNS")
-    parser.add_argument("--base-url", default="https://reqsys-api.fly.dev")
+    parser = argparse.ArgumentParser(description="Valida smoke público de um runtime ReqSys autorizado")
+    parser.add_argument("--base-url", required=True)
     parser.add_argument("--environment", default="prod")
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--endpoint", action="append", dest="endpoints")
     parser.add_argument("--include-optional-evidence", action="store_true")
-    parser.add_argument("--cors-origin", default="https://reqsys.example.com")
+    parser.add_argument("--cors-origin")
     parser.add_argument("--output", default="public-runtime-validation.json")
     parser.add_argument("--readiness-output", default="ops-readiness-report.json")
     args = parser.parse_args()
 
     base_url = _normalizar_base_url(args.base_url)
+    cors_origin = _normalizar_base_url(args.cors_origin) if args.cors_origin else None
     required_endpoints = tuple(args.endpoints) if args.endpoints else DEFAULT_ENDPOINTS
     evidence_endpoints = required_endpoints + (OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS if args.include_optional_evidence else ())
     # Preserve order while removing duplicates.
     evidence_endpoints = tuple(dict.fromkeys(evidence_endpoints))
-    results = [validar_endpoint(base_url, endpoint, args.timeout, args.cors_origin) for endpoint in evidence_endpoints]
+    results = [validar_endpoint(base_url, endpoint, args.timeout, cors_origin) for endpoint in evidence_endpoints]
     payload = build_payload(base_url, args.environment, results, required_endpoints, args.include_optional_evidence)
 
     with open(args.output, "w", encoding="utf-8") as file:

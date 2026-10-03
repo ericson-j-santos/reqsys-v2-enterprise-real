@@ -4,7 +4,7 @@
 Uso típico em CI/CD:
 
 python scripts/register_lifecycle_evidence.py \
-  --base-url https://reqsys-api-dev.fly.dev \
+  --base-url https://api-dev.example.net \
   --requirement-code REQ-123456789 \
   --type pr \
   --repo owner/repo \
@@ -26,8 +26,20 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEFAULT_TIMEOUT = 20
 DEFAULT_ATTEMPTS = 3
+
+
+def _require_https_base_url(value: str) -> str:
+    base_url = require_authorized_runtime_url(value, label='base-url do lifecycle')
+    if not base_url.startswith('https://'):
+        raise ValueError('base-url do lifecycle deve usar HTTPS')
+    return base_url
 
 
 def _post_json(url: str, token: str, payload: dict[str, Any], correlation_id: str, timeout: int) -> dict[str, Any]:
@@ -65,6 +77,7 @@ def register(
     timeout: int = DEFAULT_TIMEOUT,
     attempts: int = DEFAULT_ATTEMPTS,
 ) -> dict[str, Any]:
+    base_url = _require_https_base_url(base_url)
     endpoint = f"{base_url.rstrip('/')}/v1/requisitos/lifecycle/codigo/{requirement_code}/evidencias"
     payload = {
         'provedor': provider,
@@ -127,6 +140,10 @@ def main() -> int:
         parser.error('--environment só é permitido quando --type=deploy')
     if not args.base_url:
         parser.error('--base-url ou REQSYS_API_BASE_URL é obrigatório')
+    try:
+        args.base_url = _require_https_base_url(args.base_url)
+    except ValueError as exc:
+        parser.error(str(exc))
     if not args.token and not args.dry_run:
         parser.error('--token ou REQSYS_LIFECYCLE_SERVICE_TOKEN é obrigatório')
 

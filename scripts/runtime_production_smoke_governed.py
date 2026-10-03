@@ -11,16 +11,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-DEFAULT_BASE_URL = "https://reqsys-app.fly.dev"
 DEFAULT_OUTPUT = "artifacts/runtime-production-smoke-governed.json"
 
 REQUIRED_ENDPOINTS: tuple[tuple[str, int, str], ...] = (
@@ -63,6 +62,9 @@ def normalize_base_url(value: str) -> str:
     base = value.strip().rstrip("/")
     if not base.startswith(("http://", "https://")):
         raise ValueError("base_url must start with http:// or https://")
+    hostname = (urlparse(base).hostname or "").lower()
+    if hostname in {"fly.dev", "fly.io"} or hostname.endswith((".fly.dev", ".fly.io")):
+        raise ValueError("Fly.io foi retirado definitivamente; informe um runtime autorizado")
     return base
 
 
@@ -210,7 +212,7 @@ def run_smoke(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Governed production runtime smoke for ReqSys")
-    parser.add_argument("--base-url", default=os.getenv("RUNTIME_PUBLIC_BASE_URL", DEFAULT_BASE_URL))
+    parser.add_argument("--base-url", default=os.getenv("RUNTIME_PUBLIC_BASE_URL", ""))
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     parser.add_argument("--timeout-seconds", type=float, default=8.0)
     parser.add_argument("--attempts", type=int, default=3)

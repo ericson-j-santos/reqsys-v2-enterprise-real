@@ -200,14 +200,16 @@ jobs:
             }
 
             async function listRuns(headSha, includeArtifacts = false) {
-              const response = await github.rest.actions.listWorkflowRunsForRepo({
-                owner,
-                repo,
-                head_sha: headSha,
-                event: 'pull_request',
-                per_page: 100,
-              });
-              const runs = response.data.workflow_runs || [];
+              const runs = await github.paginate(
+                github.rest.actions.listWorkflowRunsForRepo,
+                {
+                  owner,
+                  repo,
+                  head_sha: headSha,
+                  event: 'pull_request',
+                  per_page: 100,
+                },
+              );
 
               const runSummaries = [];
               for (const run of runs) {

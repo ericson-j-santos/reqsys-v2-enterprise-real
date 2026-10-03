@@ -3,13 +3,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.post_merge_main_runtime_validator import build_report, main, render_markdown
+import pytest
+
+from scripts.post_merge_main_runtime_validator import (
+    build_report,
+    main,
+    render_markdown,
+)
+from scripts.runtime_url_policy import RuntimeURLPolicyError
 
 
 def _smoke(status: str = "healthy") -> dict:
     return {
         "status": status,
-        "base_url": "https://reqsys-app.fly.dev",
+        "base_url": "https://runtime.example",
         "required_ok": 4,
         "required_total": 4,
         "required_success_percentual": 100.0,
@@ -53,6 +60,14 @@ def test_build_report_blocks_when_executive_summary_contract_is_invalid() -> Non
     assert report["status"] == "blocked"
     assert report["dominant_blocker"] == "executive_runtime_evidence_summary"
     assert "executive_runtime_evidence_summary" in report["blocking_issues"]
+
+
+def test_build_report_rejects_retired_runtime_artifact() -> None:
+    smoke = _smoke()
+    smoke["base_url"] = "https://reqsys-app.fly.dev"
+
+    with pytest.raises(RuntimeURLPolicyError, match="Fly.io"):
+        build_report(smoke, _executive(), repo="example/repo", sha="abc", run_id=None)
 
 
 def test_render_markdown_contains_checks_and_sha() -> None:

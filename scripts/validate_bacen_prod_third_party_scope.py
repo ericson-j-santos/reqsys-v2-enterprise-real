@@ -94,8 +94,8 @@ def validate(path: Path, *, repo_root: Path = REPO_ROOT) -> dict:
             local_evidence_verified_vendor_ids.append(vendor_id)
 
     fly = next((v for v in vendors if v.get("name") == "Fly.io"), None)
-    if not fly or fly.get("classification") != "USED_IN_PROD":
-        errors.append("Fly.io must be explicitly recorded as USED_IN_PROD")
+    if not fly or fly.get("classification") != "NOT_USED_IN_PROD":
+        errors.append("Fly.io must be explicitly recorded as NOT_USED_IN_PROD after retirement")
 
     unverified_vendor_ids = [
         str(v.get("id"))

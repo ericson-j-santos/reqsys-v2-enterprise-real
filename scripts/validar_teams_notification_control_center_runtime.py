@@ -16,8 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MANIFEST = ROOT / "infra" / "fly-environments.json"
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEMO_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
 PROTECTED_ENDPOINTS = (
     "/v1/teams-gateway/notificacoes/dashboard",
@@ -154,7 +157,10 @@ def validate_environment(
     send_canary: bool,
     request_fn: RequestFn = _request_json,
 ) -> dict[str, Any]:
-    api_url = str(cfg["api_url"]).rstrip("/")
+    api_url = require_authorized_runtime_url(
+        str(cfg.get("api_url") or ""),
+        label=f"{environment}.api_url",
+    )
     checks: list[dict[str, Any]] = []
     warnings: list[str] = []
 
@@ -274,22 +280,17 @@ def validate_environment(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Valida o runtime do Control Center Teams")
-    parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--environment", required=True, choices=["dev", "hml", "prod"])
+    parser.add_argument("--api-url", required=True)
     parser.add_argument("--timeout", type=float, default=25.0)
     parser.add_argument("--output")
     parser.add_argument("--require-authenticated", action="store_true")
     parser.add_argument("--send-canary", action="store_true")
     args = parser.parse_args()
 
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    cfg = (manifest.get("environments") or {}).get(args.environment)
-    if not isinstance(cfg, dict):
-        raise SystemExit(f"Ambiente ausente no manifest: {args.environment}")
-
     result = validate_environment(
         args.environment,
-        cfg,
+        {"api_url": args.api_url},
         timeout=args.timeout,
         require_authenticated=args.require_authenticated,
         send_canary=args.send_canary,

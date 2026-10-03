@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,6 @@ REQ = {
     "id",
     "environment",
     "github_environment",
-    "fly_app",
     "criticality",
     "enabled",
     "rpo_target_minutes",
@@ -53,7 +53,7 @@ def sha(path: Path) -> str:
 def manifest(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(path)
-    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
+    with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as connection:
         quick = str(connection.execute("PRAGMA quick_check").fetchone()[0])
         counts: dict[str, int] = {}
         names = connection.execute(
@@ -113,8 +113,6 @@ def validate_inventory(payload: dict[str, Any]) -> list[str]:
             errors.append(f"assets[{index}].criticality invalid")
         if not isinstance(asset["enabled"], bool):
             errors.append(f"assets[{index}].enabled must be boolean")
-        if not str(asset["fly_app"]).startswith("reqsys-api"):
-            errors.append(f"assets[{index}].fly_app outside allowlist")
         for key in ("rpo_target_minutes", "rto_target_seconds"):
             if not isinstance(asset[key], int) or asset[key] <= 0:
                 errors.append(f"assets[{index}].{key} must be positive")
@@ -136,7 +134,14 @@ def validate_inventory(payload: dict[str, Any]) -> list[str]:
 def merged(payload: dict[str, Any], asset: dict[str, Any]) -> dict[str, Any]:
     defaults = dict(payload.get("defaults", {}))
     retention = dict(defaults.pop("retention", {}))
-    result = {**defaults, **asset}
+    active_asset = {
+        key: value
+        for key, value in asset.items()
+        if key in REQ or key == "retention"
+    }
+    result = {**defaults, **active_asset}
+    if str(result.get("rollout_state", "")).startswith("retired_"):
+        result["rollout_state"] = "retired_legacy_provider"
     result["retention"] = {**retention, **asset.get("retention", {})}
     return result
 
@@ -230,7 +235,6 @@ def evidence(
         "evidence_class": "real_asset_external_encrypted_backup_restore",
         "asset_id": asset["id"],
         "environment": asset["environment"],
-        "fly_app": asset["fly_app"],
         "database_engine": asset["database_engine"],
         "storage_provider": "cloudflare-r2",
         "encryption": "restic-client-side",
@@ -283,7 +287,6 @@ def dashboard(
             {
                 "asset_id": asset["id"],
                 "environment": asset["environment"],
-                "fly_app": asset["fly_app"],
                 "enabled": asset["enabled"],
                 "rollout_state": asset["rollout_state"],
                 "status": status,
@@ -336,8 +339,10 @@ def markdown(payload: dict[str, Any]) -> str:
         "",
         f"> Atualizado automaticamente em `{payload['generated_at']}`.",
         "",
-        "- Armazenamento externo configurado: "
-        f"**{str(payload['external_storage_configured']).lower()}**",
+        (
+            "- Armazenamento externo configurado: "
+            f"**{str(payload['external_storage_configured']).lower()}**"
+        ),
     ]
     if payload["missing_secrets"]:
         lines.append(

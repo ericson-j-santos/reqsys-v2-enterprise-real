@@ -29,24 +29,24 @@ def sample_env_validation(tmp_path: Path) -> Path:
         "environments": [
             {
                 "name": "desenvolvimento",
-                "frontend": "https://reqsys-app-dev.fly.dev",
-                "api": "https://reqsys-api-dev.fly.dev/docs",
+                "frontend": "https://app-dev.example.net",
+                "api": "https://api-dev.example.net/docs",
                 "status": "ready",
                 "readiness_percent": 100,
                 "operational_risk": "low",
             },
             {
                 "name": "homologacao",
-                "frontend": "https://reqsys-web-stg.fly.dev",
-                "api": "https://reqsys-api-stg.fly.dev/docs",
+                "frontend": "https://app-hml.example.net",
+                "api": "https://api-hml.example.net/docs",
                 "status": "degraded",
                 "readiness_percent": 50,
                 "operational_risk": "medium",
             },
             {
                 "name": "producao",
-                "frontend": "https://reqsys-app.fly.dev",
-                "api": "https://reqsys-api.fly.dev/docs",
+                "frontend": "https://app.example.net",
+                "api": "https://api.example.net/docs",
                 "status": "ready",
                 "readiness_percent": 100,
                 "operational_risk": "low",
@@ -93,8 +93,6 @@ def test_multi_environment_evidence_consolidation(sample_env_validation: Path, t
         "scripts/operational_multi_environment_evidence.py",
         "--environments-validation",
         str(sample_env_validation),
-        "--fly-matrix",
-        str(ROOT / "infra/fly-environments.json"),
         "--out-dir",
         str(out_dir),
     )
@@ -105,20 +103,21 @@ def test_multi_environment_evidence_consolidation(sample_env_validation: Path, t
     assert "dev" in canonical
     assert "hml" in canonical
     assert "prod" in canonical
+    assert report["historical_offline_reference"] is None
+    assert all("fly_api_url" not in item for item in report["environments"])
 
 
 def test_environment_drift_detects_promotion_inversion(sample_env_validation: Path, tmp_path: Path) -> None:
     multi_dir = tmp_path / "multi-env"
     drift_dir = tmp_path / "drift"
-    _run(
+    consolidation = _run(
         "scripts/operational_multi_environment_evidence.py",
         "--environments-validation",
         str(sample_env_validation),
-        "--fly-matrix",
-        str(ROOT / "infra/fly-environments.json"),
         "--out-dir",
         str(multi_dir),
     )
+    assert consolidation.returncode == 0, consolidation.stderr
     result = _run(
         "scripts/environment_drift_analyzer.py",
         "--multi-env",
@@ -130,7 +129,7 @@ def test_environment_drift_detects_promotion_inversion(sample_env_validation: Pa
     report = json.loads((drift_dir / "environment-drift.json").read_text(encoding="utf-8"))
     assert report["drift_level"] in {"ALTO", "MEDIO", "BAIXO", "NENHUM"}
     finding_types = {item["type"] for item in report.get("findings", [])}
-    assert "promotion_inversion" in finding_types or report["drift_level"] != "NENHUM"
+    assert "promotion_inversion" in finding_types
 
 
 def test_slo_evidence_from_history(sample_env_validation: Path, sample_history: Path, tmp_path: Path) -> None:
@@ -140,8 +139,6 @@ def test_slo_evidence_from_history(sample_env_validation: Path, sample_history: 
         "scripts/operational_multi_environment_evidence.py",
         "--environments-validation",
         str(sample_env_validation),
-        "--fly-matrix",
-        str(ROOT / "infra/fly-environments.json"),
         "--out-dir",
         str(multi_dir),
     )
@@ -191,7 +188,6 @@ def test_correlation_timeline_hydrated(tmp_path: Path) -> None:
         ],
     }
     (hub_dir / "operational-observability-hub.json").write_text(json.dumps(hub), encoding="utf-8")
-    out_dir = tmp_path / "reports" / "github-runtime-analytics"
     result = subprocess.run(
         [
             sys.executable,

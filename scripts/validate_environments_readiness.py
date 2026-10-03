@@ -19,14 +19,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MANIFEST = ROOT / "infra" / "fly-environments.json"
-
-_DISPLAY_NAMES: dict[str, tuple[str, str]] = {
-    "dev": ("desenvolvimento", "Fly dev; local usa docker-compose.yml + docker-compose.dev.yml"),
-    "hml": ("homologacao", "Fly staging"),
-    "prod": ("producao", "Fly producao; local usa docker-compose.yml + docker-compose.prod.yml"),
-}
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
 
 
 @dataclass(frozen=True)
@@ -38,39 +34,57 @@ class EnvironmentTarget:
     canonical: str | None = None
 
 
-def load_environment_targets(manifest_path: Path = DEFAULT_MANIFEST) -> list[EnvironmentTarget]:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    environments = manifest.get("environments") or {}
-    targets: list[EnvironmentTarget] = []
+def _require_https_url(value: str, *, label: str) -> str:
+    url = require_authorized_runtime_url(value, label=label)
+    if not url.startswith("https://"):
+        raise ValueError(f"{label} deve usar HTTPS")
+    return url
 
-    for canonical in ("dev", "hml", "prod"):
-        cfg = environments.get(canonical) or {}
-        display_name, notes = _DISPLAY_NAMES[canonical]
-        api_url = str(cfg.get("api_url") or "").rstrip("/")
-        frontend_url = str(cfg.get("frontend_url") or "").rstrip("/")
-        targets.append(
+
+def parse_environment_target(value: str) -> EnvironmentTarget:
+    canonical, separator, endpoints = value.partition("=")
+    frontend, comma, api = endpoints.partition(",")
+    canonical = canonical.strip().lower()
+    if not separator or not comma or not canonical:
+        raise ValueError(
+            "--environment deve seguir o formato NOME=FRONTEND_URL,API_URL"
+        )
+    frontend_url = _require_https_url(
+        frontend,
+        label=f"frontend do ambiente {canonical}",
+    )
+    api_url = _require_https_url(api, label=f"API do ambiente {canonical}")
+    return EnvironmentTarget(
+        name=canonical,
+        frontend=frontend_url,
+        api=api_url,
+        notes="runtime provider-neutral informado explicitamente",
+        canonical=canonical,
+    )
+
+
+def _validated_targets(targets: list[EnvironmentTarget]) -> list[EnvironmentTarget]:
+    if not targets:
+        raise ValueError("ao menos um ambiente deve ser informado explicitamente")
+    validated: list[EnvironmentTarget] = []
+    for target in targets:
+        canonical = (target.canonical or target.name).strip().lower()
+        validated.append(
             EnvironmentTarget(
-                name=display_name,
-                frontend=frontend_url,
-                api=f"{api_url}/docs" if api_url else "",
-                notes=notes,
+                name=target.name,
+                frontend=_require_https_url(
+                    target.frontend,
+                    label=f"frontend do ambiente {canonical}",
+                ),
+                api=_require_https_url(
+                    target.api,
+                    label=f"API do ambiente {canonical}",
+                ),
+                notes=target.notes,
                 canonical=canonical,
             )
         )
-
-    targets.append(
-        EnvironmentTarget(
-            name="testes",
-            frontend="http://localhost:8084",
-            api="http://localhost:8212/docs",
-            notes="Docker test",
-            canonical="test",
-        )
-    )
-    return targets
-
-
-ENVIRONMENTS = load_environment_targets()
+    return validated
 
 
 def is_local_url(url: str) -> bool:
@@ -79,6 +93,7 @@ def is_local_url(url: str) -> bool:
 
 
 def probe_url(url: str, timeout_seconds: float, skip_local: bool = True) -> dict[str, Any]:
+    url = _require_https_url(url, label="URL de probe do ambiente")
     if skip_local and is_local_url(url):
         return {
             "url": url,
@@ -116,7 +131,7 @@ def probe_url(url: str, timeout_seconds: float, skip_local: bool = True) -> dict
             "mode": "remote_probe",
             "error": f"HTTP Error {exc.code}: {exc.reason}",
         }
-    except Exception as exc:  # noqa: BLE001 - report-only validator must capture all probe errors
+    except Exception as exc:  # noqa: BLE001 - validador report-only registra falhas do probe
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         return {
             "url": url,
@@ -159,9 +174,14 @@ def classify_environment(frontend_probe: dict[str, Any], api_probe: dict[str, An
     }
 
 
-def validate_all_environments(timeout_seconds: float = 5.0, skip_local: bool = True) -> dict[str, Any]:
+def validate_all_environments(
+    targets: list[EnvironmentTarget],
+    timeout_seconds: float = 5.0,
+    skip_local: bool = True,
+) -> dict[str, Any]:
+    targets = _validated_targets(targets)
     environments: list[dict[str, Any]] = []
-    for target in ENVIRONMENTS:
+    for target in targets:
         frontend_probe = probe_url(target.frontend, timeout_seconds, skip_local=skip_local)
         api_probe = probe_url(target.api, timeout_seconds, skip_local=skip_local)
         classification = classify_environment(frontend_probe, api_probe)
@@ -206,7 +226,7 @@ def validate_all_environments(timeout_seconds: float = 5.0, skip_local: bool = T
             "read_only_probe",
             "non_blocking_operational_evidence",
             "no_secret_required",
-            "local_endpoints_skipped_by_default",
+            "explicit_provider_neutral_https_targets",
             "ci_should_fail_only_on_contract_errors",
         ],
     }
@@ -216,10 +236,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate all ReqSys environments")
     parser.add_argument("--output", default="docs/ops-dashboard/data/environments-validation.json")
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
-    parser.add_argument("--probe-local", action="store_true", help="Probe localhost targets instead of marking them as local_only")
+    parser.add_argument(
+        "--environment",
+        action="append",
+        required=True,
+        metavar="NOME=FRONTEND_URL,API_URL",
+        help="Ambiente e URLs HTTPS provider-neutral; repita para cada ambiente.",
+    )
     args = parser.parse_args()
 
-    payload = validate_all_environments(timeout_seconds=args.timeout_seconds, skip_local=not args.probe_local)
+    try:
+        targets = [parse_environment_target(value) for value in args.environment]
+    except ValueError as exc:
+        parser.error(str(exc))
+    payload = validate_all_environments(
+        targets,
+        timeout_seconds=args.timeout_seconds,
+        skip_local=False,
+    )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

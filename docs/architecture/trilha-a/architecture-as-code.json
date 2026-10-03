@@ -13,10 +13,8 @@
   },
   "capabilities": {
     "boot_resiliente": {
-      "status": "active",
-      "script": "scripts/fly_boot.sh",
-      "dockerfile": "Dockerfile.fly",
-      "config": "fly.toml"
+      "status": "retired_flyio_2026-10-02",
+      "reason": "O boot e os manifestos Fly.io foram aposentados definitivamente"
     },
     "healthcheck_camadas": {
       "status": "active",
@@ -24,14 +22,15 @@
       "runtime_module": "backend/app/core/runtime_boot.py"
     },
     "validador_consolidado": {
-      "status": "active",
+      "status": "retired_flyio_2026-10-02",
       "validator": "scripts/runtime_public_validator.py",
       "wrapper": "scripts/trilha_a_runtime_publico.py",
       "schema": "docs/contracts/trilha-a-runtime-publico.schema.json"
     },
     "probe_publico": {
-      "status": "active",
-      "script": "scripts/validate_public_runtime.py"
+      "status": "provider_neutral_explicit_url_only",
+      "script": "scripts/validate_public_runtime.py",
+      "url_policy": "scripts/runtime_url_policy.py"
     }
   },
   "artifacts": {
@@ -41,9 +40,9 @@
   "validation": {
     "checks": [
       "governance_files_exist",
-      "fly_config_valid",
-      "dockerfile_present",
-      "validator_executable",
+      "flyio_retirement_guard_active",
+      "fly_manifests_absent",
+      "provider_neutral_url_policy_active",
       "report_generated"
     ]
   }

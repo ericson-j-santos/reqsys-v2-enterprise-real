@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from scripts.runtime_url_policy import RuntimeURLPolicyError
 from scripts.smoke_user_experience_environments import REQUIRED_PATHS, collect
 
 
@@ -65,6 +66,13 @@ class UserExperienceEnvironmentSmokeTests(unittest.TestCase):
         self.assertFalse(report["environments"]["DEV"]["indicator_drilldown_available"])
         self.assertEqual("PUBLIC_UX_ENV_SYNC_REVIEW", report["status"])
         self.assertFalse(report["automatic_score_promotion"])
+
+    @patch("scripts.smoke_user_experience_environments.probe")
+    def test_retired_runtime_is_rejected_before_any_probe(self, mocked_probe):
+        with self.assertRaisesRegex(RuntimeURLPolicyError, "Fly.io"):
+            collect({"DEV": "https://dev.example", "PROD": "https://reqsys-app.fly.dev"})
+
+        mocked_probe.assert_not_called()
 
 
 if __name__ == "__main__":

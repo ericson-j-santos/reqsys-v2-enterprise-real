@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -41,7 +41,28 @@ def test_extract_frontend_asset_hash():
     assert _extract_frontend_asset_hash(html) == "BC6S1SXZ"
 
 
-def test_build_payload_marks_unavailable_without_network(monkeypatch):
+def test_build_payload_refuses_retired_manifest_without_network(monkeypatch):
+    def unexpected_validate_environment(*args, **kwargs):
+        raise AssertionError("manifesto Fly aposentado não deve iniciar probe")
+
+    monkeypatch.setattr(
+        "scripts.validate_publication_sync.validate_environment",
+        unexpected_validate_environment,
+    )
+    payload = build_payload(
+        manifest_path=ROOT / "infra" / "fly-environments.json",
+        environment="prod",
+        expected_sha="854d887f014e",
+        expected_version="3.1.0",
+        timeout=1.0,
+    )
+    assert payload["ok"] is False
+    assert payload["status"] == "PERMANENTLY_RETIRED"
+    assert payload["environments"] == []
+    assert payload["blocking_issues"] == ["flyio_manifest_permanently_retired"]
+
+
+def test_build_payload_allows_explicit_provider_neutral_manifest(monkeypatch, tmp_path):
     def fake_validate_environment(env_name, cfg, *, expected_sha, expected_version, timeout):
         return {
             "environment": env_name,
@@ -55,10 +76,15 @@ def test_build_payload_marks_unavailable_without_network(monkeypatch):
             "blocking_issues": ["API indisponível"],
         }
 
+    manifest = tmp_path / "runtime-manifest.json"
+    manifest.write_text(
+        '{"canonical_environments":["dev"],"environments":{"dev":{"api_url":"https://runtime.example","frontend_url":"https://frontend.example"}}}',
+        encoding="utf-8",
+    )
     monkeypatch.setattr("scripts.validate_publication_sync.validate_environment", fake_validate_environment)
     payload = build_payload(
-        manifest_path=ROOT / "infra" / "fly-environments.json",
-        environment="prod",
+        manifest_path=manifest,
+        environment="dev",
         expected_sha="854d887f014e",
         expected_version="3.1.0",
         timeout=1.0,

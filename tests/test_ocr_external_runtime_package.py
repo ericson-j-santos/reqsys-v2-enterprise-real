@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "config" / "ocr-engine-lock.json"
 ACTION = ROOT / ".github" / "actions" / "prepare-ocr-runtime" / "action.yml"
@@ -58,8 +57,8 @@ def test_prepare_script_records_sha256_without_credentials() -> None:
     assert "pip" in text and "wheel" in text and "--no-deps" in text
 
 
-def test_dockerfiles_fail_closed_and_remove_local_copy_when_external_is_required() -> None:
-    for relative in ("backend/Dockerfile", "backend/Dockerfile.fly"):
+def test_dockerfile_fails_closed_and_removes_local_copy_when_external_is_required() -> None:
+    for relative in ("backend/Dockerfile",):
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert "ARG OCR_EXTERNAL_PACKAGE_REQUIRED=0" in text
         assert 'test "$wheel_count" = "1"' in text

@@ -1,15 +1,18 @@
 import json
 import subprocess
 import sys
-from pathlib import Path
+
+import pytest
 
 from scripts import validate_dev_environment_readiness as validator
+from scripts.runtime_url_policy import RuntimeURLPolicyError
 
 
 def test_dev_target_uses_public_https_urls():
-    assert validator.is_public_https_url(validator.DEV_TARGET.frontend)
-    assert validator.is_public_https_url(validator.DEV_TARGET.api_docs)
-    assert validator.is_public_https_url(validator.DEV_TARGET.api_health)
+    target = validator.build_dev_target("https://dev.example", "https://api.dev.example")
+    assert validator.is_public_https_url(target.frontend)
+    assert validator.is_public_https_url(target.api_docs)
+    assert validator.is_public_https_url(target.api_health)
 
 
 def test_classify_dev_environment_ready():
@@ -55,7 +58,11 @@ def test_validate_dev_environment_contract_with_stubbed_probes(monkeypatch):
         }
 
     monkeypatch.setattr(validator, "probe_url", fake_probe)
-    payload = validator.validate_dev_environment(timeout_seconds=0.1)
+    payload = validator.validate_dev_environment(
+        frontend_url="https://dev.example",
+        api_url="https://api.dev.example",
+        timeout_seconds=0.1,
+    )
 
     assert payload["schema_version"] == "1.0.0"
     assert payload["contract"] == "dev-environment-readiness-validation"
@@ -67,12 +74,30 @@ def test_validate_dev_environment_contract_with_stubbed_probes(monkeypatch):
     assert "ci_should_fail_only_on_contract_errors" in payload["guardrails"]
 
 
+def test_validate_dev_environment_rejects_fly_before_probe(monkeypatch):
+    probe_calls = []
+    monkeypatch.setattr(validator, "probe_url", lambda *args: probe_calls.append(args))
+
+    with pytest.raises(RuntimeURLPolicyError, match="Fly.io"):
+        validator.validate_dev_environment(
+            frontend_url="https://reqsys-app-dev.fly.dev",
+            api_url="https://api.dev.example",
+            timeout_seconds=0.1,
+        )
+
+    assert probe_calls == []
+
+
 def test_cli_writes_dev_environment_artifact(tmp_path):
     output_path = tmp_path / "dev-environments-validation.json"
     result = subprocess.run(
         [
             sys.executable,
             "scripts/validate_dev_environment_readiness.py",
+            "--frontend-url",
+            "https://dev.example",
+            "--api-url",
+            "https://api.dev.example",
             "--output",
             str(output_path),
             "--timeout-seconds",
@@ -86,5 +111,5 @@ def test_cli_writes_dev_environment_artifact(tmp_path):
     assert result.returncode == 0, result.stderr
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["contract"] == "dev-environment-readiness-validation"
-    assert payload["environment"]["frontend"] == "https://reqsys-app-dev.fly.dev"
+    assert payload["environment"]["frontend"] == "https://dev.example"
     assert payload["summary"]["mode"] == "read_only_non_blocking"

@@ -11,7 +11,6 @@ on:
       - 'backend/app/core/config.py'
       - 'backend/app/core/runtime_boot.py'
       - 'backend/app/main.py'
-      - 'backend/fly_boot.sh'
       - 'frontend/src/views/LoginView.vue'
 
 permissions:

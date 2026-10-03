@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Valida login (Azure AD + demo + bundle frontend) em todos os ambientes Fly.
+"""Valida login (Azure AD + demo + bundle frontend) em ambientes explícitos.
 
 Read-only para credenciais reais: não executa login interativo MSAL.
-Usa `infra/fly-environments.json` como fonte canônica de URLs.
+O manifesto informado deve conter somente URLs de runtimes autorizados.
 """
 
 from __future__ import annotations
@@ -17,16 +17,17 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MANIFEST = ROOT / "infra" / "fly-environments.json"
 DEMO_EMAIL = "ericsonjosedossantos@tieri659.onmicrosoft.com"
 _REDIRECT_DRIFT_PREFIX = "expected_redirect_uri divergente:"
 
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from scripts.validar_frontend_auth_redirect import validate_public_frontend
-from scripts.validar_login_azure_operacional import validar_config
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+    from scripts.validar_frontend_auth_redirect import validate_public_frontend
+    from scripts.validar_login_azure_operacional import validar_config
+except ModuleNotFoundError:  # execução direta: python scripts/validar_login_multi_ambiente.py
+    from runtime_url_policy import require_authorized_runtime_url
+    from validar_frontend_auth_redirect import validate_public_frontend
+    from validar_login_azure_operacional import validar_config
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class LoginProbeResult:
 
 
 def _post_json(url: str, payload: dict[str, Any], timeout: float) -> tuple[dict[str, Any] | None, int | None, str | None]:
+    url = require_authorized_runtime_url(url, label="endpoint de login")
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -61,7 +63,8 @@ def _post_json(url: str, payload: dict[str, Any], timeout: float) -> tuple[dict[
 
 
 def _probe_demo_login(api_url: str, *, timeout: float, expect_allowed: bool) -> LoginProbeResult:
-    endpoint = api_url.rstrip("/") + "/v1/auth/login"
+    api_url = require_authorized_runtime_url(api_url, label="API de login")
+    endpoint = api_url + "/v1/auth/login"
     body, status, error = _post_json(endpoint, {"email": DEMO_EMAIL}, timeout)
     has_token = bool(isinstance(body, dict) and body.get("success") and (body.get("data") or {}).get("access_token"))
 
@@ -115,8 +118,8 @@ def validate_environment_login(
     *,
     timeout: float,
 ) -> dict[str, Any]:
-    api_url = str(cfg["api_url"]).rstrip("/")
-    frontend_url = str(cfg["frontend_url"]).rstrip("/")
+    api_url = require_authorized_runtime_url(str(cfg["api_url"]), label=f"API {env_name}")
+    frontend_url = require_authorized_runtime_url(str(cfg["frontend_url"]), label=f"frontend {env_name}")
     app_env = str(cfg.get("app_env") or "")
     configured_demo_allowed: bool | None = None
 
@@ -200,10 +203,18 @@ def build_payload(
     order = list(manifest.get("canonical_environments") or environments_cfg.keys())
     targets = [environment] if environment else order
 
+    validated_targets: list[tuple[str, dict[str, Any]]] = []
+    for name in targets:
+        if name not in environments_cfg:
+            continue
+        cfg = dict(environments_cfg[name])
+        cfg["api_url"] = require_authorized_runtime_url(cfg.get("api_url"), label=f"API {name}")
+        cfg["frontend_url"] = require_authorized_runtime_url(cfg.get("frontend_url"), label=f"frontend {name}")
+        validated_targets.append((name, cfg))
+
     summaries = [
-        validate_environment_login(name, environments_cfg[name], timeout=timeout)
-        for name in targets
-        if name in environments_cfg
+        validate_environment_login(name, cfg, timeout=timeout)
+        for name, cfg in validated_targets
     ]
 
     ready = sum(1 for item in summaries if item["login_ready"])
@@ -227,7 +238,7 @@ def build_payload(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Valida login em todos os ambientes ReqSys")
-    parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
+    parser.add_argument("--manifest", required=True, help="Manifesto explícito com URLs de runtimes autorizados")
     parser.add_argument("--environment", choices=["dev", "hml", "prod"])
     parser.add_argument("--timeout", type=float, default=25.0)
     parser.add_argument("--output", help="Arquivo JSON de evidência")

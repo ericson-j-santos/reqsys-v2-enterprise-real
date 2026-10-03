@@ -1,4 +1,4 @@
-"""Utilitários de boot resiliente para runtime público Fly.io."""
+"""Utilitários provider-neutral de boot resiliente e health do runtime."""
 
 from __future__ import annotations
 

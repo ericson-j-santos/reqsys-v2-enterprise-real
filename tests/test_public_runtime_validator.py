@@ -1,4 +1,10 @@
-from scripts.validate_public_runtime import EndpointResult, build_payload
+import pytest
+
+from scripts.validate_public_runtime import (
+    EndpointResult,
+    _normalizar_base_url,
+    build_payload,
+)
 
 
 def _result(endpoint, ok=True, status_code=200, elapsed_ms=100, **extra):
@@ -56,3 +62,11 @@ def test_build_payload_classifica_indisponivel_quando_required_falha():
     assert payload["readiness"]["operational_status"] == "unavailable"
     assert payload["readiness"]["reachable"] is False
     assert payload["readiness"]["blocking_issues"]
+
+
+def test_runtime_url_must_be_explicit_https_and_provider_neutral():
+    assert _normalizar_base_url("https://api.example.net/") == "https://api.example.net"
+    with pytest.raises(ValueError, match="HTTPS"):
+        _normalizar_base_url("http://api.example.net")
+    with pytest.raises(ValueError, match="retirado definitivamente"):
+        _normalizar_base_url("https://legacy.fly.dev")

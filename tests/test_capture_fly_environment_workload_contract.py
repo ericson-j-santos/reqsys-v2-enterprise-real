@@ -245,25 +245,12 @@ def test_versioned_manifest_declares_both_workload_contracts(environment: str) -
         ("prod", "frontend", "frontend_fly_config"),
     ],
 )
-def test_manifest_contract_matches_fly_config(
+def test_historical_manifest_points_to_removed_fly_config(
     environment: str, role: str, config_key: str
 ) -> None:
-    """The declared contract must match the committed fly config, not hide it."""
+    """O inventário permanece auditável sem reintroduzir IaC executável."""
     payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
     cfg = payload["environments"][environment]
-    contract = cfg["workload_contracts"][role]
-    content = (ROOT / cfg[config_key]).read_text(encoding="utf-8")
-
-    declared = [
-        int(line.split("=", 1)[1].strip())
-        for line in content.splitlines()
-        if line.strip().startswith("min_machines_running")
-    ]
-    assert declared, f"{cfg[config_key]} não declara min_machines_running"
-    assert declared[0] == contract["min_machines_running"], (
-        environment,
-        role,
-        cfg[config_key],
-    )
-    if contract["workload_type"] == "scale_to_zero":
-        assert "auto_start_machines = true" in content, cfg[config_key]
+    assert payload["retirement"]["status"] == "PERMANENTLY_RETIRED"
+    assert role in cfg["workload_contracts"]
+    assert not (ROOT / cfg[config_key]).exists(), cfg[config_key]

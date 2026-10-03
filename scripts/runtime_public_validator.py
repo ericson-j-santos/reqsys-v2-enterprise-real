@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Validador consolidado da Trilha A — Runtime Público.
-
-Orquestra validação local Fly (config + Docker), probe HTTP opcional e
-fallback progressivo para artifacts em cache, sem secrets e sem deploy.
-"""
+"""Validador legado da Trilha A, aposentado com a retirada do Fly.io."""
 
 from __future__ import annotations
 
@@ -16,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+FLYIO_RETIREMENT_GUARD = "Fly.io retirado definitivamente; validador legado indisponível"
+RETIREMENT_EXIT_CODE = 78
 
 FALLBACK_CANDIDATES = (
     Path('audit/runtime/public-runtime-validation.json'),
@@ -61,26 +59,11 @@ def validate_fly_config() -> dict[str, Any]:
 
 
 def validate_docker_smoke(*, skip: bool) -> dict[str, Any]:
-    if skip:
-        return {'track': 'docker_smoke', 'ok': True, 'source': 'skipped', 'detail': {'reason': 'skip_docker=true'}}
-    dockerfile = ROOT / 'Dockerfile.fly'
-    if not dockerfile.exists():
-        return {'track': 'docker_smoke', 'ok': False, 'source': 'live', 'detail': {'error': 'Dockerfile.fly ausente'}}
-    completed = subprocess.run(
-        ['docker', 'build', '-f', str(dockerfile), '-t', 'reqsys-api:runtime-public-smoke', str(ROOT)],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
     return {
         'track': 'docker_smoke',
-        'ok': completed.returncode == 0,
-        'source': 'live',
-        'detail': {
-            'exit_code': completed.returncode,
-            'stderr_tail': '\n'.join(completed.stderr.strip().splitlines()[-5:]),
-        },
+        'ok': False,
+        'source': 'retired',
+        'detail': {'reason': FLYIO_RETIREMENT_GUARD, 'skip_requested': skip},
     }
 
 
@@ -274,7 +257,7 @@ def build_payload(
 def main() -> int:
     parser = argparse.ArgumentParser(description='Validador consolidado Trilha A — Runtime Público')
     parser.add_argument('--environment', default='prod')
-    parser.add_argument('--base-url', default='https://reqsys-api.fly.dev')
+    parser.add_argument('--base-url', default='')
     parser.add_argument('--probe', action='store_true', help='Executa probe HTTP público read-only')
     parser.add_argument('--include-optional-evidence', action='store_true')
     parser.add_argument('--timeout', type=float, default=10.0)
@@ -286,40 +269,30 @@ def main() -> int:
     parser.add_argument('--strict', action='store_true', help='Falha quando houver blocking_issues')
     args = parser.parse_args()
 
-    tracks: list[dict[str, Any]] = [
-        validate_fly_config(),
-        validate_docker_smoke(skip=args.skip_docker),
-    ]
-
-    if args.probe:
-        tracks.append(
-            validate_public_probe(
-                base_url=args.base_url,
-                environment=args.environment,
-                timeout=args.timeout,
-                include_optional=args.include_optional_evidence,
-                attempts=args.probe_attempts,
-                retry_delay_seconds=args.probe_delay,
-            )
-        )
-    else:
-        tracks.append(load_fallback_cache(Path(args.artifact_root)))
-
-    payload = build_payload(
-        tracks,
-        probe_requested=args.probe,
-        base_url=args.base_url if args.probe else None,
-        environment=args.environment,
-    )
+    payload = {
+        'schema_version': '1.0.0',
+        'contract': 'trilha-a-runtime-publico',
+        'validated_at_epoch': int(time.time()),
+        'environment': args.environment,
+        'base_url': None,
+        'status': 'PERMANENTLY_RETIRED',
+        'ok': False,
+        'message': FLYIO_RETIREMENT_GUARD,
+        'tracks': [],
+        'summary': {
+            'operational_status': 'retired',
+            'confidence': 'high',
+            'blocking_issues': ['flyio_permanently_retired'],
+            'next_actions': ['Configurar e validar um runtime substituto autorizado'],
+        },
+    }
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
-    if args.strict and payload['summary']['blocking_issues']:
-        return 1
-    return 0 if payload['ok'] else 1
+    return RETIREMENT_EXIT_CODE
 
 
 if __name__ == '__main__':

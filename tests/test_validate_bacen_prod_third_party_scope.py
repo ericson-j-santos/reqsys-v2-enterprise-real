@@ -26,8 +26,8 @@ def test_repository_scope_is_valid():
     result = validate(Path("governance/bacen/PROD-THIRD-PARTY-SCOPE.yaml"))
     assert result["ok"], result["errors"]
     assert result["vendor_count"] == 14
-    assert result["counts"]["USED_IN_PROD"] == 3
-    assert result["counts"]["NOT_USED_IN_PROD"] == 0
+    assert result["counts"]["USED_IN_PROD"] == 2
+    assert result["counts"]["NOT_USED_IN_PROD"] == 1
     assert result["counts"]["UNVERIFIED"] == 11
     assert result["local_evidence_verified_vendor_ids"] == ["T01", "T06", "T14"]
     assert result["remaining_unverified_count"] == 11
@@ -40,7 +40,7 @@ def test_not_used_requires_explicit_evidence(tmp_path):
     path = write_scope(
         tmp_path,
         [
-            {"id": "T14", "name": "Fly.io", "classification": "USED_IN_PROD", "evidence": ["fly.toml"]},
+            {"id": "T14", "name": "Fly.io", "classification": "NOT_USED_IN_PROD", "evidence": ["config/flyio-retirement-policy.json"]},
             {"id": "T99", "name": "Example", "classification": "NOT_USED_IN_PROD", "evidence": []},
         ],
     )
@@ -49,14 +49,14 @@ def test_not_used_requires_explicit_evidence(tmp_path):
     assert "T99: NOT_USED_IN_PROD requires explicit evidence" in result["errors"]
 
 
-def test_used_requires_evidence(tmp_path):
+def test_retired_provider_requires_explicit_evidence(tmp_path):
     path = write_scope(
         tmp_path,
-        [{"id": "T14", "name": "Fly.io", "classification": "USED_IN_PROD", "evidence": []}],
+        [{"id": "T14", "name": "Fly.io", "classification": "NOT_USED_IN_PROD", "evidence": []}],
     )
     result = validate(path)
     assert not result["ok"]
-    assert "T14: USED_IN_PROD requires evidence" in result["errors"]
+    assert "T14: NOT_USED_IN_PROD requires explicit evidence" in result["errors"]
 
 
 def test_missing_evidence_path_fails_closed(tmp_path):
@@ -66,7 +66,7 @@ def test_missing_evidence_path_fails_closed(tmp_path):
             {
                 "id": "T14",
                 "name": "Fly.io",
-                "classification": "USED_IN_PROD",
+                "classification": "NOT_USED_IN_PROD",
                 "evidence": ["governance/bacen/__missing_evidence__.yaml"],
             }
         ],
@@ -90,7 +90,7 @@ def test_evidence_path_cannot_escape_repository(tmp_path):
             {
                 "id": "T14",
                 "name": "Fly.io",
-                "classification": "USED_IN_PROD",
+                "classification": "NOT_USED_IN_PROD",
                 "evidence": ["../outside.txt"],
             }
         ],
@@ -104,8 +104,8 @@ def test_unknown_classification_fails_closed(tmp_path):
     path = write_scope(
         tmp_path,
         [
-            {"id": "T14", "name": "Fly.io", "classification": "USED_IN_PROD", "evidence": ["fly.toml"]},
-            {"id": "T99", "name": "Example", "classification": "ASSUMED_UNUSED", "evidence": ["fly.toml"]},
+            {"id": "T14", "name": "Fly.io", "classification": "NOT_USED_IN_PROD", "evidence": ["config/flyio-retirement-policy.json"]},
+            {"id": "T99", "name": "Example", "classification": "ASSUMED_UNUSED", "evidence": ["config/flyio-retirement-policy.json"]},
         ],
     )
     result = validate(path)

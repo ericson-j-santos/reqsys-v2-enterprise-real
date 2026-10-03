@@ -14,8 +14,6 @@ on:
       - "frontend/**"
       - "fly.toml"
       - "frontend/fly.toml"
-      - "Dockerfile.fly"
-      - "scripts/fly_boot.sh"
       - "scripts/auto_open_agent_pr.py"
       - "scripts/generate_operational_artifacts_baseline.py"
       - "scripts/post_workflow_evidence_snapshot.py"
@@ -97,11 +95,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   validate-runtime:
+    # Trilha A dependia do runtime Fly aposentado; aguarda runtime substituto autorizado.
     name: Validate runtime público (Trilha A)
-    if: >-
-      (github.event_name == 'push' && github.ref_name == 'main') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto'))
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -356,17 +352,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   public-runtime-smoke:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
     name: Smoke público /api/runtime/*
     runs-on: ubuntu-latest
     needs: [validate-runtime, deploy-fly-prod, deploy-fly-frontend-prod]
-    if: >-
-      always() &&
-      needs.validate-runtime.result == 'success' &&
-      needs.deploy-fly-prod.result == 'success' &&
-      (needs.deploy-fly-frontend-prod.result == 'success' || needs.deploy-fly-frontend-prod.result == 'skipped') &&
-      ((github.event_name == 'push' && github.ref_name == 'main') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
-       (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'deploy_runtime_only' || github.event.inputs.action == 'auto')))
+    if: ${{ false }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 

@@ -3,8 +3,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.generate_ops_dashboard_data import _resolve_public_runtime, build_dashboard_payload
-from scripts.persist_public_runtime_evidence import build_evidence_index, infer_operational_notes, persist_evidence
+from scripts.generate_ops_dashboard_data import (
+    _resolve_public_runtime,
+    build_dashboard_payload,
+)
+from scripts.persist_public_runtime_evidence import (
+    build_evidence_index,
+    infer_operational_notes,
+    persist_evidence,
+)
 
 
 class PersistPublicRuntimeEvidenceTests(unittest.TestCase):
@@ -64,7 +71,7 @@ class PersistPublicRuntimeEvidenceTests(unittest.TestCase):
         self.assertEqual(index["contract"], "public-runtime-evidence-index")
         self.assertTrue(index["strict_gate_passed"])
 
-    def test_infer_fly_deploy_lag_note_when_health_ok_and_runtime_404(self):
+    def test_infer_provider_neutral_note_when_health_ok_and_runtime_404(self):
         validation = {
             "results": [
                 {"endpoint": "/health", "ok": True, "status_code": 200},
@@ -82,9 +89,9 @@ class PersistPublicRuntimeEvidenceTests(unittest.TestCase):
         }
         notes = infer_operational_notes(validation, validation["readiness"], strict_gate_passed=False)
         self.assertEqual(len(notes), 1)
-        self.assertEqual(notes[0]["id"], "fly_runtime_deploy_lag")
+        self.assertEqual(notes[0]["id"], "strict_runtime_endpoints_missing")
         self.assertFalse(notes[0]["wire_scope"])
-        self.assertEqual(notes[0]["next_increment"], "fly-runtime-p0-deploy")
+        self.assertNotIn("next_increment", notes[0])
 
     def test_persist_writes_operational_note_in_markdown(self):
         validation = {
@@ -126,8 +133,8 @@ class PersistPublicRuntimeEvidenceTests(unittest.TestCase):
             markdown = (output_dir / "public-runtime-evidence.md").read_text(encoding="utf-8")
             index = json.loads((output_dir / "public-runtime-evidence-index.json").read_text(encoding="utf-8"))
             self.assertIn("## Nota operacional", markdown)
-            self.assertIn("fly_runtime_deploy_lag", markdown)
-            self.assertEqual(index["operational_notes"][0]["id"], "fly_runtime_deploy_lag")
+            self.assertIn("strict_runtime_endpoints_missing", markdown)
+            self.assertEqual(index["operational_notes"][0]["id"], "strict_runtime_endpoints_missing")
 
 
 class OpsDashboardPublicRuntimeResolutionTests(unittest.TestCase):
@@ -171,7 +178,7 @@ class OpsDashboardPublicRuntimeResolutionTests(unittest.TestCase):
                         "run_id": "999",
                         "generated_at": "2026-06-27T00:00:00Z",
                         "strict_gate_passed": False,
-                        "operational_notes": [{"id": "fly_runtime_deploy_lag", "message": "deploy lag"}],
+                        "operational_notes": [{"id": "strict_runtime_endpoints_missing", "message": "strict endpoints missing"}],
                     }
                 ),
                 encoding="utf-8",
@@ -179,7 +186,7 @@ class OpsDashboardPublicRuntimeResolutionTests(unittest.TestCase):
 
             _, provenance = _resolve_public_runtime(audit_path, root / "missing.json", index_path)
 
-            self.assertEqual(provenance["operational_notes"][0]["id"], "fly_runtime_deploy_lag")
+            self.assertEqual(provenance["operational_notes"][0]["id"], "strict_runtime_endpoints_missing")
 
     def test_uses_artifacts_fallback_when_audit_missing(self):
         with tempfile.TemporaryDirectory() as tmp:

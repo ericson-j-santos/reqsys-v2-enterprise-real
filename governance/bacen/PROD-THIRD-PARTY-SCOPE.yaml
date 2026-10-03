@@ -59,17 +59,18 @@ vendors:
   - id: T12
     name: PostgreSQL
     classification: UNVERIFIED
-    evidence: [fly.toml]
-    note: production fly.toml declares SQLite; absence of PostgreSQL there is not proof of non-use elsewhere in PROD
+    evidence: [infra/fly-environments.json]
+    note: historical retirement inventory is not proof of current PostgreSQL use in PROD
   - id: T13
     name: Redis
     classification: UNVERIFIED
-    evidence: [fly.toml]
-    note: no Redis runtime declaration in production fly.toml; absence alone is not proof of non-use
+    evidence: [infra/fly-environments.json]
+    note: historical retirement inventory is not proof of current Redis use in PROD
   - id: T14
     name: Fly.io
-    classification: USED_IN_PROD
-    evidence: [fly.toml, .github/workflows/deploy-production-sync.yml]
+    classification: NOT_USED_IN_PROD
+    evidence: [docs/releases/flyio-retirement-20261002.md, config/flyio-retirement-policy.json]
+    note: provider retired permanently on 2026-10-02; remote inventory and credentials were removed
 notes:
   - This inventory narrows investigation but does not promote BACEN-05 to implemented.
-  - T14 records a production provider evidenced by the canonical deployment path and previously absent from the BACEN-05 vendor register.
+  - T14 remains in the register for audit history, with current production classification NOT_USED_IN_PROD backed by retirement evidence.

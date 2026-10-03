@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.config import _RETIRED_FLY_HOSTS, settings
 from app.models.agile_runtime import AgileWorkItem
 from app.models.requisito import Requisito
 from app.services import github_client
@@ -74,15 +74,17 @@ def _resolver_branch_trabalho(item: AgileWorkItem, ambiente: str) -> str:
     return recomendar_roteamento_multi_ia(item).branch_sugerida
 
 
-def _acoes_disponiveis(ambiente: str) -> list[str]:
+def _acoes_disponiveis(ambiente: str, *, app_disponivel: bool) -> list[str]:
     amb = normalizar_ambiente_launchpad(ambiente)
     acoes: list[str]
     if amb in {'dev', 'test'}:
-        acoes = ['abrir_branch', 'criar_branch_github', 'abrir_pr', 'ver_actions', 'abrir_app']
+        acoes = ['abrir_branch', 'criar_branch_github', 'abrir_pr', 'ver_actions']
     elif amb == 'homolog':
-        acoes = ['abrir_branch', 'abrir_pr', 'ver_actions', 'abrir_app']
+        acoes = ['abrir_branch', 'abrir_pr', 'ver_actions']
     else:
-        acoes = ['abrir_branch', 'abrir_app']
+        acoes = ['abrir_branch']
+    if app_disponivel:
+        acoes.append('abrir_app')
     if amb != 'prod' and github_client.github_token_configurado():
         acoes.append('criar_branch_api')
     return acoes
@@ -126,7 +128,14 @@ def _url_app_ambiente(ambiente: str) -> str | None:
     info = settings.ambientes_urls.get(config_key)
     if not info:
         return None
-    return info.get('frontend')
+    candidate = (info.get('frontend') or '').strip()
+    parsed = urlsplit(candidate)
+    hostname = (parsed.hostname or '').lower().rstrip('.')
+    if parsed.scheme not in {'http', 'https'} or not hostname:
+        return None
+    if any(hostname == retired or hostname.endswith(f'.{retired}') for retired in _RETIRED_FLY_HOSTS):
+        return None
+    return candidate
 
 
 def _buscar_requisito_codigo(db: Session | None, requisito_id: int | None) -> str | None:
@@ -148,6 +157,7 @@ def montar_github_launchpad(
 
     branch_base = branch_base_por_ambiente(amb)
     branch_trabalho = _resolver_branch_trabalho(item, amb)
+    app_ambiente_url = _url_app_ambiente(amb)
     requisito_codigo = _buscar_requisito_codigo(db, item.requisito_id)
     branch_existe: bool | None = None
     if github_client.github_token_configurado():
@@ -164,7 +174,7 @@ def montar_github_launchpad(
         'criar_branch': _github_url_compare(repo, branch_base, branch_trabalho, expand=True),
         'novo_pr': _github_url_compare(repo, branch_base, branch_trabalho, quick_pull=True),
         'actions': _github_url_actions(repo, branch_trabalho),
-        'app_ambiente': _url_app_ambiente(amb),
+        'app_ambiente': app_ambiente_url,
         'repositorio': _github_url_repo(repo),
     }
     if item.change_url:
@@ -189,7 +199,7 @@ def montar_github_launchpad(
         'branch_base': branch_base,
         'branch_existe': branch_existe,
         'links': links,
-        'acoes_disponiveis': _acoes_disponiveis(amb),
+        'acoes_disponiveis': _acoes_disponiveis(amb, app_disponivel=bool(app_ambiente_url)),
         'somente_leitura': amb == 'prod',
         'increment_gate': gate,
         'mensagem_commit_sugerida': mensagem_commit,

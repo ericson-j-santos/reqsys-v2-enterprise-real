@@ -9,24 +9,29 @@ vários lugares (arquivos .http, terminais, scripts) dentro da mesma janela de
 buscar com `get` até ele expirar.
 
 Fluxo (com captura manual):
-  1) Login real em https://reqsys-app-{env}.fly.dev, copiar o JWT do DevTools
+  1) Login real no frontend HTTPS autorizado, copiar o JWT do DevTools
      (Application > Local Storage > reqsys_token).
-  2) python scripts/cofre_human_token.py bootstrap-reader --environment dev
+  2) python scripts/cofre_human_token.py bootstrap-reader --environment dev \
+       --base-url https://api-dev.example.net
      (uma vez por ambiente: cria um token de leitura do Cofre restrito à
      chave human_admin_jwt:{env} e grava em .cofre/vault-token-{env}.local,
      fora do git. Pede o JWT admin colado na hora.)
-  3) python scripts/cofre_human_token.py set --environment dev
+  3) python scripts/cofre_human_token.py set --environment dev \
+       --base-url https://api-dev.example.net
      (grava o JWT recém-obtido no Cofre, com o exp decodificado do próprio
      token. Autentica com o JWT colado.)
-  4) python scripts/cofre_human_token.py get --environment dev [--write-http]
+  4) python scripts/cofre_human_token.py get --environment dev \
+       --base-url https://api-dev.example.net [--write-http]
      (busca o JWT guardado usando o token de leitura escopado do passo 2 —
      nunca o JWT admin. Se expirado, avisa e pede para repetir o passo 1+3.
      --write-http atualiza @jwt/@jwtStg em scratch-api-calls.http.)
 
 Fluxo (com captura automática do passo 3, via bookmarklet):
-  1) Login real em https://reqsys-app-{env}.fly.dev (continua manual, nunca
+  1) Login real no frontend HTTPS autorizado (continua manual, nunca
      automatizado).
-  2) python scripts/cofre_human_token.py listen --environment dev
+  2) python scripts/cofre_human_token.py listen --environment dev \
+       --base-url https://api-dev.example.net \
+       --frontend-origin https://app-dev.example.net
      — imprime um bookmarklet e sobe um listener em 127.0.0.1 (nunca exposto
      na rede), que só aceita POST vindo da origem exata do frontend daquele
      ambiente e desliga sozinho após a primeira captura ou após o timeout.
@@ -42,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import json
 import os
 import re
@@ -52,19 +58,16 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VAULT_TOKEN_DIR = REPO_ROOT / ".cofre"
 HTTP_SCRATCH_FILE = REPO_ROOT / "scratch-api-calls.http"
 
-ENVIRONMENTS = {
-    "dev": "https://reqsys-api-dev.fly.dev",
-    "stg": "https://reqsys-api-stg.fly.dev",
-}
-
-FRONTEND_ORIGINS = {
-    "dev": "https://reqsys-app-dev.fly.dev",
-    "stg": "https://reqsys-app-stg.fly.dev",
-}
+ENVIRONMENTS = ("dev", "stg")
 
 HTTP_VAR_BY_ENV = {
     "dev": "jwt",
@@ -74,6 +77,10 @@ HTTP_VAR_BY_ENV = {
 LISTEN_DEFAULT_PORT = 8765
 LISTEN_DEFAULT_TIMEOUT_SECONDS = 180
 _MAX_CAPTURE_BODY_BYTES = 8192
+_FRONTEND_ORIGIN_PATTERN = re.compile(
+    r"https://(?P<host>[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)"
+    r"(?::(?P<port>[0-9]{1,5}))?"
+)
 
 _BOOKMARKLET_TEMPLATE = """(function(){
 var t=localStorage.getItem('reqsys_token');
@@ -90,13 +97,41 @@ class CofreTokenError(Exception):
 
 
 def _base_url(environment: str, override: str | None) -> str:
-    if override:
-        return override.rstrip("/")
     if environment not in ENVIRONMENTS:
-        raise CofreTokenError(
-            f"Ambiente '{environment}' desconhecido. Use --base-url para apontar explicitamente."
+        raise CofreTokenError(f"Ambiente '{environment}' desconhecido.")
+    try:
+        base_url = require_authorized_runtime_url(
+            override,
+            label=f"URL base do Cofre ({environment})",
         )
-    return ENVIRONMENTS[environment]
+    except ValueError as exc:
+        raise CofreTokenError(str(exc)) from exc
+    if not base_url.startswith("https://"):
+        raise CofreTokenError("URL base do Cofre deve usar HTTPS")
+    return base_url
+
+
+def _frontend_origin(environment: str, value: str | None) -> str:
+    try:
+        origin = require_authorized_runtime_url(
+            value,
+            label=f"origem do frontend ({environment})",
+        )
+    except ValueError as exc:
+        raise CofreTokenError(str(exc)) from exc
+    if not origin.startswith("https://"):
+        raise CofreTokenError("origem do frontend deve usar HTTPS")
+    match = _FRONTEND_ORIGIN_PATTERN.fullmatch(origin)
+    if not match:
+        raise CofreTokenError(
+            "origem do frontend deve ser uma origem HTTPS exata, sem caminho, "
+            "credenciais, query, fragmento ou caracteres de controle"
+        )
+    port = match.group("port")
+    if port is not None and not 1 <= int(port) <= 65535:
+        raise CofreTokenError("porta da origem do frontend deve estar entre 1 e 65535")
+    canonical_port = f":{int(port)}" if port is not None else ""
+    return f"https://{match.group('host').lower()}{canonical_port}"
 
 
 def _vault_token_path(environment: str) -> Path:
@@ -110,7 +145,7 @@ def _decode_jwt_exp(token: str) -> int:
     payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
     try:
         payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-    except Exception as exc:
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise CofreTokenError(f"Falha ao decodificar o payload do JWT: {exc}")
     exp = payload.get("exp")
     if not isinstance(exp, int):
@@ -205,7 +240,8 @@ def cmd_get(args: argparse.Namespace) -> None:
     if not reader_path.exists():
         raise CofreTokenError(
             f"Nenhum token de leitura local para '{args.environment}'. "
-            f"Rode primeiro: python scripts/cofre_human_token.py bootstrap-reader --environment {args.environment}"
+            "Rode primeiro o comando bootstrap-reader informando "
+            f"--environment {args.environment} e --base-url URL_HTTPS."
         )
     vault_token = reader_path.read_text(encoding="utf-8").strip()
 
@@ -257,13 +293,13 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
     class _CaptureHandler(BaseHTTPRequestHandler):
         server_version = "ReqSysCofreCapture/1.0"
 
-        def log_message(self, format, *args):  # noqa: A002 - assinatura fixa do BaseHTTPRequestHandler
+        def log_message(self, format, *args):
             pass  # silencia log padrão (evita ecoar Origin/IP no terminal)
 
         def _cors_headers(self) -> None:
             origin = self.headers.get("Origin", "")
             if origin and origin == allowed_origin:
-                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Access-Control-Allow-Origin", allowed_origin)
                 self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
                 self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
@@ -276,12 +312,12 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
             self.end_headers()
             self.wfile.write(body)
 
-        def do_OPTIONS(self) -> None:  # noqa: N802 - nome exigido pelo BaseHTTPRequestHandler
+        def do_OPTIONS(self) -> None:
             self.send_response(204)
             self._cors_headers()
             self.end_headers()
 
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             # Visitar a URL direto no navegador (em vez de clicar no bookmarklet) cai
             # aqui — sem isso o BaseHTTPRequestHandler devolveria um 501 cru e confuso.
             self._reply_json(200, {
@@ -293,7 +329,7 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
                 ),
             })
 
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             if self.path != "/capture":
                 self._reply_json(404, {"ok": False, "erro": "rota desconhecida"})
                 return
@@ -324,7 +360,7 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
                 result["ok"] = False
                 result["erro"] = str(exc)
                 self._reply_json(400, {"ok": False, "erro": str(exc)})
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - listener devolve erro controlado ao navegador
                 result["done"] = True
                 result["ok"] = False
                 result["erro"] = str(exc)
@@ -335,9 +371,7 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
 
 def cmd_listen(args: argparse.Namespace) -> None:
     _base_url(args.environment, args.base_url)  # valida ambiente/--base-url cedo
-    allowed_origin = FRONTEND_ORIGINS.get(args.environment)
-    if not allowed_origin:
-        raise CofreTokenError(f"Sem origem de frontend mapeada para '{args.environment}'.")
+    allowed_origin = _frontend_origin(args.environment, args.frontend_origin)
 
     print("Cole este bookmarklet como URL de um novo favorito no navegador:\n")
     print(_build_bookmarklet(args.port))
@@ -371,7 +405,7 @@ def main() -> None:
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--environment", required=True, choices=sorted(ENVIRONMENTS))
-    common.add_argument("--base-url", default=None, help="Sobrescreve a URL base padrão do ambiente.")
+    common.add_argument("--base-url", required=True, help="URL HTTPS explícita da API do ambiente.")
 
     p_bootstrap = sub.add_parser("bootstrap-reader", parents=[common], help="Cria o token de leitura escopado (uma vez por ambiente).")
     p_bootstrap.add_argument("--token", default=None, help="JWT admin (se omitido, pede via input()).")
@@ -391,6 +425,11 @@ def main() -> None:
     )
     p_listen.add_argument("--port", type=int, default=LISTEN_DEFAULT_PORT)
     p_listen.add_argument("--timeout-seconds", type=int, default=LISTEN_DEFAULT_TIMEOUT_SECONDS)
+    p_listen.add_argument(
+        "--frontend-origin",
+        required=True,
+        help="Origem HTTPS explícita do frontend autorizado a usar o bookmarklet.",
+    )
     p_listen.set_defaults(func=cmd_listen)
 
     args = parser.parse_args()

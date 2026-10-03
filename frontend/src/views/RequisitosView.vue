@@ -231,6 +231,7 @@ import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRequisitosStore } from '../stores/requisitos'
 import axios from 'axios'
+import { requireProviderNeutralRuntimeUrl } from '../services/runtimeUrlPolicy'
 import { criarQueryFiltrosRequisitos, filtrarRequisitos, normalizarFiltrosRequisitos, possuiFiltroAtivo } from '../utils/filtrosRequisitos'
 
 const store = useRequisitosStore()
@@ -308,7 +309,10 @@ async function assistenteIA() {
   ia.justificativa = ''
   ia.urgenciaSugerida = ''
   try {
-    const base = import.meta.env.VITE_API_URL || '/api'
+    const base = requireProviderNeutralRuntimeUrl(
+      import.meta.env.VITE_API_URL || '/api',
+      'VITE_API_URL',
+    )
     const [resDescricao, resUrgencia] = await Promise.allSettled([
       axios.post(`${base}/v1/ia/sugerir-descricao`, { titulo: form.titulo, area: form.area, sistema: form.sistema }),
       axios.post(`${base}/v1/ia/classificar-urgencia`, { titulo: form.titulo, descricao: form.descricao || form.titulo }),

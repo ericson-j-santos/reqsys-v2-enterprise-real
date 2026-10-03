@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Diagnóstico read-only da disponibilidade e autenticação do ReqSys DEV.
 
-Executa probes públicos repetidos, compara o runtime com a configuração Fly
-versionada e produz somente evidência sanitizada. Nenhum secret, tenant id,
+Executa probes públicos repetidos contra URLs HTTPS informadas explicitamente
+e produz somente evidência sanitizada. Nenhum secret, tenant id,
 client id, token, UPN ou corpo arbitrário de resposta é persistido.
 """
 
@@ -12,7 +12,6 @@ import argparse
 import json
 import math
 import time
-import tomllib
 import urllib.error
 import urllib.request
 import uuid
@@ -20,15 +19,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-
-TARGETS = {
-    "frontend": "https://reqsys-app-dev.fly.dev/",
-    "health": "https://reqsys-api-dev.fly.dev/health",
-    "runtime_health": "https://reqsys-api-dev.fly.dev/api/runtime/health",
-    "readiness": "https://reqsys-api-dev.fly.dev/api/runtime/readiness",
-    "liveness": "https://reqsys-api-dev.fly.dev/api/runtime/liveness",
-    "auth_config": "https://reqsys-api-dev.fly.dev/v1/auth/config",
-}
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
 
 SAFE_AUTH_FIELDS = (
     "azure_enabled",
@@ -39,6 +33,26 @@ SAFE_AUTH_FIELDS = (
     "missing_fields",
     "expected_redirect_uri",
 )
+
+
+def _require_https_url(value: str, *, label: str) -> str:
+    url = require_authorized_runtime_url(value, label=label)
+    if not url.startswith("https://"):
+        raise ValueError(f"{label} deve usar HTTPS")
+    return url
+
+
+def build_targets(frontend_url: str, api_url: str) -> dict[str, str]:
+    frontend = _require_https_url(frontend_url, label="frontend DEV")
+    api = _require_https_url(api_url, label="API DEV")
+    return {
+        "frontend": f"{frontend}/",
+        "health": f"{api}/health",
+        "runtime_health": f"{api}/api/runtime/health",
+        "readiness": f"{api}/api/runtime/readiness",
+        "liveness": f"{api}/api/runtime/liveness",
+        "auth_config": f"{api}/v1/auth/config",
+    }
 
 
 def _percentile(values: list[int], percentile: float) -> int | None:
@@ -59,38 +73,8 @@ def sanitize_auth_payload(payload: Any) -> dict[str, Any]:
     return {key: data.get(key) for key in SAFE_AUTH_FIELDS if key in data}
 
 
-def load_static_fly_state(repo_root: Path) -> dict[str, Any]:
-    backend_path = repo_root / "backend" / "fly.dev.toml"
-    frontend_path = repo_root / "frontend" / "fly.dev.toml"
-
-    with backend_path.open("rb") as handle:
-        backend = tomllib.load(handle)
-    with frontend_path.open("rb") as handle:
-        frontend = tomllib.load(handle)
-
-    backend_http = backend.get("http_service", {})
-    frontend_http = frontend.get("http_service", {})
-    backend_env = backend.get("env", {})
-
-    return {
-        "backend": {
-            "app": backend.get("app"),
-            "auto_stop_machines": backend_http.get("auto_stop_machines"),
-            "auto_start_machines": backend_http.get("auto_start_machines"),
-            "min_machines_running": backend_http.get("min_machines_running"),
-            "allow_demo_login_declared": str(backend_env.get("ALLOW_DEMO_LOGIN", "")).lower() == "true",
-            "public_environment_declared": backend_env.get("PUBLIC_ENVIRONMENT"),
-        },
-        "frontend": {
-            "app": frontend.get("app"),
-            "auto_stop_machines": frontend_http.get("auto_stop_machines"),
-            "auto_start_machines": frontend_http.get("auto_start_machines"),
-            "min_machines_running": frontend_http.get("min_machines_running"),
-        },
-    }
-
-
 def probe_url(name: str, url: str, timeout_seconds: float) -> dict[str, Any]:
+    url = _require_https_url(url, label=f"target {name}")
     started = time.perf_counter()
     request = urllib.request.Request(
         url,
@@ -128,7 +112,7 @@ def probe_url(name: str, url: str, timeout_seconds: float) -> dict[str, Any]:
             "correlation_id": exc.headers.get("x-correlation-id") if exc.headers else None,
             "error": f"http_{exc.code}",
         }
-    except Exception as exc:  # noqa: BLE001 - evidência deve capturar falhas operacionais
+    except Exception as exc:  # noqa: BLE001 - evidência captura falhas operacionais sem traceback
         return {
             "ok": False,
             "status_code": None,
@@ -175,8 +159,16 @@ def classify(aggregate: dict[str, Any], auth: dict[str, Any], static_state: dict
 
     backend_min = static_state["backend"].get("min_machines_running")
     frontend_min = static_state["frontend"].get("min_machines_running")
-    min_running_ok = backend_min is not None and backend_min >= 1 and frontend_min is not None and frontend_min >= 1
-    if not min_running_ok:
+    if backend_min is None and frontend_min is None:
+        min_running_ok: bool | None = None
+    else:
+        min_running_ok = (
+            backend_min is not None
+            and backend_min >= 1
+            and frontend_min is not None
+            and frontend_min >= 1
+        )
+    if min_running_ok is False:
         suspected_causes.append("cold_start_configuration_risk")
 
     auth_available = bool(
@@ -218,15 +210,26 @@ def classify(aggregate: dict[str, Any], auth: dict[str, Any], static_state: dict
     }
 
 
-def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_seconds: float) -> dict[str, Any]:
-    static_state = load_static_fly_state(repo_root)
-    probes: dict[str, list[dict[str, Any]]] = {name: [] for name in TARGETS}
+def diagnose(
+    frontend_url: str,
+    api_url: str,
+    attempts: int,
+    timeout_seconds: float,
+    interval_seconds: float,
+) -> dict[str, Any]:
+    targets = build_targets(frontend_url, api_url)
+    deployment_context = {
+        "provider": "operator_supplied",
+        "backend": {},
+        "frontend": {},
+    }
+    probes: dict[str, list[dict[str, Any]]] = {name: [] for name in targets}
 
     for attempt in range(1, attempts + 1):
-        with ThreadPoolExecutor(max_workers=len(TARGETS)) as executor:
+        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
             futures = {
                 executor.submit(probe_url, name, url, timeout_seconds): name
-                for name, url in TARGETS.items()
+                for name, url in targets.items()
             }
             for future in as_completed(futures):
                 probes[futures[future]].append(future.result())
@@ -236,7 +239,7 @@ def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_se
     aggregate = aggregate_probes(probes, attempts)
     auth_samples = [row.get("auth") for row in probes["auth_config"] if row.get("ok") and row.get("auth")]
     auth = auth_samples[-1] if auth_samples else {}
-    classification = classify(aggregate, auth, static_state)
+    classification = classify(aggregate, auth, deployment_context)
 
     return {
         "schema_version": "1.0.0",
@@ -246,8 +249,8 @@ def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_se
         "environment": "development",
         "attempts_per_target": attempts,
         "timeout_seconds": timeout_seconds,
-        "targets": TARGETS,
-        "static_fly_configuration": static_state,
+        "targets": targets,
+        "deployment_context": deployment_context,
         "runtime_auth": auth,
         "probe_summary": aggregate,
         "classification": classification,
@@ -262,6 +265,8 @@ def diagnose(repo_root: Path, attempts: int, timeout_seconds: float, interval_se
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Diagnosticar runtime/autenticação DEV do ReqSys")
+    parser.add_argument("--frontend-url", required=True, help="URL HTTPS explícita do frontend DEV")
+    parser.add_argument("--api-url", required=True, help="URL HTTPS explícita da API DEV")
     parser.add_argument("--output", default="artifacts/dev-runtime-auth-diagnostics/evidence.json")
     parser.add_argument("--attempts", type=int, default=10)
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
@@ -273,7 +278,16 @@ def main() -> int:
         parser.error("--attempts deve estar entre 1 e 50")
 
     repo_root = Path(__file__).resolve().parents[1]
-    payload = diagnose(repo_root, args.attempts, args.timeout_seconds, args.interval_seconds)
+    try:
+        payload = diagnose(
+            args.frontend_url,
+            args.api_url,
+            args.attempts,
+            args.timeout_seconds,
+            args.interval_seconds,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     output = repo_root / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

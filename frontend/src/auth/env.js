@@ -1,3 +1,5 @@
+import { requireProviderNeutralRuntimeUrl } from '../services/runtimeUrlPolicy'
+
 const DEFAULT_CALLBACK_PATH = '/auth/callback.html'
 const DEFAULT_LOGIN_PATH = '/login'
 
@@ -18,17 +20,21 @@ function resolveAbsoluteHttpUrl(value) {
   const raw = String(value || '').trim()
   if (!raw) return null
 
+  let url
   try {
-    const url = new URL(raw)
-    if (!['http:', 'https:'].includes(url.protocol)) return null
-    return url.toString()
+    url = new URL(raw)
   } catch {
     return null
   }
+  if (!['http:', 'https:'].includes(url.protocol)) return null
+  return requireProviderNeutralRuntimeUrl(url.toString(), 'endereço de redirecionamento do MSAL')
 }
 
 function publicOrigin() {
-  return normalizeOrigin(readEnv('VITE_MSAL_PUBLIC_ORIGIN') || readEnv('VITE_PUBLIC_URL') || window.location.origin)
+  return requireProviderNeutralRuntimeUrl(
+    normalizeOrigin(readEnv('VITE_MSAL_PUBLIC_ORIGIN') || readEnv('VITE_PUBLIC_URL') || window.location.origin),
+    'MSAL public origin',
+  )
 }
 
 function absoluteFromEnvOrOrigin(envName, pathEnvName, fallbackPath) {
