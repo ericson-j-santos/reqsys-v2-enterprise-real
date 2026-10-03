@@ -257,6 +257,26 @@ class WindowsIdentityTests(unittest.TestCase):
                     1, win32security.DACL_SECURITY_INFORMATION)
                 self.assertEqual(before, after)
 
+    def test_actual_acl_is_protected_and_exact_for_directory_and_file(self):
+        import win32security
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary) / "private"
+            folder.mkdir()
+            sample = folder / "sample"
+            sample.write_bytes(b"public test fixture")
+            for path, directory in ((folder, True), (sample, False)):
+                transport.secure_acl(path, directory=directory)
+                descriptor = win32security.GetFileSecurity(str(path),
+                    win32security.DACL_SECURITY_INFORMATION)
+                self.assertTrue(descriptor.GetSecurityDescriptorControl()[0] & 0x1000,
+                                "the DACL must disable inherited access")
+                acl = descriptor.GetSecurityDescriptorDacl()
+                self.assertEqual(acl.GetAceCount(), 2)
+                for index in range(acl.GetAceCount()):
+                    ace = acl.GetAce(index)
+                    self.assertEqual(ace[0], (win32security.ACCESS_ALLOWED_ACE_TYPE, 3 if directory else 0))
+                    self.assertEqual(ace[1], 0x1F01FF)
+
     def test_existing_protected_folder_with_untrusted_sid_is_rejected(self):
         import win32security
         with tempfile.TemporaryDirectory() as temporary:

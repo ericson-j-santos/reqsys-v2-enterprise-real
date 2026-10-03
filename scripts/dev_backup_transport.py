@@ -311,9 +311,28 @@ def secure_acl(path: Path, *, directory: bool) -> None:
         acl.AddAccessAllowedAceEx(win32security.ACL_REVISION, flags, 0x1F01FF, sid)
     descriptor = win32security.SECURITY_DESCRIPTOR()
     descriptor.SetSecurityDescriptorDacl(1, acl, 0)
+    # SetFileSecurity is a legacy API: the descriptor control must explicitly
+    # protect the DACL; the SECURITY_INFORMATION flag alone is insufficient.
+    descriptor.SetSecurityDescriptorControl(0x1000, 0x1000)
     win32security.SetFileSecurity(str(path),
         win32security.DACL_SECURITY_INFORMATION | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
         descriptor)
+    written = win32security.GetFileSecurity(str(path), win32security.DACL_SECURITY_INFORMATION)
+    if not written.GetSecurityDescriptorControl()[0] & 0x1000:
+        reject("private_acl_protection_not_applied")
+    written_acl = written.GetSecurityDescriptorDacl()
+    if written_acl is None or written_acl.GetAceCount() != 2:
+        reject("private_acl_not_exclusive")
+    expected_sids = {win32security.ConvertSidToStringSid(sid) for sid in (user_sid, system_sid)}
+    observed_sids = set()
+    for index in range(written_acl.GetAceCount()):
+        ace = written_acl.GetAce(index)
+        if (len(ace) != 3 or ace[0] != (win32security.ACCESS_ALLOWED_ACE_TYPE, flags)
+                or ace[1] != 0x1F01FF):
+            reject("private_acl_rights_or_flags_invalid")
+        observed_sids.add(win32security.ConvertSidToStringSid(ace[2]))
+    if observed_sids != expected_sids:
+        reject("private_acl_identity_not_exclusive")
 
 
 def receiver_root() -> Path:
