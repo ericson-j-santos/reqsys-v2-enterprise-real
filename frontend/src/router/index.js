@@ -13,6 +13,7 @@ import SpecsView from '../views/SpecsView.vue'
 import TaskConsoleView from '../views/TaskConsoleView.vue'
 import AgileRuntimeView from '../views/AgileRuntimeView.vue'
 import ArquiteturaView from '../views/ArquiteturaView.vue'
+import ArquiteturaVivaView from '../views/ArquiteturaVivaView.vue'
 import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
 import CopilotMemoryInstallerView from '../views/CopilotMemoryInstallerView.vue'
@@ -94,6 +95,7 @@ export const routes = [
   },
   { path: '/financeiro', component: FinanceiroView, meta: { recurso: 'dashboard:read' } },
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
+  { path: '/arquitetura-viva', component: ArquiteturaVivaView, meta: { recurso: 'dashboard:read' } },
   { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
   { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
   { path: '/integracoes/pentaho', component: PentahoIntegracoesView, meta: { recurso: 'dashboard:read' } },
