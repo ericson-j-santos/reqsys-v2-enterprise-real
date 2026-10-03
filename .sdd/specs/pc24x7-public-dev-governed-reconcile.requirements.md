@@ -33,6 +33,7 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
 10. O Runtime Core é opcional neste stack. Sua resolução DNS deve ocorrer somente
     quando uma rota `/runtime-core/` permitida for acessada; a ausência do serviço
     deve retornar HTTP 502 nessas rotas sem impedir o gateway público de iniciar.
+    Quando presente, o proxy de TODO events deve preservar sufixo de caminho e query.
 
 ## Critérios de aceite
 
@@ -45,6 +46,8 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
 - o smoke independente confirma o mesmo SHA publicado antes de considerar DEV pronto.
 - sem `reqsys-runtime` na rede, o Nginx passa em `nginx -t`, atende frontend/API e
   mantém as rotas permitidas de `/runtime-core/` fechadas com HTTP 502.
+- com um upstream stub, `/runtime-core/api/todo-events/abc?x=1` chega ao serviço
+  como `/api/todo-events/abc?x=1`.
 
 ## Fora de escopo
 
