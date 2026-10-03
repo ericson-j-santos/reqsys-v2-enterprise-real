@@ -19,6 +19,8 @@ anteriores.
 7. O endereço público direto `/dev/painel-projetos/` encaminha para o ReqSys
    preservando `/painel-projetos` como destino depois do login Microsoft.
 8. Destinos externos, recursivos ou inválidos não são aceitos no retorno do login.
+9. A tela inicial apresenta, no topo e sem depender da expansão do menu lateral,
+   um botão explícito **Abrir Painel de projetos** que leva à rota canônica.
 
 ## Fora de escopo
 

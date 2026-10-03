@@ -9,6 +9,15 @@
         </p>
       </div>
       <div class="header-actions">
+        <v-btn
+          color="info"
+          variant="tonal"
+          prepend-icon="mdi-briefcase-eye-outline"
+          data-testid="dashboard-abrir-painel-projetos"
+          @click="irPara({ path: '/painel-projetos' })"
+        >
+          Abrir Painel de projetos
+        </v-btn>
         <AmbienteNavigator :environment-hint="ambienteLabel" test-id="ambiente-chip" />
         <div
           class="figma-semaforo-geral"
@@ -444,9 +453,9 @@ const painelDireito = computed(() => [
   },
   {
     id: 'publicar-integracao',
-    title: 'Publicar em ferramenta de entrega',
-    subtitle: 'Preparar envio para Planner, Redmine, GitHub ou fluxo de trabalho corporativo',
-    rota: { path: '/painel-integracao' },
+    title: 'Painel de projetos',
+    subtitle: 'Acompanhar Planner, integrações, andamento e evidências dos projetos',
+    rota: { path: '/painel-projetos' },
     testId: 'destino-publicar-integracao',
   },
   {
