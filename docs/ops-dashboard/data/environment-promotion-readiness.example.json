@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "environment_promotion_readiness",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "report_only",
+  "decision": "BLOCKED_FOR_PROD_PROMOTION",
+  "ready_for_prod_promotion": false,
+  "production_blockers": [
+    "env_dev_evidence_missing",
+    "env_stg_evidence_missing",
+    "env_prod_evidence_missing"
+  ],
+  "executive_readiness": {
+    "available": true,
+    "ready_for_production": true,
+    "decision": "READY_FOR_PRODUCTION",
+    "score": 98,
+    "risk": "low",
+    "blocker_count": 0,
+    "blockers": []
+  },
+  "environments": [
+    { "environment": "dev", "available": false, "ok": false, "state": "unknown", "blocking_issue_count": 0 },
+    { "environment": "stg", "available": false, "ok": false, "state": "unknown", "blocking_issue_count": 0 },
+    { "environment": "prod", "available": false, "ok": false, "state": "unknown", "blocking_issue_count": 0 }
+  ],
+  "coverage": {
+    "required_environments": ["dev", "stg", "prod"],
+    "ready_environments": [],
+    "missing_environments": ["dev", "stg", "prod"],
+    "failed_environments": [],
+    "coverage_percent": 0
+  },
+  "guardrails": [
+    "dev_stg_prod_required_before_prod_promotion",
+    "executive_readiness_required",
+    "report_only_by_default",
+    "no_secret_capture",
+    "no_runtime_api_call_from_public_dashboard"
+  ]
+}

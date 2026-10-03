@@ -1,0 +1,24 @@
+{
+  "feature_name": "live-traceability-change-impact",
+  "project": "ReqSys Produto",
+  "created_at": "2026-09-29",
+  "updated_at": "2026-09-29",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Conecta o functional_traceability_graph vivo ao Impact Engine, mantém o dataset histórico como benchmark e exclui evidência rejeitada do conjunto operacional padrão.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_change_impact_analysis.py",
+      "backend/tests/test_traceability_graph.py"
+    ],
+    "pre_pr_tests": [
+      "backend/tests/test_change_impact_analysis.py",
+      "backend/tests/test_traceability_graph.py"
+    ],
+    "evidence_contract": "API FastAPI real + SQLite real de teste alimentam o Impact Engine; controle negativo exclui runtime rejeitado e impede ID alucinado pelo LLM."
+  }
+}

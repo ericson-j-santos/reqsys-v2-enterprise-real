@@ -1,0 +1,76 @@
+name: BACEN Third-Party Register Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/validate_bacen_third_party_register.py"
+      - ".github/workflows/bacen-third-party-register-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/validate_bacen_third_party_register.py"
+      - ".github/workflows/bacen-third-party-register-gate.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-third-party-register-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-05 Third-Party Drift Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_bacen_third_party_register.py
+
+      - name: Validate third-party register
+        run: python scripts/validate_bacen_third_party_register.py
+
+      - name: Publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-third-party-register-evidence
+          path: artifacts/bacen/bacen-05-third-party-drift-report.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Append summary
+        if: always()
+        run: |
+          echo "## BACEN-05 — Registro de nuvem e terceiros" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/bacen/bacen-05-third-party-drift-report.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-05-third-party-drift-report.json").read_text())
+          summary = report.get("summary", {})
+          print(f"- Resultado: `{report.get('result')}`")
+          print(f"- Provedores registrados: **{summary.get('total_providers', 0)}**")
+          print(f"- Variáveis externas detectadas: **{summary.get('external_vars_detected', 0)}**")
+          print(f"- Deriva (drift) detectada: `{summary.get('drift_detected')}`")
+          for error in report.get("errors", []):
+              print(f"  - ⚠️ {error}")
+          PY
+          else
+            echo "- Evidência não gerada." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

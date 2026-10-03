@@ -1,0 +1,27 @@
+{
+  "feature_name": "pc24x7-public-dev-ingress",
+  "project": "ReqSys v2 Enterprise — runtime público DEV",
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Consolida o runtime público DEV no PC24x7 sem Fly.io, reconciliando dois Cloudflare Quick Tunnels contra o gateway Nginx em host.docker.internal:8083 e preservando DuckDNS como alvo de URL estável futura.",
+  "runtime_target": "pc24x7",
+  "environment": "dev",
+  "controls": {
+    "production_enabled": false,
+    "backend_direct_publication": false,
+    "secrets_in_git": false,
+    "stable_url_promotion_requires_evidence": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_public_dev_tunnel.py"
+    ],
+    "evidence_contract": "O reconciliador deve ser idempotente, remover dependência de IPv4 LAN fixo, manter restart unless-stopped, validar /api/health e /task-console via túnel e não promover HML/PROD."
+  }
+}

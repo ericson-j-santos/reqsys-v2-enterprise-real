@@ -1,0 +1,47 @@
+{
+  "feature_name": "merge-queue-reliability-metrics",
+  "project": "ReqSys v2 Enterprise — CI/CD",
+  "created_at": "2026-09-27",
+  "updated_at": "2026-09-27",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Instrumentação report-only de confiabilidade da Merge Queue e falhas pós-merge por SHA exato.",
+  "scope": "github-ci-analytics",
+  "files": [
+    "scripts/enrich_ci_pr_efficiency.py",
+    "tests/scripts/test_enrich_ci_pr_efficiency.py",
+    "docs/contracts/ci-lead-time-analytics.schema.json",
+    "docs/runbooks/ci-lead-time-analytics.md",
+    ".sdd/specs/merge-queue-reliability-metrics.requirements.md",
+    ".sdd/specs/merge-queue-reliability-metrics.spec.json"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/scripts/test_enrich_ci_pr_efficiency.py"
+    ],
+    "evidence_contract": "Provar que merge_group real é condição necessária para canary_e2e_observed, tentativas são deduplicadas por HEAD SHA, PR verde com falha de fila/requeue é detectada, pós-merge usa merge_commit_sha exato, cancelled permanece observável sem ser classificado como falha, paginação global incompleta aciona recent_prs_fallback bounded e ausência de merge_group falha fechado como indisponível."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "deploy": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "protected_branch_write": false
+  },
+  "increment_type": "observability",
+  "acceptance_criteria": [
+    "Sem merge_group real, available=false e canary_e2e_observed=false.",
+    "queue_attempts deduplica workflows do mesmo merge_group head_sha.",
+    "green_pr_but_queue_failed e requeue são detectados em teste controlado.",
+    "Falha pós-merge usa workflow push do merge_commit_sha exato.",
+    "Workflow pós-merge cancelled é reportado separadamente e não incrementa contadores de falha.",
+    "Métricas permanecem report-only e creates_gate=false.",
+    "Paginação global incompleta usa recent_prs_fallback bounded sem varredura ilimitada.",
+    "Pre-PR Readiness verde no HEAD final e behind_by=0."
+  ]
+}

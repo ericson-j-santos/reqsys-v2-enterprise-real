@@ -1,14 +1,28 @@
 <template>
-  <main class="login-page">
-    <v-card class="login-card" :width="cardWidth">
-      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
-        <span>ReqSys Enterprise</span>
-        <v-chip size="small" color="amber" variant="tonal">RBAC</v-chip>
+  <main class="login-page" data-testid="route-login">
+    <v-card class="login-card" :width="cardWidth" elevation="0">
+      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 login-card-title">
+        <span class="login-brand"><span class="brand-dot">R</span> ReqSys Enterprise</span>
+        <span class="figma-pill figma-pill--compact">RBAC</span>
       </v-card-title>
-      <v-card-subtitle>Login corporativo · Tieri659</v-card-subtitle>
+      <v-card-subtitle class="login-card-subtitle">Acesso corporativo - Tieri659</v-card-subtitle>
 
       <v-card-text>
-        <!-- Botão Microsoft (principal) -->
+        <v-alert
+          v-if="estadoConfigAuth === 'loading'"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          data-testid="auth-config-loading"
+          aria-live="polite"
+        >
+          <div class="d-flex align-center ga-2">
+            <v-progress-circular indeterminate size="18" width="2" aria-hidden="true" />
+            <span>Verificando a autenticacao corporativa...</span>
+          </div>
+        </v-alert>
+
         <v-btn
           v-if="azureDisponivel"
           block
@@ -22,14 +36,36 @@
           Entrar com conta Microsoft
         </v-btn>
 
+        <v-btn
+          v-if="certificadoDisponivel"
+          block
+          size="large"
+          variant="outlined"
+          class="mb-4 btn-certificado"
+          :loading="carregandoCertificado"
+          :disabled="carregandoAzure || carregandoDemo"
+          prepend-icon="mdi-certificate-outline"
+          @click="entrarCertificado"
+        >
+          Entrar com certificado digital
+        </v-btn>
+
         <v-alert
-          v-if="!azureDisponivel && !demoLoginDisponivel"
+          v-if="estadoConfigAuth === 'ready' && !azureDisponivel && !certificadoDisponivel && !demoLoginDisponivel"
           type="warning"
           variant="tonal"
           density="compact"
           class="mb-4"
+          data-testid="auth-config-unavailable"
         >
-          Autenticação indisponível. Verifique a configuração do Azure AD no backend.
+          <div class="font-weight-medium">Autenticacao corporativa indisponivel.</div>
+          <div>{{ mensagemDiagnosticoAuth }}</div>
+          <div v-if="camposAusentes.length" class="mt-2 text-caption">
+            Campos ausentes: {{ camposAusentes.join(', ') }}
+          </div>
+          <div v-if="redirectEsperado" class="mt-1 text-caption">
+            Redirect URI esperado no Microsoft Entra ID: {{ redirectEsperado }}
+          </div>
         </v-alert>
 
         <template v-if="demoLoginDisponivel">
@@ -37,9 +73,8 @@
             <span class="text-caption text-medium-emphasis px-2">ou</span>
           </v-divider>
 
-          <!-- Login demo (desenvolvimento) -->
           <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-            Acesso demo — apenas para desenvolvimento
+            Acesso demo - apenas para desenvolvimento
           </v-alert>
 
           <v-text-field
@@ -62,14 +97,23 @@
           />
         </template>
 
-        <v-alert v-if="erro" type="error" density="compact" class="mt-1">{{ erro }}</v-alert>
+        <v-alert
+          v-if="erro"
+          type="error"
+          color="#b91c1c"
+          density="compact"
+          class="mt-1 login-error-alert"
+        >
+          {{ erro }}
+        </v-alert>
       </v-card-text>
 
       <v-card-actions v-if="demoLoginDisponivel" class="px-4 pb-4">
         <v-btn
           block
-          color="amber"
+          color="primary"
           size="large"
+          class="figma-btn-entrar"
           :loading="carregandoDemo"
           :disabled="carregandoAzure"
           @click="entrarDemo"
@@ -83,44 +127,56 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from '../stores/auth'
-import { loginMicrosoftPopup } from '../auth/msal'
+import { loginMicrosoftRedirect } from '../auth/msal'
+import { persistPostLoginRedirect } from '../auth/postLoginRedirect'
 import { api } from '../services/api'
 
 const { width } = useDisplay()
 const cardWidth = computed(() => Math.min(440, width.value - 32))
 
-const email          = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
-const senha          = ref('')
-const erro           = ref('')
+const email = ref('ericsonjosedossantos@tieri659.onmicrosoft.com')
+const senha = ref('')
+const erro = ref('')
 const carregandoDemo = ref(false)
 const carregandoAzure = ref(false)
-const mostrarSenha   = ref(false)
+const carregandoCertificado = ref(false)
+const estadoConfigAuth = ref('loading')
+const mostrarSenha = ref(false)
 const azureDisponivel = ref(false)
+const certificadoDisponivel = ref(false)
 const demoLoginDisponivel = ref(false)
-const azureConfig    = ref(null)
+const azureConfig = ref(null)
 
-const auth   = useAuthStore()
+const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+
+const camposAusentes = computed(() => azureConfig.value?.missing_fields || [])
+const redirectEsperado = computed(() => azureConfig.value?.expected_redirect_uri || '')
+const mensagemDiagnosticoAuth = computed(() => {
+  return azureConfig.value?.operator_action || 'Verifique a configuracao do Azure AD no serviço.'
+})
 
 onMounted(async () => {
-  // Exibir erro do retorno Azure (gravado em main.js antes de montar)
-  const azureErr = sessionStorage.getItem('azure_login_error')
+  const azureErr = sessionStorage.getItem('azure_login_error') || localStorage.getItem('azure_login_error')
   if (azureErr) {
     erro.value = azureErr
     sessionStorage.removeItem('azure_login_error')
   }
 
-  // Verificar configuração pública de autenticação
   try {
     const { data } = await api.get('/v1/auth/config')
     azureConfig.value = data.data
     azureDisponivel.value = Boolean(data.data.azure_enabled)
+    certificadoDisponivel.value = Boolean(data.data.certificate_enabled)
     demoLoginDisponivel.value = Boolean(data.data.demo_login_enabled)
+    estadoConfigAuth.value = 'ready'
   } catch {
-    erro.value = 'Não foi possível obter a configuração de autenticação do servidor.'
+    estadoConfigAuth.value = 'error'
+    erro.value ||= 'Nao foi possivel obter a configuracao de autenticacao do servidor.'
   }
 })
 
@@ -128,15 +184,12 @@ async function entrarMicrosoft() {
   if (!azureConfig.value) return
   carregandoAzure.value = true
   erro.value = ''
+  localStorage.removeItem('azure_login_error')
   try {
-    const idToken = await loginMicrosoftPopup()
-    if (!idToken) throw new Error('Token não retornado pelo Microsoft')
-    const { data } = await api.post('/v1/auth/azure', { id_token: idToken })
-    auth.salvarSessao(data.data)
-    router.push('/')
+    persistPostLoginRedirect(route.query.redirect)
+    await loginMicrosoftRedirect()
   } catch (e) {
-    erro.value = e.response?.data?.detail || e.message || 'Falha no login Microsoft'
-  } finally {
+    erro.value = e.response?.data?.detail || e.message || 'Falha no acesso Microsoft'
     carregandoAzure.value = false
   }
 }
@@ -146,27 +199,58 @@ async function entrarDemo() {
   erro.value = ''
   try {
     await auth.login({ email: email.value, senha: senha.value })
-    router.push('/')
+    const destino = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    router.push(destino.startsWith('/login') ? '/' : destino)
   } catch (e) {
-    erro.value = e.response?.data?.detail || 'Falha no login demo'
+    erro.value = e.response?.data?.detail || 'Falha no acesso demo'
   } finally {
     carregandoDemo.value = false
+  }
+}
+
+async function entrarCertificado() {
+  carregandoCertificado.value = true
+  erro.value = ''
+  try {
+    await auth.loginCertificado()
+    router.push('/')
+  } catch (e) {
+    erro.value = e.response?.data?.detail || e.message || 'Falha no acesso com certificado digital'
+  } finally {
+    carregandoCertificado.value = false
   }
 }
 </script>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
-  display: flex;
+.login-brand {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: var(--bg);
+  gap: 10px;
+  font-weight: 800;
 }
-.login-card { width: 100%; }
+
+.login-card-title,
+.login-card-subtitle {
+  color: var(--text) !important;
+}
+
+.figma-btn-entrar {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
 .btn-microsoft {
-  border-color: #0078d4 !important;
-  color: #0078d4 !important;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+}
+
+.btn-certificado {
+  border-color: #16a34a !important;
+  color: #166534 !important;
+}
+
+.login-error-alert {
+  color: #ffffff !important;
 }
 </style>

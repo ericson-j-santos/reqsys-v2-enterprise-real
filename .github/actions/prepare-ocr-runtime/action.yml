@@ -1,0 +1,84 @@
+name: Prepare OCR Runtime Package
+description: Prepara wheel privado do OCR por SHA imutável sem materializar credencial no build.
+
+inputs:
+  app-id:
+    description: GitHub App ID governado
+    required: true
+  private-key:
+    description: Chave privada da GitHub App governada
+    required: true
+
+outputs:
+  ocr-sha:
+    description: SHA imutável do OCR preparado
+    value: ${{ steps.lock.outputs.sha }}
+  ocr-version:
+    description: Versão do pacote OCR
+    value: ${{ steps.lock.outputs.version }}
+  wheel-sha256:
+    description: SHA-256 do wheel preparado
+    value: ${{ steps.package.outputs.wheel_sha256 }}
+
+runs:
+  using: composite
+  steps:
+    - name: Ler lock imutável do OCR
+      id: lock
+      shell: bash
+      run: |
+        set -euo pipefail
+        python - <<'PY' >> "$GITHUB_OUTPUT"
+        import json
+        import re
+        from pathlib import Path
+
+        lock = json.loads(Path("config/ocr-engine-lock.json").read_text(encoding="utf-8"))
+        sha = str(lock["sha"])
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise SystemExit("ocr_lock_sha_must_be_full_commit")
+        if lock["repository"] != "ericson-j-santos/ocr-evidence-engine":
+            raise SystemExit("ocr_lock_repository_mismatch")
+        print(f"repository={lock['repository']}")
+        print(f"sha={sha}")
+        print(f"version={lock['version']}")
+        PY
+
+    - name: Emitir token temporário somente leitura
+      id: app-token
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ github.repository_owner }}
+        repositories: |
+          reqsys-v2-enterprise-real
+          ocr-evidence-engine
+        permission-contents: read
+
+    - name: Checkout OCR privado no SHA do lock
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ steps.lock.outputs.repository }}
+        ref: ${{ steps.lock.outputs.sha }}
+        token: ${{ steps.app-token.outputs.token }}
+        path: .external/ocr-evidence-engine
+        persist-credentials: false
+
+    - name: Gerar wheel e proveniência para o build
+      id: package
+      shell: bash
+      run: |
+        set -euo pipefail
+        python scripts/prepare_ocr_runtime_package.py
+        python - <<'PY' >> "$GITHUB_OUTPUT"
+        import json
+        from pathlib import Path
+
+        data = json.loads(
+            Path("backend/vendor/ocr-evidence-engine/provenance.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        print(f"wheel_sha256={data['wheel_sha256']}")
+        PY

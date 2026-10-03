@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Ordem segura do callback Microsoft no GitHub Pages",
+  "status": "implemented",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/auth/__tests__/startupFailSafe.test.js",
+      "frontend/src/auth/__tests__/msal.test.js"
+    ],
+    "evidence_contract": "O retorno OAuth e consumido antes do mount somente quando a URL contem uma resposta Microsoft; o bootstrap comum permanece nao bloqueante."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pages-msal-callback-order.requirements.md",
+    "implementation": "frontend/src/main.js"
+  },
+  "risk": {
+    "production": false,
+    "environment": "dev",
+    "secrets": false
+  }
+}

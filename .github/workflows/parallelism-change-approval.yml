@@ -1,0 +1,122 @@
+name: Parallelism Change Approval
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_id:
+        description: "Artifact ID produced by Staged Parallelism Policy"
+        required: true
+        type: string
+      decision:
+        description: "Governance decision"
+        required: true
+        type: choice
+        options: [APPROVE, REJECT]
+      reason:
+        description: "Mandatory auditable rationale"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: parallelism-change-approval-${{ inputs.artifact_id }}
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_ARTIFACT_ID: ${{ inputs.artifact_id }}
+      GOVERNANCE_DECISION: ${{ inputs.decision }}
+      GOVERNANCE_REASON: ${{ inputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test approval contract
+        run: |
+          python -m py_compile scripts/build_parallelism_approval_receipt.py
+          python -m unittest tests/test_build_parallelism_approval_receipt.py -v
+
+      - name: Download source change request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/parallelism-approval/source
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}" \
+            --jq '{id, name, expired, workflow_run: .workflow_run.id}' \
+            > .tmp/parallelism-approval/source-artifact.json
+          jq -e '.name == "reqsys-staged-parallelism-policy" and .expired == false' \
+            .tmp/parallelism-approval/source-artifact.json >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" \
+            > .tmp/parallelism-approval/source.zip
+          unzip -q .tmp/parallelism-approval/source.zip -d .tmp/parallelism-approval/source
+          test -f .tmp/parallelism-approval/source/parallelism-change-request.json
+
+      - name: Build immutable approval receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_run_id="$(jq -r '.workflow_run' .tmp/parallelism-approval/source-artifact.json)"
+          python scripts/build_parallelism_approval_receipt.py \
+            --request .tmp/parallelism-approval/source/parallelism-change-request.json \
+            --decision "$GOVERNANCE_DECISION" \
+            --actor "$GITHUB_ACTOR" \
+            --reason "$GOVERNANCE_REASON" \
+            --source-artifact-id "$SOURCE_ARTIFACT_ID" \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-id "$source_run_id" \
+            --output .tmp/parallelism-approval/parallelism-approval-receipt.json
+
+      - name: Validate governance invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.execution.automatic_application_allowed == false and .execution.applied == false' \
+            .tmp/parallelism-approval/parallelism-approval-receipt.json >/dev/null
+          jq -e '.execution.requires_separate_workflow == true' \
+            .tmp/parallelism-approval/parallelism-approval-receipt.json >/dev/null
+          jq -e '.production.promotion_allowed == false' \
+            .tmp/parallelism-approval/parallelism-approval-receipt.json >/dev/null
+          jq -e '.source.change_request_sha256 | length == 64' \
+            .tmp/parallelism-approval/parallelism-approval-receipt.json >/dev/null
+          jq -e '.receipt_sha256 | length == 64' \
+            .tmp/parallelism-approval/parallelism-approval-receipt.json >/dev/null
+
+      - name: Publish executive summary
+        shell: bash
+        run: |
+          status="$(jq -r '.decision_status' .tmp/parallelism-approval/parallelism-approval-receipt.json)"
+          current_stage="$(jq -r '.change.current_stage' .tmp/parallelism-approval/parallelism-approval-receipt.json)"
+          recommended_stage="$(jq -r '.change.recommended_stage' .tmp/parallelism-approval/parallelism-approval-receipt.json)"
+          receipt_sha="$(jq -r '.receipt_sha256' .tmp/parallelism-approval/parallelism-approval-receipt.json)"
+          {
+            echo "# Parallelism Change Approval"
+            echo ""
+            echo "| Indicator | Value |"
+            echo "|---|---|"
+            echo "| Decision | \`$status\` |"
+            echo "| Actor | \`$GITHUB_ACTOR\` |"
+            echo "| Current stage | \`$current_stage\` |"
+            echo "| Recommended stage | \`$recommended_stage\` |"
+            echo "| Source artifact | \`$SOURCE_ARTIFACT_ID\` |"
+            echo "| Receipt SHA-256 | \`$receipt_sha\` |"
+            echo "| Automatic application | \`false\` |"
+            echo "| Production promotion | \`false\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-parallelism-approval-receipt-${{ inputs.artifact_id }}
+          path: |
+            .tmp/parallelism-approval/parallelism-approval-receipt.json
+            .tmp/parallelism-approval/source-artifact.json
+          retention-days: 90

@@ -1,0 +1,26 @@
+name: Ops Dashboard Navigation
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ops-dashboard/operational-navigation.html'
+      - 'docs/ops-dashboard/operational-navigation-index.json'
+      - 'docs/ops-dashboard/index.html'
+      - 'scripts/validate_ops_dashboard_navigation.py'
+      - '.github/workflows/ops-dashboard-navigation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-ops-dashboard-navigation:
+    name: Validate Ops Dashboard Navigation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate navigation artifacts
+        run: python3 scripts/validate_ops_dashboard_navigation.py

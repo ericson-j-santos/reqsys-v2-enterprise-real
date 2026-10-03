@@ -1,0 +1,14 @@
+name: Planner Teams Notify DEV Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  acceptance:
+    name: Planner → Teams — prova real DEV via OIDC
+    uses: ./.github/workflows/runtime-e2e-continuous.yml
+    secrets: inherit

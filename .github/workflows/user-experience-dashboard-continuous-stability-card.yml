@@ -1,0 +1,46 @@
+name: User Experience Dashboard Continuous Stability Card
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/inject_user_experience_dashboard_continuous_stability_card.py'
+      - 'scripts/smoke_user_experience_dashboard_continuous_stability_card.py'
+      - 'tests/test_user_experience_dashboard_continuous_stability_card.py'
+      - '.github/workflows/user-experience-dashboard-continuous-stability-card.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: |
+          python -m py_compile scripts/inject_user_experience_dashboard_continuous_stability_card.py
+          python -m py_compile scripts/smoke_user_experience_dashboard_continuous_stability_card.py
+      - name: Unit tests
+        run: python -m unittest tests/test_user_experience_dashboard_continuous_stability_card.py
+      - name: Build governed evidence
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/state.json <<'JSON'
+          {"cards":{"user_experience_dashboard_continuous_stability":{"status":"UX_DASHBOARD_CONTINUOUS_STABILITY_STABLE","success_rate":100.0,"stable_sequence":3,"sample_count":3,"confidence_score":100,"common_fingerprint":"stable","recurring_drift":false,"human_review_eligible":true,"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          cat > artifacts/brief.json <<'JSON'
+          {"indicators":{"user_experience_dashboard_continuous_stability":{"status":"UX_DASHBOARD_CONTINUOUS_STABILITY_STABLE","success_rate":100.0,"stable_sequence":3,"sample_count":3,"confidence_score":100,"common_fingerprint":"stable","recurring_drift":false,"human_review_eligible":true,"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          echo '{"cards":[]}' > artifacts/dashboard.json
+          python scripts/inject_user_experience_dashboard_continuous_stability_card.py --dashboard artifacts/dashboard.json --indicator artifacts/brief.json --output artifacts/dashboard-updated.json
+          python scripts/smoke_user_experience_dashboard_continuous_stability_card.py --state artifacts/state.json --brief artifacts/brief.json --dashboard artifacts/dashboard-updated.json --output artifacts/smoke.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-dashboard-continuous-stability-card
+          path: artifacts/
+          retention-days: 90

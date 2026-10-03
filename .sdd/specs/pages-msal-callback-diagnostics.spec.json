@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Callback Microsoft direto e diagnóstico persistente",
+  "status": "implemented",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/auth/__tests__/startupFailSafe.test.js",
+      "frontend/src/auth/__tests__/msal.test.js"
+    ],
+    "evidence_contract": "O Pages usa sua raiz como redirect URI e erros do callback permanecem visiveis sem registrar credenciais ou parametros OAuth."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pages-msal-callback-diagnostics.requirements.md",
+    "implementation": "frontend/src/main.js",
+    "login_view": "frontend/src/views/LoginView.vue",
+    "workflow": ".github/workflows/deploy-reqsys-pages-composite.yml"
+  },
+  "risk": {
+    "production": false,
+    "environment": "dev",
+    "secrets": false
+  }
+}

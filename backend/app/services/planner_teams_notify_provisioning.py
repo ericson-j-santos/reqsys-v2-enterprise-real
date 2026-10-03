@@ -1,0 +1,353 @@
+from __future__ import annotations
+
+import json
+import uuid
+from typing import Any, Iterator
+
+import httpx
+
+PROFILE = 'planner_teams_notificacao_simples'
+FLOW_MANAGEMENT_BASE = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple'
+SCHEMA = 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#'
+PLANNER_API = '/providers/Microsoft.PowerApps/apis/shared_planner'
+TEAMS_API = '/providers/Microsoft.PowerApps/apis/shared_teams'
+TEAMS_POST_CARD_OPERATION = 'PostCardToConversation'
+PLANNER_TASK_URL = "https://planner.cloud.microsoft/webui/plan/@{parameters('PLANNER_PLAN_ID')}/view/board/task/@{triggerBody()?['id']}"
+FILTRO_TAREFA_TESTE_ID = 'Ignorar_tarefas_de_teste_automatizado'
+# Suites de E2E recorrentes (fora do ReqSys) criam tarefas nesse plano com
+# esse prefixo para testar a propria sincronizacao Planner->Excel. Sem esse
+# filtro, cada rodada delas dispara uma notificacao real no canal do Teams —
+# confirmado em DEV: uma dessas tarefas ja notificou sozinha durante os
+# testes deste fluxo, sem nenhuma acao humana.
+PREFIXO_TAREFA_TESTE_IGNORADA = 'REQSYS-E2E-'
+
+EVENTOS = {
+    'criada': {
+        'operation_id': 'OnNewTask_V3',
+        'trigger_name': 'Quando_uma_tarefa_e_criada',
+        'display_name': 'ReqSys - Notificar Teams (Tarefa criada no Planner)',
+        'titulo_mensagem': 'Nova tarefa no Planner',
+    },
+    'concluida': {
+        'operation_id': 'OnCompleteTask_V3',
+        'trigger_name': 'Quando_uma_tarefa_e_concluida',
+        'display_name': 'ReqSys - Notificar Teams (Tarefa concluída no Planner)',
+        'titulo_mensagem': 'Tarefa concluída no Planner',
+    },
+}
+
+
+def _segmento_id_seguro(value: str, label: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f'{label} obrigatorio')
+    parts = normalized.split('-')
+    for part in parts:
+        if not part or not part.isalnum():
+            raise ValueError(f'{label} invalido')
+    return '-'.join(parts)
+
+
+def _adaptive_card(titulo_mensagem: str) -> dict[str, Any]:
+    return {
+        '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
+        'type': 'AdaptiveCard',
+        'version': '1.2',
+        'body': [
+            {'type': 'TextBlock', 'size': 'Medium', 'weight': 'Bolder', 'text': titulo_mensagem},
+            {
+                'type': 'TextBlock',
+                'wrap': True,
+                'weight': 'Bolder',
+                'text': "@{triggerBody()?['title']}",
+            },
+            {
+                'type': 'FactSet',
+                'facts': [
+                    {'title': 'Progresso', 'value': "@{string(triggerBody()?['percentComplete'])}%"},
+                    {'title': 'Vencimento', 'value': "@{coalesce(triggerBody()?['dueDateTime'], 'Sem prazo')}"},
+                ],
+            },
+            {
+                'type': 'TextBlock',
+                'wrap': True,
+                'isSubtle': True,
+                'spacing': 'Small',
+                'size': 'Small',
+                'text': "ID da tarefa: @{triggerBody()?['id']}",
+            },
+        ],
+        'actions': [
+            {
+                'type': 'Action.OpenUrl',
+                'title': 'Abrir no Planner',
+                'url': PLANNER_TASK_URL,
+            },
+        ],
+    }
+
+
+def gerar_definicao(payload: dict[str, Any], evento: str) -> dict[str, Any]:
+    config = EVENTOS[evento]
+    card = _adaptive_card(config['titulo_mensagem'])
+    trigger = {
+        'type': 'OpenApiConnection',
+        'inputs': {
+            'host': {
+                'apiId': PLANNER_API,
+                'operationId': config['operation_id'],
+                'connectionName': 'shared_planner',
+            },
+            'parameters': {
+                # Persistir os valores reais no trigger. Em DEV, o designer do
+                # Power Automate so manteve o gatilho funcional depois que
+                # grupo/plano foram salvos diretamente; expressoes
+                # @parameters(...) podiam resultar em flow Started sem runs.
+                'groupId': payload['group_id'],
+                'id': payload['plan_id'],
+            },
+        },
+        # OnNewTask_V3/OnCompleteTask_V3 sao triggers "batch" (poll), nao
+        # push: exigem recurrence proprio, sem isso o flow management
+        # rejeita com TemplateValidationError. Confirmado em DEV.
+        'recurrence': {'frequency': 'Minute', 'interval': 5},
+        'splitOn': "@triggerBody()?['value']",
+    }
+    notificar_teams = {
+        'type': 'OpenApiConnection',
+        'inputs': {
+            'host': {
+                'apiId': TEAMS_API,
+                'operationId': TEAMS_POST_CARD_OPERATION,
+                'connectionName': 'shared_teams',
+            },
+            'parameters': {
+                # "Flow bot"/"Channel" sao seletores fixos do conector (nao
+                # ids) — confirmado via GetUnifiedActionSchema real; qualquer
+                # outro valor (ex.: um id de canal aqui) falha com HTTP 400.
+                'poster': 'Flow bot',
+                'location': 'Channel',
+                # Objeto aninhado (messageBody/recipient como estava antes)
+                # e aceito e ecoado pela API de gerenciamento de fluxos, mas
+                # NAO e o que fica persistido de fato — o designer do Power
+                # Automate so reconhece parametros de objeto aninhado nessa
+                # notacao "caminho achatado com prefixo body/". Confirmado
+                # em DEV: com o formato aninhado, o campo Cartao Adaptavel
+                # aparecia vazio no designer e o grupo do trigger revertia
+                # sozinho ao salvar.
+                'body/messageBody': json.dumps(card, ensure_ascii=False),
+                'body/recipient/groupId': "@parameters('TEAMS_TEAM_ID')",
+                'body/recipient/channelId': "@parameters('TEAMS_CHANNEL_ID')",
+            },
+        },
+        'runAfter': {},
+    }
+    filtro_teste = {
+        'type': 'If',
+        # startsWith() do Logic Apps ja e case-insensitive. Tarefas cujo
+        # titulo comeca com o prefixo de teste automatizado nao notificam.
+        'expression': f"@not(startsWith(triggerBody()?['title'], '{PREFIXO_TAREFA_TESTE_IGNORADA}'))",
+        'actions': {'Notificar_Teams': notificar_teams},
+        # Em DEV, a API de gerenciamento aceitou um If sem else, mas o
+        # Dataverse persistiu apenas Notificar_Teams no nivel superior. O
+        # perfil WSJF no mesmo ambiente preserva o If com else.actions
+        # explicito; por isso o ramo falso vazio faz parte do contrato.
+        'else': {'actions': {}},
+        'runAfter': {},
+    }
+    return {
+        '$schema': SCHEMA,
+        'contentVersion': '1.0.0.0',
+        'parameters': {
+            '$authentication': {'defaultValue': {}, 'type': 'SecureObject'},
+            '$connections': {'defaultValue': {}, 'type': 'Object'},
+            'PLANNER_GROUP_ID': {'defaultValue': payload['group_id'], 'type': 'String'},
+            'PLANNER_PLAN_ID': {'defaultValue': payload['plan_id'], 'type': 'String'},
+            'TEAMS_TEAM_ID': {'defaultValue': payload['teams_team_id'], 'type': 'String'},
+            'TEAMS_CHANNEL_ID': {'defaultValue': payload['teams_channel_id'], 'type': 'String'},
+        },
+        'triggers': {config['trigger_name']: trigger},
+        'actions': {FILTRO_TAREFA_TESTE_ID: filtro_teste},
+    }
+
+
+def _walk_actions(actions: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
+    for name, action in actions.items():
+        yield name, action
+        nested = action.get('actions')
+        if isinstance(nested, dict):
+            yield from _walk_actions(nested)
+        else_actions = action.get('else', {}).get('actions')
+        if isinstance(else_actions, dict):
+            yield from _walk_actions(else_actions)
+
+
+def validar_definicao(definition: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if definition.get('$schema') != SCHEMA:
+        errors.append('schema_invalido')
+    if not definition.get('triggers'):
+        errors.append('trigger_ausente')
+    trigger = next(iter(definition.get('triggers', {}).values()), {})
+    trigger_host = trigger.get('inputs', {}).get('host', {})
+    if trigger_host.get('apiId') != PLANNER_API:
+        errors.append('trigger_conector_nao_permitido')
+    if trigger_host.get('operationId') not in {e['operation_id'] for e in EVENTOS.values()}:
+        errors.append('trigger_operacao_nao_permitida')
+
+    filtro = definition.get('actions', {}).get(FILTRO_TAREFA_TESTE_ID, {})
+    if filtro.get('type') != 'If':
+        errors.append('filtro_tarefa_teste_ausente')
+    if filtro.get('else') != {'actions': {}}:
+        errors.append('filtro_tarefa_teste_else_explicito_ausente')
+
+    todas_acoes = dict(_walk_actions(definition.get('actions', {})))
+    if 'Notificar_Teams' not in todas_acoes:
+        errors.append('acao_notificar_teams_ausente')
+    else:
+        action_host = todas_acoes['Notificar_Teams'].get('inputs', {}).get('host', {})
+        if action_host.get('apiId') != TEAMS_API or action_host.get('operationId') != TEAMS_POST_CARD_OPERATION:
+            errors.append('acao_notificar_teams_conector_invalido')
+    raw = json.dumps(definition, ensure_ascii=False)
+    if 'Action.OpenUrl' not in raw or PLANNER_TASK_URL not in raw:
+        errors.append('acao_abrir_planner_ausente')
+    if 'UpdateTask' in raw:
+        errors.append('escrita_planner_proibida')
+    return errors
+
+
+def montar_bundle(payload: dict[str, Any]) -> dict[str, Any]:
+    target = str(payload.get('target_environment') or 'dev').strip().lower()
+    if target not in {'dev', 'development'}:
+        raise ValueError('O perfil planner_teams_notificacao_simples está restrito a DEV neste incremento')
+    for campo in ('teams_team_id', 'teams_channel_id', 'teams_connection_id'):
+        if not (payload.get(campo) or '').strip():
+            raise ValueError(f'{campo} obrigatorio (conexao Microsoft Teams autorizada no Power Automate)')
+
+    correlation_id = payload.get('correlation_id') or str(uuid.uuid4())
+    flows = []
+    for evento, config in EVENTOS.items():
+        definition = gerar_definicao(payload, evento)
+        errors = validar_definicao(definition)
+        if errors:
+            raise ValueError(f'Definicao invalida ({evento}): {errors}')
+        flows.append(
+            {
+                'id': f'planner_teams_notificar_{evento}',
+                'evento': evento,
+                'display_name': config['display_name'],
+                'state': 'Stopped',
+                'definition': definition,
+            }
+        )
+    return {
+        'schema_version': '1.0.0',
+        'profile': PROFILE,
+        'capability': 'Notificar Teams sobre mudancas no Planner',
+        'correlation_id': correlation_id,
+        'target': {
+            'environment_id': payload['environment_id'],
+            'environment_url': payload['environment_url'],
+            'target_environment': 'dev',
+        },
+        'connections': {
+            'planner': payload['planner_connection_id'],
+            'teams': payload['teams_connection_id'],
+        },
+        'flows': flows,
+    }
+
+
+async def _buscar_flow_existente(
+    client: httpx.AsyncClient, base_url: str, headers: dict[str, str], display_name: str
+) -> str | None:
+    response = await client.get(base_url, headers=headers, params={'api-version': '2016-11-01'})
+    if response.status_code != 200:
+        return None
+    for item in response.json().get('value', []):
+        if item.get('properties', {}).get('displayName') == display_name:
+            return item.get('name')
+    return None
+
+
+async def despachar(payload: dict[str, Any], *, user_token: str | None = None) -> dict[str, Any]:
+    """Cria/atualiza os fluxos de notificacao Planner->Teams de verdade.
+
+    Mesmo padrao provado em wsjf_planner_excel_provisioning.py: a API de
+    gerenciamento de fluxos (api.flow.microsoft.com) nao aceita credencial
+    app-only, so token delegado do usuario; nao ha upsert por id escolhido
+    pelo cliente (o id e gerado no POST), entao a idempotencia busca por
+    displayName a cada execucao e faz PATCH no id real encontrado, ou POST
+    para criar quando nao existe.
+
+    A notificacao usa o conector Teams real (PostCardToConversation, "Post
+    card in a chat or channel", poster "Flow bot", location "Channel") — nao
+    um webhook generico. Confirmado em DEV: um teste real via essa mesma
+    operacao postou a mensagem no canal de verdade.
+    """
+    bundle = montar_bundle(payload)
+    if not payload.get('confirmar'):
+        return {
+            'dispatched': False,
+            'status': 'validado_sem_implantar',
+            'correlation_id': bundle['correlation_id'],
+            'bundle': bundle,
+        }
+    if not user_token:
+        return {
+            'dispatched': False,
+            'status': 'pending_configuration',
+            'correlation_id': bundle['correlation_id'],
+            'erro': 'Token delegado do Power Automate ausente: verifique se a permissao delegada Flows.Manage.All foi consentida no Microsoft Entra.',
+        }
+    safe_environment_id = _segmento_id_seguro(payload['environment_id'], 'Ambiente')
+    base_url = f'{FLOW_MANAGEMENT_BASE}/environments/{safe_environment_id}/flows'
+    headers = {'Authorization': f'Bearer {user_token}'}
+    resultados = []
+    async with httpx.AsyncClient(timeout=30) as client:
+        for flow in bundle['flows']:
+            body = {
+                'properties': {
+                    'displayName': flow['display_name'],
+                    'definition': flow['definition'],
+                    'connectionReferences': {
+                        'shared_planner': {'connectionName': bundle['connections']['planner'], 'id': PLANNER_API},
+                        'shared_teams': {'connectionName': bundle['connections']['teams'], 'id': TEAMS_API},
+                    },
+                    'state': 'Stopped',
+                },
+            }
+            flow_id = await _buscar_flow_existente(client, base_url, headers, flow['display_name'])
+            if flow_id:
+                response = await client.patch(
+                    f'{base_url}/{flow_id}', headers=headers, params={'api-version': '2016-11-01'}, json=body
+                )
+            else:
+                response = await client.post(base_url, headers=headers, params={'api-version': '2016-11-01'}, json=body)
+            if response.status_code not in (200, 201):
+                resultados.append(
+                    {
+                        'evento': flow['evento'],
+                        'dispatched': False,
+                        'status_code': response.status_code,
+                        'erro': response.text[:500],
+                    }
+                )
+                continue
+            data = response.json()
+            flow_id = data.get('name') or flow_id
+            resultados.append(
+                {
+                    'evento': flow['evento'],
+                    'dispatched': True,
+                    'flow_id': flow_id,
+                    'flow_url': f'https://make.powerautomate.com/environments/{safe_environment_id}/flows/{flow_id}/details',
+                }
+            )
+    todos_ok = all(r['dispatched'] for r in resultados)
+    return {
+        'dispatched': todos_ok,
+        'status': 'implantado' if todos_ok else 'erro_parcial',
+        'correlation_id': bundle['correlation_id'],
+        'flows': resultados,
+    }

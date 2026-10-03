@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "runtime-valid-001",
+  "event_type": "requirement.created",
+  "event_class": "PRODUCT_INTELLIGENCE",
+  "occurred_at": "2026-06-24T00:00:00Z",
+  "source": {
+    "system": "reqsys",
+    "channel": "api",
+    "actor_type": "system",
+    "actor_id": "schema-runtime-enforcer"
+  },
+  "requirement": {
+    "id": "REQ-RUNTIME-001",
+    "title": "Runtime enforcement valid payload",
+    "type": "functional",
+    "status": "draft",
+    "priority": "must",
+    "confidence": "high"
+  },
+  "quality": {
+    "bdd_coverage": 100,
+    "ambiguity_score": 0,
+    "traceability_score": 100,
+    "risk_score": 0,
+    "readiness_score": 100
+  },
+  "traceability": {
+    "parent_ids": [],
+    "linked_prs": [],
+    "linked_tests": [],
+    "linked_decisions": [],
+    "linked_risks": []
+  },
+  "governance": {
+    "correlation_id": "runtime-valid-fixture",
+    "pii_masked": true,
+    "human_review_required": true,
+    "ai_generated": false,
+    "evidence_level": "complete"
+  }
+}
