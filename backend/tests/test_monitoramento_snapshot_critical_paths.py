@@ -1,0 +1,203 @@
+"""Testes de caminhos críticos — snapshot operacional de monitoramento."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.schemas.monitoramento_operacional import ItemMonitorado
+from app.services import monitoramento_snapshot as snapshot
+
+
+@pytest.fixture(autouse=True)
+def _govbi_base_url_aprovada(monkeypatch):
+    monkeypatch.setattr(snapshot.settings, 'govbi_base_url', 'https://govbi.example')
+
+
+def test_classificar_estado_geral_lista_vazia():
+    assert snapshot.classificar_estado_geral([]) == 'desconhecido'
+
+
+def test_classificar_estado_geral_bloqueante_sem_estado_bloqueado():
+    itens = [
+        ItemMonitorado(tipo='a', referencia='1', titulo='bloq', estado='verde', severidade='alta', origem='x', bloqueante=True),
+    ]
+    assert snapshot.classificar_estado_geral(itens) == 'bloqueado'
+
+
+def test_classificar_estado_geral_prioriza_bloqueio():
+    itens = [
+        ItemMonitorado(tipo='a', referencia='1', titulo='ok', estado='verde', severidade='baixa', origem='x'),
+        ItemMonitorado(tipo='b', referencia='2', titulo='bloq', estado='bloqueado', severidade='alta', origem='x'),
+    ]
+    assert snapshot.classificar_estado_geral(itens) == 'bloqueado'
+
+
+def test_estado_de_score_mapeia_faixas():
+    assert snapshot._estado_de_score(96) == 'verde'
+    assert snapshot._estado_de_score(85) == 'amarelo'
+    assert snapshot._estado_de_score(50) == 'vermelho'
+
+
+def test_resolver_modo_coleta():
+    assert snapshot._resolver_modo_coleta({'a': {'modo': 'live'}, 'b': {'modo': 'live'}}) == 'live'
+    assert snapshot._resolver_modo_coleta({'a': {'modo': 'live'}, 'b': {'modo': 'preview'}}) == 'hibrido'
+    assert snapshot._resolver_modo_coleta({'a': {'modo': 'preview'}}) == 'preview'
+
+
+@patch('app.services.monitoramento_snapshot.httpx.Client')
+def test_estado_govbi_amarelo_quando_5xx(mock_client_cls):
+    mock_response = MagicMock(status_code=503)
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.get.return_value = mock_response
+    mock_client_cls.return_value = mock_client
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'amarelo'
+    assert detalhes['http_status'] == 503
+
+
+@patch('app.services.monitoramento_snapshot.resumo_conectores')
+def test_estado_conectores_mapeia_bloqueado(mock_resumo):
+    mock_resumo.return_value = {'estado_geral': 'bloqueado'}
+    estado, _ = snapshot._estado_conectores()
+    assert estado == 'vermelho'
+
+
+@patch('app.services.monitoramento_snapshot.resumo_conectores')
+def test_estado_conectores_desconhecido(mock_resumo):
+    mock_resumo.return_value = {'estado_geral': 'outro'}
+    estado, _ = snapshot._estado_conectores()
+    assert estado == 'desconhecido'
+
+
+@patch.dict('os.environ', {'GITHUB_TOKEN': 'tok', 'REQSYS_GITHUB_REPO': 'org/repo'})
+@patch('app.services.monitoramento_snapshot.GitHubActionsClient')
+def test_estado_ci_amarelo_quando_em_execucao(mock_client_cls):
+    mock_client_cls.return_value.listar_runs.return_value = []
+    with patch('app.services.monitoramento_snapshot.classificar_runs', return_value={
+        'score_saude': 98,
+        'decisao': 'ok',
+        'total_runs': 1,
+        'falhas': [],
+        'em_execucao': [{'id': 1}],
+    }):
+        estado, detalhes = snapshot._estado_ci()
+    assert estado == 'amarelo'
+    assert detalhes['modo'] == 'live'
+
+
+@patch.dict('os.environ', {'GITHUB_TOKEN': 'tok', 'REQSYS_GITHUB_REPO': 'org/repo'})
+@patch('app.services.monitoramento_snapshot.GitHubActionsClient', side_effect=RuntimeError('api down'))
+def test_estado_ci_preview_quando_api_falha(_mock_client):
+    estado, detalhes = snapshot._estado_ci()
+    assert estado == 'amarelo'
+    assert detalhes['modo'] == 'preview'
+    assert 'erro' in detalhes
+
+
+@patch('app.services.monitoramento_snapshot.httpx.Client')
+def test_estado_govbi_verde_quando_health_ok(mock_client_cls):
+    mock_response = MagicMock(status_code=200)
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.get.return_value = mock_response
+    mock_client_cls.return_value = mock_client
+
+    estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'verde'
+    assert detalhes['http_status'] == 200
+
+
+@patch('app.services.monitoramento_snapshot.httpx.Client', side_effect=RuntimeError('timeout'))
+def test_estado_govbi_vermelho_quando_probe_falha(_mock_client):
+    estado, detalhes = snapshot._estado_govbi()
+    assert estado == 'vermelho'
+    assert 'erro' in detalhes
+
+
+@pytest.mark.parametrize('base_url', ['', 'https://govbi.fly.dev', 'https://govbi.fly.io'])
+def test_estado_govbi_bloqueado_sem_url_aprovada(monkeypatch, base_url):
+    monkeypatch.setattr(snapshot.settings, 'govbi_base_url', base_url)
+    with patch('app.services.monitoramento_snapshot.httpx.Client') as client:
+        estado, detalhes = snapshot._estado_govbi()
+
+    assert estado == 'bloqueado'
+    assert detalhes['fonte'] == 'configuracao'
+    assert detalhes['modo'] == 'bloqueado'
+    assert detalhes['base_url'] is None
+    client.assert_not_called()
+
+
+@patch.dict('os.environ', {}, clear=True)
+def test_estado_ci_preview_sem_token():
+    estado, detalhes = snapshot._estado_ci()
+    assert estado == 'amarelo'
+    assert detalhes['modo'] == 'preview'
+
+
+@patch.dict('os.environ', {'GITHUB_TOKEN': 'tok', 'REQSYS_GITHUB_REPO': 'org/repo'})
+@patch('app.services.monitoramento_snapshot.GitHubActionsClient')
+def test_estado_ci_vermelho_quando_ha_falhas(mock_client_cls):
+    mock_client_cls.return_value.listar_runs.return_value = []
+    with patch('app.services.monitoramento_snapshot.classificar_runs', return_value={
+        'score_saude': 40,
+        'decisao': 'bloquear',
+        'total_runs': 2,
+        'falhas': [{'id': 1}],
+        'em_execucao': [],
+    }):
+        estado, detalhes = snapshot._estado_ci()
+
+    assert estado == 'vermelho'
+    assert detalhes['modo'] == 'live'
+
+
+@patch('app.services.monitoramento_snapshot._estado_govbi', return_value=('verde', {'http_status': 200}))
+@patch('app.services.monitoramento_snapshot._estado_ci', return_value=('amarelo', {'modo': 'preview'}))
+@patch('app.services.monitoramento_snapshot._estado_conectores', return_value=('verde', {'estado_geral': 'verde'}))
+def test_criar_snapshot_operacional_compoe_itens(_c, _ci, _g):
+    payload = snapshot.criar_snapshot_operacional('corr-mon-001')
+
+    assert payload.correlation_id == 'corr-mon-001'
+    assert payload.modo_coleta in {'preview', 'hibrido', 'live'}
+    assert payload.resumo.total_itens >= 5
+    assert any(item.referencia == 'REQSYS-OPER-004' for item in payload.itens)
+
+
+@pytest.mark.parametrize('estado_geral', ['amarelo', 'verde'])
+def test_estado_conectores_preserva_sinal_operacional(estado_geral):
+    resumo = {'estado_geral': estado_geral, 'total': 2}
+    with patch.object(snapshot, 'resumo_conectores', return_value=resumo):
+        estado, detalhes = snapshot._estado_conectores()
+
+    assert estado == estado_geral
+    assert detalhes == resumo
+
+
+@pytest.mark.parametrize('estado', ['vermelho', 'amarelo', 'desconhecido', 'verde'])
+def test_classificacao_preserva_estado_sem_bloqueio(estado):
+    item = ItemMonitorado(
+        tipo='integracao', referencia='controle', titulo='Controle',
+        estado=estado, severidade='media', origem='teste',
+    )
+    esperado = 'amarelo' if estado == 'desconhecido' else estado
+    assert snapshot.classificar_estado_geral([item]) == esperado
+
+
+@patch.dict('os.environ', {'GITHUB_TOKEN': 'unused-test-token', 'REQSYS_GITHUB_REPO': 'org/repo'})
+def test_estado_ci_verde_exige_sem_falhas_e_sem_execucoes():
+    resumo = {
+        'score_saude': 100, 'decisao': 'ok', 'total_runs': 1,
+        'falhas': [], 'em_execucao': [],
+    }
+    with patch.object(snapshot, 'GitHubActionsClient') as client:
+        client.return_value.listar_runs.return_value = []
+        with patch.object(snapshot, 'classificar_runs', return_value=resumo):
+            estado, detalhes = snapshot._estado_ci()
+
+    assert estado == 'verde'
+    assert detalhes['modo'] == 'live'
+    assert detalhes['falhas'] == 0

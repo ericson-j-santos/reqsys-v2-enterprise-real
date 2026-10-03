@@ -1,0 +1,196 @@
+name: Codex Worker Pool Smoke DEV
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Operação fixa do Worker Pool DEV
+        required: false
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - restore
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-worker-pool-smoke-dev
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: inputs.mode == 'smoke' || inputs.mode == ''
+    name: Validar Worker Pool no PC24x7 DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      CODEX_WORKER_POOL_URL: http://127.0.0.1:8097
+      CORRELATION_ID: codex-worker-pool-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_FILE: artifacts/codex-worker-pool-smoke-dev/evidence.json
+
+    steps:
+      - name: Checkout SHA imutável
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verificar host DEV exato
+        shell: powershell
+        run: |
+          if ($env:COMPUTERNAME -ne "DESKTOP-PDQK954") {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Executar smoke governado do Worker Pool
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          python scripts/codex_worker_pool_smoke_dev.py `
+            --expected-sha "${{ github.sha }}" `
+            --correlation-id "$env:CORRELATION_ID" `
+            --output "$env:EVIDENCE_FILE"
+
+      - name: Validar evidência independente
+        shell: powershell
+        run: |
+          $evidence = Get-Content -Raw "$env:EVIDENCE_FILE" | ConvertFrom-Json
+          if ($evidence.result -ne "WORKER_POOL_SMOKE_PASSED") { throw "Smoke não aprovado." }
+          if ($evidence.lane_enabled -ne $false) { throw "Lane sintética não está desabilitada." }
+          if ($evidence.task_state -ne "queued" -or $null -ne $evidence.leased_by) {
+            throw "Task sintética tornou-se executável."
+          }
+          if ($evidence.replay_created -ne $false -or $evidence.independent_readback -ne $true) {
+            throw "Replay ou leitura independente não comprovados."
+          }
+          if ($evidence.expected_sha -ne "${{ github.sha }}") { throw "SHA divergente." }
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-worker-pool-smoke-dev-${{ github.run_id }}
+          path: artifacts/codex-worker-pool-smoke-dev/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumo
+        if: always()
+        shell: powershell
+        run: |
+          "## Codex Worker Pool Smoke DEV" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Host esperado: DESKTOP-PDQK954" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Lane sintética: desabilitada" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Replay idempotente: obrigatório" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Deploy executado: não" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  restore:
+    if: inputs.mode == 'restore'
+    name: Restaurar autenticação do Worker Pool no PC24x7 DEV
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 12
+    env:
+      CORRELATION_ID: worker-pool-token-restore-${{ github.run_id }}-${{ github.run_attempt }}
+      TARGET_REPO: C:\dev\reqsys-v2-enterprise-real
+      EVIDENCE_REL: artifacts/codex-worker-pool-auth-restore-dev/evidence.json
+
+    steps:
+      - name: Checkout regras canônicas
+        uses: actions/checkout@v4
+        with:
+          repository: ericson-j-santos/chatgpt-operational-rules
+          ref: main
+          path: _rules
+          fetch-depth: 1
+
+      - name: Bootstrap obrigatório de sessão
+        id: session
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $launcher = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\session_launcher.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $launcherArgs = @(
+            "--policy", $policy,
+            "--repo", $env:TARGET_REPO,
+            "--session-prefix", "worker-pool-restore",
+            "--correlation-id", $env:CORRELATION_ID,
+            "--expected-head", "${{ github.sha }}",
+            "--sync-ref", "origin/main"
+          )
+          $raw = & python $launcher @launcherArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $line = @($raw)[-1]
+          $data = $line | ConvertFrom-Json
+          if ($data.result -ne "SESSION_LAUNCH_OK" -or $data.state_validated -ne $true) {
+            throw "SESSION_LAUNCH_BLOCKED"
+          }
+          if ($data.head -ne "${{ github.sha }}") { throw "SESSION_HEAD_MISMATCH" }
+          "target_path=$($data.target_path)" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Instalar autorização Risk3 exata e temporária
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_worker_pool_auth_restore_risk3.py `
+              --enable `
+              --ttl-minutes 30 `
+              --confirm ENABLE-WORKER-POOL-AUTH-RESTORE-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Restaurar auth via Owner Risk3 Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\owner_risk3_gateway.py"
+          $riskArgs = @(
+            "--action-id", "reqsys.worker-pool-auth-file-restore.dev",
+            "--scope", "repo://reqsys/environment/dev/worker-pool",
+            "--cwd", $env:TARGET_PATH,
+            "--timeout", "300",
+            "--correlation-id", $env:CORRELATION_ID
+          )
+          & python $gateway @riskArgs
+          exit $LASTEXITCODE
+
+      - name: Remover autorização Risk3 temporária
+        if: always()
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TARGET_PATH) { throw "TARGET_PATH_MISSING_FOR_RISK3_CLEANUP" }
+          Push-Location $env:TARGET_PATH
+          try {
+            python scripts/configure_worker_pool_auth_restore_risk3.py `
+              --disable `
+              --confirm DISABLE-WORKER-POOL-AUTH-RESTORE-ONCE
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Publicar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-worker-pool-token-restore-dev-${{ github.run_id }}
+          path: ${{ steps.session.outputs.target_path }}\artifacts\codex-worker-pool-auth-restore-dev\evidence.json
+          if-no-files-found: error
+          retention-days: 30

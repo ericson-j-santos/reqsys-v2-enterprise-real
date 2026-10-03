@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Environment Observability Action Pins",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_environment_observability_action_pins.py",
+      "tests/test_environment_observability_build_only_contract.py"
+    ],
+    "evidence_contract": "O workflow environment-observability-promotion.yml mantém sua semântica, fixa todas as Actions externas por SHA completo e rejeita regressão de setup-flyctl para @master."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/environment-observability-promotion.yml",
+    "pull_request": "pending"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}

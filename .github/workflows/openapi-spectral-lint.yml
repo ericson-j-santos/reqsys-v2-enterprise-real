@@ -1,0 +1,53 @@
+name: OpenAPI Spectral Lint
+
+on:
+  pull_request:
+    paths:
+      - docs-site/assets/openapi/**
+      - contracts/openapi/**
+      - .github/workflows/openapi-spectral-lint.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openapi-spectral-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spectral-lint:
+    name: Spectral lint (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run Spectral lint
+        run: |
+          mkdir -p artifacts/openapi
+          npx --yes @stoplight/spectral-cli@6.11.1 lint \
+            docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json \
+            --ruleset contracts/openapi/.spectral.yaml \
+            --format json \
+            > artifacts/openapi/spectral-lint-report.json || true
+          if [ ! -s artifacts/openapi/spectral-lint-report.json ]; then
+            echo '{"status":"empty","mode":"report-only"}' > artifacts/openapi/spectral-lint-report.json
+          fi
+          cat artifacts/openapi/spectral-lint-report.json
+
+      - name: Upload Spectral artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spectral-lint
+          path: artifacts/openapi/spectral-lint-report.json
+          if-no-files-found: warn
+          retention-days: 15

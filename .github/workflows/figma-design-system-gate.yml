@@ -1,0 +1,85 @@
+name: Figma Design System Gate
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/theme/**'
+      - 'frontend/scripts/validate-design-tokens.mjs'
+      - 'frontend/scripts/export-figma-tokens.mjs'
+      - 'frontend/artifacts/figma-tokens/**'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - '.github/workflows/figma-design-system-gate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/src/theme/**'
+      - 'frontend/scripts/validate-design-tokens.mjs'
+      - 'frontend/scripts/export-figma-tokens.mjs'
+      - 'frontend/artifacts/figma-tokens/**'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - '.github/workflows/figma-design-system-gate.yml'
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: figma-design-system-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-design-system:
+    name: Validate Figma tokens, runtime mapping and drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate canonical design tokens
+        run: npm run validate:design-tokens
+
+      - name: Validate token-to-Vuetify contract
+        run: npm run test:unit -- src/theme/__tests__/figmaPadraoOuro.spec.js
+
+      - name: Generate Tokens Studio artifact and block drift
+        run: npm run check:figma-token-drift
+
+      - name: Verify artifact checksum
+        run: |
+          cd artifacts/figma-tokens
+          sha256sum --check reqsys.tokens.sha256
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Publish versioned Figma Tokens artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-figma-tokens-${{ github.sha }}
+          path: |
+            frontend/artifacts/figma-tokens/reqsys.tokens.json
+            frontend/artifacts/figma-tokens/reqsys.tokens.sha256
+            frontend/artifacts/figma-tokens/manifest.json
+            frontend/artifacts/figma-tokens/drift-report.json
+          if-no-files-found: error
+          retention-days: 30

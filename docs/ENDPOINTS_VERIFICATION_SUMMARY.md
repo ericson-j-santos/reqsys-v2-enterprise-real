@@ -15,7 +15,7 @@ Criado módulo dedicado para informações da API com 3 endpoints:
   - Credenciais demo: `ericsonjosedossantos@tieri659.onmicrosoft.com` / `admin123`
   - Ambientes configurados (dev e prod com URLs)
 - **Autenticação**: Não requerida
-- **Uso**: Onboarding de desenvolvedores e clientes
+- **Uso**: Integração de desenvolvedores e clientes
 
 #### **GET /v1/sistema/health-check**
 
@@ -175,7 +175,7 @@ curl -H "Authorization: Bearer <seu_token>" \
 
 Os endpoints de sistema permitem:
 
-- ✅ **Onboarding**: Novos desenvolvedores podem consultar `/v1/sistema/info` para entender a API
+- ✅ **Integração**: Novos desenvolvedores podem consultar `/v1/sistema/info` para entender a API
 - ✅ **Monitoramento**: DevOps pode consultar `/v1/sistema/health-check` para verificar sistema
 - ✅ **Documentação**: Clientes podem acessar `/v1/sistema/endpoints` para quick reference
 - ✅ **Auditoria**: Todas as mudanças registradas em `/v1/auditoria/eventos/config-infra`

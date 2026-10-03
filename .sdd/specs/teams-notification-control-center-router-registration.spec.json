@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Teams Notification Control Center router registration",
+  "status": "ready_for_validation",
+  "created_at": "2026-09-28",
+  "approvals": {
+    "requirements": true
+  },
+  "scope": {
+    "api_prefix": "/v1/teams-gateway/notificacoes",
+    "credentials_changed": false,
+    "production_touched": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_teams_notifications.py"
+    ],
+    "evidence_contract": "As quatro rotas do Control Center devem existir no FastAPI; acesso anônimo deve falhar por autenticação, não por 404; smoke de runtime pós-integração é evidência separada."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/teams-notification-control-center-router-registration.requirements.md",
+    "app": "backend/app/main.py",
+    "router": "backend/app/api/notificacoes.py",
+    "runtime_smoke": ".github/workflows/teams-notification-control-center-smoke.yml"
+  }
+}

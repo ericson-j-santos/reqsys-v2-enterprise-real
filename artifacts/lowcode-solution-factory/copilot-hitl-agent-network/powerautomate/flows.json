@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0.0",
+  "flows": [
+    {
+      "name": "ReqSys HITL - Intake e Orquestração",
+      "trigger": "Copilot Studio action or Dataverse row created",
+      "purpose": "Criar instância persistente, gerar correlation_id, registrar versão inicial e chamar o Supervisor.",
+      "actions": [
+        "Validate input contract",
+        "Create workflow instance",
+        "Append received transition",
+        "Invoke Supervisor Agent",
+        "Persist agent execution",
+        "Route to specialist or human gate"
+      ],
+      "idempotency_key": "correlation_id + operation + state_version",
+      "retry_policy": "exponential, 4 attempts",
+      "run_after_failure": "Persist failure and notify operations"
+    },
+    {
+      "name": "ReqSys HITL - Aprovação Analista",
+      "trigger": "Workflow state awaiting_analyst",
+      "purpose": "Executar primeiro nível de aprovação com SLA, lembrete, expiração e reatribuição.",
+      "approval_type": "Approve/Reject - First to respond",
+      "sla": "PT8H",
+      "reminders": ["PT4H", "PT7H"],
+      "on_approved": "Transition to awaiting_po",
+      "on_rejected": "Transition to rejected and resume Supervisor",
+      "on_timeout": "Reassign once, then escalate"
+    },
+    {
+      "name": "ReqSys HITL - Aprovação Product Owner",
+      "trigger": "Workflow state awaiting_po",
+      "purpose": "Validar valor, prioridade, escopo e critérios de aceite.",
+      "approval_type": "Approve/Reject - First to respond",
+      "sla": "P1D",
+      "reminders": ["PT8H", "PT20H"],
+      "on_approved": "Transition to awaiting_manager",
+      "on_rejected": "Transition to rejected and resume Supervisor",
+      "on_timeout": "Escalate to delegated PO"
+    },
+    {
+      "name": "ReqSys HITL - Aprovação Gestor",
+      "trigger": "Workflow state awaiting_manager",
+      "purpose": "Autorizar risco residual, custo, integração externa e execução governada.",
+      "approval_type": "Approve/Reject - First to respond",
+      "sla": "P2D",
+      "reminders": ["P1D", "PT36H"],
+      "on_approved": "Transition to approved and enqueue external operations",
+      "on_rejected": "Transition to rejected and resume Supervisor",
+      "on_timeout": "Expire request and notify Analyst"
+    },
+    {
+      "name": "ReqSys HITL - Retomada Pós-Aprovação",
+      "trigger": "Approval decision recorded",
+      "purpose": "Retomar automaticamente o workflow usando estado e versão persistidos.",
+      "actions": [
+        "Load workflow with optimistic concurrency",
+        "Validate resume token hash",
+        "Append immutable transition",
+        "Invoke Supervisor with decision context",
+        "Persist next state"
+      ],
+      "concurrency_control": 1,
+      "reject_stale_version": true
+    },
+    {
+      "name": "ReqSys HITL - Dispatcher de Integrações",
+      "trigger": "Scheduled every 5 minutes and outbox row created",
+      "purpose": "Executar operações aprovadas em GitHub, Azure DevOps, Redmine, Teams ou e-mail.",
+      "actions": [
+        "Claim pending outbox item",
+        "Validate approval chain",
+        "Execute connector or custom connector",
+        "Persist external reference and evidence",
+        "Retry transient failures",
+        "Dead-letter permanent failures"
+      ],
+      "idempotent": true,
+      "maximum_attempts": 5,
+      "dead_letter_state": "failed"
+    },
+    {
+      "name": "ReqSys HITL - Monitor de SLA e Escalonamento",
+      "trigger": "Recurrence every 30 minutes",
+      "purpose": "Localizar aprovações vencendo ou expiradas, lembrar, reatribuir e escalar.",
+      "actions": [
+        "Query pending approvals",
+        "Send Teams reminder",
+        "Apply delegation matrix",
+        "Append reassignment transition",
+        "Expire after policy limit"
+      ]
+    }
+  ],
+  "connection_references": [
+    "shared_commondataserviceforapps",
+    "shared_approvals",
+    "shared_teams",
+    "shared_office365",
+    "shared_github",
+    "reqsys_azuredevops_custom_connector",
+    "reqsys_redmine_custom_connector"
+  ],
+  "environment_variables": [
+    "REQSYS_APPROVAL_ANALYST_GROUP",
+    "REQSYS_APPROVAL_PO_GROUP",
+    "REQSYS_APPROVAL_MANAGER_GROUP",
+    "REQSYS_TEAMS_CHANNEL_ID",
+    "REQSYS_GITHUB_REPOSITORY",
+    "REQSYS_AZDO_ORGANIZATION",
+    "REQSYS_REDMINE_BASE_URL",
+    "REQSYS_MAX_REASSIGNMENTS"
+  ]
+}

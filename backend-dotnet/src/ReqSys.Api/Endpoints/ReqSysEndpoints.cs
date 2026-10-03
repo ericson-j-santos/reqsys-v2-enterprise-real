@@ -14,6 +14,12 @@ public static class ReqSysEndpoints
         app.MapGet("/health", (HttpContext context) =>
             ApiEnvelope<object>.Ok(new { status = "ok", service = "reqsys-dotnet-api" }, context));
 
+        app.MapGet("/api/connectors/health", (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(BuildConnectorHealth(store, context), context));
+
+        app.MapPost("/api/connectors/capabilities/check", async (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(store, context), context));
+
         v1.MapPost("/auth/login", (LoginRequest request, AuthService auth, HttpContext context) =>
         {
             var response = auth.Login(request);
@@ -44,7 +50,7 @@ public static class ReqSysEndpoints
                 nome = "ReqSys Enterprise API .NET",
                 versao = configuration["ReqSys:Version"] ?? "3.1.0",
                 stack = ".NET 8 / C# 12",
-                modulos = new[] { "auth", "dashboard", "requisitos", "pipeline", "relatorios", "auditoria", "qualidade-ia" }
+                modulos = new[] { "auth", "dashboard", "requisitos", "pipeline", "relatorios", "auditoria", "qualidade-ia", "connection-broker" }
             }, context));
 
         v1.MapGet("/dashboard/resumo", (ReqSysStore store, HttpContext context) =>
@@ -72,6 +78,12 @@ public static class ReqSysEndpoints
                 stack = ".NET 8 / C# 12",
                 conectado = true
             }, context));
+
+        v1.MapGet("/connectors/health", (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(BuildConnectorHealth(store, context), context));
+
+        v1.MapPost("/connectors/capabilities/check", async (ReqSysStore store, HttpContext context) =>
+            ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(store, context), context));
 
         v1.MapGet("/requisitos", (ReqSysStore store, HttpContext context) =>
             ApiEnvelope<IReadOnlyCollection<Requisito>>.Ok(store.ListarRequisitos(), context));
@@ -281,6 +293,62 @@ public static class ReqSysEndpoints
             ApiEnvelope<object>.Ok(new { criado = true }, context));
 
         return app;
+    }
+
+    private static object BuildConnectorHealth(ReqSysStore store, HttpContext context)
+    {
+        var conectores = store.ListarConnectorCapabilities()
+            .Select(item => new
+            {
+                ambiente = item.Ambiente,
+                conector = item.Conector,
+                capability = item.Capability,
+                status = item.Status,
+                criticidade = item.Criticidade,
+                acao_sugerida = item.AcaoSugerida,
+                requires_human_confirmation = item.RequiresHumanConfirmation
+            })
+            .ToArray();
+
+        return new
+        {
+            correlation_id = context.TraceIdentifier,
+            conectores,
+            resumo = new
+            {
+                total = conectores.Length,
+                prontos = conectores.Count(item => item.status == "ready"),
+                pendentes = conectores.Count(item => item.status is "missing_permission" or "insufficient_permission" or "expired"),
+                bloqueados = conectores.Count(item => item.status is "blocked" or "unavailable" or "misconfigured"),
+                estado_geral = conectores.Any(item => item.status is "blocked" or "unavailable" or "misconfigured")
+                    ? "bloqueado"
+                    : conectores.Any(item => item.status is "missing_permission" or "insufficient_permission" or "expired") ? "amarelo" : "verde"
+            }
+        };
+    }
+
+    private static async Task<object> BuildCapabilityCheckAsync(ReqSysStore store, HttpContext context)
+    {
+        var payload = await JsonSerializer.DeserializeAsync<JsonElement>(context.Request.Body);
+        var correlationId = GetString(payload, "correlation_id", context.TraceIdentifier);
+        var result = store.VerificarConnectorCapability(
+            GetString(payload, "ambiente", "dev"),
+            GetString(payload, "capability", "repository.read"),
+            GetString(payload, "acao", "consultar"),
+            correlationId,
+            UsuarioAtual(context));
+
+        return new
+        {
+            allowed = result.Allowed,
+            status = result.Status,
+            ambiente = result.Ambiente,
+            capability = result.Capability,
+            acao = result.Acao,
+            requires_human_confirmation = result.RequiresHumanConfirmation,
+            message = result.Message,
+            correlation_id = result.CorrelationId
+        };
     }
 
     private static string UsuarioAtual(HttpContext context) =>

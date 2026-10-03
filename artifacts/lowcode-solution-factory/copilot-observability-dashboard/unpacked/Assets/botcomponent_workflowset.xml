@@ -1,0 +1,14 @@
+<botcomponent_workflowset>
+  <botcomponent_workflow botcomponentid.schemaname="reqsys_ReqSysCopilotStudioOrquestrador.topic.ConsultarStatus" workflowid.workflowid="69a54f8b-caec-53c4-9f5b-887230cf43d2">
+    <iscustomizable>1</iscustomizable>
+  </botcomponent_workflow>
+  <botcomponent_workflow botcomponentid.schemaname="reqsys_ReqSysCopilotStudioOrquestrador.topic.CriarDemanda" workflowid.workflowid="ae83d82a-8e04-5eb4-bf4a-dfadd5443a7a">
+    <iscustomizable>1</iscustomizable>
+  </botcomponent_workflow>
+  <botcomponent_workflow botcomponentid.schemaname="reqsys_ReqSysCopilotStudioOrquestrador.topic.PrepararAprovacao" workflowid.workflowid="780422ae-8c74-57fc-8895-04f7f3513c33">
+    <iscustomizable>1</iscustomizable>
+  </botcomponent_workflow>
+  <botcomponent_workflow botcomponentid.schemaname="reqsys_ReqSysCopilotStudioOrquestrador.topic.ResumoRelease" workflowid.workflowid="768fde7b-db2e-500f-8be1-7b4cbf1ed31e">
+    <iscustomizable>1</iscustomizable>
+  </botcomponent_workflow>
+</botcomponent_workflowset>

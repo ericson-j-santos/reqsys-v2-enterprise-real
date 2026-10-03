@@ -1,0 +1,110 @@
+{
+  "info": {
+    "name": "ReqSys Power Automate Requisitos API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Colecao para praticar GET e POST de requisitos no ReqSys via Power Automate."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://reqsys-api.fly.dev"
+    },
+    {
+      "key": "correlation_id",
+      "value": "REQSYS-PA-DEV-0001"
+    },
+    {
+      "key": "codigo_requisito",
+      "value": "REQ-123456789"
+    }
+  ],
+  "item": [
+    {
+      "name": "POST /api/requisitos",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-Id",
+            "value": "{{correlation_id}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/requisitos",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "requisitos"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"schema_version\": \"1.0.0\",\n  \"titulo\": \"Validar payload Power Automate\",\n  \"descricao\": \"O ReqSys deve receber requisitos enviados por fluxo HTTP POST do Power Automate.\",\n  \"tipo\": \"funcional\",\n  \"prioridade\": \"alta\",\n  \"area\": \"Arquitetura\",\n  \"sistema\": \"ReqSys\",\n  \"solicitante\": \"Power Automate\",\n  \"impacto_regulatorio\": false\n}"
+        }
+      }
+    },
+    {
+      "name": "GET /api/requisitos",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-Id",
+            "value": "{{correlation_id}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/requisitos",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "requisitos"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /api/requisitos/{codigo}",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-Id",
+            "value": "{{correlation_id}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/requisitos/{{codigo_requisito}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "requisitos",
+            "{{codigo_requisito}}"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:53:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "lane_scoring",
+  "score_model": {
+    "docs": 95,
+    "artifacts": 95,
+    "runbooks": 90,
+    "dashboard_contracts": 85,
+    "tests": 75,
+    "workflows": 45,
+    "frontend_dashboard": 35,
+    "backend_runtime": 30,
+    "shared_contracts": 20,
+    "dependency_manifests": 15
+  },
+  "interpretation": {
+    "80_100": "safe_for_parallel_pr",
+    "50_79": "review_open_prs_first",
+    "0_49": "do_not_parallelize_when_competing_pr_exists"
+  },
+  "current_recommendation": "use docs, artifacts, runbooks and dashboard contracts until runtime and frontend PRs close"
+}

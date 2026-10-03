@@ -1,0 +1,25 @@
+{
+  "feature_name": "desktop-free-control-plane-bootstrap",
+  "project": "ReqSys v2 Enterprise — PC24x7 / Desktop control plane",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Provisiona, reutiliza ou repara de forma idempotente e fail-closed o GitHub Actions runner do DESKTOP-PDQK954, incluindo reconfiguração governada quando o contrato local existe mas o registro GitHub desapareceu.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_activate_desktop_free_control_plane.py",
+      "tests/test_desktop_control_plane_watchdog.py"
+    ],
+    "evidence_contract": "O bootstrap usa host/repositório/nome/labels fixos, nunca persiste/loga registration-token ou remove-token, aceita somente o Runner.Listener.exe do runner_home governado, repara registro ausente por config.cmd remove + novo registro com tokens efêmeros obtidos antes da mutação, exige registro online/labels completas para runtime_active e mantém pickup externo como prova terminal."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/desktop-free-control-plane-bootstrap.requirements.md",
+    "implementation": "scripts/activate_desktop_free_control_plane.py",
+    "watchdog": "scripts/desktop_control_plane_watchdog.py"
+  }
+}
