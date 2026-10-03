@@ -1,18 +1,18 @@
 import logging
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
+from app.core.config import GovBIConfigurationError, settings, validate_govbi_base_url
 from app.core.envelope import ok
 
 router = APIRouter(prefix='/api/govbi', tags=['govbi'])
 logger = logging.getLogger('reqsys.govbi')
 
-DEFAULT_GOVBI_BASE_URL = 'https://govbi-ia-hom.fly.dev'
 DEFAULT_GOVBI_TIMEOUT_SECONDS = 15.0
 
 
@@ -32,7 +32,7 @@ def _correlation_id(header_value: str | None) -> str:
 
 
 def _govbi_base_url() -> str:
-    return getattr(settings, 'govbi_base_url', '') or DEFAULT_GOVBI_BASE_URL
+    return validate_govbi_base_url(getattr(settings, 'govbi_base_url', ''))
 
 
 def _govbi_timeout() -> float:
@@ -61,6 +61,31 @@ def _normalizar_resposta(data: dict[str, Any], correlation_id: str) -> dict[str,
     }
 
 
+def _erro_negocio_govbi(pergunta: str, correlation_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    mensagem = data.get('mensagem') or data.get('erro') or 'Requisição rejeitada pelo serviço GovBI externo.'
+    return {
+        'avisos': [mensagem],
+        'nivelSensibilidade': 'BAIXA',
+        'statusFluxo': 'ERRO',
+        'metrica': 'analise_exploratoria',
+        'dimensoes': ['periodo'],
+        'filtros': {},
+        'correlationId': correlation_id,
+        'sqlGerado': '',
+        'resultado': {
+            'colunas': ['item', 'valor', 'status'],
+            'linhas': [
+                {'item': 'Pergunta recebida', 'valor': pergunta, 'status': 'VALIDADA'},
+                {'item': 'Serviço GovBI', 'valor': mensagem, 'status': 'ERRO_NEGOCIO'},
+            ],
+        },
+        'mascaramentoAplicado': True,
+        'requerAprovacao': False,
+        'aprovacaoId': None,
+        'explicacao': 'Erro de negócio retornado pelo serviço GovBI externo e normalizado pelo backend ReqSys.',
+    }
+
+
 def _fallback_governado(pergunta: str, correlation_id: str, detalhe: str) -> dict[str, Any]:
     return {
         'avisos': [
@@ -80,7 +105,11 @@ def _fallback_governado(pergunta: str, correlation_id: str, detalhe: str) -> dic
             'linhas': [
                 {'item': 'Pergunta recebida', 'valor': pergunta, 'status': 'VALIDADA'},
                 {'item': 'Serviço GovBI', 'valor': detalhe, 'status': 'FALLBACK_GOVERNADO'},
-                {'item': 'Próxima ação', 'valor': 'Validar GOVBI_BASE_URL, contrato /api/v1/perguntas e logs Fly.io.', 'status': 'ACAO_OPERACIONAL'},
+                {
+                    'item': 'Próxima ação',
+                    'valor': 'Validar GOVBI_BASE_URL, contrato /api/v1/perguntas e logs do provedor aprovado.',
+                    'status': 'ACAO_OPERACIONAL',
+                },
             ],
         },
         'mascaramentoAplicado': True,
@@ -93,7 +122,14 @@ def _fallback_governado(pergunta: str, correlation_id: str, detalhe: str) -> dic
 @router.post('/perguntas')
 async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str | None = Header(default=None)):
     correlation_id = _correlation_id(x_correlation_id)
-    base_url = _govbi_base_url().rstrip('/')
+    try:
+        base_url = _govbi_base_url()
+    except GovBIConfigurationError:
+        logger.error('govbi_configuracao_bloqueada')
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Integração GovBI indisponível.',
+        ) from None
     url = f'{base_url}/api/v1/perguntas'
 
     headers = {
@@ -114,6 +150,18 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
 
         return _normalizar_resposta(data, correlation_id)
     except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 400:
+            try:
+                data = exc.response.json()
+                if isinstance(data, dict) and (data.get('erro') or data.get('mensagem')):
+                    logger.info(
+                        'govbi_erro_negocio correlation_id=%s erro=%s',
+                        correlation_id,
+                        data.get('erro'),
+                    )
+                    return _erro_negocio_govbi(payload.pergunta, correlation_id, data)
+            except Exception:  # noqa: BLE001 - segue para fallback operacional
+                pass
         detalhe = f'HTTP {exc.response.status_code} ao consultar GovBI externo'
         logger.warning('govbi_http_status_error correlation_id=%s status=%s', correlation_id, exc.response.status_code)
         return _fallback_governado(payload.pergunta, correlation_id, detalhe)
@@ -125,9 +173,100 @@ async def perguntar_govbi(payload: GovBIPerguntaRequest, x_correlation_id: str |
 
 @router.get('/health')
 def govbi_health():
+    try:
+        _govbi_base_url()
+        configurado = True
+        configuracao_erro = None
+    except GovBIConfigurationError as exc:
+        configurado = False
+        configuracao_erro = str(exc)
+
     return ok({
         'service': 'govbi-proxy',
-        'status': 'ok',
-        'external_base_url_configured': bool(_govbi_base_url()),
+        'status': 'ok' if configurado else 'bloqueado',
+        'external_base_url_configured': configurado,
+        'configuration_error': configuracao_erro,
         'timeout_seconds': _govbi_timeout(),
     })
+
+
+def _resultado_funcionamento(
+    resultado_id: str,
+    nome: str,
+    aprovado: bool,
+    detalhe: str = 'OK',
+) -> dict[str, Any]:
+    return {
+        'id': resultado_id,
+        'nome': nome,
+        'ok': bool(aprovado),
+        'detalhe': detalhe,
+        'categoria': 'backend',
+    }
+
+
+def _executar_funcionamento_govbi() -> dict[str, Any]:
+    try:
+        base_url = _govbi_base_url()
+        base_url_valida = True
+        base_url_detalhe = base_url
+    except GovBIConfigurationError as exc:
+        base_url_valida = False
+        base_url_detalhe = str(exc)
+    timeout = _govbi_timeout()
+    fallback = _fallback_governado('teste funcionamento', 'govbi-func-backend', 'simulado')
+
+    resultados = [
+        _resultado_funcionamento(
+            'config-base-url',
+            'Configuração GOVBI_BASE_URL',
+            base_url_valida,
+            base_url_detalhe,
+        ),
+        _resultado_funcionamento(
+            'config-timeout',
+            'Timeout do proxy configurado',
+            timeout > 0,
+            f'{timeout}s',
+        ),
+        _resultado_funcionamento(
+            'contrato-fallback',
+            'Fallback governado com contrato mínimo',
+            all(
+                campo in fallback
+                for campo in ('statusFluxo', 'correlationId', 'resultado', 'explicacao', 'mascaramentoAplicado')
+            ),
+            fallback.get('statusFluxo', ''),
+        ),
+        _resultado_funcionamento(
+            'contrato-normalizacao',
+            'Normalização de resposta externa',
+            'statusFluxo' in _normalizar_resposta({'resultado': {'colunas': [], 'linhas': []}}, 'corr-test'),
+            'campos canônicos presentes',
+        ),
+        _resultado_funcionamento(
+            'validacao-pergunta',
+            'Validação mínima de pergunta (3 caracteres)',
+            GovBIPerguntaRequest.model_validate({'pergunta': 'sim'}).pergunta == 'sim',
+            'min_length=3 ativo',
+        ),
+    ]
+
+    total = len(resultados)
+    aprovados = sum(1 for item in resultados if item['ok'])
+    percentual = round((aprovados / total) * 100) if total else 0
+
+    return {
+        'executadoEm': datetime.now(UTC).isoformat(),
+        'total': total,
+        'aprovados': aprovados,
+        'reprovados': total - aprovados,
+        'percentual': percentual,
+        'completo': total > 0 and aprovados == total,
+        'resultados': resultados,
+    }
+
+
+@router.get('/funcionamento')
+def govbi_funcionamento():
+    return ok(_executar_funcionamento_govbi())

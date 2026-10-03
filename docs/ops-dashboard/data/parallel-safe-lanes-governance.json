@@ -1,0 +1,75 @@
+{
+  "schema_version": "0.1.0",
+  "generated_at": "2026-06-29T10:45:00-03:00",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "parallel_pr_governance",
+  "objective": "increase_safe_parallel_development_without_conflicting_runtime_or_dashboard_contracts",
+  "overall_status": "active",
+  "policy": {
+    "max_parallel_prs_recommended": 3,
+    "require_distinct_paths": true,
+    "require_read_only_validation": true,
+    "avoid_large_html_rewrites": true,
+    "avoid_shared_contract_mutation": true
+  },
+  "safe_lanes": [
+    {
+      "id": "docs_runbooks_lane",
+      "title": "Runbooks e documentação operacional",
+      "parallelism": "safe",
+      "risk": "low",
+      "allowed_paths": ["docs/runbooks/**", "docs/**/*.md"],
+      "avoid_paths": ["src/**", "backend/**", "docs/ops-dashboard/index.html"],
+      "recommended_increment_type": "consolidate"
+    },
+    {
+      "id": "ops_data_lane",
+      "title": "Dados estáticos do Ops Dashboard",
+      "parallelism": "safe_with_contract_guard",
+      "risk": "medium",
+      "allowed_paths": ["docs/ops-dashboard/data/*.json"],
+      "avoid_paths": ["docs/ops-dashboard/index.html", "docs/dashboard/operational-evidence-hub.html"],
+      "recommended_increment_type": "gap_fix"
+    },
+    {
+      "id": "validator_scripts_lane",
+      "title": "Validadores read-only",
+      "parallelism": "safe",
+      "risk": "low",
+      "allowed_paths": ["scripts/validate_*.py", "tests/test_validate_*.py"],
+      "avoid_paths": ["scripts/deploy*.py", "scripts/*secret*"],
+      "recommended_increment_type": "gap_fix"
+    },
+    {
+      "id": "workflow_validation_lane",
+      "title": "Workflows locais/read-only",
+      "parallelism": "controlled",
+      "risk": "medium",
+      "allowed_paths": [".github/workflows/*validation*.yml", ".github/workflows/*navigation*.yml"],
+      "avoid_paths": [".github/workflows/*deploy*.yml", ".github/workflows/*production*.yml"],
+      "recommended_increment_type": "gap_fix"
+    }
+  ],
+  "conflict_rules": [
+    {
+      "id": "single_html_owner",
+      "rule": "large_dashboard_html_files_should_have_single_active_pr_owner",
+      "severity": "medium"
+    },
+    {
+      "id": "contract_before_render",
+      "rule": "new_dashboard_rendering_requires_json_contract_and_validator_first",
+      "severity": "medium"
+    },
+    {
+      "id": "runtime_code_is_serial",
+      "rule": "runtime_api_or_auth_changes_should_not_run_in_parallel_with_dashboard_only_prs",
+      "severity": "high"
+    }
+  ],
+  "next_safe_increments": [
+    "render_parallel_safe_lanes_in_ops_dashboard",
+    "add_pr_lane_classifier_report",
+    "publish_weekly_parallelism_efficiency_burndown"
+  ]
+}

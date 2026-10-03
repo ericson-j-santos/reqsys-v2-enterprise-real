@@ -1,0 +1,15 @@
+name: Integration Excel SQL SharePoint — DEV E2E
+# Alias manual de compatibilidade. O caminho real canônico é OIDC, sem Device Code.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  e2e:
+    name: E2E real DEV — Excel → SQL Server → SharePoint
+    uses: ./.github/workflows/integration-excel-sql-sharepoint-oidc-dev.yml
+    secrets: inherit

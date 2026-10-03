@@ -1,0 +1,17 @@
+{
+  "feature_name": "reqsys-weekly-accomplishment-actions",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Migra o log semanal de realizações do ReqSys do agendamento do chat para GitHub Actions, com relatório baseado somente em evidências verificáveis.",
+  "sdd_gate": {
+    "tests": ["tests/test_reqsys_weekly_accomplishment_log.py"],
+    "evidence_contract": "Artifact Markdown/JSON deve registrar janela, PRs, SHAs, checks, cinco dimensões, lacunas de evidência e comparação com o snapshot anterior quando disponível."
+  }
+}

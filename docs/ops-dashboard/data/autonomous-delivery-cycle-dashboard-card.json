@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "card": "autonomous_delivery_cycle",
+  "generated_at_epoch": 1782580000,
+  "status": "seed",
+  "risk": "low",
+  "summary": "Ciclo governado de auto-merge condicionado a CI verde, labels explícitas e fila report-only.",
+  "metrics": {
+    "candidate_count": 0,
+    "eligible_count": 0,
+    "merged_count": 0,
+    "blocker_count": 0,
+    "next_increment_queue_count": 0
+  },
+  "latest": {
+    "mode": "seed",
+    "required_label": "cycle:auto-merge-approved",
+    "max_prs": 1
+  },
+  "queue": {
+    "status": "empty_seed",
+    "items": []
+  },
+  "links": {
+    "latest_contract": "docs/ops-dashboard/data/autonomous-delivery-cycle-latest.json",
+    "next_increments": "docs/ops-dashboard/data/autonomous-delivery-cycle-next-increments.json",
+    "policy": "docs/ops-dashboard/data/autonomous-delivery-cycle-policy.json",
+    "workflow": ".github/workflows/autonomous-delivery-cycle.yml",
+    "runbook": "docs/runbooks/autonomous-delivery-cycle.md"
+  },
+  "guardrails": [
+    "offline_static_generation",
+    "no_runtime_github_api_call",
+    "queue_is_report_only",
+    "safe_fallback_when_source_artifact_missing",
+    "post_merge_attention_blocks_next_increment"
+  ]
+}

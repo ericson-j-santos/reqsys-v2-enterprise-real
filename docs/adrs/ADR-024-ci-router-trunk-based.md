@@ -1,4 +1,13 @@
+---
+status: ReqSys / Plataforma Corporativa
+date: 2026-06-22
+deciders: Arquitetura / Engenharia
+context: ReqSys / Plataforma Corporativa
+version: 1.0.0
+---
+
 # ADR-024 — CI Router e Trunk-Based Development
+
 
 ## Status
 
@@ -44,7 +53,7 @@ Adotar uma estratégia operacional baseada em:
 - Menor tempo médio de PR.
 - Menor fila de CI.
 - Menos conflitos por branches longas.
-- Feedback mais rápido por área alterada.
+- Retorno mais rápido por área alterada.
 - Redução de retrabalho operacional.
 
 ## Riscos

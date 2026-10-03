@@ -1,4 +1,4 @@
-# RAG Python Governado com LlamaIndex
+# RAG Python Governado
 
 ## Estado evidenciado
 
@@ -8,8 +8,20 @@
 | Fonte obrigatória | 🟢 Implementada | Sem fonte recuperada, a resposta é bloqueada |
 | Auditoria | 🟢 Implementada | `correlation_id` propagado no envelope padrão |
 | PII básica | 🟢 Implementada | CPF/e-mail mascarados antes da resposta |
-| LlamaIndex | 🟡 Preparado | Detecção de disponibilidade e fallback offline |
+| Recuperação/embeddings próprios | 🟢 Implementada | Mecanismo local e persistido sem dependência de LlamaIndex |
+| LlamaIndex | 🔴 Suspenso por segurança | Removido de `requirements-rag.txt` enquanto NLTK estiver afetado por PYSEC-2026-3740 / CVE-2026-81726 |
 | Vector store externo | 🔵 Alvo | Próximo incremento: Qdrant ou pgvector |
+
+## Decisão temporária de segurança
+
+A implementação atual do ReqSys não importa LlamaIndex. A dependência opcional `llama-index-core` introduzia `nltk` de forma transitiva, e versões do NLTK até 3.10.3 estão afetadas por PYSEC-2026-3740 / CVE-2026-81726.
+
+Enquanto não existir versão corrigida upstream:
+
+- LlamaIndex não deve ser instalado nos ambientes do ReqSys;
+- `requirements-rag.txt` mantém apenas dependências opcionais que não introduzem essa cadeia vulnerável;
+- o RAG atual continua usando o mecanismo próprio já existente;
+- LlamaIndex só poderá ser reintroduzido após versão corrigida, testes e scanner de dependências aprovados.
 
 ## Fluxo operacional
 
@@ -61,13 +73,13 @@ uvicorn app.main:app --reload
 | Variável | Finalidade | Padrão |
 |---|---|---|
 | `REQSYS_RAG_DOCUMENTS_PATH` | Diretório com `.md`/`.txt` para consulta quando o payload não enviar documentos | vazio |
-| `REQSYS_RAG_VECTOR_STORE` | Estratégia alvo de armazenamento vetorial | `in_memory` |
+| `REQSYS_RAG_VECTOR_STORE` | Estratégia de armazenamento vetorial | `in_memory` |
 | `REQSYS_RAG_REQUIRE_SOURCES` | Exigir fonte para responder | `true` |
 
 ## Próximo incremento recomendado
 
-1. Adicionar dependências opcionais de LlamaIndex em arquivo separado `requirements-rag.txt`.
-2. Criar adapter `QdrantVectorStoreAdapter` ou `PgVectorStoreAdapter`.
+1. Manter LlamaIndex suspenso até existir versão corrigida do NLTK.
+2. Implementar integração direta com Qdrant ou pgvector somente quando necessária, sem reintroduzir dependências não utilizadas.
 3. Persistir chunks com `document_id`, `chunk_id`, `hash`, `score`, `origem`, `versao_indice` e `indexed_at`.
-4. Expor painel frontend com drill-down de fontes e trechos recuperados.
-5. Adicionar gate de produção: bloquear resposta RAG sem fonte e sem `correlation_id`.
+4. Expor painel frontend com detalhamento de fontes e trechos recuperados.
+5. Manter gate de produção bloqueando resposta RAG sem fonte e sem `correlation_id`.

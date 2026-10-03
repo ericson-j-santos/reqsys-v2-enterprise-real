@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
     <title>ReqSys - retorno Microsoft</title>
     <style>
       body {
@@ -42,7 +43,10 @@
       <p>Voce sera redirecionado de volta ao ReqSys automaticamente.</p>
     </main>
     <script>
-      const target = new URL('/', window.location.origin)
+      // Preserva o prefixo de publicação. Em GitHub Pages o callback fica em
+      // /reqsys-v2-enterprise-real/dev/auth/callback.html e deve retornar para
+      // /reqsys-v2-enterprise-real/dev/, não para a raiz do domínio.
+      const target = new URL('../', window.location.href)
       target.search = window.location.search
       target.hash = window.location.hash
       window.location.replace(target.toString())

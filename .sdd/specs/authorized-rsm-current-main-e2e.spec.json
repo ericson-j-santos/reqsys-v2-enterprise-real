@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Authorized RSM current-main E2E dispatch",
+  "status": "ready_for_validation",
+  "created_at": "2026-09-28",
+  "approvals": {
+    "requirements": true
+  },
+  "scope": {
+    "target_ref": "main",
+    "workflow": "rsm-service-case-e2e.yml",
+    "production_touched": false,
+    "arbitrary_workflow_allowed": false,
+    "arbitrary_inputs_allowed": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Comando exato rsm-service-case-e2e-current-main; workflow fixo rsm-service-case-e2e.yml; ref main; run alvo validado no SHA corrente; dispatch não equivale a sucesso."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/authorized-rsm-current-main-e2e.requirements.md",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "target_workflow": ".github/workflows/rsm-service-case-e2e.yml",
+    "issue": "#2055"
+  }
+}

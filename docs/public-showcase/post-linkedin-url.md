@@ -2,7 +2,7 @@
 
 Estou estruturando uma versão pública do **ReqSys**, uma iniciativa voltada à engenharia de requisitos corporativa com apoio de IA, rastreabilidade e governança.
 
-A proposta é transformar informações dispersas de stakeholders, squads, formulários, reuniões e documentos em requisitos mais claros, testáveis e auditáveis.
+A proposta é transformar informações dispersas de partes interessadas, equipes, formulários, reuniões e documentos em requisitos mais claros, testáveis e auditáveis.
 
 Mais do que “usar IA para escrever requisitos”, o objetivo é criar uma camada estruturada entre negócio, tecnologia e qualidade, conectando:
 
@@ -17,7 +17,7 @@ Ela apresenta:
 - capacidades principais;
 - governança para uso responsável de IA;
 - arquitetura viva;
-- visão de roadmap;
+- visão de plano de evolução;
 - posicionamento de produto.
 
 URL: [inserir URL pública aqui]

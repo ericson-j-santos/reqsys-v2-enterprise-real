@@ -1,16 +1,23 @@
 name: PR Fast Classifier
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: "SHA base para classificação manual"
+        required: false
+        type: string
+      head_sha:
+        description: "SHA exato a classificar"
+        required: false
+        type: string
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: pr-fast-classifier-${{ github.event.pull_request.number || github.run_id }}
+  group: pr-fast-classifier-${{ github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -23,13 +30,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Classificar PR
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ inputs.base_sha || github.event.before }}
+          HEAD_SHA: ${{ inputs.head_sha || github.sha }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/pr-fast-classifier

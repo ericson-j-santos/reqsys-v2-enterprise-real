@@ -1,0 +1,206 @@
+{
+  "schema_version": "1.1",
+  "feature_name": "Noteri to Desktop governed network probes",
+  "status": "implementation",
+  "issue": 1899,
+  "increment_type": "gap_fix",
+  "architecture": {
+    "source_host": "Noteri",
+    "target_host": "DESKTOP-PDQK954",
+    "workflow": ".github/workflows/noteri-desktop-network-probe.yml",
+    "probe": "scripts/noteri_desktop_network_probe.py",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "execution_control": "Session Launcher -> Command Gateway",
+    "runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "noteri",
+      "reqsys-dev"
+    ],
+    "runtime_port": 8081,
+    "environment": "DEV",
+    "admin_staging_probe": "C:\\Users\\Public\\Desktop via C$",
+    "wmi": {
+      "transport": "DCOM/WMI",
+      "namespace": "root\\cimv2",
+      "query_class": "Win32_OperatingSystem",
+      "query": "SELECT Caption FROM Win32_OperatingSystem",
+      "credentials": "current Windows identity only",
+      "read_only": true
+    },
+    "dev_http_probe": {
+      "script": "scripts/noteri_desktop_dev_http_probe.py",
+      "port": 8083,
+      "method": "GET",
+      "paths": [
+        "/api/health",
+        "/api/runtime/health"
+      ],
+      "branch_prefix": "fix/noteri-desktop-network-probe-http-8083-",
+      "legacy_job_skipped_on_http_branch": true,
+      "workflow_dispatch_on_main": true
+    },
+    "orchestrator_runner_recovery": {
+      "source_host": "Noteri",
+      "target_host": "DESKTOP-PDQK954",
+      "port": 8787,
+      "task_type": "host.github_runner.recover.v1",
+      "client": "scripts/noteri_desktop_orchestrator_runner_recovery.py",
+      "execution_control": "Session Launcher -> Command Gateway",
+      "trigger_branch_prefix": "hotfix/noteri-desktop-orchestrator-runner-recovery-",
+      "post_merge_branch": "main",
+      "arbitrary_host": false,
+      "arbitrary_port": false,
+      "arbitrary_url": false,
+      "arbitrary_task_type": false,
+      "remote_shell": false,
+      "gateway_command": "/reqsys run desktop-runner-recover-via-orchestrator",
+      "watchdog_mode": "runner-recover",
+      "bootstrap_required": false
+    },
+    "orchestrator_status_readback": {
+      "source_host": "Noteri",
+      "target_host": "DESKTOP-PDQK954",
+      "endpoint": "http://DESKTOP-PDQK954:8787",
+      "methods": [
+        "GET /readyz",
+        "GET /v1/status"
+      ],
+      "target_worker": "desktop-pdqk954",
+      "expected_runtime_sha": "313f5da4bb0ee9dd70937c238c7cfdf4e3514602",
+      "script": "scripts/noteri_desktop_orchestrator_status_probe.py",
+      "execution_control": "Session Launcher -> Command Gateway",
+      "python_runtime": "portable Python 3.12.10 pinned by SHA-256",
+      "mutating": false,
+      "arbitrary_target": false,
+      "workflow_dispatch_on_main": true
+    },
+    "python_execution": {
+      "version": "3.12.10",
+      "network_http_recovery": "portable archive verified by fixed SHA-256; no global or registry installation",
+      "status": "portable archive verified by SHA-256",
+      "explicit_executable_required": true,
+      "child_executable_must_match": true,
+      "global_alias_required": false,
+      "rules_sha": "d26351458b17c917100efc3b736dcc6d53a646cb",
+      "dependency_installation": "Command Gateway risk 2; isolated pip, official index, binary wheels, explicit temporary target",
+      "physical_validation_branch_prefix": "fix/noteri-desktop-network-probe-python-",
+      "temporary_root_per_job": true,
+      "pip_bootstrap": "pip 25.2 wheel from fixed official HTTPS URL and pinned SHA-256 before extraction; execution only after governed session",
+      "pip_wheel_sha256": "6d67a2b4e7f14d8b31b8b52648866fa717f45a1eb70e83002f4331d07e953717",
+      "user_site_disabled": true,
+      "validation": "physical read-only probes and readiness on final HEAD after synchronization with main"
+    }
+  },
+  "security": {
+    "arbitrary_target": false,
+    "arbitrary_shell": false,
+    "remote_shell": false,
+    "gui_input": false,
+    "credentials_supplied": false,
+    "credentials_read": false,
+    "firewall_change": false,
+    "reboot": false,
+    "shutdown": false,
+    "raw_ip_persisted": false,
+    "remote_write": false,
+    "remote_listing_persisted": false,
+    "wmi_mutation": false,
+    "dev_http_mutation": false,
+    "dev_http_credentials": false,
+    "uac_or_acl_relaxed": false,
+    "excluded_recovery_routes": [
+      "wmi",
+      "scm",
+      "schtasks",
+      "c$",
+      "admin_broker"
+    ],
+    "orchestrator_status_mutation": false,
+    "orchestrator_status_credentials": false
+  },
+  "evidence_contract": {
+    "states": [
+      "name_resolution_failed",
+      "resolved_not_reachable",
+      "host_reachable_runtime_port_closed",
+      "host_reachable_wmi_runtime_port_closed",
+      "runtime_port_reachable"
+    ],
+    "wmi_states": [
+      "accessible",
+      "empty_result",
+      "access_denied",
+      "rpc_server_unavailable",
+      "namespace_unavailable",
+      "dependency_unavailable",
+      "wmi_error"
+    ],
+    "artifact": "artifacts/noteri-desktop-network/evidence.json",
+    "correlation_id_required": true,
+    "independent_readback_required": true,
+    "exact_sha_required": true,
+    "remote_write": false,
+    "dev_http_states": [
+      "name_resolution_failed",
+      "dev_gateway_tcp_closed",
+      "dev_gateway_http_reachable",
+      "dev_gateway_tcp_reachable_http_unresponsive"
+    ],
+    "dev_http_artifact": "artifacts/noteri-desktop-dev-http/evidence.json",
+    "orchestrator_runner_recovery_artifact": "artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json",
+    "orchestrator_runner_recovery_required": [
+      "replay_idempotent",
+      "negative_read_control",
+      "independent_readback",
+      "exact_target_host",
+      "exact_task_type"
+    ],
+    "orchestrator_status_artifact": "artifacts/noteri-desktop-orchestrator-status/evidence.json",
+    "orchestrator_status_required": [
+      "ready_http_status",
+      "ready",
+      "status_http_status",
+      "worker_match_count",
+      "runtime_source_sha",
+      "worker_instance_id",
+      "safe_task_types",
+      "runtime_identity_current"
+    ]
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_desktop_network_probe.py",
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_self_hosted_runner_governance.py",
+      "tests/test_noteri_desktop_dev_http_probe.py",
+      "tests/test_noteri_desktop_orchestrator_runner_recovery.py",
+      "tests/test_noteri_desktop_orchestrator_status_probe.py"
+    ],
+    "requirements": ".sdd/specs/noteri-desktop-network-probe.requirements.md"
+  },
+  "approvals": {
+    "requirements": true
+  },
+  "updated_at": "2026-10-02",
+  "acceptance_criteria": [
+    "O probe executa somente no runner Noteri allowlisted, após Session Launcher com state_validated=true e no HEAD exato.",
+    "A sonda WMI/DCOM usa somente a identidade Windows corrente e consulta exclusivamente Win32_OperatingSystem em root\\cimv2, sem credenciais fornecidas e sem método de mutação.",
+    "O resultado WMI é sanitizado para estados allowlisted e não persiste Caption, versão, hostname remoto, endereço IP, stdout/stderr ou credenciais.",
+    "wmi_result=accessible somente é aceito quando a consulta read-only retorna ao menos uma instância; access_denied não é tratado como autorização para execução remota.",
+    "A execução física produz artifact vinculado ao correlation_id e SHA atuais, com remote_shell_used=false, credentials_supplied=false, production_touched=false e secrets_read=false.",
+    "Pre-PR Readiness retorna READY_FOR_PR=passed no HEAD exato e behind_by=0 antes de qualquer PR.",
+    "Na branch fix/noteri-desktop-network-probe-http-8083-*, o job legado é ignorado e somente a sonda HTTP DEV executa.",
+    "Em workflow_dispatch na main, a sonda HTTP DEV executa no mesmo SHA; a sonda legada pode executar em paralelo como evidência independente.",
+    "A sonda HTTP DEV usa somente GET nos paths allowlisted de DESKTOP-PDQK954:8083, não persiste body e não envia credenciais ou mutações.",
+    "WMI, SCM, Task Scheduler/schtasks, C$ e Admin Broker não são executados pelo incremento HTTP.",
+    "candidate_transport_reachable apenas comprova transporte; recuperação exige endpoint fixo e governado comprovado separadamente.",
+    "A recuperação via Engineering Orchestrator usa somente DESKTOP-PDQK954:8787 e host.github_runner.recover.v1, exige worker Desktop fresh/NORMAL/auth válido com capability explícita, replay idempotente, controle negativo 404 e leitura independente.",
+    "O gateway expõe runner-recover como rota P0 para host.github_runner.recover.v1; bootstrap não é pré-requisito e pickup físico independente continua obrigatório.",
+    "O readback do Orchestrator usa apenas GET /readyz e GET /v1/status no DESKTOP-PDQK954:8787, fixa worker e runtime SHA, executa pelo Python portátil pinado e nunca substitui o pickup físico independente do Desktop.",
+    "O readback do Orchestrator pode ser executado por workflow_dispatch na main, no SHA exato, usando somente GET /readyz e GET /v1/status; o resultado permanece diagnóstico e não conclui recovery sem pickup físico independente.",
+    "Os quatro jobs validam Python portátil 3.12.10 e hash fixo sem instalação global/registro. Launcher, Gateway, pytest e probes filhos usam o mesmo executável explícito. Dependências dos dois jobs de testes são instaladas apenas no destino temporário e pelo Gateway após bootstrap; PYTHONNOUSERSITE=1 bloqueia código e pacotes do perfil do runner, e o wheel inicial do pip usa URL e SHA-256 fixos."
+  ],
+  "hotfix_issue": 2088
+}

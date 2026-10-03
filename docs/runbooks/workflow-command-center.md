@@ -12,10 +12,35 @@ O Command Center:
 - identifica workflows criticos com falha ou pendencia;
 - gera artifact de evidencia;
 - permite disparar apenas workflows na allowlist;
+- apresenta a serie historica de melhoria do processo CI;
+- calcula sustentabilidade somente com observacoes explicitamente comparaveis ao baseline;
 - nao executa deploy;
 - nao altera producao;
 - nao altera secrets;
 - nao faz merge automatico.
+
+## Sustentabilidade da melhoria de processo
+
+A classificacao `process_improvement_history.sustainability` usa somente registros com:
+
+`window_comparability.comparable_to_baseline=true`
+
+Registros com `false` ou sem comparabilidade explicita continuam preservados no contexto historico, mas nao entram:
+
+- na contagem de sinais `improved`, `stable` ou `regressed` usada para sustentabilidade;
+- nas medias recentes de success rate, failure rate, P95 e CV;
+- no minimo de tres observacoes necessario para sair de `insufficient_data`.
+
+O resumo publica tambem:
+
+- `records`: total historico;
+- `comparable_records`: total elegivel para sustentabilidade;
+- `excluded_non_comparable_records`: registros preservados, mas excluidos da decisao;
+- `sustainability_basis=comparable_to_baseline_only`;
+- `series`: janela recente somente de registros comparaveis;
+- `recent_context`: contexto recente completo, inclusive registros nao comparaveis e seus motivos.
+
+A regra permanece `report-only` e `creates_gate=false`. Comparabilidade estrutural nao equivale a significancia estatistica nem prova causal.
 
 ## Workflows monitorados
 
@@ -50,6 +75,9 @@ Conteudo:
 
 - `workflow-command-center.json`
 - `summary.md`
+- `ci-process-improvement-history.json`
+- `ci-process-improvement-history.md`
+- `workflow-command-center.html`
 
 ## Permissoes
 
@@ -67,6 +95,7 @@ Motivo de `actions: write`: necessario para disparar workflows allowlisted via A
 - Nao existe execucao arbitraria de comandos.
 - Nao usa secrets externos.
 - Nao manipula ambientes produtivos.
+- Historico nao comparavel nunca e promovido a evidencia de sustentabilidade.
 
 ## Como executar manualmente
 
@@ -75,6 +104,7 @@ Motivo de `actions: write`: necessario para disparar workflows allowlisted via A
 3. Clicar em `Run workflow`.
 4. Opcionalmente informar um workflow allowlisted.
 5. Confirmar artifact `workflow-command-center-evidence`.
+6. Conferir `process_improvement_history.comparable_records` antes de interpretar sustentabilidade.
 
 ## Decisao operacional
 
@@ -84,6 +114,8 @@ Motivo de `actions: write`: necessario para disparar workflows allowlisted via A
 | Falhas criticas | Pausar e corrigir Pareto |
 | Pendencias | Aguardar ou investigar logs |
 | Workflow ausente na janela recente | Validar se precisa disparo manual |
+| Menos de 3 observacoes comparaveis | Manter `insufficient_data` |
+| `sustained_improvement` | Interpretar somente como evidencia observacional comparavel, sem prova causal |
 
 ## Links
 

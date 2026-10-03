@@ -1,0 +1,95 @@
+name: CI Workflow Pareto Recommendations
+
+on:
+  pull_request:
+    paths:
+      - "config/ci-workflow-pareto-policy.json"
+      - "scripts/build_ci_workflow_pareto_recommendations.py"
+      - "tests/test_build_ci_workflow_pareto_recommendations.py"
+      - ".github/workflows/ci-workflow-pareto-recommendations.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ci-workflow-pareto-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate CI workflow Pareto recommendations
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/build_ci_workflow_pareto_recommendations.py
+          python -m unittest tests/test_build_ci_workflow_pareto_recommendations.py
+
+      - name: Generate synthetic workflow metrics
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/github-actions docs/ops-dashboard/data
+          cat > docs/ops-dashboard/data/pr-workflow-run-metrics.json <<'JSON'
+          {
+            "schema_version": "1.0.0",
+            "summary": {"pr_count": 4, "average_workflows_per_pr": 12},
+            "pull_requests": [
+              {"pr_number": 4, "workflows": ["ReqSys Required Fast Gate", "Runtime Risk Scoring", "PR Quality Review"]},
+              {"pr_number": 3, "workflows": ["ReqSys Required Fast Gate", "Runtime Risk Scoring", "PR Quality Review"]},
+              {"pr_number": 2, "workflows": ["ReqSys Required Fast Gate", "Runtime Risk Scoring"]},
+              {"pr_number": 1, "workflows": ["ReqSys Required Fast Gate", "Runtime Risk Scoring"]}
+            ]
+          }
+          JSON
+          python scripts/build_ci_workflow_pareto_recommendations.py --json > /tmp/pareto.json
+          python -m json.tool docs/ops-dashboard/data/ci-workflow-pareto-recommendations.json > /tmp/pareto.validated.json
+
+      - name: Assert report-only guardrails
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("docs/ops-dashboard/data/ci-workflow-pareto-recommendations.json").read_text(encoding="utf-8"))
+          assert payload["mode"] == "report_only"
+          assert payload["policy"]["automatic_filtering"] is False
+          assert payload["summary"]["recommended_path_review_count"] >= 1
+          assert all(item["workflow"] != "ReqSys Required Fast Gate" for item in payload["recommendations"])
+          PY
+
+      - name: Publish recommendation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-workflow-pareto-recommendations
+          path: docs/ops-dashboard/data/ci-workflow-pareto-recommendations.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize
+        run: |
+          set -euo pipefail
+          {
+            echo "# CI Workflow Pareto Recommendations"
+            echo ""
+            echo "Artifact: ci-workflow-pareto-recommendations"
+            echo "Modo: report-only"
+            echo "Nenhum workflow obrigatório é elegível para filtro automático."
+            echo "Alterações futuras de path exigem PR separado e evidência de ganho."
+          } >> "$GITHUB_STEP_SUMMARY"

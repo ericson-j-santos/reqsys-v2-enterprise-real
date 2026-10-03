@@ -1,0 +1,56 @@
+from pathlib import Path
+
+
+WORKFLOW = Path('.github/workflows/pc24x7-teams-token-bootstrap.yml')
+
+
+def test_bootstrap_usa_jwt_admin_e_identidade_mutadora() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    assert 'environment: development' in text
+    assert 'CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}' in text
+    assert 'CCP_AZURE_CLIENT_ID_DEV' not in text
+    assert 'COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}' in text
+    assert 'VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}' not in text
+    assert 'COFRE_API_URL: ${{ secrets.COFRE_API_URL }}' not in text
+    assert "PC24X7_TEAMS_ALLOW_PROVISION: 'true'" in text
+
+
+def test_bootstrap_permanece_dev_only_e_resolve_locator_assinado() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    assert 'https://reqsys-api-dev.fly.dev' not in text
+    assert 'reqsys-api-stg' not in text
+    assert 'reqsys-app.fly.dev' not in text
+    assert 'resolve_pc24x7_dev_locator.mjs --self-test' in text
+    assert '--output artifacts/pc24x7-teams-token/signed-locator.json' in text
+    assert 'steps.locator.outputs.base_url' in text
+    assert "printf 'REQSYS_API_BASE_URL=%s\\n' \"$RESOLVED_API_BASE\" >> \"$GITHUB_ENV\"" in text
+    assert 'reqsys-pc24x7-teams-service-token' in text
+    assert 'signed-locator.json' in text
+
+def test_bootstrap_bloqueia_runtime_defasado_antes_de_oidc_e_mutacao() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    sha_gate = text.index('Validar runtime PC24x7 no mesmo SHA')
+    oidc = text.index('Login Azure por OIDC da identidade mutadora')
+    mutation = text.index('Validar ou provisionar token S2S DEV')
+    assert sha_gate < oidc < mutation
+    assert "base + '/api/runtime/build-info'" in text
+    assert "EXPECTED_SHA: ${{ github.sha }}" in text
+    assert "pc24x7_runtime_sha_mismatch" in text
+    assert "pc24x7_runtime_probe_failed" in text
+    assert "'token_created': False" in text
+    assert "'secret_value_exposed': False" in text
+    assert "'production_touched': False" in text
+
+
+
+def test_bootstrap_autocorrige_runtime_pc24x7_antes_do_token() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    reconcile_job = text.index('  reconcile-runtime-dev:')
+    bootstrap_job = text.index('  bootstrap-dev:')
+    assert reconcile_job < bootstrap_job
+    assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in text
+    assert 'needs: [contract, reconcile-runtime-dev]' in text
+    assert 'reconcile_pc24x7_teams_dev_runtime.py' in text
+    assert '--confirm RECONCILE-PC24X7-TEAMS-DEV' in text
+    assert '--expected-sha "${{ github.sha }}"' in text
+    assert 'Publicar evidência sanitizada da reconciliação' in text

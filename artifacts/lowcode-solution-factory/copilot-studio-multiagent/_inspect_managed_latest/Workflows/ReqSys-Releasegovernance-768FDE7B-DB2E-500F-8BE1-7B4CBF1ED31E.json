@@ -1,0 +1,55 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {},
+      "triggers": {
+        "manual": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "versao": {
+                  "type": "string"
+                },
+                "correlation_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "correlation_id"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Resposta_Governada": {
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "resultado": "Resumo de release recebido pelo workflow nativo Power Automate. Go/no-go exige confirmacao humana.",
+              "workflow": "ReqSys - Release governance",
+              "audit_event": "copilot_release_go_no_go",
+              "correlation_id": "@{triggerBody()?['correlation_id']}",
+              "status": "materialized_native_p0"
+            }
+          },
+          "runAfter": {}
+        }
+      },
+      "outputs": {}
+    },
+    "templateName": null
+  },
+  "schemaVersion": "1.0.0.0"
+}

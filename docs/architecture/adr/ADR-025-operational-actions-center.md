@@ -1,4 +1,13 @@
+---
+status: ReqSys / Plataforma Corporativa
+date: 2026-06-22
+deciders: Arquitetura / Engenharia
+context: ReqSys / Plataforma Corporativa
+version: 1.0.0
+---
+
 # ADR-025 — ReqSys Operational Actions Center
+
 
 ## Status
 

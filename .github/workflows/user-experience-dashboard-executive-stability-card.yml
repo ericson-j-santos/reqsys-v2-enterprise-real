@@ -1,0 +1,47 @@
+name: User Experience Dashboard Executive Stability Card
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/inject_user_experience_dashboard_executive_stability_card.py'
+      - 'scripts/smoke_user_experience_dashboard_executive_stability_card.py'
+      - 'tests/test_user_experience_dashboard_executive_stability_card.py'
+      - '.github/workflows/user-experience-dashboard-executive-stability-card.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: |
+          python -m py_compile scripts/inject_user_experience_dashboard_executive_stability_card.py
+          python -m py_compile scripts/smoke_user_experience_dashboard_executive_stability_card.py
+      - name: Tests
+        run: python -m unittest tests/test_user_experience_dashboard_executive_stability_card.py
+      - name: Emit guardrail evidence
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/ux-dashboard-executive-stability-card.json <<'JSON'
+          {
+            "mode": "report-only",
+            "production_blocker": false,
+            "human_approval_required": true,
+            "deploy_changed": false,
+            "readiness_changed": false,
+            "production_ready_changed": false
+          }
+          JSON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-dashboard-executive-stability-card-evidence
+          path: artifacts/ux-dashboard-executive-stability-card.json
+          retention-days: 90

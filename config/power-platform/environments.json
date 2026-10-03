@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "name": "reqsys-power-platform-environment-registry",
+  "descricao": "Registro versionado dos ambientes Power Platform usados pela promocao DEV -> TEST -> PROD do flow robo_envia_teamsv2. Substitui anotacoes soltas por uma fonte unica auditavel e validavel em CI.",
+  "principios": {
+    "armazena_segredo": false,
+    "connection_id_e_identificador_nao_credencial": true,
+    "url_de_origem_permanece_em_secret": true,
+    "default_fail_closed": true
+  },
+  "ciclo_de_vida": {
+    "status_permitidos": [
+      "NAO_DEFINIDO",
+      "DEFINIDO",
+      "CONEXAO_AUTORIZADA",
+      "PROMOCAO_VALIDADA"
+    ],
+    "significado": {
+      "NAO_DEFINIDO": "Ambiente Power Platform ainda nao escolhido/criado. Acao humana pendente (blueprint item 3).",
+      "DEFINIDO": "environment_url e environment_id registrados. Falta autorizar a conexao Teams (blueprint item 4).",
+      "CONEXAO_AUTORIZADA": "Conexao Teams autorizada e connection reference vinculada. Pronto para a promocao real (blueprint item 5).",
+      "PROMOCAO_VALIDADA": "Promocao ponta a ponta executada com evidencia anexada em evidencia_run_url."
+    }
+  },
+  "ambientes": {
+    "dev": {
+      "papel": "origem",
+      "status": "DEFINIDO",
+      "environment_url": null,
+      "url_secret_ref": "POWER_PLATFORM_ENVIRONMENT_URL",
+      "environment_id": null,
+      "github_environment": "reqsys-power-platform-dev",
+      "connection_id": null,
+      "connection_reference_logical_name": null,
+      "evidencia_run_url": null,
+      "observacao": "Ambiente ja conectado. A URL vive no secret POWER_PLATFORM_ENVIRONMENT_URL do environment reqsys-power-platform-dev e nao e replicada aqui."
+    },
+    "test": {
+      "papel": "destino",
+      "status": "NAO_DEFINIDO",
+      "environment_url": null,
+      "url_secret_ref": null,
+      "environment_id": null,
+      "github_environment": null,
+      "connection_id": null,
+      "connection_reference_logical_name": null,
+      "evidencia_run_url": null,
+      "observacao": "Preencher apos escolher o ambiente de TESTE no Power Platform Admin Center e autorizar a conexao Teams."
+    },
+    "prod": {
+      "papel": "destino",
+      "status": "NAO_DEFINIDO",
+      "environment_url": null,
+      "url_secret_ref": null,
+      "environment_id": null,
+      "github_environment": null,
+      "connection_id": null,
+      "connection_reference_logical_name": null,
+      "evidencia_run_url": null,
+      "observacao": "So preencher depois que TEST estiver em PROMOCAO_VALIDADA."
+    }
+  },
+  "solution": {
+    "solution_name": "robo_envia_teamsv2",
+    "flow_display_name": "robo_envia_teamsv2",
+    "managed_em_destino": true
+  }
+}

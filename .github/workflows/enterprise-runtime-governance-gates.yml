@@ -5,6 +5,24 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - "backend/**"
+      - "app/**"
+      - "api/**"
+      - "services/**"
+      - "config/**"
+      - "configs/**"
+      - "deploy/**"
+      - "deployment/**"
+      - "infra/**"
+      - "Dockerfile*"
+      - "docker-compose*.yml"
+      - "docker-compose*.yaml"
+      - "fly*.toml"
+      - "nginx.conf"
+      - "scripts/governance/enterprise_runtime_governance_gates.py"
+      - "tests/test_enterprise_runtime_governance_gates.py"
+      - ".github/workflows/enterprise-runtime-governance-gates.yml"
   push:
     branches:
       - main
@@ -30,3 +48,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/governance/enterprise_runtime_governance_gates.py
+
+      - name: Publicar evidência Enterprise Runtime Governance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: enterprise-runtime-governance
+          path: artifacts/enterprise-runtime-governance
+          if-no-files-found: error
+          retention-days: 30

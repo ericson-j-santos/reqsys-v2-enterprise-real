@@ -1,0 +1,88 @@
+{
+  "feature_name": "noteri-desktop-watchdog-recovery",
+  "project": "ReqSys v2 Enterprise — Desktop control plane",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-28",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Fallback governado Noteri→Desktop que consulta e inicia somente a tarefa watchdog já existente via Windows schtasks remoto, após Session Launcher e exclusivamente por Command Gateway risco 2.",
+  "scope": "local-dev",
+  "files": [
+    "scripts/noteri_desktop_watchdog_rpc_recovery.py",
+    ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+    ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    ".github/self-hosted-runner-policy.json",
+    "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
+    "tests/test_reqsys_authorized_actions_gateway.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_noteri_desktop_watchdog_rpc_recovery.py",
+      "tests/test_reqsys_authorized_actions_gateway.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "Fixed target/task; GitHub workspace used only as exact transient Session Launcher source; each physical mode uses CPython 3.12.10 embeddable x64 from python.org in RUNNER_TEMP, validates SHA-256 before extraction, and never uses actions/setup-python or host PATH; operational rules in _rules pinned to 562fc4274aff24f7058cb135f27a509aa69031c1; physical modes inject the exact _rules/scripts directory into the ephemeral CPython 3.12.10 python312._pth before Session Launcher, require runner-version preflight inside Session Launcher; isolated governed worktree under C:\\\\dev\\\\chatgpt-workers; recovery script resolved from target_path; Command Gateway risk 2; negative RPC/config tests; exact gateway dispatch and independent Desktop runner pickup."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "reboot": false,
+    "secrets": false,
+    "task_creation_or_mutation": false
+  },
+  "runtime_shell": "powershell",
+  "increment_type": "gap_fix",
+  "governance": {
+    "session_launcher_required": true,
+    "command_gateway_required": true,
+    "command_gateway_risk": 2,
+    "rules_sha": "562fc4274aff24f7058cb135f27a509aa69031c1",
+    "runner_version_preflight_required": true
+  },
+  "acceptance_criteria": [
+    "O workflow executa somente no runner Noteri allowlisted e host esperado.",
+    "`${ github.workspace }` é somente a fonte transitória do bootstrap; a execução ocorre no worktree governado retornado pelo Session Launcher.",
+    "Cada modo físico usa CPython 3.12.10 embeddable x64 oficial em RUNNER_TEMP, validado por SHA-256 antes da extração; actions/setup-python e dependência do PATH do host são proibidos.",
+    "Cada runtime CPython portátil adiciona somente o diretório exato `_rules/scripts` do checkout canônico ao `python312._pth` efêmero antes do Session Launcher; ausência do arquivo `._pth` falha fechado e nenhum path global do host é alterado.",
+    "O Session Launcher exige SESSION_LAUNCH_OK e state_validated=true no SHA exato.",
+    "O script de recuperação é resolvido a partir do target_path retornado pela sessão e executado exclusivamente pelo Command Gateway risco 2.",
+    "Nenhum clone persistente C:\\dev\\reqsys-v2-enterprise-real é requisito do Noteri; o único destino de execução é o worktree governado.",
+    "O RPC permanece limitado a Query+Run da tarefa watchdog existente; criação/alteração de tarefa, segredo, credencial e produção são proibidos.",
+    "Após sucesso do RPC, pickup real do runner Desktop continua sendo a prova terminal.",
+    "Todos os modos físicos usam o SHA canônico atual das regras operacionais e exigem runner-version preflight no Session Launcher.",
+    "Todas as actions externas do workflow alterado usam SHA imutável; tags maiores mutáveis são proibidas."
+  ],
+  "operational_rules": {
+    "repository": "ericson-j-santos/chatgpt-operational-rules",
+    "sha": "562fc4274aff24f7058cb135f27a509aa69031c1",
+    "applies_to_modes": [
+      "watchdog",
+      "runner-recover",
+      "runner-bootstrap",
+      "runner-canary"
+    ],
+    "stale_pin_allowed": false
+  },
+  "workflow_action_immutability": {
+    "checkout_sha": "11d5960a326750d5838078e36cf38b85af677262",
+    "upload_artifact_sha": "ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "mutable_major_tags_allowed": false,
+    "python_runtime_strategy": "portable-embedded-sha256-validated",
+    "python_runtime": {
+      "version": "3.12.10",
+      "distribution": "windows_embeddable_x64",
+      "source": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+      "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+      "install_required": false,
+      "registry_required": false,
+      "toolcache_required": false,
+      "admin_required": false,
+      "runtime_location": "RUNNER_TEMP_per_run",
+      "module_resolution": "ephemeral_python312._pth_exact_rules_scripts"
+    }
+  }
+}
