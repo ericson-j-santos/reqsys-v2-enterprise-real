@@ -36,7 +36,7 @@ export function buildPulsoPortfolio(requisitos = [], workItems = [], traceRows =
       progress,
       nextMilestone: work?.ci_status === 'running' ? 'Integração contínua' : work?.deploy_status === 'deployed' ? 'Monitoramento' : 'Próxima transição',
       updatedAt: work?.atualizado_em || req.atualizado_em || null,
-      origin: work ? 'ReqSys + Agile Runtime' : 'ReqSys',
+      origin: work ? 'ReqSys + Agile Execução' : 'ReqSys',
       plannerTaskId: trace?.planner_task_id || null,
       correlationId: trace?.correlation_id || null,
       evidenceUrl,

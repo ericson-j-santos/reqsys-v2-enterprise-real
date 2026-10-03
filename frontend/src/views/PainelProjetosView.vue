@@ -22,7 +22,7 @@
     </div>
 
     <section class="portfolio-card">
-      <div class="section-title"><div><h2>Panorama do portfólio</h2><p>Dados consolidados do ReqSys e do Agile Runtime.</p></div><span>Sincronizado {{ sincronizadoEm }}</span></div>
+      <div class="section-title"><div><h2>Panorama do portfólio</h2><p>Dados consolidados do ReqSys e do Agile Execução.</p></div><span>Sincronizado {{ sincronizadoEm }}</span></div>
       <div class="portfolio-bar" aria-label="Distribuição da saúde dos projetos">
         <span class="ok" :style="{ flex: distribuicao.ritmo || 0.1 }"/><span class="warn" :style="{ flex: distribuicao.atencao || 0.1 }"/><span class="late" :style="{ flex: distribuicao.atrasado || 0.1 }"/><span class="done" :style="{ flex: distribuicao.concluido || 0.1 }"/>
       </div>
@@ -33,7 +33,7 @@
       <div class="section-title"><div><h2>Projetos em andamento</h2><p>{{ projetosFiltrados.length }} projetos encontrados</p></div><v-chip size="small" color="info">Origem: ReqSys</v-chip></div>
       <div class="project-table-wrap">
         <table class="project-table">
-          <thead><tr><th>Projeto</th><th>Responsável</th><th>Progresso</th><th>Próximo marco</th><th>Ambiente</th><th>Status</th></tr></thead>
+          <thead><tr><th>Projeto</th><th>Responsável</th><th>Progresso</th><th>Próximo marco</th><th>Ambiente</th><th>Situação</th></tr></thead>
           <tbody>
             <tr v-for="projeto in projetosFiltrados" :key="projeto.id" @click="selecionado = projeto.id" :class="{ selected: selecionado === projeto.id }">
               <td><strong>{{ projeto.name }}</strong><small>{{ projeto.code }}</small></td>
