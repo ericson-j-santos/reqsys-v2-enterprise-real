@@ -80,6 +80,7 @@
     "gitlab/ci/ocr-deploy-staging.yml",
     "infra/fly-environments.json",
     "scripts/configurar_fly_auth_azure.py",
+    "scripts/cofre_human_token.py",
     "scripts/credential_control_plane_lifecycle.py",
     "scripts/cutover_fly_postgres.py",
     "scripts/fly-deploy.ps1",
@@ -90,6 +91,7 @@
     "backend/tests/test_main_critical_paths.py",
     "tests/test_flyio_permanent_retirement.py",
     "tests/test_plan_governed_workflow_artifact_promotion.py",
+    "tests/test_runtime_url_retirement_guards.py",
     "docs/releases/flyio-retirement-20261002.md",
     "tests/test_environment_observability_build_only_contract.py",
     "tests/test_fly_automatic_promotion_contract.py",
@@ -116,7 +118,7 @@
       "tests/test_plan_governed_workflow_artifact_promotion.py",
       "gitlab/tests/test_validate_gitlab_governance.py"
     ],
-    "evidence_contract": "Workflows YAML válidos no SHA do PR; jobs e entrypoints com operações, tokens ou callers Fly.io ficam fail-closed; fallbacks fly.dev/fly.io, deploys GitLab, 13 manifestos e quatro artefatos de build/boot Fly são retirados; scripts de rede, catálogos e superfícies UI recusam o provedor antes de I/O externo. O estado remoto, a cobrança e a exclusão da conta só podem ser declarados com inventário autenticado e confirmação do provedor."
+    "evidence_contract": "Workflows YAML válidos no SHA do PR; jobs e entrypoints com operações, tokens ou callers Fly.io ficam fail-closed; fallbacks fly.dev/fly.io, deploys GitLab, 13 manifestos e quatro artefatos de build/boot Fly são retirados; scripts de rede, catálogos e superfícies UI recusam o provedor antes de I/O externo; a origem CORS configurável é canonicalizada e não aceita caracteres de controle. O estado remoto, a cobrança e a exclusão da conta só podem ser declarados com inventário autenticado e confirmação do provedor."
   },
   "risk": {
     "production": true,

@@ -38,6 +38,30 @@ def test_cofre_requires_explicit_provider_neutral_https_urls() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "value",
+    (
+        "https://app.example.net/path",
+        "https://app.example.net?mode=dev",
+        "https://app.example.net#fragment",
+        "https://user@app.example.net",
+        "https://app.example.net\r\nX-Injected: true",
+        "https://app.example.net:0",
+        "https://app.example.net:65536",
+    ),
+)
+def test_cofre_rejects_non_origin_or_header_unsafe_frontend_values(value: str) -> None:
+    with pytest.raises(cofre_human_token.CofreTokenError):
+        cofre_human_token._frontend_origin("dev", value)
+
+
+def test_cofre_canonicalizes_safe_frontend_origin() -> None:
+    assert (
+        cofre_human_token._frontend_origin("dev", "https://APP.EXAMPLE.NET:0443/")
+        == "https://app.example.net:443"
+    )
+
+
 def test_frontend_validator_rejects_fly_before_fetch(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(

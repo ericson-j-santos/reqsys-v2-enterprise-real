@@ -19,6 +19,7 @@ Em 2026-10-02 o usuário determinou retirar Fly.io definitivamente de todas as s
 11. Retirar links, catálogos, launchpads, manifests Teams e superfícies UI que ainda ofereçam Fly.io como destino.
 12. Jobs skipped e validações locais não comprovam encerramento remoto, migração de dados, faturamento zerado ou exclusão da conta; essas afirmações exigem evidência autenticada do provedor.
 13. A validação de PR do promotor de artefatos deve executar os testes locais sem depender de runs históricos sujeitos a expiração; download, validação por hash e publicação do bundle imutável permanecem obrigatórios no `workflow_dispatch`.
+14. A origem CORS explícita do capturador local deve ser canonicalizada como origem HTTPS exata e recusar caminho, credenciais, query, fragmento, porta inválida e caracteres de controle antes de compor headers HTTP.
 
 ## Critérios de aceite
 
@@ -32,3 +33,4 @@ Em 2026-10-02 o usuário determinou retirar Fly.io definitivamente de todas as s
 - A documentação separa a retirada no repositório do encerramento remoto, que só pode ser confirmado por inventário autenticado e prova de cobrança/conta.
 - CI de admissão e revisão de evidência passam antes do merge.
 - O gate de promoção passa em PR sem artefato externo e continua fail-closed no caminho manual de promoção imutável.
+- A captura local só reflete no header CORS a origem HTTPS canonicalizada e coberta por casos negativos de injeção CR/LF.

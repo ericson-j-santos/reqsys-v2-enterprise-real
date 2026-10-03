@@ -77,6 +77,10 @@ HTTP_VAR_BY_ENV = {
 LISTEN_DEFAULT_PORT = 8765
 LISTEN_DEFAULT_TIMEOUT_SECONDS = 180
 _MAX_CAPTURE_BODY_BYTES = 8192
+_FRONTEND_ORIGIN_PATTERN = re.compile(
+    r"https://(?P<host>[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)"
+    r"(?::(?P<port>[0-9]{1,5}))?"
+)
 
 _BOOKMARKLET_TEMPLATE = """(function(){
 var t=localStorage.getItem('reqsys_token');
@@ -117,7 +121,17 @@ def _frontend_origin(environment: str, value: str | None) -> str:
         raise CofreTokenError(str(exc)) from exc
     if not origin.startswith("https://"):
         raise CofreTokenError("origem do frontend deve usar HTTPS")
-    return origin
+    match = _FRONTEND_ORIGIN_PATTERN.fullmatch(origin)
+    if not match:
+        raise CofreTokenError(
+            "origem do frontend deve ser uma origem HTTPS exata, sem caminho, "
+            "credenciais, query, fragmento ou caracteres de controle"
+        )
+    port = match.group("port")
+    if port is not None and not 1 <= int(port) <= 65535:
+        raise CofreTokenError("porta da origem do frontend deve estar entre 1 e 65535")
+    canonical_port = f":{int(port)}" if port is not None else ""
+    return f"https://{match.group('host').lower()}{canonical_port}"
 
 
 def _vault_token_path(environment: str) -> Path:
@@ -285,7 +299,7 @@ def _make_capture_handler(environment: str, base_url_override: str | None, allow
         def _cors_headers(self) -> None:
             origin = self.headers.get("Origin", "")
             if origin and origin == allowed_origin:
-                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Access-Control-Allow-Origin", allowed_origin)
                 self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
                 self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
