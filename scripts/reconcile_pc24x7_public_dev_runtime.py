@@ -33,6 +33,8 @@ EXPECTED_HOST = "DESKTOP-PDQK954"
 EXPECTED_REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 DEV_API_PORT = "8210"
 DEV_GATEWAY_PORT = "8083"
+API_STARTUP_TIMEOUT_SECONDS = 240
+API_STARTUP_POLL_SECONDS = 2.0
 CONFIRMATION = "RECONCILE-PC24X7-PUBLIC-DEV"
 OVERLAY = Path("docker-compose.pc24x7-public-dev.yml")
 STATIC_NGINX = Path("infra/nginx/default.pc24x7-public-dev.conf")
@@ -367,6 +369,45 @@ def _compose_base(
     return command
 
 
+def _wait_for_api_ready(
+    expected_sha: str,
+    *,
+    timeout_seconds: float = API_STARTUP_TIMEOUT_SECONDS,
+    poll_seconds: float = API_STARTUP_POLL_SECONDS,
+) -> dict[str, Any]:
+    expected = expected_sha.lower()
+    deadline = time.monotonic() + timeout_seconds
+    attempts = 0
+    last: dict[str, Any] = {"error": "api_startup_not_observed"}
+
+    while time.monotonic() < deadline:
+        attempts += 1
+        try:
+            build = _probe(f"http://127.0.0.1:{DEV_API_PORT}/api/runtime/build-info")
+            health = _probe(f"http://127.0.0.1:{DEV_API_PORT}/api/runtime/health")
+            build_sha = str(_json_data(build).get("build_sha") or "").strip().lower()
+            last = {
+                "build_http": build["status"],
+                "health_http": health["status"],
+                "build_sha": build_sha,
+            }
+            if build["status"] == 200 and health["status"] == 200 and build_sha == expected:
+                return {
+                    "strategy": "api_frontend_then_nginx",
+                    "attempts": attempts,
+                    "build_sha": build_sha,
+                    "health": "ok",
+                }
+        except ReconcileError:
+            last = {"error": "direct_api_probe_failed"}
+
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(poll_seconds, remaining))
+
+    raise ReconcileError("api_startup_timeout:" + json.dumps(last, sort_keys=True))
+
+
 def _recreate_public_stack(
     governed_root: Path,
     project: str,
@@ -411,11 +452,18 @@ def _recreate_public_stack(
                 "--no-deps",
                 "api",
                 "frontend",
-                "nginx",
             ],
             cwd=governed_root,
             env=env,
             timeout=900,
+            sensitive=True,
+        )
+        api_startup = _wait_for_api_ready(expected_sha)
+        _run(
+            base + ["up", "-d", "--no-deps", "--force-recreate", "nginx"],
+            cwd=governed_root,
+            env=env,
+            timeout=180,
             sensitive=True,
         )
     finally:
@@ -426,6 +474,7 @@ def _recreate_public_stack(
         "credential_source": "azure_key_vault_existing",
         "credential_rotated": False,
         "secret_value_exposed": False,
+        "api_startup": api_startup,
     }
 
 
@@ -593,6 +642,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _safe_failure_detail(exc: Exception) -> str:
+    if isinstance(exc, ReconcileError):
+        return str(exc)
+    return "reconciliation_failed"
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -606,7 +661,7 @@ def main() -> int:
             "expected_sha": args.expected_sha,
             "correlation_id": args.correlation_id,
             "reason": type(exc).__name__,
-            "detail": "reconciliation_failed",
+            "detail": _safe_failure_detail(exc),
             "production_touched": False,
             "secret_value_exposed": False,
         }
