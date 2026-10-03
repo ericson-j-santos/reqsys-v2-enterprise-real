@@ -1,12 +1,11 @@
 name: PR Scope Labeler
 
 on:
+  # Snapshot inicial somente. Reclassificação contínua fica centralizada no
+  # PR Fast Classifier para evitar dois runners report-only por novo SHA.
   pull_request:
     types:
       - opened
-      - synchronize
-      - reopened
-      - ready_for_review
 
 permissions:
   contents: read

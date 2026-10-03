@@ -34,38 +34,38 @@ jobs:
             --limit 20 > runs.json
 
           python - <<'PY'
-import json
-from pathlib import Path
-
-runs = json.loads(Path('runs.json').read_text())
-
-summary = []
-summary.append('| Workflow | Status | Conclusion |')
-summary.append('|---|---|---|')
-
-failed = []
-
-for run in runs:
-    name = run.get('name', '-')
-    status = run.get('status', '-')
-    conclusion = run.get('conclusion', '-')
-
-    summary.append(f'| {name} | {status} | {conclusion} |')
-
-    if conclusion in ('failure', 'cancelled', 'timed_out'):
-        failed.append(name)
-
-summary.append('')
-summary.append('## Incident Classification')
-
-if not failed:
-    summary.append('- No critical workflow failures detected.')
-else:
-    for item in failed:
-        summary.append(f'- Potential structural/flaky incident detected: {item}')
-
-Path('summary-table.md').write_text('\n'.join(summary), encoding='utf-8')
-PY
+          import json
+          from pathlib import Path
+          
+          runs = json.loads(Path('runs.json').read_text())
+          
+          summary = []
+          summary.append('| Workflow | Status | Conclusion |')
+          summary.append('|---|---|---|')
+          
+          failed = []
+          
+          for run in runs:
+              name = run.get('name', '-')
+              status = run.get('status', '-')
+              conclusion = run.get('conclusion', '-')
+          
+              summary.append(f'| {name} | {status} | {conclusion} |')
+          
+              if conclusion in ('failure', 'cancelled', 'timed_out'):
+                  failed.append(name)
+          
+          summary.append('')
+          summary.append('## Incident Classification')
+          
+          if not failed:
+              summary.append('- No critical workflow failures detected.')
+          else:
+              for item in failed:
+                  summary.append(f'- Potential structural/flaky incident detected: {item}')
+          
+          Path('summary-table.md').write_text('\n'.join(summary), encoding='utf-8')
+          PY
 
           cat summary-table.md >> operational-summary.md
 

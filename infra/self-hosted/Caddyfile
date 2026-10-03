@@ -1,0 +1,13 @@
+{
+    email {$ACME_EMAIL}
+    admin off
+}
+{$SITE_ADDRESS} {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+    reverse_proxy gateway:80
+}

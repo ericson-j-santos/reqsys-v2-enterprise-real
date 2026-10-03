@@ -62,14 +62,14 @@ jobs:
           import urllib.error
           import urllib.request
           from datetime import datetime, timezone
-
+          
           token = os.environ["GITHUB_TOKEN"]
           repo = os.environ["REPOSITORY"]
           pr_number = os.environ["PR_NUMBER"].strip()
           decision = os.environ["DECISION"].strip()
           approval_note = os.environ.get("APPROVAL_NOTE", "").strip()
           base_url = "https://api.github.com"
-
+          
           def api(path):
               request = urllib.request.Request(
                   base_url + path,
@@ -82,16 +82,16 @@ jobs:
               )
               with urllib.request.urlopen(request, timeout=30) as response:
                   return json.loads(response.read().decode("utf-8"))
-
+          
           def fail(message, payload=None):
               print(f"::error::{message}")
               if payload is not None:
                   print(json.dumps(payload, indent=2, ensure_ascii=False))
               sys.exit(1)
-
+          
           if not pr_number.isdigit():
               fail("pr_number must be numeric")
-
+          
           pr = api(f"/repos/{repo}/pulls/{pr_number}")
           head_sha = pr["head"]["sha"]
           labels = api(f"/repos/{repo}/issues/{pr_number}").get("labels", [])
@@ -99,25 +99,25 @@ jobs:
           check_runs = api(f"/repos/{repo}/commits/{head_sha}/check-runs?per_page=100").get("check_runs", [])
           statuses = api(f"/repos/{repo}/commits/{head_sha}/status").get("statuses", [])
           workflow_runs = api(f"/repos/{repo}/actions/runs?head_sha={head_sha}&per_page=100").get("workflow_runs", [])
-
+          
           latest_check_by_name = {}
           for item in check_runs:
               name = item.get("name") or "unknown"
               current = latest_check_by_name.get(name)
               if not current or item.get("started_at", "") > current.get("started_at", ""):
                   latest_check_by_name[name] = item
-
+          
           latest_workflow_by_name = {}
           for item in workflow_runs:
               name = item.get("name") or "unknown"
               current = latest_workflow_by_name.get(name)
               if not current or item.get("created_at", "") > current.get("created_at", ""):
                   latest_workflow_by_name[name] = item
-
+          
           blocking_check_states = {"failure", "cancelled", "timed_out", "action_required", "startup_failure", None}
           blocking_status_states = {"failure", "error", "pending"}
           blocking_workflow_conclusions = {"failure", "timed_out", "action_required", "startup_failure", None}
-
+          
           latest_check_results = []
           blocking_checks = []
           for name, item in sorted(latest_check_by_name.items()):
@@ -134,7 +134,7 @@ jobs:
               latest_check_results.append(result)
               if status != "completed" or conclusion in blocking_check_states:
                   blocking_checks.append(result)
-
+          
           latest_workflow_results = []
           blocking_workflows = []
           for name, item in sorted(latest_workflow_by_name.items()):
@@ -152,7 +152,7 @@ jobs:
               latest_workflow_results.append(result)
               if status != "completed" or conclusion in blocking_workflow_conclusions:
                   blocking_workflows.append(result)
-
+          
           latest_status_results = []
           blocking_statuses = []
           for item in statuses:
@@ -165,7 +165,7 @@ jobs:
               latest_status_results.append(result)
               if item.get("state") in blocking_status_states:
                   blocking_statuses.append(result)
-
+          
           manual_gate_reason = []
           if pr.get("draft"):
               manual_gate_reason.append("PR is draft; human decision is limited to ready-for-review, not merge.")
@@ -178,7 +178,7 @@ jobs:
               manual_gate_reason.append("deep-review label present but latest Deep Governance Review is not successful.")
           if decision == "record-human-approval" and not approval_note:
               manual_gate_reason.append("Human approval requires approval_note for auditability.")
-
+          
           generated_at = datetime.now(timezone.utc).isoformat()
           evidence = {
               "generated_at_utc": generated_at,
@@ -207,11 +207,11 @@ jobs:
                   "manual_gate_reasons": manual_gate_reason,
               },
           }
-
+          
           os.makedirs("artifacts/manual-gate-guardrail", exist_ok=True)
           with open("artifacts/manual-gate-guardrail/evidence.json", "w", encoding="utf-8") as f:
               json.dump(evidence, f, indent=2, ensure_ascii=False)
-
+          
           blocking_total = len(blocking_checks) + len(blocking_statuses) + len(blocking_workflows) + len(manual_gate_reason)
           summary_lines = [
               "# Manual Gate Guardrail",
@@ -242,13 +242,13 @@ jobs:
               summary_lines.append("Guardrail is clean for requesting deep review. Apply label or dispatch Deep Governance Review as policy requires.")
           else:
               summary_lines.append("Guardrail is clean. Human decision may proceed if business/architecture acceptance is explicit.")
-
+          
           with open("artifacts/manual-gate-guardrail/summary.md", "w", encoding="utf-8") as f:
               f.write("\n".join(summary_lines) + "\n")
-
+          
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
               f.write("\n".join(summary_lines) + "\n")
-
+          
           if blocking_total:
               fail("Manual gate guardrail blocked this decision. See artifact evidence.json.", evidence["blocking"])
           PY

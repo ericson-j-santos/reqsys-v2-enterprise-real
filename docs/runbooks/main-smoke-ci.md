@@ -33,8 +33,8 @@ O workflow valida:
 - presenca de script, teste e runbook do watcher;
 - uso de guardrail de exclusao de run;
 - uso de artifact no PR CI Watch;
-- sintaxe Python do watcher;
-- testes rapidos do watcher.
+- sintaxe Python do watcher (`py_compile`);
+- existencia do teste do watcher (execucao no PR via `Fast CI - Operational Guardrails`).
 
 ## Relatorio de Monitoramento do PR
 

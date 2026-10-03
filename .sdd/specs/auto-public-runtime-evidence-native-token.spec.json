@@ -1,0 +1,21 @@
+{
+  "feature_name": "auto-public-runtime-evidence-native-token",
+  "project": "ReqSys v2 Enterprise — CI/CD e evidência de runtime",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-29",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Mantém GITHUB_TOKEN efêmero e roteia a evidência automática DEV exclusivamente pelo locator assinado PC24x7 após Main Post-Merge Validation fail-closed, sem fallback Fly ou URL estática.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_auto_public_runtime_evidence_token_contract.py",
+      "tests/test_dev_runtime_cutover.py",
+      "tests/test_pr_quality_review.py"
+    ],
+    "evidence_contract": "No HEAD exato, Auto Public Runtime Evidence deve escutar Main Post-Merge Validation em workflow_dispatch bem-sucedido, resolver DEV pelo locator assinado PC24x7, rejeitar fly.io/fly.dev e usar somente GITHUB_TOKEN efêmero."
+  }
+}

@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-qualidade-ia">
     <PageHeader
       title="Monitoramento de Qualidade de IA"
       subtitle="Acompanhe score geral, métricas-chave, tendência histórica e recomendações para melhoria contínua."
@@ -8,7 +8,7 @@
       chip-tooltip="Status operacional atual da qualidade de IA"
     >
       <template #actions>
-        <v-tooltip text="Executa um novo snapshot do monitoramento de qualidade" location="top">
+        <v-tooltip text="Executa um novo snapshot do monitoramento de qualidade" location="top" aria-label="Executa um novo snapshot do monitoramento de qualidade">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -23,7 +23,7 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Recarrega dados do monitoramento de qualidade" location="top">
+        <v-tooltip text="Recarrega dados do monitoramento de qualidade" location="top" aria-label="Recarrega dados do monitoramento de qualidade">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -37,7 +37,7 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Período do histórico para exportação/tendência" location="top">
+        <v-tooltip text="Período do histórico para exportação/tendência" location="top" aria-label="Período do histórico para exportação/tendência">
           <template #activator="{ props }">
             <v-btn-toggle
               v-bind="props"
@@ -54,7 +54,7 @@
             </v-btn-toggle>
           </template>
         </v-tooltip>
-        <v-tooltip text="Exporta tendência histórica em CSV" location="top">
+        <v-tooltip text="Exporta tendência histórica em CSV" location="top" aria-label="Exporta tendência histórica em CSV">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -68,7 +68,7 @@
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Exporta tendência histórica em PDF" location="top">
+        <v-tooltip text="Exporta tendência histórica em PDF" location="top" aria-label="Exporta tendência histórica em PDF">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -450,14 +450,14 @@ onMounted(carregar)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
   font-size: 0.92rem;
 }
 
 .empty-cell {
   text-align: center;
   color: var(--muted);
-  padding: 18px;
+  padding: var(--space-lg);
 }
 
 .provider-header {

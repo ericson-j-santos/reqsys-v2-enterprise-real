@@ -124,8 +124,15 @@ jobs:
           | Backend security | ${{ needs.backend-security.result }} |
           | Frontend security | ${{ needs.frontend-security.result }} |
           EOF
-          for result in "${{ needs.backend-security.result }}" "${{ needs.frontend-security.result }}"; do
-            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+
+          # Somente uma falha efetiva deve tornar o resumo vermelho. Jobs
+          # cancelados por `concurrency.cancel-in-progress` ou não executados
+          # pelo roteador não representam vulnerabilidade nem regressão.
+          for result in \
+            "${{ needs.security-router.result }}" \
+            "${{ needs.backend-security.result }}" \
+            "${{ needs.frontend-security.result }}"; do
+            if [[ "$result" == "failure" ]]; then
               exit 1
             fi
           done

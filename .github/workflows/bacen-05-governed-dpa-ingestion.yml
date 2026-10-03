@@ -1,0 +1,82 @@
+name: BACEN-05 Governed DPA Reference Ingestion
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/ingest_bacen_05_dpa_references.py"
+      - "tests/test_ingest_bacen_05_dpa_references.py"
+      - ".github/workflows/bacen-05-governed-dpa-ingestion.yml"
+      - "scripts/validate_bacen_dpa_evidence_contract.py"
+  workflow_dispatch:
+    inputs:
+      expected_sha256:
+        description: "SHA-256 do YAML DPA externo antes do base64"
+        required: true
+        type: string
+      minimum_validated_records:
+        description: "Quantidade mínima de referências DPA validadas"
+        required: true
+        default: 1
+        type: number
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-05-governed-dpa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check pytest pyyaml
+      - name: Compile governed ingestion
+        run: python -m py_compile scripts/ingest_bacen_05_dpa_references.py
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_ingest_bacen_05_dpa_references.py
+
+  ingest:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      BACEN_05_DPA_REFERENCES_BASE64: ${{ secrets.BACEN_05_DPA_REFERENCES_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install YAML dependency
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Verify governed payload is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${BACEN_05_DPA_REFERENCES_BASE64:-}" ]]; then
+            echo "::error::Configure BACEN_05_DPA_REFERENCES_BASE64 with the base64-encoded external YAML."
+            exit 1
+          fi
+      - name: Ingest and normalize validated DPA references
+        run: |
+          python scripts/ingest_bacen_05_dpa_references.py \
+            --base64-env BACEN_05_DPA_REFERENCES_BASE64 \
+            --expected-sha256 "${{ inputs.expected_sha256 }}" \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --minimum-validated-records "${{ inputs.minimum_validated_records }}" \
+            --output artifacts/bacen/bacen-05-governed-dpa-ingestion.json
+      - name: Publish normalized evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-governed-dpa-ingestion
+          path: artifacts/bacen/bacen-05-governed-dpa-ingestion.json
+          if-no-files-found: error
+          retention-days: 365

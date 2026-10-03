@@ -1,13 +1,18 @@
 name: Operational Stability Score
 
+# Push main: Main Operational Validation Fast. workflow_run removido (anti-cascata).
+
 on:
-  workflow_run:
-    workflows:
-      - "CI Incident Intelligence"
-      - "Post Merge Operational Summary"
-      - "Testes Monitorador APIs Python"
-    types:
-      - completed
+  workflow_dispatch:
+  schedule:
+    - cron: "41 10 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operational-stability-score
+  cancel-in-progress: false
 
 jobs:
   operational-stability-score:
@@ -17,13 +22,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Generate operational stability score
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || 'scheduled-scan' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           echo "# Operational Stability Score" > operational-stability-score.md
           echo "" >> operational-stability-score.md
@@ -35,60 +45,60 @@ jobs:
           echo "" >> operational-stability-score.md
 
           python - <<'PY'
-from pathlib import Path
-import os
-
-workflow = os.getenv('WORKFLOW_NAME', '')
-conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
-
-score = 100
-classification = 'STABLE'
-trend = 'HEALTHY'
-
-if conclusion != 'success':
-    score -= 35
-    classification = 'DEGRADED'
-    trend = 'ATTENTION'
-
-if 'Monitorador' in workflow:
-    score -= 5
-
-if 'Incident Intelligence' in workflow:
-    score -= 2
-
-if score < 70:
-    classification = 'CRITICAL'
-    trend = 'RISK'
-elif score < 85:
-    classification = 'WARNING'
-    trend = 'MONITORING'
-
-lines = []
-lines.append('## Stability Analysis')
-lines.append(f'- Operational stability score: {score}/100')
-lines.append(f'- Classification: {classification}')
-lines.append(f'- Trend: {trend}')
-lines.append('')
-lines.append('## Recommendations')
-
-if score >= 90:
-    lines.append('- Operational ecosystem stable.')
-    lines.append('- Continue continuous monitoring.')
-elif score >= 75:
-    lines.append('- Minor operational degradation detected.')
-    lines.append('- Review recurrent workflows and flaky signals.')
-else:
-    lines.append('- Critical operational instability detected.')
-    lines.append('- Prioritize CI remediation before new functional increments.')
-
-lines.append('')
-lines.append('## Governance')
-lines.append('- Preserve mandatory gates.')
-lines.append('- Avoid force merge with active CI failures.')
-lines.append('- Correlate incidents with deployments and PRs.')
-
-Path('stability-analysis.md').write_text('\n'.join(lines), encoding='utf-8')
-PY
+          from pathlib import Path
+          import os
+          
+          workflow = os.getenv('WORKFLOW_NAME', '')
+          conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+          
+          score = 100
+          classification = 'STABLE'
+          trend = 'HEALTHY'
+          
+          if conclusion != 'success':
+              score -= 35
+              classification = 'DEGRADED'
+              trend = 'ATTENTION'
+          
+          if 'Monitorador' in workflow:
+              score -= 5
+          
+          if 'Incident Intelligence' in workflow:
+              score -= 2
+          
+          if score < 70:
+              classification = 'CRITICAL'
+              trend = 'RISK'
+          elif score < 85:
+              classification = 'WARNING'
+              trend = 'MONITORING'
+          
+          lines = []
+          lines.append('## Stability Analysis')
+          lines.append(f'- Operational stability score: {score}/100')
+          lines.append(f'- Classification: {classification}')
+          lines.append(f'- Trend: {trend}')
+          lines.append('')
+          lines.append('## Recommendations')
+          
+          if score >= 90:
+              lines.append('- Operational ecosystem stable.')
+              lines.append('- Continue continuous monitoring.')
+          elif score >= 75:
+              lines.append('- Minor operational degradation detected.')
+              lines.append('- Review recurrent workflows and flaky signals.')
+          else:
+              lines.append('- Critical operational instability detected.')
+              lines.append('- Prioritize CI remediation before new functional increments.')
+          
+          lines.append('')
+          lines.append('## Governance')
+          lines.append('- Preserve mandatory gates.')
+          lines.append('- Avoid force merge with active CI failures.')
+          lines.append('- Correlate incidents with deployments and PRs.')
+          
+          Path('stability-analysis.md').write_text('\n'.join(lines), encoding='utf-8')
+          PY
 
           cat stability-analysis.md >> operational-stability-score.md
 
