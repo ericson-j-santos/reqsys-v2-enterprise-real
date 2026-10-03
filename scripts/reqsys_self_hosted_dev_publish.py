@@ -286,7 +286,7 @@ def discover_public_ids() -> tuple[str, str]:
 
 def render_config(secret_root: Path, ids: tuple[str, str]) -> bytes:
     root = secret_root.as_posix()
-    if not re.fullmatch(r"[A-Za-z0-9:/ _.\-]+", root):
+    if not re.fullmatch(r"[A-Za-z0-9:/ _.~\-]+", root):
         raise PublishError("private_path_not_representable")
     values = {
         "COMPOSE_PROJECT_NAME": PROJECT,
