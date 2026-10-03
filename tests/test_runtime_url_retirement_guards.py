@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from urllib.parse import urlsplit
+
 import pytest
 
 from scripts import (
@@ -127,4 +130,8 @@ def test_generated_notifier_requires_explicit_authorized_gateway(tmp_path) -> No
     ).read_text(encoding="utf-8")
     assert "DEFAULT_BASE_URL" not in service
     assert "TEAMS_GATEWAY_BASE_URL" in service
-    assert "https://gateway.example.net" in readme
+    documented_urls = {
+        urlsplit(value.rstrip("`.,)"))
+        for value in re.findall(r"https://[^\s]+", readme)
+    }
+    assert urlsplit("https://gateway.example.net") in documented_urls
