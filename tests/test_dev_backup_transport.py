@@ -1,8 +1,11 @@
 """Meaningful rejection tests for the bounded DEV ciphertext handoff."""
 import hashlib
 import json
+import os
 import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -157,6 +160,118 @@ class ResticProvisionTests(unittest.TestCase):
         ])
         with self.assertRaisesRegex(transport.TransportError, "size_invalid"):
             transport.parse_snapshot_inventory(data)
+
+
+class DependencyCorrelationTests(unittest.TestCase):
+    def test_fixed_migration_and_portable_site_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            migration = base / "reqsys-migration-python-12345"
+            migration.mkdir()
+            portable = base / "reqsys-python-3.12.10-job_name-12345-1" / "Lib" / "site-packages"
+            portable.mkdir(parents=True)
+            environment = {"RUNNER_TEMP": str(base), "GITHUB_RUN_ID": "12345",
+                           "GITHUB_JOB": "job_name", "GITHUB_RUN_ATTEMPT": "1",
+                           "REQSYS_MIGRATION_DEPENDENCIES": str(migration), "REQSYS_PYTHON_SITE": ""}
+            with patch.dict(os.environ, environment):
+                self.assertEqual(transport.migration_dependency_site(), migration)
+            environment.update(REQSYS_MIGRATION_DEPENDENCIES="", REQSYS_PYTHON_SITE=str(portable))
+            with patch.dict(os.environ, environment):
+                self.assertEqual(transport.migration_dependency_site(), portable)
+
+    @unittest.skipUnless(os.name == "nt", "Windows DLL search API")
+    def test_dll_search_handles_are_retained_without_processing_pth(self):
+        import sys
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            site = base / "reqsys-migration-python-12345"
+            for relative in ("win32/lib", "pywin32_system32"):
+                (site / relative).mkdir(parents=True)
+            environment = {"RUNNER_TEMP": str(base), "GITHUB_RUN_ID": "12345",
+                           "REQSYS_MIGRATION_DEPENDENCIES": str(site), "REQSYS_PYTHON_SITE": ""}
+            with patch.dict(os.environ, environment), \
+                    patch.dict(transport._WINDOWS_DLL_HANDLES, {}, clear=True), \
+                    patch.object(sys, "path", list(sys.path)), \
+                    patch.object(os, "add_dll_directory", return_value=object()) as add_dll:
+                transport.initialize_windows_libraries()
+                transport.initialize_windows_libraries()
+                add_dll.assert_called_once_with(str(site / "pywin32_system32"))
+                self.assertEqual(sys.path[:3], [str(site), str(site / "win32"), str(site / "win32/lib")])
+                self.assertIn(str(site / "pywin32_system32"), transport._WINDOWS_DLL_HANDLES)
+
+    def test_other_run_or_outside_temp_site_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            stale = base / "reqsys-migration-python-12344"
+            stale.mkdir()
+            with patch.dict(os.environ, {"RUNNER_TEMP": str(base), "GITHUB_RUN_ID": "12345",
+                    "REQSYS_MIGRATION_DEPENDENCIES": str(stale), "REQSYS_PYTHON_SITE": ""}):
+                with self.assertRaisesRegex(transport.TransportError, "path_not_fixed"):
+                    transport.migration_dependency_site()
+
+
+@unittest.skipUnless(os.name == "nt", "real Windows DPAPI and DACL")
+class WindowsIdentityTests(unittest.TestCase):
+    def test_real_dpapi_identity_replay_and_ciphertext_restore(self):
+        import win32security
+        from scripts import reqsys_self_hosted_dev_publish as publisher
+
+        connection = sqlite3.connect(":memory:")
+        for index in range(11):
+            connection.execute(f"CREATE TABLE t{index} (id INTEGER PRIMARY KEY)")
+            connection.executemany(f"INSERT INTO t{index} VALUES (?)",
+                                   [(number,) for number in range(20 if index == 0 else 19)])
+        data = connection.serialize()
+        connection.close()
+        with tempfile.TemporaryDirectory() as temporary:
+            shared = Path(temporary) / "ReqSys"
+            shared.mkdir()
+            before = win32security.ConvertSecurityDescriptorToStringSecurityDescriptor(
+                win32security.GetFileSecurity(str(shared), win32security.DACL_SECURITY_INFORMATION),
+                1, win32security.DACL_SECURITY_INFORMATION)
+            environment = {"LOCALAPPDATA": temporary, "REQSYS_MIGRATION_DEPENDENCIES": "",
+                           "REQSYS_PYTHON_SITE": ""}
+            with patch.dict(os.environ, environment), \
+                    patch.object(transport.socket, "gethostname", return_value=transport.TARGET_HOST), \
+                    patch.object(transport, "SQLITE_SHA256", transport.digest(data)), \
+                    patch.object(transport, "SQLITE_BYTES", len(data)):
+                key, first_public = transport.receiver_identity()
+                replay_key, second_public = transport.receiver_identity()
+                self.assertEqual(first_public, second_public)
+                self.assertEqual(transport.public_der(key.public_key()),
+                                 transport.public_der(replay_key.public_key()))
+                root = transport.receiver_root()
+                self.assertTrue((root / "receiver-private-key.dpapi").is_file())
+                envelope = transport.seal_sqlite(data, key.public_key(), 12345, "a" * 40)
+                report = transport.restore_on_receiver(envelope, expected_run_id=12345,
+                    expected_source_sha="a" * 40, expected_envelope_sha256=transport.digest(envelope))
+                self.assertTrue(report["ok"])
+                self.assertEqual((root / "restored-dev.sqlite").read_bytes(), data)
+                # Cross-check the publisher's independent WinAPI ACL reader.
+                independent = publisher.WindowsPrivateFiles()
+                for path in (root.parent, root, root / "receiver-private-key.dpapi",
+                             root / "receiver-public-key.json", root / "restored-dev.sqlite"):
+                    independent.check(path)
+                after = win32security.ConvertSecurityDescriptorToStringSecurityDescriptor(
+                    win32security.GetFileSecurity(str(shared), win32security.DACL_SECURITY_INFORMATION),
+                    1, win32security.DACL_SECURITY_INFORMATION)
+                self.assertEqual(before, after)
+
+    def test_existing_protected_folder_with_untrusted_sid_is_rejected(self):
+        import win32security
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary) / "private"
+            transport.private_scope_directory(folder)
+            descriptor = win32security.GetFileSecurity(str(folder), win32security.DACL_SECURITY_INFORMATION)
+            acl = descriptor.GetSecurityDescriptorDacl()
+            everyone = win32security.CreateWellKnownSid(win32security.WinWorldSid, None)
+            acl.AddAccessAllowedAceEx(win32security.ACL_REVISION, 0, 0x1F01FF, everyone)
+            descriptor.SetSecurityDescriptorDacl(1, acl, 0)
+            win32security.SetFileSecurity(str(folder),
+                win32security.DACL_SECURITY_INFORMATION | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
+                descriptor)
+            with self.assertRaisesRegex(transport.TransportError, "acl_untrusted"):
+                transport.private_scope_directory(folder)
 
 
 if __name__ == "__main__":

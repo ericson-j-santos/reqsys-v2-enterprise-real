@@ -198,7 +198,7 @@ def test_probe_children_use_the_selected_python() -> None:
     assert '"python", $script' not in raw
     assert '"python", $probeScript' not in raw
     assert "& python " not in raw
-    assert raw.count('"$env:REQSYS_PYTHON", $script') == 2
+    assert raw.count('"$env:REQSYS_PYTHON", $script') == 3
     assert raw.count('"$env:REQSYS_PYTHON", $probeScript') == 3
     assert raw.count('"$env:REQSYS_PYTHON", "-m", "pytest"') == 2
 
@@ -209,8 +209,8 @@ def test_all_probe_jobs_bootstrap_without_registry_installation() -> None:
     assert raw.count("4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3") == 5
     assert raw.count('$env:GITHUB_JOB + "-" + $env:GITHUB_RUN_ID') == 5
     assert raw.count('"portable_pip_sha256_mismatch"') == 3
-    assert raw.count('"--target", "$env:REQSYS_PYTHON_SITE"') == 2
-    assert raw.count('"--only-binary=:all:"') == 2
+    assert raw.count('"--target", "$env:REQSYS_PYTHON_SITE"') == 3
+    assert raw.count('"--only-binary=:all:"') == 3
     assert raw.count('PYTHONNOUSERSITE: "1"') == 3
     assert raw.count('"portable_python_user_site_not_disabled"') == 3
     assert (

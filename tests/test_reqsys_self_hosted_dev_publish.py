@@ -233,6 +233,62 @@ class PublishTests(unittest.TestCase):
             private.check(root)
             private.check(root / "sample")
 
+    @unittest.skipUnless(os.name == "nt", "DACL Windows")
+    def test_actual_windows_extra_admin_grant_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            private = publish.WindowsPrivateFiles()
+            root = Path(temporary) / "private"
+            private.directory(root)
+            descriptor = publish.ctypes.c_void_p()
+            sddl = private.directory_sddl + "(A;OICI;FA;;;BA)"
+            self.assertTrue(
+                private.adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl, 1, publish.ctypes.byref(descriptor), None
+                ), "test_descriptor_conversion_failed"
+            )
+            try:
+                self.assertTrue(
+                    private.adv.SetFileSecurityW(str(root), 0x80000004, descriptor),
+                    "test_descriptor_update_failed"
+                )
+            finally:
+                private.kernel.LocalFree(descriptor)
+            try:
+                with self.assertRaisesRegex(publish.PublishError, "not_exclusive"):
+                    private.check(root)
+            finally:
+                private.secure(root)
+
+    @unittest.skipUnless(os.name == "nt", "DACL Windows")
+    def test_actual_windows_transport_and_publisher_acl_interoperate(self):
+        try:
+            import win32security  # noqa: F401
+        except ImportError:
+            self.fail("Windows ACL interoperation test requires pywin32")
+        path = SCRIPT.parent / "dev_backup_transport.py"
+        crypto_spec = importlib.util.spec_from_file_location("backup_transport_acl", path)
+        crypto = importlib.util.module_from_spec(crypto_spec)
+        crypto_spec.loader.exec_module(crypto)
+        with tempfile.TemporaryDirectory() as temporary:
+            private = publish.WindowsPrivateFiles()
+            root = Path(temporary) / "private"
+            root.mkdir()
+            crypto.secure_acl(root, directory=True)
+            private.check(root)
+            file = root / "private-metadata"
+            file.write_bytes(b"private-metadata\n")
+            crypto.secure_acl(file, directory=False)
+            private.check(file)
+
+    @unittest.skipUnless(os.name == "nt", "DACL Windows")
+    def test_actual_windows_alias_sid_normalization(self):
+        private = publish.WindowsPrivateFiles()
+        self.assertTrue(
+            private._canonical_sid("SY") == private._canonical_sid("S-1-5-18"),
+            "system_sid_alias_not_normalized"
+        )
+
+
 
 if __name__ == "__main__":
     unittest.main()

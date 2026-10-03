@@ -74,6 +74,9 @@ class WindowsPrivateFiles:
         self.adv.ConvertSidToStringSidW.argtypes = [
             ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)
         ]
+        self.adv.ConvertStringSidToSidW.argtypes = [
+            wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p)
+        ]
         self.adv.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
             wintypes.LPCWSTR, wintypes.DWORD,
             ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(wintypes.DWORD)
@@ -92,6 +95,22 @@ class WindowsPrivateFiles:
         self.sid = self._user_sid()
         self.sddl = f"D:P(A;;FA;;;{self.sid})(A;;FA;;;SY)"
         self.directory_sddl = f"D:P(A;OICI;FA;;;{self.sid})(A;OICI;FA;;;SY)"
+
+    def _canonical_sid(self, value: str) -> str:
+        """Compara SID real, independentemente do alias usado pelo SDDL."""
+        sid = ctypes.c_void_p()
+        if not self.adv.ConvertStringSidToSidW(value, ctypes.byref(sid)):
+            raise PublishError("private_acl_sid_invalid")
+        text = ctypes.c_void_p()
+        try:
+            if not self.adv.ConvertSidToStringSidW(sid, ctypes.byref(text)):
+                raise PublishError("private_acl_sid_invalid")
+            try:
+                return ctypes.wstring_at(text)
+            finally:
+                self.kernel.LocalFree(text)
+        finally:
+            self.kernel.LocalFree(sid)
 
     def _user_sid(self) -> str:
         token = wintypes.HANDLE()
@@ -160,7 +179,9 @@ class WindowsPrivateFiles:
         if not match:
             raise PublishError("private_acl_not_exclusive")
         identities = re.findall(r"\(A;" + flags + r";FA;;;([^)]+)\)", match.group(1))
-        if sorted(identities) != sorted((self.sid, "SY")):
+        normalized = [self._canonical_sid(identity) for identity in identities]
+        expected = (self._canonical_sid(self.sid), self._canonical_sid("SY"))
+        if sorted(normalized) != sorted(expected):
             raise PublishError("private_acl_not_exclusive")
 
     def directory(self, path: Path) -> None:

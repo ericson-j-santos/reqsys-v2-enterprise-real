@@ -823,6 +823,41 @@ jobs:
           & $env:REQSYS_PYTHON $gateway @args
           exit $LASTEXITCODE
 
+      - name: Install pinned migration dependencies through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $args = @("--policy",$policy,"--correlation-id","$env:CORRELATION_ID-deps","run",
+            "--cwd",$env:TARGET_PATH,"--session-id",$env:SESSION_ID,"--risk","2","--timeout","240",
+            "--expected-head",$env:ANCHOR_SHA,"--","$env:REQSYS_PYTHON","-m","pip","--isolated","install",
+            "--disable-pip-version-check","--index-url","https://pypi.org/simple","--no-user",
+            "--only-binary=:all:","--target", "$env:REQSYS_PYTHON_SITE","cryptography==46.0.2","pywin32==311")
+          & $env:REQSYS_PYTHON $gateway @args
+          exit $LASTEXITCODE
+
+      - name: Inspect the fixed Restic snapshot through Command Gateway
+        shell: powershell
+        env:
+          TARGET_PATH: ${{ steps.session.outputs.target_path }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+          ANCHOR_SHA: ${{ steps.session.outputs.anchor_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gateway = Join-Path $env:GITHUB_WORKSPACE "_rules\scripts\command_gateway.py"
+          $policy = Join-Path $env:GITHUB_WORKSPACE "_rules\config\command-gateway.policy.json"
+          $script = Join-Path $env:TARGET_PATH "scripts\dev_backup_transport.py"
+          $args = @("--policy",$policy,"--correlation-id","$env:CORRELATION_ID-restic","run",
+            "--cwd",$env:TARGET_PATH,"--session-id",$env:SESSION_ID,"--risk","2","--timeout","180",
+            "--expected-head",$env:ANCHOR_SHA,"--","$env:REQSYS_PYTHON", $script,
+            "restic-inventory","--confirm","INVENTORY-NOTERI-FIXED-RESTIC-DEV-BACKUP")
+          & $env:REQSYS_PYTHON $gateway @args
+          exit $LASTEXITCODE
       - name: Upload sanitized backup metadata evidence
         if: always() && steps.session.outputs.target_path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

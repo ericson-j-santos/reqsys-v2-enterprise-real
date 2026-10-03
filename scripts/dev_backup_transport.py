@@ -194,13 +194,108 @@ def no_reparse(path: Path) -> None:
     for ancestor in (path, *path.parents):
         if ancestor.exists():
             if ancestor.is_symlink() or (
-                ancestor.stat().st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                getattr(ancestor.stat(), "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
             ):
                 reject("private_path_reparse_rejected")
 
 
+_WINDOWS_DLL_HANDLES: dict[str, object] = {}
+
+
+def migration_dependency_site() -> Path | None:
+    """Only this workflow's fixed temporary installation can extend DLL search."""
+    raw_migration = os.environ.get("REQSYS_MIGRATION_DEPENDENCIES", "")
+    raw_portable = os.environ.get("REQSYS_PYTHON_SITE", "")
+    if not raw_migration and not raw_portable:
+        return None  # Hosted Windows CI installs pywin32 normally.
+    temporary = os.environ.get("RUNNER_TEMP", "")
+    run = os.environ.get("GITHUB_RUN_ID", "")
+    if not temporary or not Path(temporary).is_absolute() or not re.fullmatch(r"[1-9][0-9]*", run):
+        reject("migration_dependency_correlation_invalid")
+    base = Path(temporary).resolve()
+    if raw_migration:
+        requested = Path(raw_migration)
+        expected = base / ("reqsys-migration-python-" + run)
+    else:
+        job = os.environ.get("GITHUB_JOB", "")
+        attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", job) or not re.fullmatch(r"[1-9][0-9]*", attempt):
+            reject("migration_dependency_correlation_invalid")
+        requested = Path(raw_portable)
+        expected = base / ("reqsys-python-3.12.10-" + job + "-" + run + "-" + attempt) / "Lib" / "site-packages"
+    if not requested.is_absolute():
+        reject("migration_dependency_path_not_fixed")
+    no_reparse(requested)
+    if requested.resolve() != expected.resolve():
+        reject("migration_dependency_path_not_fixed")
+    if not requested.is_dir():
+        reject("migration_dependency_directory_missing")
+    return requested.resolve()
+
+
+def initialize_windows_libraries() -> None:
+    if os.name != "nt":
+        reject("windows_libraries_required")
+    site = migration_dependency_site()
+    if site is None:
+        return
+    import sys
+    allowed = (site, site / "win32", site / "win32" / "lib")
+    dll_directory = site / "pywin32_system32"
+    for path in (*allowed, dll_directory):
+        no_reparse(path)
+        if not path.is_dir():
+            reject("migration_pywin32_layout_missing")
+    dll_key = str(dll_directory)
+    if dll_key not in _WINDOWS_DLL_HANDLES:
+        _WINDOWS_DLL_HANDLES[dll_key] = os.add_dll_directory(dll_key)
+    # Avoid executing .pth files; only known pywin32 package directories are added.
+    for path in reversed(allowed):
+        text = str(path)
+        if text not in sys.path:
+            sys.path.insert(0, text)
+
+
+def private_scope_directory(path: Path) -> None:
+    """Protect the dedicated task scope; shared ReqSys parent is never modified."""
+    initialize_windows_libraries()
+    import win32api
+    import win32con
+    import win32security
+    no_reparse(path)
+    if path.exists():
+        if not path.is_dir():
+            reject("private_scope_directory_required")
+        token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
+        try:
+            user = win32security.GetTokenInformation(token, win32security.TokenUser)[0]
+        finally:
+            token.Close()
+        system = win32security.CreateWellKnownSid(win32security.WinLocalSystemSid, None)
+        administrators = win32security.CreateWellKnownSid(win32security.WinBuiltinAdministratorsSid, None)
+        creator_owner = win32security.CreateWellKnownSid(win32security.WinCreatorOwnerSid, None)
+        descriptor = win32security.GetFileSecurity(str(path),
+            win32security.OWNER_SECURITY_INFORMATION | win32security.DACL_SECURITY_INFORMATION)
+        owner = descriptor.GetSecurityDescriptorOwner()
+        if owner not in (user, system, administrators):
+            reject("private_scope_owner_untrusted")
+        dacl = descriptor.GetSecurityDescriptorDacl()
+        if dacl is None:
+            reject("private_scope_acl_missing")
+        protected = bool(descriptor.GetSecurityDescriptorControl()[0] & 0x1000)
+        trusted = (user, system) if protected else (user, system, administrators, creator_owner)
+        for index in range(dacl.GetAceCount()):
+            ace = dacl.GetAce(index)
+            if len(ace) != 3 or ace[0][0] != win32security.ACCESS_ALLOWED_ACE_TYPE or ace[2] not in trusted:
+                reject("private_scope_acl_untrusted")
+    else:
+        path.mkdir(parents=True, exist_ok=False)
+    secure_acl(path, directory=True)
+
+
 def secure_acl(path: Path, *, directory: bool) -> None:
     """Private owner+SYSTEM DACL; no subprocess and no elevation."""
+    initialize_windows_libraries()
     import win32api
     import win32con
     import win32security
@@ -213,7 +308,7 @@ def secure_acl(path: Path, *, directory: bool) -> None:
     acl = win32security.ACL()
     flags = (win32con.OBJECT_INHERIT_ACE | win32con.CONTAINER_INHERIT_ACE) if directory else 0
     for sid in (user_sid, system_sid):
-        acl.AddAccessAllowedAceEx(win32security.ACL_REVISION, flags, win32con.GENERIC_ALL, sid)
+        acl.AddAccessAllowedAceEx(win32security.ACL_REVISION, flags, 0x1F01FF, sid)
     descriptor = win32security.SECURITY_DESCRIPTOR()
     descriptor.SetSecurityDescriptorDacl(1, acl, 0)
     win32security.SetFileSecurity(str(path),
@@ -226,11 +321,10 @@ def receiver_root() -> Path:
     base = os.environ.get("LOCALAPPDATA", "")
     if not base or not Path(base).is_absolute():
         reject("localappdata_required")
-    root = Path(base) / "ReqSys" / "SelfHostedDev" / "Migration"
-    no_reparse(root)
-    root.mkdir(parents=True, exist_ok=True)
-    no_reparse(root)
-    secure_acl(root, directory=True)
+    scope = Path(base) / "ReqSys" / "SelfHostedDev"
+    private_scope_directory(scope)
+    root = scope / "Migration"
+    private_scope_directory(root)
     return root
 
 
@@ -256,6 +350,8 @@ def private_write(path: Path, value: bytes) -> None:
 
 def receiver_identity() -> tuple[rsa.RSAPrivateKey, dict]:
     """Idempotent key provisioning. Private key persists only inside user DPAPI."""
+    exact_host(TARGET_HOST)
+    initialize_windows_libraries()
     import win32crypt
     root = receiver_root()
     key_file, public_file = root / "receiver-private-key.dpapi", root / "receiver-public-key.json"
