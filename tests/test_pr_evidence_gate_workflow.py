@@ -49,7 +49,7 @@ def test_pr_evidence_gate_paginates_workflow_lookup():
 
     assert 'github.rest.actions.listWorkflowRunsForRepo' in text
     assert 'const runs = await github.paginate(' in text
-    assert '(response) => response.data.workflow_runs || []' in text
+    assert '(response) => response.data.workflow_runs || []' not in text
     assert "event: 'pull_request'" in text
     assert 'per_page: 100' in text
 

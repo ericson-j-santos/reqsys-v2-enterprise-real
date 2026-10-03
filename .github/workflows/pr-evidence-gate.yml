@@ -209,7 +209,6 @@ jobs:
                   event: 'pull_request',
                   per_page: 100,
                 },
-                (response) => response.data.workflow_runs || [],
               );
 
               const runSummaries = [];
