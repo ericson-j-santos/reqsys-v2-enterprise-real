@@ -1,0 +1,10 @@
+mcs.metadata:
+  componentName: EndofConversation
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnMultipleTopicsMatched
+  id: main
+  actions:
+    - kind: SendActivity
+      id: sendMessage_ambiguo
+      activity: Encontrei mais de um assunto possivel (demanda, aprovacao ou release). Qual deles voce quer tratar agora?

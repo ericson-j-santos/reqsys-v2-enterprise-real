@@ -1,0 +1,49 @@
+name: Artifact Contract Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'docs/**/*.json'
+      - 'docs/**/*.md'
+      - 'docs/contracts/**'
+      - 'scripts/artifact_contract_validator.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - 'docs/**/*.json'
+      - 'docs/**/*.md'
+      - 'docs/contracts/**'
+      - 'scripts/artifact_contract_validator.py'
+
+concurrency:
+  group: artifact-contract-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-contract-validation:
+    name: Report-only artifact contract validation
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate report-only contract validation report
+        run: |
+          python scripts/artifact_contract_validator.py
+
+      - name: Upload artifact contract validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact-contract-validation-report-${{ github.run_id }}
+          path: audit/artifact-contract-validation/
+          if-no-files-found: warn
+          retention-days: 30

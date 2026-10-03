@@ -21,11 +21,19 @@ Fornecer uma camada isolada, auditável e segura para chamadas locais de IA, man
 - Administração remota de modelos sem RBAC.
 - Persistência de prompts sensíveis.
 
-## Execução local planejada
+## Execução local
 
 ```bash
-python -m reqsys_ollama_gateway.app
+pip install -e .[dev]
+uvicorn reqsys_ollama_gateway.main:app --host 0.0.0.0 --port 8008
 ```
+
+## Endpoints
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/health` | Healthcheck com `correlation_id` |
+| POST | `/v1/chat` | Chat governado consumido pelo ReqSys (`ollama_gateway`) |
 
 ## Variáveis esperadas
 
@@ -35,6 +43,8 @@ python -m reqsys_ollama_gateway.app
 | `REQSYS_OLLAMA_BASE_URL` | URL base local do Ollama |
 | `REQSYS_AUTH_REQUIRED` | Exigir autenticação |
 | `REQSYS_ALLOWED_ORIGINS` | Origens permitidas, sem wildcard em produção |
+| `REQSYS_GATEWAY_API_KEY` | Chave para `X-API-Key` |
+| `REQSYS_OLLAMA_TIMEOUT_SECONDS` | Timeout das chamadas ao Ollama |
 
 ## Segurança
 

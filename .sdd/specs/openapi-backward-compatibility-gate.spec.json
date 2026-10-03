@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "OpenAPI Backward Compatibility Gate",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_openapi_breaking_change_gate.py"
+    ],
+    "evidence_contract": "O gate compara o contrato canônico mais recente da base com o candidato do HEAD, bloqueia incompatibilidades de alta confiança e possui controle negativo que prova o bloqueio."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/openapi-routes-drift.yml",
+    "pull_request": "pending"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}

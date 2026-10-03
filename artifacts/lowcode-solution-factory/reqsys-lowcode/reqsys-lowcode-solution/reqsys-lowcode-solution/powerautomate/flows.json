@@ -1,0 +1,58 @@
+[
+  {
+    "name": "ReqSys - Intake de demanda",
+    "trigger": "Dataverse: row added on Demandas",
+    "actions": [
+      "Calcular prioridade",
+      "Criar aprovacao inicial",
+      "Notificar Teams"
+    ],
+    "connection_references": [
+      "shared_commondataserviceforapps",
+      "shared_teams"
+    ],
+    "run_as": "service_principal_or_owner"
+  },
+  {
+    "name": "ReqSys - Aprovacao de requisito",
+    "trigger": "Dataverse: status em_aprovacao on Requisitos",
+    "actions": [
+      "Start and wait for approval",
+      "Atualizar requisito",
+      "Registrar evidencia"
+    ],
+    "connection_references": [
+      "shared_commondataserviceforapps",
+      "shared_approvals"
+    ],
+    "run_as": "service_principal_or_owner"
+  },
+  {
+    "name": "ReqSys - Release governance",
+    "trigger": "Manual button or scheduled",
+    "actions": [
+      "Consolidar evidencias",
+      "Gerar go/no-go",
+      "Notificar stakeholders"
+    ],
+    "connection_references": [
+      "shared_commondataserviceforapps",
+      "shared_teams",
+      "shared_sharepointonline"
+    ],
+    "run_as": "service_principal_or_owner"
+  },
+  {
+    "name": "ReqSys - Copilot handoff",
+    "trigger": "Copilot Studio action",
+    "actions": [
+      "Criar demanda",
+      "Vincular contexto",
+      "Retornar numero da demanda"
+    ],
+    "connection_references": [
+      "shared_commondataserviceforapps"
+    ],
+    "run_as": "service_principal_or_owner"
+  }
+]

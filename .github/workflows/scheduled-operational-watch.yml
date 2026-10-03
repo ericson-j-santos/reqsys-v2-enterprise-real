@@ -3,14 +3,14 @@ name: Scheduled Operational Watch
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */4 * * *'
 
 permissions:
   actions: read
   checks: read
   contents: read
   pull-requests: read
-  issues: read
+  issues: write
 
 jobs:
   operational-watch:
@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Build operational watch evidence
         id: watch
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const fs = require('fs');
@@ -125,9 +125,789 @@ jobs:
 
       - name: Upload operational evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: scheduled-operational-watch-${{ github.run_id }}
           path: audit/
           if-no-files-found: error
           retention-days: 30
+
+  microsoft-graph-planner-teams-watch:
+    name: Detect material Microsoft Graph changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check official Microsoft Graph sources
+        id: watch
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          ISSUE_NUMBER: '2165'
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const sources = [
+              {
+                id: 'permissions',
+                url: 'https://learn.microsoft.com/en-us/graph/permissions-reference',
+                anchors: ['ChannelMessage.Read.All', 'ChannelMessage.ReadWrite', 'ChannelMessage.Send']
+              },
+              {
+                id: 'channel-read',
+                url: 'https://learn.microsoft.com/en-us/graph/api/channel-list-messages?view=graph-rest-1.0',
+                anchors: ['ChannelMessage.Read.Group', 'ChannelMessage.Read.All', 'resource-specific consent']
+              },
+              {
+                id: 'channel-send',
+                url: 'https://learn.microsoft.com/en-us/graph/api/chatmessage-post?view=graph-rest-1.0',
+                anchors: ['ChannelMessage.Send', 'Teamwork.Migrate.All', 'migration']
+              },
+              {
+                id: 'change-notifications',
+                url: 'https://learn.microsoft.com/en-us/graph/teams-changenotifications-chatmessage',
+                anchors: ['ChannelMessage.Read.Group', 'ChannelMessage.Read.All', 'resource-specific consent']
+              },
+              {
+                id: 'teams-rsc',
+                url: 'https://learn.microsoft.com/en-us/microsoftteams/platform/graph-api/rsc/resource-specific-consent',
+                anchors: ['ChannelMessage.Read.Group', 'ChannelMessage.Send.Group', 'applicationPermissions']
+              }
+            ];
+            const rssUrl = 'https://developer.microsoft.com/en-us/graph/changelog/rss';
+            const markerStart = '<!-- graph-watch-state\n';
+            const markerEnd = '\ngraph-watch-state -->';
+            const messageSignals = [
+              'channelmessage', 'channel message', 'chatmessage', 'chat message',
+              'teamwork.migrate.all'
+            ];
+            const consentSignals = [
+              'channelmessage.read', 'channelmessage.send',
+              'resource-specific consent', 'resource specific consent'
+            ];
+            const notificationSignals = ['change notification', 'change notifications', 'subscription'];
+            const authSignals = [
+              'admin consent', 'application permission', 'application permissions',
+              'client credential', 'client credentials', 'service principal',
+              'access token', 'oauth'
+            ];
+            const graphContextSignals = [
+              'microsoft graph', 'graph', 'teams',
+              'channelmessage', 'channel message', 'chatmessage', 'chat message'
+            ];
+
+            function rssEntryIsMaterial(entry) {
+              const haystack = (entry.title + '\n' + entry.description).toLowerCase();
+              const hasAny = terms => terms.some(term => haystack.includes(term));
+              const messageChange = hasAny(messageSignals);
+              const consentChange = hasAny(consentSignals);
+              const notificationChange =
+                hasAny(notificationSignals) &&
+                hasAny(['channelmessage', 'channel message', 'chatmessage', 'chat message', 'teams', 'teamwork']);
+              const appAuthChange = hasAny(authSignals) && hasAny(graphContextSignals);
+              return messageChange || consentChange || notificationChange || appAuthChange;
+            }
+
+            function clean(raw) {
+              return raw
+                .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+                .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/&amp;/gi, '&')
+                .replace(/&lt;/gi, '<')
+                .replace(/&gt;/gi, '>')
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/gi, '"')
+                .replace(/\s+/g, ' ')
+                .trim();
+            }
+
+            function relevantWindow(text, anchors) {
+              const lower = text.toLowerCase();
+              const ranges = [];
+              for (const anchor of anchors) {
+                let at = lower.indexOf(anchor.toLowerCase());
+                while (at >= 0) {
+                  ranges.push([Math.max(0, at - 450), Math.min(text.length, at + anchor.length + 700)]);
+                  at = lower.indexOf(anchor.toLowerCase(), at + anchor.length);
+                }
+              }
+              if (!ranges.length) throw new Error('required_anchor_missing');
+              ranges.sort((a, b) => a[0] - b[0]);
+              const merged = [];
+              for (const range of ranges) {
+                const last = merged[merged.length - 1];
+                if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+                else merged.push(range);
+              }
+              return merged.slice(0, 12).map(([a, b]) => text.slice(a, b)).join('\n---\n');
+            }
+
+            function sha256(value) {
+              return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+            }
+
+            async function fetchText(url) {
+              let last;
+              for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                  const response = await fetch(url, {
+                    headers: {
+                      'user-agent': 'ReqSys-MicrosoftGraph-Watch/1.0',
+                      accept: 'text/html,application/xml,application/rss+xml;q=0.9,*/*;q=0.8'
+                    },
+                    signal: AbortSignal.timeout(20000)
+                  });
+                  if (response.ok) return await response.text();
+                  last = new Error('http_' + response.status);
+                  if (![429, 500, 502, 503, 504].includes(response.status)) break;
+                  const retryAfter = Number(response.headers.get('retry-after') || 0);
+                  await new Promise(resolve => setTimeout(resolve, Math.min(8000, retryAfter > 0 ? retryAfter * 1000 : (2 ** attempt) * 1000)));
+                } catch (error) {
+                  last = error;
+                  if (attempt < 2) await new Promise(resolve => setTimeout(resolve, (2 ** attempt) * 1000));
+                }
+              }
+              throw last || new Error('fetch_failed');
+            }
+
+            function tag(item, name) {
+              const match = item.match(new RegExp('<' + name + '[^>]*>([\\s\\S]*?)<\\/' + name + '>', 'i'));
+              return match ? clean(match[1]) : '';
+            }
+
+            function rssEntries(raw) {
+              const items = raw.match(/<item\b[\s\S]*?<\/item>/gi) || [];
+              return items.map(item => {
+                const title = tag(item, 'title');
+                const description = tag(item, 'description');
+                const link = tag(item, 'link');
+                const id = tag(item, 'guid') || link || title;
+                const published = tag(item, 'pubDate');
+                return {id, title, description, link, published};
+              }).filter(rssEntryIsMaterial);
+            }
+
+            const issue = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            const currentBody = issue.data.body || '';
+            const start = currentBody.indexOf(markerStart);
+            const end = start >= 0 ? currentBody.indexOf(markerEnd, start + markerStart.length) : -1;
+            let previous = {
+              schema_version: '1.1',
+              source_hashes: {},
+              source_text: {},
+              rss_initialized: false,
+              rss_latest_published_ms: 0,
+              rss_recent_ids: []
+            };
+            if (start >= 0 && end >= 0) {
+              try {
+                previous = {...previous, ...JSON.parse(currentBody.slice(start + markerStart.length, end).trim())};
+              } catch (error) {
+                core.warning('Invalid previous state; seeding safely.');
+              }
+            }
+
+            const parsedWatermark = Number(previous.rss_latest_published_ms || 0);
+            const next = {
+              schema_version: '1.1',
+              source_hashes: {...(previous.source_hashes || {})},
+              source_text: {...(previous.source_text || {})},
+              rss_initialized: Boolean(previous.rss_initialized),
+              rss_latest_published_ms: Number.isFinite(parsedWatermark) && parsedWatermark > 0 ? parsedWatermark : 0,
+              rss_recent_ids: Array.isArray(previous.rss_recent_ids) ? previous.rss_recent_ids.slice(-200) : []
+            };
+            const changes = [];
+            const errors = [];
+            const seeded = [];
+
+            for (const source of sources) {
+              try {
+                const text = clean(await fetchText(source.url));
+                const excerpt = relevantWindow(text, source.anchors);
+                const digest = sha256(excerpt);
+                const old = next.source_hashes[source.id];
+                if (!old) seeded.push(source.id);
+                else if (old !== digest) {
+                  changes.push({
+                    source: source.id,
+                    url: source.url,
+                    confirmed_change: 'Relevant official Microsoft documentation changed.',
+                    old_digest: old,
+                    new_digest: digest,
+                    excerpt: excerpt.slice(0, 1800)
+                  });
+                }
+                next.source_hashes[source.id] = digest;
+                next.source_text[source.id] = excerpt.slice(0, 4000);
+              } catch (error) {
+                errors.push({source: source.id, url: source.url, error: String(error.message || error)});
+              }
+            }
+
+            try {
+              const entries = rssEntries(await fetchText(rssUrl));
+              const datedEntries = entries
+                .map(entry => ({...entry, publishedMs: Date.parse(entry.published)}))
+                .filter(entry => Number.isFinite(entry.publishedMs));
+              if (entries.length && !datedEntries.length) throw new Error('rss_published_date_missing');
+
+              const previousWatermark = next.rss_latest_published_ms;
+              const recentIds = new Set(next.rss_recent_ids);
+              if (next.rss_initialized && previousWatermark > 0) {
+                for (const entry of datedEntries) {
+                  const isNewer = entry.publishedMs > previousWatermark;
+                  const isNewAtWatermark =
+                    entry.publishedMs === previousWatermark && !recentIds.has(entry.id);
+                  if (isNewer || isNewAtWatermark) {
+                    changes.push({
+                      source: 'graph-changelog-rss',
+                      url: entry.link || rssUrl,
+                      confirmed_change: entry.title || 'New relevant Microsoft Graph changelog entry.',
+                      old_digest: null,
+                      new_digest: sha256(entry.id),
+                      excerpt: (entry.published + ' ' + entry.description).trim().slice(0, 1800)
+                    });
+                  }
+                }
+              } else {
+                // Migration/baseline: seed the current feed without replaying historical entries.
+                seeded.push('graph-changelog-rss');
+              }
+
+              const currentWatermark = datedEntries.reduce(
+                (maximum, entry) => Math.max(maximum, entry.publishedMs),
+                previousWatermark
+              );
+              next.rss_latest_published_ms = currentWatermark;
+              const retentionFloor = currentWatermark > 0
+                ? currentWatermark - (30 * 24 * 60 * 60 * 1000)
+                : 0;
+              next.rss_recent_ids = Array.from(new Set(
+                datedEntries
+                  .filter(entry => entry.publishedMs >= retentionFloor)
+                  .sort((a, b) => b.publishedMs - a.publishedMs)
+                  .map(entry => entry.id)
+              )).slice(0, 200);
+              next.rss_initialized = true;
+            } catch (error) {
+              errors.push({source: 'graph-changelog-rss', url: rssUrl, error: String(error.message || error)});
+            }
+
+            const impact = 'Pode destravar ou alterar leitura, envio, consentimento ou autenticação do E2E Planner→Teams.';
+            const risk = 'Mudar permissões ou autenticação sem validar o contrato oficial pode elevar privilégio ou produzir falso verde no readback do Teams.';
+            const adaptation = 'Não conceder permissão automaticamente. Mapear a mudança ao menor escopo oficial, aplicar somente em DEV e reexecutar o E2E com correlation_id único, caso negativo, caso positivo, readback independente e replay sem duplicidade.';
+
+            const stateJson = JSON.stringify(next);
+            const status = errors.length ? 'degraded' : 'passed';
+            const nextBody = [
+              '### Descrição do problema',
+              'Monitorar mudanças oficiais do Microsoft Graph que possam destravar ou alterar o E2E Planner→Teams do ReqSys sem ampliar privilégios automaticamente.',
+              '',
+              '### Estado atual evidenciado',
+              '- Execução: GitHub Actions no `Scheduled Operational Watch` existente (cron de 4 horas).',
+              '- Último estado técnico: `' + status + '`; fontes com erro: `' + errors.length + '`.',
+              '- Comentários do monitor: somente quando houver mudança material detectada nas superfícies oficiais monitoradas.',
+              '',
+              '### Estado esperado',
+              'Detectar mudança material em permissões ChannelMessage, consentimento/RSC, mensagens de canal, change notifications ou autenticação e registrar um único alerta acionável.',
+              '',
+              '### Causa raiz',
+              'O E2E Planner→Teams depende do contrato externo do Microsoft Graph; alterações de permissão, consentimento ou autenticação podem destravar ou invalidar a integração sem mudança no código do ReqSys.',
+              '',
+              '### Critérios de aceite',
+              '- Primeira coleta sem baseline não gera alerta.',
+              '- Mudança material futura gera um único comentário com fonte oficial, efeito, risco e menor adaptação segura/idempotente.',
+              '- Erro isolado de fonte gera estado degradado, nunca alerta material.',
+              '- Replay sem mudança não duplica comentário.',
+              '',
+              '### Riscos',
+              'Falso positivo de documentação e ampliação indevida de privilégio. O monitor não concede permissões, não altera tenant, consentimento, segredo, ambiente ou deploy.',
+              '',
+              '### Dependências',
+              'Microsoft Learn, Microsoft Graph changelog oficial e disponibilidade do GitHub Actions.',
+              '',
+              '### Evidências',
+              '- Artifact sanitizado: `microsoft-graph-planner-teams-watch`.',
+              '- Estado/deduplicação persistidos abaixo por SHA-256.',
+              '',
+              '### PR(s) relacionadas',
+              '- #2166',
+              '',
+              '### Responsável',
+              'Engineering Control Plane / GitHub Actions.',
+              '',
+              '### Prioridade',
+              'P1 — confiabilidade do E2E Planner→Teams.',
+              '',
+              '### Declaração de rastreabilidade',
+              '- [x] Issue canônica de estado do monitor Microsoft Graph ↔ E2E Planner→Teams ↔ PR #2166.',
+              '',
+              markerStart + stateJson + markerEnd
+            ].join('\n');
+
+            if (currentBody.trim() !== nextBody.trim()) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: nextBody
+              });
+            }
+
+            if (changes.length) {
+              const sections = changes.map(change => [
+                '### ' + change.source,
+                '- Mudança confirmada: ' + change.confirmed_change,
+                '- Fonte oficial: ' + change.url,
+                '- Efeito no bloqueio atual: ' + impact,
+                '- Risco: ' + risk,
+                '- Menor adaptação segura/idempotente: ' + adaptation,
+                '- Evidência SHA-256: `' + (change.old_digest || 'new-entry') + '` → `' + change.new_digest + '`',
+                '',
+                '<details><summary>Trecho oficial observado</summary>',
+                '',
+                change.excerpt,
+                '',
+                '</details>'
+              ].join('\n')).join('\n\n');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: '## Microsoft Graph — mudança material detectada\n\n' + sections
+              });
+            }
+
+            const report = {
+              schema_version: '1.1',
+              repository: context.repo.owner + '/' + context.repo.repo,
+              run_id: context.runId,
+              status,
+              notify: changes.length > 0,
+              seeded_sources: seeded,
+              material_changes: changes,
+              source_errors: errors
+            };
+            fs.mkdirSync('artifacts/microsoft-graph-planner-teams-watch', {recursive: true});
+            fs.writeFileSync(
+              'artifacts/microsoft-graph-planner-teams-watch/report.json',
+              JSON.stringify(report, null, 2) + '\n'
+            );
+            await core.summary
+              .addHeading('Microsoft Graph Planner→Teams Watch')
+              .addRaw('Status: ' + status + '\n')
+              .addRaw('Material changes: ' + changes.length + '\n')
+              .addRaw('Seeded sources: ' + seeded.length + '\n')
+              .addRaw('Source errors: ' + errors.length + '\n')
+              .write();
+            if (errors.length) core.warning('Source errors detected; no alert is emitted from errors alone.');
+
+      - name: Upload sanitized watch evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: microsoft-graph-planner-teams-watch
+          path: artifacts/microsoft-graph-planner-teams-watch/report.json
+          if-no-files-found: error
+          retention-days: 30
+
+  github-pages-pc24x7-watch:
+    name: Detect material GitHub Pages changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check official GitHub Pages sources
+        id: watch
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          ISSUE_NUMBER: '2179'
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const sources = [
+              {
+                id: 'limits',
+                url: 'https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits',
+                anchors: ['limit', 'bandwidth', 'deployment', 'builds per hour', '429', 'GB']
+              },
+              {
+                id: 'publishing',
+                url: 'https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site',
+                anchors: ['GitHub Actions', 'publishing source', 'branch', 'workflow', 'deploy', '.nojekyll', 'Jekyll']
+              },
+              {
+                id: 'custom-domain',
+                url: 'https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site',
+                anchors: ['custom domain', 'DNS', 'CNAME', 'AAAA', 'ALIAS', 'ANAME', 'verify', 'takeover']
+              },
+              {
+                id: 'https',
+                url: 'https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https',
+                anchors: ['HTTPS', 'certificate', 'DNS', 'CAA', 'letsencrypt.org', '64 characters']
+              },
+              {
+                id: 'domain-troubleshooting',
+                url: 'https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/troubleshooting-custom-domains-and-github-pages',
+                anchors: ['takeover', 'HTTPS', 'certificate', 'CAA', 'DNS', 'wildcard']
+              }
+            ];
+            const rssUrl = 'https://github.blog/changelog/feed/';
+            const markerStart = '<!-- github-pages-watch-state\n';
+            const markerEnd = '\ngithub-pages-watch-state -->';
+            const materialSignals = [
+              'must', 'required', 'requirement', 'no longer', 'deprecated', 'deprecation',
+              'retired', 'sunset', 'limit', 'rate limit', 'bandwidth', 'timeout', 'builds per hour',
+              'gb', 'mb', '429', 'https', 'certificate', 'dns', 'cname', 'aaaa', 'alias', 'aname',
+              'caa', 'letsencrypt', 'wildcard', 'takeover', 'verify', 'verification', 'public',
+              'private', 'visibility', 'github actions', 'deploy-pages', 'upload-pages-artifact',
+              'workflow', 'branch', '.nojekyll', 'jekyll', 'publishing source', 'breaking',
+              'compatibility', 'security'
+            ];
+
+            function clean(raw) {
+              return raw
+                .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+                .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/&amp;/gi, '&')
+                .replace(/&lt;/gi, '<')
+                .replace(/&gt;/gi, '>')
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/gi, '"')
+                .replace(/\s+/g, ' ')
+                .trim();
+            }
+
+            function sha256(value) {
+              return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+            }
+
+            function normalized(value) {
+              return value.replace(/\s+/g, ' ').trim();
+            }
+
+            function materialFacts(raw, anchors) {
+              const text = clean(raw);
+              const anchorLower = anchors.map(item => item.toLowerCase());
+              const facts = text
+                .split(/(?<=[.!?])\s+/)
+                .map(normalized)
+                .filter(item => item.length >= 25 && item.length <= 1600)
+                .filter(item => {
+                  const lower = item.toLowerCase();
+                  return anchorLower.some(term => lower.includes(term)) &&
+                    materialSignals.some(term => lower.includes(term));
+                });
+              return Array.from(new Set(facts)).sort().slice(0, 160);
+            }
+
+            function changedFacts(before, after) {
+              const previous = new Set(before || []);
+              const current = new Set(after || []);
+              return {
+                added: [...current].filter(item => !previous.has(item)).slice(0, 12),
+                removed: [...previous].filter(item => !current.has(item)).slice(0, 12)
+              };
+            }
+
+            async function fetchText(url) {
+              let last;
+              for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                  const response = await fetch(url, {
+                    headers: {
+                      'user-agent': 'ReqSys-GitHubPages-Watch/1.0',
+                      accept: 'text/html,application/xml,application/rss+xml;q=0.9,*/*;q=0.8'
+                    },
+                    signal: AbortSignal.timeout(20000)
+                  });
+                  if (response.ok) return await response.text();
+                  last = new Error('http_' + response.status);
+                  if (![429, 500, 502, 503, 504].includes(response.status)) break;
+                  const retryAfter = Number(response.headers.get('retry-after') || 0);
+                  const delay = Math.min(8000, retryAfter > 0 ? retryAfter * 1000 : (2 ** attempt) * 1000);
+                  await new Promise(resolve => setTimeout(resolve, delay));
+                } catch (error) {
+                  last = error;
+                  if (attempt < 2) await new Promise(resolve => setTimeout(resolve, (2 ** attempt) * 1000));
+                }
+              }
+              throw last || new Error('fetch_failed');
+            }
+
+            function tag(item, name) {
+              const match = item.match(new RegExp('<' + name + '[^>]*>([\\s\\S]*?)<\\/' + name + '>', 'i'));
+              return match ? clean(match[1]) : '';
+            }
+
+            function rssEntries(raw) {
+              const items = raw.match(/<item\b[\s\S]*?<\/item>/gi) || [];
+              return items.map(item => {
+                const title = tag(item, 'title');
+                const description = tag(item, 'description');
+                const link = tag(item, 'link');
+                const id = tag(item, 'guid') || link || title;
+                const published = tag(item, 'pubDate');
+                return {id, title, description, link, published};
+              }).filter(entry => {
+                const haystack = (entry.title + ' ' + entry.description).toLowerCase();
+                const pagesSpecific =
+                  haystack.includes('github pages') ||
+                  haystack.includes('pages site') ||
+                  haystack.includes('pages actions') ||
+                  haystack.includes('deploy-pages') ||
+                  haystack.includes('upload-pages-artifact');
+                return pagesSpecific && materialSignals.some(term => haystack.includes(term));
+              });
+            }
+
+            const negative = materialFacts(
+              '<html><body><p>Cosmetic wording and navigation were refreshed.</p></body></html>',
+              ['GitHub Pages']
+            );
+            if (negative.length !== 0) throw new Error('material_filter_negative_self_test_failed');
+            const positive = materialFacts(
+              '<html><body><p>GitHub Pages deployments now require deploy-pages v5 for publishing.</p></body></html>',
+              ['GitHub Pages', 'deploy-pages']
+            );
+            if (positive.length !== 1) throw new Error('material_filter_positive_self_test_failed');
+
+            const issue = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            const currentBody = issue.data.body || '';
+            const start = currentBody.indexOf(markerStart);
+            const end = start >= 0 ? currentBody.indexOf(markerEnd, start + markerStart.length) : -1;
+            let previous = {
+              schema_version: '1.0',
+              source_facts: {},
+              rss_initialized: false,
+              rss_latest_published_ms: 0,
+              rss_recent_ids: []
+            };
+            if (start >= 0 && end >= 0) {
+              try {
+                previous = {...previous, ...JSON.parse(currentBody.slice(start + markerStart.length, end).trim())};
+              } catch (error) {
+                core.warning('Invalid previous GitHub Pages watch state; seeding safely.');
+              }
+            }
+
+            const previousWatermark = Number(previous.rss_latest_published_ms || 0);
+            const next = {
+              schema_version: '1.0',
+              source_facts: {...(previous.source_facts || {})},
+              rss_initialized: Boolean(previous.rss_initialized),
+              rss_latest_published_ms: Number.isFinite(previousWatermark) && previousWatermark > 0 ? previousWatermark : 0,
+              rss_recent_ids: Array.isArray(previous.rss_recent_ids) ? previous.rss_recent_ids.slice(-200) : []
+            };
+            const changes = [];
+            const errors = [];
+            const seeded = [];
+
+            for (const source of sources) {
+              try {
+                const raw = await fetchText(source.url);
+                const facts = materialFacts(raw, source.anchors);
+                if (!facts.length) throw new Error('required_material_facts_missing');
+                const oldFacts = Array.isArray(next.source_facts[source.id]) ? next.source_facts[source.id] : [];
+                if (!oldFacts.length) {
+                  seeded.push(source.id);
+                } else {
+                  const delta = changedFacts(oldFacts, facts);
+                  if (delta.added.length || delta.removed.length) {
+                    changes.push({
+                      source: source.id,
+                      url: source.url,
+                      confirmed_change: 'Material GitHub Pages contract facts changed in official documentation.',
+                      old_digest: sha256(oldFacts.join('\n')),
+                      new_digest: sha256(facts.join('\n')),
+                      added: delta.added,
+                      removed: delta.removed
+                    });
+                  }
+                }
+                next.source_facts[source.id] = facts;
+              } catch (error) {
+                errors.push({source: source.id, url: source.url, error: String(error.message || error)});
+              }
+            }
+
+            try {
+              const entries = rssEntries(await fetchText(rssUrl));
+              const dated = entries
+                .map(entry => ({...entry, publishedMs: Date.parse(entry.published)}))
+                .filter(entry => Number.isFinite(entry.publishedMs));
+              if (entries.length && !dated.length) throw new Error('rss_published_date_missing');
+
+              const recentIds = new Set(next.rss_recent_ids);
+              if (next.rss_initialized && next.rss_latest_published_ms > 0) {
+                for (const entry of dated) {
+                  const isNewer = entry.publishedMs > next.rss_latest_published_ms;
+                  const isNewAtWatermark =
+                    entry.publishedMs === next.rss_latest_published_ms && !recentIds.has(entry.id);
+                  if (isNewer || isNewAtWatermark) {
+                    changes.push({
+                      source: 'github-changelog-rss',
+                      url: entry.link || rssUrl,
+                      confirmed_change: entry.title || 'New material GitHub Pages changelog entry.',
+                      old_digest: null,
+                      new_digest: sha256(entry.id),
+                      added: [(entry.published + ' ' + entry.description).trim().slice(0, 1600)],
+                      removed: []
+                    });
+                  }
+                }
+              } else {
+                seeded.push('github-changelog-rss');
+              }
+
+              const currentWatermark = dated.reduce(
+                (maximum, entry) => Math.max(maximum, entry.publishedMs),
+                next.rss_latest_published_ms
+              );
+              next.rss_latest_published_ms = currentWatermark;
+              const retentionFloor = currentWatermark > 0
+                ? currentWatermark - (45 * 24 * 60 * 60 * 1000)
+                : 0;
+              next.rss_recent_ids = Array.from(new Set(
+                dated
+                  .filter(entry => entry.publishedMs >= retentionFloor)
+                  .sort((a, b) => b.publishedMs - a.publishedMs)
+                  .map(entry => entry.id)
+              )).slice(0, 200);
+              next.rss_initialized = true;
+            } catch (error) {
+              errors.push({source: 'github-changelog-rss', url: rssUrl, error: String(error.message || error)});
+            }
+
+            const status = errors.length ? 'degraded' : 'passed';
+            const checkedAt = new Date().toISOString();
+            const stateJson = JSON.stringify(next);
+            const nextBody = [
+              '### Descrição do problema',
+              'Monitorar mudanças oficiais do GitHub Pages que possam afetar a rota DEV GitHub Pages → locator assinado → Cloudflare → PC24x7 sem alterar automaticamente a infraestrutura.',
+              '',
+              '### Estado atual evidenciado',
+              '- Execução: GitHub Actions no `Scheduled Operational Watch` existente (cron de 4 horas).',
+              '- Estado técnico: `' + status + '`; fontes com erro: `' + errors.length + '`.',
+              '- Alertas: somente quando fatos materiais das fontes oficiais mudarem após o baseline.',
+              '',
+              '### Estado esperado',
+              'Detectar mudança material em publicação, Pages Actions, domínio/DNS/HTTPS, limites ou segurança e registrar um único alerta acionável sem falso positivo.',
+              '',
+              '### Causa raiz',
+              'A entrada estática da rota DEV depende do contrato externo do GitHub Pages; mudanças oficiais podem quebrar publicação, domínio, HTTPS ou limites sem alteração no código do ReqSys.',
+              '',
+              '### Critérios de aceite',
+              '- Primeira coleta sem baseline não gera alerta histórico.',
+              '- Mudança material futura gera um único comentário com fonte oficial, risco e menor adaptação segura/idempotente.',
+              '- Erro isolado de fonte gera estado degradado, nunca alerta material.',
+              '- Replay sem mudança não duplica comentário nem reescreve a Issue sem alteração de estado.',
+              '- O corpo desta Issue permanece conforme o contrato de governança de Issues do ReqSys.',
+              '',
+              '### Riscos',
+              'Falso positivo documental, configuração DNS/HTTPS incorreta ou takeover. O monitor não altera domínio, permissão, publicação, Cloudflare, locator, PC24x7, segredo ou produção.',
+              '',
+              '### Dependências',
+              'GitHub Docs, GitHub Changelog oficial, GitHub Actions e disponibilidade da Issue #2179.',
+              '',
+              '### Evidências',
+              '- Artifact sanitizado: `github-pages-pc24x7-watch`.',
+              '- Estado/deduplicação persistidos abaixo por fatos oficiais normalizados.',
+              '',
+              '### PR(s) relacionadas',
+              '- #2180',
+              '',
+              '### Responsável',
+              'Engineering Control Plane / GitHub Actions.',
+              '',
+              '### Prioridade',
+              'P1 — confiabilidade da rota DEV PC24x7.',
+              '',
+              '### Declaração de rastreabilidade',
+              '- [x] Issue canônica de estado do monitor GitHub Pages ↔ locator assinado ↔ Cloudflare ↔ PC24x7.',
+              '',
+              markerStart + stateJson + markerEnd
+            ].join('\n');
+            if (currentBody.trim() !== nextBody.trim()) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: nextBody
+              });
+            }
+
+            if (changes.length > 0) {
+              const sections = changes.map(change => {
+                const delta = []
+                  .concat((change.added || []).map(item => '+ ' + item))
+                  .concat((change.removed || []).map(item => '- ' + item))
+                  .slice(0, 16)
+                  .join('\n');
+                return [
+                  '### ' + change.source,
+                  '- Mudança confirmada: ' + change.confirmed_change,
+                  '- Fonte oficial: ' + change.url,
+                  '- Risco: pode quebrar publicação, HTTPS/domínio, limites ou compatibilidade da entrada estática da rota DEV.',
+                  '- Menor adaptação segura: revisar somente o requisito alterado; se aplicável, atualizar configuração/action fixada, validar em DEV e executar E2E Pages → locator assinado → Cloudflare → PC24x7 antes de promover.',
+                  '',
+                  'Delta relevante:',
+                  delta || '(sem trecho textual disponível)'
+                ].join('\n');
+              }).join('\n\n');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: '## GitHub Pages — mudança material detectada\n\n' + sections
+              });
+            }
+
+            const report = {
+              schema_version: '1.0',
+              repository: context.repo.owner + '/' + context.repo.repo,
+              run_id: context.runId,
+              checked_at: checkedAt,
+              status,
+              notify: changes.length > 0,
+              seeded_sources: seeded,
+              material_changes: changes,
+              source_errors: errors,
+              self_test: 'passed'
+            };
+            fs.mkdirSync('artifacts/github-pages-pc24x7-watch', {recursive: true});
+            fs.writeFileSync(
+              'artifacts/github-pages-pc24x7-watch/report.json',
+              JSON.stringify(report, null, 2) + '\n'
+            );
+            await core.summary
+              .addHeading('GitHub Pages → PC24x7 Watch')
+              .addRaw('Status: ' + status + '\n')
+              .addRaw('Material changes: ' + changes.length + '\n')
+              .addRaw('Seeded sources: ' + seeded.length + '\n')
+              .addRaw('Source errors: ' + errors.length + '\n')
+              .write();
+            if (errors.length) core.warning('Source errors detected; errors alone never emit a change alert.');
+
+      - name: Upload sanitized GitHub Pages watch evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: github-pages-pc24x7-watch
+          path: artifacts/github-pages-pc24x7-watch/report.json
+          if-no-files-found: error
+          retention-days: 30
+

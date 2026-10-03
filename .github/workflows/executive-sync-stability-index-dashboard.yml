@@ -1,0 +1,71 @@
+name: Executive Sync Stability Index Dashboard
+
+on:
+  workflow_run:
+    workflows: ["Executive Sync Stability Index"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish-card:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/inject_executive_sync_stability_index_card.py
+          python -m py_compile scripts/validate_executive_sync_stability_index_card.py
+          python -m unittest tests/test_executive_sync_stability_index_dashboard.py
+
+      - name: Download latest canonical dashboard artifact
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          workflow: ops-dashboard.yml
+          workflow_conclusion: success
+          name: ops-dashboard-static
+          path: ops-dashboard-static
+          if_no_artifact_found: fail
+
+      - name: Download sync stability index artifact
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          workflow: executive-sync-stability-index.yml
+          workflow_conclusion: success
+          name: executive-sync-stability-index
+          path: executive-sync-stability-index
+          if_no_artifact_found: fail
+
+      - name: Resolve inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          INDEX=$(find executive-sync-stability-index -type f -name 'runtime-executive-index.json' | head -n1)
+          test -n "$INDEX"
+          cp "$INDEX" ops-dashboard-static/data/runtime-executive-index.json
+
+      - name: Inject and validate card
+        run: |
+          python scripts/inject_executive_sync_stability_index_card.py \
+            --html ops-dashboard-static/index.html \
+            --runtime-index ops-dashboard-static/data/runtime-executive-index.json
+          python scripts/validate_executive_sync_stability_index_card.py \
+            --html ops-dashboard-static/index.html \
+            --runtime-index ops-dashboard-static/data/runtime-executive-index.json
+
+      - name: Publish canonical artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-dashboard-static
+          path: ops-dashboard-static
+          retention-days: 90
+          if-no-files-found: error

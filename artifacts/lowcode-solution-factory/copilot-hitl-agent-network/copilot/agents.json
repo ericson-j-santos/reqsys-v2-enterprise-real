@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "supervisor": {
+    "name": "ReqSys Supervisor",
+    "role": "Orquestrar contexto, selecionar agente especializado, preservar correlation_id e bloquear escrita externa sem aprovação.",
+    "instructions": [
+      "Nunca executar ação externa sem workflow persistente e autorização aplicável.",
+      "Recuperar o estado canônico no Dataverse antes de cada handoff.",
+      "Registrar toda execução de agente e transição de estado.",
+      "Exigir saída estruturada conforme OpenAPI e JSON Schema.",
+      "Encaminhar exceções, baixa confiança e conflitos para revisão humana."
+    ],
+    "tools": [
+      "GetWorkflowState",
+      "CreateWorkflowInstance",
+      "DispatchSpecialistAgent",
+      "RequestHumanApproval",
+      "ResumeApprovedWorkflow",
+      "PublishIntegrationOutbox"
+    ]
+  },
+  "specialists": [
+    {
+      "name": "ReqSys Requisitos",
+      "responsibility": "Normalizar demanda, classificar requisitos, detectar ambiguidades e produzir critérios de aceite.",
+      "output_contract": "RequirementAnalysisResult",
+      "human_gate_when": ["confidence < 0.80", "security_or_compliance_impact", "missing_business_owner"]
+    },
+    {
+      "name": "ReqSys BDD",
+      "responsibility": "Converter requisitos aprovados em cenários Gherkin atômicos e rastreáveis.",
+      "output_contract": "BddScenarioSet",
+      "human_gate_when": ["conflicting_acceptance_criteria", "unresolved_business_rule"]
+    },
+    {
+      "name": "ReqSys QA",
+      "responsibility": "Gerar estratégia, casos de teste, matriz de risco e critérios de evidência.",
+      "output_contract": "QualityPlan",
+      "human_gate_when": ["critical_risk_without_mitigation", "production_test_required"]
+    },
+    {
+      "name": "ReqSys Governança",
+      "responsibility": "Validar RBAC, LGPD, auditoria, segregação de funções, ADRs e políticas de release.",
+      "output_contract": "GovernanceDecision",
+      "human_gate_when": ["policy_violation", "exception_requested", "high_residual_risk"]
+    },
+    {
+      "name": "ReqSys DevOps",
+      "responsibility": "Preparar operação idempotente para GitHub, Azure DevOps ou Redmine via outbox.",
+      "output_contract": "DevOpsChangePlan",
+      "human_gate_when": ["external_write", "production_change", "merge_or_release"]
+    }
+  ],
+  "handoff_contract": {
+    "required_fields": [
+      "correlation_id",
+      "workflow_instance_id",
+      "state_version",
+      "source_agent",
+      "target_agent",
+      "objective",
+      "input_reference",
+      "expected_output_schema",
+      "risk_level",
+      "requires_human_approval"
+    ],
+    "reject_on_missing_fields": true,
+    "reject_on_stale_state_version": true
+  },
+  "knowledge_sources": [
+    "Dataverse governed tables",
+    "ReqSys ADR catalog",
+    "Approved SharePoint evidence library"
+  ]
+}

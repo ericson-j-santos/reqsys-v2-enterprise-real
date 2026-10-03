@@ -1,0 +1,21 @@
+{
+  "feature_name": "change-impact-benchmark-v1",
+  "project": "ReqSys Produto",
+  "created_at": "2026-09-28",
+  "updated_at": "2026-09-28",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Benchmark governado de CHANGE impact analysis comparando grafo, recuperação semântica local e híbrido RAG+LLM, com ground truth histórico, recall/precision/review_rate e LLM restrito a candidatos recuperados.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_change_impact_analysis.py",
+      "tests/test_change_impact_benchmark.py",
+      "scripts/change_impact_benchmark.py"
+    ],
+    "evidence_contract": "O E2E deve executar dataset histórico -> três resultados por caso -> artifact JSON; em CI o LLM pode ser desabilitado ou injetado apenas para validar contrato. A estratégia híbrida só é considerada funcionalmente validada após execução real do provider configurado no mesmo SHA com llm_status=used. Dataset inválido deve falhar e não produzir artifact de sucesso."
+  }
+}

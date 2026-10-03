@@ -1,0 +1,158 @@
+name: Collect Performance SLO Evidence
+description: Resolve a evidência mais recente/elegível do Performance SLO Gate com proveniência explícita.
+
+inputs:
+  github-token:
+    description: Token somente leitura para consultar runs e artifacts.
+    required: true
+  repository:
+    description: Repositório owner/name.
+    required: true
+  source-run-id:
+    description: Run do Performance SLO Gate; vazio seleciona o último workflow_run de main.
+    required: false
+    default: ""
+  output-dir:
+    description: Diretório onde a evidência e a proveniência serão materializadas.
+    required: false
+    default: artifacts/performance-slo-observability
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Performance SLO run and artifact
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPOSITORY: ${{ inputs.repository }}
+        SOURCE_RUN_ID_INPUT: ${{ inputs.source-run-id }}
+        OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        set -euo pipefail
+        mkdir -p "${OUTPUT_DIR}/source"
+
+        source_run_id="${SOURCE_RUN_ID_INPUT}"
+        if [[ -z "${source_run_id}" ]]; then
+          gh run list \
+            --repo "${REPOSITORY}" \
+            --workflow "Performance SLO Error Budget Gate" \
+            --limit 30 \
+            --json databaseId,event,conclusion,headBranch,headSha,url,createdAt \
+            > "${OUTPUT_DIR}/candidate-runs.json"
+          source_run_id="$(jq -r '[.[] | select(.event == "workflow_run" and .headBranch == "main")][0].databaseId // empty' "${OUTPUT_DIR}/candidate-runs.json")"
+        fi
+
+        if [[ -z "${source_run_id}" ]]; then
+          jq -n '{
+            schema_version:"1.0.0",
+            source:"performance-slo-artifact-collector",
+            state:"unavailable",
+            reason:"no_main_workflow_run_found",
+            artifact_expected:false,
+            artifact_found:false
+          }' > "${OUTPUT_DIR}/provenance.json"
+          exit 0
+        fi
+
+        gh api "repos/${REPOSITORY}/actions/runs/${source_run_id}" > "${OUTPUT_DIR}/run.json"
+        source_event="$(jq -r '.event // ""' "${OUTPUT_DIR}/run.json")"
+        source_branch="$(jq -r '.head_branch // ""' "${OUTPUT_DIR}/run.json")"
+        source_sha="$(jq -r '.head_sha // ""' "${OUTPUT_DIR}/run.json")"
+        source_conclusion="$(jq -r '.conclusion // ""' "${OUTPUT_DIR}/run.json")"
+        source_url="$(jq -r '.html_url // ""' "${OUTPUT_DIR}/run.json")"
+        source_created_at="$(jq -r '.created_at // ""' "${OUTPUT_DIR}/run.json")"
+
+        if [[ "${source_event}" != "workflow_run" || "${source_branch}" != "main" ]]; then
+          jq -n \
+            --arg run_id "${source_run_id}" \
+            --arg conclusion "${source_conclusion}" \
+            --arg event "${source_event}" \
+            --arg branch "${source_branch}" \
+            --arg sha "${source_sha}" \
+            --arg url "${source_url}" \
+            --arg created_at "${source_created_at}" \
+            '{
+              schema_version:"1.0.0",
+              source:"performance-slo-artifact-collector",
+              state:"not_applicable",
+              reason:"source_run_is_not_main_workflow_run",
+              source_workflow_run_id:$run_id,
+              source_workflow_conclusion:$conclusion,
+              source_event:$event,
+              source_head_branch:$branch,
+              source_head_sha:$sha,
+              source_url:$url,
+              source_created_at:$created_at,
+              artifact_expected:false,
+              artifact_found:false
+            }' > "${OUTPUT_DIR}/provenance.json"
+          exit 0
+        fi
+
+        gh api "repos/${REPOSITORY}/actions/runs/${source_run_id}/jobs?per_page=100" > "${OUTPUT_DIR}/jobs.json"
+        gh api "repos/${REPOSITORY}/actions/runs/${source_run_id}/artifacts?per_page=100" > "${OUTPUT_DIR}/artifacts.json"
+
+        not_applicable="$(jq -r '[.jobs[].steps[]? | select(.name == "Record safe ineligible runtime path" and .conclusion == "success")] | length > 0' "${OUTPUT_DIR}/jobs.json")"
+        artifact_expected="$(jq -r '[.jobs[].steps[]? | select(.name == "Upload SLO evidence" and .conclusion == "success")] | length > 0' "${OUTPUT_DIR}/jobs.json")"
+        artifact_id="$(jq -r '[.artifacts[] | select(.expired == false and .name == "performance-slo-evidence")][0].id // empty' "${OUTPUT_DIR}/artifacts.json")"
+        artifact_name="$(jq -r '[.artifacts[] | select(.expired == false and .name == "performance-slo-evidence")][0].name // empty' "${OUTPUT_DIR}/artifacts.json")"
+
+        state="available"
+        reason="artifact_resolved"
+        artifact_found=false
+        if [[ "${not_applicable}" == "true" ]]; then
+          state="not_applicable"
+          reason="runtime_measurement_not_eligible"
+          artifact_expected=false
+        elif [[ -n "${artifact_id}" ]]; then
+          artifact_found=true
+        elif [[ "${artifact_expected}" == "true" ]]; then
+          state="artifact_missing"
+          reason="expected_artifact_missing"
+        elif [[ "${source_conclusion}" != "success" ]]; then
+          state="source_failed"
+          reason="performance_slo_workflow_failed_before_artifact"
+        else
+          state="not_applicable"
+          reason="slo_evaluation_not_executed"
+        fi
+
+        jq -n \
+          --arg state "${state}" \
+          --arg reason "${reason}" \
+          --arg run_id "${source_run_id}" \
+          --arg conclusion "${source_conclusion}" \
+          --arg event "${source_event}" \
+          --arg branch "${source_branch}" \
+          --arg sha "${source_sha}" \
+          --arg url "${source_url}" \
+          --arg created_at "${source_created_at}" \
+          --arg artifact_id "${artifact_id}" \
+          --arg artifact_name "${artifact_name}" \
+          --argjson artifact_expected "${artifact_expected}" \
+          --argjson artifact_found "${artifact_found}" \
+          '{
+            schema_version:"1.0.0",
+            source:"performance-slo-artifact-collector",
+            state:$state,
+            reason:$reason,
+            source_workflow_run_id:$run_id,
+            source_workflow_conclusion:$conclusion,
+            source_event:$event,
+            source_head_branch:$branch,
+            source_head_sha:$sha,
+            source_url:$url,
+            source_created_at:$created_at,
+            artifact_expected:$artifact_expected,
+            artifact_found:$artifact_found,
+            artifact_id:($artifact_id | if . == "" then null else . end),
+            artifact_name:($artifact_name | if . == "" then null else . end)
+          }' > "${OUTPUT_DIR}/provenance.json"
+
+        if [[ "${artifact_found}" == "true" ]]; then
+          gh run download "${source_run_id}" \
+            --repo "${REPOSITORY}" \
+            --name "${artifact_name}" \
+            --dir "${OUTPUT_DIR}/source"
+          test -f "${OUTPUT_DIR}/source/performance-slo-evidence.json"
+        fi

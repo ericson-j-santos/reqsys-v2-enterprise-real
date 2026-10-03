@@ -1,8 +1,8 @@
 <template>
-  <main class="figma-github" aria-labelledby="titulo-figma-github">
+  <main class="figma-github" data-testid="route-figma-github" aria-labelledby="titulo-figma-github">
     <section class="cabecalho">
       <div>
-        <p class="eyebrow">ReqSys · Integração visual</p>
+        <p class="figma-eyebrow">ReqSys · Integração visual</p>
         <h1 id="titulo-figma-github">Figma GitHub</h1>
         <p>
           Painel operacional para sincronizar artefatos do Figma com GitHub e exibir retorno auditável em tela.
@@ -10,7 +10,7 @@
       </div>
       <div class="acoes-cabecalho">
         <button type="button" :disabled="carregandoStatus" @click="carregarStatus">
-          {{ carregandoStatus ? 'Atualizando...' : 'Atualizar status' }}
+          {{ carregandoStatus ? 'Atualizando...' : 'Atualizar situação' }}
         </button>
       </div>
     </section>
@@ -41,15 +41,25 @@
       <div>
         <h2 id="titulo-sincronizacao">Sincronização governada</h2>
         <p>
-          Informe a chave do arquivo Figma e o repositório GitHub. Quando omitidos, o backend usa as configurações
+          Informe a chave do arquivo Figma e o repositório GitHub. Quando omitidos, o serviço usa as configurações
           padrão seguras, caso estejam habilitadas no ambiente.
+        </p>
+        <p v-if="!config.has_default_file_key" class="aviso-config" role="note">
+          File key é obrigatório neste ambiente porque <code>FIGMA_DEFAULT_FILE_KEY</code> não está configurado.
         </p>
       </div>
 
       <form class="formulario" @submit.prevent="sincronizar">
         <label>
           File key do Figma
-          <input v-model.trim="form.file_key" type="text" placeholder="Opcional se FIGMA_DEFAULT_FILE_KEY existir" />
+          <input
+            v-model.trim="form.file_key"
+            type="text"
+            :required="!config.has_default_file_key"
+            :aria-invalid="!config.has_default_file_key && !form.file_key ? 'true' : 'false'"
+            placeholder="Cole a file key do Figma"
+          />
+          <small v-if="!config.has_default_file_key">Obrigatório quando não há file key padrão no ambiente.</small>
         </label>
         <label>
           Repositório GitHub
@@ -80,25 +90,44 @@
       </form>
     </section>
 
+    <section class="painel figma-preview-panel" aria-labelledby="titulo-preview-figma">
+      <div class="linha-painel">
+        <div>
+          <h2 id="titulo-preview-figma">Preview do Figma</h2>
+          <p>Renderização incorporada do arquivo informado, quando o compartilhamento do Figma permitir embed.</p>
+        </div>
+        <a v-if="figmaFileUrl" class="link-externo" :href="figmaFileUrl" target="_blank" rel="noopener noreferrer">Abrir no Figma</a>
+      </div>
+      <div v-if="figmaEmbedUrl" class="figma-embed-shell">
+        <iframe
+          title="Preview renderizado do arquivo Figma"
+          :src="figmaEmbedUrl"
+          loading="lazy"
+          allowfullscreen
+        />
+      </div>
+      <p v-else class="vazio">Informe um file key para visualizar o Figma nesta tela.</p>
+    </section>
+
     <section v-if="resultadoSync" class="painel" aria-labelledby="titulo-retorno">
       <h2 id="titulo-retorno">Retorno da última sincronização</h2>
       <dl class="detalhes">
         <div><dt>File key</dt><dd>{{ resultadoSync.file_key || '-' }}</dd></div>
         <div><dt>Repositório</dt><dd>{{ resultadoSync.repo || '-' }}</dd></div>
         <div><dt>Modo</dt><dd>{{ resultadoSync.mode || '-' }}</dd></div>
-        <div><dt>Status</dt><dd>{{ resultadoSync.status || 'processado' }}</dd></div>
+        <div><dt>Situação</dt><dd>{{ resultadoSync.status || 'processado' }}</dd></div>
       </dl>
-      <pre class="json-retorno">{{ JSON.stringify(resultadoSync, null, 2) }}</pre>
+      <pre class="json-retorno" tabindex="0" aria-label="Retorno JSON da última sincronização">{{ JSON.stringify(resultadoSync, null, 2) }}</pre>
     </section>
 
     <section class="painel" aria-labelledby="titulo-analitico">
       <div class="linha-painel">
         <div>
           <h2 id="titulo-analitico">Analítico de vínculos</h2>
-          <p>Status retornado pelo backend para rastrear Figma, GitHub, conflitos e última sincronização.</p>
+          <p>Situação retornado pelo serviço para rastrear Figma, GitHub, conflitos e última sincronização.</p>
         </div>
         <label class="filtro">
-          Status
+          Situação
           <select v-model="filtroStatus">
             <option value="">Todos</option>
             <option v-for="status in statusDisponiveis" :key="status" :value="status">{{ status }}</option>
@@ -106,8 +135,12 @@
         </label>
       </div>
 
-      <div class="tabela-wrapper">
-        <table>
+      <div
+        class="tabela-wrapper responsive-table-shell"
+        tabindex="0"
+        aria-label="Tabela de vínculos entre Figma e GitHub; use as setas horizontais para navegar quando necessário"
+      >
+        <table class="figma-github-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -116,7 +149,7 @@
               <th>Repositório</th>
               <th>Issue</th>
               <th>Tipo</th>
-              <th>Status</th>
+              <th>Situação</th>
               <th>Conflito</th>
               <th>Última sync</th>
             </tr>
@@ -150,8 +183,15 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { api } from '../services/api'
 
 const API_BASE = '/v1/integracoes/figma-github'
+
+const config = reactive({
+  has_default_file_key: true,
+  has_default_repo: true,
+  sync_enabled: false,
+})
 
 const form = reactive({
   file_key: '',
@@ -171,6 +211,24 @@ const sincronizando = ref(false)
 const erro = ref('')
 const mensagem = ref('')
 const ultimaAcao = ref('-')
+
+const fileKeyPreview = computed(() => {
+  const primeiroVinculoComArquivo = itens.value.find((item) => item.figma_file_key)?.figma_file_key
+  return form.file_key || resultadoSync.value?.file_key || primeiroVinculoComArquivo || ''
+})
+
+const figmaFileUrl = computed(() => {
+  if (!fileKeyPreview.value) return ''
+  return `https://www.figma.com/file/${encodeURIComponent(fileKeyPreview.value)}/reqsys-preview`
+})
+
+const figmaEmbedUrl = computed(() => {
+  if (!figmaFileUrl.value) return ''
+  const url = new URL('https://www.figma.com/embed')
+  url.searchParams.set('embed_host', 'reqsys')
+  url.searchParams.set('url', figmaFileUrl.value)
+  return url.toString()
+})
 
 const resumo = computed(() => {
   const total = itens.value.length
@@ -199,17 +257,25 @@ function montarPayload() {
   }
 }
 
+async function carregarConfig() {
+  try {
+    const { data: payload } = await api.get(`${API_BASE}/config`)
+    Object.assign(config, payload.data || {})
+  } catch (e) {
+    config.has_default_file_key = true
+    config.has_default_repo = true
+  }
+}
+
 async function carregarStatus() {
   carregandoStatus.value = true
   limparAlertas()
   try {
-    const resposta = await fetch(`${API_BASE}/status`, { headers: { Accept: 'application/json' } })
-    if (!resposta.ok) throw new Error('Falha ao carregar status Figma/GitHub')
-    const payload = await resposta.json()
+    const { data: payload } = await api.get(`${API_BASE}/status`)
     itens.value = payload.data?.items || []
     ultimaAcao.value = new Date().toLocaleString('pt-BR')
   } catch (e) {
-    erro.value = e?.message || 'Erro inesperado ao carregar status Figma/GitHub'
+    erro.value = e?.response?.data?.detail || e?.message || 'Erro inesperado ao carregar situação Figma/GitHub'
   } finally {
     carregandoStatus.value = false
   }
@@ -218,20 +284,19 @@ async function carregarStatus() {
 async function sincronizar() {
   sincronizando.value = true
   limparAlertas()
+  if (!config.has_default_file_key && !form.file_key) {
+    erro.value = 'file_key é obrigatório quando FIGMA_DEFAULT_FILE_KEY não está configurado.'
+    sincronizando.value = false
+    return
+  }
   try {
-    const resposta = await fetch(`${API_BASE}/sync`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(montarPayload()),
-    })
-    const payload = await resposta.json().catch(() => ({}))
-    if (!resposta.ok) throw new Error(payload.detail || 'Falha ao executar sincronização Figma/GitHub')
+    const { data: payload } = await api.post(`${API_BASE}/sync`, montarPayload())
     resultadoSync.value = payload.data || payload
     mensagem.value = 'Sincronização solicitada e retorno recebido em tela.'
     ultimaAcao.value = new Date().toLocaleString('pt-BR')
     await carregarStatus()
   } catch (e) {
-    erro.value = e?.message || 'Erro inesperado ao sincronizar Figma/GitHub'
+    erro.value = e?.response?.data?.detail || e?.message || 'Erro inesperado ao sincronizar Figma/GitHub'
   } finally {
     sincronizando.value = false
   }
@@ -244,37 +309,54 @@ function formatarData(valor) {
   return data.toLocaleString('pt-BR')
 }
 
-onMounted(carregarStatus)
+onMounted(async () => {
+  await carregarConfig()
+  await carregarStatus()
+})
 </script>
 
 <style scoped>
-.figma-github { display: grid; gap: 1rem; padding: 1rem; }
-.cabecalho, .linha-painel { display: grid; gap: 1rem; align-items: start; }
-.eyebrow { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.figma-github { display: grid; gap: 1rem; padding: var(--space-2xl) var(--space-2xl) var(--space-3xl); width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: clip; }
+.cabecalho, .linha-painel { display: grid; gap: 1rem; align-items: start; min-width: 0; }
 .acoes-cabecalho { display: flex; gap: 0.5rem; justify-content: flex-start; }
 .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-.card, .painel { border: 1px solid #d0d7de; border-radius: 12px; padding: 1rem; background: #fff; }
+.card, .painel { border: 1px solid var(--line); border-radius: 16px; padding: 1rem; background: rgba(255,255,255,0.02); min-width: 0; max-width: 100%; }
 .card span, .card strong { display: block; }
-.card strong { font-size: 1.4rem; margin-top: 0.5rem; }
-.formulario { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 1rem; }
-.formulario label, .filtro { display: grid; gap: 0.25rem; font-weight: 600; }
-input, select, button { border: 1px solid #d0d7de; border-radius: 8px; padding: 0.65rem; }
-button { cursor: pointer; font-weight: 700; }
+.card strong { font-size: 1.4rem; margin-top: 0.5rem; color: var(--text); }
+.formulario { display: grid; gap: 0.75rem; grid-template-columns: 1fr; margin-top: 1rem; }
+.formulario label, .filtro { display: grid; gap: 0.25rem; font-weight: 600; color: var(--text); }
+input, select, button { border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem; background: rgba(255,255,255,0.04); color: var(--text); }
+button { cursor: pointer; font-weight: 700; background: var(--dsc-primary); color: #fff; border-color: var(--dsc-primary); }
 button:disabled { cursor: not-allowed; opacity: 0.6; }
+button:focus-visible, input:focus-visible, select:focus-visible, .tabela-wrapper:focus-visible, .json-retorno:focus-visible, .link-externo:focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 2px; }
 .checks { display: grid; gap: 0.4rem; align-content: end; }
 .checks label { display: flex; gap: 0.4rem; align-items: center; font-weight: 500; }
-.alerta { border-radius: 8px; padding: 0.75rem; }
-.erro { border: 1px solid #d1242f; color: #d1242f; }
-.sucesso { border: 1px solid #1a7f37; color: #1a7f37; }
+.alerta, .aviso-config { border-radius: 8px; padding: 0.75rem; }
+.aviso-config { border: 1px solid var(--amber); color: var(--text); background: rgba(245, 158, 11, 0.08); }
+.erro { border: 1px solid var(--red); color: var(--text); }
+.sucesso { border: 1px solid var(--green); color: var(--text); }
 .detalhes { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.detalhes div { border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem; }
+.detalhes div { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
 dt { font-weight: 700; }
-dd { margin: 0.25rem 0 0; word-break: break-word; }
-.json-retorno { overflow-x: auto; border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem; }
-.tabela-wrapper { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; min-width: 980px; }
-th, td { border-bottom: 1px solid #d0d7de; padding: 0.75rem; text-align: left; vertical-align: top; }
-.badge { border: 1px solid #d0d7de; border-radius: 999px; padding: 0.2rem 0.55rem; }
-.vazio { text-align: center; color: #57606a; }
-@media (min-width: 768px) { .cabecalho, .linha-painel { grid-template-columns: 1fr auto; } }
+dd { margin: 0.25rem 0 0; word-break: break-word; color: var(--muted); }
+.json-retorno { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
+.figma-preview-panel { gap: 1rem; display: grid; }
+.figma-embed-shell { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-height: 520px; background: #111827; }
+.figma-embed-shell iframe { display: block; width: 100%; min-height: 520px; border: 0; }
+.link-externo { color: var(--text); font-weight: 700; text-decoration: underline; text-underline-offset: 0.18em; }
+small { color: var(--muted); font-weight: 500; }
+.tabela-wrapper { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; contain: inline-size; }
+.figma-github-table { border-collapse: collapse; width: max(100%, 720px); min-width: 720px; }
+th, td { border-bottom: 1px solid var(--line); padding: 0.75rem; text-align: left; vertical-align: top; white-space: nowrap; }
+th:first-child, td:first-child, th:last-child, td:last-child { white-space: normal; }
+.badge { border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem 0.55rem; }
+.vazio { text-align: center; color: var(--muted); }
+@media (max-width: 767px) {
+  .figma-github { padding: var(--space-lg) var(--space-md) var(--space-xl); }
+}
+@media (min-width: 768px) {
+  .cabecalho, .linha-painel { grid-template-columns: 1fr auto; }
+  .formulario { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
+@media (min-width: 1024px) { .figma-github-table { min-width: 980px; } }
 </style>

@@ -55,16 +55,16 @@ jobs:
           mkdir -p artifacts/operational-health
           cat > artifacts/operational-health/summary.md <<'EOF'
           # Operational Health Dashboard Evidence
-
+          
           Status: OPERATIONAL_HEALTH_DASHBOARD_READY
-
+          
           Scope:
           - PR aging governance documented.
           - Conflict risk governance documented.
           - Stale branch governance documented.
           - Merge readiness score documented.
           - Operational PR classification documented.
-
+          
           Guardrails:
           - No deployment.
           - No production write.
