@@ -37,6 +37,7 @@
     "Um worktree dedicado e limpo e criado ou atualizado somente por fast-forward para um SHA pertencente a origin/main.",
     "A composicao reutiliza apenas overrides locais DEV permitidos e usa os arquivos versionados do worktree governado.",
     "O segredo Teams DEV existente e resolvido por Azure OIDC e Key Vault, usado apenas no ambiente filho e nunca exposto em erro ou evidencia.",
+    "A permissao id-token: write fica limitada ao job reconcile; o smoke publico recebe somente contents: read.",
     "Somente api, frontend e nginx DEV sao recriados; HML e PROD permanecem fora de escopo.",
     "Health, readiness, build-info, frontend estatico e controle negativo de Vite validam o SHA exato antes de publicar o locator."
   ]

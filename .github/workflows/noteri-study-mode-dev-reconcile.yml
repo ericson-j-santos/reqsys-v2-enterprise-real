@@ -39,7 +39,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: noteri-study-mode-dev-reconcile
@@ -48,6 +47,9 @@ concurrency:
 jobs:
   reconcile:
     name: Reconcile Study Mode on PC24x7 DEV
+    permissions:
+      contents: read
+      id-token: write
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 25
     environment: development
@@ -170,6 +172,8 @@ jobs:
   public-smoke:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
     needs: reconcile
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
