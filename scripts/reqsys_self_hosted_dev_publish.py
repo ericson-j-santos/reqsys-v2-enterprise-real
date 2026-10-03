@@ -21,6 +21,9 @@ HOST = "DESKTOP-PDQK954"
 REPOSITORY = "ericson-j-santos/reqsys-v2-enterprise-real"
 PROJECT = "reqsys-dev-selfhosted"
 INSTANCE = "pc24x7-selfhost-dev-v1"
+LOCAL_HEALTH_ORIGIN = "http://localhost:18080"
+PAGES_UI_ORIGIN = "https://ericson-j-santos.github.io"
+PAGES_UI_URL = PAGES_UI_ORIGIN + "/reqsys-v2-enterprise-real/dev"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 TABLE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,62}")
@@ -288,7 +291,7 @@ def render_config(secret_root: Path, ids: tuple[str, str]) -> bytes:
     values = {
         "COMPOSE_PROJECT_NAME": PROJECT,
         "APP_ENV": "development",
-        "PUBLIC_ORIGIN": "http://localhost:18080",
+        "PUBLIC_ORIGIN": LOCAL_HEALTH_ORIGIN,
         "SITE_ADDRESS": ":80",
         "ACME_EMAIL": "operador@example.invalid",
         "BIND_ADDRESS": "127.0.0.1",
@@ -538,7 +541,12 @@ class Publisher:
             }
         }
         override["services"]["api"]["environment"] = {
-            "REQSYS_BUILD_SHA": self.expected
+            "REQSYS_BUILD_SHA": self.expected,
+            "CORS_ORIGINS": f"{PAGES_UI_ORIGIN},{LOCAL_HEALTH_ORIGIN}",
+            "APP_PUBLIC_URL": PAGES_UI_URL,
+            # JWT audience is used for both issuance and validation by
+            # backend/app/core/security.py. Preserve this isolated API's audience.
+            "JWT_AUDIENCE": LOCAL_HEALTH_ORIGIN,
         }
         self.private.preserving(
             self.override,

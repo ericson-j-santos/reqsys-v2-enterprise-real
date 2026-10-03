@@ -18,6 +18,11 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
+try:
+    from scripts import self_hosted_dev_maintenance as portable_dev
+except ModuleNotFoundError:
+    import self_hosted_dev_maintenance as portable_dev
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -287,6 +292,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    try:
+        portable = portable_dev.verify_if_active()
+    except portable_dev.PortableRuntimeError as exc:
+        print(json.dumps({"published": False, "usable": False,
+                          "runtime_provider": "self_hosted_dev",
+                          "error": exc.code, "legacy_runtime_touched": False}, sort_keys=True))
+        return 2
+    if portable is not None:
+        print(json.dumps({**portable, "published": False, "signed": False,
+                          "candidate_locator_publication_deferred": True}, sort_keys=True))
+        return 0
     key, cfg = ensure_identity()
     urls = healthy_urls()
     if args.sign_only and not urls:

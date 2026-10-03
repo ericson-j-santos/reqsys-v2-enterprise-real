@@ -9,7 +9,7 @@
     "design": true,
     "tasks": true
   },
-  "description": "Prepara stack Linux independente e conclui ensaio DEV isolado com restauração SQLite validada no PC24x7, sem promover produção.",
+  "description": "Prepara runtime Linux independente e restauração DEV governada no PC24x7. Preserva PostgreSQL atual e suas chaves; SQLite Noteri é cópia independente para ensaio isolado.",
   "scope": "runtime-flyio-retirement",
   "files": [
     "infra/self-hosted/compose.yml",
@@ -31,7 +31,20 @@
     "tests/test_reqsys_self_hosted_dev_publish.py",
     "scripts/dev_backup_transport.py",
     "tests/test_dev_backup_transport.py",
-    "tests/test_noteri_desktop_orchestrator_status_probe.py"
+    "tests/test_noteri_desktop_orchestrator_status_probe.py",
+    "scripts/self_hosted_dev_maintenance.py",
+    "scripts/pc24x7_dev_runtime_supervisor.py",
+    "scripts/pc24x7_dev_runtime_supervisor_install.py",
+    "scripts/pc24x7_public_dev_tunnel.py",
+    "scripts/pc24x7_dev_locator_publisher.py",
+    "scripts/noteri_study_mode_dev_reconcile.py",
+    "scripts/reconcile_pc24x7_public_dev_runtime.py",
+    ".github/workflows/noteri-study-mode-dev-reconcile.yml",
+    "tests/test_self_hosted_dev_maintenance.py",
+    "tests/test_pc24x7_dev_runtime_supervisor.py",
+    ".sdd/specs/self-hosted-runtime.requirements.md",
+    "scripts/run_self_hosted_dev_owner_action.py",
+    "tests/test_run_self_hosted_dev_owner_action.py"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
@@ -39,16 +52,22 @@
       "tests/test_noteri_dev_backup_metadata.py",
       "tests/test_import_self_hosted_dev_sqlite.py",
       "tests/test_reqsys_self_hosted_dev_publish.py",
-      "tests/test_dev_backup_transport.py"
+      "tests/test_dev_backup_transport.py",
+      "tests/test_self_hosted_dev_maintenance.py",
+      "tests/test_pc24x7_dev_runtime_supervisor.py",
+      "tests/test_run_self_hosted_dev_owner_action.py"
     ],
     "tests": [
       "tests/test_self_hosted_runtime.py",
       "tests/test_noteri_dev_backup_metadata.py",
       "tests/test_import_self_hosted_dev_sqlite.py",
       "tests/test_reqsys_self_hosted_dev_publish.py",
-      "tests/test_dev_backup_transport.py"
+      "tests/test_dev_backup_transport.py",
+      "tests/test_self_hosted_dev_maintenance.py",
+      "tests/test_pc24x7_dev_runtime_supervisor.py",
+      "tests/test_run_self_hosted_dev_owner_action.py"
     ],
-    "evidence_contract": "Executor físico governado no PC24x7; chave privada DPAPI e ACL, transferência cifrada, PostgreSQL isolado, importação transacional com integridade/contagens/digests e leitura independente. Publicação e troca DEV somente após backup, autenticação e E2E no SHA; nenhuma promoção de produção."
+    "evidence_contract": "Diagnóstico físico governado, PostgreSQL atual e backup consistente protegido. Restauração e leitura independente de todas as tabelas, sequências e conteúdo; fidelidade de JWT/cofre/chaves cifradas. Ações Owner Risk3 específicas e temporárias. Manutenção, login Microsoft real e ingresso público têm provas distintas no mesmo SHA. Nenhuma promoção de produção."
   },
   "risk": {
     "production": false,

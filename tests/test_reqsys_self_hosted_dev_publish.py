@@ -98,6 +98,65 @@ class PublishTests(unittest.TestCase):
         self.assertNotIn("password=", config)
         self.assertNotIn("jwt_secret=", config)
 
+    def configured_publisher(self, root):
+        publisher = object.__new__(publish.Publisher)
+        publisher.root = root
+        publisher.env_file = root / "runtime.env"
+        publisher.override = root / "compose.override.json"
+        publisher.expected = "a" * 40
+        private = FakePrivateFiles()
+        private.preserving = lambda path, content: publish.WindowsPrivateFiles.preserving(
+            private, path, content
+        )
+        publisher.private = private
+        publisher.compose_calls = []
+        publisher.compose = lambda *args: publisher.compose_calls.append(args)
+        return publisher
+
+    def test_pages_api_origin_separated_from_local_ingress_and_jwt_audience(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            publisher = self.configured_publisher(Path(temporary) / "ReqSys/SelfHostedDev")
+            ids = ("11111111-1111-1111-1111-111111111111",
+                   "22222222-2222-2222-2222-222222222222")
+            with patch.object(publish, "discover_public_ids", return_value=ids):
+                self.assertEqual(publisher.configure(), ids)
+            override = publish.json.loads(publisher.override.read_bytes())
+            env = override["services"]["api"]["environment"]
+            self.assertEqual(env["APP_PUBLIC_URL"],
+                             "https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/dev")
+            self.assertEqual(env["CORS_ORIGINS"].split(","), [
+                "https://ericson-j-santos.github.io", "http://localhost:18080",
+            ])
+            self.assertNotIn("/dev", env["CORS_ORIGINS"])
+            self.assertNotIn("*", env["CORS_ORIGINS"])
+            self.assertEqual(env["JWT_AUDIENCE"], "http://localhost:18080")
+            self.assertEqual(env["REQSYS_BUILD_SHA"], publisher.expected)
+            runtime = dict(
+                (key, publish.json.loads(value)) for key, value in
+                (line.split("=", 1) for line in publisher.env_file.read_text().splitlines())
+            )
+            self.assertEqual(runtime["PUBLIC_ORIGIN"], "http://localhost:18080")
+            self.assertEqual(runtime["BIND_ADDRESS"], "127.0.0.1")
+            self.assertEqual((runtime["HTTP_PORT"], runtime["HTTPS_PORT"]), ("18080", "18443"))
+            self.assertEqual(runtime["SITE_ADDRESS"], ":80")
+            self.assertNotIn("API_PUBLIC_URL", env)
+            self.assertEqual(set(override["services"]["frontend"]), {"labels"})
+            self.assertTrue(all("password" not in key.lower() and "secret" not in key.lower()
+                                for key in env))
+            self.assertEqual(publisher.compose_calls, [("config", "--quiet")])
+
+    def test_existing_private_override_never_rewritten_for_pages_config(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            publisher = self.configured_publisher(Path(temporary) / "ReqSys/SelfHostedDev")
+            publisher.root.mkdir(parents=True)
+            old_override = b'{"services":{"api":{"environment":{"CORS_ORIGINS":"old"}}}}\n'
+            publisher.override.write_bytes(old_override)
+            with patch.object(publish, "discover_public_ids", return_value=("", "")):
+                with self.assertRaisesRegex(publish.PublishError, "existing_configuration_mismatch"):
+                    publisher.configure()
+            self.assertEqual(publisher.override.read_bytes(), old_override)
+            self.assertEqual(publisher.compose_calls, [])
+
     def test_fresh_complete_proof_accepted(self):
         self.assertEqual(self.validate(self.proof()), {"requisitos": 3})
 
