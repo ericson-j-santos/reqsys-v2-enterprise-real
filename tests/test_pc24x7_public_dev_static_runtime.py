@@ -40,6 +40,17 @@ def test_public_gateway_uses_static_frontend_and_blocks_vite_hmr() -> None:
     assert "max-age=31536000, immutable" in raw
 
 
+def test_public_gateway_defers_optional_runtime_core_dns_resolution() -> None:
+    raw = NGINX.read_text(encoding="utf-8")
+    assert "resolver 127.0.0.11 valid=30s ipv6=off;" in raw
+    assert "set $reqsys_runtime_upstream reqsys-runtime:8000;" in raw
+    assert "proxy_pass http://reqsys-runtime:8000" not in raw
+    assert "proxy_pass http://$reqsys_runtime_upstream/health;" in raw
+    assert "proxy_pass http://$reqsys_runtime_upstream/api/runtime/build-info;" in raw
+    assert "proxy_pass http://$reqsys_runtime_upstream/api/todo-events;" in raw
+    assert "proxy_pass http://$reqsys_runtime_upstream/api/todo-events/;" in raw
+
+
 def test_reconciler_is_dev_only_fast_forward_and_recreates_only_public_surface() -> None:
     module = _load()
     raw = SCRIPT.read_text(encoding="utf-8")

@@ -30,6 +30,9 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
 8. A conclusão exige SHA idêntico nos probes direto e gateway, health/readiness
    HTTP 200, frontend estático e `/@vite/client` HTTP 404.
 9. HML e PROD permanecem fora de escopo e sem caminho de execução neste workflow.
+10. O Runtime Core é opcional neste stack. Sua resolução DNS deve ocorrer somente
+    quando uma rota `/runtime-core/` permitida for acessada; a ausência do serviço
+    deve retornar HTTP 502 nessas rotas sem impedir o gateway público de iniciar.
 
 ## Critérios de aceite
 
@@ -40,6 +43,8 @@ continua restrita ao PC24x7 DEV e ao SHA solicitado da `main`.
 - todos os actions externos do workflow ficam presos a SHAs imutáveis;
 - o artifact declara `production_touched=false` e `secret_value_exposed=false`;
 - o smoke independente confirma o mesmo SHA publicado antes de considerar DEV pronto.
+- sem `reqsys-runtime` na rede, o Nginx passa em `nginx -t`, atende frontend/API e
+  mantém as rotas permitidas de `/runtime-core/` fechadas com HTTP 502.
 
 ## Fora de escopo
 
