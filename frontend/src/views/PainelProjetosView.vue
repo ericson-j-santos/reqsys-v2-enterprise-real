@@ -23,7 +23,7 @@
 
     <section class="portfolio-card">
       <div class="section-title"><div><h2>Panorama do portfólio</h2><p>Dados consolidados do ReqSys e do Agile Execução.</p></div><span>Sincronizado {{ sincronizadoEm }}</span></div>
-      <div class="portfolio-bar" aria-label="Distribuição da saúde dos projetos">
+      <div class="portfolio-bar" role="img" aria-label="Distribuição da saúde dos projetos">
         <span class="ok" :style="{ flex: distribuicao.ritmo || 0.1 }"/><span class="warn" :style="{ flex: distribuicao.atencao || 0.1 }"/><span class="late" :style="{ flex: distribuicao.atrasado || 0.1 }"/><span class="done" :style="{ flex: distribuicao.concluido || 0.1 }"/>
       </div>
       <div class="legend"><span>● No ritmo <b>{{ distribuicao.ritmo }}</b></span><span>● Em atenção <b>{{ distribuicao.atencao }}</b></span><span>● Atrasados <b>{{ distribuicao.atrasado }}</b></span><span>● Concluídos <b>{{ distribuicao.concluido }}</b></span></div>
