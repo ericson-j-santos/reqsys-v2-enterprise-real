@@ -1,0 +1,19 @@
+{
+  "environment": "local",
+  "base_url": "http://127.0.0.1:8000",
+  "reachable": true,
+  "response_time": 256.25,
+  "dashboard_ready": false,
+  "login_ready": false,
+  "api_ready": true,
+  "runtime_ready": true,
+  "evidence_ready": false,
+  "operational_status": "partial",
+  "readiness_percent": 100.0,
+  "blocking_issues": [],
+  "next_actions": [
+    "Validar artifact public-runtime-validation.json",
+    "Corrigir endpoints indisponíveis antes de promover ambiente",
+    "Reexecutar smoke validator read-only"
+  ]
+}

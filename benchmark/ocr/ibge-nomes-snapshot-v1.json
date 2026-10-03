@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "snapshot_version": "ibge-nomes-ranking-v1",
+  "snapshot_date": "2026-08-21",
+  "source": "https://servicodados.ibge.gov.br/api/v2/censos/nomes/ranking",
+  "purpose": "synthetic-generator-vocabulary-only",
+  "ranking": [
+    {"nome":"MARIA","frequencia":11734129,"ranking":1},
+    {"nome":"JOSE","frequencia":5754529,"ranking":2},
+    {"nome":"ANA","frequencia":3089858,"ranking":3},
+    {"nome":"JOAO","frequencia":2984119,"ranking":4},
+    {"nome":"ANTONIO","frequencia":2576348,"ranking":5},
+    {"nome":"FRANCISCO","frequencia":1772197,"ranking":6},
+    {"nome":"CARLOS","frequencia":1489191,"ranking":7},
+    {"nome":"PAULO","frequencia":1423262,"ranking":8},
+    {"nome":"PEDRO","frequencia":1219605,"ranking":9},
+    {"nome":"LUCAS","frequencia":1127310,"ranking":10},
+    {"nome":"LUIZ","frequencia":1107792,"ranking":11},
+    {"nome":"MARCOS","frequencia":1106165,"ranking":12},
+    {"nome":"LUIS","frequencia":935905,"ranking":13},
+    {"nome":"GABRIEL","frequencia":932449,"ranking":14},
+    {"nome":"RAFAEL","frequencia":821638,"ranking":15},
+    {"nome":"FRANCISCA","frequencia":725642,"ranking":16},
+    {"nome":"DANIEL","frequencia":711338,"ranking":17},
+    {"nome":"MARCELO","frequencia":693215,"ranking":18},
+    {"nome":"BRUNO","frequencia":668217,"ranking":19},
+    {"nome":"EDUARDO","frequencia":632664,"ranking":20}
+  ]
+}

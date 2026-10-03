@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Acesso DEV estável pelo GitHub Pages",
+  "status": "implemented",
+  "environment": "dev",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/services/__tests__/publicRuntimeLocator.test.js",
+      "frontend/src/constants/ambientesOperacionais.test.js",
+      "tests/test_pc24x7_dev_public_locator.py",
+      "tests/test_dev_runtime_cutover.py"
+    ],
+    "evidence_contract": "O GitHub Pages serve o frontend na origem estável, o navegador aceita somente localizadores DEV assinados e frescos, e a API exige Microsoft Entra sem login de demonstração."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/github-pages-stable-dev-access.requirements.md",
+    "implementation": "frontend/src/services/publicRuntimeLocator.js",
+    "workflow": ".github/workflows/deploy-reqsys-pages-composite.yml"
+  },
+  "acceptance_criteria": [
+    "A URL estável do GitHub Pages entrega o frontend e o callback Microsoft.",
+    "A API dinâmica é descoberta apenas por envelope Ed25519 válido, fresco e restrito ao ambiente DEV.",
+    "O backend aceita a origem estável e mantém o login de demonstração desativado.",
+    "Nenhum segredo é publicado no site estático e nenhum ambiente PROD é alterado."
+  ],
+  "components": [
+    "frontend",
+    "github-pages",
+    "microsoft-entra",
+    "pc24x7",
+    "cloudflare-quick-tunnel"
+  ],
+  "controls": {
+    "stable_frontend_origin": true,
+    "signed_dynamic_api_discovery": true,
+    "demo_login_disabled": true,
+    "secrets_in_static_site": false,
+    "production_touched": false
+  }
+}

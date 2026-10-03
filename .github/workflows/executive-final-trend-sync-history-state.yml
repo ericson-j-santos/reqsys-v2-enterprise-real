@@ -1,0 +1,89 @@
+name: Executive Final Trend Sync History State
+
+on:
+  workflow_run:
+    workflows:
+      - Executive Final Sync History Public Smoke Trend Sync
+      - Executive Final Sync Trend Public Smoke
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  consolidate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/enrich_executive_final_trend_sync_history_state.py
+          python -m unittest tests/test_enrich_executive_final_trend_sync_history_state.py
+
+      - name: Prepare audit workspace
+        run: mkdir -p evidence/input evidence/output
+
+      - name: Download latest green evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for env in DEV STG PROD; do
+            name="executive-final-trend-sync-history-${env,,}"
+            run_id="$(gh run list --branch main --status success --limit 100 --json databaseId,artifacts \
+              --jq '.[] | select(any(.artifacts[]?; .name == "'"$name"'")) | .databaseId' | head -n1)"
+            if [ -n "$run_id" ]; then
+              gh run download "$run_id" -n "$name" -D "evidence/input/$env" || true
+            fi
+          done
+
+      - name: Locate canonical inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          find evidence/input/DEV -type f -name '*.json' -print -quit | xargs -r -I{} cp {} evidence/input/dev.json
+          find evidence/input/STG -type f -name '*.json' -print -quit | xargs -r -I{} cp {} evidence/input/stg.json
+          find evidence/input/PROD -type f -name '*.json' -print -quit | xargs -r -I{} cp {} evidence/input/prod.json
+          test -f evidence/input/dev.json
+          test -f evidence/input/stg.json
+          test -f evidence/input/prod.json
+          cp ops-dashboard/data/runtime-executive-index.json evidence/input/state.json
+          cp ops-dashboard/data/executive-brief.json evidence/input/brief.json
+
+      - name: Consolidate synchronized history
+        run: |
+          python scripts/enrich_executive_final_trend_sync_history_state.py \
+            --dev evidence/input/dev.json \
+            --stg evidence/input/stg.json \
+            --prod evidence/input/prod.json \
+            --state evidence/input/state.json \
+            --brief evidence/input/brief.json \
+            --out-state evidence/output/runtime-executive-index.json \
+            --out-brief evidence/output/executive-brief.json \
+            --out-evidence evidence/output/executive-final-trend-sync-history-state.json
+
+      - name: Validate guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('evidence/output/executive-final-trend-sync-history-state.json').read_text())
+          assert evidence['mode'] == 'report-only'
+          assert evidence['production_blocker'] is False
+          assert evidence['human_approval_required'] is True
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: executive-final-trend-sync-history-state
+          path: evidence/output
+          retention-days: 90

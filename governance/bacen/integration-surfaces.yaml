@@ -1,0 +1,69 @@
+schema_version: "1.0.0"
+policy:
+  scan_roots:
+    - backend/app
+    - runtime/app
+    - services
+  executable_extensions:
+    - .py
+    - .js
+    - .ts
+    - .vue
+    - .cs
+  activation_requires:
+    - contract_version
+    - official_reference
+    - consumer_paths
+    - contract_tests
+
+surfaces:
+  - id: sgs_cdi
+    status: active
+    contract_version: "sgs-series-12-json-v1"
+    official_reference: "https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json"
+    consumer_paths:
+      - backend/app/services/cdi_provider.py
+    contract_tests:
+      - backend/tests/test_financeiro_api.py
+    required_consumer_markers:
+      - "BCB_CDI_SERIE_URL = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json'"
+      - "item.get('data')"
+      - "item.get('valor')"
+      - "CdiRate.reference_date == payload.reference_date"
+      - "CdiRate.source == BCB_CDI_SOURCE"
+    detection:
+      path_regex: "(?i)(?:^|/)(?:cdi|.*_cdi)(?:_client|_provider|_api|_service)?\\.(?:py|ts|js|cs)$"
+      content_regex: "(?i)api\\.bcb\\.gov\\.br/dados/serie/bcdata\\.sgs\\.12"
+
+  - id: dict
+    status: dormant
+    contract_version: null
+    official_reference: "https://www.bcb.gov.br/estabilidadefinanceira/pix"
+    consumer_paths: []
+    contract_tests: []
+    required_consumer_markers: []
+    detection:
+      path_regex: "(?i)(?:^|/)(?:bacen_)?dict(?:_client|_provider|_api|_service)?\\.(?:py|ts|js|cs)$"
+      content_regex: "(?i)(?:dict(?:-h)?\\.pi\\.rsfn\\.net\\.br|/api/v2/(?:keys|claims|infraction-reports)|\\bTransactionDepth\\b)"
+
+  - id: pix
+    status: dormant
+    contract_version: null
+    official_reference: "https://www.bcb.gov.br/estabilidadefinanceira/pix"
+    consumer_paths: []
+    contract_tests: []
+    required_consumer_markers: []
+    detection:
+      path_regex: "(?i)(?:^|/)(?:bacen_)?pix(?:_client|_provider|_api|_service)?\\.(?:py|ts|js|cs)$"
+      content_regex: "(?i)(?:api[-_.]?pix|/v2/(?:cob|cobv|pix|rec)|pix[ _-]automatico)"
+
+  - id: open_finance
+    status: dormant
+    contract_version: null
+    official_reference: "https://www.bcb.gov.br/estabilidadefinanceira/openfinance"
+    consumer_paths: []
+    contract_tests: []
+    required_consumer_markers: []
+    detection:
+      path_regex: "(?i)(?:^|/).*(?:open[_-]?finance|openbanking).*(?:\\.py|\\.ts|\\.js|\\.cs)$"
+      content_regex: "(?i)(?:openbanking-brasil\\.org\\.br|/open-finance/|/open-banking/)"

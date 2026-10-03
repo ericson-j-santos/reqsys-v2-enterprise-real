@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-07T21:07:06Z",
+  "source": "operational-slo-evidence",
+  "status": "degraded",
+  "confidence_level": "high",
+  "maturity_percent": 50,
+  "operational_risk": "high",
+  "commit_sha": "local",
+  "correlation_id": "2877b8c3-15ac-413d-b9a0-69074c9eebde",
+  "mode": "report_only",
+  "summary": {
+    "slo_count": 3,
+    "breach_count": 2,
+    "met_count": 1,
+    "no_data_count": 0
+  },
+  "slos": [
+    {
+      "slo_id": "ci_success_rate",
+      "name": "Taxa de sucesso CI",
+      "environment": "all",
+      "target_percent": 95.0,
+      "window_days": 7,
+      "actual_percent": 97.0,
+      "error_budget_remaining": 2.0,
+      "breach": false,
+      "status": "met"
+    },
+    {
+      "slo_id": "env_probe_availability",
+      "name": "Disponibilidade probes multiambiente",
+      "environment": "multi",
+      "target_percent": 99.0,
+      "window_days": 1,
+      "actual_percent": 66.67,
+      "error_budget_remaining": -32.33,
+      "breach": true,
+      "status": "breach"
+    },
+    {
+      "slo_id": "mttr_minutes",
+      "name": "MTTR operacional",
+      "environment": "all",
+      "target_percent": 90.0,
+      "window_days": 7,
+      "actual_percent": 75.0,
+      "error_budget_remaining": -15.0,
+      "breach": true,
+      "status": "breach"
+    }
+  ],
+  "guardrails": [
+    "report_only",
+    "no_auto_block",
+    "human_review_on_breach"
+  ]
+}

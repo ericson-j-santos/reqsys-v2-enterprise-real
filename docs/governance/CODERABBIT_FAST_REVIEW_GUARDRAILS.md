@@ -39,7 +39,7 @@ Evitar:
 
 ### 2. Fast path obrigatório
 
-O PR deve receber feedback rápido de:
+O PR deve receber retorno rápido de:
 
 - validação de YAML;
 - lint/test mínimo afetado;
@@ -111,7 +111,7 @@ Em produção, segurança e arquitetura transversal, CodeRabbit/deep review deve
 
 Acompanhar:
 
-- tempo médio até primeiro feedback do CI Fast;
+- tempo médio até primeiro retorno do CI Fast;
 - tempo médio até CodeRabbit concluir;
 - número de arquivos por PR;
 - linhas alteradas por PR;

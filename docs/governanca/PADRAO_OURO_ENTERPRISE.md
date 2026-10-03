@@ -144,7 +144,7 @@ docs/
   runbooks/
 .github/
   workflows/
-  PULL_REQUEST_TEMPLATE.md
+  pull_request_template.md
 README.md
 CHANGELOG.md
 ROADMAP.md

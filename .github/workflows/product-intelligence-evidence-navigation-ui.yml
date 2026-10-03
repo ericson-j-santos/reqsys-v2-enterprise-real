@@ -52,21 +52,21 @@ jobs:
       - name: Validate evidence navigation UI
         run: |
           python - <<'PY'
-import json
-from pathlib import Path
-
-report_dir = Path('reports/product-intelligence')
-payload = json.loads((report_dir / 'product-intelligence-evidence-navigation-ui.json').read_text(encoding='utf-8'))
-html = (report_dir / 'product-intelligence-evidence-navigation-ui.html').read_text(encoding='utf-8')
-md = (report_dir / 'product-intelligence-evidence-navigation-ui.md').read_text(encoding='utf-8')
-assert payload['mode'] == 'review_only', payload
-assert payload['readiness_color'] == 'green', payload
-assert payload['evidence_coverage_percent'] == 100.0, payload
-assert payload['risk_percent'] <= 5, payload
-assert payload['confidence_percent'] >= 90, payload
-assert payload['available_count'] == payload['artifact_count'], payload
-assert 'Product Intelligence Evidence Navigation UI' in html
-assert 'Navigable evidence cards' in md
-PY
+          import json
+          from pathlib import Path
+          
+          report_dir = Path('reports/product-intelligence')
+          payload = json.loads((report_dir / 'product-intelligence-evidence-navigation-ui.json').read_text(encoding='utf-8'))
+          html = (report_dir / 'product-intelligence-evidence-navigation-ui.html').read_text(encoding='utf-8')
+          md = (report_dir / 'product-intelligence-evidence-navigation-ui.md').read_text(encoding='utf-8')
+          assert payload['mode'] == 'review_only', payload
+          assert payload['readiness_color'] == 'green', payload
+          assert payload['evidence_coverage_percent'] == 100.0, payload
+          assert payload['risk_percent'] <= 5, payload
+          assert payload['confidence_percent'] >= 90, payload
+          assert payload['available_count'] == payload['artifact_count'], payload
+          assert 'Product Intelligence Evidence Navigation UI' in html
+          assert 'Navigable evidence cards' in md
+          PY
       - name: Publish summary
         run: cat reports/product-intelligence/product-intelligence-evidence-navigation-ui.md >> "$GITHUB_STEP_SUMMARY"

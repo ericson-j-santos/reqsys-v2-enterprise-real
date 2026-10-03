@@ -36,6 +36,19 @@ Classificar alertas operacionais de CI/CD por criticidade, reduzir ruído e reco
 - Não altera runtime produtivo.
 - Não remove nem flexibiliza gates.
 
+## Implementação
+
+- Script canônico: `scripts/operational_alert_intelligence.py`
+- Workflow: `.github/workflows/operational-alert-intelligence.yml`
+- Artifact: `artifacts/operational-alert-intelligence/operational-alert-intelligence.json`
+- Consumidor downstream: `scripts/unified_operational_signal_consolidator.py`
+
+## Cadeia operacional
+
+```text
+Operational Runtime Mesh Hub → Alert Intelligence → Unified Event Bus → Signal Consolidator
+```
+
 ## Próximo incremento
 
-Unified Operational Event Bus.
+Manter cadeia integrada via `Unified Operational Signal Consolidator` e `evidence_gate_consolidated` no Runtime Validation Consolidator. Runbook: `docs/runbooks/consolidacao-operacional-p0.md`.

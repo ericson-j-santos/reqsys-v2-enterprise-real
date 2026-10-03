@@ -1,6 +1,22 @@
 name: Main Operational Health
 
+# Validação diária + disparo imediato em push operacional.
+# Caminho rápido pós-merge: Main Operational Validation Fast (~segundos).
+
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/main-operational-health.yml"
+      - ".github/workflows/main-smoke-ci.yml"
+      - ".github/workflows/pr-scope-labeler.yml"
+      - ".github/workflows/pr-ci-watch.yml"
+      - ".github/workflows/ci-fast-operational.yml"
+      - "scripts/pr_ci_watch.py"
+      - "tests/test_pr_ci_watch.py"
+      - "docs/runbooks/main-smoke-ci.md"
+      - "docs/runbooks/pr-ci-watch.md"
   schedule:
     - cron: "17 9 * * 1-5"
   workflow_dispatch:
@@ -17,7 +33,7 @@ jobs:
   operational-health:
     name: Main operational health / evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
@@ -46,10 +62,17 @@ jobs:
         run: |
           set -euo pipefail
           grep -qi -- "read-only" .github/workflows/pr-scope-labeler.yml
-          grep -qi -- "sem mutação de labels" .github/workflows/pr-scope-labeler.yml
+          grep -qi -- "sem mutacao de labels" .github/workflows/pr-scope-labeler.yml
           grep -qi -- "main-smoke-ci-evidence" .github/workflows/main-smoke-ci.yml
-          grep -qi -- "environment_change\":False" .github/workflows/main-smoke-ci.yml
-          grep -qi -- "deploy\":False" .github/workflows/main-smoke-ci.yml
+          python - <<'PY'
+          from pathlib import Path
+
+          smoke = Path(".github/workflows/main-smoke-ci.yml").read_text(encoding="utf-8")
+          required = ['"environment_change":False', '"deploy":False']
+          missing = [item for item in required if item not in smoke.replace(" ", "")]
+          if missing:
+              raise SystemExit(f"Guardrails ausentes no Main Smoke CI: {missing}")
+          PY
           grep -qi -- "--exclude-run-id" .github/workflows/pr-ci-watch.yml
           grep -qi -- "upload-artifact" .github/workflows/pr-ci-watch.yml
 
@@ -58,14 +81,6 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile scripts/pr_ci_watch.py
-
-      - name: Executar testes rapidos do watcher
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m pytest tests/test_pr_ci_watch.py -q
 
       - name: Gerar evidencia operacional
         if: always()
@@ -82,7 +97,9 @@ jobs:
             printf -- '- Confirma PR Scope Labeler em modo read-only.\n'
             printf -- '- Confirma Main Smoke CI com artifact de evidencia.\n'
             printf -- '- Confirma guardrails do PR CI Watch.\n'
-            printf -- '- Valida sintaxe e testes rapidos do watcher.\n'
+            printf -- '- Valida sintaxe do watcher (py_compile).\n'
+            printf -- '- Testes do watcher: gate no PR via Fast CI - Operational Guardrails.\n'
+            printf -- '- Malha P0 rapida: Main Operational Validation Fast (--lite).\n'
             printf -- '- Nao executa deploy.\n'
             printf -- '- Nao altera producao.\n'
           } > artifacts/main-operational-health/summary.md

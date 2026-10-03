@@ -18,7 +18,7 @@
       </template>
     </PageHeader>
 
-    <PageHeader title="Pipeline" subtitle="..." chip="Demo" chip-color="blue" chip-tooltip="Dados simulados" />
+    <PageHeader title="Fluxo" subtitle="..." chip="Demo" chip-color="blue" chip-tooltip="Dados simulados" />
 -->
 <template>
   <div class="page-header">
@@ -28,7 +28,7 @@
     </div>
     <div class="page-header__actions">
       <slot name="actions" />
-      <v-tooltip v-if="chip" :text="chipTooltip || chip" location="top">
+      <v-tooltip v-if="chip" :text="chipTooltip || chip" location="top" :aria-label="chipTooltip || chip">
         <template #activator="{ props }">
           <v-chip v-bind="props" size="small" :color="chipColor" variant="tonal">
             {{ chip }}
@@ -56,7 +56,7 @@ defineProps({
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-xl);
 }
 
 .page-header__title-block h1 {
@@ -67,7 +67,7 @@ defineProps({
 }
 
 .page-header__subtitle {
-  margin: 4px 0 0;
+  margin: var(--space-xs) 0 0;
   max-width: 60ch;
 }
 

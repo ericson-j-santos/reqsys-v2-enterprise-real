@@ -2,10 +2,14 @@ from pathlib import Path
 import sys
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+SCRIPTS_DIR = ROOT_DIR / "scripts"
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 from scripts.pr_quality_review import ChangedFile, PullRequestContext, classify_risk  # noqa: E402
+import pr_quality_review_entry  # noqa: E402
 
 
 def pr_context(draft: bool = False) -> PullRequestContext:
@@ -31,6 +35,20 @@ def changed_file(filename: str, changes: int = 10) -> ChangedFile:
     )
 
 
+def governed_changed_file(
+    filename: str,
+    changes: int = 10,
+    status: str = "modified",
+):
+    return pr_quality_review_entry.review.ChangedFile(
+        filename=filename,
+        status=status,
+        additions=changes if status != "removed" else 0,
+        deletions=changes if status == "removed" else 0,
+        changes=changes,
+    )
+
+
 def test_classify_workflow_change_warns_without_critical_block() -> None:
     severity, score, findings = classify_risk(
         [changed_file(".github/workflows/pr-quality-review.yml")],
@@ -52,6 +70,74 @@ def test_classify_sensitive_filename_blocks() -> None:
     assert severity == "critical"
     assert score <= 50
     assert any(finding.category == "seguranca" for finding in findings)
+
+
+def test_governed_classifier_allows_public_figma_token_artifact() -> None:
+    artifact = governed_changed_file("frontend/artifacts/figma-tokens/reqsys.tokens.json")
+
+    assert artifact.is_sensitive is False
+
+
+def test_governed_classifier_allows_design_tokens_source() -> None:
+    source = governed_changed_file("frontend/src/theme/design-tokens.json")
+
+    assert source.is_sensitive is False
+
+
+def test_governed_classifier_allows_control_plane_runtime_workflow() -> None:
+    workflow = governed_changed_file(
+        ".github/workflows/credential-control-plane-runtime-health.yml"
+    )
+
+    assert workflow.is_sensitive is False
+
+
+def test_governed_classifier_allows_credential_named_workflow_source() -> None:
+    workflow = governed_changed_file(
+        ".github/workflows/credential-control-plane-cutover-smoke.yml"
+    )
+
+    assert workflow.is_sensitive is False
+
+
+def test_governed_classifier_allows_credential_named_composite_action() -> None:
+    action = governed_changed_file(
+        ".github/actions/resolve-managed-credential/action.yml"
+    )
+
+    assert action.is_sensitive is False
+
+
+def test_governed_classifier_allows_public_pc24x7_token_broker_compose() -> None:
+    compose = governed_changed_file("docker-compose.pc24x7-token-broker.yml")
+
+    assert compose.is_sensitive is False
+
+
+def test_governed_classifier_allows_sdd_spec_with_token_in_name() -> None:
+    spec = governed_changed_file(
+        ".sdd/specs/auto-public-runtime-evidence-native-token.spec.json"
+    )
+
+    assert spec.is_sensitive is False
+
+
+def test_governed_classifier_keeps_real_token_config_sensitive() -> None:
+    token_config = governed_changed_file("config/access-token.json")
+
+    assert token_config.is_sensitive is True
+
+
+def test_governed_classifier_treats_token_named_runtime_config_as_sensitive_by_default() -> None:
+    runtime_config = governed_changed_file("render.token-broker.yaml")
+
+    assert runtime_config.is_sensitive is True
+
+
+def test_governed_classifier_does_not_block_removed_sensitive_config() -> None:
+    removed = governed_changed_file("config/access-token.json", status="removed")
+
+    assert removed.is_sensitive is False
 
 
 def test_classify_docs_only_ok() -> None:

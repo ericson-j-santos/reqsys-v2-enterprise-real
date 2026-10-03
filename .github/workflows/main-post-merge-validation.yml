@@ -15,7 +15,7 @@ on:
 
 concurrency:
   group: main-post-merge-validation-${{ github.event.inputs.commit_sha || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   actions: read
@@ -35,12 +35,12 @@ jobs:
         Main Post-Merge Validation
         PR Evidence Gate
         NGINX Security Profile
-      MAX_WAIT_SECONDS: '180'
-      POLL_SECONDS: '15'
+      MAX_WAIT_SECONDS: '60'
+      POLL_SECONDS: '10'
     steps:
       - name: Build main post-merge evidence
         id: evidence
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const fs = require('fs');
@@ -172,8 +172,8 @@ jobs:
             const mainSha = await resolveMainSha();
             const requiredWorkflows = parseList(process.env.REQUIRED_MAIN_WORKFLOWS);
             const optionalWorkflows = parseList(process.env.OPTIONAL_MAIN_WORKFLOWS);
-            const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '180');
-            const pollSeconds = Number(process.env.POLL_SECONDS || '15');
+            const maxWaitSeconds = Number(process.env.MAX_WAIT_SECONDS || '60');
+            const pollSeconds = Number(process.env.POLL_SECONDS || '10');
             const deadline = Date.now() + maxWaitSeconds * 1000;
 
             let runs = [];
@@ -188,19 +188,23 @@ jobs:
             } while (Date.now() < deadline);
 
             if (gate.status === 'pending') {
-              gate.failures.push(...gate.pending);
-              gate.status = 'failed';
+              gate.warnings.push(...gate.pending.map((item) => `Pending timeout after ${maxWaitSeconds}s: ${item}`));
+              gate.status = 'pending_timeout';
             }
 
+            const mode = context.eventName === 'workflow_dispatch'
+              ? 'blocking_dispatch'
+              : 'report_only';
+
             const audit = {
-              schema_version: '1.2.0',
+              schema_version: '1.4.0',
               generated_at: new Date().toISOString(),
               repository: `${owner}/${repo}`,
               branch: 'main',
               validated_sha: mainSha,
               event_name: context.eventName,
               run_id: context.runId,
-              mode: 'report_only',
+              mode,
               gate,
               workflow_runs: runs,
             };
@@ -216,17 +220,22 @@ jobs:
               `- Status: ${gate.status}`,
               `- Mode: ${audit.mode}`,
               `- Failures: ${gate.failures.length}`,
+              `- Pending: ${gate.pending.length}`,
               `- Warnings: ${gate.warnings.length}`,
               '',
               '## Failures',
               gate.failures.length ? gate.failures.map((failure) => `- ${failure}`).join('\n') : '- None',
               '',
+              '## Pending',
+              gate.pending.length ? gate.pending.map((item) => `- ${item}`).join('\n') : '- None',
+              '',
               '## Warnings',
               gate.warnings.length ? gate.warnings.map((warning) => `- ${warning}`).join('\n') : '- None',
               '',
               '## Policy',
-              '- Report-only monitor: evidence gaps are surfaced in artifacts without breaking this workflow.',
-              '- Blocking remains delegated to explicit required CI and quality gates.',
+              `- Execution mode: ${mode}.`,
+              '- Push and schedule remain report-only monitors.',
+              '- workflow_dispatch is fail-closed when the evidence gate is not passed.',
             ].join('\n'));
 
             core.setOutput('validated_sha', mainSha);
@@ -236,11 +245,122 @@ jobs:
               core.warning(gate.failures.concat(gate.warnings).join('\n'));
             }
 
+      - name: Checkout validated main SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.evidence.outputs.validated_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Python for exact-SHA security validation
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Resolve exact main security delta
+        id: security_delta
+        shell: bash
+        env:
+          VALIDATED_SHA: ${{ steps.evidence.outputs.validated_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p audit/security-post-merge/delta audit/security-post-merge/posture
+
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$VALIDATED_SHA" ]; then
+            echo "::error::validated_sha_mismatch actual=$actual_sha expected=$VALIDATED_SHA"
+            exit 2
+          fi
+
+          parent_sha="$(git rev-parse "${VALIDATED_SHA}^1")"
+          diff_range="${parent_sha}...${VALIDATED_SHA}"
+          git diff --name-only "$diff_range" > audit/security-post-merge/changed-files.txt
+
+          python - "$diff_range" <<'PY'
+          import json
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+          
+          diff_range = sys.argv[1]
+          output = subprocess.check_output(
+              ["git", "-c", "core.quotePath=false", "diff", "--unified=0", "--no-color", diff_range, "--"],
+              text=True,
+          )
+          hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+          current = None
+          result = {}
+          for line in output.splitlines():
+              if line.startswith("+++ "):
+                  raw = line[4:].strip()
+                  current = None if raw == "/dev/null" else (raw[2:] if raw.startswith("b/") else raw)
+                  if current is not None:
+                      result.setdefault(current, set())
+                  continue
+              match = hunk.match(line)
+              if current is None or not match:
+                  continue
+              start = int(match.group(1))
+              count = int(match.group(2) or "1")
+              if count > 0:
+                  result[current].update(range(start, start + count))
+          serializable = {path: sorted(lines) for path, lines in sorted(result.items())}
+          Path("audit/security-post-merge/changed-lines.json").write_text(
+              json.dumps(serializable, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          
+          echo "parent_sha=$parent_sha" >> "$GITHUB_OUTPUT"
+          echo "validated_sha=$VALIDATED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce security delta on exact main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/validate_security_baseline.py scripts/vibe_security_gate.py
+          python scripts/validate_security_baseline.py \
+            --strict \
+            --output-dir audit/security-post-merge/delta/baseline \
+            --scope changed \
+            --changed-files audit/security-post-merge/changed-files.txt
+          python scripts/vibe_security_gate.py --self-test-negative
+          python scripts/vibe_security_gate.py \
+            --strict \
+            --output-dir audit/security-post-merge/delta/vibe-security \
+            --scope changed \
+            --changed-files audit/security-post-merge/changed-files.txt \
+            --changed-lines audit/security-post-merge/changed-lines.json
+
+      - name: Snapshot full security posture on exact main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/validate_security_baseline.py \
+            --output-dir audit/security-post-merge/posture/baseline \
+            --scope all
+          python scripts/vibe_security_gate.py \
+            --output-dir audit/security-post-merge/posture/vibe-security \
+            --scope all
+
       - name: Upload main validation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: main-post-merge-validation-${{ steps.evidence.outputs.validated_sha || github.sha }}
           path: audit/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Enforce dispatched post-merge gate
+        if: always() && github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GATE_STATUS: ${{ steps.evidence.outputs.status }}
+        run: |
+          set -euo pipefail
+          if [[ "$GATE_STATUS" != "passed" ]]; then
+            echo "::error::MAIN_POST_MERGE_GATE_NOT_PASSED status=$GATE_STATUS"
+            exit 1
+          fi
