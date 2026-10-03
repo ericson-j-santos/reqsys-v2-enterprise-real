@@ -29,7 +29,9 @@ SERVICES = ("db", "redis", "api", "frontend", "gateway", "caddy")
 
 
 class PublishError(RuntimeError):
-    pass
+    def __init__(self, code: str):
+        self.code = code if re.fullmatch(r"[a-z0-9_]+", code) else "publish_operation_failed"
+        super().__init__(self.code)
 
 
 def require_host() -> None:
@@ -852,7 +854,7 @@ def main(argv=None) -> int:
         evidence.update({
             "status": "blocked",
             "operation_succeeded": False,
-            "error": str(exc) if isinstance(exc, PublishError)
+            "error": exc.code if isinstance(exc, PublishError)
                      else f"operation_{type(exc).__name__}",
         })
     if publisher is not None:
