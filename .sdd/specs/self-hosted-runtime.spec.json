@@ -24,23 +24,36 @@
     "infra/self-hosted/README.md",
     "scripts/noteri_dev_backup_metadata.py",
     "tests/test_noteri_dev_backup_metadata.py",
-    ".github/workflows/noteri-desktop-network-probe.yml"
+    ".github/workflows/noteri-desktop-network-probe.yml",
+    "scripts/import_self_hosted_dev_sqlite.py",
+    "tests/test_import_self_hosted_dev_sqlite.py",
+    "scripts/reqsys_self_hosted_dev_publish.py",
+    "tests/test_reqsys_self_hosted_dev_publish.py",
+    "scripts/dev_backup_transport.py",
+    "tests/test_dev_backup_transport.py",
+    "tests/test_noteri_desktop_orchestrator_status_probe.py"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
       "tests/test_self_hosted_runtime.py",
-      "tests/test_noteri_dev_backup_metadata.py"
+      "tests/test_noteri_dev_backup_metadata.py",
+      "tests/test_import_self_hosted_dev_sqlite.py",
+      "tests/test_reqsys_self_hosted_dev_publish.py",
+      "tests/test_dev_backup_transport.py"
     ],
     "tests": [
       "tests/test_self_hosted_runtime.py",
-      "tests/test_noteri_dev_backup_metadata.py"
+      "tests/test_noteri_dev_backup_metadata.py",
+      "tests/test_import_self_hosted_dev_sqlite.py",
+      "tests/test_reqsys_self_hosted_dev_publish.py",
+      "tests/test_dev_backup_transport.py"
     ],
-    "evidence_contract": "Compose valido, segredos externos e inicializacao idempotente; testes negativos; ensaio isolado quando disponivel. Nao declarar migracao/PROD sem E2E e restauracao no destino."
+    "evidence_contract": "Executor físico governado no PC24x7; chave privada DPAPI e ACL, transferência cifrada, PostgreSQL isolado, importação transacional com integridade/contagens/digests e leitura independente. Publicação e troca DEV somente após backup, autenticação e E2E no SHA; nenhuma promoção de produção."
   },
   "risk": {
     "production": false,
     "merge": false,
-    "secrets_mutation": false,
+    "secrets_mutation": true,
     "admin_permissions": false,
     "reboot": false
   }

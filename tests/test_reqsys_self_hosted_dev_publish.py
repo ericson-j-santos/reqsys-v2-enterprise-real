@@ -1,0 +1,238 @@
+"""Gates que impedem ativação vazia, stale ou em host incorreto."""
+from datetime import datetime, timedelta, timezone
+import importlib.util
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/reqsys_self_hosted_dev_publish.py"
+spec = importlib.util.spec_from_file_location("selfhost_publish", SCRIPT)
+publish = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(publish)
+
+
+class FakePrivateFiles:
+    def directory(self, path):
+        path.mkdir(exist_ok=True)
+
+    def check(self, path):
+        if not path.exists():
+            raise FileNotFoundError(path)
+
+    def create(self, path, content):
+        with path.open("xb") as stream:
+            stream.write(content)
+
+
+class PublishTests(unittest.TestCase):
+    def proof(self):
+        proof = {
+            "schema_version": "1",
+            "status": "verified",
+            "host": publish.HOST,
+            "project": publish.PROJECT,
+            "target_sha": "a" * 40,
+            "source_sha256": "b" * 64,
+            "verified_at": datetime.now(timezone.utc).isoformat(),
+            "sqlite_integrity_ok": True,
+            "target_verified": True,
+            "source_rows": 3,
+            "copied_rows": 3,
+            "table_counts": {"requisitos": 3},
+            "database_identity": {
+                "database": "reqsys",
+                "container_id": "c" * 64,
+                "postgres_system_identifier": "123456789",
+            },
+        }
+        proof["proof_integrity_sha256"] = publish.proof_integrity(proof)
+        return proof
+
+    def validate(self, proof):
+        return publish.validate_restore_proof(
+            proof, "a" * 40, "b" * 64, datetime.now(timezone.utc)
+        )
+
+    def test_other_host_blocked(self):
+        with patch.object(publish.socket, "gethostname", return_value="NOTERI"):
+            with self.assertRaises(publish.PublishError):
+                publish.require_host()
+
+    def test_secret_retry_preserves_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "secrets"
+            private = FakePrivateFiles()
+            self.assertEqual(len(publish.initialize_secrets(root, private)), 3)
+            original = {p.name: p.read_bytes() for p in root.iterdir()}
+            self.assertEqual(publish.initialize_secrets(root, private), [])
+            self.assertEqual(original, {p.name: p.read_bytes() for p in root.iterdir()})
+
+    def test_invalid_existing_secret_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "secrets"
+            root.mkdir()
+            path = root / "db_owner_password"
+            path.write_bytes(b"old-invalid-value\n")
+            with self.assertRaises(publish.PublishError):
+                publish.initialize_secrets(root, FakePrivateFiles())
+            self.assertEqual(path.read_bytes(), b"old-invalid-value\n")
+
+    def test_configuration_preserves_exact_existing_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "runtime.env"
+            path.write_bytes(b"old\n")
+            private = FakePrivateFiles()
+            publish.WindowsPrivateFiles.preserving(private, path, b"old\n")
+            with self.assertRaises(publish.PublishError):
+                publish.WindowsPrivateFiles.preserving(private, path, b"new\n")
+            self.assertEqual(path.read_bytes(), b"old\n")
+
+    def test_config_is_private_local_dev(self):
+        config = publish.render_config(Path("C:/Private/secrets"), ("", "")).decode()
+        self.assertIn('SITE_ADDRESS=":80"', config)
+        self.assertIn('BIND_ADDRESS="127.0.0.1"', config)
+        self.assertIn('APP_ENV="development"', config)
+        self.assertNotIn("password=", config)
+        self.assertNotIn("jwt_secret=", config)
+
+    def test_fresh_complete_proof_accepted(self):
+        self.assertEqual(self.validate(self.proof()), {"requisitos": 3})
+
+    def test_stale_future_empty_wrong_target_and_unbound_backup_rejected(self):
+        for field, value in (
+            ("verified_at", (datetime.now(timezone.utc) -
+                             timedelta(hours=2)).isoformat()),
+            ("verified_at", (datetime.now(timezone.utc) +
+                             timedelta(hours=2)).isoformat()),
+            ("copied_rows", 0),
+            ("target_sha", "d" * 40),
+            ("source_sha256", "d" * 64),
+            ("host", "NOTERI"),
+            ("target_verified", False),
+            ("table_counts", {"requisitos": 2}),
+            ("table_counts", {'bad"; DROP TABLE x': 3}),
+        ):
+            with self.subTest(field=field, value=value):
+                proof = self.proof()
+                proof[field] = value
+                with self.assertRaises(publish.PublishError):
+                    self.validate(proof)
+
+
+    def raw_proof(self):
+        proof = self.proof()
+        proof.update({
+            "schema_version": "1.0.0",
+            "contract": "reqsys-sqlite-postgres-import",
+            "digests_match": True,
+            "independent_readback": True,
+            "migration_committed": True,
+        })
+        return proof
+
+    def test_raw_import_evidence_requires_committed_independent_readback(self):
+        raw = self.raw_proof()
+        proof = publish.aggregate_restore_proof(
+            raw, "a" * 40, "b" * 64, self.proof()["database_identity"],
+            datetime.now(timezone.utc)
+        )
+        self.assertEqual(self.validate(proof), {"requisitos": 3})
+        for field in ("digests_match", "independent_readback", "migration_committed"):
+            with self.subTest(field=field):
+                bad = dict(raw)
+                bad[field] = False
+                with self.assertRaises(publish.PublishError):
+                    publish.aggregate_restore_proof(
+                        bad, "a" * 40, "b" * 64,
+                        self.proof()["database_identity"],
+                        datetime.now(timezone.utc)
+                    )
+
+    def test_valid_metadata_cannot_change_without_integrity_update(self):
+        proof = self.proof()
+        proof["database_identity"]["container_id"] = "d" * 64
+        with self.assertRaisesRegex(publish.PublishError, "integrity_mismatch"):
+            self.validate(proof)
+
+    def test_copied_row_boolean_is_not_accepted_as_integer(self):
+        proof = self.proof()
+        proof.update(source_rows=1, copied_rows=True, table_counts={"requisitos": 1})
+        proof["proof_integrity_sha256"] = publish.proof_integrity(proof)
+        with self.assertRaisesRegex(publish.PublishError, "empty_or_incomplete"):
+            self.validate(proof)
+
+    def test_live_restore_rejects_replaced_database_and_wrong_counts(self):
+        publisher = object.__new__(publish.Publisher)
+        proof = self.proof()
+        with patch.object(publisher, "compose", return_value="c" * 64):
+            with patch.object(publisher, "run", return_value="d" * 64):
+                with self.assertRaisesRegex(publish.PublishError, "container_changed"):
+                    publisher.verify_live_restore(proof, {"requisitos": 3})
+        with patch.object(publisher, "compose", side_effect=[
+            "c" * 64, "identity|123456789\nrequisitos|2"
+        ]):
+            with patch.object(publisher, "run", return_value="c" * 64):
+                with self.assertRaisesRegex(publish.PublishError, "counts_mismatch"):
+                    publisher.verify_live_restore(proof, {"requisitos": 3})
+
+    def test_bounded_evidence_rejects_old_oversized_or_non_object_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "evidence.json"
+            path.write_bytes(b"x" * 262145)
+            with self.assertRaisesRegex(publish.PublishError, "too_large"):
+                publish.bounded_json(path, FakePrivateFiles())
+            path.write_bytes(b"[]")
+            with self.assertRaisesRegex(publish.PublishError, "not_object"):
+                publish.bounded_json(path, FakePrivateFiles())
+
+
+    def test_cleanup_cannot_remove_unowned_or_other_container(self):
+        publisher = object.__new__(publish.Publisher)
+        publisher.source = Path.cwd()
+        publisher.events = []
+        attempt = "a" * 24
+        with patch.object(publish.subprocess, "run") as run:
+            with self.assertRaisesRegex(publish.PublishError, "identity_invalid"):
+                publisher.cleanup_importer("reqsys-live-api-1", attempt)
+            run.assert_not_called()
+        response = SimpleNamespace(returncode=0, stdout="{}", stderr="")
+        with patch.object(publish.subprocess, "run", return_value=response) as run:
+            with self.assertRaisesRegex(publish.PublishError, "owner_mismatch"):
+                publisher.cleanup_importer("reqsys-dev-restore-" + attempt, attempt)
+            self.assertEqual(run.call_count, 1)
+
+    def test_cleanup_removes_exact_owned_ephemeral_container_without_volumes(self):
+        publisher = object.__new__(publish.Publisher)
+        publisher.source = Path.cwd()
+        publisher.events = []
+        attempt = "a" * 24
+        name = "reqsys-dev-restore-" + attempt
+        labels = {
+            "com.docker.compose.project": publish.PROJECT,
+            "com.docker.compose.service": "api",
+            "io.reqsys.selfhost.instance": publish.INSTANCE,
+            "io.reqsys.selfhost.restore_attempt": attempt,
+        }
+        inspected = SimpleNamespace(returncode=0, stdout=publish.json.dumps(labels), stderr="")
+        removed = SimpleNamespace(returncode=0, stdout=name, stderr="")
+        with patch.object(publish.subprocess, "run", side_effect=[inspected, removed]) as run:
+            publisher.cleanup_importer(name, attempt)
+            self.assertEqual(run.call_args.args[0], ["docker", "rm", "--force", name])
+            self.assertFalse(run.call_args.kwargs["shell"])
+
+    @unittest.skipUnless(os.name == "nt", "DACL Windows")
+    def test_actual_windows_private_acl_roundtrip(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            private = publish.WindowsPrivateFiles()
+            root = Path(temporary) / "private"
+            private.directory(root)
+            private.create(root / "sample", b"sample\n")
+            private.check(root)
+            private.check(root / "sample")
+
+
+if __name__ == "__main__":
+    unittest.main()
