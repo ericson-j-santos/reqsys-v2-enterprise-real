@@ -1,0 +1,157 @@
+{
+  "schema_version": 2,
+  "routes": [
+    {
+      "route": "/",
+      "area": "meu-trabalho",
+      "status": "canonical",
+      "responsibility": "Resumo diário, pendências, jornada de requisitos e próximas ações do usuário."
+    },
+    {
+      "route": "/requisitos",
+      "area": "requisitos",
+      "status": "canonical",
+      "responsibility": "Cadastro, revisão e acompanhamento de requisitos e demandas."
+    },
+    {
+      "route": "/analytics",
+      "area": "indicadores",
+      "status": "canonical",
+      "responsibility": "Indicadores executivos e navegação analítica; detalhes de execução devem apontar para Operação."
+    },
+    {
+      "route": "/estatisticas",
+      "area": "indicadores",
+      "status": "canonical",
+      "responsibility": "Indicadores auditáveis com fonte, fórmula e detalhamento."
+    },
+    {
+      "route": "/monitoramento-operacional",
+      "area": "operacao",
+      "status": "canonical",
+      "responsibility": "Saúde de execução, topologia, filas, conectores, incidentes e observabilidade operacional."
+    },
+    {
+      "route": "/governanca",
+      "area": "governanca",
+      "status": "canonical",
+      "responsibility": "Políticas, verificações obrigatórias, gates, evidências, conformidade e promoção controlada."
+    },
+    {
+      "route": "/painel-integracao",
+      "area": "integracoes",
+      "status": "canonical",
+      "responsibility": "Estado, eventos e diagnóstico das integrações corporativas."
+    },
+    {
+      "route": "/hub-lowcode",
+      "area": "automacoes",
+      "status": "canonical",
+      "responsibility": "Descoberta, configuração e instalação de automações e recursos low-code."
+    },
+    {
+      "route": "/arquitetura",
+      "area": "arquitetura",
+      "status": "canonical",
+      "responsibility": "Mapa da solução, componentes, integrações e relação com decisões arquiteturais."
+    },
+    {
+      "route": "/home",
+      "area": "user-final-shell",
+      "status": "transitional-proposed",
+      "responsibility": "Rota da proposta de shell do usuário final; não substitui o painel canônico enquanto o contrato estiver proposed."
+    },
+    {
+      "route": "/workspace",
+      "area": "user-final-shell",
+      "status": "transitional-proposed",
+      "responsibility": "Espaço de trabalho da proposta de shell; mantido fora da navegação principal até decisão de produto."
+    },
+    {
+      "route": "/ajuda",
+      "area": "user-final-shell",
+      "status": "transitional-proposed",
+      "responsibility": "Ajuda da proposta de shell; mantida compatível sem promovê-la a fonte canônica."
+    }
+  ],
+  "navigation_duplicate_decisions": [
+    {
+      "route": "/requisitos",
+      "classification": "intentional-cross-theme-entry",
+      "rationale": "A rota é atalho do trabalho diário e também entrada canônica da área especializada de Engenharia de requisitos."
+    },
+    {
+      "route": "/pipeline",
+      "classification": "intentional-cross-theme-entry",
+      "rationale": "A rota é atalho de acompanhamento diário e também etapa explícita do refinamento na área de Engenharia de requisitos."
+    },
+    {
+      "route": "/rastreabilidade",
+      "classification": "intentional-cross-theme-entry",
+      "rationale": "A rota aparece na jornada diária e na publicação/rastreio da área especializada; é a mesma implementação canônica."
+    }
+  ],
+  "component_reuse_decisions": [
+    {
+      "component": "UserFinalShellView",
+      "paths": ["/home", "/workspace", "/ajuda"],
+      "classification": "intentional-transitional-shell",
+      "rationale": "As três rotas pertencem à mesma proposta transitória de shell do usuário final e compartilham intencionalmente o mesmo componente enquanto o contrato permanecer proposed."
+    }
+  ],
+  "overlap_decisions": [
+    {
+      "subject": "Dashboard x User Final Shell",
+      "decision": "A rota / permanece o ponto canônico do trabalho diário. /home, /workspace e /ajuda ficam classificados como proposta transitória porque o contrato user-final-shell está com status proposed. Não redirecionar nem remover até decisão de produto."
+    },
+    {
+      "subject": "Analytics x Monitoramento",
+      "decision": "Analytics deve apresentar síntese e navegação para indicadores. Execução, malha operacional, topologia e incidentes pertencem a /monitoramento-operacional; qualquer resumo em Analytics deve funcionar como detalhamento direcionado, não como segunda implementação operacional."
+    },
+    {
+      "subject": "Monitoramento x Governança",
+      "decision": "Monitoramento responde pelo estado técnico corrente; Governança responde por políticas, gates e evidências. Sinais operacionais podem ser referenciados pela Governança, mas não recalculados independentemente."
+    },
+    {
+      "subject": "Painel de Integrações x Central de Automações",
+      "decision": "/painel-integracao é canônico para saúde/eventos das integrações. /hub-lowcode é canônico para descoberta, configuração e instalação de automações."
+    }
+  ],
+  "architectural_variants": [
+    {
+      "path": "frontend",
+      "classification": "canonical",
+      "responsibility": "Frontend principal Vue/Vite/Vuetify."
+    },
+    {
+      "path": "frontend-angular",
+      "classification": "complementary-or-experimental",
+      "responsibility": "Frente complementar; não tratá-la como interface canônica sem decisão explícita."
+    },
+    {
+      "path": "frontend-vuetify",
+      "classification": "validation-variant",
+      "responsibility": "Variante utilizada em validações específicas."
+    },
+    {
+      "path": "backend",
+      "classification": "canonical",
+      "responsibility": "API principal FastAPI e domínio principal."
+    },
+    {
+      "path": "backend-dotnet",
+      "classification": "complementary",
+      "responsibility": "Serviço .NET complementar quando aplicável."
+    },
+    {
+      "path": "runtime",
+      "classification": "canonical-async-runtime",
+      "responsibility": "Runtime de jobs assíncronos."
+    },
+    {
+      "path": "services",
+      "classification": "canonical-supporting-services",
+      "responsibility": "Serviços independentes e reutilizáveis."
+    }
+  ]
+}

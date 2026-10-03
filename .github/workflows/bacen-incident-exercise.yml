@@ -1,0 +1,107 @@
+name: BACEN Incident Exercise Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/INCIDENT-EXERCISE-SCENARIO.json"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/run_bacen_incident_exercise.py"
+      - ".github/workflows/bacen-incident-exercise.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/INCIDENT-EXERCISE-SCENARIO.json"
+      - "governance/bacen/BACEN-CONTROL-MATRIX.yaml"
+      - "scripts/run_bacen_incident_exercise.py"
+      - ".github/workflows/bacen-incident-exercise.yml"
+  schedule:
+    - cron: "17 10 1 */3 *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-incident-exercise-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  incident-exercise:
+    name: BACEN-03 Operational Incident Exercise
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile runner
+        run: python -m py_compile scripts/run_bacen_incident_exercise.py
+
+      - name: Execute incident exercise
+        env:
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python scripts/run_bacen_incident_exercise.py \
+            --scenario governance/bacen/INCIDENT-EXERCISE-SCENARIO.json \
+            --output artifacts/bacen/bacen-03-incident-exercise-evidence.json
+
+      - name: Validate evidence and blocking criteria
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          path = Path("artifacts/bacen/bacen-03-incident-exercise-evidence.json")
+          report = json.loads(path.read_text(encoding="utf-8"))
+          assert report["control_id"] == "BACEN-03"
+          assert report["result"] == "passed"
+          assert report["all_thresholds_met"] is True
+          assert report["corrective_action_plan_present"] is True
+          assert report["production_touched"] is False
+          assert len(report["participants"]) >= 4
+          assert len(report["decisions"]) >= 3
+          assert len(report["corrective_actions"]) >= 1
+          assert len(report["scenario_sha256"]) == 64
+          assert report["correlation_id"]
+          next_due = datetime.fromisoformat(report["next_due_at"])
+          assert next_due > datetime.now(UTC)
+          print("BACEN-03 incident exercise evidence: valid")
+          PY
+
+      - name: Publish operational evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-03-incident-exercise-evidence
+          path: artifacts/bacen/bacen-03-incident-exercise-evidence.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Append executive summary
+        if: always()
+        run: |
+          echo "## BACEN-03 — Exercício operacional de incidente" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/bacen/bacen-03-incident-exercise-evidence.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-03-incident-exercise-evidence.json").read_text())
+          print(f"- Resultado: **{report['result']}**")
+          print(f"- Thresholds atendidos: **{report['all_thresholds_met']}**")
+          print(f"- Plano corretivo presente: **{report['corrective_action_plan_present']}**")
+          print(f"- Próximo vencimento: `{report['next_due_at']}`")
+          print(f"- Produção acessada: **{report['production_touched']}**")
+          print(f"- Correlation ID: `{report['correlation_id']}`")
+          PY
+          else
+            echo "- Evidência não gerada." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

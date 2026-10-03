@@ -1,0 +1,12 @@
+{
+  "schema_version": "2.0.0",
+  "mode": "bootstrap",
+  "message": "Estado operacional ao vivo indisponível. Consulte global-status.json gerado pelo workflow atual; não use este arquivo como evidência de andamento.",
+  "source_role": "non_operational_fallback",
+  "canonical_sources": {
+    "github": "GitHub API / Actions",
+    "todo_global": "TODO Global",
+    "teams": "Teams Notification Dashboard",
+    "runtime": "evidências PC24x7 same-SHA quando aplicável"
+  }
+}

@@ -1,0 +1,256 @@
+name: Pre-PR Readiness Gate
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Branch base para validação"
+        required: true
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CORRELATION_ID: pre-pr-${{ github.run_id }}-${{ github.run_attempt }}
+  EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.base_ref || 'main' }}
+
+concurrency:
+  # Eventos do mesmo tipo cancelam versões obsoletas da branch; push e pull_request
+  # ficam isolados para não se cancelarem mutuamente no mesmo SHA.
+  group: pre-pr-readiness-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  ready-for-pr:
+    name: READY_FOR_PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout completo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.EVALUATED_SHA }}
+          fetch-depth: 0
+
+      - name: Classificar escopo contra a base
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_REF" --prune
+          head="$(git rev-parse HEAD)"
+          base="$(git rev-parse "origin/$BASE_REF")"
+          changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          if [[ "$head" == "$base" && -z "$changed" ]]; then
+            echo "not_applicable=true" >> "$GITHUB_OUTPUT"
+            echo "Pre-PR não aplicável: HEAD idêntico à base e sem diff."
+          else
+            echo "not_applicable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Node 20 para validação condicional de frontend
+        if: steps.scope.outputs.not_applicable != 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Dependências do gate por perfil
+        if: steps.scope.outputs.not_applicable != 'true'
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_REF" --prune
+          # Os testes raiz podem ser selecionados mesmo quando o diff também contém backend.
+          # Portanto, as dependências mínimas do próprio gate são invariantes de perfil.
+          python -m pip install --disable-pip-version-check PyYAML pytest ruff 'httpx==0.28.1' 'openpyxl==3.1.5' 'cryptography==50.0.0'
+          if [[ -f requirements-report-builder.txt ]]; then
+            echo "Instalando dependência compartilhada Report Builder Platform fixada por SHA."
+            python -m pip install --disable-pip-version-check -r requirements-report-builder.txt
+          fi
+          backend_profile=false
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -q '^backend/'; then
+            backend_profile=true
+          else
+            while IFS= read -r spec; do
+              if [[ -f "$spec" ]] && grep -q '"backend/tests/' "$spec"; then
+                backend_profile=true
+                break
+              fi
+            done < <(git diff --name-only "origin/$BASE_REF...HEAD" | grep -E '^\.sdd/specs/.*\.spec\.json$' || true)
+          fi
+          if [[ "$backend_profile" != "true" ]]; then
+            if python -c 'import os; from pathlib import Path; from scripts.pre_pr_readiness import candidate_pytests, changed_files; files = changed_files(os.environ["BASE_REF"]); raise SystemExit(0 if any(path.startswith("backend/tests/") for path in candidate_pytests(files, Path.cwd())) else 1)'; then
+              backend_profile=true
+            fi
+          fi
+          if [[ "$backend_profile" == "true" ]]; then
+            echo "Perfil backend detectado: instalando também as dependências oficiais do backend."
+            python -m pip install --disable-pip-version-check -r backend/requirements.txt
+          fi
+
+      - name: Testes do contrato do gate
+        id: contract
+        if: steps.scope.outputs.not_applicable != 'true'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_pre_pr_readiness.py tests/test_ci_admission_control.py tests/test_vibe_security_gate.py tests/test_dev_runtime_cutover.py tests/test_validate_action_immutability.py -q
+          python scripts/pre_pr_readiness.py --self-test-negative
+          python scripts/validate_action_immutability.py --self-test-negative
+          python scripts/vibe_security_gate.py --self-test-negative
+          python scripts/validate_dev_runtime_cutover.py
+
+      - name: Executar prontidão no HEAD atual
+        id: readiness
+        if: always()
+        run: |
+          set +e
+          python scripts/pre_pr_readiness.py \
+            --base-ref "$BASE_REF" \
+            --expected-head-sha "$EVALUATED_SHA" \
+            --correlation-id "$CORRELATION_ID" \
+            --output artifacts/pre-pr-readiness/pre-pr-readiness.json
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Gerar manifesto canônico de admissão CI
+        id: admission
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci_admission_manifest.py \
+            --readiness artifacts/pre-pr-readiness/pre-pr-readiness.json \
+            --expected-head-sha "$EVALUATED_SHA" \
+            --output "artifacts/admission/$EVALUATED_SHA.json"
+
+      - name: Publicar evidência READY_FOR_PR
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pre-pr-readiness-${{ env.EVALUATED_SHA }}
+          path: artifacts/pre-pr-readiness/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publicar manifesto de admissão do SHA
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-admission-${{ env.EVALUATED_SHA }}
+          path: artifacts/admission/${{ env.EVALUATED_SHA }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Pre-PR Readiness" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Correlation ID: \`$CORRELATION_ID\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- HEAD: \`$EVALUATED_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Contract tests: \`${{ steps.contract.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f artifacts/pre-pr-readiness/pre-pr-readiness.json ]]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          p = json.loads(Path('artifacts/pre-pr-readiness/pre-pr-readiness.json').read_text(encoding='utf-8'))
+          print(f"- READY_FOR_PR: `{p['status']}`")
+          print(f"- Base SHA: `{p['base_sha']}`")
+          print(f"- Behind: `{p['behind_by']}`")
+          print(f"- Arquivos alterados: `{len(p['changed_files'])}`")
+          print(f"- Perfis: `{', '.join(p['profiles'])}`")
+          invariants = p.get('preventive_invariants', [])
+          if invariants:
+              print("### Invariantes preventivos")
+              for item in invariants:
+                  print(f"- {item['name']}: `{item['status']}`")
+          if p['blockers']:
+              print('### Bloqueios')
+              for item in p['blockers']:
+                  print(f"- {item}")
+          if p['warnings']:
+              print('### Alertas')
+              for item in p['warnings']:
+                  print(f"- {item}")
+          PY
+          fi
+
+      - name: Bloquear publicação de PR quando não estiver pronta
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.scope.outputs.not_applicable }}" == "true" ]]; then
+            python - "$EVALUATED_SHA" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          sha = sys.argv[1]
+          payload = json.loads((Path("artifacts/admission") / f"{sha}.json").read_text(encoding="utf-8"))
+          if payload.get("status") != "not_applicable" or payload.get("head_sha") != sha:
+              raise SystemExit("CI_ADMISSION_NOT_APPLICABLE_INVALID")
+          if payload.get("classification", {}).get("changed_files_count") != 0:
+              raise SystemExit("CI_ADMISSION_NOT_APPLICABLE_WITH_DIFF")
+          print(f"CI_ADMISSION_NOT_APPLICABLE head={sha}")
+          PY
+            exit 0
+          fi
+          test "${{ steps.contract.outcome }}" = "success" || {
+            echo "Contrato do Pre-PR Readiness falhou."
+            exit 1
+          }
+          test "${{ steps.readiness.outputs.exit_code }}" = "0" || {
+            echo "READY_FOR_PR bloqueado."
+            exit 1
+          }
+          test "${{ steps.admission.outcome }}" = "success" || {
+            echo "Manifesto de admissão não foi produzido."
+            exit 1
+          }
+          python - "$EVALUATED_SHA" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          sha = sys.argv[1]
+          path = Path("artifacts/admission") / f"{sha}.json"
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          required = {
+              "sdd:contract",
+              "security:changed-diff",
+              "workflow:surface-budget",
+              "workflow:action-immutability",
+              "workflow:regression-contracts",
+          }
+          invariants = {
+              str(item.get("name")): str(item.get("status"))
+              for item in payload.get("preventive_invariants", [])
+              if isinstance(item, dict)
+          }
+          if payload.get("status") != "admitted" or payload.get("head_sha") != sha:
+              raise SystemExit("CI_ADMISSION_BLOCKED")
+          failed = sorted(name for name in required if invariants.get(name) != "passed")
+          if failed:
+              raise SystemExit("CI_ADMISSION_PREVENTIVE_INVARIANTS_BLOCKED:" + ",".join(failed))
+          print(f"CI_ADMISSION_ACCEPTED head={sha}")
+          PY

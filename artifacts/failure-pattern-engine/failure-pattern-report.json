@@ -1,0 +1,39 @@
+{
+  "generated_at_utc": "2026-06-29T03:10:53.922880+00:00",
+  "catalog_schema_version": "1.0.0",
+  "files_analyzed": [
+    "/workspace/artifacts/failure-pattern-engine/input-clean.log"
+  ],
+  "summary": {
+    "matches": 0,
+    "categories": {},
+    "severities": {},
+    "risk": {
+      "score": 0,
+      "status": "VERDE",
+      "description": "Nenhum padrao conhecido de falha foi identificado."
+    }
+  },
+  "matches": [],
+  "safety_policy": {
+    "automatic_remediation_enabled": false,
+    "allowed_actions": [
+      "classify",
+      "summarize",
+      "recommend",
+      "publish_artifact"
+    ],
+    "blocked_actions": [
+      "merge_pull_request",
+      "push_to_main",
+      "modify_production",
+      "delete_artifact",
+      "rerun_without_policy"
+    ]
+  },
+  "limits": [
+    "Classificacao baseada em padroes deterministos e texto disponivel.",
+    "Nao executa rerun, merge, push, deploy ou remediacao automatica.",
+    "Resultado sem matches nao garante ausencia de falha desconhecida."
+  ]
+}

@@ -1,0 +1,66 @@
+name: Resolve managed credential
+description: Resolve uma credencial do Credential Control Plane no Azure Key Vault sem fallback legado.
+inputs:
+  credential-id:
+    required: true
+    description: credential_id da policy canônica.
+  consumer:
+    required: true
+    description: consumer autorizado declarado na policy.
+  export-env:
+    required: true
+    description: variável de ambiente a disponibilizar para os passos seguintes.
+  vault-name:
+    required: true
+  azure-client-id:
+    required: true
+  azure-tenant-id:
+    required: true
+  azure-subscription-id:
+    required: true
+  evidence-path:
+    required: false
+    default: audit/credential-consumer-cutover.json
+
+runs:
+  using: composite
+  steps:
+    - name: Validar configuração OIDC/Key Vault
+      shell: bash
+      env:
+        VAULT_NAME: ${{ inputs.vault-name }}
+        AZURE_CLIENT_ID_VALUE: ${{ inputs.azure-client-id }}
+        AZURE_TENANT_ID_VALUE: ${{ inputs.azure-tenant-id }}
+        AZURE_SUBSCRIPTION_ID_VALUE: ${{ inputs.azure-subscription-id }}
+      run: |
+        set -euo pipefail
+        for name in VAULT_NAME AZURE_CLIENT_ID_VALUE AZURE_TENANT_ID_VALUE AZURE_SUBSCRIPTION_ID_VALUE; do
+          if [ -z "${!name:-}" ]; then
+            echo "::error::$name não configurado; cutover permanece fail-closed."
+            exit 2
+          fi
+        done
+
+    - name: Preparar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Autenticar Azure por OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        subscription-id: ${{ inputs.azure-subscription-id }}
+
+    - name: Resolver credencial gerenciada
+      shell: bash
+      env:
+        REQSYS_KEY_VAULT_NAME: ${{ inputs.vault-name }}
+      run: |
+        set -euo pipefail
+        python "$GITHUB_WORKSPACE/scripts/resolve_managed_credential.py" \
+          --credential-id "${{ inputs.credential-id }}" \
+          --consumer "${{ inputs.consumer }}" \
+          --export-env "${{ inputs.export-env }}" \
+          --evidence "${{ inputs.evidence-path }}"

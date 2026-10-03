@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "incident_id": "REQSYS-RUNTIME-<yyyyMMdd-HHmm>-<environment>",
+  "increment": "REQSYS#002.P5",
+  "environment": "dev",
+  "severity": "sev2",
+  "status": "open",
+  "opened_at": "<iso-8601>",
+  "closed_at": null,
+  "operator": "<github-user>",
+  "commit_sha": "<sha>",
+  "deploy_run_id": "<github-run-id>",
+  "smoke_run_id": "<github-run-id>",
+  "app_name": "<app-fly-existente>",
+  "base_url": "https://<app-fly>.fly.dev",
+  "duckdns_url": "https://<hostname-duckdns>",
+  "symptoms": [
+    "<sintoma-observado>"
+  ],
+  "failed_gates": [
+    "<gate-falho>"
+  ],
+  "timeline": [
+    {
+      "at": "<iso-8601>",
+      "event": "deploy_started",
+      "evidence": "<url-ou-run-id>"
+    },
+    {
+      "at": "<iso-8601>",
+      "event": "smoke_failed",
+      "evidence": "<url-ou-artifact>"
+    }
+  ],
+  "rollback": {
+    "required": true,
+    "previous_release": "<release-version-anterior>",
+    "executed_at": "<iso-8601>",
+    "result": "pending"
+  },
+  "root_cause_hypothesis": "<hipotese-inicial>",
+  "final_decision": "blocked",
+  "follow_up_items": [
+    "<acao-corretiva>"
+  ]
+}

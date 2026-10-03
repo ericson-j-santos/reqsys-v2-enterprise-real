@@ -1,0 +1,67 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-20T00:00:00-03:00",
+  "owner": "ReqSys Platform Governance",
+  "environments": ["dev", "homolog", "prod"],
+  "capabilities": [
+    {
+      "id": "repository.read",
+      "connector_type": "repository_provider",
+      "description": "Consultar arquivos, branches, issues, pull requests e status de integração.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_permissions_profile": "read_minimum",
+      "criticality": "high",
+      "requires_human_confirmation": false,
+      "fallback": "Solicitar exportação manual das informações."
+    },
+    {
+      "id": "repository.write",
+      "connector_type": "repository_provider",
+      "description": "Criar branch, registrar mudanças e publicar solicitação de revisão.",
+      "environments": ["dev", "homolog"],
+      "minimum_permissions_profile": "write_minimum",
+      "criticality": "critical",
+      "requires_human_confirmation": true,
+      "fallback": "Gerar instruções e diff para aplicação manual."
+    },
+    {
+      "id": "document.read",
+      "connector_type": "document_provider",
+      "description": "Ler documentos e arquivos de referência autorizados.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_permissions_profile": "document_read_minimum",
+      "criticality": "medium",
+      "requires_human_confirmation": false,
+      "fallback": "Solicitar upload manual do arquivo."
+    },
+    {
+      "id": "message.compose",
+      "connector_type": "communication_provider",
+      "description": "Preparar comunicações operacionais autorizadas.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_permissions_profile": "compose_minimum",
+      "criticality": "high",
+      "requires_human_confirmation": true,
+      "fallback": "Criar texto para revisão manual."
+    },
+    {
+      "id": "schedule.manage",
+      "connector_type": "calendar_provider",
+      "description": "Consultar e preparar compromissos operacionais autorizados.",
+      "environments": ["dev", "homolog", "prod"],
+      "minimum_permissions_profile": "schedule_minimum",
+      "criticality": "medium",
+      "requires_human_confirmation": true,
+      "fallback": "Gerar texto de agendamento manual."
+    }
+  ],
+  "production_gates": [
+    "critical_connector_without_health_check",
+    "capability_without_minimum_permissions_profile",
+    "expired_authorization_without_safe_refresh",
+    "broad_permission_without_justification",
+    "missing_correlation_id",
+    "secret_detected_in_logs",
+    "write_action_without_required_human_confirmation"
+  ]
+}

@@ -347,6 +347,18 @@ class TestDescribeSecretResolution:
         monkeypatch.setenv('DR_KEY5', 'segredo')
         assert describe_secret_resolution('DR_KEY5')['value_exposed'] is False
 
+    def test_resolved_espelha_configured(self, fk, monkeypatch):
+        monkeypatch.setenv('DR_KEY10', 'valor')
+        result = describe_secret_resolution('DR_KEY10')
+        assert result['resolved'] is True
+        assert result['resolved'] == result['configured']
+
+    def test_resolved_false_quando_absent(self, fk, monkeypatch):
+        monkeypatch.delenv('DR_KEY11', raising=False)
+        result = describe_secret_resolution('DR_KEY11')
+        assert result['resolved'] is False
+        assert result['configured'] is False
+
     def test_env_vence_vault_sem_prefer_vault(self, fk_init, monkeypatch):
         monkeypatch.setenv('DR_KEY6', 'de-env')
         _put_vault_secret(fk_init, SVC, 'DR_KEY6', 'do-vault')

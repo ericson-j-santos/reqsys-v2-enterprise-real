@@ -1,0 +1,30 @@
+{
+  "versao": "1.0.0",
+  "idioma_principal": "pt-BR",
+  "modo": "consultivo",
+  "termos_de_dominio": {
+    "request": "demanda",
+    "opinion": "parecer",
+    "finding": "apontamento",
+    "service queue": "fila de atendimento",
+    "available": "disponível",
+    "reserved": "reservada",
+    "in progress": "em atendimento",
+    "completed": "concluída",
+    "assignee": "responsável",
+    "dashboard": "painel",
+    "alert": "alerta",
+    "evidence": "evidência"
+  },
+  "excecoes_tecnicas": [
+    "HTTP",
+    "JSON",
+    "SQL",
+    "OAuth",
+    "OpenAPI",
+    "Dockerfile",
+    "Content-Type",
+    "access_token",
+    "correlation_id"
+  ]
+}

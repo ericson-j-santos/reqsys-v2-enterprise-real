@@ -1,0 +1,830 @@
+{
+  "schema_version": "0.1.0",
+  "capability": "LowCode Solution Factory P0",
+  "status": "planned",
+  "correlation_id": "be60d31c-909f-4beb-9422-be752a0820e7",
+  "generated_at": "2026-07-02T18:47:34.709482+00:00",
+  "solution_name": "ReqSysLowCode",
+  "display_name": "ReqSys Low-Code",
+  "description": "Versao low-code do ReqSys sem API propria, usando Dataverse, Power Apps, Power Automate, Copilot Studio, security roles e ALM governado.",
+  "target_environment": "dev",
+  "modules": [
+    "dataverse",
+    "powerapps",
+    "powerautomate",
+    "copilot",
+    "security"
+  ],
+  "publisher": {
+    "name": "ReqSys",
+    "prefix": "reqsys"
+  },
+  "governance": {
+    "mode": "dry_run_blueprint",
+    "sandbox_first": true,
+    "requires_human_or_pipeline_approval": true,
+    "no_custom_reqsys_api_required": true,
+    "external_write_guardrails": [
+      "nao importar em producao sem aprovacao",
+      "nao gravar client secrets no ReqSys",
+      "usar connection references por ambiente",
+      "gerar evidencias e plano de rollback"
+    ]
+  },
+  "dataverse": {
+    "tables": [
+      {
+        "logical_name": "reqsys_demanda",
+        "display_name": "Demandas",
+        "description": "Entrada governada de demandas, ideias e solicitacoes.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_origem",
+            "type": "choice",
+            "display_name": "Origem"
+          },
+          {
+            "name": "reqsys_solicitante",
+            "type": "lookup",
+            "target": "systemuser",
+            "display_name": "Solicitante"
+          },
+          {
+            "name": "reqsys_resultado_esperado",
+            "type": "multiline_text",
+            "display_name": "Resultado esperado"
+          },
+          {
+            "name": "reqsys_score_priorizacao",
+            "type": "whole_number",
+            "display_name": "Score de priorizacao"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_requisito",
+        "display_name": "Requisitos",
+        "description": "Requisitos funcionais, nao funcionais, regras e criterios.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_demanda_id",
+            "type": "lookup",
+            "target": "reqsys_demanda",
+            "display_name": "Demanda"
+          },
+          {
+            "name": "reqsys_tipo",
+            "type": "choice",
+            "display_name": "Tipo"
+          },
+          {
+            "name": "reqsys_criterios_aceite",
+            "type": "multiline_text",
+            "display_name": "Criterios de aceite"
+          },
+          {
+            "name": "reqsys_regra_negocio",
+            "type": "multiline_text",
+            "display_name": "Regra de negocio"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_aprovacao",
+        "display_name": "Aprovacoes",
+        "description": "Decisoes formais sobre demandas, requisitos e releases.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_referencia",
+            "type": "text",
+            "display_name": "Referencia"
+          },
+          {
+            "name": "reqsys_aprovador",
+            "type": "lookup",
+            "target": "systemuser",
+            "display_name": "Aprovador"
+          },
+          {
+            "name": "reqsys_parecer",
+            "type": "multiline_text",
+            "display_name": "Parecer"
+          },
+          {
+            "name": "reqsys_decidido_em",
+            "type": "datetime",
+            "display_name": "Decidido em"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_evidencia",
+        "display_name": "Evidencias",
+        "description": "Evidencias de qualidade, operacao, release e governanca.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_referencia",
+            "type": "text",
+            "display_name": "Referencia"
+          },
+          {
+            "name": "reqsys_tipo_evidencia",
+            "type": "choice",
+            "display_name": "Tipo de evidencia"
+          },
+          {
+            "name": "reqsys_url",
+            "type": "url",
+            "display_name": "URL"
+          },
+          {
+            "name": "reqsys_conteudo",
+            "type": "multiline_text",
+            "display_name": "Conteudo"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_release",
+        "display_name": "Releases",
+        "description": "Pacotes de mudanca, go/no-go, comunicacao e rollback.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_versao",
+            "type": "text",
+            "display_name": "Versao"
+          },
+          {
+            "name": "reqsys_janela",
+            "type": "datetime",
+            "display_name": "Janela"
+          },
+          {
+            "name": "reqsys_rollback",
+            "type": "multiline_text",
+            "display_name": "Plano de rollback"
+          },
+          {
+            "name": "reqsys_go_no_go",
+            "type": "choice",
+            "display_name": "Go/No-Go"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "from": "reqsys_requisito",
+        "to": "reqsys_demanda",
+        "type": "many_to_one"
+      },
+      {
+        "from": "reqsys_aprovacao",
+        "to": "reqsys_demanda",
+        "type": "many_to_one"
+      },
+      {
+        "from": "reqsys_evidencia",
+        "to": "reqsys_release",
+        "type": "many_to_one"
+      }
+    ],
+    "choices": {
+      "status": [
+        "novo",
+        "em_triagem",
+        "em_aprovacao",
+        "aprovado",
+        "em_execucao",
+        "validado",
+        "arquivado"
+      ],
+      "prioridade": [
+        "baixa",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "origem": [
+        "power_app",
+        "teams",
+        "copilot",
+        "importacao",
+        "manual"
+      ],
+      "tipo_requisito": [
+        "funcional",
+        "nao_funcional",
+        "regra_negocio",
+        "integracao",
+        "seguranca"
+      ]
+    }
+  },
+  "apps": {
+    "canvas_app": {
+      "app_type": "canvas",
+      "name": "ReqSysLowCode Canvas App",
+      "logical_name": "reqsys_reqsyslowcode_canvas",
+      "theme": {
+        "primary": "#2563EB",
+        "accent": "#10B981",
+        "warning": "#F59E0B",
+        "danger": "#DC2626"
+      },
+      "start_screen": "scrDashboard",
+      "layout": "responsive_tablet",
+      "navigation": [
+        {
+          "label": "Painel ReqSys",
+          "target": "scrDashboard"
+        },
+        {
+          "label": "Demandas",
+          "target": "scrDemandas"
+        },
+        {
+          "label": "Requisitos",
+          "target": "scrRequisitos"
+        },
+        {
+          "label": "Aprovacoes",
+          "target": "scrAprovacoes"
+        },
+        {
+          "label": "Evidencias",
+          "target": "scrEvidencias"
+        }
+      ],
+      "screens": [
+        {
+          "name": "scrDashboard",
+          "title": "Painel ReqSys",
+          "purpose": "Resumo operacional com demandas, aprovacoes, riscos e releases.",
+          "data_sources": [
+            "reqsys_demanda",
+            "reqsys_aprovacao",
+            "reqsys_release"
+          ],
+          "components": [
+            "Header",
+            "KpiStrip",
+            "DemandasRecentes",
+            "AprovacoesPendentes",
+            "ReleaseStatus"
+          ]
+        },
+        {
+          "name": "scrDemandas",
+          "title": "Demandas",
+          "purpose": "Criar, classificar e acompanhar demandas.",
+          "data_sources": [
+            "reqsys_demanda"
+          ],
+          "components": [
+            "DemandForm",
+            "DemandGallery",
+            "PriorityBadge",
+            "SubmitForApprovalButton"
+          ]
+        },
+        {
+          "name": "scrRequisitos",
+          "title": "Requisitos",
+          "purpose": "Detalhar requisitos, regras e criterios de aceite.",
+          "data_sources": [
+            "reqsys_requisito",
+            "reqsys_demanda"
+          ],
+          "components": [
+            "RequirementForm",
+            "AcceptanceCriteriaEditor",
+            "TraceabilityPanel"
+          ]
+        },
+        {
+          "name": "scrAprovacoes",
+          "title": "Aprovacoes",
+          "purpose": "Decidir aprovacao, rejeicao ou devolucao para ajuste.",
+          "data_sources": [
+            "reqsys_aprovacao"
+          ],
+          "components": [
+            "ApprovalQueue",
+            "DecisionPanel",
+            "AuditTimeline"
+          ]
+        },
+        {
+          "name": "scrEvidencias",
+          "title": "Evidencias",
+          "purpose": "Registrar evidencias de qualidade, operacao e release.",
+          "data_sources": [
+            "reqsys_evidencia",
+            "reqsys_release"
+          ],
+          "components": [
+            "EvidenceUpload",
+            "EvidenceGallery",
+            "ReleaseLink"
+          ]
+        }
+      ],
+      "offline": {
+        "enabled": false,
+        "reason": "P0 usa Dataverse online e ALM sandbox-first."
+      }
+    }
+  },
+  "flows": [
+    {
+      "name": "ReqSys - Intake de demanda",
+      "trigger": "Dataverse: row added on Demandas",
+      "actions": [
+        "Calcular prioridade",
+        "Criar aprovacao inicial",
+        "Notificar Teams"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps",
+        "shared_teams"
+      ],
+      "run_as": "service_principal_or_owner"
+    },
+    {
+      "name": "ReqSys - Aprovacao de requisito",
+      "trigger": "Dataverse: status em_aprovacao on Requisitos",
+      "actions": [
+        "Start and wait for approval",
+        "Atualizar requisito",
+        "Registrar evidencia"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps",
+        "shared_approvals"
+      ],
+      "run_as": "service_principal_or_owner"
+    },
+    {
+      "name": "ReqSys - Release governance",
+      "trigger": "Manual button or scheduled",
+      "actions": [
+        "Consolidar evidencias",
+        "Gerar go/no-go",
+        "Notificar stakeholders"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps",
+        "shared_teams",
+        "shared_sharepointonline"
+      ],
+      "run_as": "service_principal_or_owner"
+    },
+    {
+      "name": "ReqSys - Copilot handoff",
+      "trigger": "Copilot Studio action",
+      "actions": [
+        "Criar demanda",
+        "Vincular contexto",
+        "Retornar numero da demanda"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps"
+      ],
+      "run_as": "service_principal_or_owner"
+    }
+  ],
+  "copilot": {
+    "name": "ReqSysLowCode Copilot",
+    "target": "copilot_studio",
+    "language": "pt-BR",
+    "instructions": [
+      "Atue como orquestrador low-code do ReqSys.",
+      "Converta pedidos vagos em demandas estruturadas no Dataverse.",
+      "Sempre confirme antes de criar aprovacao, release ou acao externa.",
+      "Explique status, pendencias e proximo passo em linguagem executiva."
+    ],
+    "topics": [
+      {
+        "name": "Criar demanda",
+        "intent": "Registrar nova solicitacao",
+        "action": "ReqSys - Copilot handoff"
+      },
+      {
+        "name": "Consultar status",
+        "intent": "Consultar demanda ou requisito",
+        "data_source": "reqsys_demanda"
+      },
+      {
+        "name": "Preparar aprovacao",
+        "intent": "Gerar resumo para aprovador",
+        "data_source": "reqsys_aprovacao"
+      },
+      {
+        "name": "Resumo de release",
+        "intent": "Gerar go/no-go executivo",
+        "data_source": "reqsys_release"
+      }
+    ],
+    "knowledge_sources": [
+      "Dataverse ReqSysLowCode",
+      "SharePoint evidencias governadas"
+    ]
+  },
+  "security_roles": [
+    {
+      "name": "ReqSys Solicitante",
+      "description": "Cria demandas e consulta itens proprios.",
+      "privileges": {
+        "reqsys_demanda": [
+          "read_own",
+          "create_own",
+          "append_own"
+        ],
+        "reqsys_requisito": [
+          "read_own",
+          "create_own",
+          "append_own"
+        ]
+      }
+    },
+    {
+      "name": "ReqSys Aprovador",
+      "description": "Avalia demandas e requisitos em aprovacao.",
+      "privileges": {
+        "reqsys_demanda": [
+          "read_org",
+          "write_assigned",
+          "append_org"
+        ],
+        "reqsys_requisito": [
+          "read_org",
+          "write_assigned",
+          "append_org"
+        ],
+        "reqsys_aprovacao": [
+          "read_org",
+          "write_assigned",
+          "append_org"
+        ]
+      }
+    },
+    {
+      "name": "ReqSys Administrador Low-Code",
+      "description": "Administra a solution low-code e suas configuracoes.",
+      "privileges": {
+        "reqsys_demanda": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_requisito": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_aprovacao": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_evidencia": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_release": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ]
+      }
+    },
+    {
+      "name": "ReqSys Auditor",
+      "description": "Consulta evidencias, aprovacoes e releases sem alterar dados.",
+      "privileges": {
+        "reqsys_demanda": [
+          "read_org"
+        ],
+        "reqsys_requisito": [
+          "read_org"
+        ],
+        "reqsys_aprovacao": [
+          "read_org"
+        ],
+        "reqsys_evidencia": [
+          "read_org"
+        ],
+        "reqsys_release": [
+          "read_org"
+        ]
+      }
+    }
+  ],
+  "alm_package": {
+    "package_name": "reqsys-lowcode-solution",
+    "solution_name": "ReqSysLowCode",
+    "publisher_prefix": "reqsys",
+    "target_repository": "ericson-j-santos/reqsys-powerplatform-alm",
+    "target_environment": "dev",
+    "mode": "dry_run_manifest",
+    "expected_pipeline": "lowcode-solution-factory-p0.yml",
+    "pac_cli_steps": [
+      "pac auth create",
+      "pac solution init --publisher-prefix reqsys --publisher-name ReqSys",
+      "pac solution add-reference",
+      "pac solution pack",
+      "pac solution import"
+    ],
+    "connection_references": [
+      "shared_commondataserviceforapps",
+      "shared_teams",
+      "shared_approvals",
+      "shared_sharepointonline"
+    ],
+    "requires_approval": true,
+    "secrets_required": [
+      "POWERPLATFORM_APP_ID",
+      "POWERPLATFORM_CLIENT_SECRET",
+      "POWERPLATFORM_TENANT_ID",
+      "DEV_ENVIRONMENT_URL ou TARGET_ENVIRONMENT_URL"
+    ]
+  },
+  "canvas_markdown": "# ReqSys Low-Code - Canvas da Solution\n\n## Visao geral\n\nSolution: `ReqSysLowCode`  \nAmbiente alvo: `dev`  \nModo: `dry_run_blueprint`  \nStatus: `planned`\n\n## Canvas App\n\nApp: `ReqSysLowCode Canvas App`  \nTela inicial: `scrDashboard`  \nLayout: `responsive_tablet`\n\n| Tela | Objetivo | Componentes |\n| --- | --- | --- |\n| Painel ReqSys | Resumo operacional com demandas, aprovacoes, riscos e releases. | Header, KpiStrip, DemandasRecentes, AprovacoesPendentes, ReleaseStatus |\n| Demandas | Criar, classificar e acompanhar demandas. | DemandForm, DemandGallery, PriorityBadge, SubmitForApprovalButton |\n| Requisitos | Detalhar requisitos, regras e criterios de aceite. | RequirementForm, AcceptanceCriteriaEditor, TraceabilityPanel |\n| Aprovacoes | Decidir aprovacao, rejeicao ou devolucao para ajuste. | ApprovalQueue, DecisionPanel, AuditTimeline |\n| Evidencias | Registrar evidencias de qualidade, operacao e release. | EvidenceUpload, EvidenceGallery, ReleaseLink |\n\n## Dataverse\n\n| Tabela | Logical name | Colunas |\n| --- | --- | ---: |\n| Demandas | `reqsys_demanda` | 8 |\n| Requisitos | `reqsys_requisito` | 8 |\n| Aprovacoes | `reqsys_aprovacao` | 8 |\n| Evidencias | `reqsys_evidencia` | 8 |\n| Releases | `reqsys_release` | 8 |\n\n## Power Automate\n\n| Flow | Trigger | Acoes |\n| --- | --- | --- |\n| ReqSys - Intake de demanda | Dataverse: row added on Demandas | Calcular prioridade, Criar aprovacao inicial, Notificar Teams |\n| ReqSys - Aprovacao de requisito | Dataverse: status em_aprovacao on Requisitos | Start and wait for approval, Atualizar requisito, Registrar evidencia |\n| ReqSys - Release governance | Manual button or scheduled | Consolidar evidencias, Gerar go/no-go, Notificar stakeholders |\n| ReqSys - Copilot handoff | Copilot Studio action | Criar demanda, Vincular contexto, Retornar numero da demanda |\n\n## Copilot Studio\n\nAgente: `ReqSysLowCode Copilot`  \nTopicos: Criar demanda, Consultar status, Preparar aprovacao, Resumo de release\n\n## Security roles\n\nReqSys Solicitante, ReqSys Aprovador, ReqSys Administrador Low-Code, ReqSys Auditor\n"
+}

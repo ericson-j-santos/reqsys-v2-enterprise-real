@@ -9,6 +9,10 @@ services:
       - ./backend:/app
       - ${SDD_SPECS_HOST_PATH:-../../my-first-spec-project/.sdd}:/sdd:ro
 
+  db:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
   frontend:
     expose:
       - "5173"
@@ -18,7 +22,7 @@ services:
 
   nginx:
     ports:
-      - "${GATEWAY_PORT:-8081}:80"
+      - "${GATEWAY_PORT:-8083}:80"
     volumes:
       - ./infra/nginx/default.dev.conf:/etc/nginx/conf.d/default.conf:ro
 

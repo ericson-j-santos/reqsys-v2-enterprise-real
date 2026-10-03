@@ -1,0 +1,131 @@
+name: GitLab Mirror Identity Attestation
+
+# Correlaciona a credencial gerenciada do Key Vault com a identidade GitLab
+# efetiva do mirror, sem expor o segredo e sem alterar nada no GitLab.
+# Referência: Issue #1503 e docs/runbooks/gitlab-main-mirror.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      require_authorized:
+        description: "Falhar enquanto a autorização humana mínima não estiver aplicada"
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+    paths:
+      - "scripts/attest_gitlab_mirror_identity.py"
+      - "scripts/sync_gitlab_mirror.py"
+      - "tests/test_attest_gitlab_mirror_identity.py"
+      - "tests/test_sync_gitlab_mirror.py"
+      - ".github/workflows/gitlab-mirror-identity-attestation.yml"
+  schedule:
+    # Reverificação diária não bloqueante: expõe no summary se a autorização já entrou.
+    - cron: "0 9 * * *"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gitlab-mirror-identity-attestation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    name: Contrato do atestador
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar pytest
+        run: python -m pip install --quiet pytest
+      - name: Validar contrato somente-leitura e fail-closed
+        run: |
+          python -m pytest -q \
+            tests/test_attest_gitlab_mirror_identity.py \
+            tests/test_sync_gitlab_mirror.py
+
+  attest:
+    name: Atestar identidade efetiva
+    # `pull_request` de forks não deve alcançar o Key Vault.
+    if: github.event_name != 'pull_request'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CORRELATION_ID: gitlab-mirror-identity-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolver credencial GitLab no Control Plane
+        uses: ./.github/actions/resolve-managed-credential
+        with:
+          credential-id: gitlab-main-mirror
+          consumer: github-actions:gitlab-main-mirror
+          export-env: GITLAB_MIRROR_TOKEN
+          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_GITLAB }}
+          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+          evidence-path: audit/gitlab-mirror-credential-resolution.json
+
+      - name: Atestar identidade (somente leitura)
+        id: attest
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.require_authorized }}" = "true" ]; then
+            args+=(--require-authorized)
+          fi
+          python scripts/attest_gitlab_mirror_identity.py "${args[@]}" >/dev/null
+
+      - name: Publicar veredito no summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidencia=audit/gitlab-mirror-identity-attestation.json
+          if [ ! -f "$evidencia" ]; then
+            echo "Evidência de atestação não gerada." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python - "$evidencia" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import sys
+
+          dados = json.loads(open(sys.argv[1], encoding="utf-8").read())
+          identidade = dados.get("authoritative_identity") or {}
+          print("## Atestação de identidade do mirror GitLab\n")
+          print(f"- Veredito: `{dados.get('verdict')}`")
+          print(f"- Identidade autoritativa: `{identidade.get('username')}` (id `{identidade.get('id')}`)")
+          print(f"- Correlation ID: `{dados.get('correlation_id')}`\n")
+          if dados.get("findings"):
+              print("### Constatações\n")
+              for item in dados["findings"]:
+                  print(f"- {item}")
+              print()
+          acao = dados.get("remaining_human_action")
+          if acao:
+              print("### Ação humana mínima restante\n")
+              if acao.get("statement"):
+                  print(f"> {acao['statement']}\n")
+              for passo in acao.get("steps", []):
+                  print(f"1. {passo}")
+          PY
+
+      - name: Publicar evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitlab-mirror-identity-attestation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            audit/gitlab-mirror-identity-attestation.json
+            audit/gitlab-mirror-credential-resolution.json
+          if-no-files-found: warn
+          retention-days: 30

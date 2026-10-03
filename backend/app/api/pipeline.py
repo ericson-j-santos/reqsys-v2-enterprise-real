@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.core.envelope import ok
 from app.db import get_db
 from app.models.requisito import Requisito
+from app.models.vinculo_git import VinculoGit
+from app.services.auditoria import registrar_evento
 from app.services.github_redmine import (
     IntegracaoError,
     fetch_github_issues,
@@ -71,6 +73,41 @@ def inferir_rfs(descricao: str | None) -> list[str]:
     if 'cadastro' in texto or 'pre-cadastro' in texto:
         rfs.append('Permitir continuidade do fluxo com edição controlada.')
     return rfs
+
+
+def registrar_vinculo_redmine(db: Session, requisito: Requisito, issue_id: int | str | None, redmine_url: str | None) -> None:
+    if not issue_id:
+        return
+
+    referencia = str(issue_id)
+    existente = (
+        db.query(VinculoGit)
+        .filter(VinculoGit.requisito_id == requisito.id)
+        .filter(VinculoGit.provedor == 'redmine')
+        .filter(VinculoGit.tipo == 'issue')
+        .filter(VinculoGit.referencia == referencia)
+        .first()
+    )
+    if existente:
+        if redmine_url and existente.url != redmine_url:
+            existente.url = redmine_url
+        return
+
+    db.add(
+        VinculoGit(
+            requisito_codigo=requisito.codigo,
+            requisito_id=requisito.id,
+            tipo='issue',
+            provedor='redmine',
+            repo='redmine',
+            referencia=referencia,
+            url=redmine_url,
+            titulo=f'Redmine issue #{referencia}',
+            autor='reqsys',
+            ambiente=None,
+        )
+    )
+    db.flush()
 
 @router.post('/v1/solicitacoes', status_code=201)
 def criar_solicitacao(
@@ -240,6 +277,10 @@ def publicar_redmine(
 
     if result['issue_principal_id'] and requisito.status not in ('backlog', 'concluido', 'cancelado'):
         requisito.status = 'backlog'
+
+    registrar_vinculo_redmine(db, requisito, result['issue_principal_id'], result.get('redmine_url'))
+
+    if result['issue_principal_id']:
         db.commit()
 
     warnings = result['warnings'] + github_publish_result['warnings']
@@ -248,6 +289,7 @@ def publicar_redmine(
         'requisito_id': requisito_id,
         'codigo': requisito.codigo,
         'issue_principal_id': result['issue_principal_id'],
+        'redmine_url': result.get('redmine_url'),
         'subtarefas': result['subtarefas'],
         'github_repo': payload.github_repo,
         'github_imported_count': len(github_issues),
@@ -257,3 +299,50 @@ def publicar_redmine(
         'warnings': warnings,
         'feature_enabled': github_redmine_import_enabled(),
     }, x_correlation_id)
+
+
+class ConcluirRequisitoIn(BaseModel):
+    evidencia: str = Field(
+        min_length=10,
+        description='Evidencia objetiva e verificavel de que o requisito foi entregue (ex.: link, endpoint validado, referencia de commit/PR).',
+    )
+    responsavel: str = Field(min_length=2, max_length=120)
+
+
+@router.post('/v1/requisitos/concluir/{requisito_id}')
+def concluir_requisito(
+    requisito_id: int,
+    payload: ConcluirRequisitoIn,
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Fecha um requisito publicado no backlog (status='backlog') como concluido.
+
+    Exige evidencia objetiva no payload — nunca fecha por inferencia. O pipeline
+    (recebido -> validado -> estruturado -> backlog) nao tinha nenhuma transicao
+    formal para o estado terminal; itens entregues ficavam presos em 'backlog'
+    sem trilha de auditoria do fechamento.
+    """
+    requisito = db.get(Requisito, requisito_id)
+    if not requisito:
+        raise HTTPException(status_code=404, detail=f'Requisito {requisito_id} nao encontrado.')
+    if requisito.status != 'backlog':
+        raise HTTPException(
+            status_code=409,
+            detail=f"Requisito {requisito.codigo} esta em status '{requisito.status}'; conclusao exige status 'backlog'.",
+        )
+
+    requisito.status = 'concluido'
+    db.commit()
+
+    registrar_evento(
+        db,
+        x_correlation_id or 'sem-correlation-id',
+        payload.responsavel,
+        'REQUISITO_CONCLUIDO',
+        'requisito',
+        requisito.id,
+        f'{{"evidencia":{payload.evidencia!r}}}',
+    )
+
+    return ok({'requisito_id': requisito.id, 'codigo': requisito.codigo, 'status': requisito.status}, x_correlation_id)

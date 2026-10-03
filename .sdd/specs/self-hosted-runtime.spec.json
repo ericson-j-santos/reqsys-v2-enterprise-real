@@ -1,0 +1,42 @@
+{
+  "feature_name": "self-hosted-runtime",
+  "project": "ReqSys — substituicao Fly.io",
+  "created_at": "2026-10-02",
+  "updated_at": "2026-10-02",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Prepara stack independente Linux e ensaio isolado para fechar OPS-GAP-FLY-RETIREMENT; sem promover producao.",
+  "scope": "runtime-flyio-retirement",
+  "files": [
+    "infra/self-hosted/compose.yml",
+    "infra/self-hosted/start_api.py",
+    "infra/self-hosted/init-db.sh",
+    "infra/self-hosted/Caddyfile",
+    "infra/self-hosted/nginx.conf",
+    "infra/self-hosted/.env.example",
+    "scripts/init_self_hosted_secrets.py",
+    "infra/self-hosted/backup-postgres.sh",
+    "tests/test_self_hosted_runtime.py",
+    "infra/self-hosted/README.md"
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_self_hosted_runtime.py"
+    ],
+    "tests": [
+      "tests/test_self_hosted_runtime.py"
+    ],
+    "evidence_contract": "Compose valido, segredos externos e inicializacao idempotente; testes negativos; ensaio isolado quando disponivel. Nao declarar migracao/PROD sem E2E e restauracao no destino."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "reboot": false
+  }
+}

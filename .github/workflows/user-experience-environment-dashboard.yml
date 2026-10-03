@@ -1,0 +1,71 @@
+name: User Experience Environment Dashboard
+
+on:
+  workflow_run:
+    workflows: ["User Experience Environment State"]
+    types: [completed]
+  pull_request:
+    paths:
+      - "scripts/inject_user_experience_environment_history_card.py"
+      - "scripts/validate_user_experience_environment_history_card.py"
+      - "scripts/smoke_user_experience_environment_history_card.py"
+      - "tests/test_user_experience_environment_history_dashboard.py"
+      - ".github/workflows/user-experience-environment-dashboard.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: user-experience-environment-dashboard-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-and-smoke:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/inject_user_experience_environment_history_card.py
+          python -m py_compile scripts/validate_user_experience_environment_history_card.py
+          python -m py_compile scripts/smoke_user_experience_environment_history_card.py
+          python -m unittest tests/test_user_experience_environment_history_dashboard.py
+
+      - name: Build synchronized evidence
+        run: |
+          mkdir -p evidence/ux
+          cat > evidence/runtime-executive-index.json <<'JSON'
+          {"cards":{"user_experience_environment_history":{"status":"eligible-for-human-review","environment_coverage":["DEV","STG","PROD"],"pass_rate_by_environment":{"DEV":100,"STG":100,"PROD":100},"minimum_pass_rate":100,"stable_sequence":3,"common_fingerprint":"evidence-fingerprint","drift_detected":false,"eligible_for_human_review":true,"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          cat > evidence/executive-brief.json <<'JSON'
+          {"indicators":{"user_experience_environment_history":{"status":"eligible-for-human-review","environment_coverage":["DEV","STG","PROD"],"pass_rate_by_environment":{"DEV":100,"STG":100,"PROD":100},"minimum_pass_rate":100,"stable_sequence":3,"common_fingerprint":"evidence-fingerprint","drift_detected":false,"eligible_for_human_review":true,"mode":"report-only","production_blocker":false,"human_approval_required":true}}}
+          JSON
+          echo '{"cards":[]}' > evidence/dashboard.json
+          python scripts/inject_user_experience_environment_history_card.py \
+            --index evidence/runtime-executive-index.json \
+            --dashboard evidence/dashboard.json \
+            --output evidence/dashboard-enriched.json
+          python scripts/validate_user_experience_environment_history_card.py \
+            --dashboard evidence/dashboard-enriched.json
+          python scripts/smoke_user_experience_environment_history_card.py \
+            --index evidence/runtime-executive-index.json \
+            --brief evidence/executive-brief.json \
+            --dashboard evidence/dashboard-enriched.json \
+            --output evidence/ux/user-experience-environment-dashboard-smoke.json
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-environment-dashboard
+          path: evidence/
+          retention-days: 90
