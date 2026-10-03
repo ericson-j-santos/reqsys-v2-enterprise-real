@@ -70,6 +70,19 @@ A tarefa `ReqSys-Dev-Runtime-Supervisor` executa a cada 7 minutos e possui:
 O supervisor recupera containers, reconcilia os dois Cloudflare tunnels e
 publica o locator assinado.
 
+A reconciliação manual `public-static` não altera nem limpa o checkout que
+originou o runtime encontrado. Ela cria ou atualiza por fast-forward um worktree
+dedicado `wt-pc24x7-public-dev-governed`, sempre em um SHA pertencente à `main`,
+e recria somente `api`, `frontend` e `nginx` a partir dessa árvore limpa. Os
+overrides locais DEV de administração e Pages continuam reutilizados por lista
+permitida; overrides versionados e o SHA vêm do worktree governado.
+
+Quando o runtime inclui o override do bot Teams, o workflow autentica no Azure
+por OIDC do environment `development` e reutiliza o segredo DEV já existente no
+Key Vault. O valor é entregue apenas ao processo filho do Docker Compose,
+apagado do ambiente em memória após o uso e nunca registrado em evidência. A
+operação não rotaciona credenciais e não possui caminho para HML ou PROD.
+
 Em esgotamento excepcional da cota do IP local, um workflow manual e vinculado ao
 SHA exato da `main` pode retransmitir pelo mesmo ntfy um envelope público assinado
 no PC24x7. Esse relay não recebe a chave privada, não altera a identidade do
