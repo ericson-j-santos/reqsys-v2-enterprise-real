@@ -12,7 +12,8 @@
       "frontend/src/views/__tests__/DashboardView.painelProjetos.test.js",
       "frontend/src/services/__tests__/painelProjetos.test.js",
       "frontend/src/constants/rotasResponsivas.test.js",
-      "frontend/tests/e2e/painel-projetos.spec.js"
+      "frontend/tests/e2e/painel-projetos.spec.js",
+      "frontend/tests/e2e/acessibilidade-rotas.spec.js"
     ]
   }
 }

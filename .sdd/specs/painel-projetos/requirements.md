@@ -24,6 +24,8 @@ anteriores.
 10. O Pulso consolida somente dados retornados por ReqSys, Agile Runtime e
     rastreabilidade, vinculando-os por `requisito_id`, e mostra ambiente, origem,
     última sincronização, Planner, correlação e evidência quando disponíveis.
+11. O panorama da saúde do portfólio expõe um nome acessível e não apresenta
+    violações automatizáveis WCAG 2.2 A/AA no catálogo de rotas autenticadas.
 
 ## Fora de escopo
 
