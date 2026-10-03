@@ -6,7 +6,9 @@
   "sdd_gate": {
     "tests": [
       "frontend/src/router/painelProjetosRoute.spec.js",
-      "frontend/src/constants/navCatalog.test.js"
+      "frontend/src/constants/navCatalog.test.js",
+      "frontend/src/auth/__tests__/postLoginRedirect.test.js",
+      "frontend/src/views/__tests__/LoginView.test.js"
     ]
   }
 }

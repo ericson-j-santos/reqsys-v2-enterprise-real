@@ -15,6 +15,7 @@ import { useAuthStore } from './stores/auth'
 import { api } from './services/api'
 import { acquireIdTokenSilent, handleRedirectResult } from './auth/msal'
 import { isMicrosoftRedirectResponse } from './auth/msalRedirectHandoff'
+import { consumePostLoginRedirect, normalizePostLoginRedirect } from './auth/postLoginRedirect'
 import { DSC_TABLE, DSC_Z_INDEX, figmaVuetifyLightTheme, figmaVuetifyTheme } from './theme/figmaPadraoOuro'
 
 const temaPersistido = localStorage.getItem('reqsys_tema_visual')
@@ -46,15 +47,10 @@ function caminhoAtual() {
 }
 
 function destinoSeguroAposLogin(caminhoInicial, retornoMicrosoft = false) {
-  if (retornoMicrosoft) return '/'
+  if (retornoMicrosoft) return consumePostLoginRedirect()
   const redirect = router.currentRoute.value?.query?.redirect
-  if (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) {
-    return redirect
-  }
-  if (caminhoInicial.startsWith('/') && !caminhoInicial.startsWith('//') && !caminhoInicial.startsWith('/login')) {
-    return caminhoInicial
-  }
-  return '/'
+  if (typeof redirect === 'string') return normalizePostLoginRedirect(redirect)
+  return normalizePostLoginRedirect(caminhoInicial)
 }
 
 async function inicializarAutenticacao(caminhoInicial, retornoMicrosoft = false) {

@@ -16,6 +16,9 @@ anteriores.
    notificações e evidências.
 5. O frontend compila e os testes de rota e navegação são aprovados.
 6. A publicação ocorre somente em DEV pelo pipeline canônico do GitHub Pages.
+7. O endereço público direto `/dev/painel-projetos/` encaminha para o ReqSys
+   preservando `/painel-projetos` como destino depois do login Microsoft.
+8. Destinos externos, recursivos ou inválidos não são aceitos no retorno do login.
 
 ## Fora de escopo
 
