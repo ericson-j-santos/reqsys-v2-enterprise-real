@@ -8,19 +8,18 @@
   "strict_blocked": false,
   "increment_type": "consolidate",
   "reference": null,
-  "intent": "tornar Painel de projetos localizavel na tela inicial e no menu do ReqSys apos PR 2215",
-  "coordenador_state": "red",
-  "coordenador_decision": "bloquear_novas_frentes_e_tratar_gaps",
+  "intent": "substituir rota Painel de projetos pela experiencia Pulso correta e manter integracoes separadas",
+  "coordenador_state": "yellow",
+  "coordenador_decision": "bloquear_novas_frentes_ate_consolidar",
   "increment_gate": {
     "new_front_allowed": false,
     "blockers": [
-      "state_red",
-      "critical_gaps"
+      "state_yellow"
     ],
     "open_pr_threshold": 5,
     "open_prs": 1,
     "duplicate_group_count": 0,
-    "critical_gaps": 1,
+    "critical_gaps": 0,
     "allowed_increment_types": [
       "gap_fix",
       "hotfix",
@@ -30,33 +29,33 @@
   },
   "recommended_actions": [
     {
-      "priority": "P0",
-      "action": "investigar_workflow_vermelho",
-      "reference": "PR Evidence Gate",
-      "detail": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/37131455192"
-    },
-    {
-      "priority": "P0",
-      "action": "investigar_workflow_vermelho",
-      "reference": "PR CI Watch",
-      "detail": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/actions/runs/37131455121"
-    },
-    {
-      "priority": "P1",
-      "action": "abrir_pr_ou_agente_para_correcao",
-      "reference": "OPS-GAP-37132028127",
-      "detail": "Tratar falha não autocorrigível em TODO Global Hourly Cycle"
-    },
-    {
       "priority": "P1",
       "action": "bloquear_nova_frente",
-      "reference": "state_red,critical_gaps",
+      "reference": "state_yellow",
       "detail": "Resolver bloqueios antes de abrir branch/PR novo"
     },
     {
       "priority": "P2",
       "action": "validar_workflow_ausente_na_janela",
       "reference": "Actions Auto Operator",
+      "detail": "Disparar leitura ou workflow allowlisted se necessario"
+    },
+    {
+      "priority": "P2",
+      "action": "validar_workflow_ausente_na_janela",
+      "reference": "Branch Protection Audit",
+      "detail": "Disparar leitura ou workflow allowlisted se necessario"
+    },
+    {
+      "priority": "P2",
+      "action": "validar_workflow_ausente_na_janela",
+      "reference": "CI Enterprise Fast",
+      "detail": "Disparar leitura ou workflow allowlisted se necessario"
+    },
+    {
+      "priority": "P2",
+      "action": "validar_workflow_ausente_na_janela",
+      "reference": "CI — ReqSys v2 Enterprise",
       "detail": "Disparar leitura ou workflow allowlisted se necessario"
     }
   ],
