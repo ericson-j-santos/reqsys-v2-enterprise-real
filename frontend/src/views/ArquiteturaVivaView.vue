@@ -4,7 +4,7 @@
       <div>
         <h1>Arquitetura Viva</h1>
         <p class="muted">
-          Diagramas navegáveis com rastreabilidade entre requisitos, código, runtime e analytics.
+          Diagramas navegáveis com rastreabilidade entre requisitos, código, execução e indicadores.
         </p>
       </div>
       <div class="d-flex flex-wrap gap-2">
@@ -87,7 +87,7 @@
                 <div class="inspector-grid">
                   <div>
                     <span>Tipo</span>
-                    <strong>{{ noSelecionado.type }}</strong>
+                    <strong>{{ tipoExibicao(noSelecionado.type) }}</strong>
                   </div>
                   <div>
                     <span>Owner</span>
@@ -159,7 +159,7 @@
 
       <v-col cols="12" md="6">
         <v-card class="comp-card" elevation="0">
-          <v-card-title class="pa-4 pb-2">Gates de publicação</v-card-title>
+          <v-card-title class="pa-4 pb-2">Verificações obrigatórias de publicação</v-card-title>
           <v-card-text class="pa-4 pt-0">
             <div class="gate-list">
               <div v-for="gate in gates" :key="gate.nome" class="gate-item">
@@ -197,14 +197,14 @@ const diagrama = {
 
 const nodes = [
   { id: 'req', lane: 'negocio', icon: '📄', label: 'Requisito', type: 'business', owner: 'Squad/Negócio', environment: 'dev', source: 'ReqSys', description: 'Demanda funcional ou técnica capturada no ReqSys com rastreabilidade de origem.' },
-  { id: 'ia', lane: 'negocio', icon: '🤖', label: 'Análise IA', type: 'ai', owner: 'IA Governada', environment: 'dev', source: 'Qualidade IA', description: 'Análise assistida para critérios, ambiguidades, riscos e recomendações com score de confiança.' },
+  { id: 'ia', lane: 'negocio', icon: '🤖', label: 'Análise IA', type: 'ai', owner: 'IA Governada', environment: 'dev', source: 'Qualidade IA', description: 'Análise assistida para critérios, ambiguidades, riscos e recomendações com nota de confiança.' },
   { id: 'backlog', lane: 'delivery', icon: '📋', label: 'Backlog', type: 'delivery', owner: 'PO/Tech Lead', environment: 'dev', source: 'ReqSys/Pipeline', description: 'Priorização, refinamento e preparação da entrega com vínculo ao requisito original.' },
-  { id: 'branch', lane: 'delivery', icon: '🌿', label: 'Branch', type: 'code', owner: 'Dev', environment: 'dev', source: 'GitHub', description: 'Branch de implementação criada a partir da linha base governada.' },
-  { id: 'pr', lane: 'delivery', icon: '🔀', label: 'Pull Request', type: 'code', owner: 'Dev/Reviewer', environment: 'dev', source: 'GitHub PR', description: 'PR em draft ou review com checklist, evidências, CI e discussão técnica.' },
-  { id: 'ci', lane: 'runtime', icon: '✅', label: 'CI/CD', type: 'runtime', owner: 'DevOps', environment: 'dev', source: 'GitHub Actions', description: 'Validação automatizada de build, testes, segurança e responsividade.' },
-  { id: 'deploy', lane: 'runtime', icon: '🚀', label: 'Deploy', type: 'runtime', owner: 'DevOps', environment: 'homologacao', source: 'Pipeline', description: 'Publicação controlada para ambiente alvo após gates técnicos aprovados.' },
+  { id: 'branch', lane: 'delivery', icon: '🌿', label: 'Versão de código', type: 'code', owner: 'Dev', environment: 'dev', source: 'GitHub', description: 'Versão de código criada a partir da linha base governada.' },
+  { id: 'pr', lane: 'delivery', icon: '🔀', label: 'Solicitação de integração', type: 'code', owner: 'Dev/Reviewer', environment: 'dev', source: 'GitHub PR', description: 'Solicitação de integração em elaboração ou revisão, com lista de verificação, evidências, verificações automáticas e discussão técnica.' },
+  { id: 'ci', lane: 'runtime', icon: '✅', label: 'Verificações automáticas', type: 'runtime', owner: 'DevOps', environment: 'dev', source: 'GitHub Actions', description: 'Validação automatizada de compilação, testes, segurança e responsividade.' },
+  { id: 'deploy', lane: 'runtime', icon: '🚀', label: 'Deploy', type: 'runtime', owner: 'DevOps', environment: 'homologacao', source: 'Pipeline', description: 'Publicação controlada para ambiente alvo após verificações técnicas obrigatórias aprovadas.' },
   { id: 'obs', lane: 'operacao', icon: '📡', label: 'Observabilidade', type: 'runtime', owner: 'SRE/Suporte', environment: 'producao', source: 'Logs/Traces', description: 'Monitoramento por logs, métricas, correlation_id, incidentes e saúde operacional.' },
-  { id: 'analytics', lane: 'operacao', icon: '📊', label: 'Analytics', type: 'analytics', owner: 'BI/Gestão', environment: 'producao', source: 'Dashboard', description: 'Indicadores, linhagem, drill-down e análise de impacto a partir dos dados operacionais.' },
+  { id: 'analytics', lane: 'operacao', icon: '📊', label: 'Indicadores', type: 'analytics', owner: 'BI/Gestão', environment: 'producao', source: 'Dashboard', description: 'Indicadores, linhagem, drill-down e análise de impacto a partir dos dados operacionais.' },
 ]
 
 const edges = [
@@ -222,8 +222,8 @@ const edges = [
 const lanes = [
   { id: 'negocio', titulo: 'Negócio e IA' },
   { id: 'delivery', titulo: 'Delivery e Código' },
-  { id: 'runtime', titulo: 'Runtime e Deploy' },
-  { id: 'operacao', titulo: 'Operação e Analytics' },
+  { id: 'runtime', titulo: 'Execução e publicação' },
+  { id: 'operacao', titulo: 'Operação e indicadores' },
 ]
 
 const gates = [
@@ -232,14 +232,14 @@ const gates = [
   { nome: 'Metadados auditáveis exibidos', ok: true },
   { nome: 'Sem secrets ou PII no grafo', ok: true },
   { nome: 'Drill-down por nó disponível', ok: true },
-  { nome: 'Runtime real integrado', ok: false },
+  { nome: 'Execução real integrada', ok: false },
 ]
 
 const kpis = computed(() => [
   { titulo: 'Nós', valor: nodes.length, descricao: 'Componentes navegáveis' },
   { titulo: 'Conexões', valor: edges.length, descricao: 'Dependências mapeadas' },
-  { titulo: 'Gates OK', valor: gates.filter((gate) => gate.ok).length, descricao: 'Validações locais da UI' },
-  { titulo: 'Confiança', valor: diagrama.audit.confidence, descricao: 'Sem runtime real ainda' },
+  { titulo: 'Verificações OK', valor: gates.filter((gate) => gate.ok).length, descricao: 'Validações locais da UI' },
+  { titulo: 'Confiança', valor: diagrama.audit.confidence, descricao: 'Sem execução real ainda' },
 ])
 
 const termoFiltro = computed(() => (filtro.value || '').trim().toLowerCase())
@@ -272,8 +272,19 @@ const dependenciasSelecionadas = computed(() => {
 })
 
 const explicacaoSelecionada = computed(() => {
-  return `O nó ${noSelecionado.value.label} participa do fluxo vivo com fonte ${noSelecionado.value.source}, ambiente ${noSelecionado.value.environment} e owner ${noSelecionado.value.owner}. A explicação é limitada aos metadados versionados nesta UI; runtime real e OpenTelemetry ainda não estão integrados neste incremento.`
+  return `O nó ${noSelecionado.value.label} participa do fluxo vivo com fonte ${noSelecionado.value.source}, ambiente ${noSelecionado.value.environment} e owner ${noSelecionado.value.owner}. A explicação é limitada aos metadados versionados nesta UI; execução real e OpenTelemetry ainda não estão integrados neste incremento.`
 })
+
+function tipoExibicao(type) {
+  return {
+    business: 'Negócio',
+    ai: 'IA',
+    delivery: 'Entrega',
+    code: 'Código',
+    runtime: 'Execução',
+    analytics: 'Indicadores',
+  }[type] || type
+}
 
 function selecionarNo(id) {
   noSelecionadoId.value = id

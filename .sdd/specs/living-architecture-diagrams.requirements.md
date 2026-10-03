@@ -18,3 +18,11 @@ Recuperar e consolidar no PR #44 a base de Arquitetura Viva originalmente implem
 - frontend/tests/e2e/responsividade.spec.js cobre a rota e o fluxo específico de seleção, filtro e ausência de overflow.
 - Build, navegação, design tokens, segurança e Pre-PR Readiness ficam verdes no mesmo HEAD.
 - behind_by=0 e nenhum deploy/promoção de ambiente é executado.
+
+9. O Pre-PR deve instalar dependências backend quando um teste raiz selecionado executar script que importa `app.*`.
+10. O inventário ReqSys 360 não pode promover arquivos `*.test.js` ou `*.spec.js` a candidatos de serviço órfão.
+
+## Prevenção de recorrência
+- A inferência transitiva do perfil backend possui testes positivo e negativo.
+- O inventário de serviços possui regressão explícita para arquivos de teste.
+- O gate de linguagem simples continua bloqueando termos técnicos proibidos na interface.

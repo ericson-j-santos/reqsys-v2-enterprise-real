@@ -30,5 +30,13 @@ def test_engine_mermaid_permanece_fail_closed_e_sanitiza_labels():
 
 def test_ui_nao_afirma_integracao_runtime_que_ainda_nao_existe():
     view = read("frontend/src/views/ArquiteturaVivaView.vue")
-    assert "{ nome: 'Runtime real integrado', ok: false }" in view
-    assert "runtime real e OpenTelemetry ainda não estão integrados" in view
+    assert "{ nome: 'Execução real integrada', ok: false }" in view
+    assert "execução real e OpenTelemetry ainda não estão integrados" in view
+
+
+def test_ui_usa_rotulos_claros_nos_nos_principais():
+    view = read("frontend/src/views/ArquiteturaVivaView.vue")
+    assert "label: 'Versão de código'" in view
+    assert "label: 'Solicitação de integração'" in view
+    assert "label: 'Verificações automáticas'" in view
+    assert "label: 'Indicadores'" in view

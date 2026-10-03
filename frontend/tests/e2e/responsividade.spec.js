@@ -222,7 +222,7 @@ test.describe(`responsividade padrão ouro — ${ROTAS_RESPONSIVAS.length} rotas
     await expect(page.getByTestId('architecture-live-canvas')).toBeVisible()
 
     await page.getByTestId('architecture-node-ci').click()
-    await expect(page.getByTestId('architecture-live-inspector')).toContainText('CI/CD')
+    await expect(page.getByTestId('architecture-live-inspector')).toContainText('Verificações automáticas')
 
     await page.getByTestId('architecture-live-filter').locator('input').fill('analytics')
     await expect(page.getByTestId('architecture-node-analytics')).toBeVisible()
