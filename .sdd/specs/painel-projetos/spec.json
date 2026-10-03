@@ -10,7 +10,8 @@
       "frontend/src/auth/__tests__/postLoginRedirect.test.js",
       "frontend/src/views/__tests__/LoginView.test.js",
       "frontend/src/views/__tests__/DashboardView.painelProjetos.test.js",
-      "frontend/src/services/__tests__/painelProjetos.test.js"
+      "frontend/src/services/__tests__/painelProjetos.test.js",
+      "frontend/tests/e2e/painel-projetos.spec.js"
     ]
   }
 }
