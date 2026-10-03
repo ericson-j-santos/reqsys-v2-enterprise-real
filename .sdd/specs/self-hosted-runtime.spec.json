@@ -43,8 +43,12 @@
     "tests/test_self_hosted_dev_maintenance.py",
     "tests/test_pc24x7_dev_runtime_supervisor.py",
     ".sdd/specs/self-hosted-runtime.requirements.md",
-    "scripts/run_self_hosted_dev_owner_action.py",
-    "tests/test_run_self_hosted_dev_owner_action.py"
+    "scripts/reqsys_dev_runtime_key_handoff.py",
+    "tests/test_reqsys_dev_runtime_key_handoff.py",
+    "scripts/restore_self_hosted_dev_postgres.py",
+    "tests/test_restore_self_hosted_dev_postgres.py",
+    "scripts/verify_self_hosted_dev_azure_auth.py",
+    "tests/test_verify_self_hosted_dev_azure_auth.py"
   ],
   "sdd_gate": {
     "pre_pr_tests": [
@@ -55,7 +59,9 @@
       "tests/test_dev_backup_transport.py",
       "tests/test_self_hosted_dev_maintenance.py",
       "tests/test_pc24x7_dev_runtime_supervisor.py",
-      "tests/test_run_self_hosted_dev_owner_action.py"
+      "tests/test_reqsys_dev_runtime_key_handoff.py",
+      "tests/test_restore_self_hosted_dev_postgres.py",
+      "tests/test_verify_self_hosted_dev_azure_auth.py"
     ],
     "tests": [
       "tests/test_self_hosted_runtime.py",
@@ -65,7 +71,9 @@
       "tests/test_dev_backup_transport.py",
       "tests/test_self_hosted_dev_maintenance.py",
       "tests/test_pc24x7_dev_runtime_supervisor.py",
-      "tests/test_run_self_hosted_dev_owner_action.py"
+      "tests/test_reqsys_dev_runtime_key_handoff.py",
+      "tests/test_restore_self_hosted_dev_postgres.py",
+      "tests/test_verify_self_hosted_dev_azure_auth.py"
     ],
     "evidence_contract": "Diagnóstico físico governado, PostgreSQL atual e backup consistente protegido. Restauração e leitura independente de todas as tabelas, sequências e conteúdo; fidelidade de JWT/cofre/chaves cifradas. Ações Owner Risk3 específicas e temporárias. Manutenção, login Microsoft real e ingresso público têm provas distintas no mesmo SHA. Nenhuma promoção de produção."
   },

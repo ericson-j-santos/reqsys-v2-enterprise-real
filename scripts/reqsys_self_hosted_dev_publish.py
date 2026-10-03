@@ -7,6 +7,7 @@ import ctypes
 from ctypes import wintypes
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -230,14 +231,25 @@ class WindowsPrivateFiles:
                 temporary.unlink()
 
 
-def initialize_secrets(root: Path, private: WindowsPrivateFiles) -> list[str]:
+def initialize_secrets(root: Path, private: WindowsPrivateFiles,
+                       create_jwt: bool = True) -> list[str]:
     created = []
     private.directory(root)
+    if not create_jwt and not (root / "jwt_secret").is_file():
+        raise PublishError("original_jwt_secret_required")
     for name in ("db_owner_password", "db_app_password", "jwt_secret"):
         path = root / name
         if path.exists():
             private.check(path)
-            if not DIGEST.fullmatch(path.read_text(encoding="utf-8").strip()):
+            raw = path.read_bytes()
+            if name == "jwt_secret":
+                try:
+                    value = raw.decode("utf-8")
+                except UnicodeError as exc:
+                    raise PublishError("existing_secret_invalid") from exc
+                if not value or len(raw) > 65536 or "\x00" in value:
+                    raise PublishError("existing_secret_invalid")
+            elif not DIGEST.fullmatch(raw.decode("utf-8").strip()):
                 raise PublishError("existing_secret_invalid")
             continue
         private.create(path, (secrets.token_hex(32) + "\n").encode("ascii"))
@@ -257,16 +269,57 @@ def get_json(url: str, timeout: int = 8) -> dict:
     with urllib.request.build_opener(RejectRedirect()).open(
         request, timeout=timeout
     ) as response:
+        if response.status != 200:
+            raise PublishError("probe_http_status_invalid")
         raw = response.read(65537)
     if len(raw) > 65536:
         raise PublishError("probe_payload_too_large")
     result = json.loads(raw)
     if not isinstance(result, dict):
         raise PublishError("probe_payload_invalid")
+    if result.get("success") is False or result.get("error") or result.get("errors"):
+        raise PublishError("probe_response_reported_failure")
+    if "data" in result and (
+            result.get("success") is not True or result.get("errors") != []):
+        raise PublishError("probe_envelope_invalid")
     data = result.get("data", result)
     if not isinstance(data, dict):
         raise PublishError("probe_payload_invalid")
     return data
+
+
+def validate_health_payload(endpoint: str, data: dict) -> None:
+    """Same health semantics as the portable runtime gate, without its marker."""
+    if not isinstance(data, dict) or data.get("service") != "reqsys-api":
+        raise PublishError("published_health_service_invalid")
+    for flag in ("ready", "healthy", "available", "database_ok"):
+        if flag in data and data[flag] is not True:
+            raise PublishError("published_health_negative_flag")
+    checks = data.get("checks")
+    if checks is not None:
+        if not isinstance(checks, dict) or not checks:
+            raise PublishError("published_health_checks_invalid")
+        if any(value is not True and value not in ("ok", "healthy", "ready", "available")
+               for value in checks.values()):
+            raise PublishError("published_health_check_failed")
+    if endpoint == "/api/health":
+        database = data.get("database")
+        if (data.get("status") != "ok" or not isinstance(database, dict)
+                or database.get("status") != "ok"):
+            raise PublishError("published_database_health_failed")
+    elif endpoint in ("/api/runtime/health", "/api/runtime/readiness"):
+        expected_status, expected_check = (
+            ("ok", "health") if endpoint.endswith("/health") else ("ready", "readiness")
+        )
+        if (data.get("schema_version") != "1.1.0"
+                or data.get("environment") != "desenvolvimento"
+                or data.get("status") != expected_status or data.get("check") != expected_check):
+            raise PublishError("published_runtime_health_invalid")
+    elif endpoint == "/api/runtime/build-info":
+        if data.get("environment") != "desenvolvimento":
+            raise PublishError("published_build_environment_invalid")
+    else:
+        raise PublishError("published_health_endpoint_invalid")
 
 
 def discover_public_ids() -> tuple[str, str]:
@@ -525,11 +578,47 @@ class Publisher:
         if not match or int(match.group(1)) < 2:
             raise PublishError("compose_v2_or_newer_required")
 
+    def key_handoff_module(self):
+        path = self.source / "scripts/reqsys_dev_runtime_key_handoff.py"
+        no_reparse(path)
+        if not path.is_file():
+            raise PublishError("key_handoff_package_required")
+        spec = importlib.util.spec_from_file_location("reqsys_runtime_key_handoff", path)
+        if spec is None or spec.loader is None:
+            raise PublishError("key_handoff_package_required")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def preserve_runtime_keys(self) -> dict:
+        self.root.parent.mkdir(parents=True, exist_ok=True)
+        no_reparse(self.root.parent)
+        module = self.key_handoff_module()
+        try:
+            metadata = module.preserve(self.root, self.expected, self.private)
+        except module.HandoffError as exc:
+            raise PublishError(exc.code) from exc
+        self.events.append({
+            "name": "original_runtime_keys_preserved", "ok": True,
+            "source_written": False, "secret_values_exposed": False,
+        })
+        return metadata
+
+    def require_key_handoff(self, source_container_id: str | None = None) -> dict:
+        module = self.key_handoff_module()
+        try:
+            return module.validate_existing(
+                self.root, self.expected, self.private, source_container_id
+            )
+        except module.HandoffError as exc:
+            raise PublishError(exc.code) from exc
+
     def configure(self) -> tuple[str, str]:
+        handoff = self.require_key_handoff()
         self.root.parent.mkdir(parents=True, exist_ok=True)
         no_reparse(self.root.parent)
         self.private.directory(self.root)
-        initialize_secrets(self.root / "secrets", self.private)
+        initialize_secrets(self.root / "secrets", self.private, create_jwt=False)
         ids = discover_public_ids()
         self.private.preserving(
             self.env_file, render_config(self.root / "secrets", ids)
@@ -542,12 +631,29 @@ class Publisher:
         }
         override["services"]["api"]["environment"] = {
             "REQSYS_BUILD_SHA": self.expected,
+            "REQSYS_REQUIRE_RUNTIME_KEY_HANDOFF": "1",
             "CORS_ORIGINS": f"{PAGES_UI_ORIGIN},{LOCAL_HEALTH_ORIGIN}",
             "APP_PUBLIC_URL": PAGES_UI_URL,
-            # JWT audience is used for both issuance and validation by
-            # backend/app/core/security.py. Preserve this isolated API's audience.
-            "JWT_AUDIENCE": LOCAL_HEALTH_ORIGIN,
+            # Preserve effective source claims together with the original HMAC key.
+            "JWT_ISSUER": handoff["jwt_issuer"],
+            "JWT_AUDIENCE": handoff["jwt_audience"],
+            "REQSYS_VAULT_SERVICE_NAME": handoff["vault_service_name"],
+            "REQSYS_DATA_DIR": "/data",
+            "AI_CONVERSATION_ENCRYPTION_MODE": handoff["ai_mode"],
         }
+        secret_dir = (self.root / "secrets").as_posix()
+        override["secrets"] = {
+            name: {"file": f"{secret_dir}/{name}"} for name in (
+                "cofre_keyring_passphrase", "ai_conversation_content_encryption_key_b64"
+            )
+        }
+        override["services"]["api"]["secrets"] = [
+            "cofre_keyring_passphrase", "ai_conversation_content_encryption_key_b64"
+        ]
+        override["services"]["api"]["volumes"] = [{
+            "type": "bind", "source": (self.root / "cofre-data").as_posix(),
+            "target": "/data", "read_only": False,
+        }]
         self.private.preserving(
             self.override,
             (json.dumps(override, indent=2, sort_keys=True) + "\n").encode()
@@ -575,6 +681,7 @@ class Publisher:
     def prepare(self) -> dict:
         self.validate_source()
         self.validate_engine()
+        self.preserve_runtime_keys()
         ids = self.configure()
         self.require_owned_project()
         self.compose("build", "api", timeout=480)
@@ -788,6 +895,38 @@ class Publisher:
         if observed != {name: str(count) for name, count in counts.items()}:
             raise PublishError("restore_live_counts_mismatch")
 
+    def postgres_restorer_module(self):
+        path = self.source / "scripts/restore_self_hosted_dev_postgres.py"
+        no_reparse(path)
+        spec = importlib.util.spec_from_file_location("reqsys_postgres_restorer", path)
+        if spec is None or spec.loader is None:
+            raise PublishError("postgres_restore_module_missing")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def restore_postgres(self) -> dict:
+        module = self.postgres_restorer_module()
+        try:
+            proof = module.Restorer(self).restore()
+        except module.RestoreError as error:
+            self.events.append({
+                "command": "postgres_restore",
+                "migration_committed": error.committed,
+            })
+            raise PublishError("postgres_" + error.code) from None
+        return {
+            "status": "database_restored",
+            "restore_completed": True,
+            "restored_rows": proof["copied_rows"],
+            "archive_content_compared": True,
+            "sequences_verified": True,
+            "runtime_keys_preserved": True,
+            "application_started": False,
+            "current_source_freshness_verified": False,
+            "usable": False,
+        }
+
     def activate(self, backup_sha: str) -> dict:
         self.validate_source()
         self.validate_engine()
@@ -795,13 +934,14 @@ class Publisher:
         self.require_owned_project()
         if not all(ids):
             raise PublishError("azure_public_ids_missing")
-        proof_file = self.root / "restore-proof.json"
-        self.private.check(proof_file)
-        proof = json.loads(proof_file.read_text(encoding="utf-8"))
-        counts = validate_restore_proof(
-            proof, self.expected, backup_sha, datetime.now(timezone.utc)
-        )
-        self.verify_live_restore(proof, counts)
+        # The Noteri SQLite rehearsal cannot authorize the current DEV cutover.
+        # PostgreSQL proof independently checks archive COPY digests, schema,
+        # sequence state, cluster identity and the preserved runtime keys.
+        pg = self.postgres_restorer_module()
+        try:
+            proof = pg.verify_existing(self, backup_sha)
+        except pg.RestoreError as error:
+            raise PublishError("postgres_" + error.code) from None
         self.compose("build", "frontend", timeout=360)
         self.compose("up", "-d", "--wait", "--wait-timeout", "180", timeout=210)
         endpoints = {}
@@ -809,6 +949,9 @@ class Publisher:
                      "/api/runtime/readiness", "/api/runtime/build-info",
                      "/api/v1/auth/config"):
             endpoints[path] = get_json("http://127.0.0.1:18080" + path)
+        for path in ("/api/health", "/api/runtime/health",
+                     "/api/runtime/readiness", "/api/runtime/build-info"):
+            validate_health_payload(path, endpoints[path])
         build = endpoints["/api/runtime/build-info"]
         if build.get("build_sha") != self.expected:
             raise PublishError("published_build_sha_mismatch")
@@ -840,7 +983,7 @@ class Publisher:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("prepare", "restore", "activate"))
+    parser.add_argument("phase", choices=("prepare", "restore", "restore-postgres", "activate"))
     parser.add_argument("--source-root", required=True, type=Path)
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--correlation-id", required=True)
@@ -874,6 +1017,8 @@ def main(argv=None) -> int:
             result = publisher.prepare()
         elif args.phase == "restore":
             result = publisher.restore(args.backup_sha256)
+        elif args.phase == "restore-postgres":
+            result = publisher.restore_postgres()
         else:
             result = publisher.activate(args.backup_sha256)
         evidence.update(result)

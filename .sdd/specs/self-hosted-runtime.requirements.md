@@ -35,3 +35,5 @@ Fly.io definitivamente em todas as solucoes. OPS-GAP-FLY-RETIREMENT.
 - Supervisor, reconciliação, túneis e locator devem reconhecer o modo portátil validado e impedir retorno automático ao stack legado.
 - A manutenção do stack é uma prova distinta da sessão Microsoft real e do ingresso público; os três resultados precisam permanecer separados.
 - O Owner Gateway mantém a negação padrão; ações locais críticas usam autorizações específicas, temporárias, vinculadas ao código revisado.
+
+O ensaio PostgreSQL usa o arquivo DPAPI da base atual, restaura apenas candidato vazio e inativo, verifica COPY por conteúdo e estado de sequências. A configuração exige fidelidade exata de JWT, issuer/audience, cofre e chave de histórico. Prova de sessão Azure exige IdToken explicitamente provisionado e controles negativos; teste de callback interativo permanece separado. Nenhum resultado de preparação permite cutover sem prova recente de congelamento da origem e validação do ingresso público.
