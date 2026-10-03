@@ -18,11 +18,11 @@ describe('ambientesOperacionais', () => {
     expect(normalizarAmbienteId('production')).toBe('producao')
   })
 
-  it('detecta DEV pelo locator/runtime PC24x7 e mantém os demais ambientes explícitos', () => {
+  it('detecta somente hosts operacionais conhecidos e ignora hosts retirados', () => {
     expect(detectarAmbientePorHostname('abc.trycloudflare.com')).toBe('desenvolvimento')
     expect(detectarAmbientePorHostname('ericson-j-santos.github.io')).toBe('desenvolvimento')
-    expect(detectarAmbientePorHostname('reqsys-app-stg.fly.dev')).toBe('homologacao')
-    expect(detectarAmbientePorHostname('reqsys-app.fly.dev')).toBe('producao')
+    expect(detectarAmbientePorHostname('reqsys-app-stg.fly.dev')).toBeNull()
+    expect(detectarAmbientePorHostname('reqsys-app.fly.dev')).toBeNull()
     expect(detectarAmbientePorHostname('127.0.0.1')).toBe('local')
   })
 
@@ -38,16 +38,16 @@ describe('ambientesOperacionais', () => {
   it('lista local apenas quando hostname é local', () => {
     const remoto = ambientesNavegaveis({ hostname: 'abc.trycloudflare.com' })
     expect(remoto.some((item) => item.id === 'local')).toBe(false)
-    expect(remoto).toHaveLength(3)
+    expect(remoto.map((item) => item.id)).toEqual(['desenvolvimento'])
 
     const local = ambientesNavegaveis({ hostname: '127.0.0.1' })
     expect(local.some((item) => item.id === 'local')).toBe(true)
-    expect(local).toHaveLength(4)
+    expect(local.map((item) => item.id)).toEqual(['local', 'desenvolvimento'])
   })
 
-  it('monta URL preservando rota informada', () => {
+  it('bloqueia navegação quando o ambiente não tem destino remoto governado', () => {
     const url = montarUrlAmbiente('homologacao', { path: '/governanca', preserveRoute: false })
-    expect(url).toBe('https://reqsys-app-stg.fly.dev/governanca')
+    expect(url).toBeNull()
   })
 
   it('mantém a SPA DEV no Pages e preserva a rota enquanto a API usa locator assinado', () => {
@@ -58,8 +58,9 @@ describe('ambientesOperacionais', () => {
     expect(url).not.toContain('fly.dev')
   })
 
-  it('expõe catálogo com URLs canônicas', () => {
-    expect(ambientePorId('prod')?.frontend).toBe('https://reqsys-app.fly.dev')
+  it('mantém ambientes retirados no catálogo sem links executáveis', () => {
+    expect(ambientePorId('homologacao')).toMatchObject({ frontend: '', backend: '', navegavel: false })
+    expect(ambientePorId('prod')).toMatchObject({ frontend: '', backend: '', navegavel: false })
     expect(AMBIENTES_OPERACIONAIS).toHaveLength(4)
   })
 
@@ -69,7 +70,7 @@ describe('ambientesOperacionais', () => {
     expect(ambienteRequerConfirmacao('homologacao')).toBe(false)
   })
 
-  it('cancela navegação para produção quando confirmação é recusada', () => {
+  it('falha fechado antes de confirmar produção sem destino remoto', () => {
     const assign = vi.fn()
     const confirm = vi.fn(() => false)
     vi.stubGlobal('window', {
@@ -80,12 +81,12 @@ describe('ambientesOperacionais', () => {
     const resultado = irParaAmbiente('producao', { path: '/governanca', preserveRoute: false })
 
     expect(resultado).toBe(false)
-    expect(confirm).toHaveBeenCalledOnce()
+    expect(confirm).not.toHaveBeenCalled()
     expect(assign).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 
-  it('navega para produção quando confirmação é aceita', () => {
+  it('não abre produção mesmo quando uma confirmação seria aceita', () => {
     const assign = vi.fn()
     const confirm = vi.fn(() => true)
     vi.stubGlobal('window', {
@@ -95,8 +96,9 @@ describe('ambientesOperacionais', () => {
 
     const resultado = irParaAmbiente('producao', { path: '/governanca', preserveRoute: false })
 
-    expect(resultado).toBe(true)
-    expect(assign).toHaveBeenCalledWith('https://reqsys-app.fly.dev/governanca')
+    expect(resultado).toBe(false)
+    expect(confirm).not.toHaveBeenCalled()
+    expect(assign).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 })

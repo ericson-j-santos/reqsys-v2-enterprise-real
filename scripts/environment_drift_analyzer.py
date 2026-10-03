@@ -24,6 +24,8 @@ def load_json(path: Path, default: Any) -> Any:
 def classify_cross_env_drift(
     environments: list[dict[str, Any]],
     promotion_order: list[str],
+    *,
+    include_historical_offline: bool = False,
 ) -> tuple[str, list[dict[str, Any]], list[str]]:
     findings: list[dict[str, Any]] = []
     recommendations: list[str] = []
@@ -65,37 +67,29 @@ def classify_cross_env_drift(
             )
             recommendations.append("Alinhar disponibilidade entre ambientes promoviveis.")
 
-    for item in environments:
+    for item in environments if include_historical_offline else []:
         if item.get("url_matrix_aligned") is False:
             findings.append(
                 {
-                    "type": "url_matrix_drift",
+                    "type": "historical_offline_url_matrix_drift",
                     "severity": "high",
-                    "detail": f"probe URLs divergem de infra/fly-environments.json ({item['canonical']})",
+                    "detail": f"URLs do probe divergem da matriz de ambiente ({item['canonical']})",
                     "environments": [item["canonical"]],
                 }
             )
             recommendations.append(
-                f"Normalizar URLs de {item['canonical']} entre validate_environments_readiness e fly-environments."
+                f"Registrar o desvio histórico de URLs de {item['canonical']} na evidência offline."
             )
 
     severities = [f.get("severity") for f in findings]
     if "high" in severities:
         drift_level = "ALTO"
-        status = "degraded"
-        risk = "high"
     elif "medium" in severities:
         drift_level = "MEDIO"
-        status = "watch"
-        risk = "medium"
     elif findings:
         drift_level = "BAIXO"
-        status = "watch"
-        risk = "low"
     else:
         drift_level = "NENHUM"
-        status = "aligned"
-        risk = "low"
 
     if not recommendations:
         recommendations.append("Ambientes alinhados — continuar monitoramento longitudinal.")
@@ -106,7 +100,12 @@ def classify_cross_env_drift(
 def analyze(multi_env: dict[str, Any], commit_sha: str) -> dict[str, Any]:
     environments = multi_env.get("environments") or []
     promotion_order = (multi_env.get("summary") or {}).get("promotion_order") or ["dev", "hml", "prod"]
-    drift_level, findings, recommendations = classify_cross_env_drift(environments, promotion_order)
+    historical_offline = multi_env.get("historical") is True and multi_env.get("offline") is True
+    drift_level, findings, recommendations = classify_cross_env_drift(
+        environments,
+        promotion_order,
+        include_historical_offline=historical_offline,
+    )
 
     return {
         "schema_version": "1.0.0",
@@ -119,6 +118,7 @@ def analyze(multi_env: dict[str, Any], commit_sha: str) -> dict[str, Any]:
         "commit_sha": commit_sha,
         "correlation_id": multi_env.get("correlation_id") or str(uuid4()),
         "mode": "report_only",
+        "classification": "historical_offline" if historical_offline else "current_provider_neutral",
         "drift_level": drift_level,
         "findings": findings,
         "recommendations": recommendations,

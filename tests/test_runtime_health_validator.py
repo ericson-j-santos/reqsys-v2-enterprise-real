@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -12,12 +14,12 @@ from scripts.runtime_health_validator import (  # noqa: E402
     WorkflowRun,
     build_baseline_report,
     build_health_matrix,
-    build_quarantine,
     build_remediation_plan,
     build_report,
     build_retry_policy,
     compute_runtime_score,
     fetch_runs_with_fallback,
+    parse_environment_endpoint,
     reconcile_runs,
     write_report,
 )
@@ -76,10 +78,29 @@ def test_health_matrix_and_quarantine_on_security_failure() -> None:
         run("CI — ReqSys v2 Enterprise", "success"),
     ]
     plan = build_remediation_plan(runs)
-    report = build_report("owner/repo", "main", runs, plan, [], "report_only")
+    report = build_report(
+        "owner/repo",
+        "main",
+        runs,
+        plan,
+        [],
+        "report_only",
+        environment_endpoints={
+            "dev": "https://api-dev.example.net/health",
+            "hml": "https://api-hml.example.net/health",
+            "prod": "https://api.example.net/health",
+        },
+    )
 
     matrix_ids = {row["id"] for row in report["health_matrix"]}
-    assert matrix_ids == {"ci_github", "fly_dev", "fly_homolog", "fly_prod", "evidence_gate", "security_gates"}
+    assert matrix_ids == {
+        "ci_github",
+        "runtime_dev",
+        "runtime_hml",
+        "runtime_prod",
+        "evidence_gate",
+        "security_gates",
+    }
 
     security_row = next(row for row in report["health_matrix"] if row["id"] == "security_gates")
     assert security_row["status"] == "red"
@@ -220,7 +241,15 @@ def test_build_baseline_report_when_no_data() -> None:
 
 
 def test_write_report_publishes_navigable_summary_and_json(tmp_path: Path) -> None:
-    report = build_report("owner/repo", "main", [run("CI", "success")], [], [], "report_only")
+    report = build_report(
+        "owner/repo",
+        "main",
+        [run("CI", "success")],
+        [],
+        [],
+        "report_only",
+        environment_endpoints={"prod": "https://api.example.net/health"},
+    )
 
     write_report(report, tmp_path)
 
@@ -233,4 +262,33 @@ def test_write_report_publishes_navigable_summary_and_json(tmp_path: Path) -> No
     assert "## Retry policy" in summary
     assert "## Automatic backlog" in summary
     assert "## Environment sync" in summary
-    assert "https://reqsys-api.fly.dev/health" in summary
+    assert "https://api.example.net/health" in summary
+
+
+def test_environment_endpoint_is_explicit_https_and_provider_neutral(monkeypatch) -> None:
+    assert parse_environment_endpoint("prod=https://api.example.net/health") == (
+        "prod",
+        "https://api.example.net/health",
+    )
+
+    with pytest.raises(ValueError, match="retirado definitivamente"):
+        parse_environment_endpoint("prod=https://legacy.fly.dev/health")
+    with pytest.raises(ValueError, match="HTTPS"):
+        parse_environment_endpoint("prod=http://api.example.net/health")
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "scripts.runtime_health_validator.probe_health_endpoint",
+        lambda url, *_args, **_kwargs: calls.append(url),
+    )
+    with pytest.raises(ValueError, match="retirado definitivamente"):
+        build_health_matrix(
+            [],
+            probe_env=True,
+            artifact_root=Path("."),
+            environment_endpoints={
+                "dev": "https://api-dev.example.net/health",
+                "prod": "https://legacy.fly.dev/health",
+            },
+        )
+    assert calls == []

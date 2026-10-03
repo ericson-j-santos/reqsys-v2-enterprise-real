@@ -17,6 +17,8 @@ def build_runtime_ux_evidence(
     source_head_sha: str,
     source_workflow: str,
 ) -> list[dict[str, Any]]:
+    if homologation.get("historical") is not True or homologation.get("offline") is not True:
+        raise ValueError("homologação Fly legada exige historical=true e offline=true")
     if homologation.get("contract") != "fly-environment-homologation-gate":
         raise ValueError("contrato de homologação inválido")
     if homologation.get("ok") is not True:
@@ -52,7 +54,10 @@ def build_runtime_ux_evidence(
         {
             "schema_version": "1.0.0",
             "contract": "reqsys-runtime-ux-recovery-evidence",
-            "evidence_source": "runtime",
+            "evidence_source": "historical_offline",
+            "historical": True,
+            "offline": True,
+            "historical_provider": "fly",
             "environment": environment,
             "source_workflow": source_workflow,
             "source_run_id": source_run_id,
@@ -84,7 +89,7 @@ def main() -> int:
 
     homologation = json.loads(args.homologation.read_text(encoding="utf-8"))
     if not isinstance(homologation, dict):
-        raise ValueError("homologation deve conter objeto JSON")
+        raise TypeError("homologation deve conter objeto JSON")
 
     result = build_runtime_ux_evidence(
         homologation,

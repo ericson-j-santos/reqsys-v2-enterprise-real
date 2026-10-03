@@ -18,7 +18,14 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-DEFAULT_BASE_URL = "https://reqsys-api.fly.dev"
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/notificar_teams.py
+    from runtime_url_policy import require_authorized_runtime_url
+
+# Mantém a API importável sem reintroduzir um endpoint de provedor implícito.
+# Chamadores devem fornecer TEAMS_GATEWAY_BASE_URL ou --base-url explicitamente.
+DEFAULT_BASE_URL = ""
 
 
 def _postar_json(
@@ -28,6 +35,7 @@ def _postar_json(
     payload: dict[str, Any],
     timeout: float,
 ) -> dict[str, Any]:
+    base_url = require_authorized_runtime_url(base_url, label="Teams gateway base URL")
     body = json.dumps(payload).encode("utf-8")
     request = Request(
         f"{base_url.rstrip('/')}{endpoint}",
@@ -142,7 +150,7 @@ def main() -> int:
         default=os.environ.get("TEAMS_DELIVERY_MODE", "all"),
         choices=["all", "first_success", "channel"],
     )
-    parser.add_argument("--base-url", default=os.environ.get("TEAMS_GATEWAY_BASE_URL", DEFAULT_BASE_URL))
+    parser.add_argument("--base-url", default=os.environ.get("TEAMS_GATEWAY_BASE_URL", ""))
     parser.add_argument("--autor", default="reqsys-ci")
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--dry-run", action="store_true")

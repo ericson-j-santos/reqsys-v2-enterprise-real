@@ -9,9 +9,11 @@
     "design": true,
     "tasks": true
   },
-  "description": "Finaliza a retirada permanente do Fly.io no ReqSys: bloqueia operações remanescentes, elimina fallbacks e deploys GitLab, torna scripts locais fail-closed e preserva manifestos somente como evidência histórica não executável.",
+  "description": "Finaliza a retirada permanente do Fly.io no ReqSys: bloqueia operações remanescentes, elimina fallbacks e deploys GitLab, remove manifestos e artefatos de build/boot específicos e torna scripts, catálogos e superfícies de navegação fail-closed.",
   "scope": "runtime-flyio-retirement-finalization",
   "files": [
+    ".github/workflows/auth-azure-operational-gate.yml",
+    ".github/workflows/coleta-requisitos-teams-certificacao-strict-dev.yml",
     ".github/workflows/coleta-requisitos-teams-e2e-dev.yml",
     ".github/workflows/bacen-human-action-issue-sync.yml",
     ".github/workflows/dynamic-performance-gate.yml",
@@ -25,10 +27,12 @@
     ".github/workflows/reqsys-next-increment-auto-evaluation.yml",
     ".github/workflows/runtime-executive-post-deploy-smoke.yml",
     ".github/workflows/runtime-operational-health.yml",
+    ".github/workflows/runtime-production-smoke-governed.yml",
     ".github/workflows/teams-bot-dev-activation-probe.yml",
     ".github/workflows/teams-recipient-policy-runtime-readiness.yml",
     ".github/workflows/ux-integrated-runtime-evidence-producer.yml",
     ".github/workflows/ux-runtime-scheduled-collection.yml",
+    ".github/workflows/wsjf-conexoes-msal-live.yml",
     ".github/workflows/configurar-fly-auth-azure.yml",
     ".github/workflows/configurar-integracao-github-fly-dev.yml",
     ".github/workflows/control-plane-lifecycle.yml",
@@ -36,6 +40,7 @@
     ".github/workflows/credential-control-plane-cutover-smoke.yml",
     ".github/workflows/credential-control-plane-runtime-health.yml",
     ".github/workflows/deploy-production-sync.yml",
+    ".github/workflows/dispatch-public-runtime-evidence.yml",
     ".github/workflows/deploy-staging-auth-fix.yml",
     ".github/workflows/dev-merge-console-homologation.yml",
     ".github/workflows/dev-runtime-auth-diagnostic.yml",
@@ -53,9 +58,11 @@
     ".github/workflows/fly-governed-command-center.yml",
     ".github/workflows/fly-org-token-successor-probe.yml",
     ".github/workflows/fly-runtime-p0.yml",
+    ".github/workflows/governed-workflow-artifact-promotion.yml",
     ".github/workflows/ocr-deploy-staging.yml",
     ".github/workflows/ocr-secret-rotation.yml",
     ".github/workflows/padrao-ouro-delivery-automation.yml",
+    ".github/workflows/post-merge-main-runtime-validator.yml",
     ".github/workflows/reqsys-backup-provider-readiness.yml",
     ".github/workflows/reqsys-free-tier-backup.yml",
     ".github/workflows/sync-microsoft-identity-dev.yml",
@@ -64,6 +71,7 @@
     "backend/app/api/actions_runtime_center.py",
     "backend/app/api/govbi.py",
     "backend/app/core/config.py",
+    "backend/app/main.py",
     "backend/app/services/monitoramento_snapshot.py",
     "backend/app/services/operational_deploy.py",
     "config/control-plane-lifecycle-policy.json",
@@ -72,13 +80,18 @@
     "gitlab/ci/ocr-deploy-staging.yml",
     "infra/fly-environments.json",
     "scripts/configurar_fly_auth_azure.py",
+    "scripts/cofre_human_token.py",
     "scripts/credential_control_plane_lifecycle.py",
     "scripts/cutover_fly_postgres.py",
     "scripts/fly-deploy.ps1",
+    "scripts/plan_governed_workflow_artifact_promotion.py",
     "scripts/remote_postgres_backup.sh",
     "scripts/rollback_environment_observability_api.sh",
     "scripts/run_reqsys_free_tier_backup.sh",
+    "backend/tests/test_main_critical_paths.py",
     "tests/test_flyio_permanent_retirement.py",
+    "tests/test_plan_governed_workflow_artifact_promotion.py",
+    "tests/test_runtime_url_retirement_guards.py",
     "docs/releases/flyio-retirement-20261002.md",
     "tests/test_environment_observability_build_only_contract.py",
     "tests/test_fly_automatic_promotion_contract.py",
@@ -88,7 +101,8 @@
   "sdd_gate": {
     "pre_pr_tests": [
       "tests/test_flyio_permanent_retirement.py",
-      "tests/test_flyio_local_mutation_retirement.py"
+      "tests/test_flyio_local_mutation_retirement.py",
+      "tests/test_plan_governed_workflow_artifact_promotion.py"
     ],
     "tests": [
       "tests/test_flyio_permanent_retirement.py",
@@ -101,9 +115,10 @@
       "tests/test_environment_observability_build_only_contract.py",
       "tests/test_fly_automatic_promotion_contract.py",
       "tests/test_flyio_local_mutation_retirement.py",
+      "tests/test_plan_governed_workflow_artifact_promotion.py",
       "gitlab/tests/test_validate_gitlab_governance.py"
     ],
-    "evidence_contract": "Workflows YAML válidos no SHA do PR; jobs e entrypoints com operações, tokens ou callers Fly.io ficam fail-closed; fallbacks fly.dev/fly.io e deploys GitLab são retirados; manifestos restantes são históricos e não executáveis. O estado remoto, a cobrança e a exclusão da conta só podem ser declarados com inventário autenticado e confirmação do provedor."
+    "evidence_contract": "Workflows YAML válidos no SHA do PR; jobs e entrypoints com operações, tokens ou callers Fly.io ficam fail-closed; fallbacks fly.dev/fly.io, deploys GitLab, 13 manifestos e quatro artefatos de build/boot Fly são retirados; scripts de rede, catálogos e superfícies UI recusam o provedor antes de I/O externo; a origem CORS configurável é canonicalizada e não aceita caracteres de controle. O estado remoto, a cobrança e a exclusão da conta só podem ser declarados com inventário autenticado e confirmação do provedor."
   },
   "risk": {
     "production": true,

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Consolida maturidade operacional e runtime público ao Padrão Ouro 100%.
+"""Consolida maturidade operacional e contrato de runtime ao Padrão Ouro 100%.
 
 Gera evidências locais canônicas (report-only, sem deploy produtivo):
 - artifacts operacionais em estado passed
-- validação strict dos endpoints /api/runtime/* via backend local
+- validação strict dos endpoints /api/runtime/* via ASGI em processo
 - runtime-health-report, delivery-maturity-snapshot e health.json regenerados
 """
 
@@ -14,17 +14,32 @@ import os
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    from scripts.validate_public_runtime import (
+        OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS,
+        EndpointResult,
+        _ler_json_seguro,
+        _text_markers,
+        build_payload,
+    )
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from validate_public_runtime import (
+        OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS,
+        EndpointResult,
+        _ler_json_seguro,
+        _text_markers,
+        build_payload,
+    )
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-LOCAL_BASE_URL = "http://127.0.0.1:8000"
+ASGI_BASE_URL = "http://reqsys.asgi.invalid"
 STRICT_ENDPOINTS = ("/health", "/api/runtime/health", "/api/runtime/readiness", "/api/runtime/liveness")
 
 
@@ -119,55 +134,99 @@ def seed_gold_standard_artifacts() -> None:
         _write_json(ROOT / rel_path, payload)
 
 
-def _wait_for_backend(timeout_s: float = 30.0) -> bool:
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(f"{LOCAL_BASE_URL}/health", timeout=2) as response:  # noqa: S310
-                if 200 <= response.status < 300:
-                    return True
-        except (urllib.error.URLError, TimeoutError, OSError):
-            time.sleep(0.5)
-    return False
+def _asgi_endpoint_result(client: Any, endpoint: str) -> EndpointResult:
+    url = f"{ASGI_BASE_URL}{endpoint}"
+    started = time.perf_counter()
+    try:
+        response = client.get(endpoint)
+    except Exception as exc:
+        return EndpointResult(
+            endpoint=endpoint,
+            url=url,
+            ok=False,
+            status_code=None,
+            elapsed_ms=round((time.perf_counter() - started) * 1000),
+            content_type=None,
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
-
-def start_local_backend() -> subprocess.Popen[str] | None:
-    if _wait_for_backend(timeout_s=2.0):
-        return None
-    venv_python = ROOT / "backend" / ".venv" / "bin" / "python"
-    python = str(venv_python if venv_python.exists() else Path(sys.executable))
-    return subprocess.Popen(
-        [python, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
-        cwd=ROOT / "backend",
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    raw = response.content
+    payload, payload_keys = _ler_json_seguro(raw)
+    markers = _text_markers(raw)
+    correlation_id = None
+    if isinstance(payload, dict):
+        meta = payload.get("meta")
+        data = payload.get("data")
+        if isinstance(meta, dict) and meta.get("correlation_id"):
+            correlation_id = str(meta["correlation_id"])
+        elif isinstance(data, dict) and data.get("correlation_id"):
+            correlation_id = str(data["correlation_id"])
+    if not correlation_id:
+        correlation_id = (
+            response.headers.get("x-correlation-id")
+            or response.headers.get("x-request-id")
+            or response.headers.get("traceparent")
+        )
+    return EndpointResult(
+        endpoint=endpoint,
+        url=url,
+        ok=200 <= response.status_code < 300,
+        status_code=response.status_code,
+        elapsed_ms=round((time.perf_counter() - started) * 1000),
+        content_type=response.headers.get("content-type"),
+        payload_keys=payload_keys,
+        correlation_id=correlation_id,
+        cors_allow_origin=response.headers.get("access-control-allow-origin"),
+        **markers,
     )
 
 
-def validate_local_runtime() -> dict[str, Any]:
+def build_in_process_runtime_validation(client: Any) -> dict[str, Any]:
+    endpoints = tuple(dict.fromkeys(STRICT_ENDPOINTS + OPTIONAL_PUBLIC_EVIDENCE_ENDPOINTS))
+    results = [_asgi_endpoint_result(client, endpoint) for endpoint in endpoints]
+    payload = build_payload(ASGI_BASE_URL, "canonical", results, STRICT_ENDPOINTS, True)
+    payload["validation_mode"] = "asgi_in_process"
+    payload["network_reachability_verified"] = False
+    payload["readiness"]["network_reachability_verified"] = False
+    return payload
+
+
+def assert_required_runtime_endpoints(validation: dict[str, Any]) -> None:
+    by_endpoint = {
+        result.get("endpoint"): result
+        for result in validation.get("results", [])
+        if isinstance(result, dict)
+    }
+    failures = [
+        f"{endpoint}: {by_endpoint.get(endpoint, {}).get('status_code') or 'sem resposta'}"
+        for endpoint in STRICT_ENDPOINTS
+        if by_endpoint.get(endpoint, {}).get("ok") is not True
+    ]
+    if failures:
+        raise RuntimeError("contrato ASGI obrigatório falhou: " + ", ".join(failures))
+
+
+def validate_in_process_runtime() -> dict[str, Any]:
+    backend_path = str(ROOT / "backend")
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+
+    from app.main import app
+    from fastapi.testclient import TestClient
+
     output = ROOT / "audit/runtime/public-runtime-validation.json"
     readiness_output = ROOT / "audit/runtime/ops-readiness-report.json"
     artifact_output = ROOT / "artifacts/runtime/public-runtime-validation.json"
-    result = _run(
-        [
-            sys.executable,
-            "scripts/validate_public_runtime.py",
-            "--base-url",
-            LOCAL_BASE_URL,
-            "--environment",
-            "canonical",
-            "--include-optional-evidence",
-            "--output",
-            str(output),
-            "--readiness-output",
-            str(readiness_output),
-        ]
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"validação local falhou:\n{result.stdout}\n{result.stderr}")
-    payload = json.loads(output.read_text(encoding="utf-8"))
-    artifact_output.parent.mkdir(parents=True, exist_ok=True)
-    artifact_output.write_text(output.read_text(encoding="utf-8"), encoding="utf-8")
+    client = TestClient(app, base_url=ASGI_BASE_URL)
+    try:
+        payload = build_in_process_runtime_validation(client)
+    finally:
+        client.close()
+
+    _write_json(output, payload)
+    _write_json(readiness_output, payload["readiness"])
+    _write_json(artifact_output, payload)
+    assert_required_runtime_endpoints(payload)
     return payload
 
 
@@ -178,8 +237,8 @@ def update_public_access_validation(validation: dict[str, Any]) -> None:
             "name": "canonical-api-health",
             "environment": "canonical",
             "type": "api",
-            "provider": "local",
-            "url": f"{LOCAL_BASE_URL}/health",
+            "provider": "asgi-in-process",
+            "url": f"{ASGI_BASE_URL}/health",
             "expectedStatus": [200],
             "reachable": True,
             "status": 200,
@@ -192,8 +251,8 @@ def update_public_access_validation(validation: dict[str, Any]) -> None:
             "name": "canonical-runtime-health",
             "environment": "canonical",
             "type": "api",
-            "provider": "local",
-            "url": f"{LOCAL_BASE_URL}/api/runtime/health",
+            "provider": "asgi-in-process",
+            "url": f"{ASGI_BASE_URL}/api/runtime/health",
             "expectedStatus": [200],
             "reachable": True,
             "status": 200,
@@ -206,8 +265,8 @@ def update_public_access_validation(validation: dict[str, Any]) -> None:
             "name": "canonical-runtime-readiness",
             "environment": "canonical",
             "type": "api",
-            "provider": "local",
-            "url": f"{LOCAL_BASE_URL}/api/runtime/readiness",
+            "provider": "asgi-in-process",
+            "url": f"{ASGI_BASE_URL}/api/runtime/readiness",
             "expectedStatus": [200],
             "reachable": True,
             "status": 200,
@@ -217,6 +276,9 @@ def update_public_access_validation(validation: dict[str, Any]) -> None:
             "error": None,
         },
     ]
+    for result in results:
+        result["reachabilityScope"] = "asgi_in_process"
+        result["networkReachabilityVerified"] = False
     _write_json(
         ROOT / "artifacts/public-access-validation/public-access-validation.json",
         {
@@ -224,6 +286,8 @@ def update_public_access_validation(validation: dict[str, Any]) -> None:
             "artifact": "public-access-validation",
             "generatedAt": _now(),
             "source": "padrao_ouro_maturity_consolidator",
+            "validationMode": "asgi_in_process",
+            "networkReachabilityVerified": False,
             "analytics": {
                 "total": len(results),
                 "reachable": len(results),
@@ -264,7 +328,7 @@ def persist_public_runtime_evidence(validation: dict[str, Any]) -> None:
             "--sha",
             os.getenv("GITHUB_SHA", "local"),
             "--strict-gate-passed",
-            "true",
+            "true" if validation.get("network_reachability_verified") is True else "false",
         ]
     )
 
@@ -349,36 +413,24 @@ def assert_gold_standard_targets(runtime_report: dict[str, Any], validation: dic
 
 
 def main() -> int:
-    backend_proc: subprocess.Popen[str] | None = None
-    try:
-        seed_gold_standard_artifacts()
-        backend_proc = start_local_backend()
-        if not _wait_for_backend():
-            raise RuntimeError("backend local indisponível em :8000")
-        validation = validate_local_runtime()
-        update_public_access_validation(validation)
-        persist_public_runtime_evidence(validation)
-        runtime_report = regenerate_downstream_reports()
-        assert_gold_standard_targets(runtime_report, validation)
-        print(
-            json.dumps(
-                {
-                    "status": "passed",
-                    "readiness_percent": validation.get("readiness", {}).get("readiness_percent"),
-                    "gold_standard_depth": runtime_report.get("gold_standard_depth", {}).get("overall_score"),
-                    "maturity_percent": runtime_report.get("maturity_percent"),
-                },
-                indent=2,
-            )
+    seed_gold_standard_artifacts()
+    validation = validate_in_process_runtime()
+    update_public_access_validation(validation)
+    persist_public_runtime_evidence(validation)
+    runtime_report = regenerate_downstream_reports()
+    assert_gold_standard_targets(runtime_report, validation)
+    print(
+        json.dumps(
+            {
+                "status": "passed",
+                "readiness_percent": validation.get("readiness", {}).get("readiness_percent"),
+                "gold_standard_depth": runtime_report.get("gold_standard_depth", {}).get("overall_score"),
+                "maturity_percent": runtime_report.get("maturity_percent"),
+            },
+            indent=2,
         )
-        return 0
-    finally:
-        if backend_proc is not None:
-            backend_proc.terminate()
-            try:
-                backend_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                backend_proc.kill()
+    )
+    return 0
 
 
 if __name__ == "__main__":

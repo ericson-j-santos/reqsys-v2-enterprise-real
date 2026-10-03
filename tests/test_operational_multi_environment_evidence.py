@@ -1,22 +1,41 @@
-from scripts.operational_multi_environment_evidence import build_env_entry, normalize_api_base
+import pytest
+
+from scripts.operational_multi_environment_evidence import build_env_entry, consolidate
 
 
-def test_normalize_api_base_strips_docs_suffix():
-    assert normalize_api_base("https://reqsys-api-dev.fly.dev/docs") == "https://reqsys-api-dev.fly.dev"
-    assert normalize_api_base("https://reqsys-api-dev.fly.dev") == "https://reqsys-api-dev.fly.dev"
-
-
-def test_build_env_entry_aligns_probe_docs_with_manifest_base():
+def test_build_env_entry_uses_provider_neutral_probe_data():
     probe = {
         "name": "desenvolvimento",
-        "frontend": "https://reqsys-app-dev.fly.dev",
-        "api": "https://reqsys-api-dev.fly.dev/docs",
+        "frontend": "https://app-dev.example.net",
+        "api": "https://api-dev.example.net/docs",
+        "status": "ready",
     }
-    fly_env = {
-        "api_url": "https://reqsys-api-dev.fly.dev",
-        "frontend_url": "https://reqsys-app-dev.fly.dev",
-    }
+    entry = build_env_entry("dev", probe)
+    assert entry["canonical"] == "dev"
+    assert entry["frontend_url"] == "https://app-dev.example.net"
+    assert "fly_api_url" not in entry
+    assert "url_matrix_aligned" not in entry
 
-    entry = build_env_entry("dev", probe, fly_env)
 
-    assert entry["url_matrix_aligned"] is True
+def test_historical_matrix_is_attached_only_as_offline_reference():
+    report = consolidate(
+        {"environments": [{"canonical": "dev", "status": "ready"}], "summary": {}},
+        "abc123",
+        historical_offline_fly_matrix={
+            "historical": True,
+            "offline": True,
+            "environments": {"dev": {"api_url": "https://legacy.fly.dev"}},
+        },
+    )
+    assert report["historical_offline_reference"]["classification"] == "historical_offline"
+    assert report["environments"][0]["canonical"] == "dev"
+    assert "fly_api_url" not in report["environments"][0]
+
+
+def test_unmarked_legacy_matrix_is_rejected():
+    with pytest.raises(ValueError, match="historical=true e offline=true"):
+        consolidate(
+            {"environments": []},
+            "abc123",
+            historical_offline_fly_matrix={"environments": {"dev": {}}},
+        )

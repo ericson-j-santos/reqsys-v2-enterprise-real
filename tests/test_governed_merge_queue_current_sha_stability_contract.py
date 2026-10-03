@@ -36,6 +36,12 @@ def test_stability_evidence_is_persisted() -> None:
     assert "current_sha_stability: $sha_stability[0]" in workflow
 
 
+def test_current_sha_run_discovery_paginates_all_workflows() -> None:
+    workflow = workflow_path().read_text(encoding="utf-8")
+    assert "gh api --method GET --paginate --slurp" in workflow
+    assert "workflow_runs: [.[].workflow_runs[]]" in workflow
+
+
 def test_final_gate_tolerates_missing_stability_artifact() -> None:
     workflow = workflow_path().read_text(encoding="utf-8")
     assert "Baixar evidência de estabilidade do SHA atual" in workflow

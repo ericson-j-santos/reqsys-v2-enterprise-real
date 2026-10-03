@@ -1,13 +1,16 @@
 import json
+import sys
 from io import BytesIO
 from pathlib import Path
-import sys
 from urllib.error import HTTPError, URLError
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.notificar_teams import enviar_mensagem, main
+from scripts.notificar_teams import enviar_mensagem, main  # noqa: E402
+from scripts.runtime_url_policy import RuntimeURLPolicyError  # noqa: E402
 
 
 class _FakeResponse:
@@ -26,7 +29,7 @@ class _FakeResponse:
 
 def test_enviar_mensagem_retorna_data_em_sucesso(monkeypatch):
     def fake_urlopen(request, timeout):
-        assert request.full_url == "https://reqsys-api.fly.dev/v1/teams-gateway/messages"
+        assert request.full_url == "https://gateway.example/v1/teams-gateway/messages"
         body = json.loads(request.data.decode("utf-8"))
         assert body["modo"] == "auto"
         assert body["texto"] == "ola"
@@ -35,7 +38,7 @@ def test_enviar_mensagem_retorna_data_em_sucesso(monkeypatch):
     monkeypatch.setattr("scripts.notificar_teams.urlopen", fake_urlopen)
 
     resultado = enviar_mensagem(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://gateway.example",
         texto="ola",
         titulo="Titulo",
         modo="auto",
@@ -83,7 +86,7 @@ def test_policy_404_usa_destino_explicito_no_endpoint_legado(monkeypatch):
     monkeypatch.setattr("scripts.notificar_teams.urlopen", fake_urlopen)
 
     resultado = enviar_mensagem(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://gateway.example",
         texto="ola",
         titulo="Titulo",
         modo="auto",
@@ -98,8 +101,8 @@ def test_policy_404_usa_destino_explicito_no_endpoint_legado(monkeypatch):
     )
 
     assert chamadas == [
-        "https://reqsys-api.fly.dev/v1/teams-gateway/recipient-policies/hitl-approvers/messages",
-        "https://reqsys-api.fly.dev/v1/teams-gateway/messages",
+        "https://gateway.example/v1/teams-gateway/recipient-policies/hitl-approvers/messages",
+        "https://gateway.example/v1/teams-gateway/messages",
     ]
     assert resultado["entregue"] is True
     assert resultado["fallback_usado"] is True
@@ -123,7 +126,7 @@ def test_policy_404_sem_destino_preserva_erro(monkeypatch):
     monkeypatch.setattr("scripts.notificar_teams.urlopen", fake_urlopen)
 
     resultado = enviar_mensagem(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://gateway.example",
         texto="ola",
         titulo="Titulo",
         modo="auto",
@@ -149,7 +152,7 @@ def test_enviar_mensagem_trata_erro_de_rede(monkeypatch):
     monkeypatch.setattr("scripts.notificar_teams.urlopen", fake_urlopen)
 
     resultado = enviar_mensagem(
-        base_url="https://reqsys-api.fly.dev",
+        base_url="https://gateway.example",
         texto="ola",
         titulo="Titulo",
         modo="auto",
@@ -165,6 +168,27 @@ def test_enviar_mensagem_trata_erro_de_rede(monkeypatch):
     assert resultado["erro"] == "network_error"
 
 
+def test_enviar_mensagem_recusa_fly_antes_da_rede(monkeypatch):
+    def unexpected_urlopen(*args, **kwargs):
+        raise AssertionError("a rede nao deve ser chamada para URL Fly.io")
+
+    monkeypatch.setattr("scripts.notificar_teams.urlopen", unexpected_urlopen)
+
+    with pytest.raises(RuntimeURLPolicyError, match="Fly.io"):
+        enviar_mensagem(
+            base_url="https://reqsys-api.fly.dev",
+            texto="ola",
+            titulo="Titulo",
+            modo="auto",
+            destino_tipo="chat",
+            destino_id="user@example.com",
+            autor="reqsys-ci",
+            permitir_fallback=True,
+            dry_run=False,
+            timeout=10.0,
+        )
+
+
 def test_main_nao_falha_por_padrao_quando_nao_entregue(monkeypatch, tmp_path):
     def fake_urlopen(request, timeout):
         raise URLError("falhou")
@@ -174,6 +198,7 @@ def test_main_nao_falha_por_padrao_quando_nao_entregue(monkeypatch, tmp_path):
 
     sys.argv = [
         "notificar_teams.py",
+        "--base-url", "https://gateway.example",
         "--texto", "ola",
         "--destino-id", "user@example.com",
         "--output", str(saida),
@@ -194,6 +219,7 @@ def test_main_falha_com_strict_quando_nao_entregue(monkeypatch, tmp_path):
 
     sys.argv = [
         "notificar_teams.py",
+        "--base-url", "https://gateway.example",
         "--texto", "ola",
         "--destino-id", "user@example.com",
         "--output", str(saida),

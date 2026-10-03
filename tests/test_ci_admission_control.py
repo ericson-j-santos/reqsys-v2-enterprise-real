@@ -89,6 +89,48 @@ def test_guard_accepts_only_successful_pre_pr_on_exact_sha() -> None:
     assert [item["id"] for item in selected] == [3]
 
 
+def test_guard_queries_canonical_pre_pr_workflow(monkeypatch) -> None:
+    head = "a" * 40
+    base = "b" * 40
+    paths: list[str] = []
+
+    def fake_github_json(repository: str, path: str, token: str):
+        paths.append(path)
+        if path.startswith("actions/workflows/pre-pr-readiness.yml/runs?"):
+            return {
+                "workflow_runs": [
+                    {
+                        "id": 7,
+                        "name": guard.WORKFLOW_NAME,
+                        "head_sha": head,
+                        "status": "completed",
+                        "conclusion": "success",
+                        "updated_at": "2026-10-03T10:00:00Z",
+                    }
+                ]
+            }
+        if path == "actions/runs/7/artifacts?per_page=100":
+            return {
+                "artifacts": [
+                    {"id": 11, "name": f"ci-admission-{head}", "expired": False}
+                ]
+            }
+        raise AssertionError(f"consulta inesperada: {path}")
+
+    monkeypatch.setattr(guard, "github_json", fake_github_json)
+    monkeypatch.setattr(
+        guard,
+        "load_and_validate_manifest",
+        lambda repository, artifact, head_sha, base_sha, token: {"status": "admitted"},
+    )
+
+    result = guard.verify_evidence("owner/repo", head, base, "token")
+
+    assert result["pre_pr_run_id"] == 7
+    assert paths[0].startswith("actions/workflows/pre-pr-readiness.yml/runs?")
+    assert "actions/runs?" not in paths[0]
+
+
 def test_guard_rejects_old_or_expired_admission_artifact() -> None:
     head = "a" * 40
     assert guard.matching_artifact([{"name": f"ci-admission-{'b' * 40}", "expired": False}], head) is None

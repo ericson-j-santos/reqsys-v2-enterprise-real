@@ -310,37 +310,14 @@ class FlyAdapter:
     def __init__(self, runner: CommandRunner | None = None):
         self.runner = runner or CommandRunner()
 
-    @staticmethod
-    def _env(token: str) -> dict[str, str]:
-        env = os.environ.copy()
-        env["FLY_API_TOKEN"] = token
-        return env
-
     def create_deploy_token(self, *, app: str, issuer_token: str, name: str, expires_in_days: int) -> tuple[str, str | None]:
         raise LifecycleError(FLYIO_RETIREMENT_GUARD)
 
-        output = self.runner.run([
-            "flyctl", "tokens", "create", "deploy", "--app", app,
-            "--expiry", f"{expires_in_days * 24}h", "--name", name, "--json",
-        ], env=self._env(issuer_token))
-        data = json.loads(output)
-        token = str(data.get("token") or data.get("Token") or "")
-        token_id_raw = data.get("id") if "id" in data else data.get("ID")
-        token_id = str(token_id_raw) if token_id_raw not in (None, "") else None
-        if not token:
-            raise LifecycleError("Fly não retornou o novo deploy token em JSON.")
-        return token, token_id
-
     def validate_app(self, *, app: str, token: str) -> None:
-        output = self.runner.run(["flyctl", "status", "--app", app, "--json"], env=self._env(token))
-        if not output.strip():
-            raise LifecycleError(f"Novo deploy token Fly não validou acesso ao app {app}.")
-        json.loads(output)
+        raise LifecycleError(FLYIO_RETIREMENT_GUARD)
 
     def revoke(self, *, token_id: str, issuer_token: str) -> None:
         raise LifecycleError(FLYIO_RETIREMENT_GUARD)
-
-        self.runner.run(["flyctl", "tokens", "revoke", token_id], env=self._env(issuer_token))
 
 
 def _rotation_anchor(metadata: SecretMetadata) -> datetime | None:
@@ -495,37 +472,6 @@ def execute_plan(
 
         if provider == "fly":
             raise LifecycleError(FLYIO_RETIREMENT_GUARD)
-
-            issuer = store.read(str(item["issuer_secret_name"]))
-            metadata = store.metadata(str(item["secret_name"]))
-            old_id = (metadata.tags or {}).get("provider_token_id") if metadata.exists else None
-            if action == "ROTATE" and not old_id:
-                raise LifecycleError(f"{cid}: rotação Fly bloqueada sem provider_token_id do token anterior.")
-            app = str(item["target"]["app"])
-            name = str(item.get("token_name") or f"reqsys-{app}-deploy")
-            new_token, new_id = fly.create_deploy_token(app=app, issuer_token=issuer, name=name, expires_in_days=int(rotation["expires_in_days"]))
-            fly.validate_app(app=app, token=new_token)
-            if not new_id:
-                raise LifecycleError(f"{cid}: Fly criou token sem ID; persistência bloqueada para garantir revogação futura.")
-            tags = {
-                "credential_id": cid,
-                "provider": "fly",
-                "provider_token_id": new_id,
-                "fly_app": app,
-                "rotated_at": iso_z(instant) or "",
-            }
-            store.write(str(item["secret_name"]), new_token, expires_at=expires_at, tags=tags)
-            if old_id:
-                fly.revoke(token_id=old_id, issuer_token=issuer)
-            results.append(RotationResult(
-                cid,
-                provider,
-                "CREATED" if action == "CREATE" else "ROTATED",
-                "new_token_validated_persisted_old_revoked" if old_id else "new_token_validated_and_persisted",
-                new_id,
-                expires_at,
-            ))
-            continue
 
         raise LifecycleError(f"Provider sem adaptador: {provider}")
 

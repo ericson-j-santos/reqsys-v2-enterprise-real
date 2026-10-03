@@ -9,9 +9,13 @@ import time
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/main_operational_state_snapshot.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 DEFAULT_VALIDATOR = "artifacts/post-merge-main-runtime-validator/post-merge-main-runtime-validator.json"
 DEFAULT_OUTPUT = "artifacts/main-operational-state-snapshot/main-operational-state-snapshot.json"
-DEFAULT_RUNTIME_URL = "https://reqsys-app.fly.dev"
 
 
 def load_json(path: str | Path) -> dict[str, Any]:
@@ -22,8 +26,10 @@ def load_json(path: str | Path) -> dict[str, Any]:
 
 
 def runtime_url(report: dict[str, Any]) -> str:
+    if not report:
+        return ""
     links = report.get("links") or {}
-    return str(links.get("runtime_public_url") or DEFAULT_RUNTIME_URL)
+    return require_authorized_runtime_url(links.get("runtime_public_url"), label="runtime_public_url do validator")
 
 
 def build_snapshot(report: dict[str, Any], *, repo: str, sha: str, run_id: str | None) -> dict[str, Any]:

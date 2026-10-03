@@ -23,7 +23,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from scripts.auto_rerun_governed import MAX_RERUN_ATTEMPTS, is_blocklisted
+from scripts.auto_rerun_governed import MAX_RERUN_ATTEMPTS, is_blocklisted  # noqa: E402
+from scripts.runtime_url_policy import require_authorized_runtime_url  # noqa: E402
 
 MATURITY_LEVELS = {
     "green": "managed",
@@ -31,20 +32,12 @@ MATURITY_LEVELS = {
     "red": "reactive",
 }
 
-ENVIRONMENT_ENDPOINTS = {
-    "dev": "https://reqsys-api-dev.fly.dev/health",
-    "homolog": "https://reqsys-api-stg.fly.dev/health",
-    "prod": "https://reqsys-api.fly.dev/health",
-}
-
 HEALTH_MATRIX_WEIGHTS = {
     "ci_github": 0.30,
-    "fly_dev": 0.10,
-    "fly_homolog": 0.10,
-    "fly_prod": 0.15,
     "evidence_gate": 0.20,
     "security_gates": 0.15,
 }
+RUNTIME_ENVIRONMENT_WEIGHT = 0.10
 
 STATUS_SCORE = {
     "green": 100,
@@ -208,7 +201,7 @@ def github_request(method: str, url: str, token: str, payload: dict[str, Any] | 
         },
     )
     try:
-        with urlopen(request, timeout=30) as response:  # noqa: S310 - GitHub API URL is controlled.
+        with urlopen(request, timeout=30) as response:
             body = response.read().decode("utf-8")
             return json.loads(body) if body else {}
     except HTTPError as exc:
@@ -255,10 +248,41 @@ def load_local_artifact(path: Path) -> dict[str, Any] | None:
     return load_cached_report(path)
 
 
+def _require_https_health_url(value: str, *, label: str) -> str:
+    url = require_authorized_runtime_url(value, label=label)
+    if not url.startswith("https://"):
+        raise ValueError(f"{label} deve usar HTTPS")
+    return url
+
+
+def parse_environment_endpoint(value: str) -> tuple[str, str]:
+    environment, separator, endpoint = value.partition("=")
+    environment = environment.strip().lower()
+    if not separator or not environment:
+        raise ValueError("--environment-url deve seguir o formato NOME=URL_HTTPS")
+    return environment, _require_https_health_url(
+        endpoint,
+        label=f"health endpoint do ambiente {environment}",
+    )
+
+
+def _validated_environment_endpoints(
+    endpoints: dict[str, str] | None,
+) -> dict[str, str]:
+    return {
+        environment: _require_https_health_url(
+            endpoint,
+            label=f"health endpoint do ambiente {environment}",
+        )
+        for environment, endpoint in (endpoints or {}).items()
+    }
+
+
 def probe_health_endpoint(url: str, timeout: int = 8) -> tuple[str, str]:
+    url = _require_https_health_url(url, label="runtime health endpoint")
     request = Request(url, method="GET", headers={"User-Agent": "ReqSys-Runtime-Health-Validator/1.2"})
     try:
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - controlled Fly.io health URL.
+        with urlopen(request, timeout=timeout) as response:
             if 200 <= response.status < 300:
                 return "green", "live"
             return "yellow", "live"
@@ -315,7 +339,9 @@ def build_health_matrix(
     *,
     probe_env: bool,
     artifact_root: Path,
+    environment_endpoints: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
+    environment_endpoints = _validated_environment_endpoints(environment_endpoints)
     matrix: list[dict[str, Any]] = []
 
     ci_status = ci_github_status(runs)
@@ -328,15 +354,15 @@ def build_health_matrix(
         "detail": f"{sum(1 for run in runs if run.health == 'green')} verde(s) de {len(runs)} runs",
     })
 
-    for env, endpoint in ENVIRONMENT_ENDPOINTS.items():
-        row_id = f"fly_{env}"
+    for env, endpoint in (environment_endpoints or {}).items():
+        row_id = f"runtime_{env}"
         if probe_env:
             status, source = probe_health_endpoint(endpoint)
         else:
             status, source = "declared", "declared"
         matrix.append({
             "id": row_id,
-            "label": f"Fly.io {env.upper()}",
+            "label": f"Runtime {env.upper()}",
             "status": status,
             "score": STATUS_SCORE.get(status, 40),
             "source": source,
@@ -366,18 +392,24 @@ def build_health_matrix(
     return matrix
 
 
+def _health_matrix_weight(row_id: str) -> float:
+    if row_id.startswith("runtime_"):
+        return RUNTIME_ENVIRONMENT_WEIGHT
+    return HEALTH_MATRIX_WEIGHTS.get(row_id, 0.0)
+
+
 def compute_runtime_score(matrix: list[dict[str, Any]]) -> int:
     if not matrix:
         return 40
-    total_weight = sum(HEALTH_MATRIX_WEIGHTS.get(row["id"], 0.0) for row in matrix)
+    total_weight = sum(_health_matrix_weight(row["id"]) for row in matrix)
     if total_weight <= 0:
         return 40
     weighted = sum(
         row.get("score", STATUS_SCORE.get(row.get("status", "unknown"), 40))
-        * HEALTH_MATRIX_WEIGHTS.get(row["id"], 0.0)
+        * _health_matrix_weight(row["id"])
         for row in matrix
     )
-    return max(0, min(100, int(round(weighted / total_weight))))
+    return max(0, min(100, round(weighted / total_weight)))
 
 
 def build_quarantine(
@@ -549,11 +581,12 @@ def build_backlog(runs: list[WorkflowRun], plan: list[dict[str, Any]]) -> list[d
     return backlog
 
 
-def build_environment_sync() -> dict[str, Any]:
+def build_environment_sync(environment_endpoints: dict[str, str] | None = None) -> dict[str, Any]:
+    environment_endpoints = _validated_environment_endpoints(environment_endpoints)
     return {
         "strategy": "dev_to_homolog_to_prod",
         "production_execution": "blocked_without_explicit_governed_promotion",
-        "flyio_health_endpoints": ENVIRONMENT_ENDPOINTS,
+        "runtime_health_endpoints": dict(environment_endpoints or {}),
         "required_evidence": ["health_check", "ci_green", "rollback_metadata", "change_ticket_for_prod"],
     }
 
@@ -591,6 +624,7 @@ def build_report(
     *,
     probe_env: bool = False,
     artifact_root: Path | None = None,
+    environment_endpoints: dict[str, str] | None = None,
     data_sources: list[dict[str, str]] | None = None,
     confidence: str = "high",
 ) -> dict[str, Any]:
@@ -603,7 +637,12 @@ def build_report(
     pending = [run for run in runs if run.health == "pending"]
     state = "red" if red else "yellow" if yellow or pending else "green"
     backlog = build_backlog(runs, plan)
-    health_matrix = build_health_matrix(runs, probe_env=probe_env, artifact_root=artifact_root)
+    health_matrix = build_health_matrix(
+        runs,
+        probe_env=probe_env,
+        artifact_root=artifact_root,
+        environment_endpoints=environment_endpoints,
+    )
     runtime_score = compute_runtime_score(health_matrix)
     retry_policy = build_retry_policy(plan, runs, mode)
     quarantine = build_quarantine(state, runs, backlog, health_matrix)
@@ -652,7 +691,7 @@ def build_report(
             "state": "regression_suspected" if red else "no_regression_detected",
             "failed_workflows": [run.name for run in red],
         },
-        "environment_sync": build_environment_sync(),
+        "environment_sync": build_environment_sync(environment_endpoints),
         "rollback_policy": build_rollback_policy(state),
         "evidence_consolidation": {
             "artifact": "runtime-health-validator-evidence",
@@ -670,7 +709,12 @@ def build_report(
     }
 
 
-def build_baseline_report(repo: str, branch: str, mode: str) -> dict[str, Any]:
+def build_baseline_report(
+    repo: str,
+    branch: str,
+    mode: str,
+    environment_endpoints: dict[str, str] | None = None,
+) -> dict[str, Any]:
     return build_report(
         repo,
         branch,
@@ -680,6 +724,7 @@ def build_baseline_report(repo: str, branch: str, mode: str) -> dict[str, Any]:
         mode,
         probe_env=False,
         artifact_root=Path("."),
+        environment_endpoints=environment_endpoints,
         data_sources=[
             {"stage": "github_api", "status": "unavailable", "confidence": "low"},
             {"stage": "cached_artifact", "status": "unavailable", "confidence": "low"},
@@ -799,7 +844,7 @@ def write_report(report: dict[str, Any], output_dir: Path) -> None:
     else:
         lines.append("- None")
     lines.extend(["", "## Environment sync", ""])
-    for env, endpoint in report["environment_sync"]["flyio_health_endpoints"].items():
+    for env, endpoint in report["environment_sync"]["runtime_health_endpoints"].items():
         lines.append(f"- `{env}`: `{endpoint}`")
     (output_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -811,7 +856,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--mode", choices=["report_only", "dry_run", "execute"], default="report_only")
     parser.add_argument("--output-dir", default="artifacts/runtime-health-validator")
-    parser.add_argument("--probe-env", action="store_true", help="Probe Fly.io health endpoints (default: declared only).")
+    parser.add_argument("--probe-env", action="store_true", help="Probe os health endpoints HTTPS informados explicitamente.")
+    parser.add_argument(
+        "--environment-url",
+        action="append",
+        default=[],
+        metavar="NOME=URL_HTTPS",
+        help="Health endpoint provider-neutral; repita para cada ambiente.",
+    )
     parser.add_argument("--artifact-root", default=".", help="Root for local artifact fallback lookups.")
     return parser.parse_args()
 
@@ -820,6 +872,17 @@ def main() -> int:
     args = parse_args()
     if not args.repo:
         print("--repo or GITHUB_REPOSITORY is required", file=sys.stderr)
+        return 2
+
+    try:
+        environment_endpoints = dict(
+            parse_environment_endpoint(value) for value in args.environment_url
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.probe_env and not environment_endpoints:
+        print("--probe-env exige ao menos um --environment-url NOME=URL_HTTPS", file=sys.stderr)
         return 2
 
     output_dir = Path(args.output_dir)
@@ -837,7 +900,12 @@ def main() -> int:
     )
 
     if not runs and confidence == "low":
-        report = build_baseline_report(args.repo, args.branch, args.mode)
+        report = build_baseline_report(
+            args.repo,
+            args.branch,
+            args.mode,
+            environment_endpoints,
+        )
         write_report(report, output_dir)
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return 0
@@ -857,6 +925,7 @@ def main() -> int:
         args.mode,
         probe_env=args.probe_env,
         artifact_root=Path(args.artifact_root),
+        environment_endpoints=environment_endpoints,
         data_sources=data_sources,
         confidence=confidence,
     )

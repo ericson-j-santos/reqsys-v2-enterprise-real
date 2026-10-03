@@ -5,7 +5,6 @@ import json
 import sys
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "validate_public_runtime.py"
 
 
@@ -57,7 +56,7 @@ def test_probe_extracts_correlation_id_from_envelope(monkeypatch) -> None:
     monkeypatch.setattr(module, "urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
 
     result = module.validar_endpoint(
-        "https://reqsys-api.fly.dev",
+        "https://api.example.net",
         "/v1/integracoes/figma-github/status",
         1.0,
     )
@@ -77,6 +76,6 @@ def test_probe_uses_header_correlation_as_fallback(monkeypatch) -> None:
     )
     monkeypatch.setattr(module, "urlopen", lambda *_args, **_kwargs: response)
 
-    result = module.validar_endpoint("https://reqsys-api.fly.dev", "/health", 1.0)
+    result = module.validar_endpoint("https://api.example.net", "/health", 1.0)
 
     assert result.correlation_id == "corr-header-456"

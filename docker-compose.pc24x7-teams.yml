@@ -10,7 +10,7 @@ services:
       - /var/lib/reqsys-24x7/teams
       - worker
       - --base-url
-      - ${REQSYS_API_BASE_URL:-https://reqsys-api-dev.fly.dev}
+      - ${REQSYS_API_BASE_URL:?REQSYS_API_BASE_URL must be set to a provider-neutral HTTPS endpoint}
       - --token-file
       - /run/secrets/reqsys_api_service_token
       - --interval

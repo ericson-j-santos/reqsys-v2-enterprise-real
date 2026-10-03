@@ -37,6 +37,8 @@ def build_record(
     source_head_sha: str,
     source_workflow: str,
 ) -> dict[str, Any]:
+    if evidence.get("historical") is not True or evidence.get("offline") is not True:
+        raise ValueError("evidência Fly legada exige historical=true e offline=true")
     if evidence.get("contract") != "fly-environment-homologation-gate":
         raise ValueError("contrato de evidência não autorizado")
     if evidence.get("ok") is not True:
@@ -62,7 +64,10 @@ def build_record(
     return {
         "schema_version": SCHEMA_VERSION,
         "contract": "reqsys-runtime-environment-evidence",
-        "evidence_source": "runtime",
+        "evidence_source": "historical_offline",
+        "historical": True,
+        "offline": True,
+        "historical_provider": "fly",
         "attestation_provider": "github-artifact-attestations",
         "environment": environment,
         "source_workflow": source_workflow,
@@ -72,7 +77,6 @@ def build_record(
         "observed_sha": observed_sha,
         "correlation_id": evidence.get("correlation_id"),
         "base_url": evidence.get("base_url"),
-        "fly_app": evidence.get("fly_app"),
         "observed_at": datetime.fromtimestamp(generated_epoch, timezone.utc).isoformat(),
         "evidence_sha256": hashlib.sha256(evidence_bytes).hexdigest(),
         "probes_total": len(evidence.get("probes") or []),
@@ -114,7 +118,7 @@ def main() -> int:
     evidence_bytes = args.evidence.read_bytes()
     evidence = json.loads(evidence_bytes.decode("utf-8"))
     if not isinstance(evidence, dict):
-        raise ValueError("evidence deve conter objeto JSON")
+        raise TypeError("evidence deve conter objeto JSON")
 
     record = build_record(
         evidence,

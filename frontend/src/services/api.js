@@ -8,8 +8,11 @@ import {
 import { emitDashboardEmptyResult, isEmptyDashboardResponse } from './dashboardEmptyStateIntegration'
 import { GOVBI_EMPTY_EVENT } from './emptyStateEvents'
 import { ensurePublicRuntimeApiBase } from './publicRuntimeLocator'
+import { requireProviderNeutralRuntimeUrl } from './runtimeUrlPolicy'
 
-export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
+export const api = axios.create({
+  baseURL: requireProviderNeutralRuntimeUrl(import.meta.env.VITE_API_URL || '/api', 'VITE_API_URL'),
+})
 
 const CORRELATION_STORAGE_KEY = 'reqsys_correlation_id'
 const JOURNEY_PATHS = ['/govbi', '/runtime', '/dashboard', '/monitoramento', '/analytics']
@@ -80,7 +83,9 @@ function emitGovBIEmptyResult(response) {
 
 api.interceptors.request.use(async (config) => {
   const publicRuntimeBase = await ensurePublicRuntimeApiBase()
-  if (publicRuntimeBase) config.baseURL = publicRuntimeBase
+  if (publicRuntimeBase) {
+    config.baseURL = requireProviderNeutralRuntimeUrl(publicRuntimeBase, 'endereço público da execução')
+  }
   const token = localStorage.getItem('reqsys_token')
   config.headers['X-Correlation-Id'] = obterCorrelationIdSessao()
   if (token) config.headers.Authorization = `Bearer ${token}`

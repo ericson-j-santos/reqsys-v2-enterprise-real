@@ -1,4 +1,15 @@
-from scripts.diagnose_dev_runtime_auth import classify, sanitize_auth_payload
+from pathlib import Path
+
+import pytest
+
+from scripts.diagnose_dev_runtime_auth import (
+    build_targets,
+    classify,
+    sanitize_auth_payload,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "dev-runtime-auth-diagnostics.yml"
 
 
 def test_sanitize_auth_payload_remove_identificadores_sensiveis():
@@ -10,7 +21,7 @@ def test_sanitize_auth_payload_remove_identificadores_sensiveis():
             "environment": "development",
             "auth_status": "misconfigured",
             "missing_fields": ["AZURE_TENANT_ID", "AZURE_CLIENT_ID"],
-            "expected_redirect_uri": "https://reqsys-app-dev.fly.dev",
+            "expected_redirect_uri": "https://app-dev.example.net",
             "azure_tenant_id": "nao-deve-sair",
             "azure_client_id": "nao-deve-sair",
             "access_token": "nao-deve-sair",
@@ -92,3 +103,36 @@ def test_classify_ready_com_runtime_estavel_e_auth_disponivel():
     assert result["operational_risk"] == "low"
     assert result["auth_available"] is True
     assert result["suspected_causes"] == []
+
+
+def test_build_targets_requires_explicit_provider_neutral_https_urls():
+    targets = build_targets(
+        "https://app-dev.example.net",
+        "https://api-dev.example.net",
+    )
+
+    assert targets["frontend"] == "https://app-dev.example.net/"
+    assert targets["health"] == "https://api-dev.example.net/health"
+    assert targets["auth_config"] == "https://api-dev.example.net/v1/auth/config"
+
+
+def test_build_targets_rejects_fly_and_plain_http():
+    with pytest.raises(ValueError, match="retirado definitivamente"):
+        build_targets("https://legacy.fly.dev", "https://api.example.net")
+    with pytest.raises(ValueError, match="HTTPS"):
+        build_targets("https://app.example.net", "http://api.example.net")
+
+
+def test_workflow_summary_does_not_fail_when_evidence_is_absent():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    summary_step = workflow.split("      - name: Publicar resumo sanitizado", 1)[1].split(
+        "      - name: Upload da evidência sanitizada",
+        1,
+    )[0]
+
+    guard = "if [[ -f /tmp/summary.md ]]; then"
+    publish = 'cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"'
+
+    assert guard in summary_step
+    assert publish in summary_step
+    assert summary_step.index(guard) < summary_step.index(publish)

@@ -12,7 +12,7 @@ Sem dependências externas.
 
 Uso:
     python scripts/runtime_performance_gate.py \
-      --base-url https://reqsys-api.fly.dev \
+      --base-url https://api.example.net \
       --budgets config/runtime-performance-budgets.json \
       --output artifacts/performance/runtime-performance.json \
       --strict
@@ -27,16 +27,29 @@ import statistics
 import sys
 import time
 import uuid
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 VERSION = "1.0.0"
 USER_AGENT = f"ReqSys-Runtime-Performance-Gate/{VERSION}"
+
+
+def _require_https_base_url(value: str) -> str:
+    base_url = require_authorized_runtime_url(value, label="base-url do gate de performance")
+    if not base_url.startswith("https://"):
+        raise ValueError("base-url do gate de performance deve usar HTTPS")
+    return base_url
 
 
 @dataclass(frozen=True)
@@ -154,6 +167,7 @@ def run_endpoint(
     samples_override: int | None = None,
     concurrency_override: int | None = None,
 ) -> dict[str, Any]:
+    base_url = _require_https_base_url(base_url)
     _validate_endpoint_config(endpoint)
 
     samples = int(samples_override or endpoint.get("samples") or defaults.get("samples", 20))
@@ -296,11 +310,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
+        base_url = _require_https_base_url(args.base_url)
         policy = load_policy(args.budgets)
         defaults = dict(policy.get("defaults", {}))
         results = [
             run_endpoint(
-                base_url=args.base_url,
+                base_url=base_url,
                 endpoint=endpoint,
                 defaults=defaults,
                 samples_override=args.samples,
@@ -309,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
             for endpoint in policy["endpoints"]
         ]
         report = build_report(
-            base_url=args.base_url,
+            base_url=base_url,
             policy=policy,
             results=results,
             strict=args.strict,
@@ -322,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report["summary"], ensure_ascii=False))
         blocked = report["summary"]["endpoints_blocked"]
         return 1 if args.strict and blocked else 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI converte falhas do gate em saída controlada
         print(f"runtime_performance_gate_error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
 

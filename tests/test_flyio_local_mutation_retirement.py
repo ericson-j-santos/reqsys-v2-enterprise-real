@@ -5,17 +5,16 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-import tomllib
 
 from scripts import configurar_fly_auth_azure
 from scripts.credential_control_plane_lifecycle import FlyAdapter, LifecycleError
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "config" / "flyio-retirement-policy.json"
-MANIFEST_MARKER = "FLYIO_RETIRED_MANIFEST"
 
 
 def load_policy() -> dict:
@@ -42,25 +41,23 @@ def test_retirement_policy_is_permanent_and_all_mutators_are_guarded():
         assert marker in prefix, relative_path
     for relative_path in sorted(read_only):
         assert (ROOT / relative_path).is_file(), relative_path
-    for relative_path in policy["legacy_build_artifacts"]:
-        assert (ROOT / relative_path).is_file(), relative_path
+    for relative_path in policy["forbidden_legacy_build_artifacts"]:
+        assert not (ROOT / relative_path).exists(), relative_path
 
 
-def test_legacy_manifests_are_complete_marked_and_still_valid_toml():
+def test_fly_manifests_are_forbidden_and_absent():
     policy = load_policy()
-    expected = set(policy["legacy_manifests"])
+    forbidden = set(policy["forbidden_manifests"])
     discovered = {
         path.relative_to(ROOT).as_posix()
         for path in ROOT.rglob("fly*.toml")
         if not {"node_modules", ".venv", ".git"}.intersection(path.parts)
     }
 
-    assert discovered == expected
-    for relative_path in sorted(expected):
-        path = ROOT / relative_path
-        text = path.read_text(encoding="utf-8")
-        assert MANIFEST_MARKER in "\n".join(text.splitlines()[:3]), relative_path
-        assert isinstance(tomllib.loads(text), dict)
+    assert len(forbidden) == 13
+    assert discovered == set()
+    for relative_path in sorted(forbidden):
+        assert not (ROOT / relative_path).exists(), relative_path
 
 
 def test_fly_lifecycle_credentials_and_environment_manifest_fail_closed():
@@ -78,6 +75,27 @@ def test_fly_lifecycle_credentials_and_environment_manifest_fail_closed():
     assert non_fly_credentials
     assert all(item.get("enabled") is True for item in non_fly_credentials)
 
+    bootstrap_credentials = [
+        item
+        for item in lifecycle["bootstrap_credentials"]
+        if item.get("provider") == "fly"
+    ]
+    assert bootstrap_credentials
+    assert all(item.get("manual_bootstrap_required") is False for item in bootstrap_credentials)
+    assert all(item.get("enabled") is False for item in bootstrap_credentials)
+    assert all(item.get("status") == "PERMANENTLY_RETIRED" for item in bootstrap_credentials)
+
+    catalog = json.loads(
+        (ROOT / "config" / "credential-control-plane.json").read_text(encoding="utf-8")
+    )
+    assert catalog["principles"]["canonical_environment_source"] is None
+    assert catalog["principles"]["catalog_mode"] == "HISTORICAL_ONLY"
+    assert catalog["bindings_enabled"] is False
+    fly_provider = catalog["providers"]["fly"]
+    assert fly_provider["enabled"] is False
+    assert fly_provider["stores_values"] is False
+    assert fly_provider["status"] == "PERMANENTLY_RETIRED"
+
     environments = json.loads(
         (ROOT / "infra" / "fly-environments.json").read_text(encoding="utf-8")
     )
@@ -85,6 +103,22 @@ def test_fly_lifecycle_credentials_and_environment_manifest_fail_closed():
     assert retirement["status"] == "PERMANENTLY_RETIRED"
     assert retirement["mutations_allowed"] is False
     assert retirement["reactivation_allowed"] is False
+
+
+def test_fly_backup_assets_are_disabled_after_retirement():
+    inventory = json.loads(
+        (ROOT / "governance" / "backup" / "reqsys-backup-assets.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    fly_assets = [item for item in inventory["assets"] if item.get("fly_app")]
+    assert fly_assets
+    assert all(item.get("enabled") is False for item in fly_assets)
+    assert all(item.get("rollout_state") == "retired_flyio_2026-10-02" for item in fly_assets)
+    assert all(
+        item.get("rollout_evidence", {}).get("production_allowed") is not True
+        for item in fly_assets
+    )
 
 
 def test_python_mutation_adapters_refuse_before_invoking_provider():
@@ -99,6 +133,8 @@ def test_python_mutation_adapters_refuse_before_invoking_provider():
             name="unused",
             expires_in_days=1,
         )
+    with pytest.raises(LifecycleError, match="retirado definitivamente"):
+        adapter.validate_app(app="reqsys-api-dev", token="unused")
     with pytest.raises(LifecycleError, match="retirado definitivamente"):
         adapter.revoke(token_id="unused", issuer_token="unused")
 
@@ -115,6 +151,29 @@ def test_cutover_real_is_refused_before_cli_resolution_or_side_effects():
     for function_name in ("passo_5_setar_secret", "passo_6_deploy_e_verificar", "rollback"):
         function = text.split(f"def {function_name}", 1)[1].split("\ndef ", 1)[0]
         assert "FLYIO_RETIREMENT_GUARD" in function
+
+
+def test_live_state_capture_cli_is_retired_without_remote_access(tmp_path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/capture_fly_environment_state.py",
+            "--environment",
+            "dev",
+            "--expected-sha",
+            "unused",
+            "--output",
+            str(tmp_path / "must-not-exist.json"),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 78
+    assert "PERMANENTLY_RETIRED" in result.stdout
+    assert not (tmp_path / "must-not-exist.json").exists()
 
 
 @pytest.mark.parametrize(

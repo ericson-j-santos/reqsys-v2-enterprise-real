@@ -8,7 +8,6 @@ on:
       - '.github/workflows/trilha-a-runtime-publico.yml'
       - 'scripts/trilha_a_runtime_publico.py'
       - 'scripts/runtime_public_validator.py'
-      - 'scripts/fly_boot.sh'
       - 'docs/architecture/trilha-a/**'
       - 'docs/adr/ADR-036-trilha-a-runtime-publico.md'
       - 'docs/runbooks/trilha-a-runtime-publico.md'
@@ -29,13 +28,15 @@ permissions:
 
 jobs:
   validate-trilha-a:
+    # A Trilha A Fly foi aposentada e aguarda runtime substituto autorizado.
     name: Validate Trilha A — Runtime Público (report-only)
     runs-on: ubuntu-latest
+    if: ${{ false }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
@@ -43,7 +44,7 @@ jobs:
         run: python scripts/trilha_a_runtime_publico.py
 
       - name: Upload Trilha A report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: trilha-a-runtime-publico-${{ github.run_id }}
           path: audit/trilha-a/

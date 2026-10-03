@@ -43,7 +43,7 @@
         <h2>Análise governada</h2>
         <p class="muted">Use modo demonstração ou endpoint real do backend ReqSys. Não informe credenciais ou dados sensíveis no conteúdo.</p>
         <label for="endpoint">Endpoint do backend</label>
-        <input id="endpoint" placeholder="https://reqsys-api.fly.dev/v1/codex/analyze">
+        <input id="endpoint" placeholder="Informe explicitamente o endpoint governado /v1/codex/analyze">
         <label for="jwt">JWT de sessão</label>
         <input id="jwt" placeholder="cole o JWT obtido no login do ReqSys">
         <label for="provider">Provider</label>
@@ -87,6 +87,7 @@
   <script>
     const $ = id => document.getElementById(id)
     const saida = $('saida')
+    const dominiosRetirados = ['fly.dev', 'fly.io']
 
     function cid() {
       return 'codex-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -100,7 +101,18 @@
       if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
         return location.origin.replace(/:\d+$/, ':8000') + '/v1/codex/analyze'
       }
-      return 'https://reqsys-api.fly.dev/v1/codex/analyze'
+      return ''
+    }
+
+    function endpointPermitido(value) {
+      try {
+        const url = new URL(value)
+        const host = url.hostname.toLowerCase().replace(/\.$/, '')
+        return ['http:', 'https:'].includes(url.protocol)
+          && !dominiosRetirados.some(dominio => host === dominio || host.endsWith('.' + dominio))
+      } catch {
+        return false
+      }
     }
 
     function mock() {
@@ -132,6 +144,10 @@
         saida.textContent = 'Informe endpoint e JWT para usar o backend governado.'
         return
       }
+      if (!endpointPermitido(endpoint)) {
+        saida.textContent = 'Bloqueado: endpoint inválido ou pertencente a provedor retirado.'
+        return
+      }
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + jwt },
@@ -150,7 +166,11 @@
     async function verificarStatus() {
       const endpoint = $('endpoint').value.trim().replace(/\/analyze$/, '/status')
       const jwt = $('jwt').value.trim()
-      if (!jwt) { saida.textContent = 'Informe JWT para verificar status.'; return }
+      if (!endpoint || !jwt) { saida.textContent = 'Informe endpoint e JWT para verificar status.'; return }
+      if (!endpointPermitido(endpoint)) {
+        saida.textContent = 'Bloqueado: endpoint inválido ou pertencente a provedor retirado.'
+        return
+      }
       const res = await fetch(endpoint, { headers: { authorization: 'Bearer ' + jwt } })
       if (!res.ok) throw new Error('HTTP ' + res.status)
       saida.textContent = JSON.stringify(await res.json(), null, 2)

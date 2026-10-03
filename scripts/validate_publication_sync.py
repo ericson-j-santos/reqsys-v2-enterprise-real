@@ -247,6 +247,20 @@ def build_payload(
     timeout: float,
 ) -> dict[str, Any]:
     manifest = _read_json(manifest_path)
+    retirement = manifest.get("retirement") or {}
+    if retirement.get("status") == "PERMANENTLY_RETIRED":
+        return {
+            "schema_version": "1.0.0",
+            "contract": "publication-sync-validation",
+            "validated_at_epoch": int(time.time()),
+            "repository": {"sha": expected_sha, "version": expected_version},
+            "environments": [],
+            "ok": False,
+            "status": "PERMANENTLY_RETIRED",
+            "blocking_issues": ["flyio_manifest_permanently_retired"],
+            "next_actions": ["Informar manifesto explícito de runtime substituto autorizado"],
+        }
+
     environments = manifest.get("environments") or {}
     targets = [environment] if environment else list(manifest.get("canonical_environments") or environments.keys())
 

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 WORKFLOW = Path(".github/workflows/fly-runtime-p0.yml")
 
 
@@ -30,8 +29,10 @@ def test_deploy_requires_validation_and_gate_success():
     assert "inputs.deploy == true" in block
 
 
-def test_validation_and_read_only_smoke_remain_available():
+def test_read_only_smoke_is_permanently_retired():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "validate-config:" in text
-    assert "inputs.deploy == false || needs.deploy.result == 'success'" in text
-    assert "--probe" in text
+    start = text.index("\n  public-smoke:\n")
+    block = text[start:]
+    assert "Fly.io retirado definitivamente" in block
+    assert "if: ${{ false }}" in block

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Capture a sanitized, fail-closed Fly.io environment state snapshot.
+"""Avalia snapshots históricos Fly.io sem permitir nova coleta remota.
 
-The collector reads Fly metadata through flyctl and never persists secret values.
-Only secret names and deployment states are retained for promotion decisions.
+As funções puras continuam disponíveis para interpretar evidência já capturada
+em testes e auditorias. O runner padrão e a CLI são permanentemente
+fail-closed e não executam binários nem acessam o provedor aposentado.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ import argparse
 import hashlib
 import json
 import re
-import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +26,10 @@ STOPPED_MACHINE_STATES = {"stopped", "suspended"}
 WORKLOAD_ALWAYS_ON = "always_on"
 WORKLOAD_SCALE_TO_ZERO = "scale_to_zero"
 SUPPORTED_WORKLOAD_TYPES = {WORKLOAD_ALWAYS_ON, WORKLOAD_SCALE_TO_ZERO}
+FLYIO_RETIREMENT_GUARD = (
+    "Fly.io foi retirado definitivamente em 2026-10-02; "
+    "nova coleta remota de estado esta bloqueada."
+)
 REDACTION_PATTERNS = (
     re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s]+"),
     re.compile(r"(?i)(token[=:]\s*)[^\s,;]+"),
@@ -51,30 +55,8 @@ def _sanitize_error(value: str | None) -> str | None:
 
 
 def run_json_command(command: list[str], timeout_seconds: int = 60) -> CommandResult:
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return CommandResult(False, None, _sanitize_error(str(exc)), command)
-
-    if completed.returncode != 0:
-        return CommandResult(
-            False,
-            None,
-            _sanitize_error(completed.stderr or completed.stdout),
-            command,
-        )
-    try:
-        payload = json.loads(completed.stdout or "null")
-    except json.JSONDecodeError as exc:
-        return CommandResult(False, None, f"json_invalid:{type(exc).__name__}", command)
-    return CommandResult(True, payload, None, command)
+    _ = timeout_seconds
+    return CommandResult(False, None, FLYIO_RETIREMENT_GUARD, command)
 
 
 def _canonical_hash(value: Any) -> str:
@@ -593,31 +575,18 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    report = capture_environment(
-        manifest=manifest,
-        environment=args.environment,
-        expected_sha=args.expected_sha,
-        phase=args.phase,
-    )
-    output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
     print(
         json.dumps(
             {
+                "status": "PERMANENTLY_RETIRED",
                 "environment": args.environment,
-                "ready": report["ready"],
-                "blocking_issues": report["blocking_issues"],
+                "reason": FLYIO_RETIREMENT_GUARD,
+                "remote_access_performed": False,
             },
             ensure_ascii=False,
         )
     )
-    return 1 if args.strict and not report["ready"] else 0
-
+    return 78
 
 if __name__ == "__main__":
     raise SystemExit(main())

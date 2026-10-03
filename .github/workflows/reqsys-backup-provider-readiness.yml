@@ -30,7 +30,7 @@ concurrency:
 
 env:
   DASHBOARD_ISSUE: "1162"
-  REQUIRED_SECRETS: FLY_API_TOKEN,OBJECT_STORAGE_ACCESS_KEY_ID,OBJECT_STORAGE_SECRET_ACCESS_KEY,OBJECT_STORAGE_BUCKET,RESTIC_PASSWORD
+  REQUIRED_SECRETS: OBJECT_STORAGE_ENDPOINT,OBJECT_STORAGE_ACCESS_KEY_ID,OBJECT_STORAGE_SECRET_ACCESS_KEY,OBJECT_STORAGE_BUCKET,RESTIC_PASSWORD
 
 jobs:
   contract-tests:
@@ -50,16 +50,12 @@ jobs:
           python -m pytest -q tests/test_evaluate_backup_provider_readiness.py tests/test_object_storage_workflow_contract.py
 
   provider-readiness:
-    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
-    if: >-
-      ${{ false && (
-        github.event_name != 'pull_request'
-      ) }}
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: development
     env:
-      STORAGE_ENDPOINT: ${{ vars.OBJECT_STORAGE_ENDPOINT || 'https://fly.storage.tigris.dev' }}
+      STORAGE_ENDPOINT: ${{ vars.OBJECT_STORAGE_ENDPOINT }}
       STORAGE_REGION: ${{ vars.OBJECT_STORAGE_REGION || 'auto' }}
       STORAGE_KEY: ${{ secrets.OBJECT_STORAGE_ACCESS_KEY_ID }}
       STORAGE_SECRET: ${{ secrets.OBJECT_STORAGE_SECRET_ACCESS_KEY }}
@@ -72,25 +68,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Resolver credencial Fly API
-        uses: ./.github/actions/resolve-managed-credential
-        with:
-          credential-id: fly-api-dev-deploy
-          consumer: github-actions:fly-dev
-          export-env: FLY_TOKEN
-          vault-name: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-          azure-client-id: ${{ vars.CCP_AZURE_CLIENT_ID_DEV }}
-          azure-tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
-          azure-subscription-id: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
-          evidence-path: audit/reqsys-backup-provider-readiness-credential-resolution.json
-
       - name: Detect configured secret names
         id: config
         shell: bash
         run: |
           set -euo pipefail
           present=()
-          [[ -n "${FLY_TOKEN:-}" ]] && present+=(FLY_API_TOKEN)
+          [[ -n "${STORAGE_ENDPOINT:-}" ]] && present+=(OBJECT_STORAGE_ENDPOINT)
           [[ -n "${STORAGE_KEY:-}" ]] && present+=(OBJECT_STORAGE_ACCESS_KEY_ID)
           [[ -n "${STORAGE_SECRET:-}" ]] && present+=(OBJECT_STORAGE_SECRET_ACCESS_KEY)
           [[ -n "${STORAGE_BUCKET:-}" ]] && present+=(OBJECT_STORAGE_BUCKET)
@@ -107,18 +91,6 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q restic
           python -m pip install --disable-pip-version-check awscli
-          curl -fsSL https://fly.io/install.sh | sh -s 0.4.49
-          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
-
-      - name: Probe Fly credentials
-        id: fly
-        shell: bash
-        run: |
-          result=skipped
-          if [[ "${{ steps.config.outputs.configured }}" == true ]]; then
-            if FLY_API_TOKEN="$FLY_TOKEN" fly auth whoami >/dev/null 2>&1; then result=pass; else result=fail; fi
-          fi
-          echo "result=$result" >> "$GITHUB_OUTPUT"
 
       - name: Probe private S3-compatible bucket
         id: r2
@@ -154,7 +126,6 @@ jobs:
           python scripts/evaluate_backup_provider_readiness.py \
             --required "$REQUIRED_SECRETS" \
             --present "${{ steps.config.outputs.present }}" \
-            --fly-probe "${{ steps.fly.outputs.result }}" \
             --r2-probe "${{ steps.r2.outputs.result }}" \
             --restic-probe "${{ steps.restic.outputs.result }}" \
             --run-url "$RUN_URL" \
