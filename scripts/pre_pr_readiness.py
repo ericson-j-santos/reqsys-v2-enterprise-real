@@ -262,8 +262,8 @@ def candidate_pytests(files: list[str], root: Path) -> list[str]:
     return sorted(candidates)
 
 
-SCRIPT_FILE_REFERENCE_RE = re.compile(r"scripts/[A-Za-z0-9_./-]+\\.py")
-BACKEND_IMPORT_RE = re.compile(r"(?m)^\\s*(?:from\\s+app(?:\\.|\\s)|import\\s+app(?:\\.|\\s|$))")
+SCRIPT_FILE_REFERENCE_RE = re.compile(r"scripts/[A-Za-z0-9_./-]+\.py")
+BACKEND_IMPORT_RE = re.compile(r"(?m)^\s*(?:from\s+app(?:\.|\s)|import\s+app(?:\.|\s|$))")
 
 
 def targeted_tests_need_backend_profile(targeted: list[str], root: Path) -> bool:
