@@ -70,6 +70,8 @@ const handlers = [
   { pattern: /\/api\/v1\/qualidade-ia\/resumo/, body: { score_geral: 88, status: 'ok' } },
   { pattern: /\/api\/v1\/hub-lowcode\/integracoes\/historico/, body: { configurado: true, eventos: [], total: 0 } },
   { pattern: /\/api\/v1\/requisitos$/, body: [] },
+  { pattern: /\/api\/v1\/agile-runtime\/work-items$/, body: [] },
+  { pattern: /\/api\/v1\/rastreabilidade\/matriz/, body: { linhas: [], total: 0 } },
   { pattern: /\/api\/v1\/relatorios\/ssrs\/health$/, body: { status: 'ok' } },
   { pattern: /\/api\/v1\/relatorios\/ssrs\/status$/, body: { online: true } },
   { pattern: /\/api\/v1\/relatorios\/ssrs$/, body: [] },
