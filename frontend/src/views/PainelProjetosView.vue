@@ -13,6 +13,9 @@
     </header>
 
     <v-alert v-if="erro" type="error" variant="tonal" closable>{{ erro }}</v-alert>
+    <v-alert v-else-if="itensSemProjeto" type="warning" variant="tonal">
+      {{ itensSemProjeto }} item(ns) de execução ainda não aparecem no portfólio porque não possuem projeto/repositório vinculado.
+    </v-alert>
 
     <div class="metrics">
       <article><v-icon icon="mdi-briefcase-outline"/><strong>{{ projetos.length }}</strong><span>ativos</span></article>
@@ -22,7 +25,7 @@
     </div>
 
     <section class="portfolio-card">
-      <div class="section-title"><div><h2>Panorama do portfólio</h2><p>Dados consolidados do ReqSys e do Agile Execução.</p></div><span>Sincronizado {{ sincronizadoEm }}</span></div>
+      <div class="section-title"><div><h2>Panorama do portfólio</h2><p>Projetos atuais consolidados pelo repositório informado no Agile Execução.</p></div><span>Sincronizado {{ sincronizadoEm }}</span></div>
       <div class="portfolio-bar" role="img" aria-label="Distribuição da saúde dos projetos">
         <span class="ok" :style="{ flex: distribuicao.ritmo || 0.1 }"/><span class="warn" :style="{ flex: distribuicao.atencao || 0.1 }"/><span class="late" :style="{ flex: distribuicao.atrasado || 0.1 }"/><span class="done" :style="{ flex: distribuicao.concluido || 0.1 }"/>
       </div>
@@ -30,7 +33,7 @@
     </section>
 
     <section class="portfolio-card">
-      <div class="section-title"><div><h2>Projetos em andamento</h2><p>{{ projetosFiltrados.length }} projetos encontrados</p></div><v-chip size="small" color="info">Origem: ReqSys</v-chip></div>
+      <div class="section-title"><div><h2>Projetos em andamento</h2><p>{{ projetosFiltrados.length }} projetos encontrados</p></div><v-chip size="small" color="info">Origem: execução atual</v-chip></div>
       <div class="project-table-wrap">
         <table class="project-table">
           <thead><tr><th>Projeto</th><th>Responsável</th><th>Progresso</th><th>Próximo marco</th><th>Ambiente</th><th>Situação</th></tr></thead>
@@ -48,13 +51,13 @@
       </div>
       <article v-if="projetoSelecionado" class="project-detail">
         <div><h3>{{ projetoSelecionado.name }}</h3><p>{{ projetoSelecionado.summary || 'Sem resumo publicado.' }}</p></div>
-        <dl><div><dt>Origem</dt><dd>{{ projetoSelecionado.origin }}</dd></div><div><dt>Última sincronização</dt><dd>{{ formatarData(projetoSelecionado.updatedAt) }}</dd></div><div><dt>Planner task</dt><dd>{{ projetoSelecionado.plannerTaskId || 'Não vinculada' }}</dd></div><div><dt>Correlação</dt><dd>{{ projetoSelecionado.correlationId || 'Não informada' }}</dd></div></dl>
+        <dl><div><dt>Origem</dt><dd>{{ projetoSelecionado.origin }}</dd></div><div><dt>Última sincronização</dt><dd>{{ formatarData(projetoSelecionado.updatedAt) }}</dd></div><div><dt>Itens / requisitos</dt><dd>{{ projetoSelecionado.workItems }} / {{ projetoSelecionado.requirements }}</dd></div><div><dt>Branch</dt><dd>{{ projetoSelecionado.branch || 'Não vinculada' }}</dd></div><div><dt>Issue / PR</dt><dd>{{ projetoSelecionado.changeId || 'Não vinculada' }}</dd></div><div><dt>Planner task</dt><dd>{{ projetoSelecionado.plannerTaskId || 'Não vinculada' }}</dd></div><div><dt>Correlação</dt><dd>{{ projetoSelecionado.correlationId || 'Não informada' }}</dd></div></dl>
         <a v-if="projetoSelecionado.evidenceUrl" :href="projetoSelecionado.evidenceUrl" target="_blank" rel="noreferrer">Abrir evidência ↗</a>
       </article>
     </section>
 
     <section class="portfolio-card">
-      <div class="section-title"><div><h2>Soluções em destaque</h2><p>Capacidades agrupadas pelo sistema informado no requisito.</p></div></div>
+      <div class="section-title"><div><h2>Soluções em destaque</h2><p>Capacidades dos requisitos ligados aos projetos atuais.</p></div></div>
       <div class="solutions"><article v-for="solucao in solucoes" :key="solucao.name"><div><strong>{{ solucao.name }}</strong><small>{{ solucao.projects }} projeto(s) · {{ solucao.owner }}</small></div><div class="progress-cell"><v-progress-linear :model-value="solucao.progress" color="success" height="8" rounded/><span>{{ solucao.progress }}%</span></div></article></div>
     </section>
   </section>
@@ -66,7 +69,7 @@ import { api } from '../services/api'
 import { buildPulsoPortfolio } from '../services/painelProjetos'
 
 const ambiente = (import.meta.env.VITE_APP_ENVIRONMENT || 'DEV').toUpperCase()
-const projetos = ref([]), solucoes = ref([]), busca = ref(''), selecionado = ref(null), erro = ref(''), carregando = ref(false), sincronizado = ref(null)
+const projetos = ref([]), solucoes = ref([]), busca = ref(''), selecionado = ref(null), erro = ref(''), carregando = ref(false), sincronizado = ref(null), itensSemProjeto = ref(0)
 const projetosFiltrados = computed(() => { const q = busca.value?.trim().toLocaleLowerCase('pt-BR'); return q ? projetos.value.filter(p => `${p.name} ${p.code} ${p.owner} ${p.solution}`.toLocaleLowerCase('pt-BR').includes(q)) : projetos.value })
 const projetoSelecionado = computed(() => projetos.value.find(p => p.id === selecionado.value))
 const progressoMedio = computed(() => projetos.value.length ? Math.round(projetos.value.reduce((s,p) => s + p.progress, 0) / projetos.value.length) : 0)
@@ -82,7 +85,7 @@ async function carregar() {
   try {
     const [req, work, trace] = await Promise.all([api.get('/v1/requisitos'), api.get('/v1/agile-runtime/work-items'), api.get('/v1/rastreabilidade/matriz', { params: { limit: 100 } })])
     const result = buildPulsoPortfolio(payload(req), payload(work), payload(trace)?.linhas || [], ambiente)
-    projetos.value = result.projects; solucoes.value = result.solutions; selecionado.value ||= projetos.value[0]?.id || null; sincronizado.value = new Date().toISOString()
+    projetos.value = result.projects; solucoes.value = result.solutions; itensSemProjeto.value = result.unlinkedWorkItems; selecionado.value = projetos.value.some(p => p.id === selecionado.value) ? selecionado.value : projetos.value[0]?.id || null; sincronizado.value = new Date().toISOString()
   } catch (e) { erro.value = e.response?.data?.detail || 'Não foi possível consolidar as fontes do Painel de projetos.' }
   finally { carregando.value = false }
 }
