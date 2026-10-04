@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Hardening HTTP e compatibilidade de health checks da API",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-03",
+  "updated_at": "2026-10-03",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_http_hardening.py",
+      "backend/tests/test_main_critical_paths.py"
+    ],
+    "evidence_contract": "Os aliases /health/live e /health/ready preservam compatibilidade operacional; readiness falha fechado quando o banco esta indisponivel; correlation/request ID e headers defensivos sao propagados sem substituir os contratos /api/runtime existentes."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/http-hardening-health-compat.requirements.md",
+    "implementation": [
+      "backend/app/main.py",
+      "backend/app/middleware/observability.py"
+    ],
+    "tests": [
+      "backend/tests/test_http_hardening.py",
+      "backend/tests/test_main_critical_paths.py"
+    ],
+    "pull_request": "#25"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "backend-http-hardening-health"
+  },
+  "acceptance_criteria": [
+    "GET /health/live retorna liveness 200 sem depender do banco.",
+    "GET /health/ready retorna 200 quando o banco esta disponivel e 503 quando indisponivel.",
+    "X-Correlation-ID ou X-Request-ID e propagado para X-Correlation-Id e X-Request-ID.",
+    "Respostas recebem headers defensivos; HSTS somente em HTTPS.",
+    "Logs de 401/403 incluem correlation_id sem expor segredo.",
+    "Contratos atuais /api/runtime/readiness e /api/runtime/liveness permanecem inalterados.",
+    "Pre-PR Readiness passa no HEAD exato com behind_by=0."
+  ]
+}

@@ -201,6 +201,11 @@ function protectBlocks(template) {
       blocks.push(block)
       return token
     })
+    .replace(/<v-icon\b[^>]*>[\s\S]*?<\/v-icon>/giu, (block) => {
+      const token = `__REQSYS_LANG_BLOCK_${blocks.length}__`
+      blocks.push(block)
+      return token
+    })
     .replace(/<!--[\s\S]*?-->/g, (block) => {
       const token = `__REQSYS_LANG_BLOCK_${blocks.length}__`
       blocks.push(block)

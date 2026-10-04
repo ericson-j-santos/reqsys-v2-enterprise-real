@@ -114,3 +114,12 @@ def test_governed_merge_materializa_validacao_pos_merge_nos_dois_caminhos() -> N
     assert "merge_sha: result.data.sha" in text
     assert "head_sha: triggerHeadSha" in text
     assert "head_sha: headSha" in text
+
+def test_recovered_draft_is_promoted_to_ready_before_any_merge() -> None:
+    text = _text()
+    block = text.split('auto-merge-after-governed-queue:', maxsplit=1)[1].split('  governed-pr-check:', maxsplit=1)[0]
+    assert "labelNames.includes('ci:recuperado')" in block
+    assert "markPullRequestReadyForReview" in block
+    assert "pullRequestId: currentDraft.node_id" in block
+    assert "Merge: não executado neste ciclo" in block
+    assert block.index("markPullRequestReadyForReview") < block.index("github.rest.pulls.merge({")
