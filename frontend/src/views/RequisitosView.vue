@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-requisitos">
     <div class="page-header">
       <div>
         <h1>Requisitos</h1>
@@ -8,14 +8,14 @@
         </p>
       </div>
       <div class="header-actions">
-        <v-tooltip text="Recarrega a listagem atual de requisitos" location="top">
+        <v-tooltip text="Recarrega a listagem atual de requisitos" location="top" aria-label="Recarrega a listagem atual de requisitos">
           <template #activator="{ props }">
             <v-btn v-bind="props" variant="outlined" prepend-icon="mdi-refresh" :loading="store.carregando" @click="carregar">
               Atualizar
             </v-btn>
           </template>
         </v-tooltip>
-        <v-tooltip text="Abre o formulário para registrar uma nova solicitação" location="top">
+        <v-tooltip text="Abre o formulário para registrar uma nova solicitação" location="top" aria-label="Abre o formulário para registrar uma nova solicitação">
           <template #activator="{ props }">
             <v-btn v-bind="props" color="amber" prepend-icon="mdi-plus" @click="dialog = true">
               Novo requisito
@@ -44,7 +44,7 @@
       <div class="filter-header">
         <div>
           <strong>Analítico de requisitos</strong>
-          <div class="muted filter-subtitle">Filtros aplicados por clique no dashboard ou seleção manual.</div>
+          <div class="muted filter-subtitle">Filtros aplicados por clique no painel ou seleção manual. Clique em uma linha para ver detalhes.</div>
         </div>
         <v-chip v-if="temFiltroAtivo" size="small" color="amber" variant="tonal">Filtro ativo</v-chip>
       </div>
@@ -53,7 +53,7 @@
         <v-col cols="12" sm="6" md="3">
           <v-select
             v-model="filtros.status"
-            label="Status"
+            label="Situação"
             variant="outlined"
             density="compact"
             clearable
@@ -108,15 +108,49 @@
     </v-alert>
 
     <v-skeleton-loader v-if="store.carregando" type="table" />
-    <v-data-table v-else :headers="headers" :items="requisitosFiltrados" item-value="id" class="table-card requisitos-table">
+    <v-data-table
+      v-else
+      :headers="headers"
+      :items="requisitosFiltrados"
+      item-value="id"
+      class="table-card requisitos-table requisitos-table-clicavel"
+      @click:row="abrirDetalhe"
+    >
       <template v-slot:[`item.status`]="{ item }">
-        <v-tooltip text="Situação atual do requisito no fluxo operacional" location="top">
+        <v-tooltip text="Situação atual do requisito no fluxo operacional" location="top" aria-label="Situação atual do requisito no fluxo operacional">
           <template #activator="{ props }">
             <v-chip v-bind="props" size="small" :color="corStatus(item.status)">{{ item.status }}</v-chip>
           </template>
         </v-tooltip>
       </template>
     </v-data-table>
+
+    <v-dialog v-model="detalheDialog" width="640">
+      <v-card v-if="detalhe">
+        <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+          <span>{{ detalhe.titulo }}</span>
+          <v-chip size="small" :color="corStatus(detalhe.status)">{{ detalhe.status }}</v-chip>
+        </v-card-title>
+        <v-card-text>
+          <div class="muted mb-3">{{ detalhe.codigo }}</div>
+          <p class="detalhe-descricao">{{ detalhe.descricao }}</p>
+          <v-row class="mt-2">
+            <v-col cols="6" sm="4"><div class="muted">Urgência</div><div>{{ detalhe.urgencia }}</div></v-col>
+            <v-col cols="6" sm="4"><div class="muted">Área</div><div>{{ detalhe.area }}</div></v-col>
+            <v-col cols="6" sm="4"><div class="muted">Sistema</div><div>{{ detalhe.sistema }}</div></v-col>
+            <v-col cols="6" sm="4"><div class="muted">Solicitante</div><div>{{ detalhe.solicitante }}</div></v-col>
+            <v-col cols="6" sm="4">
+              <div class="muted">Impacto regulatório</div>
+              <div>{{ detalhe.impacto_regulatorio ? 'Sim' : 'Não' }}</div>
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="detalheDialog = false">Fechar</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="dialog" width="760">
       <v-card>
@@ -127,7 +161,7 @@
         <v-card-text>
           <v-row>
             <v-col cols="12" md="6">
-              <v-tooltip text="Resumo curto e objetivo do requisito" location="top">
+              <v-tooltip text="Resumo curto e objetivo do requisito" location="top" aria-label="Resumo curto e objetivo do requisito">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-text-field v-model="form.titulo" label="Título" variant="outlined" />
@@ -136,7 +170,7 @@
               </v-tooltip>
             </v-col>
             <v-col cols="12" md="6">
-              <v-tooltip text="Prioridade usada na triagem e ordenação do backlog" location="top">
+              <v-tooltip text="Prioridade usada na triagem e ordenação do backlog" location="top" aria-label="Prioridade usada na triagem e ordenação do backlog">
                 <template #activator="{ props }">
                   <div v-bind="props">
                     <v-select v-model="form.urgencia" label="Urgência" variant="outlined" :items="['baixa', 'media', 'alta', 'critica']" />
@@ -146,7 +180,7 @@
             </v-col>
           </v-row>
 
-          <v-tooltip text="Explique a necessidade de negócio e o impacto esperado" location="top">
+          <v-tooltip text="Explique a necessidade de negócio e o impacto esperado" location="top" aria-label="Explique a necessidade de negócio e o impacto esperado">
             <template #activator="{ props }">
               <div v-bind="props">
                 <v-textarea v-model="form.descricao" label="Descrição" variant="outlined" rows="4" />
@@ -197,13 +231,16 @@ import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRequisitosStore } from '../stores/requisitos'
 import axios from 'axios'
+import { requireProviderNeutralRuntimeUrl } from '../services/runtimeUrlPolicy'
 import { criarQueryFiltrosRequisitos, filtrarRequisitos, normalizarFiltrosRequisitos, possuiFiltroAtivo } from '../utils/filtrosRequisitos'
 
 const store = useRequisitosStore()
 const route = useRoute()
 const router = useRouter()
-const dialog = ref(false)
+const dialog = ref(String(route.query.acao || '') === 'novo')
 const salvando = ref(false)
+const detalheDialog = ref(false)
+const detalhe = ref(null)
 const filtros = reactive(normalizarFiltrosRequisitos(route.query))
 
 const form = reactive({ titulo: '', descricao: '', urgencia: 'media', area: '', sistema: '', solicitante: '' })
@@ -212,7 +249,7 @@ const ia = reactive({ carregando: false, erro: '', justificativa: '', urgenciaSu
 const headers = [
   { title: 'Código', key: 'codigo' },
   { title: 'Título', key: 'titulo' },
-  { title: 'Status', key: 'status' },
+  { title: 'Situação', key: 'status' },
   { title: 'Urgência', key: 'urgencia' },
   { title: 'Área', key: 'area' },
 ]
@@ -238,7 +275,10 @@ onMounted(carregar)
 
 watch(
   () => route.query,
-  (query) => Object.assign(filtros, normalizarFiltrosRequisitos(query)),
+  (query) => {
+    Object.assign(filtros, normalizarFiltrosRequisitos(query))
+    if (String(query.acao || '') === 'novo') dialog.value = true
+  },
 )
 
 function carregar() { store.listar() }
@@ -248,6 +288,10 @@ function limparFiltros() {
   sincronizarQuery()
 }
 function corStatus(status) { return ({ recebido: 'blue', em_analise: 'orange', aprovado: 'green', rejeitado: 'red' })[status] || 'grey' }
+function abrirDetalhe(_event, { item } = {}) {
+  detalhe.value = item?.raw ?? item ?? null
+  if (detalhe.value) detalheDialog.value = true
+}
 
 async function salvar() {
   salvando.value = true
@@ -265,7 +309,10 @@ async function assistenteIA() {
   ia.justificativa = ''
   ia.urgenciaSugerida = ''
   try {
-    const base = import.meta.env.VITE_API_URL || '/api'
+    const base = requireProviderNeutralRuntimeUrl(
+      import.meta.env.VITE_API_URL || '/api',
+      'VITE_API_URL',
+    )
     const [resDescricao, resUrgencia] = await Promise.allSettled([
       axios.post(`${base}/v1/ia/sugerir-descricao`, { titulo: form.titulo, area: form.area, sistema: form.sistema }),
       axios.post(`${base}/v1/ia/classificar-urgencia`, { titulo: form.titulo, descricao: form.descricao || form.titulo }),
@@ -295,12 +342,15 @@ async function assistenteIA() {
 <style scoped>
 .requisitos-subtitle { max-width: 58ch; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.summary-card { padding: 16px; }
-.summary-value { font-size: 30px; font-weight: 800; color: var(--accent); }
-.summary-filter, .filter-subtitle { font-size: 12px; }
-.filter-card { padding: 16px; }
+.summary-card { padding: var(--space-lg); }
+.summary-value { font-size: var(--font-size-display); font-weight: 800; color: var(--accent); }
+.summary-filter, .filter-subtitle { font-size: var(--font-size-sm); }
+.filter-card { padding: var(--space-lg); }
 .filter-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .filter-actions { display: flex; justify-content: flex-end; }
+.requisitos-table-clicavel :deep(tbody tr) { cursor: pointer; }
+.requisitos-table-clicavel :deep(tbody tr:hover) { background: rgba(var(--v-theme-on-surface), 0.06); }
+.detalhe-descricao { white-space: pre-wrap; }
 @media (max-width: 720px) {
   .header-actions, .filter-actions { justify-content: stretch; }
   .header-actions :deep(.v-btn), .filter-actions :deep(.v-btn) { width: 100%; }

@@ -1,0 +1,1 @@
+PR #1594: implementação inicial criada; validação funcional real ainda pendente.

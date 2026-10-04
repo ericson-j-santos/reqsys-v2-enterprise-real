@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Authorized exact-main post-merge validation dispatch",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-26",
+  "updated_at": "2026-09-26",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Gateway aceita somente /reqsys run main-post-merge-current-main, captura main SHA e despacha main-post-merge-validation.yml com commit_sha exatamente igual ao SHA capturado."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/main-post-merge-authorized-dispatch.requirements.md",
+    "workflow": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "target_workflow": ".github/workflows/main-post-merge-validation.yml",
+    "issue": "#1705"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false,
+    "scope": "github-actions-dispatch"
+  },
+  "acceptance_criteria": [
+    "Comando exato e estático no gateway.",
+    "Target workflow e modo são fixos.",
+    "commit_sha enviado ao workflow é o SHA corrente capturado da main.",
+    "Run despachado é revalidado por ID, URL, event e head SHA.",
+    "Rota não depende de runner self-hosted.",
+    "Pre-PR Readiness verde no HEAD exato com behind_by=0."
+  ]
+}

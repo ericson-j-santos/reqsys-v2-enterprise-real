@@ -121,3 +121,32 @@ Enquanto o backend não estiver disponível, a tela usa fallback local sem crede
 | Segurança | Garantir ausência de segredos no JSON de resposta. |
 | E2E | Exibir cards e tabela de conectores em `/monitoramento-operacional`. |
 | Governança | Bloquear capability crítica sem configuração válida. |
+
+---
+
+## 6. Métricas operacionais Prometheus
+
+### `GET /api/connectors/metrics`
+
+Alias versionado: `GET /v1/connectors/metrics`.
+
+Retorna `text/plain; version=0.0.4` com métricas agregadas do Connection Broker:
+
+- `reqsys_connection_broker_capabilities_total`;
+- `reqsys_connection_broker_capabilities_by_status_total{status="..."}`;
+- `reqsys_connection_broker_capabilities_by_criticality_total{criticality="..."}`;
+- `reqsys_connection_broker_human_confirmation_required_total`;
+- `reqsys_connection_broker_audit_events_total`.
+
+### Segurança e cardinalidade
+
+- Os endpoints são somente leitura.
+- Não são exportados nomes de usuário, credenciais, tokens, detalhes de auditoria, payloads ou ações sugeridas.
+- Labels são limitadas a status e criticidade e são sanitizadas para barras, aspas e quebras de linha.
+- As famílias usam agregados, evitando cardinalidade por capability, usuário ou `correlation_id`.
+
+### Evidência
+
+- Teste xUnit: `backend-dotnet/tests/ReqSys.Api.Tests/ConnectionBrokerMetricsTests.cs`.
+- Contrato preventivo: `tests/test_connection_broker_metrics_contract.py`.
+

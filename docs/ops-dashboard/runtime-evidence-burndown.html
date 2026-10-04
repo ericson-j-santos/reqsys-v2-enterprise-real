@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Runtime Evidence Burndown</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --blue:#38bdf8; --green:#22c55e; --yellow:#f59e0b; --red:#ef4444; --border:#334155; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:24px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,#111827,#1e293b); }
+    main { max-width:1180px; margin:0 auto; padding:24px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+    .card { border:1px solid var(--border); background:var(--panel); border-radius:14px; padding:18px; box-shadow:0 10px 24px rgba(0,0,0,.25); }
+    .label, .small { color:var(--muted); }
+    .value { font-size:28px; font-weight:700; margin:8px 0; }
+    .status { display:inline-block; padding:5px 9px; border-radius:999px; font-weight:700; font-size:12px; }
+    .active, .low { background:rgba(34,197,94,.16); color:var(--green); border:1px solid rgba(34,197,94,.45); }
+    .medium { background:rgba(245,158,11,.16); color:var(--yellow); border:1px solid rgba(245,158,11,.45); }
+    .high { background:rgba(239,68,68,.16); color:var(--red); border:1px solid rgba(239,68,68,.45); }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { border-bottom:1px solid var(--border); padding:12px; text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; }
+    code { color:#dbeafe; }
+    a { color:var(--blue); }
+    pre { white-space:pre-wrap; word-break:break-word; background:#020617; padding:12px; border-radius:10px; border:1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Runtime Evidence Burndown</h1>
+    <p class="small">Visualização estática do contrato <code>runtime-evidence-burndown.json</code> para acompanhar evolução, gaps e próximos incrementos.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card"><div class="label">Score atual</div><div id="current" class="value">-</div></div>
+      <div class="card"><div class="label">Alvo</div><div id="target" class="value">-</div></div>
+      <div class="card"><div class="label">Gap restante</div><div id="gap" class="value">-</div></div>
+      <div class="card"><div class="label">Confiança</div><div id="confidence" class="value">-</div></div>
+    </section>
+    <section class="card">
+      <h2>Dimensões</h2>
+      <table><thead><tr><th>Dimensão</th><th>Atual</th><th>Alvo</th><th>Gap</th><th>Risco</th><th>Próxima ação</th></tr></thead><tbody id="dimensions"></tbody></table>
+    </section>
+    <section class="card">
+      <h2>Histórico</h2>
+      <table><thead><tr><th>Timestamp</th><th>Score</th><th>Evento</th></tr></thead><tbody id="history"></tbody></table>
+    </section>
+    <section class="card">
+      <h2>Contrato bruto</h2>
+      <pre id="raw">{}</pre>
+    </section>
+  </main>
+  <script>
+    const DATA_PATH = './data/runtime-evidence-burndown.json';
+    const fallback = { overall:{ current_score:0, target_score:0, remaining_gap:0, confidence_level:'low' }, dimensions:[], history:[] };
+    function badge(value) { const v = String(value || 'medium'); return `<span class="status ${v}">${v}</span>`; }
+    async function loadData() {
+      try { const response = await fetch(DATA_PATH, { cache:'no-store' }); if (!response.ok) throw new Error('HTTP ' + response.status); return { available:true, data: await response.json(), error:null }; }
+      catch (error) { return { available:false, data:fallback, error:error.message }; }
+    }
+    async function render() {
+      const result = await loadData();
+      const payload = result.data || fallback;
+      const overall = payload.overall || fallback.overall;
+      document.getElementById('current').textContent = `${overall.current_score ?? 0}%`;
+      document.getElementById('target').textContent = `${overall.target_score ?? 0}%`;
+      document.getElementById('gap').textContent = `${overall.remaining_gap ?? 0} p.p.`;
+      document.getElementById('confidence').innerHTML = badge(overall.confidence_level);
+      document.getElementById('dimensions').innerHTML = (payload.dimensions || []).map((d) => `<tr><td><code>${d.id}</code><div class="small">${d.label || ''}</div></td><td>${d.current_percent}%</td><td>${d.target_percent}%</td><td>${d.gap_percent} p.p.</td><td>${badge(d.risk)}</td><td>${d.next_action || '-'}</td></tr>`).join('') || '<tr><td colspan="6">Nenhuma dimensão publicada.</td></tr>';
+      document.getElementById('history').innerHTML = (payload.history || []).map((h) => `<tr><td>${h.timestamp || '-'}</td><td>${h.score ?? '-'}</td><td>${h.event || '-'}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum histórico publicado.</td></tr>';
+      document.getElementById('raw').textContent = JSON.stringify({ available: result.available, error: result.error, payload }, null, 2);
+    }
+    render();
+  </script>
+</body>
+</html>

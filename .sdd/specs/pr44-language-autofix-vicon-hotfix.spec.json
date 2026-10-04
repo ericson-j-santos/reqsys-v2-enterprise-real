@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Correção pós-merge do autofix de linguagem do PR #44",
+  "increment_type": "hotfix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-03",
+  "updated_at": "2026-10-03",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/scripts/fix-user-facing-language.test.mjs",
+      "frontend/scripts/validate-user-facing-language.test.mjs"
+    ],
+    "evidence_contract": "O autofix preserva identificadores técnicos em v-icon, o validador ignora esses identificadores e continua validando texto humano adjacente, e a Arquitetura Viva usa um identificador de ícone válido."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pr44-language-autofix-vicon-hotfix.requirements.md",
+    "implementation": [
+      "frontend/src/views/ArquiteturaVivaView.vue",
+      "frontend/scripts/fix-user-facing-language.mjs",
+      "frontend/scripts/validate-user-facing-language.mjs"
+    ],
+    "tests": [
+      "frontend/scripts/fix-user-facing-language.test.mjs",
+      "frontend/scripts/validate-user-facing-language.test.mjs"
+    ],
+    "pull_request": "#2223",
+    "origin_pull_request": "#44"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "frontend-language-autofix-hotfix"
+  }
+}

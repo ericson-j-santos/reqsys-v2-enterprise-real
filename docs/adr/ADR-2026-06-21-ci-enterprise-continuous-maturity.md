@@ -2,78 +2,47 @@
 
 ## Status
 
-Proposto para validação em PR.
+Consolidado na arquitetura atual do ReqSys.
 
 ## Contexto
 
-Os pipelines do ReqSys vinham apresentando dois sintomas críticos:
+O incremento original do PR #70 foi criado para reduzir tempo até feedback, regressões intermitentes e reruns sem causa raiz. A branch histórica acumulou depois alterações de segurança e interface que não pertencem ao escopo principal.
 
-1. tempo elevado até ficarem verdes;
-2. regressões intermitentes mesmo após correções pontuais.
-
-Esses sintomas indicam falhas estruturais típicas de esteiras sem determinismo suficiente: dependências instáveis, testes flaky, excesso de E2E bloqueante, falta de isolamento, ausência de observabilidade e ausência de política explícita para transformar falhas recorrentes em guardrails.
+Na reconciliação de 2026-10-04, o objetivo original já está materializado na `main` em versões mais evoluídas. A decisão permanece válida, mas não é seguro restaurar os workflows antigos por cima das superfícies atuais.
 
 ## Decisão
 
-Adotar uma arquitetura de CI em camadas para maturidade enterprise contínua:
+Manter uma arquitetura de CI em camadas, com responsabilidades distintas:
 
-| Camada | Workflow | Bloqueia PR | Objetivo |
+| Camada | Superfície canônica atual | Bloqueia PR | Objetivo |
 |---|---|---:|---|
-| Guardrails determinísticos | `ci-enterprise-fast.yml` | Sim | Detectar instabilidade, insegurança e desvio de governança antes de testes caros |
-| Backend fast | `ci-enterprise-fast.yml` | Sim | Ruff, unitários e build/testes rápidos |
-| Frontend fast | `ci-enterprise-fast.yml` | Sim | Lint, typecheck, unitários e build |
-| Full regression | `ci-enterprise-regression.yml` | Não por padrão | E2E completo, cobertura, segurança e regressão noturna/manual |
-| Observabilidade | `ci-enterprise-observability.yml` | Indireto | Relatórios de maturidade, falhas recorrentes, flaky rate e tempo até verde |
+| Prontidão antecipada | `Pre-PR Readiness Gate` | Sim | Falhar cedo no HEAD exato antes dos checks caros |
+| Fast path | `CI Enterprise Fast` | Sim | Admission controller, guardrails e validações rápidas |
+| CI principal | `CI — ReqSys v2 Enterprise` | Sim | Validação aplicável completa por perfil |
+| Regressão ampla | `CI Enterprise Regression` | Não por padrão | Regressão nightly/manual e evidências de cobertura/segurança |
+| Observabilidade | `CI Observability` | Não substitui gates | Duração e sinais operacionais de CI |
+| Merge | `Governed Merge Queue` | Sim | Revalidar SHA, mergeabilidade e workflows obrigatórios |
 
 ## Regras canônicas
 
-1. Todo PR deve passar pelo CI rápido.
-2. Full regression deve rodar nightly, manualmente ou em release.
-3. Falha recorrente não deve ser tratada apenas com rerun.
-4. Cada falha recorrente deve gerar:
-   - teste preventivo;
-   - guardrail;
-   - registro em documentação viva;
-   - item de monitoramento operacional.
-5. Produção deve continuar bloqueada por gates de segurança:
-   - autenticação desligada;
-   - CORS com `*`;
-   - JWT sem validação real de issuer/audience/assinatura;
-   - segredo literal versionado;
-   - auditoria sem rastreabilidade.
-6. Frontend pode expor perfis/e-mails demonstrativos, mas não pode versionar senhas demo. Senhas devem ser provisionadas por mecanismo seguro, ambiente controlado ou credencial corporativa.
+1. O fast path deve continuar associado ao HEAD atual e não pode reutilizar admissão de SHA anterior.
+2. Falha recorrente não é resolvida apenas com rerun: deve gerar causa raiz, teste preventivo ou guardrail quando aplicável.
+3. A regressão ampla não deve alongar desnecessariamente o caminho crítico de cada PR.
+4. Observabilidade de CI não substitui check obrigatório.
+5. Merge deve permanecer protegido por estabilidade do SHA e política de workflows atuais.
+6. Dependências e runtimes devem usar versões explícitas compatíveis com os manifests atuais.
+7. Guardrails devem reduzir falso positivo sem relaxar segurança em runtime/configuração produtiva.
+8. Workflows paralelos com a mesma função não devem ser recriados quando existir superfície canônica equivalente.
 
-## Consequências positivas
+## Reconciliação do PR #70
 
-- Redução do tempo médio para feedback no PR.
-- Menor custo de rerun.
-- Separação entre validação rápida e regressão ampla.
-- Maior previsibilidade de merge.
-- Base para indicadores reais de maturidade.
-- Menor chance de regressão silenciosa.
-- Redução de exposição de segredos em artefatos frontend.
+Não são restaurados:
 
-## Riscos
+- `.github/workflows/ci-enterprise-observability.yml`, substituído pelo canônico `.github/workflows/ci-observability.yml`;
+- mudanças antigas de login Vue/Angular, fora do escopo do CI e em superfícies removidas/evoluídas;
+- `security-strong-guardrails.yml` e scanner associado, pois segurança hoje é tratada pelas superfícies canônicas de Security Baseline/Specialized Scanners e governança atual;
+- versões históricas de `ci.yml`, `ci-enterprise-fast.yml`, `ci-enterprise-regression.yml` ou `ci_enterprise_guardrails.py`, pois a `main` contém implementações posteriores.
 
-| Risco | Mitigação |
-|---|---|
-| Guardrails detectarem legado inseguro | Tratar achado como dívida técnica evidenciada, não mascarar status |
-| Workflow novo conflitar com scripts existentes | Implementação defensiva: detecta frontend/backend antes de executar |
-| E2E completo continuar lento | Rodar no workflow de regressão, não no fast path de PR |
-| Status parecer avançado sem evidência | Diferenciar estado alvo de estado atual até CI verde e métricas coletadas |
-| Remoção de senhas demo afetar fluxo manual de demonstração | Manter seleção de perfil/e-mail e documentar provisionamento seguro da senha |
+## Consequência
 
-## Critérios de aceite
-
-- Branch com workflows novos criada.
-- PR aberto em draft.
-- CI fast executável.
-- Regressão nightly/manual configurada.
-- Observabilidade publica artifact Markdown.
-- Guardrails geram relatório JSON e Markdown.
-- Documentação viva atualizada.
-- Senhas demo hardcoded removidas de frontend runtime.
-
-## Decisão final
-
-O ReqSys passa a tratar CI como plataforma governada, não como coleção de jobs isolados.
+O trabalho legítimo do #70 é preservado como decisão arquitetural e contrato verificável, sem reintroduzir código/workflows antigos que criariam duplicação, conflito ou regressão de governança.

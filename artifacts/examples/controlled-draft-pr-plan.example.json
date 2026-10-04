@@ -1,0 +1,27 @@
+{
+  "mode": "controlled-draft-pr",
+  "enabled": false,
+  "original_pr": 129,
+  "original_pr_open": true,
+  "original_mergeable": false,
+  "gates_passed": true,
+  "replacement_branch": "bot/recovery-pr129-clean",
+  "replacement_pr": {
+    "draft": true,
+    "base": "main",
+    "title": "docs(product): definir shell do usuário final v2",
+    "auto_merge": false
+  },
+  "original_pr_mutation": {
+    "comment": true,
+    "close": false
+  },
+  "blocked_actions": [
+    "merge",
+    "close_original_pr",
+    "deploy",
+    "secret_mutation",
+    "branch_protection_mutation"
+  ],
+  "human_review_required": true
+}

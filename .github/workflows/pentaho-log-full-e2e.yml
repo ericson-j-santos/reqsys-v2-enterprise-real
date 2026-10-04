@@ -1,0 +1,176 @@
+name: Pentaho Log Full E2E
+
+on:
+  push:
+    branches:
+      - test/pentaho-log-full-e2e-20260915
+    paths:
+      - ".github/workflows/pentaho-log-full-e2e.yml"
+      - "tools/pentaho_log_pipeline/e2e_full_hosted.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Preparar ODBC e dependências Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! odbcinst -q -d 2>/dev/null | grep -Fq '[ODBC Driver 18 for SQL Server]'; then
+            curl -fsSLo "$RUNNER_TEMP/packages-microsoft-prod.deb" \
+              https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+            sudo dpkg -i "$RUNNER_TEMP/packages-microsoft-prod.deb"
+            sudo apt-get update
+            sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+          fi
+          odbcinst -q -d
+          python -m pip install --disable-pip-version-check -r tools/pentaho_log_pipeline/requirements.txt
+
+      - name: Iniciar SQL Server descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          pw="ReqSys-Pentaho-E2E-$(openssl rand -hex 12)!Aa1"
+          echo "::add-mask::$pw"
+          echo "E2E_SQL_PASSWORD=$pw" >> "$GITHUB_ENV"
+          docker run -d --name pentaho-log-e2e-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$pw" \
+            -p 1433:1433 \
+            mcr.microsoft.com/mssql/server:2019-latest
+
+      - name: Instalar contrato SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            sqlcmd_path="$(docker exec pentaho-log-e2e-sql sh -lc \
+              'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then echo /opt/mssql-tools18/bin/sqlcmd; elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then echo /opt/mssql-tools/bin/sqlcmd; fi' \
+              2>/dev/null || true)"
+            if [ -n "$sqlcmd_path" ] && docker exec pentaho-log-e2e-sql "$sqlcmd_path" \
+              -S localhost -U sa -P "$E2E_SQL_PASSWORD" -C -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQLCMD_PATH=$sqlcmd_path" >> "$GITHUB_ENV"
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs pentaho-log-e2e-sql 2>&1 | tail -100
+              exit 1
+            fi
+            sleep 2
+          done
+          docker exec pentaho-log-e2e-sql "$sqlcmd_path" \
+            -S localhost -U sa -P "$E2E_SQL_PASSWORD" -C \
+            -Q "CREATE DATABASE pentaho_log_e2e"
+          docker exec -i pentaho-log-e2e-sql "$sqlcmd_path" \
+            -S localhost -U sa -P "$E2E_SQL_PASSWORD" -C \
+            -d pentaho_log_e2e -b \
+            < tools/pentaho_log_pipeline/sql/001_pentaho_log_pipeline.sql
+          connection="Driver={ODBC Driver 18 for SQL Server};Server=127.0.0.1,1433;Database=pentaho_log_e2e;UID=sa;PWD=$E2E_SQL_PASSWORD;Encrypt=yes;TrustServerCertificate=yes"
+          echo "::add-mask::$connection"
+          echo "PENTAHO_LOG_SQLSERVER_CONNECTION=$connection" >> "$GITHUB_ENV"
+
+      - name: Extrair Pentaho PDI 9.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='ghcr.io/homebrew/core/kettle:9.4.0.0-343'
+          docker pull --platform linux/amd64 "$image"
+          cid="$(docker create --platform linux/amd64 "$image" /bin/true)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker export "$cid" -o "$RUNNER_TEMP/kettle-bottle.tar"
+          mkdir -p "$RUNNER_TEMP/kettle-runtime"
+          tar -xf "$RUNNER_TEMP/kettle-bottle.tar" \
+            -C "$RUNNER_TEMP/kettle-runtime" \
+            kettle/9.4.0.0-343/libexec
+          kettle_home="$RUNNER_TEMP/kettle-runtime/kettle/9.4.0.0-343/libexec"
+          test -x "$kettle_home/kitchen.sh"
+          echo "KETTLE_HOME=$kettle_home" >> "$GITHUB_ENV"
+
+      - name: Iniciar API sintética
+        shell: bash
+        run: |
+          set -euo pipefail
+          pacote='tools/gerador_pentaho/pacote'
+          node "$pacote/src/servidor-simulado.js" > "$RUNNER_TEMP/pentaho-log-e2e-api.log" 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/saude >/dev/null; then
+              echo "API_SINTETICA_OK tentativa=$attempt"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/pentaho-log-e2e-api.log"
+          exit 1
+
+      - name: Preparar raízes isoladas
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="$RUNNER_TEMP/pentaho-log-e2e/raw"
+          archive="$RUNNER_TEMP/pentaho-log-e2e/archive"
+          evidence="$RUNNER_TEMP/pentaho-log-e2e/evidence"
+          mkdir -p "$raw" "$archive" "$evidence"
+          echo "PENTAHO_LOG_ROOT=$raw" >> "$GITHUB_ENV"
+          echo "PENTAHO_LOG_DIR=$raw" >> "$GITHUB_ENV"
+          echo "PENTAHO_LOG_ARCHIVE_ROOT=$archive" >> "$GITHUB_ENV"
+          echo "PENTAHO_E2E_EVIDENCE_DIR=$evidence" >> "$GITHUB_ENV"
+          echo "PENTAHO_E2E_MARKER=E2E_PENTAHO_LOG_${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+          echo "PENTAHO_JOB=$GITHUB_WORKSPACE/tools/gerador_pentaho/pacote/pentaho/jobs/jb_treino_criar_dossies.kjb" >> "$GITHUB_ENV"
+
+      - name: Executar Kitchen → fila → worker → archive → lease/DLQ → expurgo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/pentaho_log_pipeline/e2e_full_hosted.py \
+            2>&1 | tee "$PENTAHO_E2E_EVIDENCE_DIR/full-e2e.log"
+          grep -Fq 'E2E_PENTAHO_LOG_FULL_PASS' "$PENTAHO_E2E_EVIDENCE_DIR/full-e2e.log"
+
+      - name: Capturar API como evidência
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "${PENTAHO_E2E_EVIDENCE_DIR:-$RUNNER_TEMP/pentaho-log-e2e/evidence}"
+          cp "$RUNNER_TEMP/pentaho-log-e2e-api.log" \
+            "${PENTAHO_E2E_EVIDENCE_DIR:-$RUNNER_TEMP/pentaho-log-e2e/evidence}/api.log" 2>/dev/null || true
+
+      - name: Encerrar dependências descartáveis
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "$SERVER_PID" 2>/dev/null || true
+          fi
+          docker rm -f pentaho-log-e2e-sql >/dev/null 2>&1 || true
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pentaho-log-full-e2e-${{ github.run_id }}
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/pentaho-log-e2e/evidence

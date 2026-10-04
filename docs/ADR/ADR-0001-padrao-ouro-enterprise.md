@@ -1,4 +1,13 @@
+---
+status: ReqSys / Plataforma Corporativa
+date: 2026-06-22
+deciders: Arquitetura / Engenharia
+context: ReqSys / Plataforma Corporativa
+version: 1.0.0
+---
+
 # ADR-0001 — Adoção do Padrão Ouro Enterprise
+
 
 ## Status
 
@@ -56,5 +65,5 @@ Uma demanda ou PR é considerado aderente quando possui:
 ## Relações
 
 - `docs/governanca/PADRAO_OURO_ENTERPRISE.md`
-- `.github/PULL_REQUEST_TEMPLATE.md`
+- `.github/pull_request_template.md`
 - `.github/workflows/governanca-padrao-ouro.yml`

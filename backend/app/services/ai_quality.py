@@ -6,7 +6,8 @@ from sqlalchemy import func
 
 from app.models.ai_quality import QualidadeIASnapshot
 from app.models.auditoria import AuditoriaEvento
-from app.models.requisito import Requisito
+from app.repositories.requisito_repository import RequisitoRepository
+from app.services.requisitos_metricas import calcular_metricas_requisitos
 
 
 def _safe_pct(value: int, total: int) -> float:
@@ -20,25 +21,13 @@ def _clip(score: float) -> float:
 
 
 def calcular_resumo_qualidade_ia(db):
-    total = db.query(Requisito).count()
+    metricas_requisitos = calcular_metricas_requisitos(db)
+    total = metricas_requisitos['total']
+    aprovados = metricas_requisitos['aprovados']
+    em_analise = metricas_requisitos['em_analise']
+    pendentes = metricas_requisitos['pendentes']
 
-    aprovados = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).in_(['aprovado', 'aprovados', 'concluido', 'concluida']))
-        .count()
-    )
-    em_analise = (
-        db.query(Requisito)
-        .filter(func.lower(Requisito.status).like('%analise%'))
-        .count()
-    )
-    pendentes = max(total - aprovados, 0)
-
-    cobertura_dados = (
-        db.query(Requisito)
-        .filter(func.length(func.coalesce(Requisito.descricao, '')) >= 40)
-        .count()
-    )
+    cobertura_dados = RequisitoRepository(db).contar_com_descricao_minima(40)
 
     sete_dias_atras = datetime.now(timezone.utc) - timedelta(days=7)
     acao_normalizada = func.lower(func.coalesce(AuditoriaEvento.acao, ''))
@@ -92,16 +81,29 @@ def calcular_resumo_qualidade_ia(db):
     if not recomendacoes:
         recomendacoes.append('Manter rotina de monitoramento continuo com snapshots diarios de qualidade.')
 
+    metricas = {
+        'acuracia': acuracia,
+        'relevancia': relevancia,
+        'consistencia': consistencia,
+        'seguranca': seguranca,
+        'cobertura_dados': cobertura,
+    }
+    guardrail_gaps = [
+        {
+            'metrica': nome,
+            'valor_atual': valor,
+            'meta': 100.0,
+            'gap': _clip(100.0 - valor),
+        }
+        for nome, valor in metricas.items()
+        if valor < 100.0
+    ]
+    guardrail_passou = score_geral == 100.0 and not guardrail_gaps and incidentes_criticos == 0
+
     return {
         'status': status,
         'score_geral': score_geral,
-        'metricas': {
-            'acuracia': acuracia,
-            'relevancia': relevancia,
-            'consistencia': consistencia,
-            'seguranca': seguranca,
-            'cobertura_dados': cobertura,
-        },
+        'metricas': metricas,
         'contexto': {
             'amostra_total': total,
             'aprovados': aprovados,
@@ -110,8 +112,19 @@ def calcular_resumo_qualidade_ia(db):
             'incidentes_criticos_7d': incidentes_criticos,
         },
         'recomendacoes': recomendacoes,
+        'guardrail_100': {
+            'meta_score': 100.0,
+            'passou': guardrail_passou,
+            'bloqueante': not guardrail_passou,
+            'mensagem': (
+                'Qualidade IA em 100%. Manter monitoramento continuo.'
+                if guardrail_passou
+                else 'Qualidade IA abaixo de 100%. Nao mascarar o score; tratar gaps antes de considerar o guard rail aprovado.'
+            ),
+            'gaps': guardrail_gaps,
+        },
         'algoritmo': {
-            'versao': '1.0.0',
+            'versao': '1.1.0',
             'atualizado_em': datetime.now(timezone.utc).isoformat(),
         },
     }

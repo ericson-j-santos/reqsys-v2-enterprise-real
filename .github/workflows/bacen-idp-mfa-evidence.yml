@@ -1,0 +1,71 @@
+name: BACEN IdP MFA Evidence Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json"
+      - "scripts/validate_bacen_idp_mfa_evidence.py"
+      - ".github/workflows/bacen-idp-mfa-evidence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json"
+      - "scripts/validate_bacen_idp_mfa_evidence.py"
+      - ".github/workflows/bacen-idp-mfa-evidence.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-idp-mfa-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate BACEN-02 IdP MFA evidence contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_bacen_idp_mfa_evidence.py
+
+      - name: Validate contract
+        run: |
+          python scripts/validate_bacen_idp_mfa_evidence.py \
+            --input governance/bacen/IDP-MFA-EVIDENCE-CONTRACT.json \
+            --output artifacts/bacen/bacen-02-idp-mfa-evidence.json
+
+      - name: Validate output contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path("artifacts/bacen/bacen-02-idp-mfa-evidence.json").read_text(encoding="utf-8")
+          )
+          assert evidence["control_id"] == "BACEN-02"
+          assert evidence["structural_checks_passed"] is True
+          assert evidence["normalized_mfa_status"] in {"pending", "evidenced"}
+          assert evidence["production_touched"] is False
+          assert len(evidence["source_sha256"]) == 64
+          print("BACEN-02 IdP MFA evidence contract: valid")
+          PY
+
+      - name: Publish evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-02-idp-mfa-evidence
+          path: artifacts/bacen/bacen-02-idp-mfa-evidence.json
+          if-no-files-found: error
+          retention-days: 90
