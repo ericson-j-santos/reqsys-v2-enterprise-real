@@ -79,6 +79,7 @@ jobs:
       GOVERNED_WORKFLOW_NAMES: |
         Governance Quality Gates
         Governança Padrão Ouro
+        Linguagem simples - autocorreção governada
       OPTIONAL_WORKFLOW_NAMES: |
         NGINX Security Profile
       STALL_AFTER_SECONDS: '300'
@@ -258,11 +259,11 @@ jobs:
 
             function summarizeWorkflow({ name, runSummaries, strict }) {
               const matchingRuns = runSummaries.filter((run) => run.name === name);
-              const successfulRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
-              const failedRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion && !['success', 'skipped', 'neutral'].includes(run.conclusion));
-              const skippedRuns = matchingRuns.filter((run) => run.status === 'completed' && ['skipped', 'neutral'].includes(run.conclusion));
-              const activeRuns = matchingRuns.filter((run) => run.status !== 'completed');
               const latest = [...matchingRuns].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0] || null;
+              const successfulRuns = latest?.status === 'completed' && latest?.conclusion === 'success' ? [latest] : [];
+              const failedRuns = latest?.status === 'completed' && latest?.conclusion && !['success', 'skipped', 'neutral'].includes(latest.conclusion) ? [latest] : [];
+              const skippedRuns = latest?.status === 'completed' && ['skipped', 'neutral'].includes(latest?.conclusion) ? [latest] : [];
+              const activeRuns = latest && latest.status !== 'completed' ? [latest] : [];
 
               return {
                 name,
@@ -301,13 +302,15 @@ jobs:
                 const result = summarizeWorkflow({ name, runSummaries, strict: false });
 
                 if (result.matching_runs === 0) {
-                  governedSkips.push(`Governed workflow did not run on current head SHA: ${name}`);
-                } else if (result.active_runs > 0 && result.successful_runs === 0) {
+                  failures.push(`Governed workflow has no run on current head SHA: ${name}`);
+                } else if (result.active_runs > 0) {
                   pending.push(`Governed workflow still running on current head SHA: ${name}`);
-                } else if (result.successful_runs === 0 && result.failed_runs > 0) {
+                } else if (result.failed_runs > 0) {
                   failures.push(`Governed workflow failed on current head SHA: ${name}`);
-                } else if (result.successful_runs === 0 && result.skipped_runs > 0) {
-                  governedSkips.push(`Governed workflow completed as skipped or neutral on current head SHA: ${name}`);
+                } else if (result.skipped_runs > 0) {
+                  failures.push(`Governed workflow was skipped or neutral on current head SHA: ${name}`);
+                } else if (result.successful_runs === 0) {
+                  failures.push(`Governed workflow has no successful latest run on current head SHA: ${name}`);
                 }
 
                 return result;
