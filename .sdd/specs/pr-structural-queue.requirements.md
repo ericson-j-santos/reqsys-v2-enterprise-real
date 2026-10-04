@@ -42,3 +42,5 @@ Dentro da mesma classe, o PR mais antigo vem primeiro.
 - `CI Observability` usa `concurrency` por workflow de origem + HEAD e `cancel-in-progress: true`.
 - Workflows alterados devem usar referências externas de Actions fixadas por SHA.
 - A correção deve reduzir criação de runs inúteis sem relaxar nenhum gate obrigatório do PR.
+
+- O `PR Evidence Gate` não inicia no evento `pull_request`; ele nasce somente após o CI principal concluir no HEAD, evitando ocupar runner enquanto depende do próprio CI.
