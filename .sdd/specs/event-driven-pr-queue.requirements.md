@@ -18,3 +18,16 @@ Remover o ChatGPT/Work do caminho crítico da fila de PRs do ReqSys e fazer o pr
 10. Nenhum workflow ativo novo deve ser criado.
 11. Nenhuma etapa depende de ChatGPT Work ou de polling do chat.
 12. Merge continua protegido pelo Governed PR Automation e SHA exato.
+
+## Critérios de aceite
+
+- O caminho primário reage a workflow_run dos gates de CI sem esperar o cron.
+- O cron permanece apenas como watchdog.
+- O PR e o HEAD do evento são revalidados antes de qualquer mutação.
+- Eventos de SHA antigo não alteram labels nem disparam rerun.
+- Workflows pendentes não marcam o PR como recuperado.
+- Falhas técnicas elegíveis continuam indo para Ollama CI Triage e Worker Pool.
+- Mudanças materiais são notificadas pelo Teams quando a integração estiver configurada.
+- Merge permanece condicionado ao Governed Merge Queue e ao SHA exato.
+- Nenhuma etapa depende de ChatGPT Work.
+- Nenhum novo workflow ativo é criado.
