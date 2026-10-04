@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import re
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -13,9 +15,17 @@ class AriSqlValidationItem:
 
 
 class AriRuntimeSqlAdapter:
+    """Validação estática; nunca abre conexão nem executa SQL."""
+
+    _destructive = re.compile(
+        r'\b(delete|update|insert|drop|truncate|alter|create|grant|revoke)\b',
+        flags=re.IGNORECASE,
+    )
+
     def validate(self, sql: str, null_critical: int = 0, source_name: str = 'runtime-sql') -> dict:
         normalized = self._normalize(sql)
         items = [
+            self._validate_destructive(normalized),
             self._validate_count(normalized),
             self._validate_join(normalized),
             self._validate_filters(normalized),
@@ -27,23 +37,40 @@ class AriRuntimeSqlAdapter:
         return {
             'source_name': source_name,
             'adapter': 'AriRuntimeSqlAdapter',
+            'execution_mode': 'static_only',
+            'production_evidence': False,
+            'query_sha256': hashlib.sha256(normalized.encode('utf-8')).hexdigest(),
             'runtime_sql_score': score,
             'runtime_sql_ready': not blockers,
-            'validations': [item.__dict__ for item in items],
-            'blockers': [item.__dict__ for item in blockers],
+            'validations': [asdict(item) for item in items],
+            'blockers': [asdict(item) for item in blockers],
         }
 
     def _normalize(self, sql: str) -> str:
-        return ' '.join((sql or '').upper().split())
+        without_line_comments = re.sub(r'--.*$', '', str(sql or ''), flags=re.MULTILINE)
+        without_block_comments = re.sub(r'/\*[\s\S]*?\*/', '', without_line_comments)
+        return ' '.join(without_block_comments.upper().split())
+
+    def _validate_destructive(self, sql: str) -> AriSqlValidationItem:
+        match = self._destructive.search(sql)
+        if match:
+            return AriSqlValidationItem(
+                'DESTRUCTIVE_SQL',
+                'BLOCK',
+                0,
+                f'Comando potencialmente destrutivo detectado: {match.group(1).upper()}.',
+                'Usar somente análise estática e revisão humana.',
+            )
+        return AriSqlValidationItem('DESTRUCTIVE_SQL', 'VALIDADO', 100, 'Nenhum comando mutável detectado.', 'Manter análise sem execução.')
 
     def _validate_count(self, sql: str) -> AriSqlValidationItem:
         has_count = 'COUNT(' in sql or 'COUNT (' in sql
         return AriSqlValidationItem(
-            regra='COUNT_VALIDATION',
-            estado='VALIDADO' if has_count else 'PARCIAL',
-            score=96 if has_count else 82,
-            evidencia='Consulta possui checkpoint de volume.' if has_count else 'Consulta sem COUNT explicito no adapter.',
-            gap='Adicionar checkpoint COUNT antes/depois.' if not has_count else 'Persistir baseline real.',
+            'COUNT_VALIDATION',
+            'VALIDADO' if has_count else 'PARCIAL',
+            96 if has_count else 82,
+            'Checkpoint COUNT identificado.' if has_count else 'Consulta sem COUNT explícito.',
+            'Adicionar checkpoint COUNT quando o caso exigir reconciliação de volume.',
         )
 
     def _validate_join(self, sql: str) -> AriSqlValidationItem:
@@ -51,20 +78,20 @@ class AriRuntimeSqlAdapter:
         if joins >= 8:
             return AriSqlValidationItem('JOIN_CARDINALITY', 'FAIL', 45, 'Quantidade elevada de JOINs detectada.', 'Revisar cardinalidade e chaves.')
         if joins == 0:
-            return AriSqlValidationItem('JOIN_CARDINALITY', 'PARCIAL', 85, 'Consulta sem JOIN para validar cardinalidade.', 'Confirmar se a consulta deveria cruzar fontes.')
-        return AriSqlValidationItem('JOIN_CARDINALITY', 'VALIDADO', 94, 'JOINs detectados dentro do limite inicial.', 'Persistir baseline por dominio.')
+            return AriSqlValidationItem('JOIN_CARDINALITY', 'PARCIAL', 85, 'Consulta sem JOIN.', 'Confirmar se cruzamento de fontes é esperado.')
+        return AriSqlValidationItem('JOIN_CARDINALITY', 'VALIDADO', 94, 'JOINs abaixo do limite estático.', 'Medir cardinalidade real em ambiente controlado.')
 
     def _validate_filters(self, sql: str) -> AriSqlValidationItem:
         if ' WHERE ' not in f' {sql} ':
-            return AriSqlValidationItem('FILTER_ISOLATION', 'PARCIAL', 80, 'Consulta sem WHERE explicito.', 'Adicionar filtros auditaveis ou justificar full scan.')
-        return AriSqlValidationItem('FILTER_ISOLATION', 'VALIDADO', 94, 'Filtro identificado para isolamento operacional.', 'Medir impacto percentual por filtro.')
+            return AriSqlValidationItem('FILTER_ISOLATION', 'PARCIAL', 80, 'Consulta sem WHERE.', 'Justificar full scan ou adicionar filtros.')
+        return AriSqlValidationItem('FILTER_ISOLATION', 'VALIDADO', 94, 'Filtro identificado.', 'Medir impacto real por filtro.')
 
     def _validate_group_by(self, sql: str) -> AriSqlValidationItem:
         if 'GROUP BY' not in sql:
-            return AriSqlValidationItem('GROUP_BY_GRANULARITY', 'PARCIAL', 84, 'Consulta sem GROUP BY explicito.', 'Confirmar granularidade esperada.')
-        return AriSqlValidationItem('GROUP_BY_GRANULARITY', 'VALIDADO', 96, 'Granularidade explicita identificada.', 'Exibir dimensoes no drill-down.')
+            return AriSqlValidationItem('GROUP_BY_GRANULARITY', 'PARCIAL', 84, 'Consulta sem GROUP BY.', 'Confirmar granularidade esperada.')
+        return AriSqlValidationItem('GROUP_BY_GRANULARITY', 'VALIDADO', 96, 'Granularidade explícita identificada.', 'Validar dimensões contra a fonte real.')
 
     def _validate_nulls(self, null_critical: int) -> AriSqlValidationItem:
         if null_critical > 0:
-            return AriSqlValidationItem('NULL_CRITICAL', 'FAIL', 35, 'Null critico informado na validacao.', 'Corrigir origem, carga ou relacionamento.')
-        return AriSqlValidationItem('NULL_CRITICAL', 'VALIDADO', 97, 'Nenhum null critico informado.', 'Conectar catalogo de obrigatoriedade.')
+            return AriSqlValidationItem('NULL_CRITICAL', 'FAIL', 35, 'Null crítico informado.', 'Corrigir origem, carga ou relacionamento.')
+        return AriSqlValidationItem('NULL_CRITICAL', 'VALIDADO', 97, 'Nenhum null crítico informado ao adapter.', 'Conectar catálogo real de obrigatoriedade.')

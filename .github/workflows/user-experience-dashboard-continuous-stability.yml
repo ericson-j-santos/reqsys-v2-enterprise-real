@@ -1,0 +1,67 @@
+name: User Experience Dashboard Continuous Stability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 8 * * *"
+  pull_request:
+    paths:
+      - "scripts/build_user_experience_dashboard_continuous_stability.py"
+      - "tests/test_build_user_experience_dashboard_continuous_stability.py"
+      - ".github/workflows/user-experience-dashboard-continuous-stability.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: python -m py_compile scripts/build_user_experience_dashboard_continuous_stability.py
+      - name: Unit tests
+        run: python -m unittest tests/test_build_user_experience_dashboard_continuous_stability.py
+      - name: Build governed evidence
+        run: |
+          mkdir -p evidence
+          cat > evidence/history.json <<'JSON'
+          {"samples":[
+            {"classification":"UX_DASHBOARD_CONTINUOUS_RELIABILITY_CARD_OK","synchronized":true,"guardrails_ok":true,"card_count":1,"fingerprint":"stable-contract"},
+            {"classification":"UX_DASHBOARD_CONTINUOUS_RELIABILITY_CARD_OK","synchronized":true,"guardrails_ok":true,"card_count":1,"fingerprint":"stable-contract"},
+            {"classification":"UX_DASHBOARD_CONTINUOUS_RELIABILITY_CARD_OK","synchronized":true,"guardrails_ok":true,"card_count":1,"fingerprint":"stable-contract"}
+          ]}
+          JSON
+          echo '{"readiness":{"status":"preserved"},"production_ready":false}' > evidence/state.json
+          echo '{"production_ready":false}' > evidence/brief.json
+          python scripts/build_user_experience_dashboard_continuous_stability.py \
+            --history evidence/history.json \
+            --state evidence/state.json \
+            --brief evidence/brief.json \
+            --output evidence/indicator.json \
+            --state-output evidence/state-output.json \
+            --brief-output evidence/brief-output.json
+      - name: Validate guardrails
+        run: |
+          python - <<'PY'
+          import json
+          indicator = json.load(open('evidence/indicator.json', encoding='utf-8'))
+          state = json.load(open('evidence/state-output.json', encoding='utf-8'))
+          brief = json.load(open('evidence/brief-output.json', encoding='utf-8'))
+          assert indicator['status'] == 'UX_DASHBOARD_CONTINUOUS_STABILITY_STABLE'
+          assert indicator['mode'] == 'report-only'
+          assert indicator['production_blocker'] is False
+          assert indicator['human_approval_required'] is True
+          assert state['readiness'] == {'status': 'preserved'}
+          assert state['production_ready'] is False
+          assert brief['production_ready'] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-experience-dashboard-continuous-stability
+          path: evidence/
+          retention-days: 90

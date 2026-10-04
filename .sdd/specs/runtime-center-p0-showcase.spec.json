@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Runtime Operational Center P0 static showcase",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-22",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "O showcase estatico preserva health, timeline, indicadores, arquitetura e incidentes do conceito P0.",
+    "A pagina declara explicitamente que os dados sao ilustrativos e nao representam runtime atual.",
+    "O contrato JSON usa mode=illustrative e operational_evidence=false.",
+    "As fontes de evidencia real apontam para APIs operacionais atuais.",
+    "Nenhum estado estatico pode ser usado como autorizacao de merge, deploy ou promocao.",
+    "O teste preventivo fica verde no HEAD atual.",
+    "A branch fica behind_by=0 e sem conflitos antes do merge."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_runtime_center_p0_showcase.py"
+    ],
+    "tests": [
+      "tests/test_runtime_center_p0_showcase.py"
+    ],
+    "evidence_contract": "O Runtime Center P0 do PR #76 e preservado como showcase estatico, explicitamente separado da evidencia operacional real."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/runtime-center-p0-showcase.requirements.md",
+    "implementation": [
+      "docs/public-showcase/reqsys-linkedin/runtime-center/index.html",
+      "docs/public-showcase/reqsys-linkedin/runtime-center/runtime-center.css",
+      "docs/public-showcase/reqsys-linkedin/runtime-center/runtime-health.contract.json"
+    ],
+    "test": "tests/test_runtime_center_p0_showcase.py",
+    "pull_request": "#76"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "static-public-showcase"
+  }
+}

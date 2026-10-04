@@ -1,0 +1,55 @@
+# ReqSys Codex Local — configuração Continue (VS Code gratuito + Ollama)
+# Copie para ~/.continue/config.yaml ou importe via Continue > Settings > Open config.yaml
+name: ReqSys Codex Local
+version: 1.0.0
+schema: v1
+
+models:
+  - name: Qwen2.5 Coder (principal)
+    provider: ollama
+    model: qwen2.5-coder:7b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      temperature: 0.1
+      contextLength: 8192
+    requestOptions:
+      extraBodyProperties:
+        keep_alive: 10m
+
+  - name: DeepSeek Coder (fallback)
+    provider: ollama
+    model: deepseek-coder:6.7b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+    defaultCompletionOptions:
+      temperature: 0.1
+
+  - name: Qwen Autocomplete
+    provider: ollama
+    model: qwen2.5-coder:1.5b
+    apiBase: http://localhost:11434
+    roles:
+      - autocomplete
+    autocompleteOptions:
+      debounceDelay: 250
+      maxPromptTokens: 1024
+      onlyMyCode: true
+
+rules:
+  - name: ReqSys guard rails
+    rule: |
+      Atue como assistente de codificação do ReqSys v2 Enterprise.
+      Responda em português do Brasil. Não invente evidências.
+      Não solicite nem repita credenciais, tokens, senhas ou PII.
+      Prefira diff mínimo, testes focados e rastreabilidade com correlation_id.
+
+context:
+  - provider: code
+  - provider: docs
+  - provider: diff

@@ -1,0 +1,962 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/ci-lead-time-analytics.schema.json",
+  "title": "ReqSys CI Lead Time Analytics Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "repository",
+    "window_runs",
+    "completed_runs",
+    "success_rate_percent",
+    "failure_rate_percent",
+    "avg_seconds",
+    "p50_seconds",
+    "p95_seconds",
+    "max_seconds",
+    "baseline_incident_minutes",
+    "status",
+    "warnings",
+    "bottlenecks",
+    "workflow_stats"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.0\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "event_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "run_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "window_runs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "completed_runs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "success_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failure_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cancelled_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "skipped_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rerun_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "first_pass_success_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "success_rate_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "failure_rate_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "first_pass_success_rate_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "rerun_rate_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "avg_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p50_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p90_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p95_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "max_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "stddev_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cv_percent": {
+      "type": "number",
+      "minimum": 0
+    },
+    "avg_queue_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p95_queue_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "throughput": {
+      "$ref": "#/$defs/throughput"
+    },
+    "trend_comparison": {
+      "$ref": "#/$defs/trend_comparison"
+    },
+    "baseline_comparison": {
+      "$ref": "#/$defs/baseline_comparison"
+    },
+    "failure_pareto": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/failure_pareto_item"
+      }
+    },
+    "baseline_incident_minutes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "baseline_incident_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "warning"
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "bottlenecks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workflow_stat"
+      }
+    },
+    "workflow_stats": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workflow_stat"
+      }
+    },
+    "recent_completed_runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run_summary"
+      }
+    },
+    "pr_efficiency": {
+      "$ref": "#/$defs/pr_efficiency"
+    }
+  },
+  "$defs": {
+    "workflow_stat": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "runs",
+        "success_rate_percent",
+        "avg_seconds",
+        "p50_seconds",
+        "p95_seconds",
+        "max_seconds"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "failure_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "rerun_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "avg_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p50_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p90_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stddev_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cv_percent": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95_queue_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "run_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "name",
+        "event",
+        "status",
+        "duration_seconds",
+        "duration_minutes"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_sha": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "html_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "run_started_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "queue_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "execution_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration_minutes": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "throughput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_span_hours",
+        "runs_per_hour",
+        "runs_per_day"
+      ],
+      "properties": {
+        "window_span_hours": {
+          "type": "number",
+          "minimum": 0
+        },
+        "runs_per_hour": {
+          "type": "number",
+          "minimum": 0
+        },
+        "runs_per_day": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "window_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runs",
+        "success_rate_percent",
+        "failure_rate_percent",
+        "p50_seconds",
+        "p95_seconds",
+        "cv_percent"
+      ],
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "failure_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "p50_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cv_percent": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "trend_comparison": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "current": {
+          "$ref": "#/$defs/window_metrics"
+        },
+        "previous": {
+          "$ref": "#/$defs/window_metrics"
+        },
+        "delta": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "signals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "improved",
+              "stable",
+              "regressed"
+            ]
+          }
+        }
+      }
+    },
+    "baseline_comparison": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "available",
+        "mode",
+        "baseline_path"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "mode": {
+          "const": "report-only"
+        },
+        "baseline_path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "creates_gate": {
+          "type": "boolean"
+        },
+        "overall_signal": {
+          "type": "string",
+          "enum": [
+            "improved",
+            "stable",
+            "regressed",
+            "mixed"
+          ]
+        },
+        "causality": {
+          "type": "string"
+        },
+        "baseline": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "delta": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "quality": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            },
+            "speed": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            },
+            "variability": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "signals": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "quality": {
+              "$ref": "#/$defs/signal_map"
+            },
+            "speed": {
+              "$ref": "#/$defs/signal_map"
+            },
+            "variability": {
+              "$ref": "#/$defs/signal_map"
+            }
+          }
+        }
+      }
+    },
+    "signal_map": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "improved",
+          "stable",
+          "regressed"
+        ]
+      }
+    },
+    "failure_pareto_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "failures",
+        "share_percent",
+        "cumulative_share_percent"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "share_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "cumulative_share_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "pr_efficiency": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "available",
+        "mode",
+        "creates_gate",
+        "sample_prs",
+        "green_sample_prs",
+        "total_observed_ci_run_minutes",
+        "avg_observed_ci_run_minutes_per_pr",
+        "p50_latest_head_time_to_green_seconds",
+        "p90_latest_head_time_to_green_seconds",
+        "ci_fix_commit_proxy_percent",
+        "workflow_minutes_pareto",
+        "workflows_to_80_percent",
+        "baseline_sample_valid",
+        "sample_window",
+        "observed_pr_workflow_runs",
+        "rerun_workflow_runs",
+        "rerun_rate_percent"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "mode": {
+          "const": "report-only"
+        },
+        "creates_gate": {
+          "const": false
+        },
+        "sample_prs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "green_sample_prs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "incomplete_or_non_green_sample_prs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_observed_ci_run_minutes": {
+          "type": "number",
+          "minimum": 0
+        },
+        "avg_observed_ci_run_minutes_per_pr": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p50_observed_ci_run_minutes_per_pr": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p90_observed_ci_run_minutes_per_pr": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p50_latest_head_time_to_green_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p90_latest_head_time_to_green_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ci_fix_commit_proxy_prs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ci_fix_commit_proxy_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "workflow_minutes_pareto": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "minutes",
+              "share_percent",
+              "cumulative_share_percent"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "minutes": {
+                "type": "number",
+                "minimum": 0
+              },
+              "share_percent": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "cumulative_share_percent": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              }
+            }
+          }
+        },
+        "workflows_to_80_percent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "names"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "blocking_workflows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "semantics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "prs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "baseline_sample_valid": {
+          "type": "boolean"
+        },
+        "observed_pr_workflow_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rerun_workflow_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rerun_rate_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "sample_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "fixed_start_at",
+            "effective_start_at",
+            "end_at",
+            "effective_duration_minutes",
+            "target_min_prs",
+            "observed_prs",
+            "target_met",
+            "max_lookback_minutes"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "extended_low_activity",
+                "explicit",
+                "recent_prs_fallback"
+              ]
+            },
+            "fixed_start_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "effective_start_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "end_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "effective_duration_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "target_min_prs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "observed_prs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "target_met": {
+              "type": "boolean"
+            },
+            "max_lookback_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "fallback_after_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_age_days": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "selected_pr_numbers": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "merge_queue_reliability": {
+          "$ref": "#/$defs/merge_queue_reliability"
+        }
+      }
+    },
+    "merge_queue_reliability": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "available",
+        "mode",
+        "creates_gate",
+        "canary_e2e_observed",
+        "observation_reason",
+        "observed_merge_group_workflow_runs",
+        "queue_attempts",
+        "queue_wait_p50_seconds",
+        "queue_wait_p95_seconds",
+        "green_pr_but_queue_failed_count",
+        "requeue_pr_count",
+        "post_merge_cancelled_runs",
+        "post_merge_failed_pr_count"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "mode": {
+          "const": "report-only"
+        },
+        "creates_gate": {
+          "const": false
+        },
+        "canary_e2e_observed": {
+          "type": "boolean"
+        },
+        "observation_reason": {
+          "type": "string",
+          "enum": [
+            "merge_group_candidate_observed",
+            "no_merge_group_candidate_observed"
+          ]
+        },
+        "observed_merge_group_workflow_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queue_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queue_prs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queue_wait_p50_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "queue_wait_p95_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "queue_failure_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "green_pr_but_queue_failed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "green_pr_but_queue_failed_prs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "requeue_pr_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requeue_prs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "requeue_extra_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_observed_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_failure_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_failed_pr_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_merge_failed_prs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "queue_failure_causes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reliability_failure_cause"
+          }
+        },
+        "post_merge_failure_causes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reliability_failure_cause"
+          }
+        },
+        "post_merge_cancelled_runs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "reliability_failure_cause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow",
+        "conclusion",
+        "count"
+      ],
+      "properties": {
+        "workflow": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

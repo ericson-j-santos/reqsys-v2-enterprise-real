@@ -3,8 +3,11 @@ from app.services.ari_runtime_sql_adapter import AriRuntimeSqlAdapter
 from app.services.ari_staging_validator import AriStagingValidator
 
 
-def test_analytics_runtime_intelligence_snapshot(client):
-    resp = client.get('/v1/analytics-runtime-intelligence/snapshot')
+def test_analytics_runtime_intelligence_snapshot_falha_fechado_sem_evidencia_externa(client):
+    resp = client.get(
+        '/api/analytics-runtime-intelligence/snapshot',
+        headers={'X-Correlation-ID': 'corr-ari-test'},
+    )
 
     assert resp.status_code == 200
     payload = resp.json()
@@ -12,25 +15,22 @@ def test_analytics_runtime_intelligence_snapshot(client):
 
     data = payload['data']
     assert data['capability'] == 'Analytics Runtime Intelligence'
-    assert data['posicao_estrategica'] == 'Plataforma enterprise de inteligencia operacional auditavel'
+    assert data['correlation_id'] == 'corr-ari-test'
+    assert data['evidence_scope'] == 'repository_contract'
     assert 0 <= data['health_score'] <= 100
-    assert 0 <= data['confidence_score'] <= 100
-    assert len(data['validacoes']) == 10
-    assert data['draft_recomendado'] is False
-    assert data['production_ready'] is True
-    assert len(data['readiness_matrix']) >= 10
-    assert len(data['production_gaps']) >= 2
-    assert len(data['runtime_timeline']) >= 7
-    assert data['runtime_sql_validation']['runtime_sql_ready'] is True
-    assert data['staging_validation']['staging_ready'] is True
-    assert data['telemetry_validation']['telemetry_ready'] is True
-    assert data['lineage_validation']['lineage_ready'] is True
+    assert data['production_ready'] is False
+    assert data['draft_recomendado'] is True
+    assert data['runtime_sql_validation']['production_evidence'] is False
+    assert data['staging_validation']['staging_ready'] is False
+    assert data['telemetry_validation']['telemetry_ready'] is False
+    assert data['lineage_validation']['lineage_ready'] is False
+    assert any(item['bloqueia_producao'] for item in data['readiness_matrix'])
 
-    codigos = {item['codigo'] for item in data['validacoes']}
-    assert 'JOIN_CARDINALITY' in codigos
-    assert 'AI_GROUNDING' in codigos
-    assert any(gate['acao'] == 'BLOCK' for gate in data['guard_rails'])
-    assert data['figma']['status'] == 'aguardando_plano_figma'
+
+def test_alias_v1_preserva_contrato(client):
+    resp = client.get('/v1/analytics-runtime-intelligence/snapshot')
+    assert resp.status_code == 200
+    assert resp.json()['data']['production_ready'] is False
 
 
 def test_ari_validacoes_base_contem_scores_e_status_operacionais():
@@ -39,37 +39,33 @@ def test_ari_validacoes_base_contem_scores_e_status_operacionais():
     assert len(validacoes) == 10
     assert all(0 <= item['score'] <= 100 for item in validacoes)
     assert {item['status'] for item in validacoes}.issubset({'ok', 'warn', 'fail', 'block'})
-    assert _calcular_health_score(validacoes) == 92
+    assert 0 <= _calcular_health_score(validacoes) <= 100
 
 
-def test_ari_snapshot_tem_guard_rails_e_figma_pendente_com_evidencia_real():
-    snapshot = _snapshot_ari()
+def test_ari_snapshot_nao_promove_figma_sem_evidencia():
+    snapshot = _snapshot_ari('corr-figma')
 
-    assert snapshot['health_score'] == 92
-    assert snapshot['figma']['status'] == 'aguardando_plano_figma'
-    assert len(snapshot['guard_rails']) >= 6
-    assert {'regra': 'IA sem fonte ou sem grounding', 'acao': 'BLOCK'} in snapshot['guard_rails']
-
-
-def test_ari_readiness_layer_nao_tem_bloqueios_logicos_remanescentes():
-    snapshot = _snapshot_ari()
-    bloqueios = [item for item in snapshot['readiness_matrix'] if item['bloqueia_producao']]
-    estados = {item['estado'] for item in snapshot['readiness_matrix']}
-
-    assert not bloqueios
-    assert 'BLOQUEIO' not in estados
-    assert 'EVIDENCIA_AUSENTE' not in {item['estado'] for item in snapshot['staging_validation']['checks']}
-    assert 'Sem gaps bloqueantes no snapshot governado.' in snapshot['production_gaps']
-    assert snapshot['runtime_timeline'][-1]['estado'] == 'VALIDADO'
+    assert snapshot['figma']['status'] == 'evidence_pending'
+    assert snapshot['figma']['ready'] is False
+    assert snapshot['production_ready'] is False
 
 
-def test_runtime_sql_adapter_valida_consulta_com_baseline_inicial():
+def test_runtime_sql_adapter_valida_consulta_estatica_sem_promover_evidencia():
     sql = 'select count(*) total, status from requisitos where status is not null group by status'
     result = AriRuntimeSqlAdapter().validate(sql, null_critical=0)
 
     assert result['runtime_sql_ready'] is True
-    assert result['runtime_sql_score'] >= 90
+    assert result['execution_mode'] == 'static_only'
+    assert result['production_evidence'] is False
+    assert result['query_sha256']
     assert not result['blockers']
+
+
+def test_runtime_sql_adapter_bloqueia_comando_destrutivo():
+    result = AriRuntimeSqlAdapter().validate('delete from requisitos where id = 1')
+
+    assert result['runtime_sql_ready'] is False
+    assert any(item['regra'] == 'DESTRUCTIVE_SQL' for item in result['blockers'])
 
 
 def test_runtime_sql_adapter_bloqueia_null_critico():
@@ -79,20 +75,20 @@ def test_runtime_sql_adapter_bloqueia_null_critico():
     assert any(item['regra'] == 'NULL_CRITICAL' for item in result['blockers'])
 
 
-def test_staging_validator_default_usa_evidencia_governada_versionada():
+def test_staging_validator_default_falha_fechado():
     result = AriStagingValidator().validate()
-
-    assert result['staging_ready'] is True
-    assert result['blockers'] == []
-    assert result['evidence_artifact'] == 'docs/analytics-runtime-intelligence-report.html'
-
-
-def test_staging_validator_reprova_quando_evidencias_sao_removidas():
-    result = AriStagingValidator().validate(
-        base_url=None,
-        screenshot_captured=False,
-        smoke_deploy_ok=False,
-    )
 
     assert result['staging_ready'] is False
     assert len(result['blockers']) == 3
+
+
+def test_staging_validator_aprova_apenas_evidencia_explicitamente_fornecida():
+    result = AriStagingValidator().validate(
+        base_url='https://staging.example.com',
+        screenshot_captured=True,
+        smoke_deploy_ok=True,
+        evidence_artifact='artifact://ari/staging/readback',
+    )
+
+    assert result['staging_ready'] is True
+    assert result['blockers'] == []

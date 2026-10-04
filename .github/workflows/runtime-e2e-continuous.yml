@@ -1,0 +1,178 @@
+name: Runtime E2E Continuous — DEV
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-e2e-continuous.yml'
+      - 'scripts/planner_teams_runtime_e2e.mjs'
+      - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
+      - 'scripts/planner_teams_flow_state_oidc.py'
+      - 'tests/test_planner_teams_flow_state_oidc.py'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-e2e-continuous.yml'
+      - 'scripts/planner_teams_runtime_e2e.mjs'
+      - 'scripts/tests/planner_teams_runtime_e2e.test.mjs'
+      - 'scripts/planner_teams_flow_state_oidc.py'
+      - 'tests/test_planner_teams_flow_state_oidc.py'
+  schedule:
+    # 09:15 BRT (UTC-3), dias úteis.
+    - cron: '15 12 * * 1-5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-e2e-continuous-dev-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'runtime' }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contrato do harness E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout do SHA sob teste
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validar rastreabilidade do SHA
+        shell: bash
+        env:
+          EXPECTED_CHECKOUT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$EXPECTED_CHECKOUT_SHA"
+          observed_sha="$(GITHUB_SHA="$actual_sha" node -p 'process.env.GITHUB_SHA')"
+          test "$observed_sha" = "$actual_sha"
+
+      - name: Executar testes determinísticos do harness
+        run: node --test scripts/tests/planner_teams_runtime_e2e.test.mjs
+
+  planner-teams-runtime:
+    name: Planner → Teams — E2E contínuo DEV
+    needs: contract
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TARGET_ENVIRONMENT: dev
+      POWER_PLATFORM_TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      POWER_PLATFORM_CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      WSJF_DEV_PLAN_ID: ${{ vars.WSJF_DEV_PLAN_ID }}
+      WSJF_DEV_BUCKET_ID: ${{ vars.WSJF_DEV_BUCKET_ID }}
+      PLANNER_TEAMS_DEV_TEAM_ID: 07936381-2d94-41db-9f46-a7b28008caba
+      PLANNER_TEAMS_DEV_CHANNEL_ID: 19:ZW3ncXvFEGrJY-9yHd2MuFiRstJ8TQGmz2Fr_KUXqCI1@thread.tacv2
+      PLANNER_TEAMS_DATAVERSE_URL: https://orge9b920f1.crm2.dynamics.com
+      PLANNER_TEAMS_FLOW_STATE_EVIDENCE_PATH: audit/runtime-e2e/planner-teams/flow-state.json
+      PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS: '15'
+      PLANNER_TEAMS_POLL_SECONDS: '900'
+      PLANNER_TEAMS_RUN_POLL_INTERVAL_MS: '30000'
+      PLANNER_TEAMS_SETTLE_SECONDS: '45'
+      EVIDENCE_PATH: audit/runtime-e2e/planner-teams/acceptance.json
+
+    steps:
+      - name: Checkout do SHA implantado
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Autenticar ReqSys Enterprise por OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Resolver tokens Graph e Dataverse federados
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az account get-access-token --resource-type ms-graph --query accessToken -o tsv)"
+          dataverse_token="$(az account get-access-token --resource "$PLANNER_TEAMS_DATAVERSE_URL/" --query accessToken -o tsv)"
+          test -n "$token"
+          test -n "$dataverse_token"
+          echo "::add-mask::$token"
+          echo "::add-mask::$dataverse_token"
+          TOKEN="$token" python - <<'PY'
+          import base64, json, os
+          raw = os.environ['TOKEN'].split('.')[1]
+          raw += '=' * (-len(raw) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(raw).decode('utf-8'))
+          actual = claims.get('appid') or claims.get('azp')
+          expected = os.environ['POWER_PLATFORM_CLIENT_ID']
+          if actual != expected:
+              raise SystemExit('oidc_app_identity_mismatch')
+          print('OIDC_APP_ID_MATCH=true')
+          PY
+          echo "POWER_PLATFORM_GRAPH_ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "POWER_PLATFORM_DATAVERSE_ACCESS_TOKEN=$dataverse_token" >> "$GITHUB_ENV"
+
+      - name: Reconciliar cartão e garantir flows Planner → Teams ativos via Dataverse
+        run: |
+          python scripts/planner_teams_flow_state_oidc.py \
+            --output "$PLANNER_TEAMS_FLOW_STATE_EVIDENCE_PATH"
+
+      - name: Aguardar aquecimento dos gatilhos Planner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep "$PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS"
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Executar prova real Planner → Teams
+        shell: bash
+        env:
+          EXPECTED_EVIDENCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_EVIDENCE_SHA" ]; then
+            echo "::error::SHA efetivamente executado diverge do SHA esperado: actual=$actual_sha expected=$EXPECTED_EVIDENCE_SHA"
+            exit 42
+          fi
+          # A evidência fica vinculada ao checkout exato. O gate de jornada PC24x7
+          # comprova separadamente que esse mesmo SHA está publicado em DEV.
+          GITHUB_SHA="$actual_sha" node scripts/planner_teams_runtime_e2e.mjs
+          jq -e '.status == "passed" and .auth_mode == "oidc" and .checks.graph_auth_mode == "oidc" and .tokens_persisted == false' "$EVIDENCE_PATH" >/dev/null
+
+      - name: Publicar evidência auditável
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-e2e-planner-teams-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: audit/runtime-e2e/planner-teams/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Resumo operacional
+        if: always()
+        shell: bash
+        run: |
+          echo '## Runtime E2E — Planner → Teams DEV' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Disparo: ${{ github.event_name }}' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Ambiente: DEV' >> "$GITHUB_STEP_SUMMARY"
+          echo "- SHA efetivamente executado: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Autenticação Graph exigida: GitHub OIDC / Workload Identity Federation.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Timeout de observação: 900 s' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Política: tarefa normal é controle positivo; tarefa REQSYS-E2E-* deve permanecer ausente no Teams.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Sem login por device code; reconciliação limitada ao cartão do flow, sem reprovisionamento integral.' >> "$GITHUB_STEP_SUMMARY"

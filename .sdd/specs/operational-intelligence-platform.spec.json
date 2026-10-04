@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Operational Intelligence Platform",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-21",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "Os endpoints /monitoramento-operacional/runtime/health e /monitoramento-operacional/runtime/diagnostico permanecem registrados no FastAPI atual.",
+    "O diagnostico operacional produz score deterministico entre 0 e 100 e estados governados.",
+    "Estados degradado ou bloqueado geram acao que exige aprovacao.",
+    "Correlation ID e telemetria estruturada permanecem nas superficies canonicas atuais.",
+    "A UI operacional canonica permanece MonitoramentoOperacionalView.vue, sem restaurar RuntimeCenterView.vue historico.",
+    "Nao sao reintroduzidos workflow paralelo, DDL SQL Server cru ou retry generico fora da arquitetura atual.",
+    "Testes criticos do backend e contrato preventivo ficam verdes no HEAD atual.",
+    "A branch permanece behind_by=0, sem conflitos e com gates obrigatorios verdes."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_operational_intelligence_platform_contract.py"
+    ],
+    "tests": [
+      "tests/test_operational_intelligence_platform_contract.py",
+      "backend/tests/test_operational_intelligence_critical_paths.py"
+    ],
+    "evidence_contract": "O core do PR #74 permanece integrado nas superficies atuais de runtime intelligence, correlation, telemetry e FastAPI, sem restaurar implementacoes historicas duplicadas ou incompatíveis."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/operational-intelligence-platform.requirements.md",
+    "implementation": [
+      "backend/app/core/correlation.py",
+      "backend/app/core/telemetry.py",
+      "backend/app/models/operational_intelligence_models.py",
+      "backend/app/services/runtime_intelligence_service.py",
+      "backend/app/services/autonomous_operation_service.py",
+      "backend/app/api/operational_intelligence.py",
+      "backend/app/main.py",
+      "frontend/src/views/MonitoramentoOperacionalView.vue"
+    ],
+    "tests": [
+      "tests/test_operational_intelligence_platform_contract.py",
+      "backend/tests/test_operational_intelligence_critical_paths.py"
+    ],
+    "documentation": [
+      "docs/adr/ADR-022-operational-intelligence-platform.md",
+      "docs/monitoramento-operacional/operational-intelligence-platform.md",
+      "docs/runbooks/RUNBOOK-operational-intelligence-platform.md"
+    ],
+    "pull_request": "#74"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "operational-intelligence-consolidation"
+  }
+}

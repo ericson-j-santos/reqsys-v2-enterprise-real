@@ -1,0 +1,144 @@
+{
+  "info": {
+    "name": "ReqSys Runtime API v0.3.0",
+    "description": "Coleção Postman governada para prática GET/POST, Power Automate e runtime operacional do ReqSys.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": {
+      "major": 0,
+      "minor": 3,
+      "patch": 0
+    }
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://reqsys-api.fly.dev",
+      "type": "string"
+    },
+    {
+      "key": "correlationId",
+      "value": "reqsys-postman-0001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Runtime Health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{correlationId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/runtime/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "runtime", "health"]
+        },
+        "description": "Verifica saúde operacional do runtime."
+      }
+    },
+    {
+      "name": "Runtime Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{correlationId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/runtime/dashboard",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "runtime", "dashboard"]
+        },
+        "description": "Consulta sinais operacionais consolidados do dashboard runtime."
+      }
+    },
+    {
+      "name": "Runtime Analytics",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{correlationId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/runtime/analytics",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "runtime", "analytics"]
+        },
+        "description": "Consulta analytics operacional e evidências."
+      }
+    },
+    {
+      "name": "Consultar Requisito Mockado",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{correlationId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/requisitos/REQ-001",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "requisitos", "REQ-001"]
+        },
+        "description": "Consulta requisito mockado por identificador."
+      }
+    },
+    {
+      "name": "Criar Requisito Mockado",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{correlationId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"titulo\": \"Registrar requisito via Postman\",\n  \"descricao\": \"Fluxo de recebimento POST para praticar estrutura de dados.\",\n  \"tipo\": \"funcional\",\n  \"prioridade\": \"media\",\n  \"origem\": \"postman\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/requisitos",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "requisitos"]
+        },
+        "description": "Envia requisito mockado conforme contrato OpenAPI v0.3.0."
+      }
+    }
+  ]
+}

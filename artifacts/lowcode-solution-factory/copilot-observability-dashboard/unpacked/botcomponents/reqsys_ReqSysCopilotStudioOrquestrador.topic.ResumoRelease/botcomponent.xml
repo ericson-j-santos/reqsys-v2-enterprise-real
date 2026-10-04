@@ -1,0 +1,11 @@
+<botcomponent schemaname="reqsys_ReqSysCopilotStudioOrquestrador.topic.ResumoRelease">
+  <componenttype>9</componenttype>
+  <description>Consolidar evidencias e gerar recomendacao go/no-go de release, sem decidir automaticamente.</description>
+  <iscustomizable>0</iscustomizable>
+  <name>ResumoRelease</name>
+  <parentbotid>
+    <schemaname>reqsys_ReqSysCopilotStudioOrquestrador</schemaname>
+  </parentbotid>
+  <statecode>0</statecode>
+  <statuscode>1</statuscode>
+</botcomponent>

@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "environment": "dev",
+  "provider": "ntfy_signed_ed25519",
+  "topic": "reqsys-dev-locator-1651e9182d6e1c939fa6672c1248c9d532716fe7",
+  "public_key_b64": "Ox1kIxgrkNTG96NI69Obi/W+ZiZz2jxw3DLCQMvwMcM=",
+  "allowed_url_suffix": ".trycloudflare.com",
+  "required_runtime_contract": "2.0.0",
+  "required_endpoints": [
+    "/api/health",
+    "/api/runtime/health",
+    "/api/runtime/readiness",
+    "/api/runtime/build-info"
+  ]
+}

@@ -1,0 +1,99 @@
+name: User Experience Recovery Remediation Advisory
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_recovery_remediation_advisory.py"
+      - "tests/test_build_ux_recovery_remediation_advisory.py"
+      - ".github/workflows/user-experience-recovery-remediation-advisory.yml"
+  workflow_run:
+    workflows: ["User Experience Recovery Regression Trend"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-recovery-remediation-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test advisory builder
+        run: |
+          python -m py_compile scripts/build_ux_recovery_remediation_advisory.py
+          python -m unittest tests/test_build_ux_recovery_remediation_advisory.py -v
+      - name: Smoke deterministic remediation contract
+        run: |
+          mkdir -p .tmp/ux-remediation
+          cat > .tmp/ux-remediation/dashboard.json <<'JSON'
+          {"cards":[{"id":"ux-recovery-standard-gold-readiness","confidence_percent":70}]}
+          JSON
+          cat > .tmp/ux-remediation/regression.json <<'JSON'
+          {"status":"UX_RECOVERY_REGRESSION_DETECTED","regression_detected":true,"alerts":["recovery_rate_drop","recovery_time_increase"],"deltas":{"recovery_rate":-8,"recovery_seconds":7},"latest":{"source_run_id":"123","source_head_sha":"abcdef123"}}
+          JSON
+          python scripts/build_ux_recovery_remediation_advisory.py \
+            --dashboard .tmp/ux-remediation/dashboard.json \
+            --regression .tmp/ux-remediation/regression.json \
+            --output .tmp/ux-remediation/output/ops-dashboard.json
+          python - <<'PY'
+          import json
+          dashboard = json.load(open('.tmp/ux-remediation/output/ops-dashboard.json', encoding='utf-8'))
+          card = next(item for item in dashboard['cards'] if item['id'] == 'ux-recovery-standard-gold-readiness')
+          assert card['regression']['highest_severity'] == 'high'
+          assert card['regression']['recommendations'][0]['alert'] == 'recovery_rate_drop'
+          assert card['regression']['production_blocker'] is False
+          print('ux remediation advisory smoke: OK')
+          PY
+
+  publish-post-merge-advisory:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download regression trend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ux-recovery-regression-trend
+          path: .tmp/ux-remediation/source
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+      - name: Build prioritized advisory dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          dashboard="$(find .tmp/ux-remediation/source -name ops-dashboard.json -print -quit)"
+          regression="$(find .tmp/ux-remediation/source -name ux-recovery-regression-report.json -print -quit)"
+          test -n "$dashboard"
+          test -n "$regression"
+          mkdir -p .tmp/ux-remediation/output
+          python scripts/build_ux_recovery_remediation_advisory.py \
+            --dashboard "$dashboard" \
+            --regression "$regression" \
+            --output .tmp/ux-remediation/output/ops-dashboard.json
+          cp "$regression" .tmp/ux-remediation/output/ux-recovery-regression-report.json
+      - name: Publish advisory remediation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-recovery-remediation-advisory
+          path: .tmp/ux-remediation/output
+          retention-days: 90

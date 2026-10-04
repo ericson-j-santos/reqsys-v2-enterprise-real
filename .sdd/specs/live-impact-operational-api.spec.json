@@ -1,0 +1,24 @@
+{
+  "feature_name": "live-impact-operational-api",
+  "project": "ReqSys Produto",
+  "created_at": "2026-09-29",
+  "updated_at": "2026-09-29",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Expõe a análise de impacto sobre o functional_traceability_graph vivo como API operacional autenticada e read-only, sem promover o dataset histórico a fonte operacional.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_traceability_graph.py",
+      "backend/tests/test_change_impact_analysis.py"
+    ],
+    "pre_pr_tests": [
+      "backend/tests/test_traceability_graph.py",
+      "backend/tests/test_change_impact_analysis.py"
+    ],
+    "evidence_contract": "FastAPI TestClient real + SQLite real de teste exercitam requisito persistido, projeção do grafo vivo e Impact Engine; replay confirma ausência de mutação e controles negativos cobrem evidência rejeitada, seed inválido, 404 e autenticação."
+  }
+}

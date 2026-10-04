@@ -1,31 +1,14 @@
-# Operational Sync Engine v1 — Retorno Visual
+# ARI / Operational Sync — evidência Figma
 
-## FigJam gerado
+Status atual: **evidence_pending**.
 
-- URL editável: https://www.figma.com/online-whiteboard/create-diagram/d86af794-d0fa-4767-93c5-0f59d3d91cfc?utm_source=chatgpt&utm_content=edit_in_figjam&oai_id=v1%2Fnesi2ECrBtYtr3PurXfLuOG4R5yfweqajVFFgCbhwbFYjVIzn6m3B6&request_id=f2cdc5dc-e198-44f5-94fc-ba7f2c4434a1
-- Expiração da imagem temporária: 2026-06-29T03:41:24Z
-- Estado: gerado pelo conector Figma/FigJam e exibido em tela no chat.
+A interface ARI mantém navegação para `/figma-github`, mas nenhum URL/artefato Figma histórico é tratado como evidência atual.
 
-```mermaid
-flowchart LR
-  A["GitHub PRs e CI"] --> B["Operational Event Bus"]
-  C["Google Calendar / Agenda"] --> B
-  D["ReqSys Runtime Center"] --> B
-  E["Figma / FigJam"] --> B
-  B --> F["Operational Sync Engine v1"]
-  F --> G["Score de Risco"]
-  F --> H["Snapshot Auditavel"]
-  F --> I["Relatorio HTML Autocontido"]
-  F --> J["Proxima Acao Objetiva"]
-  G --> K["Alertas Governados"]
-  H --> K
-  I --> K
-  J --> K
-```
+Para promover o status:
 
-## Critérios visuais obrigatórios
+1. gerar ou atualizar o artefato visual;
+2. obter readback verificável;
+3. registrar identificador/URL atual;
+4. vincular a evidência ao SHA/execução correspondente.
 
-- Deve existir retorno navegável no repositório.
-- Deve existir fallback `.html` autocontido.
-- Deve existir diagrama versionado mesmo quando Figma/FigJam não estiver disponível.
-- Deve existir referência explícita no PR.
+Sem esses passos, Figma é apenas uma integração disponível, não prova de readiness.

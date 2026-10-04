@@ -1,107 +1,239 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
+from app.core.correlation import resolver_correlation_id
 from app.core.envelope import ok
 from app.services.ari_runtime_sql_adapter import AriRuntimeSqlAdapter
 from app.services.ari_staging_validator import AriStagingValidator
 
-router = APIRouter(prefix='/v1/analytics-runtime-intelligence', tags=['Analytics Runtime Intelligence'])
+router = APIRouter(tags=['Analytics Runtime Intelligence'])
 
 
 def _item_validacao(codigo, nome, categoria, score, evidencia, acao_recomendada, status='ok'):
-    return {'codigo': codigo, 'nome': nome, 'categoria': categoria, 'status': status, 'score': score, 'evidencia': evidencia, 'acao_recomendada': acao_recomendada}
+    return {
+        'codigo': codigo,
+        'nome': nome,
+        'categoria': categoria,
+        'status': status,
+        'score': score,
+        'evidencia': evidencia,
+        'acao_recomendada': acao_recomendada,
+    }
 
 
 def _item_readiness(capability, estado, evidencia, gap, cor, bloqueia_producao=False):
-    return {'capability': capability, 'estado': estado, 'evidencia': evidencia, 'gap': gap, 'cor': cor, 'bloqueia_producao': bloqueia_producao}
-
-
-def _item_timeline(evento, estado, detalhe, cor):
-    return {'evento': evento, 'estado': estado, 'detalhe': detalhe, 'cor': cor}
+    return {
+        'capability': capability,
+        'estado': estado,
+        'evidencia': evidencia,
+        'gap': gap,
+        'cor': cor,
+        'bloqueia_producao': bloqueia_producao,
+    }
 
 
 def _validacoes_base():
     return [
-        _item_validacao('COUNT_BEFORE_AFTER', 'Comparar totais antes/depois', 'Volume', 96, 'Checkpoint de contagem habilitado para origem, staging e destino.', 'Manter limite de divergencia parametrizado por dominio.'),
-        _item_validacao('STAT_EXTREMES', 'Validar extremos e medias', 'Estatistica', 88, 'MIN, MAX e AVG consolidados no runtime; thresholds dinamicos pendentes por dominio.', 'Versionar limites de anomalia por indicador critico.', status='warn'),
-        _item_validacao('FILTER_ISOLATION', 'Testar filtros separadamente', 'Query Intelligence', 93, 'Fluxo incremental de filtros definido para troubleshooting analitico.', 'Persistir impacto percentual por filtro.'),
-        _item_validacao('JOIN_CARDINALITY', 'Validar JOINs utilizados', 'Relacionamento', 87, 'Validador de cardinalidade especificado; controle de explosao cartesiana definido como gate.', 'Coletar baseline real por consulta produtiva.', status='warn'),
-        _item_validacao('NULL_CRITICAL', 'Procurar nulos indevidos', 'Data Quality', 95, 'Classificacao de null critico, esperado e operacional definida.', 'Conectar catalogo de campos obrigatorios.'),
-        _item_validacao('RECONCILIATION', 'Comparar com fonte oficial', 'Reconciliacao', 90, 'Motor de reconciliacao cross-source definido para SQL, API, DW e RAG.', 'Adicionar adapters reais por fonte oficial.'),
-        _item_validacao('GROUP_BY_GRANULARITY', 'Revisar agregacoes', 'Granularidade', 92, 'Validacao de GROUP BY e granularidade incluida no checklist operacional.', 'Exibir dimensoes efetivas no analitico da query.'),
-        _item_validacao('SAMPLE_INSPECTION', 'Analisar amostras manuais', 'Evidencia', 91, 'Golden samples previstos para auditoria e reproducibilidade.', 'Criar biblioteca de casos canonicos.'),
-        _item_validacao('BUSINESS_RULES', 'Revisar regra de negocio aplicada', 'Governanca funcional', 94, 'Regra de negocio passa a ser evidencia obrigatoria do resultado analitico.', 'Vincular requisito, ADR, teste e query.'),
-        _item_validacao('AI_GROUNDING', 'IA governada com fonte e lineage', 'IA Auditavel', 89, 'Resposta sem fonte ou sem grounding definida como BLOCK.', 'Aplicar policy runtime nas respostas de IA.', status='warn'),
+        _item_validacao(
+            'COUNT_BEFORE_AFTER',
+            'Comparar totais antes/depois',
+            'Volume',
+            96,
+            'Regra de checkpoint de contagem implementada no adapter estático.',
+            'Conectar baseline real por domínio antes de usar como evidência de produção.',
+            status='warn',
+        ),
+        _item_validacao(
+            'STAT_EXTREMES',
+            'Validar extremos e médias',
+            'Estatística',
+            80,
+            'Contrato definido; métricas reais ainda dependem de fonte externa.',
+            'Coletar MIN/MAX/AVG da fonte governada.',
+            status='warn',
+        ),
+        _item_validacao(
+            'FILTER_ISOLATION',
+            'Testar filtros separadamente',
+            'Query Intelligence',
+            90,
+            'Validação sintática de WHERE disponível no adapter.',
+            'Persistir impacto real por filtro quando houver fonte conectada.',
+            status='warn',
+        ),
+        _item_validacao(
+            'JOIN_CARDINALITY',
+            'Validar JOINs utilizados',
+            'Relacionamento',
+            85,
+            'Contagem de JOINs e bloqueio de excesso implementados estaticamente.',
+            'Medir cardinalidade real em ambiente controlado.',
+            status='warn',
+        ),
+        _item_validacao(
+            'NULL_CRITICAL',
+            'Procurar nulos indevidos',
+            'Data Quality',
+            90,
+            'Contrato de null crítico implementado.',
+            'Conectar catálogo real de obrigatoriedade.',
+            status='warn',
+        ),
+        _item_validacao(
+            'RECONCILIATION',
+            'Comparar com fonte oficial',
+            'Reconciliação',
+            60,
+            'Contrato previsto, sem fonte oficial conectada neste snapshot.',
+            'Conectar fonte oficial e registrar evidência por execução.',
+            status='warn',
+        ),
+        _item_validacao(
+            'GROUP_BY_GRANULARITY',
+            'Revisar agregações',
+            'Granularidade',
+            90,
+            'GROUP BY é identificado estaticamente.',
+            'Validar granularidade contra dados reais.',
+            status='warn',
+        ),
+        _item_validacao(
+            'SAMPLE_INSPECTION',
+            'Analisar amostras manuais',
+            'Evidência',
+            60,
+            'Sem golden sample runtime anexado ao snapshot atual.',
+            'Anexar amostra governada sem dados sensíveis.',
+            status='warn',
+        ),
+        _item_validacao(
+            'BUSINESS_RULES',
+            'Revisar regra de negócio aplicada',
+            'Governança funcional',
+            75,
+            'Rastreabilidade documental disponível.',
+            'Vincular requisito e evidência de dados reais.',
+            status='warn',
+        ),
+        _item_validacao(
+            'AI_GROUNDING',
+            'IA governada com fonte e lineage',
+            'IA Auditável',
+            55,
+            'Sem grounding externo ou lineage real neste snapshot.',
+            'Bloquear promoção até fonte e lineage reais estarem evidenciados.',
+            status='block',
+        ),
     ]
 
 
 def _runtime_sql_validation():
     sample_sql = 'select count(*) as total, status from requisitos where status is not null group by status'
-    return AriRuntimeSqlAdapter().validate(sample_sql, null_critical=0, source_name='ari-governed-runtime-sample')
+    return AriRuntimeSqlAdapter().validate(
+        sample_sql,
+        null_critical=0,
+        source_name='ari-repository-contract-sample',
+    )
 
 
 def _staging_validation():
+    # Fail-closed: ausência de URL/screenshot/smoke externo não vira evidência positiva.
     return AriStagingValidator().validate()
 
 
 def _telemetry_validation():
     return {
-        'telemetry_ready': True,
-        'correlation_id': 'ari-runtime-snapshot',
-        'trace_scope': 'analytics-runtime-intelligence',
-        'evidence': 'Telemetria logica exposta no snapshot ARI; proximo passo e exportador OpenTelemetry externo.',
+        'telemetry_ready': False,
+        'contract_ready': True,
+        'correlation_id_supported': True,
+        'evidence': 'Contrato de correlação/telemetria existe; exportação OpenTelemetry externa não foi comprovada neste snapshot.',
     }
 
 
 def _lineage_validation():
     return {
-        'lineage_ready': True,
-        'source': 'ari-governed-runtime-sample',
-        'flow': ['query', 'runtime_sql_adapter', 'validation_engine', 'confidence_engine', 'readiness_layer'],
-        'evidence': 'Lineage logico inicial versionado no payload operacional.',
+        'lineage_ready': False,
+        'contract_ready': True,
+        'source': 'ari-repository-contract-sample',
+        'flow': ['query', 'runtime_sql_adapter', 'validation_engine', 'readiness_layer'],
+        'evidence': 'Lineage lógico do contrato está versionado; lineage de fonte real não está evidenciado.',
     }
 
 
-def _readiness_matrix(runtime_sql=None, staging=None, telemetry=None, lineage=None):
-    runtime_sql = runtime_sql or _runtime_sql_validation()
-    staging = staging or _staging_validation()
-    telemetry = telemetry or _telemetry_validation()
-    lineage = lineage or _lineage_validation()
-    runtime_sql_block = not runtime_sql['runtime_sql_ready']
-    staging_block = not staging['staging_ready']
-    telemetry_block = not telemetry['telemetry_ready']
-    lineage_block = not lineage['lineage_ready']
+def _figma_validation():
+    return {
+        'status': 'evidence_pending',
+        'ready': False,
+        'route': '/figma-github',
+        'evidence': 'A integração Figma/GitHub existe como superfície separada; nenhum artefato Figma atual é promovido como evidência deste snapshot.',
+    }
+
+
+def _readiness_matrix(runtime_sql, staging, telemetry, lineage, figma):
     return [
-        _item_readiness('Backend ARI', 'VALIDADO', 'Endpoint snapshot e testes backend verdes.', 'Conectar fonte oficial produtiva.', 'verde'),
-        _item_readiness('Frontend ARI', 'VALIDADO', 'Tela navegavel e teste smoke frontend.', 'Validar em URL publica quando disponivel.', 'verde'),
-        _item_readiness('CI/CD', 'VALIDADO', 'Workflows principais verdes anteriormente; novo commit em monitoramento.', 'Aguardar novo ciclo de CI.', 'verde'),
-        _item_readiness('Runtime SQL Adapter', 'VALIDADO' if not runtime_sql_block else 'BLOQUEIO', f"Score runtime SQL: {runtime_sql['runtime_sql_score']}%.", 'Trocar sample governado por queries reais de dominio.', 'verde' if not runtime_sql_block else 'vermelho', runtime_sql_block),
-        _item_readiness('Staging Validation', 'VALIDADO' if not staging_block else 'BLOQUEIO', 'Validador de staging executado com evidencia versionada.', 'Revalidar contra URL publica externa.', 'verde' if not staging_block else 'vermelho', staging_block),
-        _item_readiness('Telemetry', 'VALIDADO' if not telemetry_block else 'BLOQUEIO', telemetry['evidence'], 'Adicionar exportador OpenTelemetry externo.', 'verde' if not telemetry_block else 'vermelho', telemetry_block),
-        _item_readiness('Lineage', 'VALIDADO' if not lineage_block else 'BLOQUEIO', lineage['evidence'], 'Conectar lineage a fonte oficial.', 'verde' if not lineage_block else 'vermelho', lineage_block),
-        _item_readiness('Confidence Engine', 'VALIDADO', 'Score consolidado no runtime e exibido em tela.', 'Persistir historico por execucao.', 'verde'),
-        _item_readiness('Figma Runtime', 'PARCIAL', 'Bloco visual Figma/GitHub no ARI Center.', 'Materializar artefato Figma quando o plano estiver resolvido.', 'amarelo'),
-        _item_readiness('Production Readiness', 'VALIDADO', 'Sem bloqueios logicos remanescentes no snapshot governado.', 'Exigir validacao externa antes do merge produtivo.', 'verde'),
-    ]
-
-
-def _production_gaps():
-    return [
-        'Sem gaps bloqueantes no snapshot governado.',
-        'Pendencias nao bloqueantes: URL publica externa, exportador OpenTelemetry real, fonte SQL produtiva e Figma materializado.',
-    ]
-
-
-def _runtime_timeline():
-    return [
-        _item_timeline('Backend ARI criado', 'VALIDADO', 'Endpoint e contrato entregues.', 'verde'),
-        _item_timeline('Frontend ARI criado', 'VALIDADO', 'Tela e menu entregues.', 'verde'),
-        _item_timeline('CI verde', 'VALIDADO', 'Pipelines principais aprovados anteriormente.', 'verde'),
-        _item_timeline('Readiness Layer', 'IMPLEMENTADO', 'Matriz, gaps e timeline em tela.', 'verde'),
-        _item_timeline('Runtime SQL Adapter', 'VALIDADO', 'Adapter inicial executado no snapshot.', 'verde'),
-        _item_timeline('Staging Validation', 'VALIDADO', 'Evidencia versionada e smoke logico coberto.', 'verde'),
-        _item_timeline('Runtime governado', 'VALIDADO', 'Sem bloqueios logicos remanescentes.', 'verde'),
+        _item_readiness(
+            'Backend ARI',
+            'IMPLEMENTADO',
+            'Endpoint e contrato backend versionados.',
+            'CI do HEAD atual deve permanecer verde.',
+            'verde',
+        ),
+        _item_readiness(
+            'Frontend ARI',
+            'IMPLEMENTADO',
+            'Rota e tela integradas ao catálogo atual.',
+            'Validação externa de ambiente permanece necessária.',
+            'verde',
+        ),
+        _item_readiness(
+            'Runtime SQL Adapter',
+            'PARCIAL',
+            f"Score estático: {runtime_sql['runtime_sql_score']}%.",
+            'Validação atual é sintática e não constitui evidência de banco produtivo.',
+            'amarelo',
+            True,
+        ),
+        _item_readiness(
+            'Staging Validation',
+            'VALIDADO' if staging['staging_ready'] else 'EVIDENCIA_AUSENTE',
+            'Evidência externa de staging validada.' if staging['staging_ready'] else 'Sem conjunto completo de URL externa, screenshot e smoke.',
+            'Executar staging externo governado.',
+            'verde' if staging['staging_ready'] else 'vermelho',
+            not staging['staging_ready'],
+        ),
+        _item_readiness(
+            'Telemetry',
+            'VALIDADO' if telemetry['telemetry_ready'] else 'PARCIAL',
+            telemetry['evidence'],
+            'Comprovar exportador e recebimento de telemetria externa.',
+            'verde' if telemetry['telemetry_ready'] else 'amarelo',
+            not telemetry['telemetry_ready'],
+        ),
+        _item_readiness(
+            'Lineage',
+            'VALIDADO' if lineage['lineage_ready'] else 'PARCIAL',
+            lineage['evidence'],
+            'Conectar lineage a fonte oficial e execução real.',
+            'verde' if lineage['lineage_ready'] else 'amarelo',
+            not lineage['lineage_ready'],
+        ),
+        _item_readiness(
+            'Figma Runtime',
+            'VALIDADO' if figma['ready'] else 'EVIDENCIA_AUSENTE',
+            figma['evidence'],
+            'Registrar artefato Figma atual somente quando houver readback verificável.',
+            'verde' if figma['ready'] else 'cinza',
+            False,
+        ),
+        _item_readiness(
+            'Production Readiness',
+            'BLOQUEIO',
+            'Production readiness é derivado apenas de evidências externas reais; o contrato de repositório sozinho é insuficiente.',
+            'Fechar todos os blockers externos antes de promoção.',
+            'vermelho',
+            True,
+        ),
     ]
 
 
@@ -111,24 +243,24 @@ def _calcular_health_score(validacoes):
     return round(sum(item['score'] for item in validacoes) / len(validacoes))
 
 
-def _snapshot_ari():
+def _snapshot_ari(correlation_id: str):
     validacoes = _validacoes_base()
     runtime_sql = _runtime_sql_validation()
     staging = _staging_validation()
     telemetry = _telemetry_validation()
     lineage = _lineage_validation()
-    readiness = _readiness_matrix(runtime_sql, staging, telemetry, lineage)
-    bloqueios = [item for item in readiness if item['bloqueia_producao']]
+    figma = _figma_validation()
+    readiness = _readiness_matrix(runtime_sql, staging, telemetry, lineage, figma)
+    blockers = [item for item in readiness if item['bloqueia_producao']]
+
     return {
+        'schema_version': '1.0.0',
         'capability': 'Analytics Runtime Intelligence',
-        'posicao_estrategica': 'Plataforma enterprise de inteligencia operacional auditavel',
+        'evidence_scope': 'repository_contract',
+        'correlation_id': correlation_id,
         'health_score': _calcular_health_score(validacoes),
-        'confidence_score': 92,
-        'ai_governance_score': 89,
-        'operational_quality_score': 91,
-        'production_ready': len(bloqueios) == 0,
-        'draft_recomendado': len(bloqueios) > 0,
-        'ambiente': 'runtime governado',
+        'production_ready': len(blockers) == 0,
+        'draft_recomendado': len(blockers) > 0,
         'atualizado_em': datetime.now(UTC).isoformat(),
         'validacoes': validacoes,
         'runtime_sql_validation': runtime_sql,
@@ -136,30 +268,24 @@ def _snapshot_ari():
         'telemetry_validation': telemetry,
         'lineage_validation': lineage,
         'readiness_matrix': readiness,
-        'production_gaps': _production_gaps(),
-        'runtime_timeline': _runtime_timeline(),
+        'production_gaps': [item['gap'] for item in blockers],
         'guard_rails': [
             {'regra': 'JOIN explosion', 'acao': 'FAIL'},
-            {'regra': 'NULL critico', 'acao': 'FAIL'},
-            {'regra': 'Divergencia acima do threshold', 'acao': 'FAIL'},
-            {'regra': 'IA sem fonte ou sem grounding', 'acao': 'BLOCK'},
-            {'regra': 'Lineage ausente', 'acao': 'WARN'},
-            {'regra': 'PII/log sensivel exposto', 'acao': 'FAIL'},
+            {'regra': 'NULL crítico', 'acao': 'FAIL'},
+            {'regra': 'IA sem fonte ou grounding', 'acao': 'BLOCK'},
+            {'regra': 'Lineage real ausente', 'acao': 'BLOCK'},
+            {'regra': 'Evidência externa ausente', 'acao': 'BLOCK'},
+            {'regra': 'PII/log sensível exposto', 'acao': 'FAIL'},
         ],
-        'figma': {
-            'status': 'aguardando_plano_figma',
-            'objetivo': 'retorno visual em tela para ARI, Figma e GitHub',
-            'artefato': 'Enterprise Operations Center / Analytics Runtime Intelligence',
-        },
-        'proximas_acoes': [
-            'Aguardar CI do ultimo commit.',
-            'Revalidar contra URL publica externa antes do merge produtivo.',
-            'Conectar fonte SQL produtiva.',
-            'Sincronizar artefato Figma quando o plano estiver resolvido.',
-        ],
+        'figma': figma,
     }
 
 
-@router.get('/snapshot')
-def obter_snapshot_ari():
-    return ok(_snapshot_ari())
+@router.get('/api/analytics-runtime-intelligence/snapshot')
+@router.get('/v1/analytics-runtime-intelligence/snapshot', include_in_schema=False)
+def obter_snapshot_ari(
+    x_correlation_id: str | None = Header(default=None, alias='X-Correlation-ID'),
+    x_request_id: str | None = Header(default=None, alias='X-Request-ID'),
+):
+    correlation_id = resolver_correlation_id(x_correlation_id, x_request_id)
+    return ok(_snapshot_ari(correlation_id), correlation_id)

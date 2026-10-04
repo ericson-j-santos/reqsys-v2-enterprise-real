@@ -1,60 +1,24 @@
-# ADR-022 — Analytics Runtime Intelligence como capability transversal
+# ADR — Analytics Runtime Intelligence e Operational Sync
 
 ## Status
 
-Aceito em 2026-06-21.
+Implementação reconciliada com governança fail-closed.
 
 ## Contexto
 
-O ReqSys/GovBI deve evoluir para uma plataforma enterprise de inteligência operacional auditável. A operação precisa consolidar analytics confiável, IA governada, runtime observável, validação automática, explainability, confiança mensurável, operação autônoma, governança contínua, arquitetura viva e qualidade operacional contínua.
-
-A referência operacional consolidada é o checklist de validação de resultados estranhos:
-
-1. comparar totais antes/depois;
-2. validar extremos;
-3. conferir médias;
-4. testar filtros separadamente;
-5. validar JOINs;
-6. procurar nulos indevidos;
-7. comparar com outra fonte;
-8. revisar agregações;
-9. analisar amostras manuais;
-10. revisar regra de negócio aplicada.
+O PR #81 propõe uma camada de Analytics Runtime Intelligence (ARI) e um Operational Sync Engine. A versão histórica confundia contrato/samples locais com readiness de produção.
 
 ## Decisão
 
-Implementar **Analytics Runtime Intelligence (ARI)** como capability transversal oficial do ReqSys/GovBI.
+1. ARI expõe síntese analítica e matriz de readiness.
+2. O endpoint canônico para a UI é `/api/analytics-runtime-intelligence/snapshot`; `/v1/.../snapshot` permanece alias.
+3. Samples locais e validação estática de SQL nunca são evidência de produção.
+4. Staging é fail-closed sem URL externa, readback visual e smoke explicitamente fornecidos.
+5. Telemetria e lineage de contrato não equivalem a exportação/lineage reais.
+6. Figma permanece evidência pendente até existir readback atual verificável.
+7. Operational Sync não contém estados hardcoded de PRs; consome somente input explícito e, sem input, retorna `evidence_required`.
+8. `/monitoramento-operacional` continua sendo a fonte canônica do estado técnico corrente.
 
-## Escopo inicial implementado
+## Consequência
 
-- Endpoint backend `GET /v1/analytics-runtime-intelligence/snapshot`.
-- Tela frontend `/analytics-runtime-intelligence` com retorno em tela.
-- Menu lateral `ARI Center`.
-- Modelo de score consolidado: health, confidence, AI governance e operational quality.
-- Guard rails operacionais para bloqueio, falha e alerta.
-- Retorno visual Figma/GitHub integrado ao painel.
-- Teste automatizado de contrato do snapshot.
-- Relatório HTML autocontido versionado.
-
-## Consequências
-
-### Positivas
-
-- Centraliza a visão de confiança analítica.
-- Expõe uma trilha operacional para IA governada e explainability.
-- Permite evoluir validadores reais por adapter sem quebrar a UI.
-- Cria uma base para Living Architecture e Operations Center.
-
-### Riscos
-
-- Scores iniciais são sintéticos e precisam ser conectados a evidências reais por fonte.
-- O baseline de cardinalidade e thresholds estatísticos precisa ser versionado por domínio.
-- Self-healing deve permanecer governado, com auditoria e autorização para ações críticas.
-
-## Próximos incrementos
-
-1. Conectar validadores reais de SQL Server/API/DW.
-2. Persistir histórico de score por execução.
-3. Adicionar drill-down por query, fonte, regra, requisito e incidente.
-4. Integrar Figma/GitHub como artefato vivo de arquitetura e UI.
-5. Promover gates ARI para CI/CD e runtime produtivo.
+O sistema pode evoluir capacidades analíticas sem gerar falso verde de maturidade ou production readiness.

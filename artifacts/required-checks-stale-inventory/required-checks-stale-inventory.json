@@ -1,0 +1,246 @@
+{
+  "schema_version": "1.0.0",
+  "contract": "reqsys-required-checks-stale-inventory",
+  "observed_at": "2026-09-21T20:32:36.085173+00:00",
+  "target_branch": "main",
+  "gap_reference": "OPS-GAP-GITOPS-CHECKS-001",
+  "required_contexts_source": "versioned_baseline",
+  "decision": "stale_or_misnamed_required_checks_detected",
+  "inconclusive": false,
+  "blocking": false,
+  "summary": {
+    "declared_context_count": 6,
+    "producible_context_count": 655,
+    "workflow_count": 563,
+    "unparsed_workflow_files": [],
+    "by_status": {
+      "workflow_name_mismatch": 6
+    },
+    "stale_contexts": [
+      "Branch Protection Audit",
+      "CI Enterprise Fast",
+      "CI — ReqSys v2 Enterprise",
+      "Governance Quality Gates",
+      "Governança Padrão Ouro",
+      "Governed Merge Queue"
+    ],
+    "pending_decisions": [],
+    "recommended_all_active": true
+  },
+  "classifications": [
+    {
+      "context": "Branch Protection Audit",
+      "status": "workflow_name_mismatch",
+      "producers": [],
+      "reasons": [
+        "context_matches_workflow_name_not_check_run_name"
+      ],
+      "suggested_contexts": [
+        "Auditar proteção enterprise da branch"
+      ],
+      "registered_decision": {
+        "decision": "rename",
+        "target_contexts": [
+          "Auditar proteção enterprise da branch"
+        ],
+        "rationale": "Contexto real é o job name do workflow Branch Protection Audit.",
+        "owner": "Platform Engineering / CI Governance",
+        "decided_at": "2026-09-21"
+      },
+      "decision_required": true
+    },
+    {
+      "context": "CI Enterprise Fast",
+      "status": "workflow_name_mismatch",
+      "producers": [],
+      "reasons": [
+        "context_matches_workflow_name_not_check_run_name"
+      ],
+      "suggested_contexts": [
+        "Backend fast checks",
+        "Frontend fast checks",
+        "Guardrails deterministicos",
+        "Sumario CI Enterprise Fast"
+      ],
+      "registered_decision": {
+        "decision": "rename",
+        "target_contexts": [
+          "Sumario CI Enterprise Fast"
+        ],
+        "rationale": "Sumário roda com always() e depende dos jobs de guardrails, backend e frontend fast.",
+        "owner": "Platform Engineering / CI Governance",
+        "decided_at": "2026-09-21"
+      },
+      "decision_required": true
+    },
+    {
+      "context": "CI — ReqSys v2 Enterprise",
+      "status": "workflow_name_mismatch",
+      "producers": [],
+      "reasons": [
+        "context_matches_workflow_name_not_check_run_name"
+      ],
+      "suggested_contexts": [
+        "CI Router (paths + Pareto)",
+        "CI Router Result",
+        "Frontend Responsive E2E (Playwright)",
+        "Pipeline Governança + Evidence Snapshot"
+      ],
+      "registered_decision": {
+        "decision": "rename",
+        "target_contexts": [
+          "CI Router Result"
+        ],
+        "rationale": "Gate agregador do workflow de CI roda com if always() e consolida o resultado dos jobs roteados.",
+        "owner": "Platform Engineering / CI Governance",
+        "decided_at": "2026-09-21"
+      },
+      "decision_required": true
+    },
+    {
+      "context": "Governance Quality Gates",
+      "status": "workflow_name_mismatch",
+      "producers": [],
+      "reasons": [
+        "context_matches_workflow_name_not_check_run_name"
+      ],
+      "suggested_contexts": [
+        "governance-validation"
+      ],
+      "registered_decision": {
+        "decision": "rename",
+        "target_contexts": [
+          "governance-validation"
+        ],
+        "rationale": "Job sem 'name' publica o próprio job id como check run name.",
+        "owner": "Platform Engineering / CI Governance",
+        "decided_at": "2026-09-21"
+      },
+      "decision_required": true
+    },
+    {
+      "context": "Governança Padrão Ouro",
+      "status": "workflow_name_mismatch",
+      "producers": [],
+      "reasons": [
+        "context_matches_workflow_name_not_check_run_name"
+      ],
+      "suggested_contexts": [
+        "Validar artefatos de governança"
+      ],
+      "registered_decision": {
+        "decision": "rename",
+        "target_contexts": [
+          "Validar artefatos de governança"
+        ],
+        "rationale": "Nome de workflow não é check run name; o contexto real é o job único do workflow Governança Padrão Ouro.",
+        "owner": "Platform Engineering / CI Governance",
+        "decided_at": "2026-09-21"
+      },
+      "decision_required": true
+    },
+    {
+      "context": "Governed Merge Queue",
+      "status": "workflow_name_mismatch",
+      "producers": [],
+      "reasons": [
+        "context_matches_workflow_name_not_check_run_name"
+      ],
+      "suggested_contexts": [
+        "Estabilidade dos workflows no SHA atual",
+        "Gate de merge governado",
+        "Integração temporária contra base real do PR",
+        "Resolver contexto do PR",
+        "SDD — contrato da mudança no SHA do PR",
+        "Validação isolada do PR"
+      ],
+      "registered_decision": {
+        "decision": "rename",
+        "target_contexts": [
+          "Gate de merge governado"
+        ],
+        "rationale": "Gate final da merge queue governada roda com always() e agrega os jobs anteriores.",
+        "owner": "Platform Engineering / CI Governance",
+        "decided_at": "2026-09-21"
+      },
+      "decision_required": true
+    }
+  ],
+  "recommended_validation": [
+    {
+      "context": "Auditar proteção enterprise da branch",
+      "status": "active",
+      "producers": [
+        "Branch Protection Audit :: audit"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    },
+    {
+      "context": "CI Router Result",
+      "status": "active",
+      "producers": [
+        "CI — ReqSys v2 Enterprise :: ci-result"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    },
+    {
+      "context": "Gate de merge governado",
+      "status": "active",
+      "producers": [
+        "Governed Merge Queue :: merge-queue-gate"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    },
+    {
+      "context": "Required Fast Gate",
+      "status": "active",
+      "producers": [
+        "ReqSys Required Fast Gate :: required-fast-gate"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    },
+    {
+      "context": "Security Baseline",
+      "status": "active",
+      "producers": [
+        "Security Baseline Gate :: security-baseline"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    },
+    {
+      "context": "Sumario CI Enterprise Fast",
+      "status": "active",
+      "producers": [
+        "CI Enterprise Fast :: ci-fast-summary"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    },
+    {
+      "context": "Validar artefatos de governança",
+      "status": "active",
+      "producers": [
+        "Governança Padrão Ouro :: validar-governanca"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    },
+    {
+      "context": "governance-validation",
+      "status": "active",
+      "producers": [
+        "Governance Quality Gates :: governance-validation"
+      ],
+      "reasons": [],
+      "suggested_contexts": []
+    }
+  ],
+  "automatic_branch_protection_change_allowed": false,
+  "automatic_context_removal_allowed": false,
+  "production_touched": false
+}

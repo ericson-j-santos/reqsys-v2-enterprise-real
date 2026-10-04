@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -12,37 +13,55 @@ class AriStagingCheck:
 
 
 class AriStagingValidator:
+    """Valida somente evidências explicitamente fornecidas; defaults falham fechados."""
+
     def validate(
         self,
-        base_url: str | None = '/analytics-runtime-intelligence',
-        screenshot_captured: bool = True,
-        smoke_deploy_ok: bool = True,
-        evidence_artifact: str = 'docs/analytics-runtime-intelligence-report.html',
+        base_url: str | None = None,
+        screenshot_captured: bool = False,
+        smoke_deploy_ok: bool = False,
+        evidence_artifact: str | None = None,
     ) -> dict:
         checks = [
             self._check_base_url(base_url),
             self._check_screenshot(screenshot_captured, evidence_artifact),
             self._check_smoke(smoke_deploy_ok),
         ]
-        blockers = [item for item in checks if item.estado in {'BLOQUEIO', 'EVIDENCIA_AUSENTE'}]
+        blockers = [item for item in checks if item.estado != 'VALIDADO']
         return {
             'staging_ready': not blockers,
-            'checks': [item.__dict__ for item in checks],
-            'blockers': [item.__dict__ for item in blockers],
+            'checks': [asdict(item) for item in checks],
+            'blockers': [asdict(item) for item in blockers],
             'evidence_artifact': evidence_artifact,
         }
 
     def _check_base_url(self, base_url: str | None) -> AriStagingCheck:
-        if not base_url:
-            return AriStagingCheck('staging_url', 'EVIDENCIA_AUSENTE', 'URL de staging nao informada.', 'Publicar ambiente e informar URL.')
-        return AriStagingCheck('staging_url', 'VALIDADO', f'Rota operacional informada: {base_url}', 'Executar validacao externa quando ambiente publico estiver disponivel.')
+        parsed = urlparse(base_url or '')
+        if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+            return AriStagingCheck(
+                'staging_url',
+                'EVIDENCIA_AUSENTE',
+                'URL externa de staging não comprovada.',
+                'Informar URL HTTP(S) válida do ambiente evidenciado.',
+            )
+        return AriStagingCheck('staging_url', 'VALIDADO', f'URL externa informada: {parsed.scheme}://{parsed.netloc}', 'Revalidar no mesmo ciclo de evidência.')
 
-    def _check_screenshot(self, screenshot_captured: bool, evidence_artifact: str) -> AriStagingCheck:
-        if not screenshot_captured:
-            return AriStagingCheck('screenshot_operacional', 'EVIDENCIA_AUSENTE', 'Evidencia visual ainda nao anexada.', 'Capturar evidencia visual do ARI Center.')
-        return AriStagingCheck('screenshot_operacional', 'VALIDADO', f'Evidencia visual versionada: {evidence_artifact}', 'Substituir por screenshot real quando houver staging publico.')
+    def _check_screenshot(self, screenshot_captured: bool, evidence_artifact: str | None) -> AriStagingCheck:
+        if not screenshot_captured or not evidence_artifact:
+            return AriStagingCheck(
+                'visual_evidence',
+                'EVIDENCIA_AUSENTE',
+                'Readback visual atual não foi fornecido.',
+                'Capturar evidência visual vinculada à execução atual.',
+            )
+        return AriStagingCheck('visual_evidence', 'VALIDADO', f'Evidência visual registrada em {evidence_artifact}.', 'Preservar vínculo com a execução.')
 
     def _check_smoke(self, smoke_deploy_ok: bool) -> AriStagingCheck:
         if not smoke_deploy_ok:
-            return AriStagingCheck('smoke_deploy', 'BLOQUEIO', 'Smoke deploy ainda nao executado.', 'Executar smoke deploy antes de remover draft.')
-        return AriStagingCheck('smoke_deploy', 'VALIDADO', 'Smoke deploy logico coberto por CI e testes de rota/UI.', 'Automatizar smoke contra URL publica.')
+            return AriStagingCheck(
+                'staging_smoke',
+                'EVIDENCIA_AUSENTE',
+                'Smoke externo não comprovado.',
+                'Executar smoke governado no ambiente alvo.',
+            )
+        return AriStagingCheck('staging_smoke', 'VALIDADO', 'Smoke externo informado como aprovado.', 'Preservar artifact/readback do smoke.')
