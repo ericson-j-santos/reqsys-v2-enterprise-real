@@ -21,7 +21,7 @@ def test_pr_evidence_usa_um_sinal_canonico_e_nao_dispara_na_main() -> None:
     trigger_map = triggers(data)
     workflow_run = trigger_map["workflow_run"]
 
-    assert "pull_request" not in trigger_map
+    assert "pull_request" in trigger_map
     assert workflow_run["workflows"] == ["CI — ReqSys v2 Enterprise"]
     assert workflow_run["branches-ignore"] == ["main"]
 

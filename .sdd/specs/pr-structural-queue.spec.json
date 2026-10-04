@@ -25,7 +25,7 @@
     "Ollama CI Triage deduplica por head_sha e cancela diagnóstico obsoleto.",
     "CI Observability deduplica por workflow de origem e head_sha com cancel-in-progress.",
     "Workflows alterados usam actions externas fixadas por SHA.",
-    "PR Evidence Gate não inicia no pull_request; ele é acionado pelo término do CI principal para evitar espera ativa e falso timeout."
+    "PR Evidence Gate mantém pull_request para registrar o check no HEAD e limita workflow_run ao CI principal com main excluída."
   ],
   "sdd_gate": {
     "pre_pr_tests": [
@@ -36,7 +36,7 @@
       "tests/test_pr_ci_watch.py",
       "tests/test_ci_fanout_guard.py"
     ],
-    "evidence_contract": "A fila avalia mergeabilidade antes de CI e impede fan-out inútil de workflow_run na main; watchers/observabilidade são deduplicados por HEAD/evento com referências de actions imutáveis."
+    "evidence_contract": "A fila avalia mergeabilidade antes de CI; PR Evidence Gate registra check no HEAD via pull_request e usa apenas o CI principal como sinal workflow_run, com main excluída para reduzir fan-out."
   },
   "traceability": {
     "requirements": ".sdd/specs/pr-structural-queue.requirements.md",
