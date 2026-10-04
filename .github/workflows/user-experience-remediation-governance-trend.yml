@@ -1,0 +1,99 @@
+name: User Experience Remediation Governance Trend
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_ux_remediation_governance_trend.py"
+      - "tests/test_build_ux_remediation_governance_trend.py"
+      - ".github/workflows/user-experience-remediation-governance-trend.yml"
+  workflow_run:
+    workflows: ["User Experience Remediation Governance Metrics"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ux-remediation-governance-trend-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test governance trend
+        run: |
+          python -m py_compile scripts/build_ux_remediation_governance_trend.py
+          python -m unittest tests/test_build_ux_remediation_governance_trend.py -v
+
+  publish-post-merge-trend:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download current governance dashboard
+        uses: actions/download-artifact@v4
+        with:
+          name: ux-remediation-governance-metrics
+          path: .tmp/ux-governance-trend/current
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+      - name: Restore previous trend history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ux-governance-trend/previous
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ux-remediation-governance-trend&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/ux-governance-trend/previous.zip
+            unzip -q .tmp/ux-governance-trend/previous.zip -d .tmp/ux-governance-trend/previous
+          else
+            printf '%s\n' '[]' > .tmp/ux-governance-trend/previous/ux-remediation-governance-trend-history.json
+          fi
+      - name: Evaluate targets and deterioration
+        shell: bash
+        run: |
+          set -euo pipefail
+          dashboard="$(find .tmp/ux-governance-trend/current -name ops-dashboard.json -print -quit)"
+          previous="$(find .tmp/ux-governance-trend/previous -name ux-remediation-governance-trend-history.json -print -quit)"
+          test -n "$dashboard"
+          if [ -z "$previous" ]; then
+            previous=.tmp/ux-governance-trend/previous/ux-remediation-governance-trend-history.json
+            printf '%s\n' '[]' > "$previous"
+          fi
+          mkdir -p .tmp/ux-governance-trend/output
+          python scripts/build_ux_remediation_governance_trend.py \
+            --previous "$previous" \
+            --dashboard "$dashboard" \
+            --run-id "$SOURCE_RUN_ID" \
+            --head-sha "$SOURCE_HEAD_SHA" \
+            --history-output .tmp/ux-governance-trend/output/ux-remediation-governance-trend-history.json \
+            --report-output .tmp/ux-governance-trend/output/ux-remediation-governance-trend-report.json \
+            --dashboard-output .tmp/ux-governance-trend/output/ops-dashboard.json
+      - name: Publish advisory governance trend
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-remediation-governance-trend
+          path: .tmp/ux-governance-trend/output
+          retention-days: 90

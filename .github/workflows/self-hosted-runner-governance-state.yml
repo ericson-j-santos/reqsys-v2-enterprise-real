@@ -1,0 +1,160 @@
+name: Self-Hosted Runner Governance State
+
+on:
+  pull_request:
+    paths:
+      - "scripts/enrich_self_hosted_runner_governance_state.py"
+      - "scripts/check_self_hosted_runner_governance.py"
+      - "tests/test_enrich_self_hosted_runner_governance_state.py"
+      - ".github/workflows/self-hosted-runner-governance-state.yml"
+  workflow_run:
+    workflows:
+      - "Self-Hosted Runner Governance Guard"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID do Self-Hosted Runner Governance Guard"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: self-hosted-runner-governance-state-${{ github.event.pull_request.number || github.event.workflow_run.id || inputs.run_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate preventive State integration
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/enrich_self_hosted_runner_governance_state.py
+          python -m py_compile scripts/check_self_hosted_runner_governance.py
+          python -m unittest tests/test_enrich_self_hosted_runner_governance_state.py
+
+      - name: Prepare State contracts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/self-hosted-runner-governance-state
+          mkdir -p artifacts/source-governance
+          cp docs/ops-dashboard/data/runtime-executive-index.json \
+            artifacts/self-hosted-runner-governance-state/runtime-executive-index.json
+          cp docs/ops-dashboard/data/executive-brief.json \
+            artifacts/self-hosted-runner-governance-state/executive-brief.json
+
+      - name: Produce real governance evidence in PR
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          python scripts/check_self_hosted_runner_governance.py \
+            --output artifacts/source-governance/self-hosted-runner-governance.json
+
+      - name: Resolve source run
+        if: github.event_name != 'pull_request'
+        id: source
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_RUN_ID"
+          echo "run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Validate source artifact contract
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          artifact_count="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts" \
+            --jq '[.artifacts[] | select(.name == "self-hosted-runner-governance-evidence" and .expired == false)] | length')"
+          if [ "$artifact_count" -ne 1 ]; then
+            echo "Expected exactly one active self-hosted-runner-governance-evidence artifact; found ${artifact_count}." >&2
+            exit 1
+          fi
+
+      - name: Download governance evidence
+        if: github.event_name != 'pull_request'
+        uses: actions/download-artifact@v4
+        with:
+          name: self-hosted-runner-governance-evidence
+          path: artifacts/source-governance
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Normalize and validate governance evidence
+        run: |
+          set -euo pipefail
+          source_file="artifacts/source-governance/self-hosted-runner-governance.json"
+          test -s "$source_file"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          source = Path("artifacts/source-governance/self-hosted-runner-governance.json")
+          payload = json.loads(source.read_text(encoding="utf-8"))
+          required = {"status", "self_hosted_usages", "violations", "policy"}
+          missing = sorted(required - payload.keys())
+          if missing:
+              raise SystemExit(f"governance evidence missing keys: {missing}")
+          if payload["status"] not in {"pass", "fail"}:
+              raise SystemExit("governance evidence status must be pass or fail")
+          target = Path("artifacts/self-hosted-runner-governance.json")
+          target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Enrich State and Executive Brief
+        run: |
+          set -euo pipefail
+          python scripts/enrich_self_hosted_runner_governance_state.py \
+            --evidence artifacts/self-hosted-runner-governance.json \
+            --runtime-index artifacts/self-hosted-runner-governance-state/runtime-executive-index.json \
+            --executive-brief artifacts/self-hosted-runner-governance-state/executive-brief.json
+
+      - name: Validate non-blocking contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/self-hosted-runner-governance-state')
+          runtime = json.loads((root / 'runtime-executive-index.json').read_text())
+          brief = json.loads((root / 'executive-brief.json').read_text())
+          card = runtime['cards']['self_hosted_runner_governance']
+          assert card['mode'] == 'report-only'
+          assert card['production_blocker'] is False
+          assert card['human_approval_required'] is True
+          assert 'self_hosted_runner_governance' in brief['evidencias']
+          PY
+
+      - name: Publish consolidated State evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-hosted-runner-governance-state
+          path: artifacts/self-hosted-runner-governance-state
+          if-no-files-found: error
+          retention-days: 90

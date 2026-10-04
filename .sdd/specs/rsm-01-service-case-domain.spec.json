@@ -1,0 +1,19 @@
+{
+  "feature_name": "rsm-01-service-case-domain",
+  "project": "ReqSys Service Management",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Define o contrato de domínio único ServiceCase para REQUEST, INCIDENT, PROBLEM e CHANGE, reutilizando ServicoTI como catálogo canônico e sem introduzir persistência ou integrações externas neste incremento.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_service_management_domain.py"
+    ],
+    "evidence_contract": "O domínio deve provar prioridade determinística, identidade lógica por SHA-256, transições válidas, rejeição fail-closed de transições inválidas e contratos auxiliares independentes de infraestrutura."
+  }
+}

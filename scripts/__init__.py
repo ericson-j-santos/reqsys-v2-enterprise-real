@@ -1,1 +1,0 @@
-"""Scripts operacionais do ReqSys."""

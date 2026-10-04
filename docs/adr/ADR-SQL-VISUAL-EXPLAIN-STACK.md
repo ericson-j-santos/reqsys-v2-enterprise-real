@@ -2,36 +2,29 @@
 
 ## Status
 
-Proposto
+Consolidado como complemento offline da Query Intelligence Platform.
 
 ## Contexto
 
-O ReqSys deve evoluir para apoiar análise de SQL com foco em aprendizado, explicabilidade, documentação viva, rastreabilidade e governança.
-
-A consulta analisada no actuallyEXPLAIN demonstrou valor para transformar SQL em intenção lógica navegável.
+O ReqSys já possui análise SQL estática navegável em `/query-intelligence`. O PR #77 acrescenta valor quando é necessário gerar documentação versionável fora da interface.
 
 ## Decisão
 
-Adotar duas trilhas complementares:
+Manter duas superfícies complementares:
 
-1. **Trilha didática:** actuallyEXPLAIN + IA + DBeaver/pgAdmin.
-2. **Trilha enterprise:** DBeaver/DataGrip + PostgreSQL EXPLAIN ANALYZE + SQLGlot + Mermaid/ERD versionado.
+1. **Query Intelligence** como experiência interativa canônica;
+2. **SQL Visual Explain offline** como gerador de Markdown/Mermaid sem acesso a banco.
 
-## Consequências positivas
+Ferramentas de banco continuam responsáveis por execução, `EXPLAIN` e `EXPLAIN ANALYZE`.
 
-- Melhora a leitura de consultas por negócio, engenharia e dados.
-- Cria base para documentação viva de SQL.
-- Permite evolução futura para linhagem, impacto e explicabilidade automatizada.
-- Mantém Git como fonte da verdade.
+## Segurança
 
-## Riscos
+- nenhuma conexão de banco no script;
+- nenhuma execução de SQL;
+- comandos potencialmente destrutivos aparecem como alerta;
+- exemplos não contêm credenciais nem dados reais;
+- `EXPLAIN ANALYZE` não é automatizado neste incremento.
 
-| Risco | Mitigação |
-|---|---|
-| Parser heurístico incompleto | Evoluir para SQLGlot no próximo incremento |
-| EXPLAIN ANALYZE em produção | Executar apenas em ambiente controlado ou com limites |
-| Documentação divergente do código | Automatizar geração em CI |
+## Não adotado agora
 
-## Próxima decisão
-
-Evoluir o analisador para SQLGlot e integrar geração automática de relatório Mermaid/Markdown no pipeline.
+SQLGlot continua como evolução possível, mas não é dependência necessária deste incremento.

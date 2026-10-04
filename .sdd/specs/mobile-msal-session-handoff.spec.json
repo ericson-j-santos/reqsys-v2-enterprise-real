@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Handoff MSAL para navegador móvel embutido",
+  "status": "implemented",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "frontend/src/auth/__tests__/msalRedirectHandoff.test.js",
+      "frontend/src/auth/__tests__/msal.test.js",
+      "frontend/src/auth/__tests__/startupFailSafe.test.js",
+      "frontend/src/services/__tests__/api.test.js"
+    ],
+    "evidence_contract": "O retorno OAuth sobrevive a novo contexto de sessionStorage sem persistir tokens e continua fail-closed para state, clientId e TTL."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/mobile-msal-session-handoff.requirements.md",
+    "implementation": "frontend/src/auth/msalRedirectHandoff.js"
+  },
+  "risk": {
+    "production": false,
+    "environment": "dev",
+    "secrets": false
+  }
+}

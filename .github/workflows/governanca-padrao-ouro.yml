@@ -30,7 +30,7 @@ jobs:
           arquivos_obrigatorios=(
             "docs/governanca/PADRAO_OURO_ENTERPRISE.md"
             "docs/ADR/ADR-0001-padrao-ouro-enterprise.md"
-            ".github/PULL_REQUEST_TEMPLATE.md"
+            ".github/pull_request_template.md"
           )
 
           for arquivo in "${arquivos_obrigatorios[@]}"; do

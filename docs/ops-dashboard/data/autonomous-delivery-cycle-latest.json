@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T00:00:00.000Z",
+  "repo": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "mode": "seed",
+  "required_label": "cycle:auto-merge-approved",
+  "max_prs": 1,
+  "candidate_count": 0,
+  "merged_count": 0,
+  "eligible_count": 0,
+  "decisions": [],
+  "next_increments": [],
+  "guardrails": [
+    "requires_explicit_cycle_label",
+    "requires_merge_queue_eligible_label",
+    "requires_all_required_workflows_green",
+    "requires_expected_head_sha",
+    "squash_merge_only",
+    "post_merge_push_observation",
+    "next_increment_capture_report_only"
+  ]
+}

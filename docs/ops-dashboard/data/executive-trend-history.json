@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "window_size": 10,
+  "summary": {
+    "entries": 1,
+    "executive_trend": "stable",
+    "readiness_trend": "stable",
+    "mergeability_trend": "stable",
+    "executive_slope": 0,
+    "readiness_slope": 0,
+    "mergeability_slope": 0,
+    "operational_decay_percent": 54.73,
+    "latest_freeze_recommendation": "freeze_expansion",
+    "latest_next_bottleneck": "runtime_publico_e_readiness"
+  },
+  "history": [
+    {
+      "timestamp_epoch": 1782589500,
+      "executive_score": 36.8,
+      "readiness_score": 25,
+      "mergeability_score": 19,
+      "strategic_score": 66.43,
+      "next_bottleneck": "runtime_publico_e_readiness",
+      "recommended_action": "stabilizar_evidencias_antes_de_expandir",
+      "freeze_recommendation": "freeze_expansion"
+    }
+  ],
+  "guardrails": [
+    "offline_history_only",
+    "no_predictive_ai_decision",
+    "recommendation_does_not_override_ci",
+    "governed_expansion_only"
+  ]
+}

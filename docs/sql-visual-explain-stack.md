@@ -2,214 +2,42 @@
 
 ## Objetivo
 
-Aplicar duas frentes complementares para estudo, análise e governança de SQL:
+Complementar a **Query Intelligence Platform** já integrada ao ReqSys com um fluxo offline para documentação, ensino e revisão de consultas SQL.
 
-1. **Fluxo didático:** actuallyEXPLAIN + IA + DBeaver/pgAdmin.
-2. **Fluxo enterprise:** DBeaver/DataGrip + EXPLAIN ANALYZE + SQLGlot + documentação Mermaid/ERD versionada.
+A superfície interativa canônica permanece `/query-intelligence`. O utilitário Python deste incremento gera documentação estática e **não conecta em banco nem executa SQL**.
 
-Este documento segue o padrão operacional: **Contexto → Missão → Análise → Query → Resultado**.
+## Camadas
 
----
-
-## 1. Fluxo didático
-
-### Contexto
-
-Consulta base analisada:
-
-```sql
-SELECT
-  u.id,
-  u.name,
-  o.total
-FROM users u
-JOIN orders o ON o.user_id = u.id
-WHERE o.total > 100
-ORDER BY o.total DESC;
-```
-
-### Missão
-
-Identificar usuários com pedidos acima de 100, exibindo usuário, nome e total do pedido, ordenando pelos maiores valores.
-
-### Análise lógica
-
-| Etapa | Elemento SQL | Interpretação |
+| Camada | Superfície | Papel |
 |---|---|---|
-| Fonte principal | `users u` | Entidade de clientes/usuários |
-| Relacionamento | `orders o ON o.user_id = u.id` | Junta pedidos ao usuário dono do pedido |
-| Filtro | `o.total > 100` | Mantém apenas pedidos relevantes por valor |
-| Projeção | `u.id`, `u.name`, `o.total` | Exibe identificação e valor do pedido |
-| Ordenação | `ORDER BY o.total DESC` | Lista maiores pedidos primeiro |
+| Interativa | `/query-intelligence` | análise estática, riscos e relações lógicas |
+| Offline | `scripts/sql_visual_explain_analyzer.py` | relatório Markdown/Mermaid versionável |
+| Exemplo | `examples/sql/orders_users_example.sql` | massa sem dados reais |
+| Lab | `public/sql-visual-explain-lab.html` | explicação visual estática |
+| Banco | DBeaver/pgAdmin/DataGrip ou equivalente | execução e plano real, fora do analisador |
 
-### Uso recomendado
+## Limites
 
-| Ferramenta | Aplicação |
-|---|---|
-| actuallyEXPLAIN | Visualizar intenção lógica da consulta |
-| ChatGPT/Claude | Explicar regras, lacunas, riscos e alternativas |
-| DBeaver/pgAdmin | Executar SQL, validar resultado e inspecionar schema |
+- O analisador não executa SQL.
+- Não abre conexão de banco.
+- Não mede custo do otimizador.
+- Não executa `EXPLAIN ANALYZE`.
+- O parser é heurístico; não substitui parser AST completo.
+- Comandos potencialmente destrutivos são sinalizados na saída.
 
----
+## Fluxo seguro
 
-## 2. Fluxo enterprise
+1. analisar a intenção em Query Intelligence;
+2. gerar relatório offline quando for necessário versionar evidência documental;
+3. revisar a consulta;
+4. executar `EXPLAIN` em ambiente controlado;
+5. executar `EXPLAIN ANALYZE` apenas quando a operação for segura e autorizada;
+6. nunca usar o lab ou o relatório estático como prova de performance real.
 
-### Stack recomendada
+## Exemplo
 
-| Camada | Ferramenta | Finalidade |
-|---|---|---|
-| IDE SQL | DBeaver ou DataGrip | Execução, histórico, explain e inspeção |
-| Banco | PostgreSQL | `EXPLAIN`, `EXPLAIN ANALYZE`, índices e estatísticas |
-| Parser | SQLGlot | AST, linhagem, tabelas, colunas e dialetos SQL |
-| Documentação | Mermaid/ERD | Relações versionadas no Git |
-| Governança | CI/CD | Validar scripts, documentação e padrões |
-
-### Critérios mínimos de governança
-
-- Toda query relevante deve ter objetivo de negócio documentado.
-- Toda query analítica deve declarar tabelas, joins, filtros e métricas.
-- Toda query crítica deve ter `EXPLAIN ANALYZE` salvo ou resumido.
-- Toda relação relevante deve ter ERD ou diagrama Mermaid versionado.
-- Toda evolução deve preservar rastreabilidade em Git.
-
----
-
-## 3. Consultas aplicáveis ao exemplo
-
-### 3.1 Total gasto por usuário
-
-```sql
-SELECT
-  u.id,
-  u.name,
-  SUM(o.total) AS total_gasto
-FROM users u
-JOIN orders o ON o.user_id = u.id
-GROUP BY u.id, u.name
-ORDER BY total_gasto DESC;
+```bash
+python scripts/sql_visual_explain_analyzer.py \
+  --input examples/sql/orders_users_example.sql \
+  --output /tmp/sql_visual_explain_report.md
 ```
-
-### 3.2 Quantidade de pedidos por usuário
-
-```sql
-SELECT
-  u.id,
-  u.name,
-  COUNT(o.id) AS quantidade_pedidos
-FROM users u
-JOIN orders o ON o.user_id = u.id
-GROUP BY u.id, u.name
-ORDER BY quantidade_pedidos DESC;
-```
-
-### 3.3 Ticket médio por usuário
-
-```sql
-SELECT
-  u.id,
-  u.name,
-  AVG(o.total) AS ticket_medio
-FROM users u
-JOIN orders o ON o.user_id = u.id
-GROUP BY u.id, u.name
-ORDER BY ticket_medio DESC;
-```
-
-### 3.4 Usuários sem pedidos
-
-```sql
-SELECT
-  u.id,
-  u.name
-FROM users u
-LEFT JOIN orders o ON o.user_id = u.id
-WHERE o.id IS NULL;
-```
-
-### 3.5 Pedidos acima da média geral
-
-```sql
-SELECT
-  u.id,
-  u.name,
-  o.total
-FROM users u
-JOIN orders o ON o.user_id = u.id
-WHERE o.total > (
-  SELECT AVG(total)
-  FROM orders
-)
-ORDER BY o.total DESC;
-```
-
-### 3.6 Ranking dos maiores pedidos por usuário
-
-```sql
-SELECT
-  u.id,
-  u.name,
-  o.total,
-  ROW_NUMBER() OVER (
-    PARTITION BY u.id
-    ORDER BY o.total DESC
-  ) AS ranking_pedido
-FROM users u
-JOIN orders o ON o.user_id = u.id;
-```
-
-### 3.7 Maior pedido de cada usuário
-
-```sql
-SELECT
-  id,
-  name,
-  total
-FROM (
-  SELECT
-    u.id,
-    u.name,
-    o.total,
-    ROW_NUMBER() OVER (
-      PARTITION BY u.id
-      ORDER BY o.total DESC
-    ) AS rn
-  FROM users u
-  JOIN orders o ON o.user_id = u.id
-) x
-WHERE rn = 1
-ORDER BY total DESC;
-```
-
----
-
-## 4. Diagrama lógico Mermaid
-
-```mermaid
-erDiagram
-  USERS ||--o{ ORDERS : possui
-  USERS {
-    int id PK
-    string name
-  }
-  ORDERS {
-    int id PK
-    int user_id FK
-    numeric total
-  }
-```
-
----
-
-## 5. Próximo incremento recomendado
-
-Implementar um utilitário versionado para:
-
-1. Receber uma query SQL.
-2. Extrair tabelas, joins, colunas e filtros via SQLGlot.
-3. Gerar Markdown com intenção lógica.
-4. Gerar Mermaid ERD ou fluxo lógico.
-5. Opcionalmente executar `EXPLAIN`/`EXPLAIN ANALYZE` em ambiente controlado.
-
-Status atual: **documentação operacional aplicada**.
-
-Status alvo: **SQL Query Intelligence integrado ao runtime/documentação viva**.

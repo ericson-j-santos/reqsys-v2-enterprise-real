@@ -1,0 +1,5 @@
+[
+  {"demanda_id":"DEM-TREINO-0001","tipo_servico":"ANALISE_DOCUMENTAL","data_referencia":"2026-08-10","simular_falha":false},
+  {"demanda_id":"DEM-TREINO-0002","tipo_servico":"VALIDACAO_CADASTRAL","data_referencia":"2026-08-10","simular_falha":true}
+]
+

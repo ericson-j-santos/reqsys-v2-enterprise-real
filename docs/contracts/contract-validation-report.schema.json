@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/contract-validation-report.schema.json",
+  "title": "ReqSys Contract Validation Report Artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "status", "contracts"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "status": { "type": "string", "enum": ["passed", "warning"] },
+    "contracts": { "type": "array", "items": { "type": "object" } }
+  }
+}

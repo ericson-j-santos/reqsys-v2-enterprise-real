@@ -1,0 +1,21 @@
+{
+  "feature_name": "kubernetes-argocd-dev-bootstrap",
+  "project": "ReqSys v2 Enterprise — plataforma GitOps",
+  "created_at": "2026-09-25",
+  "updated_at": "2026-09-25",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Bootstrap GitOps fail-closed de Kubernetes + Argo CD restrito a DEV, com canário não sensível, auto-sync bloqueado e E2E efêmero real em kind.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_kubernetes_gitops_bootstrap.py",
+      "tests/test_kubernetes_argocd_ephemeral_e2e_contract.py",
+      "tests/test_kubernetes_argocd_authorized_dispatch_contract.py"
+    ],
+    "evidence_contract": "Pre-PR Readiness registra o HEAD exato; CI E2E Governado executa kind + Argo CD e exige Synced/Healthy, revisão observada igual ao SHA, leitura independente do ConfigMap, controle negativo e artifact JSON. O Authorized Actions Gateway expõe somente /reqsys run kubernetes-argocd-e2e-dev para despachar esse E2E em main e valida o run_id/run_url/headSha/event exatos."
+  }
+}

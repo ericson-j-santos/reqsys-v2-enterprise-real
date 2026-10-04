@@ -1,12 +1,11 @@
 flowchart TD
-  A[Contexto da pergunta] --> B[Missao da consulta]
-  B --> C[Analise de tabelas e joins]
-  C --> D[Query SQL]
-  D --> E[Resultado validado]
-  D --> F[EXPLAIN / EXPLAIN ANALYZE]
-  D --> G[Parser SQLGlot futuro]
-  F --> H[Diagnostico de performance]
-  G --> I[Linhagem e documentacao viva]
-  I --> J[Mermaid / ERD versionado]
-  H --> K[Decisao operacional]
-  J --> K
+  A[SQL informado] --> B[Query Intelligence]
+  A --> C[Gerador offline]
+  B --> D[Análise estática e riscos]
+  C --> E[Markdown e Mermaid]
+  D --> F[Revisão humana]
+  E --> F
+  F --> G[EXPLAIN em ambiente controlado]
+  G --> H{Execução real é segura?}
+  H -->|Sim e autorizada| I[EXPLAIN ANALYZE]
+  H -->|Não| J[Somente EXPLAIN/documentação]

@@ -1,0 +1,25 @@
+name: Ops Dashboard Pareto Layer
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ops-dashboard/operational-runtime-governance.html'
+      - 'docs/ops-dashboard/data/operational-runtime-governance-consolidation.json'
+      - 'scripts/validate_ops_dashboard_pareto_layer.py'
+      - '.github/workflows/ops-dashboard-pareto-layer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-ops-dashboard-pareto-layer:
+    name: Validate Ops Dashboard Pareto Layer
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate dashboard layer
+        run: python3 scripts/validate_ops_dashboard_pareto_layer.py

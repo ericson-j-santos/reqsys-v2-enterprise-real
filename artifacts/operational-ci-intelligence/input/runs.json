@@ -1,0 +1,33 @@
+[
+  {
+    "databaseId": 101,
+    "workflowName": "CI — ReqSys v2 Enterprise",
+    "status": "completed",
+    "conclusion": "failure",
+    "headSha": "abc123",
+    "jobs": [
+      {
+        "log_excerpt": "Artifact not found during upload"
+      }
+    ]
+  },
+  {
+    "databaseId": 102,
+    "workflowName": "Backend Tests + Coverage (pytest)",
+    "status": "completed",
+    "conclusion": "failure",
+    "headSha": "def456",
+    "jobs": [
+      {
+        "log_excerpt": "pytest failed: assertion error"
+      }
+    ]
+  },
+  {
+    "databaseId": 103,
+    "workflowName": "CI — ReqSys v2 Enterprise",
+    "status": "completed",
+    "conclusion": "success",
+    "headSha": "ghi789"
+  }
+]
