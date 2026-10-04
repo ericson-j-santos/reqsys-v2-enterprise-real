@@ -83,7 +83,7 @@ jobs:
       GOVERNED_WORKFLOW_NAMES: |
         Governance Quality Gates
         Governança Padrão Ouro
-        Linguagem simples - autocorreção governada
+      CONDITIONAL_LANGUAGE_WORKFLOW_NAME: Linguagem simples PT-BR
       OPTIONAL_WORKFLOW_NAMES: |
         NGINX Security Profile
       STALL_AFTER_SECONDS: '300'
@@ -187,6 +187,25 @@ jobs:
             function isRateLimitError(error) {
               const message = String(error?.message || '');
               return error?.status === 403 && /rate limit/i.test(message);
+            }
+
+            async function listPullRequestFiles(prNumber) {
+              const files = await github.paginate(
+                github.rest.pulls.listFiles,
+                { owner, repo, pull_number: Number(prNumber), per_page: 100 },
+              );
+              return files.map((file) => String(file.filename || ''));
+            }
+
+            function requiresLanguageGate(paths) {
+              const exactPaths = new Set([
+                'frontend/scripts/validate-user-facing-language.mjs',
+                'frontend/scripts/validate-user-facing-language.test.mjs',
+                'frontend/scripts/fix-user-facing-language.mjs',
+                'frontend/scripts/fix-user-facing-language.test.mjs',
+                '.github/workflows/linguagem-simples-gate.yml',
+              ]);
+              return paths.some((path) => path.startsWith('frontend/src/') || exactPaths.has(path));
             }
 
             async function getPullRequest() {
@@ -402,7 +421,15 @@ jobs:
               pr = await getPullRequest();
               headSha = pr.head.sha;
               const strictWorkflowNames = parseList(process.env.STRICT_WORKFLOW_NAMES);
-              const governedWorkflowNames = parseList(process.env.GOVERNED_WORKFLOW_NAMES);
+              const changedFiles = await listPullRequestFiles(pr.number);
+              const languageWorkflowName = String(process.env.CONDITIONAL_LANGUAGE_WORKFLOW_NAME || '').trim();
+              const conditionalGovernedWorkflowNames = (
+                languageWorkflowName && requiresLanguageGate(changedFiles)
+              ) ? [languageWorkflowName] : [];
+              const governedWorkflowNames = [...new Set([
+                ...parseList(process.env.GOVERNED_WORKFLOW_NAMES),
+                ...conditionalGovernedWorkflowNames,
+              ])];
               const optionalWorkflowNames = parseList(process.env.OPTIONAL_WORKFLOW_NAMES);
               relevantWorkflowNames = new Set([
                 ...strictWorkflowNames,
