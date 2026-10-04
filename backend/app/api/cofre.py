@@ -1,5 +1,10 @@
 import hashlib
 import json
+from datetime import datetime, timezone
+from fnmatch import fnmatch
+from secrets import token_urlsafe
+
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.core.cofre_verificador_cego import (
     CHAVE_OPERACIONAL_VERIFICADOR,
@@ -7,11 +12,6 @@ from app.core.cofre_verificador_cego import (
     verificar_valor_cego,
 )
 from app.core.verificador_constante import comparar_constante
-from datetime import datetime, timezone
-from fnmatch import fnmatch
-from secrets import token_urlsafe
-
-from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -375,9 +375,9 @@ def verificar_segredo(
         raise HTTPException(status_code=404, detail=f'Segredo "{payload.key}" não encontrado no cofre')
     try:
         result = verificar_valor_cego(payload.key, value, payload.value)
-    except VerificadorCegoIndisponivel as exc:
+    except VerificadorCegoIndisponivel:
         _auditar(db, x_correlation_id, ctx.ator, 'COFRE_VERIFICADOR_INDISPONIVEL', payload.key)
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail='Verificador de segredo indisponível')
 
     _auditar(
         db,

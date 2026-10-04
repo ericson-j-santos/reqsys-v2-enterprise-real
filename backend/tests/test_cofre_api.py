@@ -7,6 +7,7 @@ import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi.testclient import TestClient
 
+from app.api.cofre import _hash_token
 from app.core import secrets as secrets_module
 from app.core.cofre_verificador_cego import CHAVE_OPERACIONAL_VERIFICADOR
 from app.core.config import settings as _settings
@@ -636,6 +637,9 @@ class TestCofreVerificar:
             headers={'X-Vault-Token': self.TOKEN},
         )
         assert resp.status_code == 503
+        assert resp.json()['detail'] == 'Verificador de segredo indisponível'
+        assert 'pepper' not in resp.text.lower()
+        assert 'chave operacional' not in resp.text.lower()
 
     def test_pepper_nao_pode_ser_lido_resolvido_ou_verificado(self, monkeypatch):
         self._setup(monkeypatch)
