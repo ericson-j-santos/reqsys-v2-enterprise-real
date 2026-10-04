@@ -106,7 +106,7 @@
                 <v-divider class="my-4" />
 
                 <div class="subsection-title mb-2">
-                  <v-icon size="15">mdi-source-versão de código</v-icon>
+                  <v-icon size="15">mdi-vector-link</v-icon>
                   Dependências diretas
                 </div>
                 <div class="dependency-list">
