@@ -8,10 +8,12 @@ if str(ROOT_DIR) not in sys.path:
 from scripts.pr_ci_watch import (  # noqa: E402
     REQUIRED_WORKFLOWS,
     FailureDetail,
+    PRStructure,
     WorkflowRun,
     classify,
     decide_remediation,
     latest_relevant_runs,
+    render_structural_sweep_markdown,
 )
 
 
@@ -184,3 +186,61 @@ def test_workflow_outside_retry_allowlist_is_never_rerun() -> None:
 
     assert decision["action"] == "escalate"
     assert decision["reason"] == "workflow_not_in_retry_allowlist"
+
+
+
+def structure(
+    *,
+    number: str = "10",
+    mergeable: bool | None = True,
+    mergeable_state: str = "clean",
+    behind_by: int = 0,
+    changed_files: int = 1,
+    created_at: str = "2026-01-01T00:00:00Z",
+) -> PRStructure:
+    return PRStructure(
+        number=number,
+        html_url=f"https://example.local/pull/{number}",
+        created_at=created_at,
+        head_sha="a" * 40,
+        base_sha="b" * 40,
+        mergeable=mergeable,
+        mergeable_state=mergeable_state,
+        behind_by=behind_by,
+        ahead_by=1,
+        changed_files=changed_files,
+        draft=True,
+    )
+
+
+def test_structural_priority_places_conflict_before_empty_and_behind() -> None:
+    items = [
+        structure(number="10", behind_by=2),
+        structure(number="20", changed_files=0),
+        structure(number="30", mergeable=False, mergeable_state="dirty"),
+    ]
+    ordered = sorted(items, key=lambda item: (item.priority, item.created_at or "", int(item.number)))
+    assert [item.structural_state for item in ordered] == ["conflicting", "empty_change", "behind"]
+
+
+def test_empty_change_is_not_treated_as_clean() -> None:
+    assert structure(changed_files=0).structural_state == "empty_change"
+
+
+def test_behind_with_real_diff_is_safe_candidate() -> None:
+    assert structure(behind_by=3, changed_files=2).structural_state == "behind"
+
+
+def test_unknown_mergeability_fails_closed() -> None:
+    assert structure(mergeable=None, mergeable_state="unknown").structural_state == "pending_mergeability"
+
+
+def test_structural_report_exposes_priority_before_ci() -> None:
+    markdown = render_structural_sweep_markdown(
+        "owner/repo",
+        [structure(number="7", mergeable=False, mergeable_state="dirty")],
+        {"pr_number": "7", "expected_head_sha": "a" * 40, "executed": False, "reason": "conflict_requires_objective_reconciliation"},
+    )
+    assert "fila estrutural" in markdown
+    assert "conflicting" in markdown
+    assert "conflito → diff vazio → branch atrasada → CI" in markdown
