@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from base64 import b64decode, b64encode
 
-import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi.testclient import TestClient
 
@@ -270,7 +269,7 @@ class TestCofreResolver:
         assert resp.status_code == 400
 
     def test_chave_inexistente_retorna_404(self, monkeypatch):
-        fk = _vault_patch(monkeypatch)
+        _vault_patch(monkeypatch)
         monkeypatch.setattr(_settings, 'vault_api_token', self.TOKEN)
         resp = client.post(
             '/v1/cofre/resolver',
