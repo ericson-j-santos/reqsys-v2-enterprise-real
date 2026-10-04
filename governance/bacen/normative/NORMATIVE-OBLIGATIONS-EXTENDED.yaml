@@ -1,0 +1,266 @@
+schema_version: 1.0.0
+mode: advisory
+axis: normative
+set: extended-2025-controls
+provenance:
+  regulation: CMN-5274-2025
+  published_at: "2025-12-18"
+obligations:
+  - uid: norm-3f8d8d1a
+    code: CMN4893-ART3-P6
+    title: "Verificação de desenvolvimento seguro em sistemas adquiridos ou desenvolvidos por terceiros executados em recursos próprios"
+    source: {article: "3", paragraph: "6"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-7a1a1b01
+    code: CMN4893-ART3-P7-I
+    title: "Trilhas de auditoria fim a fim com logs para falhas, comportamentos atípicos e análises"
+    source: {article: "3", paragraph: "7", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-7a1a1b02
+    code: CMN4893-ART3-P7-II
+    title: "Definição de tempo de retenção conforme o tipo de processamento"
+    source: {article: "3", paragraph: "7", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-7a1a1b03
+    code: CMN4893-ART3-P7-III
+    title: "Retenção segura das trilhas de auditoria"
+    source: {article: "3", paragraph: "7", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-8a2b2c01
+    code: CMN4893-ART3-P8-I
+    title: "Testes e análises periódicos para detecção de vulnerabilidades em sistemas"
+    source: {article: "3", paragraph: "8", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-8a2b2c02
+    code: CMN4893-ART3-P8-II
+    title: "Varreduras periódicas para identificar dispositivos indevidamente conectados"
+    source: {article: "3", paragraph: "8", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-8a2b2c03
+    code: CMN4893-ART3-P8-III
+    title: "Análises periódicas dos recursos tecnológicos para identificar vulnerabilidades"
+    source: {article: "3", paragraph: "8", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-8a2b2c04
+    code: CMN4893-ART3-P8-IV
+    title: "Realização de testes de intrusão"
+    source: {article: "3", paragraph: "8", item: "IV"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-8a2b2c05
+    code: CMN4893-ART3-P8-V
+    title: "Correção tempestiva das vulnerabilidades identificadas"
+    source: {article: "3", paragraph: "8", item: "V"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-9b3c3d01
+    code: CMN4893-ART3-P9-I
+    title: "Limitação de acesso à rede corporativa a usuários credenciados e dispositivos autorizados"
+    source: {article: "3", paragraph: "9", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-9b3c3d02
+    code: CMN4893-ART3-P9-II
+    title: "Revisão periódica e tempestiva das permissões de acesso"
+    source: {article: "3", paragraph: "9", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-9b3c3d03
+    code: CMN4893-ART3-P9-III
+    title: "Múltiplos fatores de autenticação para acesso externo à rede corporativa"
+    source: {article: "3", paragraph: "9", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-a04d4e01
+    code: CMN4893-ART3-P10-I
+    title: "Gestão do ciclo de vida dos recursos computacionais"
+    source: {article: "3", paragraph: "10", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-a04d4e02
+    code: CMN4893-ART3-P10-II
+    title: "Aplicação regular de correções de segurança"
+    source: {article: "3", paragraph: "10", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-a04d4e03
+    code: CMN4893-ART3-P10-III
+    title: "Configuração adequada dos serviços suportados pelos recursos computacionais"
+    source: {article: "3", paragraph: "10", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-a04d4e04
+    code: CMN4893-ART3-P10-IV
+    title: "Alteração de senhas e outros padrões utilizáveis em acessos indevidos"
+    source: {article: "3", paragraph: "10", item: "IV"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-b15e5f01
+    code: CMN4893-ART3-P11-I
+    title: "Segmentação de rede com proteção especial de produção e processos críticos"
+    source: {article: "3", paragraph: "11", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-b15e5f02
+    code: CMN4893-ART3-P11-II
+    title: "Regras de firewall e monitoramento de conexões externas"
+    source: {article: "3", paragraph: "11", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-b15e5f03
+    code: CMN4893-ART3-P11-III
+    title: "Critérios e monitoramento de conexões com ambientes externos"
+    source: {article: "3", paragraph: "11", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-b15e5f04
+    code: CMN4893-ART3-P11-IV
+    title: "Identificação e prevenção de conexões indevidas com ambientes externos"
+    source: {article: "3", paragraph: "11", item: "IV"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-b15e5f05
+    code: CMN4893-ART3-P11-V
+    title: "Processos e ferramentas para eventos atípicos em produção, VPN e acessos privilegiados"
+    source: {article: "3", paragraph: "11", item: "V"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-b15e5f06
+    code: CMN4893-ART3-P11-VI
+    title: "Restrição de acesso às redes corporativas a dispositivos autorizados"
+    source: {article: "3", paragraph: "11", item: "VI"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-c26f6001
+    code: CMN4893-ART3-P12-I
+    title: "Monitoramento do uso de certificados e assinaturas digitais com rastreabilidade"
+    source: {article: "3", paragraph: "12", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-c26f6002
+    code: CMN4893-ART3-P12-II
+    title: "Guarda de informações e controles de acesso físico e lógico a chaves privadas"
+    source: {article: "3", paragraph: "12", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-c26f6003
+    code: CMN4893-ART3-P12-III
+    title: "Prevenção do compartilhamento indevido de chaves privadas"
+    source: {article: "3", paragraph: "12", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-c26f6004
+    code: CMN4893-ART3-P12-IV
+    title: "Validação tempestiva de certificados revogados"
+    source: {article: "3", paragraph: "12", item: "IV"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707101
+    code: CMN4893-ART3A-I-A
+    title: "MFA para acesso administrativo aos ambientes Pix e STR"
+    source: {article: "3-A", item: "I", subitem: "a"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707102
+    code: CMN4893-ART3A-I-B
+    title: "Isolamento físico e lógico do ambiente Pix, inclusive instância dedicada em nuvem"
+    source: {article: "3-A", item: "I", subitem: "b"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707103
+    code: CMN4893-ART3A-I-C
+    title: "Isolamento físico e lógico do ambiente STR, inclusive instância dedicada em nuvem"
+    source: {article: "3-A", item: "I", subitem: "c"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707104
+    code: CMN4893-ART3A-I-D
+    title: "Monitoramento e guarda de credenciais e certificados digitais, especialmente no SPI"
+    source: {article: "3-A", item: "I", subitem: "d"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707105
+    code: CMN4893-ART3A-I-E
+    title: "Validação de integridade fim a fim antes da assinatura digital das mensagens"
+    source: {article: "3-A", item: "I", subitem: "e"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707106
+    code: CMN4893-ART3A-I-F
+    title: "Vedação de acesso de terceiros às chaves privadas usadas para assinatura de mensagens"
+    source: {article: "3-A", item: "I", subitem: "f"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707107
+    code: CMN4893-ART3A-II
+    title: "Controles de prevenção, detecção e resposta a fraudes para participação em SMF"
+    source: {article: "3-A", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707108
+    code: CMN4893-ART3A-PU-I
+    title: "Compatibilidade dos requisitos adicionais com a própria Resolução CMN 4.893"
+    source: {article: "3-A", paragraph: "paragrafo_unico", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707109
+    code: CMN4893-ART3A-PU-II
+    title: "Compatibilidade dos requisitos adicionais com a regulamentação em vigor"
+    source: {article: "3-A", paragraph: "paragrafo_unico", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-d3707110
+    code: CMN4893-ART3A-PU-III
+    title: "Observância de todos os requisitos técnicos RSFN previstos nos documentos técnicos do BCB"
+    source: {article: "3-A", paragraph: "paragrafo_unico", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-e4818201
+    code: CMN4893-ART22A-I
+    title: "Periodicidade mínima anual dos testes de intrusão"
+    source: {article: "22-A", item: "I"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-e4818202
+    code: CMN4893-ART22A-II
+    title: "Independência e imparcialidade na realização dos testes de intrusão"
+    source: {article: "22-A", item: "II"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-e4818203
+    code: CMN4893-ART22A-III
+    title: "Documentação dos resultados, vulnerabilidades e planos de ação dos testes de intrusão"
+    source: {article: "22-A", item: "III"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-f5929301
+    code: CMN4893-ART22B-CAPUT
+    title: "Classificação do serviço de comunicação eletrônica de dados na RSFN como serviço relevante"
+    source: {article: "22-B"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-f5929302
+    code: CMN4893-ART22B-P1
+    title: "Aplicação da relevância do serviço independentemente da forma de conexão com a RSFN"
+    source: {article: "22-B", paragraph: "1"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-f5929303
+    code: CMN4893-ART22B-P2
+    title: "Inclusão de processamento de mensagens no SFN e SPB no serviço relevante"
+    source: {article: "22-B", paragraph: "2"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null
+  - uid: norm-06a3a401
+    code: CMN4893-ART23-X
+    title: "Retenção por cinco anos dos resultados de pentest e planos de correção, contada da execução do teste"
+    source: {article: "23", item: "X"}
+    mapping: {state: pending, corporate_refs: [], implementation_refs: []}
+    assessment: null

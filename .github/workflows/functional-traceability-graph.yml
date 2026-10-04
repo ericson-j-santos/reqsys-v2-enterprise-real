@@ -1,0 +1,55 @@
+name: Functional Traceability Graph
+
+on:
+  pull_request:
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/functional-traceability-graph.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/functional-traceability-graph.yml"
+
+jobs:
+  functional-traceability-graph:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Product Intelligence event
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+
+      - name: Generate requirement quality score
+        run: |
+          python tools/product_intelligence/score_requirement_quality.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate functional traceability graph
+        run: |
+          python tools/product_intelligence/build_functional_traceability_graph.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Publish graph summary
+        run: |
+          cat reports/product-intelligence/functional-traceability-graph.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload graph artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: functional-traceability-graph
+          path: reports/product-intelligence/
+          if-no-files-found: error

@@ -1,0 +1,182 @@
+name: Executive Promotion Advisor Public Smoke History
+
+on:
+  workflow_run:
+    workflows:
+      - "Executive Promotion Advisor Homologation Trend Dashboard"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
+      public_url:
+        description: "URL pública opcional; vazio usa variável do ambiente"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: advisor-public-smoke-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke public Advisor trend and update environment history
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate implementation
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/smoke_executive_promotion_advisor_homologation_trend_public.py
+          python -m py_compile scripts/build_executive_promotion_advisor_public_smoke_history.py
+          python -m unittest tests/test_executive_promotion_advisor_public_smoke_history.py
+
+      - name: Resolve environment and public URL
+        id: target
+        env:
+          INPUT_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_PUBLIC_URL: ${{ inputs.public_url }}
+          DEV_URL: ${{ vars.REQSYS_OPS_DASHBOARD_DEV_URL }}
+          STG_URL: ${{ vars.REQSYS_OPS_DASHBOARD_STG_URL }}
+          PROD_URL: ${{ vars.REQSYS_OPS_DASHBOARD_PROD_URL }}
+        run: |
+          set -euo pipefail
+          environment="${INPUT_ENVIRONMENT:-dev}"
+          public_url="${INPUT_PUBLIC_URL:-}"
+          if [ -z "$public_url" ]; then
+            case "$environment" in
+              dev) public_url="$DEV_URL" ;;
+              stg) public_url="$STG_URL" ;;
+              prod) public_url="$PROD_URL" ;;
+              *) echo "ambiente inválido: $environment" >&2; exit 1 ;;
+            esac
+          fi
+          test -n "$public_url"
+          echo "environment=$environment" >> "$GITHUB_OUTPUT"
+          echo "public_url=$public_url" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve previous successful history run
+        id: previous
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          previous_run_id="$({
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/executive-promotion-advisor-public-smoke-history.yml/runs?status=success&per_page=20" \
+              --jq ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | .id" 2>/dev/null || true
+          } | head -n 1)"
+          echo "run_id=${previous_run_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Download previous environment history
+        if: steps.previous.outputs.run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: executive-promotion-advisor-public-smoke-history
+          path: artifacts/previous-advisor-public-smoke-history
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.previous.outputs.run_id }}
+
+      - name: Execute public smoke
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-promotion-advisor-public-smoke
+          python scripts/smoke_executive_promotion_advisor_homologation_trend_public.py \
+            --environment "${{ steps.target.outputs.environment }}" \
+            --public-url "${{ steps.target.outputs.public_url }}" \
+            --output artifacts/executive-promotion-advisor-public-smoke/evidence.json
+
+      - name: Build environment history
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/executive-promotion-advisor-public-smoke-history
+          args=(
+            --evidence artifacts/executive-promotion-advisor-public-smoke/evidence.json
+            --output artifacts/executive-promotion-advisor-public-smoke-history/history.json
+            --max-samples 90
+          )
+          if [ -f artifacts/previous-advisor-public-smoke-history/history.json ]; then
+            args+=(--previous-history artifacts/previous-advisor-public-smoke-history/history.json)
+          fi
+          python scripts/build_executive_promotion_advisor_public_smoke_history.py "${args[@]}"
+
+      - name: Validate report-only guardrails
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('artifacts/executive-promotion-advisor-public-smoke/evidence.json').read_text())
+          history = json.loads(Path('artifacts/executive-promotion-advisor-public-smoke-history/history.json').read_text())
+          assert evidence['mode'] == 'report-only'
+          assert evidence['production_blocker'] is False
+          assert evidence['human_approval_required'] is True
+          assert history['mode'] == 'report-only'
+          assert history['production_blocker'] is False
+          assert history['human_approval_required'] is True
+          PY
+
+      - name: Publish public smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-public-smoke-${{ steps.target.outputs.environment }}
+          path: artifacts/executive-promotion-advisor-public-smoke
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish environment history
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-promotion-advisor-public-smoke-history
+          path: artifacts/executive-promotion-advisor-public-smoke-history
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize smoke
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('artifacts/executive-promotion-advisor-public-smoke/evidence.json').read_text())
+          history = json.loads(Path('artifacts/executive-promotion-advisor-public-smoke-history/history.json').read_text())
+          environment = evidence['environment']
+          summary = history['environments'][environment]['summary']
+          print('# Executive Promotion Advisor — smoke público')
+          print()
+          print(f"- Ambiente: {environment.upper()}")
+          print(f"- Decisão: {evidence['decision']}")
+          print(f"- Status: {evidence['status']}")
+          print(f"- Amostras do ambiente: {summary['sample_count']}")
+          print(f"- Taxa de sucesso: {summary['pass_rate_percent']}%")
+          print(f"- Sequência estável: {summary['stable_streak']}")
+          print('- Modo: report-only')
+          print('- Aprovação humana: obrigatória')
+          print('- Bloqueio automático de produção: não')
+          PY

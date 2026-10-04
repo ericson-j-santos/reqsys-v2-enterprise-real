@@ -1,0 +1,21 @@
+{
+  "feature_name": "repository-admin-control-plane",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Consolida a issue #115 em um control plane read-only de registry, snapshot e decisao PR/CI por SHA exato.",
+  "environment": "backend / GitHub API",
+  "production_enabled": false,
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_repository_admin.py"
+    ],
+    "evidence_contract": "registry versionado; snapshot por SHA exato; decisao fail-closed; skipped/neutral nao contam como verde; nenhuma mutacao automatica no P0."
+  }
+}

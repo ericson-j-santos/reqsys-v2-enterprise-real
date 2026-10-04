@@ -1,0 +1,67 @@
+name: Executive Sync Stability Index Public Smoke
+
+on:
+  workflow_run:
+    workflows: ["Executive Sync Stability Index Dashboard"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+      base_url:
+        description: URL pública do Ops Dashboard
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  public-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+      TARGET_BASE_URL: ${{ inputs.base_url || vars.REQSYS_OPS_DASHBOARD_DEV_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile scripts/smoke_executive_sync_stability_index_public.py
+      - name: Unit tests
+        run: python -m unittest tests/test_smoke_executive_sync_stability_index_public.py
+      - name: Recover previous history
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          workflow: executive-sync-stability-index-public-smoke.yml
+          name: executive-sync-stability-index-public-history-${{ env.TARGET_ENVIRONMENT }}
+          path: artifacts
+          branch: main
+      - name: Public smoke and history
+        run: |
+          test -n "$TARGET_BASE_URL"
+          python scripts/smoke_executive_sync_stability_index_public.py \
+            --base-url "$TARGET_BASE_URL" \
+            --environment "$TARGET_ENVIRONMENT"
+      - name: Validate guardrails
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('artifacts/executive-sync-stability-index-public-smoke.json'))
+          assert p['mode']=='report-only'
+          assert p['production_blocker'] is False
+          assert p['human_approval_required'] is True
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: executive-sync-stability-index-public-history-${{ env.TARGET_ENVIRONMENT }}
+          path: artifacts/
+          retention-days: 90

@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:55:00-03:00",
+  "domain": "parallel_pr_governance",
+  "metric_group": "governed_pr_batching",
+  "batching_policy": {
+    "batch_size_normal": 6,
+    "batch_size_aggressive": 10,
+    "batch_size_hard_stop": 12,
+    "batch_unit": "one_file_or_one_responsibility_per_pr",
+    "base_branch": "main"
+  },
+  "batch_acceptance_criteria": [
+    "each PR changes an exclusive path",
+    "each PR has one responsibility",
+    "no PR edits runtime core while runtime PRs are open",
+    "no PR edits frontend dashboard while dashboard PRs are open",
+    "all required checks pass before merge"
+  ],
+  "next_batch_candidates": [
+    "dashboard visualization after runtime/dashboard PRs close",
+    "ruleset API snapshot when connector or workflow permission is available",
+    "historical lead-time metrics after enough merged samples"
+  ]
+}

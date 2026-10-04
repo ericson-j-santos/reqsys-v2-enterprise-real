@@ -1,6 +1,8 @@
 // Fluxo OAuth2/PKCE puro — sem @azure/msal-browser
 // Web Crypto API (disponível em todos os browsers modernos)
 
+import { getAuthCallbackUri } from './env'
+
 const KEY_VERIFIER = 'reqsys_pkce_verifier'
 const KEY_STATE    = 'reqsys_oauth_state'
 
@@ -32,7 +34,7 @@ export async function initiateAzureLogin(tenantId, clientId) {
   const params = new URLSearchParams({
     client_id:             clientId,
     response_type:         'code',
-    redirect_uri:          window.location.origin,
+    redirect_uri:          getAuthCallbackUri(),
     scope:                 'openid profile email',
     code_challenge:        challenge,
     code_challenge_method: 'S256',
@@ -72,5 +74,5 @@ export function extractOAuthCallback() {
   sessionStorage.removeItem(KEY_VERIFIER)
   sessionStorage.removeItem(KEY_STATE)
 
-  return { code, verifier, redirectUri: window.location.origin }
+  return { code, verifier, redirectUri: getAuthCallbackUri() }
 }

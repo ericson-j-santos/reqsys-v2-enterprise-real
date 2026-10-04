@@ -1,0 +1,74 @@
+name: BACEN-02 Governed MFA Evidence Ingestion
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/ingest_bacen_02_mfa_evidence.py"
+      - "tests/test_ingest_bacen_02_mfa_evidence.py"
+      - ".github/workflows/bacen-02-governed-mfa-ingestion.yml"
+      - "scripts/validate_bacen_idp_mfa_evidence.py"
+  workflow_dispatch:
+    inputs:
+      expected_sha256:
+        description: "SHA-256 do JSON MFA externo antes do base64"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-02-governed-mfa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Compile governed ingestion
+        run: python -m py_compile scripts/ingest_bacen_02_mfa_evidence.py
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_ingest_bacen_02_mfa_evidence.py
+
+  ingest:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      BACEN_02_MFA_EVIDENCE_BASE64: ${{ secrets.BACEN_02_MFA_EVIDENCE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify governed payload is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${BACEN_02_MFA_EVIDENCE_BASE64:-}" ]]; then
+            echo "::error::Configure BACEN_02_MFA_EVIDENCE_BASE64 with the base64-encoded external JSON."
+            exit 1
+          fi
+      - name: Ingest and normalize validated MFA evidence
+        run: |
+          python scripts/ingest_bacen_02_mfa_evidence.py \
+            --base64-env BACEN_02_MFA_EVIDENCE_BASE64 \
+            --expected-sha256 "${{ inputs.expected_sha256 }}" \
+            --require-evidenced \
+            --output artifacts/bacen/bacen-02-governed-mfa-ingestion.json
+      - name: Publish normalized evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-02-governed-mfa-ingestion
+          path: artifacts/bacen/bacen-02-governed-mfa-ingestion.json
+          if-no-files-found: error
+          retention-days: 365

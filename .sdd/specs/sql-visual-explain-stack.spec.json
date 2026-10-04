@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "SQL Visual Explain Stack",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-22",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "Query Intelligence permanece a superficie interativa canonica.",
+    "O analisador Python gera somente documentacao estatica e nao conecta em banco.",
+    "O analisador nao executa SQL nem EXPLAIN ANALYZE.",
+    "Comandos potencialmente destrutivos sao identificados no relatorio.",
+    "O lab HTML declara que e estatico e nao e evidencia de performance.",
+    "Exemplo e diagramas nao usam dados reais ou credenciais.",
+    "Testes unitarios e contrato preventivo ficam verdes no HEAD atual.",
+    "A branch fica behind_by=0, sem conflitos e com gates obrigatorios verdes."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_sql_visual_explain_analyzer.py",
+      "tests/test_sql_visual_explain_stack_contract.py"
+    ],
+    "tests": [
+      "tests/test_sql_visual_explain_analyzer.py",
+      "tests/test_sql_visual_explain_stack_contract.py"
+    ],
+    "evidence_contract": "O SQL Visual Explain e somente analise/documentacao offline, complementa o Query Intelligence e nao executa consultas ou planos reais."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/sql-visual-explain-stack.requirements.md",
+    "implementation": "scripts/sql_visual_explain_analyzer.py",
+    "interactive_surface": "frontend/src/services/queryIntelligence.js",
+    "tests": [
+      "tests/test_sql_visual_explain_analyzer.py",
+      "tests/test_sql_visual_explain_stack_contract.py"
+    ],
+    "documentation": [
+      "docs/sql-visual-explain-stack.md",
+      "docs/adr/ADR-SQL-VISUAL-EXPLAIN-STACK.md",
+      "docs/runbooks/sql-visual-explain-stack-runbook.md"
+    ],
+    "pull_request": "#77"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "offline-sql-documentation"
+  }
+}

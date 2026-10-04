@@ -1,0 +1,143 @@
+name: BACEN HITL Formal Completion Proposal
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/build_bacen_formal_completion_proposal.py"
+      - "tests/test_build_bacen_formal_completion_proposal.py"
+      - ".github/workflows/bacen-hitl-formal-completion-proposal.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: bacen-hitl-proposal-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  contract-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check pytest PyYAML
+      - run: python -m pytest -q tests/test_build_bacen_formal_completion_proposal.py
+
+  build-proposal:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request == null &&
+      startsWith(github.event.issue.title, '[HITL][BACEN-') &&
+      startsWith(github.event.comment.body, '/approve')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve authenticated actor permission
+        id: permission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          permission="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" \
+            --jq '.user.permission')"
+          echo "permission=$permission" >> "$GITHUB_OUTPUT"
+      - name: Materialize immutable event content
+        run: |
+          mkdir -p .tmp artifacts/bacen-hitl-proposal
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          Path(".tmp/issue.json").write_text(
+              json.dumps(
+                  {
+                      "number": event["issue"]["number"],
+                      "title": event["issue"].get("title") or "",
+                      "body": event["issue"].get("body") or "",
+                      "url": event["issue"]["html_url"],
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          Path(".tmp/issue-body.md").write_text(
+              event["issue"].get("body") or "",
+              encoding="utf-8",
+          )
+          Path(".tmp/comment-body.md").write_text(
+              event["comment"].get("body") or "",
+              encoding="utf-8",
+          )
+          PY
+      - name: Rebuild authenticated decision record
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          DECISION_ACTOR: ${{ github.event.comment.user.login }}
+          DECISION_PERMISSION: ${{ steps.permission.outputs.permission }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          python scripts/build_hitl_approval_decision.py \
+            --issue-number "$ISSUE_NUMBER" \
+            --issue-url "$ISSUE_URL" \
+            --issue-title "$ISSUE_TITLE" \
+            --issue-body-file .tmp/issue-body.md \
+            --comment-id "$COMMENT_ID" \
+            --comment-url "$COMMENT_URL" \
+            --comment-body-file .tmp/comment-body.md \
+            --actor "$DECISION_ACTOR" \
+            --permission "$DECISION_PERMISSION" \
+            --source-sha "$SOURCE_SHA" \
+            --output artifacts/bacen-hitl-proposal/decision.json
+      - name: Build non-applying formal completion proposal
+        run: |
+          python scripts/build_bacen_formal_completion_proposal.py \
+            --matrix governance/bacen/BACEN-CONTROL-MATRIX.yaml \
+            --issue .tmp/issue.json \
+            --decision artifacts/bacen-hitl-proposal/decision.json \
+            --output artifacts/bacen-hitl-proposal/proposal.json
+      - name: Comment proposal evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          decision="$(jq -r .decision artifacts/bacen-hitl-proposal/proposal.json)"
+          control="$(jq -r .control_id artifacts/bacen-hitl-proposal/proposal.json)"
+          gh issue comment "$ISSUE_NUMBER" --body "$(cat <<EOF
+          Proposta de conclusão formal BACEN gerada.
+
+          - Controle: **${control}**
+          - Decisão: **${decision}**
+          - Aplicação automática: **false**
+          - Declaração automática de implementação: **false**
+          - Artifact: \`bacen-hitl-formal-completion-${ISSUE_NUMBER}\`
+          - Produção acessada: **false**
+          EOF
+          )"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bacen-hitl-formal-completion-${{ github.event.issue.number }}
+          path: artifacts/bacen-hitl-proposal/
+          if-no-files-found: error
+          retention-days: 90

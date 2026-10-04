@@ -1,0 +1,191 @@
+name: Auto Public Runtime Evidence
+
+on:
+  workflow_run:
+    workflows:
+      - Main Post-Merge Validation
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      public_url:
+        description: "URL pública da API ReqSys"
+        required: true
+        default: ""
+      strict:
+        description: "Executar gate strict"
+        required: true
+        type: boolean
+        default: true
+      publish_comment:
+        description: "Publicar comentário governado"
+        required: true
+        type: boolean
+        default: false
+      issue_number:
+        description: "Issue/PR para comentário opcional"
+        required: false
+        default: ""
+      ref:
+        description: "Ref alvo"
+        required: true
+        default: "main"
+
+permissions:
+  actions: write
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  auto-dispatch-public-runtime-evidence:
+    name: Auto dispatch public runtime evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve trigger context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          UPSTREAM_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          UPSTREAM_EVENT: ${{ github.event.workflow_run.event || '' }}
+        run: |
+          set -euo pipefail
+          should_dispatch=false
+          skip_reason=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            should_dispatch=true
+          elif [ "$UPSTREAM_CONCLUSION" = "success" ] && [ "$UPSTREAM_EVENT" = "workflow_dispatch" ]; then
+            main_sha="$(gh api "repos/${REPOSITORY}/commits/main" --jq '.sha')"
+            if [ "$UPSTREAM_SHA" = "$main_sha" ]; then
+              should_dispatch=true
+            else
+              skip_reason="Skip esperado: upstream SHA não é a main atual."
+            fi
+          else
+            skip_reason="Skip esperado: upstream não é Main Post-Merge Validation fail-closed."
+          fi
+          echo "should_dispatch=${should_dispatch}" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=${skip_reason}" >> "$GITHUB_OUTPUT"
+
+      - name: Report expected skip
+        if: steps.ctx.outputs.should_dispatch != 'true'
+        run: |
+          echo "## Auto Public Runtime Evidence — skip esperado" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ${{ steps.ctx.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Modo: report_only (nao bloqueia malha CI)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout exact source for signed locator
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.ref || 'main' }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Node for signed PC24x7 locator
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Resolve signed PC24x7 DEV locator
+        id: locator
+        if: steps.ctx.outputs.should_dispatch == 'true' && (github.event_name != 'workflow_dispatch' || inputs.public_url == '')
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pc24x7-dev
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-dev/signed-locator.json >/dev/null
+
+      - name: Resolve inputs
+        id: inputs
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        env:
+          MANUAL_PUBLIC_URL: ${{ inputs.public_url || '' }}
+          LOCATOR_BASE_URL: ${{ steps.locator.outputs.base_url || '' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            public_url="${MANUAL_PUBLIC_URL:-$LOCATOR_BASE_URL}"
+            ref="${{ inputs.ref }}"
+            publish_comment="${{ inputs.publish_comment }}"
+            issue_number="${{ inputs.issue_number }}"
+          else
+            public_url="$LOCATOR_BASE_URL"
+            ref="main"
+            publish_comment="false"
+            issue_number=""
+          fi
+
+          if [ -z "$public_url" ]; then
+            echo "::error::Locator assinado não produziu URL DEV utilizável."
+            exit 1
+          fi
+          case "$public_url" in
+            https://*.trycloudflare.com) ;;
+            *) echo "::error::Runtime DEV fora do domínio PC24x7 governado: $public_url"; exit 1 ;;
+          esac
+          case "${public_url,,}" in
+            *fly.io*|*fly.dev*) echo "::error::Runtime DEV legado Fly.io rejeitado: $public_url"; exit 1 ;;
+          esac
+
+          echo "public_url=${public_url%/}" >> "$GITHUB_OUTPUT"
+          echo "strict=true" >> "$GITHUB_OUTPUT"
+          echo "publish_comment=$publish_comment" >> "$GITHUB_OUTPUT"
+          echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "provider=pc24x7" >> "$GITHUB_OUTPUT"
+
+      - name: Provar token efêmero nativo antes do dispatch
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "GITHUB_TOKEN efêmero não disponível." >&2
+            exit 1
+          fi
+          state="$(gh api "repos/${REPOSITORY}/actions/workflows/public-runtime-evidence.yml" --jq '.state')"
+          if [ "${state}" != "active" ]; then
+            echo "Workflow alvo indisponível para dispatch governado: ${state}" >&2
+            exit 1
+          fi
+          echo "Credencial efêmera nativa validada contra o workflow alvo (state=${state})."
+
+      - name: Dispatch Public Runtime Evidence Gate
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PUBLIC_URL: ${{ steps.inputs.outputs.public_url }}
+          STRICT: ${{ steps.inputs.outputs.strict }}
+          PUBLISH_COMMENT: ${{ steps.inputs.outputs.publish_comment }}
+          ISSUE_NUMBER: ${{ steps.inputs.outputs.issue_number }}
+          TARGET_REF: ${{ steps.inputs.outputs.ref }}
+        run: |
+          gh workflow run public-runtime-evidence.yml \
+            -R "${REPOSITORY}" \
+            --ref "${TARGET_REF}" \
+            -f "public_url=${PUBLIC_URL}" \
+            -f "strict=${STRICT}" \
+            -f "publish_comment=${PUBLISH_COMMENT}" \
+            -f "issue_number=${ISSUE_NUMBER}"
+
+      - name: Show latest public runtime evidence runs
+        if: steps.ctx.outputs.should_dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh run list \
+            -R "${REPOSITORY}" \
+            --workflow="public-runtime-evidence.yml" \
+            -L 5

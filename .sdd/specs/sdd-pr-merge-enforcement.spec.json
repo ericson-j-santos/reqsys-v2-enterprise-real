@@ -1,0 +1,19 @@
+{
+  "feature_name": "sdd-pr-merge-enforcement",
+  "project": "ReqSys v2 Enterprise — governança de merge",
+  "created_at": "2026-09-17",
+  "updated_at": "2026-09-17",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Executa o SDD Gate no SHA exato de toda PR dentro da fila de merge governada e incorpora seu resultado à elegibilidade.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_sdd_pr_merge_enforcement.py"
+    ],
+    "evidence_contract": "Governed Merge Queue deve registrar e consumir o resultado do job sdd-contract para o head_sha atual da PR."
+  }
+}

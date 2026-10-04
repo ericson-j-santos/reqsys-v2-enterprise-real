@@ -1,0 +1,38 @@
+[
+  {
+    "name": "reqsys-dev-sharepoint-catalog-reader",
+    "environment": "development",
+    "purpose": "sharepoint-package-catalog-read",
+    "data_classification": "confidential",
+    "tenant_id": "6d09c88c-0617-490c-8329-305e577684bc",
+    "client_id": "7fac1d29-0769-465b-a4a0-d7d61228a979",
+    "current_secret_ref": "env://SHAREPOINT_GRAPH_CLIENT_SECRET",
+    "next_secret_ref": "env://SHAREPOINT_GRAPH_CLIENT_SECRET_NEXT",
+    "rotated_at": "2026-10-01T18:10:43Z",
+    "max_age_days": 88
+  },
+  {
+    "name": "reqsys-hml-sharepoint-catalog-reader",
+    "environment": "staging",
+    "purpose": "sharepoint-package-catalog-read",
+    "data_classification": "confidential",
+    "tenant_id": "6d09c88c-0617-490c-8329-305e577684bc",
+    "client_id": "23edbd5e-689f-472b-ab5a-cc7f4dc8a07d",
+    "current_secret_ref": "env://SHAREPOINT_GRAPH_CLIENT_SECRET",
+    "next_secret_ref": "env://SHAREPOINT_GRAPH_CLIENT_SECRET_NEXT",
+    "rotated_at": "2026-10-01T18:10:43Z",
+    "max_age_days": 88
+  },
+  {
+    "name": "reqsys-prod-sharepoint-catalog-reader",
+    "environment": "production",
+    "purpose": "sharepoint-package-catalog-read",
+    "data_classification": "confidential",
+    "tenant_id": "6d09c88c-0617-490c-8329-305e577684bc",
+    "client_id": "564e09b2-67ea-4377-9281-47040f3943db",
+    "current_secret_ref": "env://SHAREPOINT_GRAPH_CLIENT_SECRET",
+    "next_secret_ref": "env://SHAREPOINT_GRAPH_CLIENT_SECRET_NEXT",
+    "rotated_at": "2026-10-01T18:10:43Z",
+    "max_age_days": 88
+  }
+]

@@ -1,0 +1,570 @@
+#!/usr/bin/env python3
+import json
+import sys
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from enrich_ci_pr_efficiency import (  # noqa: E402
+    SECTION_MARKER,
+    build_merge_queue_reliability,
+    build_pr_efficiency,
+    enrich_files,
+    fetch_event_runs_for_window,
+    fetch_post_merge_runs_for_prs,
+    fetch_recent_pr_sample,
+    load_blocking_workflows,
+    resolve_pr_sample_runs,
+    select_pr_sample_window,
+)
+
+
+START = datetime(2026, 9, 22, 15, 0, tzinfo=timezone.utc)
+END = datetime(2026, 9, 22, 16, 0, tzinfo=timezone.utc)
+BLOCKING = ["Required A", "Required B"]
+
+
+def run(
+    idx: int,
+    *,
+    pr: int | None,
+    name: str,
+    sha: str,
+    created: str,
+    updated: str,
+    conclusion: str = "success",
+    event: str = "pull_request",
+    attempt: int = 1,
+):
+    return {
+        "id": idx,
+        "name": name,
+        "event": event,
+        "status": "completed",
+        "conclusion": conclusion,
+        "head_branch": "feature/test",
+        "head_sha": sha,
+        "html_url": f"https://example.test/{idx}",
+        "created_at": created,
+        "run_started_at": created,
+        "updated_at": updated,
+        "run_attempt": attempt,
+        "pull_requests": [] if pr is None else [{"number": pr}],
+    }
+
+
+class CiPrEfficiencyTests(unittest.TestCase):
+    def test_calculates_minutes_time_to_green_and_workflow_pareto(self):
+        raw = [
+            run(
+                1,
+                pr=10,
+                name="Required A",
+                sha="sha-10",
+                created="2026-09-22T15:05:00Z",
+                updated="2026-09-22T15:09:00Z",
+            ),
+            run(
+                2,
+                pr=10,
+                name="Required B",
+                sha="sha-10",
+                created="2026-09-22T15:05:00Z",
+                updated="2026-09-22T15:06:00Z",
+            ),
+            run(
+                3,
+                pr=11,
+                name="Required A",
+                sha="sha-11",
+                created="2026-09-22T15:10:00Z",
+                updated="2026-09-22T15:12:00Z",
+            ),
+            run(
+                4,
+                pr=11,
+                name="Required B",
+                sha="sha-11",
+                created="2026-09-22T15:10:00Z",
+                updated="2026-09-22T15:12:00Z",
+            ),
+        ]
+        result = build_pr_efficiency(
+            raw,
+            blocking_workflows=BLOCKING,
+            start_at=START,
+            end_at=END,
+        )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["sample_prs"], 2)
+        self.assertEqual(result["green_sample_prs"], 2)
+        self.assertEqual(result["total_observed_ci_run_minutes"], 9.0)
+        self.assertEqual(result["avg_observed_ci_run_minutes_per_pr"], 4.5)
+        self.assertEqual(result["p50_observed_ci_run_minutes_per_pr"], 4.5)
+        self.assertEqual(result["p90_observed_ci_run_minutes_per_pr"], 4.9)
+        self.assertEqual(result["p50_latest_head_time_to_green_seconds"], 180.0)
+        self.assertEqual(result["p90_latest_head_time_to_green_seconds"], 228.0)
+        self.assertEqual(result["rerun_rate_percent"], 0.0)
+        self.assertTrue(result["baseline_sample_valid"])
+        self.assertEqual(result["workflows_to_80_percent"]["count"], 2)
+        self.assertEqual(
+            result["workflows_to_80_percent"]["names"],
+            ["Required A", "Required B"],
+        )
+        self.assertEqual(
+            result["workflow_minutes_pareto"][-1]["cumulative_share_percent"],
+            100.0,
+        )
+
+    def test_detects_repair_proxy_and_fails_closed_on_missing_blocker(self):
+        raw = [
+            run(
+                10,
+                pr=20,
+                name="Required A",
+                sha="sha-old",
+                created="2026-09-22T15:01:00Z",
+                updated="2026-09-22T15:02:00Z",
+                conclusion="failure",
+            ),
+            run(
+                11,
+                pr=20,
+                name="Required B",
+                sha="sha-old",
+                created="2026-09-22T15:01:00Z",
+                updated="2026-09-22T15:02:00Z",
+            ),
+            run(
+                12,
+                pr=20,
+                name="Required A",
+                sha="sha-new",
+                created="2026-09-22T15:20:00Z",
+                updated="2026-09-22T15:21:00Z",
+            ),
+            run(
+                13,
+                pr=20,
+                name="Required B",
+                sha="sha-new",
+                created="2026-09-22T15:20:00Z",
+                updated="2026-09-22T15:22:00Z",
+            ),
+            run(
+                14,
+                pr=21,
+                name="Required A",
+                sha="sha-incomplete",
+                created="2026-09-22T15:30:00Z",
+                updated="2026-09-22T15:31:00Z",
+            ),
+        ]
+        result = build_pr_efficiency(
+            raw,
+            blocking_workflows=BLOCKING,
+            start_at=START,
+            end_at=END,
+        )
+        by_pr = {item["pr_number"]: item for item in result["prs"]}
+
+        self.assertTrue(by_pr[20]["ci_fix_commit_proxy"])
+        self.assertTrue(by_pr[20]["latest_head_green"])
+        self.assertFalse(by_pr[21]["latest_head_blockers_complete"])
+        self.assertFalse(by_pr[21]["latest_head_green"])
+        self.assertIsNone(by_pr[21]["latest_head_time_to_green_seconds"])
+        self.assertEqual(result["ci_fix_commit_proxy_prs"], 1)
+        self.assertEqual(result["ci_fix_commit_proxy_percent"], 50.0)
+
+    def test_excludes_push_and_outside_window(self):
+        raw = [
+            run(
+                30,
+                pr=30,
+                name="Required A",
+                sha="sha-push",
+                created="2026-09-22T15:10:00Z",
+                updated="2026-09-22T15:11:00Z",
+                event="push",
+            ),
+            run(
+                31,
+                pr=31,
+                name="Required A",
+                sha="sha-old",
+                created="2026-09-22T14:59:00Z",
+                updated="2026-09-22T15:01:00Z",
+            ),
+        ]
+        result = build_pr_efficiency(
+            raw,
+            blocking_workflows=BLOCKING,
+            start_at=START,
+            end_at=END,
+        )
+        self.assertFalse(result["available"])
+        self.assertEqual(result["sample_prs"], 0)
+
+
+    def test_adaptive_sample_expands_only_until_low_activity_target_is_met(self):
+        raw = [
+            run(40, pr=40, name="Required A", sha="sha-40", created="2026-09-22T15:10:00Z", updated="2026-09-22T15:11:00Z"),
+            run(41, pr=41, name="Required A", sha="sha-41", created="2026-09-22T14:30:00Z", updated="2026-09-22T14:31:00Z"),
+            run(42, pr=42, name="Required A", sha="sha-42", created="2026-09-22T13:30:00Z", updated="2026-09-22T13:31:00Z"),
+        ]
+        selected = select_pr_sample_window(
+            raw,
+            fixed_start_at=START,
+            end_at=END,
+            min_sample_prs=3,
+            max_lookback_minutes=360,
+        )
+        self.assertEqual(selected["mode"], "extended_low_activity")
+        self.assertEqual(selected["effective_duration_minutes"], 240)
+        self.assertEqual(selected["observed_prs"], 3)
+        self.assertTrue(selected["target_met"])
+
+
+    def test_recent_pr_fallback_collects_three_prs_without_scanning_global_history(self):
+        def fake_api(path: str, token: str):
+            self.assertEqual(token, "token")
+            if "/pulls?state=all" in path:
+                return [
+                    {"number": 103, "created_at": "2026-09-22T12:00:00Z", "updated_at": "2026-09-22T15:30:00Z"},
+                    {"number": 102, "created_at": "2026-09-22T11:00:00Z", "updated_at": "2026-09-22T15:20:00Z"},
+                    {"number": 101, "created_at": "2026-09-22T10:00:00Z", "updated_at": "2026-09-22T15:10:00Z"},
+                ]
+            for pr in (101, 102, 103):
+                if f"/pulls/{pr}/commits" in path:
+                    return [{"sha": f"sha-{pr}"}]
+                if f"head_sha=sha-{pr}" in path:
+                    return {
+                        "workflow_runs": [
+                            run(
+                                pr,
+                                pr=None,
+                                name="Required A",
+                                sha=f"sha-{pr}",
+                                created=f"2026-09-22T{12 + (pr - 101):02d}:00:00Z",
+                                updated=f"2026-09-22T{12 + (pr - 101):02d}:01:00Z",
+                            )
+                        ]
+                    }
+            raise AssertionError(path)
+
+        runs, meta = fetch_recent_pr_sample(
+            "owner",
+            "repo",
+            "token",
+            fixed_start_at=START,
+            end_at=END,
+            min_sample_prs=3,
+            max_age_days=7,
+            api_get=fake_api,
+        )
+        self.assertEqual(meta["mode"], "recent_prs_fallback")
+        self.assertTrue(meta["target_met"])
+        self.assertEqual(meta["selected_pr_numbers"], [103, 102, 101])
+        self.assertEqual({item["pull_requests"][0]["number"] for item in runs}, {101, 102, 103})
+
+    def test_incomplete_global_collection_uses_bounded_recent_pr_fallback(self):
+        fallback_runs = [
+            run(
+                45,
+                pr=45,
+                name="Required A",
+                sha="sha-45",
+                created="2026-09-22T15:10:00Z",
+                updated="2026-09-22T15:11:00Z",
+            )
+        ]
+        fallback_window = {
+            "mode": "recent_prs_fallback",
+            "fixed_start_at": START.isoformat(),
+            "effective_start_at": START.isoformat(),
+            "end_at": END.isoformat(),
+            "effective_duration_minutes": 60,
+            "target_min_prs": 1,
+            "observed_prs": 1,
+            "target_met": True,
+            "max_lookback_minutes": 10080,
+            "selected_pr_numbers": [45],
+        }
+        calls = 0
+
+        def fallback_loader():
+            nonlocal calls
+            calls += 1
+            return fallback_runs, fallback_window
+
+        selected_runs, selected_window = resolve_pr_sample_runs(
+            [],
+            collection_complete=False,
+            fixed_start_at=START,
+            end_at=END,
+            min_sample_prs=1,
+            max_lookback_minutes=360,
+            fallback_loader=fallback_loader,
+        )
+
+        self.assertEqual(calls, 1)
+        self.assertEqual(selected_runs, fallback_runs)
+        self.assertEqual(selected_window["mode"], "recent_prs_fallback")
+        self.assertTrue(selected_window["target_met"])
+
+    def test_rerun_rate_is_explicit_and_per_pr(self):
+        raw = [
+            run(50, pr=50, name="Required A", sha="sha-50", created="2026-09-22T15:10:00Z", updated="2026-09-22T15:11:00Z", attempt=2),
+            run(51, pr=50, name="Required B", sha="sha-50", created="2026-09-22T15:10:00Z", updated="2026-09-22T15:11:00Z"),
+        ]
+        result = build_pr_efficiency(raw, blocking_workflows=BLOCKING, start_at=START, end_at=END)
+        self.assertEqual(result["observed_pr_workflow_runs"], 2)
+        self.assertEqual(result["rerun_workflow_runs"], 1)
+        self.assertEqual(result["rerun_rate_percent"], 50.0)
+        self.assertEqual(result["prs"][0]["rerun_rate_percent"], 50.0)
+
+
+    def test_rerun_duration_uses_current_attempt_start_not_original_created_at(self):
+        raw = [
+            run(
+                60,
+                pr=60,
+                name="Required A",
+                sha="sha-60",
+                created="2026-09-22T15:00:00Z",
+                updated="2026-09-22T15:31:00Z",
+                attempt=2,
+            ),
+            run(
+                61,
+                pr=60,
+                name="Required B",
+                sha="sha-60",
+                created="2026-09-22T15:00:00Z",
+                updated="2026-09-22T15:02:00Z",
+            ),
+        ]
+        raw[0]["run_started_at"] = "2026-09-22T15:30:00Z"
+        result = build_pr_efficiency(
+            raw,
+            blocking_workflows=BLOCKING,
+            start_at=START,
+            end_at=END,
+        )
+        self.assertEqual(result["total_observed_ci_run_minutes"], 3.0)
+        self.assertEqual(result["prs"][0]["observed_ci_run_minutes"], 3.0)
+        self.assertEqual(result["rerun_rate_percent"], 50.0)
+
+    def test_merge_queue_reliability_detects_green_pr_queue_failure_and_requeue(self):
+        pr_metrics = {
+            "prs": [
+                {"pr_number": 70, "latest_head_green": True},
+                {"pr_number": 71, "latest_head_green": False},
+            ]
+        }
+        queue_runs = [
+            run(
+                70,
+                pr=70,
+                name="CI Merge Group Adapter",
+                sha="queue-a",
+                created="2026-09-22T15:10:00Z",
+                updated="2026-09-22T15:12:00Z",
+                conclusion="failure",
+                event="merge_group",
+            ),
+            run(
+                71,
+                pr=70,
+                name="PR Evidence Merge Group Adapter",
+                sha="queue-b",
+                created="2026-09-22T15:20:00Z",
+                updated="2026-09-22T15:21:00Z",
+                event="merge_group",
+            ),
+        ]
+        queue_runs[0]["run_started_at"] = "2026-09-22T15:10:10Z"
+        queue_runs[1]["run_started_at"] = "2026-09-22T15:20:30Z"
+        post_merge_runs = [
+            run(
+                72,
+                pr=70,
+                name="Post Merge Smoke",
+                sha="merge-70",
+                created="2026-09-22T15:30:00Z",
+                updated="2026-09-22T15:31:00Z",
+                conclusion="failure",
+                event="push",
+            )
+        ]
+
+        result = build_merge_queue_reliability(
+            pr_metrics,
+            queue_runs,
+            post_merge_runs,
+            start_at=START,
+            end_at=END,
+        )
+
+        self.assertTrue(result["canary_e2e_observed"])
+        self.assertEqual(result["queue_attempts"], 2)
+        self.assertEqual(result["green_pr_but_queue_failed_prs"], [70])
+        self.assertEqual(result["requeue_prs"], [70])
+        self.assertEqual(result["requeue_extra_attempts"], 1)
+        self.assertEqual(result["post_merge_failed_prs"], [70])
+        self.assertEqual(result["queue_wait_p50_seconds"], 20.0)
+        self.assertEqual(result["queue_wait_p95_seconds"], 29.0)
+        self.assertEqual(
+            result["queue_failure_causes"][0]["workflow"],
+            "CI Merge Group Adapter",
+        )
+
+    def test_merge_queue_reliability_fails_closed_without_real_merge_group(self):
+        result = build_merge_queue_reliability(
+            {"prs": [{"pr_number": 80, "latest_head_green": True}]},
+            [],
+            [],
+            start_at=START,
+            end_at=END,
+        )
+
+        self.assertFalse(result["available"])
+        self.assertFalse(result["canary_e2e_observed"])
+        self.assertEqual(
+            result["observation_reason"],
+            "no_merge_group_candidate_observed",
+        )
+        self.assertEqual(result["queue_attempts"], 0)
+        self.assertEqual(result["green_pr_but_queue_failed_count"], 0)
+
+    def test_post_merge_cancelled_is_visible_but_not_failure(self):
+        result = build_merge_queue_reliability(
+            {"prs": [{"pr_number": 73, "latest_head_green": True}]},
+            [],
+            [
+                run(
+                    73,
+                    pr=73,
+                    name="Pre-PR Readiness Gate",
+                    sha="merge-73",
+                    created="2026-09-22T15:30:00Z",
+                    updated="2026-09-22T15:31:00Z",
+                    conclusion="cancelled",
+                    event="push",
+                )
+            ],
+            start_at=START,
+            end_at=END,
+        )
+
+        self.assertEqual(result["post_merge_observed_runs"], 1)
+        self.assertEqual(result["post_merge_cancelled_runs"], 1)
+        self.assertEqual(result["post_merge_failure_runs"], 0)
+        self.assertEqual(result["post_merge_failed_pr_count"], 0)
+        self.assertEqual(result["post_merge_failed_prs"], [])
+
+    def test_merge_group_fetch_is_window_bounded_and_post_merge_fetch_is_exact_sha(self):
+        seen: list[str] = []
+
+        def fake_api(path: str, token: str):
+            self.assertEqual(token, "token")
+            seen.append(path)
+            if "event=merge_group" in path:
+                return {
+                    "workflow_runs": [
+                        run(
+                            90,
+                            pr=90,
+                            name="CI Merge Group Adapter",
+                            sha="queue-90",
+                            created="2026-09-22T15:20:00Z",
+                            updated="2026-09-22T15:21:00Z",
+                            event="merge_group",
+                        )
+                    ]
+                }
+            if path.endswith("/pulls/90"):
+                return {
+                    "number": 90,
+                    "merged_at": "2026-09-22T15:30:00Z",
+                    "merge_commit_sha": "merge-90",
+                }
+            if "head_sha=merge-90&event=push" in path:
+                return {
+                    "workflow_runs": [
+                        run(
+                            91,
+                            pr=None,
+                            name="Post Merge",
+                            sha="merge-90",
+                            created="2026-09-22T15:31:00Z",
+                            updated="2026-09-22T15:32:00Z",
+                            event="push",
+                        )
+                    ]
+                }
+            raise AssertionError(path)
+
+        queue = fetch_event_runs_for_window(
+            "owner",
+            "repo",
+            "token",
+            event="merge_group",
+            start_at=START,
+            end_at=END,
+            api_get=fake_api,
+        )
+        post = fetch_post_merge_runs_for_prs(
+            "owner",
+            "repo",
+            "token",
+            pr_numbers=[90],
+            start_at=START,
+            end_at=END,
+            api_get=fake_api,
+        )
+
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(post[0]["pull_requests"], [{"number": 90}])
+        self.assertTrue(
+            any("head_sha=merge-90&event=push" in path for path in seen)
+        )
+
+    def test_enrichment_is_idempotent_and_registry_is_validated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            analytics = root / "analytics.json"
+            markdown = root / "analytics.md"
+            registry = root / "registry.json"
+            analytics.write_text(
+                json.dumps({"collection_window": {"start_at": START.isoformat(), "end_at": END.isoformat()}}),
+                encoding="utf-8",
+            )
+            markdown.write_text("# CI\n", encoding="utf-8")
+            registry.write_text(
+                json.dumps({"canonical_pr_path": {"blocking": BLOCKING}}),
+                encoding="utf-8",
+            )
+            self.assertEqual(load_blocking_workflows(registry), BLOCKING)
+
+            metrics = build_pr_efficiency(
+                [],
+                blocking_workflows=BLOCKING,
+                start_at=START,
+                end_at=END,
+            )
+            enrich_files(analytics, markdown, metrics)
+            enrich_files(analytics, markdown, metrics)
+
+            payload = json.loads(analytics.read_text(encoding="utf-8"))
+            self.assertIn("pr_efficiency", payload)
+            self.assertEqual(markdown.read_text(encoding="utf-8").count(SECTION_MARKER), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

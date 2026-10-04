@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T13:30:00-03:00",
+  "scope": "parallel_pr_capacity_policy",
+  "runtime_impact": "none",
+  "recommended_parallelism": {
+    "isolated_documentation": 5,
+    "static_data_contracts": 4,
+    "unit_tests": 3,
+    "frontend_independent_views": 2,
+    "backend_or_api_contracts": 1,
+    "ci_cd_or_deploy": 1
+  },
+  "gates": [
+    "branch_from_current_main",
+    "no_overlapping_changed_files",
+    "no_public_contract_change",
+    "rollback_documented",
+    "ci_green_before_merge"
+  ],
+  "risk_matrix": [
+    {
+      "status": "green",
+      "condition": "isolated files and green CI",
+      "action": "merge eligible"
+    },
+    {
+      "status": "yellow",
+      "condition": "pending CI with isolated scope",
+      "action": "wait and avoid stacking commits"
+    },
+    {
+      "status": "red",
+      "condition": "conflict, failing CI or contract/deploy change",
+      "action": "block merge and create correction PR"
+    }
+  ]
+}

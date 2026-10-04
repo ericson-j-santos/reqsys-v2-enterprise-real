@@ -1,10 +1,40 @@
 import json
 import os
+import time
 from typing import Any
 from urllib import parse, request
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 
+from app.core.resilience import CircuitBreaker, CircuitBreakerOpenError, call_with_retry
 from app.core.secrets import get_secret
+
+GITHUB_REDMINE_MAX_RETRIES = 3
+GITHUB_REDMINE_RETRY_BACKOFF_SECONDS = 0.5
+GITHUB_REDMINE_CIRCUIT_FAILURE_THRESHOLD = 3
+GITHUB_REDMINE_CIRCUIT_COOLDOWN_SECONDS = 60
+
+# Um circuit breaker por host: esta integracao fala tanto com api.github.com
+# quanto com o REDMINE_BASE_URL (host proprio de cada instalacao) — uma falha
+# no GitHub nao deve bloquear chamadas ao Redmine e vice-versa.
+_circuits: dict[str, CircuitBreaker] = {}
+
+
+def _circuit_for(url: str) -> CircuitBreaker:
+    host = urlparse(url).netloc or 'default'
+    if host not in _circuits:
+        _circuits[host] = CircuitBreaker(
+            name=f'github_redmine_{host}',
+            failure_threshold=GITHUB_REDMINE_CIRCUIT_FAILURE_THRESHOLD,
+            cooldown_seconds=GITHUB_REDMINE_CIRCUIT_COOLDOWN_SECONDS,
+        )
+    return _circuits[host]
+
+
+def reset_circuit_breakers() -> None:
+    """Reseta todos os circuit breakers desta integracao (uso em testes)."""
+    for circuit in _circuits.values():
+        circuit.reset()
 
 
 class IntegracaoError(RuntimeError):
@@ -16,7 +46,27 @@ def github_redmine_import_enabled() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-def _request_json(method: str, url: str, headers: dict[str, str] | None = None, payload: dict[str, Any] | None = None) -> Any:
+def _do_request(req: request.Request, url: str) -> Any:
+    try:
+        with request.urlopen(req, timeout=20) as resp:  # nosec B310
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        # HTTPError e subclasse de URLError; convertida aqui para nao ser retentada
+        # pelo retry_on=(URLError,) do call_with_retry como se fosse falha de rede.
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise IntegracaoError(f"HTTP {exc.code} em {url}: {detail[:400]}") from exc
+
+
+def _request_json(
+    method: str,
+    url: str,
+    headers: dict[str, str] | None = None,
+    payload: dict[str, Any] | None = None,
+    *,
+    sleep=time.sleep,
+    max_retries: int = GITHUB_REDMINE_MAX_RETRIES,
+) -> Any:
     body = None
     req_headers = {"User-Agent": "reqsys-integracao/2.1", "Accept": "application/json"}
     if headers:
@@ -27,12 +77,16 @@ def _request_json(method: str, url: str, headers: dict[str, str] | None = None, 
 
     req = request.Request(url=url, data=body, headers=req_headers, method=method)
     try:
-        with request.urlopen(req, timeout=20) as resp:  # nosec B310
-            raw = resp.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise IntegracaoError(f"HTTP {exc.code} em {url}: {detail[:400]}") from exc
+        return call_with_retry(
+            lambda: _do_request(req, url),
+            max_retries=max_retries,
+            backoff_seconds=GITHUB_REDMINE_RETRY_BACKOFF_SECONDS,
+            retry_on=(URLError,),
+            sleep=sleep,
+            circuit=_circuit_for(url),
+        )
+    except CircuitBreakerOpenError as exc:
+        raise IntegracaoError(str(exc)) from exc
     except URLError as exc:
         raise IntegracaoError(f"Falha de rede em {url}: {exc.reason}") from exc
 
@@ -92,6 +146,7 @@ def publish_requisito_to_redmine(
     if not base_url or not api_key or not effective_project_id:
         return {
             'issue_principal_id': None,
+            'redmine_url': None,
             'subtarefas': [],
             'warnings': ['Redmine nao configurado. Defina REDMINE_BASE_URL, REDMINE_API_KEY e REDMINE_PROJECT_ID.'],
         }
@@ -127,9 +182,10 @@ def publish_requisito_to_redmine(
     try:
         created = _request_json('POST', f'{base_url}/issues.json', headers=headers, payload=issue_payload)
     except IntegracaoError as exc:
-        return {'issue_principal_id': None, 'subtarefas': [], 'warnings': [str(exc)]}
+        return {'issue_principal_id': None, 'redmine_url': None, 'subtarefas': [], 'warnings': [str(exc)]}
 
     principal_id = (created.get('issue') or {}).get('id')
+    redmine_url = f'{base_url}/issues/{principal_id}' if principal_id else None
     subtarefas: list[dict[str, Any]] = []
     warnings: list[str] = []
 
@@ -150,7 +206,40 @@ def publish_requisito_to_redmine(
         except IntegracaoError as exc:
             warnings.append(f'Subtarefa {componente}: {exc}')
 
-    return {'issue_principal_id': principal_id, 'subtarefas': subtarefas, 'warnings': warnings}
+    return {'issue_principal_id': principal_id, 'redmine_url': redmine_url, 'subtarefas': subtarefas, 'warnings': warnings}
+
+
+def criar_issue_generica(
+    subject: str,
+    tracker_id: int | None = None,
+    project_id: int | None = None,
+    description: str = '',
+) -> dict[str, Any]:
+    """Cria uma issue simples no Redmine a partir de campos já resolvidos.
+
+    Usada pelo worker da fila `cr85a_redminequeue` (ver
+    app/services/redmine_sync_queue.py) — reaproveita o mesmo adapter/retry/
+    circuit breaker desta integração em vez de duplicar a chamada HTTP.
+    """
+    base_url = (get_secret('REDMINE_BASE_URL', '') or '').strip().rstrip('/')
+    api_key = (get_secret('REDMINE_API_KEY', '') or '').strip()
+    env_project_id = (get_secret('REDMINE_PROJECT_ID', '') or '').strip()
+    effective_project_id = project_id or (int(env_project_id) if env_project_id.isdigit() else None)
+
+    if not base_url or not api_key or not effective_project_id:
+        raise IntegracaoError('Redmine não configurado. Defina REDMINE_BASE_URL, REDMINE_API_KEY e REDMINE_PROJECT_ID.')
+
+    issue_payload: dict[str, Any] = {'issue': {'project_id': effective_project_id, 'subject': subject or 'Issue sem título'}}
+    if description:
+        issue_payload['issue']['description'] = description
+    if tracker_id:
+        issue_payload['issue']['tracker_id'] = tracker_id
+
+    headers = {'X-Redmine-API-Key': api_key}
+    created = _request_json('POST', f'{base_url}/issues.json', headers=headers, payload=issue_payload)
+    issue = created.get('issue') or {}
+    issue_id = issue.get('id')
+    return {'issue_id': issue_id, 'redmine_url': f'{base_url}/issues/{issue_id}' if issue_id else None}
 
 
 def publish_issues_to_redmine(repo: str, issues: list[dict[str, Any]], project_id: int | None = None, tracker_id: int | None = None, priority_id: int | None = None) -> dict[str, Any]:
