@@ -1,0 +1,13 @@
+{
+  "feature_name": "pr-evidence-fail-closed",
+  "project": "ReqSys v2 Enterprise — governança de CI/CD",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "phase": "implementation",
+  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "description": "Impede READY_FOR_MERGE quando um workflow governado do HEAD atual estiver ausente, falhar, for skipped/neutral ou quando sucesso antigo mascarar a execução mais recente.",
+  "sdd_gate": {
+    "tests": ["tests/test_workflow_regression_contracts.py"],
+    "evidence_contract": "PR Evidence Gate avalia o HEAD exato, usa a execução mais recente por workflow e falha fechado para ausência, failure, skipped ou neutral."
+  }
+}
