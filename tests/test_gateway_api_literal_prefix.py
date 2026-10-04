@@ -17,7 +17,7 @@ NGINX_CONFS = [
 # Prefixos que o backend registra literalmente com `/api/...` (ver `@app.get('/api/runtime/...')`
 # em backend/app/main.py e os routers com `prefix='/api/...'`).
 PREFIXOS_LITERAIS = [
-    'runtime', 'requisitos', 'operational-autonomy', 'integracoes', 'govbi', 'rag', 'connectors', 'workflows', 'internal',
+    'runtime', 'requisitos', 'operational-autonomy', 'integracoes', 'govbi', 'rag', 'connectors', 'workflows', 'internal', 'analytics-runtime-intelligence',
 ]
 COMPOSE = Path('docker-compose.yml')
 RUNBOOK = Path('docs/runbooks/pc24x7-piloto-dev.md')

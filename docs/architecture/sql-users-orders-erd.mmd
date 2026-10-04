@@ -1,0 +1,11 @@
+erDiagram
+  USERS ||--o{ ORDERS : possui
+  USERS {
+    int id PK
+    string name
+  }
+  ORDERS {
+    int id PK
+    int user_id FK
+    numeric total
+  }

@@ -1,102 +1,101 @@
-# Readiness Checklist — Usuário Final ReqSys
+# Readiness de liberação para usuário final
 
 ## Objetivo
 
-Estabelecer critérios objetivos para decidir quando o ReqSys pode ser liberado para usuário final controlado, beta operacional ou produção padrão ouro.
+Definir um checklist de **evidência**, não de intenção, para acesso controlado, beta operacional e produção.
 
-## Status de decisão
+## Como usar
 
-| Nível | Critério mínimo | Decisão |
-|---|---|---|
-| Acesso controlado | Fluxo principal navegável, autenticação mínima e workspace operacional. | Liberável para poucos usuários. |
-| Beta operacional | Analytics, auditoria, logs e indicadores vivos. | Liberável para usuários reais com suporte. |
-| Produção padrão ouro | Ambientes segregados, RBAC, E2E, gates e runbook. | Liberável para uso corporativo amplo. |
+Para cada item, registrar a evidência atual correspondente (run, artifact, endpoint/readback, teste, SHA ou decisão governada). Item sem evidência atual permanece **pendente**, ainda que a funcionalidade exista no código.
 
-## Checklist por domínio
+## 1. Acesso e identidade
 
-### 1. Acesso e autenticação
+- Login real ou modo explicitamente autorizado para o ambiente.
+- Logout e expiração de sessão validados.
+- Rotas privadas bloqueiam acesso anônimo.
+- Permissões server-side comprovadas para perfis aplicáveis.
+- Redirecionamento pós-login preserva apenas destinos internos seguros.
 
-- [ ] Login funcional.
-- [ ] Logout funcional.
-- [ ] Sessão expirada tratada.
-- [ ] Rotas privadas protegidas.
-- [ ] Perfil/permissão exibido quando aplicável.
+## 2. Navegação e experiência
 
-### 2. Navegação e UX
+- Entrada canônica clara.
+- Catálogo de navegação sem rotas órfãs/bloqueios ReqSys 360.
+- Telas críticas cobertas por evidência E2E.
+- Responsividade desktop/mobile validada.
+- Acessibilidade e linguagem simples sem regressões bloqueantes.
 
-- [ ] Usuário identifica o ponto de entrada.
-- [ ] Menu principal cobre as rotas de produto.
-- [ ] Telas possuem estados de loading, vazio, erro e sucesso.
-- [ ] Layout responsivo validado em desktop e mobile.
-- [ ] Mensagens usam linguagem clara para usuário final.
+## 3. Jornada de requisitos
 
-### 3. Workspace operacional
+- Criar requisito e ler por caminho independente.
+- Atualizar/consultar respeitando autorização.
+- Identificador e `correlation_id` preservados.
+- Rastreabilidade para trabalho/entrega/evidência quando aplicável.
+- Replay/idempotência validados em operações assíncronas ou integradas.
 
-- [ ] Dashboard inicial funcional.
-- [ ] Cards de status exibem semântica clara.
-- [ ] Lista de requisitos/demandas acessível.
-- [ ] Ações principais estão visíveis.
-- [ ] Dados ausentes não quebram a interface.
+## 4. Operação
 
-### 4. Catálogo de requisitos
+- Monitoramento operacional apresenta estado técnico corrente.
+- Falhas não são convertidas em falso verde.
+- Incidentes/erros possuem evidência sanitizada.
+- Runbook aponta diagnóstico e recuperação segura.
+- Runtime/serviços críticos possuem health/readiness aplicáveis.
 
-- [ ] Criar requisito.
-- [ ] Consultar requisito.
-- [ ] Editar requisito quando permitido.
-- [ ] Validar campos obrigatórios.
-- [ ] Manter identificador rastreável.
+## 5. Análise e indicadores
 
-### 5. Analytics e drill-down
+- Indicadores possuem fonte e regra.
+- Drill-down preserva contexto.
+- Dados simulados/estáticos estão identificados como tal.
+- GovBI/IA não promove fallback a resultado real.
+- Query Intelligence não é confundida com execução SQL/performance real.
 
-- [ ] Indicadores executivos exibidos.
-- [ ] Cards críticos são clicáveis.
-- [ ] Drill-down preserva contexto/filtro.
-- [ ] Semáforo operacional documentado.
-- [ ] Métricas possuem origem rastreável.
+## 6. Segurança
 
-### 6. Auditoria e observabilidade
+- Segredos não aparecem em logs, artifacts ou respostas.
+- CORS/JWT/auth atendem ao ambiente alvo.
+- Scanners/gates obrigatórios verdes no HEAD atual.
+- Fluxos administrativos exigem autorização adequada.
+- Nenhum bypass/force-push/deploy fora da política vigente.
 
-- [ ] `correlation_id` disponível nos fluxos críticos.
-- [ ] Logs não expõem token, senha, CPF, PII ou connection string.
-- [ ] Falhas críticas aparecem no painel operacional.
-- [ ] Eventos possuem timeline mínima.
-- [ ] Runbook orienta diagnóstico.
+## 7. Ambiente e promoção
 
-### 7. Ambientes e deploy
+- Ambiente alvo identificado.
+- Branch/base/HEAD exatos registrados.
+- `behind_by=0` e ausência de conflitos para mudanças pendentes.
+- Evidência do ambiente alvo é atual.
+- Promoção depende dos gates do ambiente e não de evidência de outro ambiente.
 
-- [ ] Ambiente atual visível: DEV, HML ou PRD.
-- [ ] Configuração segregada por ambiente.
-- [ ] Produção bloqueada com auth desligada.
-- [ ] Produção bloqueada com CORS inseguro.
-- [ ] Variáveis críticas documentadas.
+## 8. CI e qualidade
 
-### 8. Testes e gates
+- Pre-PR/CI/gates obrigatórios verdes no HEAD atual.
+- Testes funcionais e E2E aplicáveis verdes.
+- Evidência antiga é invalidada quando o SHA muda.
+- Falha determinística é corrigida na causa, não contornada.
+- Checks report-only não substituem checks bloqueantes.
 
-- [ ] Teste E2E do fluxo principal.
-- [ ] Teste de rota protegida.
-- [ ] Teste de erro/fallback operacional.
-- [ ] CI registra evidência.
-- [ ] Gate impede promoção insegura.
+## Critérios por nível
 
-## Critério mínimo para o próximo marco
+### Acesso controlado
 
-Para liberar **usuário final controlado**, concluir no mínimo:
+Exige evidência de identidade, navegação, jornada principal, segurança mínima e E2E do ambiente autorizado.
 
-- PR-001 — Shell de produto e navegação.
-- PR-002 — Autenticação e sessão mínima governada.
-- PR-003 — Workspace operacional.
-- PR-004 — Catálogo de requisitos com persistência governada.
-- PR-005 — Demo guiada e onboarding visual.
+### Beta operacional
 
-## Evidência obrigatória antes de declarar pronto
+Além do acesso controlado, exige monitoramento, auditoria, indicadores rastreáveis e suporte operacional.
 
-- Link público validado.
-- Ambiente identificado.
-- Fluxo principal testado.
-- CI sem falha bloqueante.
-- Registro de riscos residuais.
-- Checklist atualizado.
+### Produção
 
-## Risco residual atual
+Além dos níveis anteriores, exige evidência específica de produção, políticas/RBAC, observabilidade, recuperação e todos os gates de promoção vigentes.
 
-Enquanto este checklist não estiver completo, o ReqSys deve ser tratado como plataforma em evolução e não como produto final amplamente liberado para usuário final.
+## Evidência mínima de decisão
+
+Registrar:
+
+- ambiente;
+- commit/versão;
+- correlation_id quando aplicável;
+- runs/checks relevantes;
+- E2E;
+- riscos residuais;
+- decisão e responsável.
+
+Se qualquer evidência obrigatória estiver ausente ou desatualizada, o estado correto é **não comprovado**, não “pronto”.

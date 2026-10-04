@@ -191,10 +191,10 @@ const handlers = [
   } },
 ]
 
-async function mockResponsiveApis(page) {
+async function mockResponsiveApis(page, overrides = []) {
   await page.route('**/api/**', async (route) => {
     const url = route.request().url()
-    const handler = handlers.find((item) => item.pattern.test(url))
+    const handler = overrides.find((item) => item.pattern.test(url)) || handlers.find((item) => item.pattern.test(url))
     if (handler) {
       await route.fulfill(json(handler.body))
       return

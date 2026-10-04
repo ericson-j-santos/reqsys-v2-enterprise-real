@@ -1,210 +1,102 @@
-# Roadmap por PRs Pequenos — Liberação do ReqSys para Usuário Final
+# Roadmap de liberação do ReqSys para usuário final
 
 ## Objetivo
 
-Organizar a liberação do ReqSys para usuário final em incrementos pequenos, revisáveis e rastreáveis, reduzindo conflito com PRs abertos e evitando declarar maturidade sem evidência real.
+Organizar a liberação do ReqSys por **capacidades verificáveis**, sem associar maturidade a prazo, contagem de PRs ou implementação isolada.
 
-## Decisão arquitetural
+A fonte de verdade para readiness é a evidência atual do repositório/runtime. Este documento define ordem e critérios; não declara nenhum estágio como concluído por si só.
 
-A liberação deve ocorrer por fatias verticais pequenas, cada uma com escopo claro, critério de aceite e validação objetiva. A ordem recomendada prioriza primeiro a entrada do usuário, depois operação funcional, analytics, governança e hardening de produção.
+## Princípios
 
-## Fases
+1. A rota `/` permanece a entrada canônica do trabalho diário enquanto rotas transitórias não forem promovidas por decisão de produto.
+2. Liberação depende de evidência no HEAD/runtime atuais, não de status histórico.
+3. CI verde é necessário, mas não suficiente: fluxo de usuário, segurança, ambiente e runtime também precisam de evidência.
+4. Mudanças devem permanecer pequenas, reversíveis e rastreáveis.
+5. DEV, homologação e produção possuem gates distintos; ausência de evidência falha fechado.
 
-| Fase | Janela média | Resultado esperado |
-|---|---:|---|
-| Fase 1 — MVP controlado | 2 a 4 semanas | Usuário final acessa, navega, cria/consulta requisitos e visualiza status básico. |
-| Fase 2 — Beta operacional | 4 a 8 semanas | Operação com analytics, auditoria, logs, drill-down e indicadores vivos. |
-| Fase 3 — Produção padrão ouro | 8 a 12 semanas | Uso corporativo amplo com segurança, RBAC, observabilidade, gates e ambientes segregados. |
+## Trilha A — acesso controlado
 
-## Sequência de PRs pequenos
+Capacidades mínimas:
 
-### PR-001 — Shell de produto e navegação
+- autenticação e sessão;
+- rotas privadas protegidas;
+- entrada clara pelo painel canônico;
+- navegação principal coerente;
+- criação/consulta de requisitos;
+- estados de erro, vazio e carregamento;
+- responsividade e acessibilidade básicas.
 
-**Objetivo:** consolidar a experiência mínima navegável para usuário final.
+**Gate:** evidência E2E atual do fluxo principal + controles de autenticação/autorização + nenhum bloqueio crítico de segurança.
 
-**Escopo:**
+## Trilha B — operação assistida
 
-- Layout base responsivo.
-- Menu principal com rotas finais.
-- Estados de loading, vazio, erro e sucesso.
-- Página inicial com status operacional e caminho de uso.
+Capacidades mínimas:
 
-**Critérios de aceite:**
+- painel de projetos e jornada de requisitos;
+- rastreabilidade requisito → trabalho → entrega → evidência;
+- integrações com estado observável;
+- monitoramento operacional;
+- auditoria por `correlation_id`;
+- recuperação/fallback explicitamente degradados, nunca falso verde.
 
-- Usuário identifica onde iniciar.
-- Rotas principais não quebram.
-- Navegação funciona em desktop e mobile.
+**Gate:** eventos e readbacks verificáveis, com causa de falha e próximo passo operacional.
 
-### PR-002 — Autenticação e sessão mínima governada
+## Trilha C — análise e decisão
 
-**Objetivo:** permitir acesso controlado sem expor áreas sensíveis.
+Capacidades mínimas:
 
-**Escopo:**
+- indicadores com fonte/fórmula;
+- drill-down;
+- GovBI/Query Intelligence sob contratos governados;
+- métricas operacionais ligadas à evidência;
+- distinção entre análise estática e dados/runtime reais.
 
-- Login funcional.
-- Persistência segura de sessão.
-- Guards de rota.
-- Tratamento de sessão expirada.
+**Gate:** origem e confiança dos indicadores verificáveis e nenhum dado ilustrativo promovido a evidência real.
 
-**Critérios de aceite:**
+## Trilha D — promoção governada
 
-- Rotas privadas bloqueiam acesso anônimo.
-- Logout remove sessão local.
-- Falhas de autenticação exibem mensagem clara.
+Capacidades mínimas:
 
-### PR-003 — Workspace operacional
+- ambientes explicitamente identificados;
+- configuração segregada;
+- branch protection e gates obrigatórios;
+- E2E aplicável;
+- evidência de runtime;
+- políticas de segurança, segredos e autorização;
+- rollback/diagnóstico documentados.
 
-**Objetivo:** criar área principal de trabalho do usuário final.
+**Gate:** promoção somente com evidência do ambiente alvo e política vigente.
 
-**Escopo:**
+## Trilha E — uso corporativo amplo
 
-- Dashboard operacional básico.
-- Lista de requisitos/demandas.
-- Ações principais visíveis.
-- Cards de status.
+Capacidades mínimas:
 
-**Critérios de aceite:**
+- estabilidade observada ao longo de execuções reais;
+- operação e incidentes auditáveis;
+- observabilidade suficiente para diagnóstico;
+- RBAC/políticas consolidados;
+- runbooks vivos;
+- riscos residuais aceitos explicitamente.
 
-- Usuário consegue visualizar o estado do trabalho.
-- Cards possuem semântica de status.
-- Dados ausentes não quebram a tela.
+**Gate:** readiness executivo instrumentado e evidência operacional atual. Não existe promoção automática apenas porque itens anteriores foram implementados.
 
-### PR-004 — Catálogo de requisitos com persistência governada
+## Ordem de priorização
 
-**Objetivo:** permitir criação, consulta e rastreabilidade básica de requisitos.
+1. Corrigir bloqueios que impedem acesso/fluxo principal.
+2. Corrigir regressões de segurança e governança.
+3. Fechar lacunas de evidência operacional.
+4. Melhorar clareza/UX do usuário final.
+5. Evoluir analytics e automação somente quando a base estiver estável.
 
-**Escopo:**
+## Relação com os mecanismos atuais
 
-- Cadastro/edição de requisito.
-- Consulta/listagem.
-- Identificador rastreável.
-- Validações mínimas.
+Este roadmap deve ser lido junto com:
 
-**Critérios de aceite:**
+- `docs/contracts/instrumented-executive-readiness.md`;
+- `governance/reqsys-360/route-responsibilities.json`;
+- gates de Pre-PR, CI, segurança, ReqSys 360 e evidência;
+- evidência de runtime e E2E do HEAD/ambiente atuais.
 
-- Requisito criado pode ser consultado.
-- Campos obrigatórios são validados.
-- Operações geram `correlation_id` quando aplicável.
+## Regra de decisão
 
-### PR-005 — Demo guiada e onboarding visual
-
-**Objetivo:** reduzir fricção de uso para usuário não técnico.
-
-**Escopo:**
-
-- Fluxo guiado de primeira utilização.
-- Exemplos demonstrativos.
-- Ajuda contextual.
-- Página de orientação rápida.
-
-**Critérios de aceite:**
-
-- Usuário entende o fluxo sem documentação externa.
-- Demo não depende de credenciais sensíveis.
-
-### PR-006 — Dashboard executivo com drill-down
-
-**Objetivo:** evoluir a camada analítica para decisão operacional.
-
-**Escopo:**
-
-- Indicadores executivos.
-- Cards clicáveis.
-- Drill-down filtrado.
-- Semáforo operacional.
-
-**Critérios de aceite:**
-
-- Cada indicador crítico possui explicação e detalhe.
-- Drill-down preserva contexto/filtro.
-
-### PR-007 — Runtime-to-analytics e auditoria
-
-**Objetivo:** conectar execução real a indicadores e trilhas auditáveis.
-
-**Escopo:**
-
-- Eventos operacionais.
-- Timeline por `correlation_id`.
-- Logs sem PII sensível.
-- Métricas mínimas de uso e erro.
-
-**Critérios de aceite:**
-
-- Falhas críticas aparecem no painel.
-- Eventos são rastreáveis ponta a ponta.
-
-### PR-008 — Segregação DEV/HML/PRD
-
-**Objetivo:** deixar explícito o ambiente de execução e os bloqueios por ambiente.
-
-**Escopo:**
-
-- Banner/indicador de ambiente.
-- Configuração segregada.
-- Bloqueios de produção.
-- Documentação de variáveis.
-
-**Critérios de aceite:**
-
-- Usuário técnico identifica o ambiente.
-- Produção não aceita configuração insegura.
-
-### PR-009 — Readiness gates e testes E2E
-
-**Objetivo:** impedir promoção sem validação mínima automatizada.
-
-**Escopo:**
-
-- Testes E2E do fluxo principal.
-- Checklist de readiness.
-- Gate de segurança/configuração.
-- Evidência em CI.
-
-**Critérios de aceite:**
-
-- CI falha se o fluxo principal quebrar.
-- Critérios de produção ficam versionados.
-
-### PR-010 — Hardening final de produção
-
-**Objetivo:** preparar liberação corporativa mais ampla.
-
-**Escopo:**
-
-- RBAC consolidado.
-- Observabilidade ampliada.
-- Performance básica.
-- Documentação viva.
-- Runbook de operação.
-
-**Critérios de aceite:**
-
-- Operação possui plano de diagnóstico.
-- Segurança mínima está validada.
-- Usuário final acessa fluxo principal com estabilidade.
-
-## Ordem recomendada de execução
-
-1. PR-001 a PR-005 para liberar MVP controlado.
-2. PR-006 e PR-007 para beta operacional.
-3. PR-008 a PR-010 para produção padrão ouro.
-
-## Política de execução
-
-- Um PR deve ter escopo pequeno e objetivo.
-- Não misturar frontend, backend, CI e documentação extensa no mesmo PR sem necessidade.
-- Todo PR deve declarar: objetivo, escopo, fora do escopo, validação e risco residual.
-- Não declarar pronto para usuário final sem evidência de acesso, navegação e fluxo principal validado.
-
-## Indicador de decisão
-
-| Condição | Decisão |
-|---|---|
-| PR-001 a PR-005 concluídos | Liberar acesso controlado. |
-| PR-006 a PR-007 concluídos | Liberar beta operacional. |
-| PR-008 a PR-010 concluídos | Avaliar produção padrão ouro. |
-
-## Próximo incremento imediato
-
-Executar o **PR-001 — Shell de produto e navegação**, pois ele reduz o maior gap visível para usuário final: entrada, clareza de navegação, responsividade e experiência inicial.
+Nenhuma trilha é considerada concluída por checkbox histórico, prazo estimado ou número de PR. A decisão é derivada da evidência atual e deve permanecer fail-closed quando essa evidência faltar.

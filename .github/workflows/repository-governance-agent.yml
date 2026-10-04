@@ -215,10 +215,12 @@ jobs:
               owner, repo, pull_number: prNumber,
             });
             const expectedHeadSha = observed.head.sha;
+            const observedLabelNames = (observed.labels || []).map((label) => label.name);
+            const recoveredDraft = observed.draft && observedLabelNames.includes('ci:recuperado');
 
             if (
               observed.state !== 'open' ||
-              observed.draft ||
+              (observed.draft && !recoveredDraft) ||
               observed.base.ref !== 'main' ||
               observed.head.repo?.full_name !== repository
             ) {
@@ -237,9 +239,11 @@ jobs:
             const { data: current } = await github.rest.pulls.get({
               owner, repo, pull_number: prNumber,
             });
+            const currentLabelNames = (current.labels || []).map((label) => label.name);
+            const currentRecoveredDraft = current.draft && currentLabelNames.includes('ci:recuperado');
             if (
               current.state !== 'open' ||
-              current.draft ||
+              (current.draft && !currentRecoveredDraft) ||
               current.base.ref !== 'main' ||
               current.head.sha !== expectedHeadSha ||
               current.head.repo?.full_name !== repository ||
@@ -485,22 +489,29 @@ jobs:
               sort: 'updated', direction: 'asc',
             });
 
+            const recoveredPulls = pulls
+              .filter((item) => (item.labels || []).some((label) => label.name === 'ci:recuperado'))
+              .sort((a, b) => Number(a.number) - Number(b.number));
+            const candidates = recoveredPulls.length > 0 ? recoveredPulls.slice(0, 1) : pulls;
+
             const results = [];
             let updatesStarted = 0;
 
-            for (const summary of pulls) {
+            for (const summary of candidates) {
               const prNumber = Number(summary.number);
               const { data: observed } = await github.rest.pulls.get({
                 owner, repo, pull_number: prNumber,
               });
               const expectedHeadSha = observed.head.sha;
+              const observedLabelNames = (observed.labels || []).map((label) => label.name);
+              const recoveredDraft = observed.draft && observedLabelNames.includes('ci:recuperado');
 
               if (observed.state !== 'open' || observed.base.ref !== 'main') {
                 results.push({ pr: prNumber, result: 'skipped', reason: 'not_open_or_not_main' });
                 continue;
               }
-              if (observed.draft) {
-                results.push({ pr: prNumber, result: 'skipped', reason: 'draft' });
+              if (observed.draft && !recoveredDraft) {
+                results.push({ pr: prNumber, result: 'skipped', reason: 'draft_not_recovered' });
                 continue;
               }
               if (observed.head.repo?.full_name !== repository) {
@@ -523,8 +534,10 @@ jobs:
               const { data: current } = await github.rest.pulls.get({
                 owner, repo, pull_number: prNumber,
               });
+              const currentLabelNames = (current.labels || []).map((label) => label.name);
+              const currentRecoveredDraft = current.draft && currentLabelNames.includes('ci:recuperado');
               if (
-                current.state !== 'open' || current.draft || current.base.ref !== 'main' ||
+                current.state !== 'open' || (current.draft && !currentRecoveredDraft) || current.base.ref !== 'main' ||
                 current.head.sha !== expectedHeadSha ||
                 current.head.repo?.full_name !== repository ||
                 current.mergeable === false || current.mergeable_state === 'dirty'
