@@ -19,23 +19,34 @@
     "Update de branch usa expected_head_sha e falha se o HEAD mudou.",
     "A fila considera PRs mais antigos primeiro dentro da mesma prioridade.",
     "Conflito de código nunca é resolvido automaticamente.",
-    "Testes preventivos da classificação estrutural ficam verdes."
+    "Testes preventivos da classificação estrutural ficam verdes.",
+    "workflow_run destinado a PR não é criado quando o workflow de origem roda na main.",
+    "PR Evidence Gate usa somente CI — ReqSys v2 Enterprise como sinal canônico de workflow_run e consulta os demais gates pelo HEAD.",
+    "Ollama CI Triage deduplica por head_sha e cancela diagnóstico obsoleto.",
+    "CI Observability deduplica por workflow de origem e head_sha com cancel-in-progress.",
+    "Workflows alterados usam actions externas fixadas por SHA."
   ],
   "sdd_gate": {
     "pre_pr_tests": [
-      "tests/test_pr_ci_watch.py"
+      "tests/test_pr_ci_watch.py",
+      "tests/test_ci_fanout_guard.py"
     ],
     "tests": [
-      "tests/test_pr_ci_watch.py"
+      "tests/test_pr_ci_watch.py",
+      "tests/test_ci_fanout_guard.py"
     ],
-    "evidence_contract": "O PR CI Watch avalia mergeabilidade antes do CI, prioriza conflicting/empty_change/behind e só sincroniza branch segura com expected_head_sha."
+    "evidence_contract": "A fila avalia mergeabilidade antes de CI e impede fan-out inútil de workflow_run na main; watchers/observabilidade são deduplicados por HEAD/evento com referências de actions imutáveis."
   },
   "traceability": {
     "requirements": ".sdd/specs/pr-structural-queue.requirements.md",
     "workflow": ".github/workflows/pr-ci-watch.yml",
     "implementation": "scripts/pr_ci_watch.py",
     "tests": "tests/test_pr_ci_watch.py",
-    "pull_request": "#121"
+    "pull_request": "#121",
+    "fanout_test": "tests/test_ci_fanout_guard.py",
+    "evidence_gate": ".github/workflows/pr-evidence-gate.yml",
+    "ollama_triage": ".github/workflows/ollama-ci-triage.yml",
+    "ci_observability": ".github/workflows/ci-observability.yml"
   },
   "risk": {
     "production": false,

@@ -10,12 +10,14 @@ on:
       - reopened
       - ready_for_review
   workflow_run:
+    # O CI principal é o único sinal canônico; o gate consulta os demais
+    # workflows pelo HEAD atual. Main é excluída antes da criação do run.
     workflows:
       - CI — ReqSys v2 Enterprise
-      - Governance Quality Gates
-      - Governança Padrão Ouro
     types:
       - completed
+    branches-ignore:
+      - main
   workflow_dispatch:
     inputs:
       pr_number:

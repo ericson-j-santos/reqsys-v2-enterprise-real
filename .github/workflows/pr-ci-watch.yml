@@ -13,6 +13,8 @@ on:
       - CI Enterprise Fast
       - CI — ReqSys v2 Enterprise
     types: [completed]
+    branches-ignore:
+      - main
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
