@@ -52,7 +52,7 @@ describe('AnalyticsRuntimeIntelligenceView', () => {
     await vi.dynamicImportSettled()
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(wrapper.text()).toContain('Analytics Runtime Intelligence')
+    expect(wrapper.get('#titulo-ari').text()).toBe('Inteligência operacional de indicadores')
     expect(wrapper.text()).toContain('Evidência externa pendente')
     expect(wrapper.text()).toContain('Bloqueado')
     expect(wrapper.text()).toContain('EVIDENCIA_AUSENTE')
