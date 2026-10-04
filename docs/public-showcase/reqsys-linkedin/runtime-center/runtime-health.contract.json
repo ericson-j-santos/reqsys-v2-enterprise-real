@@ -1,0 +1,60 @@
+{
+  "schema_version": "runtime-center-p0.2",
+  "mode": "illustrative",
+  "operational_evidence": false,
+  "environment": "example",
+  "generated_at": "2026-06-21T22:00:00Z",
+  "correlation_id": "rtc-p0-static-example",
+  "services": [
+    {
+      "name": "CI/CD",
+      "status": "example",
+      "latency_ms": null,
+      "source": "static-showcase"
+    },
+    {
+      "name": "Deploy",
+      "status": "example",
+      "latency_ms": null,
+      "source": "static-showcase"
+    },
+    {
+      "name": "Auth",
+      "status": "example",
+      "latency_ms": null,
+      "source": "static-showcase"
+    },
+    {
+      "name": "API",
+      "status": "example",
+      "latency_ms": null,
+      "source": "static-showcase"
+    },
+    {
+      "name": "Observabilidade",
+      "status": "example",
+      "latency_ms": null,
+      "source": "static-showcase"
+    },
+    {
+      "name": "RAG/IA",
+      "status": "example",
+      "latency_ms": null,
+      "source": "static-showcase"
+    }
+  ],
+  "targets": {
+    "runtime_availability_percent": 99,
+    "ci_success_rate_percent": 95,
+    "mttr_minutes": 30,
+    "critical_incidents": 0
+  },
+  "evidence_sources": [
+    "/api/runtime/health",
+    "/api/runtime/readiness",
+    "/api/runtime/metrics",
+    "/api/runtime/dashboard",
+    "/monitoramento-operacional/runtime/health"
+  ],
+  "note": "Static showcase only. Never use this file as runtime, CI, merge or deployment evidence."
+}
