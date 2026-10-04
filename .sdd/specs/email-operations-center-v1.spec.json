@@ -1,0 +1,5 @@
+{
+  "feature_name": "Email Operations Center v1",
+  "approvals": {"requirements": true},
+  "sdd_gate": {"tests": ["backend/tests/test_email_operations_center.py"]}
+}

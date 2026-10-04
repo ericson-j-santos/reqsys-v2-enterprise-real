@@ -18,6 +18,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts import self_hosted_dev_maintenance as portable_dev
+except ModuleNotFoundError:
+    import self_hosted_dev_maintenance as portable_dev
+
 TUNNELS = ("reqsys-dev-gateway-tunnel", "reqsys-dev-failover-tunnel")
 DEFAULT_IMAGE = "cloudflare/cloudflared:latest"
 DEFAULT_TARGET = "http://host.docker.internal:8083"
@@ -174,6 +179,17 @@ def main() -> int:
     parser.add_argument("--image", default=os.environ.get("REQSYS_DEV_TUNNEL_IMAGE", DEFAULT_IMAGE))
     parser.add_argument("--state-file", type=Path, default=state_path())
     args = parser.parse_args()
+    try:
+        portable = portable_dev.control_if_active(apply=args.apply, publish=False)
+    except portable_dev.PortableRuntimeError as exc:
+        print(json.dumps({"ready": False, "usable": False,
+                          "runtime_provider": "self_hosted_dev",
+                          "error": exc.code, "legacy_runtime_touched": False}, sort_keys=True))
+        return 2
+    if portable is not None:
+        print(json.dumps({**portable, "ready": portable.get("public_ingress_verified") is True,
+                          "candidate_route_reconciliation_deferred": False}, sort_keys=True))
+        return 0
 
     results = [
         reconcile_one(name, target=args.target, image=args.image, apply=args.apply)
