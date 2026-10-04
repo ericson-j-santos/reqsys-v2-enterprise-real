@@ -3,8 +3,8 @@
 
 Uso:
     python scripts/validar_login_azure_operacional.py \
-        --api-url https://reqsys-api.fly.dev \
-        --expected-redirect-uri https://reqsys-app.fly.dev
+        --api-url https://api.example.net \
+        --expected-redirect-uri https://app.example.net/auth/callback.html
 
 O script não executa login interativo nem manipula credenciais. Ele valida se a API
 está publicando configuração suficiente para o frontend renderizar o botão Microsoft
@@ -20,9 +20,24 @@ import urllib.request
 from datetime import UTC, datetime
 from typing import Any
 
+try:
+    from scripts.runtime_url_policy import require_authorized_runtime_url
+except ModuleNotFoundError:  # execução direta: python scripts/<arquivo>.py
+    from runtime_url_policy import require_authorized_runtime_url
+
 
 class ValidationError(RuntimeError):
     """Erro de validação operacional."""
+
+
+def _require_https_url(value: str, *, label: str) -> str:
+    try:
+        url = require_authorized_runtime_url(value, label=label)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    if not url.startswith("https://"):
+        raise ValidationError(f"{label} deve usar HTTPS")
+    return url
 
 
 def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
@@ -50,6 +65,11 @@ def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
 
 
 def validar_config(api_url: str, expected_redirect_uri: str) -> dict[str, Any]:
+    api_url = _require_https_url(api_url, label="URL base da API")
+    expected_redirect_uri = _require_https_url(
+        expected_redirect_uri,
+        label="redirect URI esperado",
+    )
     endpoint = api_url.rstrip("/") + "/v1/auth/config"
     payload = _get_json(endpoint)
     data = payload.get("data", {})
@@ -106,7 +126,7 @@ def validar_config(api_url: str, expected_redirect_uri: str) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Valida configuração operacional Azure AD do ReqSys")
-    parser.add_argument("--api-url", required=True, help="URL base da API, exemplo: https://reqsys-api.fly.dev")
+    parser.add_argument("--api-url", required=True, help="URL HTTPS base da API, exemplo: https://api.example.net")
     parser.add_argument("--expected-redirect-uri", required=True, help="Origem pública esperada do frontend")
     args = parser.parse_args()
 

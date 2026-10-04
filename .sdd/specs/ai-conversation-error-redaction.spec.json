@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "AI Conversation API error redaction",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-27",
+  "updated_at": "2026-09-27",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_ai_conversation_api.py",
+      "tests/test_vibe_security_gate.py"
+    ],
+    "evidence_contract": "Respostas HTTP preservam os status existentes, usam mensagens publicas estaticas e nao devolvem o texto de excecoes de dominio/provedor."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/ai-conversation-error-redaction.requirements.md",
+    "implementation": "backend/app/api/ai_conversation.py",
+    "regression_tests": "backend/tests/test_ai_conversation_api.py",
+    "issue": "#663"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "permissions": false,
+    "scope": "backend-api-error-redaction"
+  },
+  "acceptance_criteria": [
+    "Os seis caminhos risk_id=12 de _http_error deixam de devolver str(exc).",
+    "Os status HTTP 404, 403, 429, 409, 503 e 502 permanecem inalterados.",
+    "Falha generica continua retornando 500 com mensagem publica estatica.",
+    "Teste negativo injeta marcador interno e prova ausencia no detalhe HTTP.",
+    "Security changed-diff e Pre-PR Readiness passam no HEAD exato com behind_by=0."
+  ]
+}

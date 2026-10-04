@@ -169,9 +169,9 @@ def test_provision_copilot_studio_webhook_mockado(client, monkeypatch):
 
 def test_provision_dataverse_sem_solution_zip_nao_importa(client, monkeypatch):
     monkeypatch.setattr(settings, 'copilotstudio_environment_url', 'https://orgtest.crm2.dynamics.com/')
-    monkeypatch.setattr(settings, 'azure_tenant_id', 'tenant')
-    monkeypatch.setattr(settings, 'azure_client_id', 'client')
-    monkeypatch.setattr(settings, 'azure_client_secret', 'secret')
+    monkeypatch.setattr(settings, 'dataverse_tenant_id', 'tenant')
+    monkeypatch.setattr(settings, 'dataverse_client_id', 'client')
+    monkeypatch.setattr(settings, 'dataverse_client_secret', 'secret')
 
     resp = client.post('/v1/agents/provision/copilot-studio', json={
         'name': 'Orquestrador Dataverse',

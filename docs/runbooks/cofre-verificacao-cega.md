@@ -1,72 +1,39 @@
-# Runbook — Verificação cega do cofre
+# Runbook — verificação cega do cofre
 
-## Objetivo
+## Preparação
 
-Validar se um valor informado é igual a um valor armazenado no cofre sem retornar o segredo bruto, sem retornar digest e sem expor fingerprint.
+1. Inicialize o cofre.
+2. Gere um valor aleatório com pelo menos 32 bytes de entropia adequada.
+3. Grave-o no cofre com a chave `REQSYS_COFRE_VERIFICADOR_PEPPER`.
+4. Não registre esse valor em `.env`, logs, documentação ou CI.
 
-## Endpoint recomendado
+## Verificação
 
-```http
-POST /v1/cofre/verificar
-X-Vault-Token: <VAULT_API_TOKEN>
-Content-Type: application/json
-```
+`POST /v1/cofre/verificar`
 
 Payload:
 
 ```json
-{
-  "key": "NOME_DA_CHAVE",
-  "value": "valor-candidato"
-}
+{"key":"MINHA_CHAVE","value":"valor-candidato"}
 ```
 
-Resposta:
+Autenticação: `X-Vault-Token` global legado ou token escopado que autorize `MINHA_CHAVE`.
 
-```json
-{
-  "success": true,
-  "data": {
-    "key": "NOME_DA_CHAVE",
-    "match": true,
-    "verifier_version": "cego-v1",
-    "value_exposed": false
-  }
-}
-```
+A resposta contém somente:
 
-## Preparação do valor operacional
+- chave;
+- `match`;
+- versão do verificador;
+- `value_exposed=false`.
 
-1. Inicializar o cofre por ambiente.
-2. Gerar valor forte com pelo menos 32 bytes.
-3. Gravar no cofre com a chave `REQSYS_COFRE_VERIFICADOR_PEPPER`.
-4. Nunca resolver esta chave por endpoint de leitura.
+## Falha fechada
 
-Exemplo de geração local:
+- segredo alvo ausente: 404;
+- chave operacional ausente/fraca: 503;
+- chave operacional usada como alvo: bloqueada;
+- token sem escopo: 403;
+- token inválido: 401.
 
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
+## Rotação
 
-## Guardrails
-
-- `POST /v1/cofre/verificar` retorna apenas verdadeiro/falso.
-- `REQSYS_COFRE_VERIFICADOR_PEPPER` não pode ser consultado por `/resolver` ou `/segredos/{key}`.
-- A comparação do token do cofre usa comparação constante.
-- A resposta não contém `value`, `digest`, `hash` ou `fingerprint`.
-- O valor operacional fraco ou ausente retorna `503`.
-
-## Validação local
-
-```bash
-cd backend
-python -m pytest tests/test_cofre_verificador_cego.py tests/test_cofre_verificacao_api.py -v
-```
-
-## Critério de pronto
-
-- Testes novos verdes.
-- CI completo verde.
-- PR em draft até revisão concluída.
-- Sem alteração que relaxe gates de produção.
-- Sem logs contendo valor candidato, segredo do cofre ou valor operacional.
+A chave operacional pode ser sobrescrita pela rota administrativa de gravação. Não existe leitura pela API.

@@ -1,52 +1,13 @@
-# Release Note — Cofre Verificação Cega v1.0.0
+# Cofre — verificação cega v1
 
-## Objetivo
+## Entrega
 
-Adicionar uma capacidade segura para comparar valores contra segredos armazenados no cofre sem retornar segredo bruto.
+- endpoint `POST /v1/cofre/verificar`;
+- HMAC com chave operacional separada;
+- comparação constante;
+- compatibilidade com tokens S2S escopados;
+- auditoria preservada;
+- chave operacional não recuperável pelas rotas de lookup;
+- testes positivos, negativos, fail-closed e de escopo.
 
-## Entregas
-
-| Área | Entrega |
-|---|---|
-| Backend | Novo módulo `backend/app/core/cofre_verificador_cego.py` |
-| API | Novo endpoint `POST /v1/cofre/verificar` |
-| Segurança | Comparação constante para `X-Vault-Token` |
-| Segurança | Chave operacional `REQSYS_COFRE_VERIFICADOR_PEPPER` bloqueada em endpoints de leitura |
-| Testes | Testes unitários do verificador cego |
-| Testes | Testes de API para match verdadeiro/falso e não exposição de valor |
-| Governança | ADR e runbook versionados |
-| Configuração | `.env.example` documentado |
-
-## Contrato seguro
-
-A API retorna somente:
-
-```json
-{
-  "match": true,
-  "verifier_version": "cego-v1",
-  "value_exposed": false
-}
-```
-
-A API não retorna:
-
-- segredo bruto;
-- digest;
-- hash;
-- fingerprint;
-- valor operacional do verificador.
-
-## Validação
-
-```bash
-cd backend
-python -m pytest tests/test_cofre_verificador_cego.py tests/test_cofre_verificacao_api.py -v
-```
-
-## Pendências antes de produção
-
-- Configurar `REQSYS_COFRE_VERIFICADOR_PEPPER` real por ambiente.
-- Validar CI completo.
-- Revisar logs para garantir ausência de valor candidato e segredo.
-- Manter PR em draft até revisão e autorização explícita.
+Nenhum segredo, digest ou fingerprint é retornado pelo endpoint.

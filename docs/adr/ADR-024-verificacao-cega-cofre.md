@@ -1,24 +1,24 @@
-# ADR-024 — Verificacao cega do cofre
+# ADR — Verificação cega de valores no cofre
 
 ## Status
 
-Proposto.
+Implementado de forma compatível com o cofre atual.
 
-## Decisao
+## Decisão
 
-Adicionar endpoint de verificacao cega para casos em que a aplicacao precisa validar se um valor informado corresponde ao valor armazenado no cofre, sem retornar o valor armazenado.
+O ReqSys oferece `POST /v1/cofre/verificar` para comparar um valor candidato com um segredo armazenado sem devolver o segredo, digest ou fingerprint.
 
-## Controles
+A comparação usa HMAC-SHA-256 com uma chave operacional separada, armazenada no próprio cofre sob `REQSYS_COFRE_VERIFICADOR_PEPPER`. O resultado final usa comparação em tempo constante.
 
-- Retornar apenas `match` verdadeiro ou falso.
-- Nao retornar valor bruto.
-- Nao retornar resumo criptografico, hash, digest ou fingerprint.
-- Usar comparacao resistente a timing attack.
-- Usar segredo operacional separado para derivacao.
-- Bloquear chaves internas do proprio mecanismo.
+## Integração com o cofre atual
 
-## Criterio de pronto
+- tokens S2S escopados continuam válidos;
+- o token legado usa comparação constante;
+- auditoria existente é preservada;
+- o token escopado precisa autorizar a chave alvo;
+- a chave operacional pode ser gravada por administração, mas não pode ser lida, resolvida, removida ou verificada pelas rotas de lookup;
+- ausência ou fraqueza da chave operacional retorna indisponibilidade, sem fallback inseguro.
 
-- Testes unitarios e de API cobrindo match verdadeiro, falso, chave inexistente, chave reservada e ausencia do segredo operacional.
-- CI completo verde.
-- PR em draft ate revisao e autorizacao explicita.
+## Limites
+
+O endpoint confirma igualdade. Ele não transforma o cofre em serviço de autenticação de usuário e não deve ser usado para verificar senhas humanas.

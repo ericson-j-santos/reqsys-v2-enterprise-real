@@ -1,0 +1,57 @@
+name: PR Auto Recovery Diagnostics
+
+on:
+  schedule:
+    - cron: "17 10 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Quantidade maxima de PRs abertos a avaliar"
+        required: false
+        default: "20"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: pr-auto-recovery-diagnostics-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  diagnostics:
+    name: Diagnosticar PRs bloqueados
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Executar diagnostico governado
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LIMIT: ${{ github.event.inputs.limit || '20' }}
+        run: |
+          set -euo pipefail
+          python scripts/pr_auto_recovery.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --limit "${LIMIT}" \
+            --output-dir artifacts/pr-auto-recovery
+
+      - name: Publicar artifact de evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-auto-recovery-diagnostics
+          path: artifacts/pr-auto-recovery
+          if-no-files-found: error
+          retention-days: 15

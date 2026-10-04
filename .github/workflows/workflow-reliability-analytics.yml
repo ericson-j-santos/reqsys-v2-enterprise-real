@@ -1,0 +1,188 @@
+name: Workflow Reliability Analytics
+
+# Push main: Main Operational Validation Fast. workflow_run removido (anti-cascata).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "29 10 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-reliability-analytics
+  cancel-in-progress: false
+
+jobs:
+  governance-gate:
+    name: Classificar fonte e suprimir ruído mesh
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.govern.outputs.should_run }}
+      source_workflow: ${{ steps.govern.outputs.source_workflow }}
+      source_conclusion: ${{ steps.govern.outputs.source_conclusion }}
+    steps:
+      - name: Avaliar fonte do evento
+        id: govern
+        env:
+          RUN_NAME: ${{ github.event.workflow_run.name || 'manual' }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'success' }}
+        run: |
+          set -euo pipefail
+          MESH_NOISE=(
+            "Operational Realtime Event Mesh"
+            "Realtime Operational Mesh"
+            "Realtime Operational Streaming Layer"
+            "Live Operational Control Center"
+            "Operational Alert Intelligence"
+            "Operational Runtime Mesh Hub"
+            "Unified Operational Event Bus"
+            "Governed Auto Remediation Engine"
+            "Workflow Reliability Analytics"
+          )
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "source_workflow=${RUN_NAME}" >> "$GITHUB_OUTPUT"
+            echo "source_conclusion=${RUN_CONCLUSION}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          should_run=true
+          for item in "${MESH_NOISE[@]}"; do
+            if [ "$RUN_NAME" = "$item" ]; then
+              should_run=false
+              break
+            fi
+          done
+
+          {
+            echo "should_run=${should_run}"
+            echo "source_workflow=${RUN_NAME}"
+            echo "source_conclusion=${RUN_CONCLUSION}"
+          } >> "$GITHUB_OUTPUT"
+
+  workflow-reliability-analytics:
+    name: Gerar analytics de confiabilidade
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate workflow reliability analytics
+        env:
+          WORKFLOW_NAME: ${{ needs.governance-gate.outputs.source_workflow }}
+          WORKFLOW_CONCLUSION: ${{ needs.governance-gate.outputs.source_conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          echo "# Workflow Reliability Analytics" > workflow-reliability-analytics.md
+          echo "" >> workflow-reliability-analytics.md
+          echo "- Workflow: ${WORKFLOW_NAME}" >> workflow-reliability-analytics.md
+          echo "- Conclusion: ${WORKFLOW_CONCLUSION}" >> workflow-reliability-analytics.md
+          echo "- Branch: ${HEAD_BRANCH}" >> workflow-reliability-analytics.md
+          echo "- Commit: ${HEAD_SHA}" >> workflow-reliability-analytics.md
+          echo "- URL: ${WORKFLOW_URL}" >> workflow-reliability-analytics.md
+          echo "" >> workflow-reliability-analytics.md
+
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          
+          workflow = os.getenv('WORKFLOW_NAME', '')
+          conclusion = os.getenv('WORKFLOW_CONCLUSION', '')
+          
+          failure_rate = 0
+          flaky_probability = 'LOW'
+          trend = 'STABLE'
+          reliability_score = 100
+          
+          if conclusion != 'success':
+              failure_rate = 35
+              reliability_score -= 30
+              trend = 'DEGRADING'
+              flaky_probability = 'MEDIUM'
+          
+          if 'Monitorador' in workflow:
+              reliability_score -= 5
+              flaky_probability = 'MEDIUM'
+          
+          if reliability_score < 70:
+              flaky_probability = 'HIGH'
+              trend = 'CRITICAL'
+          
+          ranking = []
+          ranking.append((workflow, reliability_score))
+          ranking.sort(key=lambda item: item[1])
+          
+          lines = []
+          lines.append('## Reliability Metrics')
+          lines.append(f'- Reliability score: {reliability_score}/100')
+          lines.append(f'- Failure rate estimate: {failure_rate}%')
+          lines.append(f'- Flaky probability: {flaky_probability}')
+          lines.append(f'- Trend: {trend}')
+          lines.append('')
+          lines.append('## Workflow Ranking')
+          lines.append('| Workflow | Reliability Score |')
+          lines.append('|---|---|')
+          
+          for item in ranking:
+              lines.append(f'| {item[0]} | {item[1]}/100 |')
+          
+          lines.append('')
+          lines.append('## Recommendations')
+          
+          if reliability_score >= 90:
+              lines.append('- Workflow ecosystem stable.')
+              lines.append('- Maintain operational monitoring cadence.')
+          elif reliability_score >= 75:
+              lines.append('- Reliability degradation signals detected.')
+              lines.append('- Review recurrent failures and flaky patterns.')
+          else:
+              lines.append('- Critical workflow instability detected.')
+              lines.append('- Prioritize CI stabilization before new releases.')
+          
+          lines.append('')
+          lines.append('## Governance')
+          lines.append('- Preserve mandatory CI gates.')
+          lines.append('- Avoid force merges with unstable workflows.')
+          lines.append('- Track workflow recurrence patterns.')
+          
+          Path('workflow-analytics.md').write_text('\n'.join(lines), encoding='utf-8')
+          PY
+
+          cat workflow-analytics.md >> workflow-reliability-analytics.md
+
+      - name: Publish workflow reliability summary
+        run: |
+          cat workflow-reliability-analytics.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload workflow reliability artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-reliability-analytics
+          path: workflow-reliability-analytics.md
+          if-no-files-found: error
+
+  skip-cascade:
+    name: Skip governado (cascata mesh suprimida)
+    runs-on: ubuntu-latest
+    needs: governance-gate
+    if: needs.governance-gate.outputs.should_run != 'true'
+    steps:
+      - name: Registrar skip esperado
+        run: |
+          echo "## Workflow Reliability Analytics — skip governado" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Fonte: \`${{ needs.governance-gate.outputs.source_workflow }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Motivo: cascata mesh suprimida para evitar ruído operacional" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Classificação: \`governed_skip\`" >> "$GITHUB_STEP_SUMMARY"

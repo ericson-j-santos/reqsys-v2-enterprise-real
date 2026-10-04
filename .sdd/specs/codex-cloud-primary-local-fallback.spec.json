@@ -1,0 +1,66 @@
+{
+  "feature_name": "codex-cloud-primary-local-fallback",
+  "project": "ReqSys v2 Enterprise — Codex Local / Ollama",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-28",
+  "phase": "runtime_validation_automation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Promove gemma4:31b-cloud como modelo primário do Codex no Desktop e usa gemma4:26b-q8-code como fallback local automático, com evidência do modelo efetivamente utilizado.",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_codex_ollama_fallback.py",
+      "docs/ollama-local-gateway/bootstrap-files/tests/test_fallback.py",
+      "tests/test_configure_codex_ollama_fallback.py",
+      "tests/test_codex_ollama_e2e_selfhosted.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "O ReqSys deve propagar o fallback ao gateway; falha HTTP do modelo primário pode acionar um único fallback local; a resposta do gateway deve informar requested_model, model efetivo e fallback_used. O E2E runtime precisa estar vinculado ao SHA exato, correlation_id único e artifact sanitizado no PC24x7 DEV, com cancelamento fail-closed quando o runner não fizer pickup. Nenhuma promoção ou deploy de produção faz parte deste incremento. O modo change-impact-pr2144 resolve o merge_commit_sha da PR #2144 mergeada no gateway e no workflow, sem SHA vindo do comentário; checkout e readback devem coincidir; o benchmark exige llm_status=used para todos os casos híbridos e publica SHA/digest sanitizados."
+  },
+  "runtime_validation": {
+    "workflow": [
+      ".github/workflows/codex-ollama-e2e-dev.yml"
+    ],
+    "script": "scripts/validate_codex_cloud_reqsys_e2e.py",
+    "host": "DESKTOP-PDQK954",
+    "environment": "DEV",
+    "gateway_command": "/reqsys run codex-ollama-e2e-dev",
+    "expected_primary_model": "gemma4:31b-cloud",
+    "expected_fallback_model": "gemma4:26b-q8-code",
+    "evidence_fields": [
+      "expected_sha",
+      "observed_sha",
+      "correlation_id",
+      "provider",
+      "fallback_used",
+      "production_touched",
+      "deploy_performed"
+    ],
+    "missing_runner_policy": "fail_closed_cancel_exact_run",
+    "change_impact_pr2144": {
+      "gateway_command": "/reqsys run change-impact-benchmark-pr2144",
+      "workflow_mode": "change-impact-pr2144",
+      "pull_request": 2144,
+      "base_ref": "main",
+      "head_ref": "copilot/change-impact-benchmark-20260928",
+      "sha_source": "github_pull_request_merge_commit_sha",
+      "user_supplied_sha_allowed": false,
+      "benchmark_command": "scripts/change_impact_benchmark.py --llm-mode configured --provider ollama_gateway --require-llm",
+      "evidence_fields": [
+        "target_sha",
+        "observed_sha",
+        "correlation_id",
+        "llm_mode",
+        "llm_used_for_all_cases",
+        "benchmark_sha256",
+        "production_touched",
+        "deploy_performed"
+      ],
+      "pr_state": "closed",
+      "pr_merged_required": true
+    }
+  }
+}

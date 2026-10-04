@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Post-Merge Workflow Run Hygiene",
+  "increment_type": "gap_fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise — CI/CD",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Evita fan-out PR-only na main após merge e degrada falhas externas da triagem auxiliar sem criar um segundo CI vermelho.",
+  "scope": "github-ci-control-plane",
+  "files": [
+    ".github/workflows/pr-evidence-gate.yml",
+    ".github/workflows/pr-ci-watch.yml",
+    ".github/workflows/ollama-ci-triage.yml",
+    "scripts/ollama_ci_triage.py",
+    "tests/test_pr_evidence_gate_workflow.py",
+    "tests/test_ollama_ci_triage.py",
+    "tests/test_ollama_ci_triage_workflow.py",
+    "tests/test_post_merge_workflow_run_hygiene.py"
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_pr_evidence_gate_workflow.py",
+      "tests/test_ollama_ci_triage.py",
+      "tests/test_ollama_ci_triage_workflow.py",
+      "tests/test_post_merge_workflow_run_hygiene.py"
+    ],
+    "tests": [
+      "tests/test_pr_evidence_gate_workflow.py",
+      "tests/test_ollama_ci_triage.py",
+      "tests/test_ollama_ci_triage_workflow.py",
+      "tests/test_post_merge_workflow_run_hygiene.py"
+    ],
+    "evidence_contract": "Provar que workflow_run da branch padrão não dispara caminhos PR-only e que github_http_403 na triagem opcional gera DEGRADED/exit 0 sem Worker Pool; PR aberto continua protegido pelos gates normais."
+  },
+  "risk": {
+    "production": false,
+    "merge": false,
+    "deploy": false,
+    "secrets_mutation": false,
+    "admin_permissions": false,
+    "protected_branch_write": false
+  },
+  "acceptance_criteria": [
+    "PR Evidence Gate ignora workflow_run pós-merge da branch padrão.",
+    "PR CI Watch não remedia workflow_run pós-merge da branch padrão.",
+    "Ollama CI Triage automático não executa em branch padrão e continua disponível manualmente.",
+    "Falha de infraestrutura GitHub degradável da triagem opcional retorna DEGRADED com exit code 0 e sem enqueue.",
+    "Falhas não degradáveis continuam fail-closed.",
+    "Pre-PR Readiness e checks aplicáveis passam no HEAD exato sem merge/deploy."
+  ]
+}

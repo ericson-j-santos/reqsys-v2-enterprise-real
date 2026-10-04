@@ -1,0 +1,256 @@
+name: OpenAPI Routes Drift
+
+on:
+  pull_request:
+    paths:
+      - docs-site/assets/openapi/**
+      - backend/app/**
+      - scripts/validate_openapi_routes_drift.py
+      - scripts/openapi_breaking_change_gate.py
+      - tests/test_openapi_parallel_lanes.py
+      - tests/test_openapi_semantic_diff_strict.py
+      - tests/test_openapi_breaking_change_gate.py
+      - .github/workflows/openapi-routes-drift.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openapi-routes-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  routes-drift:
+    name: Backend routes ↔ OpenAPI drift (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_app
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: reqsys_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_app -d reqsys_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt pytest
+
+      - name: Run routes drift detector
+        env:
+          DATABASE_URL: postgresql+psycopg2://reqsys_app:ci-postgres-password@localhost:5432/reqsys_test
+          JWT_SECRET: ci-placeholder-secret-min-32-chars-long
+          JWT_ISSUER: reqsys-ci
+          JWT_AUDIENCE: reqsys-ci
+        run: |
+          python scripts/validate_openapi_routes_drift.py \
+            --contract docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json \
+            --output artifacts/openapi/openapi-routes-drift.json
+
+      - name: Run drift unit tests
+        env:
+          DATABASE_URL: postgresql+psycopg2://reqsys_app:ci-postgres-password@localhost:5432/reqsys_test
+          JWT_SECRET: ci-placeholder-secret-min-32-chars-long
+          JWT_ISSUER: reqsys-ci
+          JWT_AUDIENCE: reqsys-ci
+        run: |
+          pytest tests/test_openapi_parallel_lanes.py tests/test_openapi_semantic_diff_strict.py -q --tb=short
+
+      - name: Upload drift artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: openapi-routes-drift
+          path: artifacts/openapi/openapi-routes-drift.json
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Resumo executivo
+        if: always()
+        run: |
+          if [[ -f artifacts/openapi/openapi-routes-drift.json ]]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/openapi/openapi-routes-drift.json").read_text(encoding="utf-8"))
+          summary = report.get("summary") or {}
+          print("## OpenAPI Routes Drift (canonico / Lane C)")
+          print(f"- Status: `{report.get('status')}`")
+          print(f"- Missing in OpenAPI: `{summary.get('missing_in_openapi')}`")
+          print(f"- Missing in backend: `{summary.get('missing_in_backend')}`")
+          PY
+          fi >> "$GITHUB_STEP_SUMMARY"
+
+  routes-drift-strict:
+    name: Strict gate — routes drift must be zero
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: routes-drift
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reqsys_app
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: reqsys_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reqsys_app -d reqsys_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run routes drift with --strict
+        env:
+          DATABASE_URL: postgresql+psycopg2://reqsys_app:ci-postgres-password@localhost:5432/reqsys_test
+          JWT_SECRET: ci-placeholder-secret-min-32-chars-long
+          JWT_ISSUER: reqsys-ci
+          JWT_AUDIENCE: reqsys-ci
+        run: |
+          python scripts/validate_openapi_routes_drift.py \
+            --contract docs-site/assets/openapi/reqsys-runtime-openapi-v0.3.0.json \
+            --output artifacts/openapi/openapi-routes-drift-strict.json \
+            --strict
+
+      - name: Strict gate summary
+        if: always()
+        run: |
+          echo "## OpenAPI Routes Drift — Strict Gate (canonico)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Detector: `validate_openapi_routes_drift.py`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Resultado depende do exit code do detector no SHA atual." >> "$GITHUB_STEP_SUMMARY"
+
+  contract-breaking-change:
+    name: Strict gate — OpenAPI backward compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout completo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolver contratos canônicos base e candidato
+        id: contracts
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || 'main' }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_REF" --prune
+          base_contract="$(
+            git ls-tree -r --name-only "origin/$BASE_REF" docs-site/assets/openapi |
+              grep -E 'docs-site/assets/openapi/reqsys-runtime-openapi-v[0-9]+\.[0-9]+\.[0-9]+\.json$' |
+              sort -V |
+              tail -n 1
+          )"
+          candidate_contract="$(
+            find docs-site/assets/openapi -maxdepth 1 -type f \
+              -name 'reqsys-runtime-openapi-v*.json' ! -name '*.generated.json' -print |
+              sort -V |
+              tail -n 1
+          )"
+          test -n "$base_contract"
+          test -n "$candidate_contract"
+          git show "origin/$BASE_REF:$base_contract" > /tmp/openapi-base.json
+          echo "base_contract=$base_contract" >> "$GITHUB_OUTPUT"
+          echo "candidate_contract=$candidate_contract" >> "$GITHUB_OUTPUT"
+
+      - name: Validar gate e executar controle negativo
+        shell: bash
+        run: |
+          set +e
+          python -m pip install --disable-pip-version-check pytest
+          install_code=$?
+          python -m py_compile scripts/openapi_breaking_change_gate.py
+          compile_code=$?
+          python -m pytest tests/test_openapi_breaking_change_gate.py -q --tb=short
+          test_code=$?
+          python scripts/openapi_breaking_change_gate.py \
+            --base /tmp/openapi-base.json \
+            --candidate "${{ steps.contracts.outputs.candidate_contract }}" \
+            --output artifacts/openapi/openapi-breaking-change-gate.json \
+            --strict
+          gate_code=$?
+          if [[ "$install_code" -ne 0 || "$compile_code" -ne 0 || "$test_code" -ne 0 || "$gate_code" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Garantir artifact diagnóstico
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/openapi
+          if [[ ! -f artifacts/openapi/openapi-breaking-change-gate.json ]]; then
+            cat > artifacts/openapi/openapi-breaking-change-gate.json <<'JSON'
+          {
+            "schema_version": "1.0.0",
+            "contract": "reqsys-openapi-breaking-change-gate",
+            "status": "diagnostic_artifact_missing",
+            "errors": ["gate_report_not_generated"],
+            "breaking_changes": [],
+            "summary": {"breaking_change_count": 0}
+          }
+          JSON
+          fi
+
+      - name: Upload compatibility artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: openapi-breaking-change-gate
+          path: artifacts/openapi/openapi-breaking-change-gate.json
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Resumo de compatibilidade
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/openapi/openapi-breaking-change-gate.json")
+          report = json.loads(path.read_text(encoding="utf-8"))
+          summary = report.get("summary") or {}
+          print("## OpenAPI Backward Compatibility")
+          print(f"- Status: `{report.get('status')}`")
+          print(f"- Breaking changes: `{summary.get('breaking_change_count')}`")
+          print("- Controle negativo: remoção deliberada de operação deve ser bloqueada pelos testes.")
+          PY
