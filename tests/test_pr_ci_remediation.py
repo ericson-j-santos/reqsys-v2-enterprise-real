@@ -37,6 +37,7 @@ def make_run(*, name="CI Enterprise Fast", conclusion="failure", attempt=1, upda
     return WorkflowRun(
         id=10,
         name=name,
+        status="completed",
         conclusion=conclusion,
         run_attempt=attempt,
         html_url="https://github.com/example/repo/actions/runs/10",
@@ -79,6 +80,7 @@ class RemediationClassificationTests(unittest.TestCase):
         new = WorkflowRun(
             id=11,
             name=old.name,
+            status="completed",
             conclusion="success",
             run_attempt=1,
             html_url="https://github.com/example/repo/actions/runs/11",
@@ -111,3 +113,63 @@ class RemediationClassificationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EventDrivenRemediationTests(unittest.TestCase):
+    def test_pending_run_is_not_classified_as_recovered(self):
+        run = WorkflowRun(
+            id=12,
+            name="CI Enterprise Fast",
+            status="in_progress",
+            conclusion="unknown",
+            run_attempt=1,
+            html_url="https://github.com/example/repo/actions/runs/12",
+            updated_at="2026-08-29T11:30:00Z",
+        )
+        state, action, reason, _ = module.classify(run, POLICY, now=NOW)
+        self.assertEqual("CI_PENDENTE", state)
+        self.assertEqual("none", action)
+        self.assertEqual("workflow_pending", reason)
+
+    def test_select_prs_rejects_stale_workflow_event(self):
+        original = module.fetch_pull_request
+        try:
+            module.fetch_pull_request = lambda repo, token, pr_number: module.PullRequest(
+                number=81,
+                title="PR",
+                html_url="https://github.com/example/repo/pull/81",
+                head_sha="a" * 40,
+                head_ref="feature/test",
+            )
+            prs, reason = module.select_prs(
+                "example/repo",
+                "token",
+                pr_number=81,
+                expected_head_sha="b" * 40,
+            )
+        finally:
+            module.fetch_pull_request = original
+        self.assertEqual([], prs)
+        self.assertEqual("stale_workflow_event", reason)
+
+    def test_workflow_has_event_driven_primary_path_and_schedule_watchdog(self):
+        raw = (Path(__file__).resolve().parents[1] / ".github/workflows/pr-ci-remediation.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_run:", raw)
+        self.assertIn('"CI — ReqSys v2 Enterprise"', raw)
+        self.assertIn('"CI Enterprise Fast"', raw)
+        self.assertIn('"Pre-PR Readiness Gate"', raw)
+        self.assertIn("EVENT_PR_NUMBER:", raw)
+        self.assertIn("EVENT_HEAD_SHA:", raw)
+        self.assertIn("schedule:", raw)
+
+
+class TeamsEventNotificationContractTests(unittest.TestCase):
+    def test_teams_notifier_consumes_automatic_triage_and_remediation_events(self):
+        raw = (Path(__file__).resolve().parents[1] / ".github/workflows/teams-commit-notification.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_run:", raw)
+        self.assertIn('"Ollama CI Triage"', raw)
+        self.assertIn('"PR CI Remediation"', raw)
+        self.assertIn("pr-ci-remediation-evidence-", raw)
+        self.assertIn("ollama-ci-triage-", raw)
+        self.assertIn("correção automática acionada", raw)
+        self.assertIn("governed CI-driven merge PR #", raw)

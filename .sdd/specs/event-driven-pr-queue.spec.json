@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Event-driven PR queue without ChatGPT Work",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "PR CI Remediation reage a workflow_run dos gates primarios.",
+    "Schedule permanece somente como watchdog.",
+    "Eventos sao limitados ao PR e HEAD exatos.",
+    "Evento stale nao produz mutacao.",
+    "Workflow pendente nao marca PR como recuperado.",
+    "Ollama CI Triage continua acionando Worker Pool para falhas tecnicas elegiveis.",
+    "Teams recebe mudancas materiais de triagem/remediacao e merges governados.",
+    "A implementacao nao cria novo workflow ativo.",
+    "Nenhuma etapa depende de ChatGPT Work.",
+    "Testes de contrato ficam verdes no HEAD exato."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_pr_ci_remediation.py"
+    ],
+    "tests": [
+      "tests/test_pr_ci_remediation.py",
+      "tests/test_ollama_ci_triage_workflow.py"
+    ],
+    "evidence_contract": "GitHub Actions e a fonte de execucao em tempo real; GitHub PR/runs/comments/labels sao o checkpoint duravel; Teams e apenas canal de notificacao."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/event-driven-pr-queue.requirements.md",
+    "implementation": [
+      ".github/workflows/pr-ci-remediation.yml",
+      "scripts/ci/pr_ci_remediation.py",
+      ".github/workflows/teams-commit-notification.yml"
+    ],
+    "existing_automatic_fix": [
+      ".github/workflows/ollama-ci-triage.yml",
+      "scripts/ollama_ci_triage.py"
+    ],
+    "existing_merge": ".github/workflows/governed-pr-automation.yml",
+    "tests": [
+      "tests/test_pr_ci_remediation.py",
+      "tests/test_ollama_ci_triage_workflow.py"
+    ]
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "engineering-control-plane"
+  }
+}
