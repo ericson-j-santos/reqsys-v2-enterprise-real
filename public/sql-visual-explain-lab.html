@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQL Visual Explain Lab</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:960px;margin:0 auto;padding:24px;line-height:1.6}
+    .note{border:1px solid #888;border-radius:12px;padding:16px;margin:16px 0}
+    pre{overflow:auto;padding:16px;border:1px solid #aaa;border-radius:12px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+    article{border:1px solid #aaa;border-radius:12px;padding:16px}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>SQL Visual Explain Lab</h1>
+    <p class="note"><strong>Laboratório estático.</strong> Esta página não executa SQL, não acessa banco e não produz evidência de performance.</p>
+    <div class="grid">
+      <article><h2>Query Intelligence</h2><p>Análise interativa canônica no ReqSys, sem executar SQL.</p></article>
+      <article><h2>Relatório offline</h2><p>Gera Markdown e Mermaid versionáveis com o script Python.</p></article>
+      <article><h2>Banco controlado</h2><p>EXPLAIN/EXPLAIN ANALYZE somente em ferramenta e ambiente apropriados.</p></article>
+    </div>
+    <h2>Exemplo</h2>
+    <pre><code>SELECT u.id, u.name, o.total
+FROM users u
+JOIN orders o ON o.user_id = u.id
+WHERE o.total &gt; 100
+ORDER BY o.total DESC;</code></pre>
+  </main>
+</body>
+</html>
