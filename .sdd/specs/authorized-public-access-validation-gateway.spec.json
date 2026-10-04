@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Authorized strict public access validation",
+  "status": "ready_for_validation",
+  "created_at": "2026-09-27",
+  "approvals": {
+    "requirements": true
+  },
+  "scope": {
+    "target_ref": "main",
+    "workflow": "validacao-acessos.yml",
+    "fail_on_unavailable": true,
+    "production_touched": false,
+    "arbitrary_url_allowed": false,
+    "arbitrary_workflow_allowed": false
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "evidence_contract": "Comando exato validate-public-access-current-main; workflow validacao-acessos.yml; ref main; fail_on_unavailable=true; sem URL/target livre; dispatch não equivale a sucesso."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/authorized-public-access-validation-gateway.requirements.md",
+    "gateway": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "target_workflow": ".github/workflows/validacao-acessos.yml",
+    "validator": "scripts/validar-acessos-publicos.mjs"
+  }
+}

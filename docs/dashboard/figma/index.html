@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReqSys Dashboard Padrão Ouro — Figma Frames</title>
+  <link rel="stylesheet" href="../../assets/styles.css" />
+  <style>
+    .figma-hub { max-width: 1100px; margin: 0 auto; padding: 48px 24px 72px; }
+    .frame-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 28px; }
+    .frame-card { border-radius: 20px; padding: 22px; }
+    .frame-card h3 { margin-bottom: 8px; }
+    .frame-meta { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+    .token-list { display: grid; gap: 8px; margin-top: 18px; }
+    .token-list span { display: block; font-size: 13px; color: var(--muted); }
+    .links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .links a { padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(148,163,184,.2); font-weight: 700; }
+    .links a.primary { background: var(--accent); color: #00111f; border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><div class="brand-mark">R</div><span>ReqSys · Figma Spec</span></div>
+    <nav>
+      <a href="dashboard-desktop.html">Desktop</a>
+      <a href="dashboard-mobile.html">Mobile</a>
+      <a href="dashboard-analytics-drilldown.html">Drill-down</a>
+    </nav>
+  </header>
+
+  <main class="figma-hub">
+    <p class="eyebrow">Trilha C · UX Operacional</p>
+    <h1>Dashboard Padrão Ouro — Telas Figma</h1>
+    <p class="lead">
+      Referência visual para importação no Figma. Espelha a implementação em
+      <code>frontend/src/views/DashboardView.vue</code> com cards clicáveis, semáforo operacional e drill-down analítico.
+    </p>
+
+    <div class="links">
+      <a class="primary" href="dashboard-desktop.html">Frame Desktop 1440×900</a>
+      <a href="dashboard-mobile.html">Frame Mobile 390×844</a>
+      <a href="dashboard-analytics-drilldown.html">Frame Drill-down</a>
+      <a href="http://127.0.0.1:5173/" target="_blank" rel="noopener">App ao vivo (dev)</a>
+    </div>
+
+    <div class="frame-grid">
+      <article class="card frame-card">
+        <h3>Desktop — visão principal</h3>
+        <p class="frame-meta">1440×900 · grade 4 colunas · header com semáforo geral</p>
+        <p>9 cards operacionais, pipeline clicável, painel de destinos analíticos e endpoints críticos.</p>
+        <div class="token-list">
+          <span>Accent: #f39200 (cards) / #38bdf8 (docs)</span>
+          <span>Border radius cards: 16px</span>
+          <span>Semáforo: verde · amarelo · vermelho</span>
+        </div>
+      </article>
+
+      <article class="card frame-card">
+        <h3>Mobile — responsivo</h3>
+        <p class="frame-meta">390×844 · grade 1 coluna · header empilhado</p>
+        <p>Cards empilhados, ações de atualização em largura total, pipeline e destinos analíticos abaixo.</p>
+      </article>
+
+      <article class="card frame-card">
+        <h3>Drill-down analítico</h3>
+        <p class="frame-meta">Estado hover/focus do card + rota filtrada</p>
+        <p>Fluxo: Indicador → card clicável → analítico filtrado → ação operacional.</p>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

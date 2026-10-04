@@ -1,28 +1,37 @@
-# ReqSys Runtime Operational Center P0
+# ReqSys Runtime Operational Center P0 — showcase estático
 
 ## Objetivo
 
-Consolidar a primeira tela operacional do ReqSys antes de abrir novas frentes de evolucao.
+Preservar o corte visual criado no PR #76 como material demonstrativo do conceito de Runtime Center.
+
+> Este diretório é um **showcase estático**. Os estados, métricas, horários e serviços exibidos não são evidência do runtime atual e não devem ser usados para autorizar merge, deploy ou promoção de ambiente.
 
 ## Entregas
 
-- Pagina renderizavel em `runtime-center/index.html`.
-- Estilos responsivos em `runtime-center.css`.
-- Contrato inicial em `runtime-health.contract.json`.
-- Teste Playwright em `tests/runtime-center-p0.spec.ts`.
+- página renderizável em `index.html`;
+- estilos responsivos em `runtime-center.css`;
+- contrato ilustrativo em `runtime-health.contract.json`;
+- contrato preventivo em `tests/test_runtime_center_p0_showcase.py`.
 
-## Criterio de estabilizacao
+## Fonte operacional real
 
-O Runtime Center P0 somente deve ser considerado estabilizado quando:
+A situação operacional real do ReqSys deve ser obtida das superfícies canônicas atuais, incluindo:
 
-1. a tela abrir corretamente;
-2. os cards de health estiverem visiveis;
-3. a timeline estiver visivel;
-4. os indicadores executivos estiverem visiveis;
-5. a arquitetura viva estiver visivel;
-6. a validacao E2E estiver verde;
-7. o PR permanecer em draft ate a confirmacao do CI.
+- `/api/runtime/health`;
+- `/api/runtime/readiness`;
+- `/api/runtime/metrics`;
+- `/api/runtime/dashboard`;
+- `/monitoramento-operacional/runtime/health`;
+- `/monitoramento-operacional/runtime/diagnostico`.
 
-## Proximo gate
+## Critério de estabilização do showcase
 
-A frente Self-Healing Runtime somente deve iniciar depois da estabilizacao do Runtime Center P0.
+1. a página abre como documento estático;
+2. health, timeline, indicadores, arquitetura e incidentes são visíveis;
+3. existe aviso explícito de conteúdo ilustrativo;
+4. o contrato JSON declara modo `illustrative` e `operational_evidence=false`;
+5. o CI atual permanece verde no HEAD do PR.
+
+## Governança
+
+Self-healing, merge, deploy e estado de saúde real não podem ser inferidos deste material estático.

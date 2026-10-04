@@ -1,0 +1,163 @@
+from datetime import UTC, datetime
+
+import pytest
+
+from app.core.operational_queue import (
+    OperationalQueue,
+    OperationalTask,
+    OperationalTaskIdentityConflictError,
+    OperationalTaskStatus,
+    OperationalTaskType,
+)
+
+
+@pytest.mark.asyncio
+async def test_enqueue_dequeue_and_complete_task():
+    queue = OperationalQueue()
+    task = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'action': 'smoke'},
+        correlation_id='corr-001',
+    )
+
+    queued = await queue.enqueue(task)
+    dequeued = await queue.dequeue()
+    assert queued.task_id == dequeued.task_id
+    assert dequeued.status == OperationalTaskStatus.RUNNING
+    assert dequeued.attempts == 1
+
+    await queue.complete(dequeued.task_id, {'status': 'ok'})
+    stored = await queue.get(dequeued.task_id)
+    assert stored.status == OperationalTaskStatus.COMPLETED
+    assert stored.result == {'status': 'ok'}
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_returns_existing_task_for_same_intent():
+    queue = OperationalQueue()
+    first = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'action': 'same'},
+        correlation_id='corr-001',
+        idempotency_key='same-key',
+    )
+    second = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'action': 'same'},
+        correlation_id='corr-002',
+        idempotency_key='same-key',
+    )
+
+    queued_first = await queue.enqueue(first)
+    queued_second = await queue.enqueue(second)
+
+    assert queued_first.task_id == queued_second.task_id
+    assert queued_second.correlation_id == 'corr-001'
+    snapshot = await queue.snapshot()
+    assert snapshot['total_tasks'] == 1
+    assert snapshot['queued_items'] == 1
+    assert snapshot['provider'] == 'memory'
+    assert snapshot['connected'] is True
+    assert snapshot['durable'] is False
+    assert snapshot['processing_items'] == 0
+    assert snapshot['dlq_items'] == 0
+    assert snapshot['oldest_message_age_seconds'] is not None
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_rejects_different_intent_without_mutating_original_task():
+    queue = OperationalQueue()
+    original = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'action': 'original', 'nested': {'value': 1}},
+        correlation_id='corr-original',
+        idempotency_key='intent-key',
+        max_attempts=3,
+    )
+    queued = await queue.enqueue(original)
+
+    divergent = [
+        OperationalTask(
+            task_type=OperationalTaskType.GENERIC,
+            payload={'action': 'different', 'nested': {'value': 1}},
+            correlation_id='corr-payload',
+            idempotency_key='intent-key',
+            max_attempts=3,
+        ),
+        OperationalTask(
+            task_type=OperationalTaskType.EMAIL_REPORT,
+            payload={'action': 'original', 'nested': {'value': 1}},
+            correlation_id='corr-type',
+            idempotency_key='intent-key',
+            max_attempts=3,
+        ),
+        OperationalTask(
+            task_type=OperationalTaskType.GENERIC,
+            payload={'action': 'original', 'nested': {'value': 1}},
+            correlation_id='corr-attempts',
+            idempotency_key='intent-key',
+            max_attempts=4,
+        ),
+    ]
+
+    for candidate in divergent:
+        with pytest.raises(
+            OperationalTaskIdentityConflictError,
+            match='idempotency_key_reused_with_different_task_intent',
+        ):
+            await queue.enqueue(candidate)
+
+    persisted = await queue.get(queued.task_id)
+    assert persisted is not None
+    assert persisted.task_type == OperationalTaskType.GENERIC
+    assert persisted.payload == {'action': 'original', 'nested': {'value': 1}}
+    assert persisted.max_attempts == 3
+    assert persisted.correlation_id == 'corr-original'
+    snapshot = await queue.snapshot()
+    assert snapshot['total_tasks'] == 1
+    assert snapshot['queued_items'] == 1
+
+
+@pytest.mark.asyncio
+async def test_fail_retries_and_then_dead_letter():
+    queue = OperationalQueue()
+    task = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'force_error': True},
+        correlation_id='corr-001',
+        max_attempts=2,
+    )
+
+    await queue.enqueue(task)
+    first = await queue.dequeue()
+    await queue.fail(first.task_id, 'erro 1')
+    assert (await queue.get(first.task_id)).status == OperationalTaskStatus.PENDING
+
+    second = await queue.dequeue()
+    await queue.fail(second.task_id, 'erro 2')
+    stored = await queue.get(second.task_id)
+    assert stored.status == OperationalTaskStatus.DEAD_LETTER
+    assert stored.last_error == 'erro 2'
+
+
+@pytest.mark.asyncio
+async def test_retry_uses_exponential_backoff():
+    queue = OperationalQueue(retry_base_seconds=2)
+    task = OperationalTask(
+        task_type=OperationalTaskType.GENERIC,
+        payload={'force_error': True},
+        correlation_id='corr-backoff',
+        max_attempts=3,
+    )
+
+    await queue.enqueue(task)
+    first = await queue.dequeue()
+    await queue.fail(first.task_id, 'erro 1')
+    stored = await queue.get(first.task_id)
+    assert (stored.next_attempt_at - stored.updated_at).total_seconds() == 2
+
+    stored.next_attempt_at = datetime.now(UTC)
+    second = await queue.dequeue()
+    await queue.fail(second.task_id, 'erro 2')
+    stored = await queue.get(second.task_id)
+    assert (stored.next_attempt_at - stored.updated_at).total_seconds() == 4

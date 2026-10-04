@@ -12,7 +12,7 @@ Codigo: AI-GOV-INDEX-001
 6. 05-DADOS: SQL, Power BI, dados e RAG.
 7. 06-DEVOPS: GitFlow, CI/CD e quality gates.
 8. 07-TESTES: estrategia de testes.
-9. 08-IA: prompts, agentes e multiagentes.
+9. 08-IA: prompts, agentes e multiagentes — ver [ARQUITETURA_MULTIAGENTE_ENTERPRISE.md](08-IA/ARQUITETURA_MULTIAGENTE_ENTERPRISE.md) e [agents/README.md](08-IA/agents/README.md).
 10. 09-CHECKLISTS: PR, producao e padrao ouro.
 11. 10-CONSOLIDADO: referencias executivas e tecnicas.
 

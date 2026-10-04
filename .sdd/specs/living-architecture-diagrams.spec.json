@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Arquitetura Viva para diagramas e fluxos navegáveis",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-20",
+  "updated_at": "2026-10-03",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_living_architecture_contract.py",
+      "tests/test_pre_pr_readiness.py",
+      "tests/test_reqsys_360_repository_audit.py",
+      "frontend/tests/e2e/responsividade.spec.js"
+    ],
+    "evidence_contract": "A rota /arquitetura-viva permanece registrada no router, navegação, catálogo responsivo e governança; a UI permite navegação, filtro e inspector sem overflow; o gerador Mermaid falha sem fonte ou ambiente e sanitiza labels; limites de runtime não implementado permanecem explícitos. O Pre-PR infere dependências backend transitivas de testes raiz e o ReqSys 360 ignora arquivos de teste no inventário de serviços.",
+    "pre_pr_tests": [
+      "tests/test_living_architecture_contract.py",
+      "tests/test_pre_pr_readiness.py",
+      "tests/test_reqsys_360_repository_audit.py"
+    ]
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/living-architecture-diagrams.requirements.md",
+    "implementation": [
+      "frontend/src/views/ArquiteturaVivaView.vue",
+      "src/platform/architecture-visualization/contracts/diagram.contract.ts",
+      "src/platform/architecture-visualization/generators/mermaid-generator.ts"
+    ],
+    "tests": [
+      "tests/test_living_architecture_contract.py",
+      "frontend/tests/e2e/responsividade.spec.js"
+    ],
+    "pull_request": "#44"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "architecture-visualization-ui-and-contracts"
+  }
+}

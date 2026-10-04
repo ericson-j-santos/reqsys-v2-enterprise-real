@@ -1,0 +1,394 @@
+{
+  "schema_version": "1.1.0",
+  "generated_at_utc": "2026-06-28T00:08:29.791419+00:00",
+  "status": "VERMELHO",
+  "operational_score": 0,
+  "runs_analyzed": 3,
+  "matches_total": 5,
+  "categories": {
+    "artifact": 2,
+    "quality_gate": 1,
+    "test_failure": 2
+  },
+  "severities": {
+    "medium": 3,
+    "high": 2
+  },
+  "owners": {
+    "ci_cd": 4,
+    "backend": 1
+  },
+  "classification_sources": {
+    "knowledge_base": 2,
+    "failure_pattern_engine": 3
+  },
+  "instability": {
+    "rate_percent": 66.67,
+    "failed": 2,
+    "cancelled": 0,
+    "unstable": 2,
+    "total": 3
+  },
+  "pareto_failures": {
+    "total_causes": 5,
+    "total_impact": 310,
+    "top_causes": [
+      {
+        "id": "OCI-TEST-001",
+        "name": "Regressao funcional ou teste desatualizado.",
+        "category": "test_failure",
+        "severity": "high",
+        "owner": "backend",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 80,
+        "sources": [
+          "knowledge_base"
+        ],
+        "cumulative_percent": 25.81,
+        "pareto_tier": "A"
+      },
+      {
+        "id": "FPE-TEST-FAIL-001",
+        "name": "Automated test failure",
+        "category": "test_failure",
+        "severity": "high",
+        "owner": "ci_cd",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 80,
+        "sources": [
+          "failure_pattern_engine"
+        ],
+        "cumulative_percent": 51.61,
+        "pareto_tier": "A"
+      },
+      {
+        "id": "OCI-ARTIFACT-001",
+        "name": "Workflow dependente de artifact que ainda nao foi publicado ou foi nomeado fora do padrao esperado.",
+        "category": "artifact",
+        "severity": "medium",
+        "owner": "ci_cd",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 50,
+        "sources": [
+          "knowledge_base"
+        ],
+        "cumulative_percent": 67.74,
+        "pareto_tier": "A"
+      },
+      {
+        "id": "FPE-GH-ARTIFACT-001",
+        "name": "Missing or unavailable artifact",
+        "category": "artifact",
+        "severity": "medium",
+        "owner": "ci_cd",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 50,
+        "sources": [
+          "failure_pattern_engine"
+        ],
+        "cumulative_percent": 83.87,
+        "pareto_tier": "B"
+      },
+      {
+        "id": "FPE-PY-RUFF-001",
+        "name": "Python lint or formatting failure",
+        "category": "quality_gate",
+        "severity": "medium",
+        "owner": "ci_cd",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 50,
+        "sources": [
+          "failure_pattern_engine"
+        ],
+        "cumulative_percent": 100.0,
+        "pareto_tier": "C"
+      }
+    ],
+    "pareto_threshold_80": [
+      {
+        "id": "OCI-TEST-001",
+        "name": "Regressao funcional ou teste desatualizado.",
+        "category": "test_failure",
+        "severity": "high",
+        "owner": "backend",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 80,
+        "sources": [
+          "knowledge_base"
+        ],
+        "cumulative_percent": 25.81,
+        "pareto_tier": "A"
+      },
+      {
+        "id": "FPE-TEST-FAIL-001",
+        "name": "Automated test failure",
+        "category": "test_failure",
+        "severity": "high",
+        "owner": "ci_cd",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 80,
+        "sources": [
+          "failure_pattern_engine"
+        ],
+        "cumulative_percent": 51.61,
+        "pareto_tier": "A"
+      },
+      {
+        "id": "OCI-ARTIFACT-001",
+        "name": "Workflow dependente de artifact que ainda nao foi publicado ou foi nomeado fora do padrao esperado.",
+        "category": "artifact",
+        "severity": "medium",
+        "owner": "ci_cd",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 50,
+        "sources": [
+          "knowledge_base"
+        ],
+        "cumulative_percent": 67.74,
+        "pareto_tier": "A"
+      }
+    ]
+  },
+  "rerun_assessment": {
+    "max_reruns_without_commit_change": 2,
+    "loops_detected": [],
+    "blocked": false
+  },
+  "classified_runs": [
+    {
+      "run_id": 101,
+      "workflow": "CI — ReqSys v2 Enterprise",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_sha": "abc123",
+      "url": null,
+      "matches": [
+        {
+          "id": "OCI-ARTIFACT-001",
+          "category": "artifact",
+          "severity": "medium",
+          "owner": "ci_cd",
+          "symptoms": [
+            "No audit/report/evidence artifact found",
+            "Artifact not found",
+            "No artifacts found"
+          ],
+          "probable_root_cause": "Workflow dependente de artifact que ainda nao foi publicado ou foi nomeado fora do padrao esperado.",
+          "recommended_action": "Validar ordem dos workflows, retention, nome do artifact e transformar ausencia inicial em warning quando o proprio workflow publicar evidencia.",
+          "safe_rerun": true,
+          "requires_code_change": "conditional",
+          "source": "knowledge_base"
+        },
+        {
+          "id": "FPE-GH-ARTIFACT-001",
+          "category": "artifact",
+          "severity": "medium",
+          "owner": "ci_cd",
+          "name": "Missing or unavailable artifact",
+          "recommended_action": "Validar etapa de upload, nome do artifact, retention-days e permissao de leitura do workflow.",
+          "safe_rerun": true,
+          "source": "failure_pattern_engine"
+        },
+        {
+          "id": "FPE-PY-RUFF-001",
+          "category": "quality_gate",
+          "severity": "medium",
+          "owner": "ci_cd",
+          "name": "Python lint or formatting failure",
+          "recommended_action": "Corrigir lint/formatacao no codigo-fonte e manter falha como bloqueio legitimo, sem rerun como solucao.",
+          "safe_rerun": false,
+          "source": "failure_pattern_engine"
+        }
+      ],
+      "risk_score": 100,
+      "recommended_owner": "ci_cd",
+      "safe_rerun": false
+    },
+    {
+      "run_id": 102,
+      "workflow": "Backend Tests + Coverage (pytest)",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_sha": "def456",
+      "url": null,
+      "matches": [
+        {
+          "id": "OCI-TEST-001",
+          "category": "test_failure",
+          "severity": "high",
+          "owner": "backend",
+          "symptoms": [
+            "FAILED",
+            "AssertionError",
+            "pytest",
+            "vitest",
+            "test failed"
+          ],
+          "probable_root_cause": "Regressao funcional ou teste desatualizado.",
+          "recommended_action": "Inspecionar falha, corrigir codigo ou teste com evidencia. Nao usar rerun como solucao inicial.",
+          "safe_rerun": false,
+          "requires_code_change": true,
+          "source": "knowledge_base"
+        },
+        {
+          "id": "FPE-TEST-FAIL-001",
+          "category": "test_failure",
+          "severity": "high",
+          "owner": "ci_cd",
+          "name": "Automated test failure",
+          "recommended_action": "Tratar como regressao ate prova contraria. Inspecionar teste, alterar codigo ou teste somente com evidencia.",
+          "safe_rerun": false,
+          "source": "failure_pattern_engine"
+        }
+      ],
+      "risk_score": 100,
+      "recommended_owner": "backend",
+      "safe_rerun": false
+    },
+    {
+      "run_id": 103,
+      "workflow": "CI — ReqSys v2 Enterprise",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "ghi789",
+      "url": null,
+      "matches": [],
+      "risk_score": 0,
+      "recommended_owner": "ci_cd",
+      "safe_rerun": false
+    }
+  ],
+  "blocked_actions": [
+    "auto_merge",
+    "auto_fix_in_production",
+    "unrestricted_rerun",
+    "continue_on_error_to_hide_failure"
+  ],
+  "recommended_next_actions": [
+    "Congelar novos incrementos grandes ate estabilizar CI operacional.",
+    "Priorizar Pareto tier A: Regressao funcional ou teste desatualizado. (test_failure) — 1 ocorrência(s), impacto 80.",
+    "Corrigir regressao de teste antes de qualquer rerun adicional.",
+    "Validar nomenclatura, retention e ordem de publicacao dos artifacts."
+  ],
+  "instability_history": {
+    "snapshot": {
+      "snapshot_at_utc": "2026-06-28T00:08:29.791419+00:00",
+      "status": "VERMELHO",
+      "operational_score": 0,
+      "runs_analyzed": 3,
+      "matches_total": 5,
+      "instability_rate_percent": 66.67,
+      "failed_runs": 2,
+      "top_pareto_cause": {
+        "id": "OCI-TEST-001",
+        "name": "Regressao funcional ou teste desatualizado.",
+        "category": "test_failure",
+        "severity": "high",
+        "owner": "backend",
+        "occurrences": 1,
+        "affected_runs": 1,
+        "impact_score": 80,
+        "sources": [
+          "knowledge_base"
+        ],
+        "cumulative_percent": 25.81,
+        "pareto_tier": "A"
+      },
+      "pareto_causes_count": 5
+    },
+    "trend": {
+      "status": "VERMELHO",
+      "direction": "piorando",
+      "delta_instability": 24.67,
+      "delta_score": -58.0,
+      "points": 4,
+      "first_instability_rate": 42.0,
+      "last_instability_rate": 66.67,
+      "avg_instability_rate": 50.84,
+      "avg_operational_score": 32.5
+    },
+    "points": 4,
+    "history": [
+      {
+        "snapshot_at_utc": "2026-06-26T10:00:00+00:00",
+        "instability_rate_percent": 42.0,
+        "operational_score": 58,
+        "runs_analyzed": 12,
+        "top_pareto_cause": {
+          "name": "Artifact not found",
+          "category": "artifact"
+        },
+        "pareto_causes_count": 3
+      },
+      {
+        "snapshot_at_utc": "2026-06-27T10:00:00+00:00",
+        "instability_rate_percent": 28.0,
+        "operational_score": 72,
+        "runs_analyzed": 18,
+        "top_pareto_cause": {
+          "name": "pytest failed",
+          "category": "test_failure"
+        },
+        "pareto_causes_count": 2
+      },
+      {
+        "snapshot_at_utc": "2026-06-28T00:08:03.801551+00:00",
+        "status": "VERMELHO",
+        "operational_score": 0,
+        "runs_analyzed": 3,
+        "matches_total": 5,
+        "instability_rate_percent": 66.67,
+        "failed_runs": 2,
+        "top_pareto_cause": {
+          "id": "OCI-TEST-001",
+          "name": "Regressao funcional ou teste desatualizado.",
+          "category": "test_failure",
+          "severity": "high",
+          "owner": "backend",
+          "occurrences": 1,
+          "affected_runs": 1,
+          "impact_score": 80,
+          "sources": [
+            "knowledge_base"
+          ],
+          "cumulative_percent": 25.81,
+          "pareto_tier": "A"
+        },
+        "pareto_causes_count": 5
+      },
+      {
+        "snapshot_at_utc": "2026-06-28T00:08:29.791419+00:00",
+        "status": "VERMELHO",
+        "operational_score": 0,
+        "runs_analyzed": 3,
+        "matches_total": 5,
+        "instability_rate_percent": 66.67,
+        "failed_runs": 2,
+        "top_pareto_cause": {
+          "id": "OCI-TEST-001",
+          "name": "Regressao funcional ou teste desatualizado.",
+          "category": "test_failure",
+          "severity": "high",
+          "owner": "backend",
+          "occurrences": 1,
+          "affected_runs": 1,
+          "impact_score": 80,
+          "sources": [
+            "knowledge_base"
+          ],
+          "cumulative_percent": 25.81,
+          "pareto_tier": "A"
+        },
+        "pareto_causes_count": 5
+      }
+    ]
+  }
+}

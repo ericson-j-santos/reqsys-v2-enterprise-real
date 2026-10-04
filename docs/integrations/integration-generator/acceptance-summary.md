@@ -1,0 +1,1 @@
+Estado de aceite: parcialmente validado. A conclusão exige CI do SHA atual e E2E real em DEV com caso positivo, negativo, leitura independente do SharePoint e repetição idempotente.

@@ -1,0 +1,22 @@
+{
+  "feature_name": "rsm-03-service-catalog",
+  "project": "ReqSys Service Management",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Catálogo mínimo Service -> ServiceOffering -> ServiceCase(type=REQUEST) com esquema declarativo de campos, validação fail-closed, idempotência por code e por idempotency_key, e E2E HTTP real contra PostgreSQL com leitura independente.",
+  "runtime_target": "github-actions-ephemeral-postgres",
+  "environment": "CI/DEV",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_service_catalog_domain.py",
+      "backend/tests/test_service_catalog_api.py"
+    ],
+    "evidence_contract": "Provar HTTP real -> oferta ativa -> ServiceCase(REQUEST) vinculado -> leitura PostgreSQL independente do vínculo catálogo -> caso -> replay sem segundo caso -> controles negativos de oferta inexistente/inativa e de entrada inválida, sempre vinculados ao SHA atual."
+  }
+}

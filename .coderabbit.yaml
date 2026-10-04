@@ -1,93 +1,11 @@
-# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit configuration for ReqSys
-# Purpose: enforce review output with operational monitoring and result tables.
-
-language: pt-BR
-tone_instructions: "Responder em português do Brasil, com tom técnico, objetivo, governado e baseado em evidências."
-
-reviews:
-  profile: assertive
-  request_changes_workflow: true
-  high_level_summary: true
-  high_level_summary_instructions: |
-    Inclua no resumo executivo uma tabela de monitoramento do PR e uma tabela de resultado da revisão.
-    Use evidências verificáveis. Quando CI, testes ou segurança não puderem ser confirmados, marque como "Não verificado".
-  poem: false
-  review_status: true
-  review_details: true
-  collapse_walkthrough: false
-  changed_files_summary: true
-  sequence_diagrams: true
-  assess_linked_issues: true
-
-  auto_review:
-    enabled: true
-    drafts: false
-    auto_incremental_review: true
-    auto_pause_after_reviewed_commits: 3
-    ignore_title_keywords:
-      - "wip"
-      - "draft:"
-
-  path_filters:
-    - "**/*"
-    - "!**/node_modules/**"
-    - "!**/dist/**"
-    - "!**/build/**"
-    - "!**/.next/**"
-    - "!**/coverage/**"
-
-  path_instructions:
-    - path: "**/*"
-      instructions: |
-        Você está revisando o repositório ReqSys.
-        Inclua obrigatoriamente um relatório em português do Brasil com:
-
-        ## Relatório de Monitoramento do PR
-
-        | Dimensão | Status | Evidência | Risco | Ação recomendada |
-        |---|---|---|---|---|
-        | Escopo alterado | Informar | Arquivos/áreas afetadas | Baixo/Médio/Alto | Próxima ação |
-        | Build/CI | Informar | Checks disponíveis | Baixo/Médio/Alto | Próxima ação |
-        | Testes | Informar | Testes adicionados/existentes | Baixo/Médio/Alto | Próxima ação |
-        | Segurança | Informar | Auth, secrets, CORS, JWT, logs ou PII | Baixo/Médio/Alto | Próxima ação |
-        | Observabilidade | Informar | Logs, correlation_id, métricas ou tracing | Baixo/Médio/Alto | Próxima ação |
-        | Documentação | Informar | README, ADR, changelog ou docs | Baixo/Médio/Alto | Próxima ação |
-        | UX/Responsividade | Informar | Telas/componentes impactados | Baixo/Médio/Alto | Próxima ação |
-        | Dados/Analytics | Informar | Dashboards, drill-down ou contratos | Baixo/Médio/Alto | Próxima ação |
-
-        ## Resultado da Revisão
-
-        | Critério | Resultado | Bloqueia merge? | Observação |
-        |---|---|---|---|
-        | Compilação | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Testes automatizados | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Segurança mínima | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Governança/ADR | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Documentação | Aprovado/Reprovado/Não verificado | Sim/Não | Evidência |
-        | Pronto para revisão humana | Sim/Não | Sim/Não | Justificativa |
-
-        Regras:
-        - Solicite mudanças quando houver risco alto, falha de segurança, ausência de validação mínima ou quebra de contrato.
-        - Não aprove PR funcional sem testes compatíveis.
-        - CI verde é condição necessária, mas não suficiente.
-        - Sempre cite arquivos, trechos ou checks usados como evidência.
-        - Considere padrão ouro: CI/CD, rastreabilidade, documentação viva, segurança, observabilidade, ambientes segregados, analytics/drill-down e ADR.
-
-  pre_merge_checks:
-    custom_checks:
-      - mode: error
-        name: "CI verde obrigatório"
-        instructions: "Falhar se houver check obrigatório ausente, pendente, cancelado ou reprovado."
-      - mode: error
-        name: "Gates ReqSys produção"
-        instructions: "Falhar se produção permitir auth desligada, CORS '*', JWT sem issuer/audience, logs com PII/secrets ou auditoria sem correlation_id."
-      - mode: warning
-        name: "Relatório operacional"
-        instructions: "Alertar se a revisão não trouxer tabela de monitoramento, tabela de resultado e evidências."
-
-chat:
-  auto_reply: true
-
-knowledge_base:
-  opt_out: false
+# CodeRabbit desativado operacionalmente.
+#
+# Decisao: substituido por workflow proprio `PR Quality Review`.
+# Motivo: remover dependencia externa, limite de quota e ruido operacional.
+# Fonte de verdade atual:
+# - .github/workflows/pr-quality-review.yml
+# - scripts/pr_quality_review.py
+#
+# Observacao: manter este arquivo vazio/documental evita reintroducao silenciosa
+# de configuracao ativa no repositorio. A desinstalacao definitiva do App
+# CodeRabbit deve ser feita nas configuracoes do GitHub, se ainda estiver instalado.

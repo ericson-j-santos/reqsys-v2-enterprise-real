@@ -1,0 +1,92 @@
+name: Planner Publish — Reprocessamento Automático
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        type: choice
+        options:
+          - dev
+          - stg
+        default: dev
+      lote_max:
+        description: Máximo de tentativas reprocessadas nesta execução
+        required: true
+        type: string
+        default: "10"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: planner-publish-reprocess-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  ARTIFACT_DIR: artifacts/planner-publish-reprocess
+
+jobs:
+  reprocessar:
+    # Fly.io retirado definitivamente pelo usuario em 2026-10-02.
+    if: ${{ false }}
+    name: Reprocessar pendentes (${{ github.event.inputs.environment || 'dev' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ (github.event.inputs.environment || 'dev') == 'stg' && 'staging' || 'development' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolver base URL do ambiente
+        id: resolver
+        env:
+          REQSYS_API_BASE_URL: ${{ vars.REQSYS_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+
+          base_url = os.environ.get('REQSYS_API_BASE_URL', '').strip().rstrip('/')
+          parsed = urlsplit(base_url)
+          if (parsed.scheme != 'https' or not parsed.hostname
+                  or parsed.username or parsed.password or parsed.query or parsed.fragment
+                  or parsed.hostname == 'fly.dev' or parsed.hostname.endswith('.fly.dev')):
+              raise SystemExit('Configure REQSYS_API_BASE_URL do PC24x7 no Environment; URL HTTPS obrigatória e Fly.io legado recusado.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'base_url={base_url}\n')
+          PY
+
+      - name: Reprocessar tentativas pendentes
+        env:
+          PLANNER_PUBLISH_SERVICE_TOKEN: ${{ secrets.PLANNER_PUBLISH_SERVICE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PLANNER_PUBLISH_SERVICE_TOKEN:-}" ]; then
+            echo "PLANNER_PUBLISH_SERVICE_TOKEN não configurado neste ambiente — reprocessamento bloqueado." >&2
+            exit 1
+          fi
+          python scripts/planner_publish_reprocess_pendentes.py \
+            --base-url "${{ steps.resolver.outputs.base_url }}" \
+            --service-token "$PLANNER_PUBLISH_SERVICE_TOKEN" \
+            --lote-max "${{ github.event.inputs.lote_max || '10' }}" \
+            --strict \
+            --evidence-file "$ARTIFACT_DIR/resumo.json"
+
+      - name: Upload evidência
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: planner-publish-reprocess-${{ github.event.inputs.environment || 'dev' }}
+          path: ${{ env.ARTIFACT_DIR }}/resumo.json
+          if-no-files-found: ignore
