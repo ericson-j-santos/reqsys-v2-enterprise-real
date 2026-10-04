@@ -55,6 +55,8 @@ export const NAV_TEMAS = [
       { to: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', tip: 'Taxa CDI diária com armazenamento temporário interno e fonte no Banco Central.' },
       { to: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', tip: 'Catálogo e situação dos relatórios corporativos.' },
       { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural com controles do ReqSys.' },
+      { to: '/query-intelligence', icon: 'mdi-file-search-outline', title: 'Análise de consultas', tip: 'Examinar consultas SQL sem executar comandos, com relações lógicas e alertas de risco.' },
+      { to: '/analytics-runtime-intelligence', icon: 'mdi-chart-timeline-variant-shimmer', title: 'Inteligência operacional', tip: 'Consolidar validações analíticas e prontidão com evidências explícitas e fail-closed.' },
     ],
   },
   {
@@ -118,6 +120,7 @@ export const NAV_TEMAS = [
     icon: 'mdi-sitemap',
     items: [
       { to: '/arquitetura', icon: 'mdi-sitemap', title: 'Mapa da solução', tip: 'Visão completa da aplicação, serviços, integrações e automações.' },
+      { to: '/arquitetura-viva', icon: 'mdi-graph-outline', title: 'Arquitetura Viva', tip: 'Diagramas navegáveis, auditáveis e explicáveis por IA com fontes e nível de confiança.' },
       { to: '/coordenacao-adr', icon: 'mdi-book-open-variant', title: 'Coordenação de decisões de arquitetura', tip: 'Coordenação geral que classifica demandas pelas decisões de arquitetura e aponta violações das verificações obrigatórias.' },
     ],
   },

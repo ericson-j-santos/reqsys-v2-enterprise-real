@@ -95,8 +95,12 @@ function collectTemplateCandidates(content) {
 
   const template = templateMatch[1]
   const templateOffset = templateMatch.index + templateMatch[0].indexOf(template)
-  const withoutExecutableBlocks = maskPreservingLines(
+  const withoutTechnicalIcons = maskPreservingLines(
     template,
+    /<v-icon\b[^>]*>[\s\S]*?<\/v-icon>/giu,
+  )
+  const withoutExecutableBlocks = maskPreservingLines(
+    withoutTechnicalIcons,
     /<(?:code|pre)\b[^>]*>[\s\S]*?<\/(?:code|pre)>/giu,
   )
   const withoutComments = maskPreservingLines(withoutExecutableBlocks, /<!--[\s\S]*?-->/g)
