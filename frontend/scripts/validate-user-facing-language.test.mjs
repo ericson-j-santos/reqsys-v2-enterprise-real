@@ -28,6 +28,20 @@ test('ignora identificadores técnicos e encontra texto de tela', () => {
   )
 })
 
+test('ignora identificador técnico de v-icon e valida texto humano adjacente', () => {
+  const source = `<template>
+    <div>
+      <v-icon>mdi-source-branch</v-icon>
+      <span>Abrir branch</span>
+    </div>
+  </template>`
+
+  const violations = findViolationsInFile('/tmp/Icone.vue', source)
+  assert.equal(violations.length, 1)
+  assert.equal(violations[0].term, 'branch')
+  assert.equal(violations[0].text, 'Abrir branch')
+})
+
 test('ignora documentação e comentários Vue fora do template e script', () => {
   const source = `<!--
     Exemplo interno: <PageHeader title="Pipeline" />

@@ -11,6 +11,7 @@ from app.schemas.monitoramento_operacional import (
     ItemMonitorado,
     MonitoramentoOperacional,
     ResumoMonitoramento,
+    TempoOperacional,
 )
 from app.services.actions_runtime_monitor import GitHubActionsClient, classificar_runs
 from app.services.connection_broker import listar_conectores, resumo_conectores
@@ -34,6 +35,35 @@ def classificar_estado_geral(itens: list[ItemMonitorado]) -> str:
     if any(item.estado in {'amarelo', 'desconhecido'} for item in itens):
         return 'amarelo'
     return 'verde'
+
+
+def criar_tempo_operacional(estado_geral: str) -> TempoOperacional:
+    if estado_geral == 'bloqueado':
+        return TempoOperacional(
+            previsao_proxima_acao='Tratar bloqueio operacional prioritario antes de avancar.',
+            eta_proxima_verificacao_minutos=10,
+            tempo_medio_proxima_acao_minutos=15,
+            tempo_medio_resolucao_horas=4.0,
+            tempo_medio_review_minutos=30,
+            sla_operacional_minutos=60,
+        )
+    if estado_geral in {'vermelho', 'amarelo'}:
+        return TempoOperacional(
+            previsao_proxima_acao='Revalidar verificacoes automaticas, revisao e pendencias antes de prosseguir.',
+            eta_proxima_verificacao_minutos=15,
+            tempo_medio_proxima_acao_minutos=20,
+            tempo_medio_resolucao_horas=6.0,
+            tempo_medio_review_minutos=45,
+            sla_operacional_minutos=120,
+        )
+    return TempoOperacional(
+        previsao_proxima_acao='Manter monitoramento e preparar a proxima frente segura.',
+        eta_proxima_verificacao_minutos=30,
+        tempo_medio_proxima_acao_minutos=30,
+        tempo_medio_resolucao_horas=2.0,
+        tempo_medio_review_minutos=20,
+        sla_operacional_minutos=240,
+    )
 
 
 def _estado_de_score(score: float) -> str:
@@ -140,6 +170,9 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado='verde' if modo_coleta != 'preview' else 'amarelo',
             severidade='media',
             origem='monitoramento-snapshot-v2',
+            pronto_para_merge=modo_coleta != 'preview',
+            proximo_passo='Manter coleta dinamica e evidencias operacionais atualizadas.',
+            criterio_de_fechamento='Snapshot dinamico ativo com coleta fora do modo preview.',
             detalhes={'motivo': 'snapshot dinâmico ativo', 'modo_coleta': modo_coleta},
         ),
         ItemMonitorado(
@@ -149,6 +182,9 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado=estado_govbi,
             severidade='alta' if estado_govbi == 'vermelho' else 'media',
             origem='govbi-probe',
+            bloqueante=estado_govbi == 'bloqueado',
+            proximo_passo='Validar fonte do GovBI, disponibilidade e falha controlada antes de promover o estado.',
+            criterio_de_fechamento='Probe GovBI responde de forma valida e configuracao obrigatoria esta presente.',
             detalhes=sinal_govbi,
         ),
         ItemMonitorado(
@@ -158,6 +194,9 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado='verde',
             severidade='baixa',
             origem='reqsys-frontend',
+            pronto_para_merge=True,
+            proximo_passo='Preservar deep link e filtros em testes de regressao do frontend.',
+            criterio_de_fechamento='Cards continuam abrindo o analitico com filtros preservados na URL.',
             detalhes={'motivo': 'drill-down e filtros via query string em RequisitosView'},
         ),
         ItemMonitorado(
@@ -167,6 +206,8 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado=estado_conectores,
             severidade='alta' if estado_conectores == 'vermelho' else 'media',
             origem='connection-broker',
+            proximo_passo='Revalidar conectores, idempotencia e reprocessamento quando houver falha.',
+            criterio_de_fechamento='Conectores ficam verdes e reenvio controlado nao duplica efeito externo.',
             detalhes={'conectores': len(listar_conectores()), **sinal_conectores},
         ),
         ItemMonitorado(
@@ -176,6 +217,8 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado=estado_ci,
             severidade='critica' if estado_ci == 'vermelho' else 'media',
             origem='github-actions' if sinal_ci.get('modo') == 'live' else 'github-actions-preview',
+            proximo_passo='Manter os gates obrigatorios verdes no HEAD atual e publicar evidencias do CI.',
+            criterio_de_fechamento='CI obrigatorio fica verde no SHA atual sem bypass de cobertura ou seguranca.',
             detalhes=sinal_ci,
         ),
         ItemMonitorado(
@@ -185,6 +228,8 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado='verde',
             severidade='critica',
             origem='reqsys',
+            pronto_para_merge=True,
+            criterio_de_fechamento='Configuracoes inseguras continuam bloqueando inicializacao em producao.',
             detalhes={'validacao': 'configuracoes inseguras bloqueiam producao'},
         ),
         ItemMonitorado(
@@ -194,6 +239,8 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado='amarelo',
             severidade='critica',
             origem='incremento-operacao-autonoma',
+            proximo_passo='Evoluir maturidade sem liberar execucao destrutiva fora da politica governada.',
+            criterio_de_fechamento='Maturidade e politicas possuem evidencia e qualquer mutacao destrutiva permanece governada.',
             detalhes={
                 'motivo': 'maturity score e policies implementadas; execucao destrutiva permanece bloqueada por governanca',
                 'endpoint': '/operacao-autonoma/maturidade',
@@ -206,6 +253,8 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             estado='amarelo',
             severidade='critica',
             origem='incremento-operacao-autonoma',
+            proximo_passo='Validar health e remediacao dry-run antes de qualquer ampliacao de efeito.',
+            criterio_de_fechamento='Health validator e remediacao governada possuem evidencias atuais sem bypass de politica.',
             detalhes={
                 'motivo': 'health validator e executor dry-run implementados; acoes destrutivas seguem bloqueadas por politica',
                 'endpoints': ['/operacao-autonoma/runtime-health', '/operacao-autonoma/remediacoes/avaliar'],
@@ -233,6 +282,9 @@ def criar_snapshot_operacional(correlation_id: str) -> MonitoramentoOperacional:
             bloqueios=sum(1 for item in itens if item.estado == 'bloqueado' or item.bloqueante),
             pendencias=sum(1 for item in itens if item.estado in {'amarelo', 'vermelho', 'desconhecido'}),
             total_itens=len(itens),
+            frentes_criticas=sum(1 for item in itens if item.severidade == 'critica'),
+            itens_prontos_para_merge=sum(1 for item in itens if item.pronto_para_merge),
         ),
+        tempo_operacional=criar_tempo_operacional(estado_geral),
         itens=itens,
     )

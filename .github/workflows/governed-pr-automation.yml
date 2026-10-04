@@ -278,7 +278,6 @@ jobs:
               failures.push(`PR atrasada ou divergente: status=${comparison.status}, behind_by=${comparison.behind_by}`);
             }
             if (pr.state !== 'open') failures.push(`PR não está aberto: ${pr.state}`);
-            if (pr.draft) failures.push('PR ainda está em draft.');
             if (pr.base.ref !== 'main') failures.push(`Base não autorizada para auto-merge: ${pr.base.ref}`);
             if (pr.head.sha !== triggerHeadSha) {
               failures.push(`HEAD mudou após a fila governada: esperado ${triggerHeadSha}, atual ${pr.head.sha}`);
@@ -292,6 +291,10 @@ jobs:
               per_page: 100,
             });
             const labelNames = labels.map((label) => label.name);
+            const recoveredDraft = pr.draft && labelNames.includes('ci:recuperado');
+            if (pr.draft && !recoveredDraft) {
+              failures.push('PR ainda está em draft e não pertence à fila recuperada.');
+            }
             if (!labelNames.includes('merge-queue:eligible')) {
               failures.push('Label merge-queue:eligible ausente.');
             }
@@ -326,6 +329,65 @@ jobs:
 
             if (failures.length) {
               core.setFailed(failures.join('\n'));
+              return;
+            }
+
+            if (recoveredDraft) {
+              const { data: currentDraft } = await github.rest.pulls.get({
+                owner, repo, pull_number: prNumber,
+              });
+              const currentDraftLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+                owner, repo, issue_number: prNumber, per_page: 100,
+              });
+              const currentDraftLabelNames = currentDraftLabels.map((label) => label.name);
+              const { data: currentDraftBaseRef } = await github.rest.git.getRef({
+                owner, repo, ref: `heads/${currentDraft.base.ref}`,
+              });
+              const currentDraftBaseSha = currentDraftBaseRef.object.sha;
+              const { data: currentDraftComparison } = await github.rest.repos.compareCommits({
+                owner, repo, base: currentDraftBaseSha, head: triggerHeadSha,
+              });
+              if (
+                currentDraft.state !== 'open' ||
+                !currentDraft.draft ||
+                currentDraft.mergeable !== true ||
+                currentDraft.head.sha !== triggerHeadSha ||
+                currentDraft.base.ref !== 'main' ||
+                currentDraft.base.sha !== currentDraftBaseSha ||
+                currentDraftComparison.status === 'diverged' ||
+                currentDraftComparison.status === 'behind' ||
+                currentDraftComparison.behind_by > 0 ||
+                !currentDraftLabelNames.includes('ci:recuperado') ||
+                !currentDraftLabelNames.includes('merge-queue:eligible')
+              ) {
+                core.setFailed(`Estado mudou antes de promover draft recuperado; esperado head ${triggerHeadSha}, atual ${currentDraft.head.sha}`);
+                return;
+              }
+              await github.graphql(
+                `mutation MarkRecoveredPullRequestReady($pullRequestId: ID!) {
+                  markPullRequestReadyForReview(input: {pullRequestId: $pullRequestId}) {
+                    pullRequest { id isDraft }
+                  }
+                }`,
+                { pullRequestId: currentDraft.node_id }
+              );
+              const { data: afterReady } = await github.rest.pulls.get({
+                owner, repo, pull_number: prNumber,
+              });
+              if (afterReady.draft || afterReady.head.sha !== triggerHeadSha) {
+                core.setFailed(`Promoção para ready não foi confirmada no mesmo HEAD: esperado ${triggerHeadSha}, atual ${afterReady.head.sha}`);
+                return;
+              }
+              await core.summary
+                .addHeading('Governed PR Automation — recovered draft ready')
+                .addRaw([
+                  `PR: #${prNumber}`,
+                  `HEAD validado: \`${triggerHeadSha}\``,
+                  'Ação: draft recuperado promovido para ready.',
+                  'Merge: não executado neste ciclo; ready_for_review deve revalidar o mesmo HEAD.',
+                  'Deploy/promoção: não executados por este workflow.',
+                ].join('\n'))
+                .write();
               return;
             }
 

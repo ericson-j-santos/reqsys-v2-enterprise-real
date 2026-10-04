@@ -2,14 +2,14 @@
   "feature_name": "repository-governance-agent-branch-sync",
   "project": "ReqSys v2 Enterprise — GitHub Governance",
   "created_at": "2026-09-22",
-  "updated_at": "2026-09-22",
+  "updated_at": "2026-10-04",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Hotfix federado: sincronizar PRs atrasadas com token de GitHub App limitado a contents:write, sem depender de pull_requests:write e mantendo a fila governada como rota exclusiva de integração na main.",
+  "description": "Hotfix: sincronizar PRs atrasadas e permitir serialmente a sincronização de drafts explicitamente recuperados (`ci:recuperado`), sem integrar na main.",
   "scope": "github-ci-dev",
   "files": [
     ".github/workflows/repository-governance-agent.yml",
@@ -20,7 +20,7 @@
     "tests": [
       "tests/test_repository_governance_agent.py"
     ],
-    "evidence_contract": "Provar sincronização somente para PR aberta, same-repo, não-draft, sem conflito e behind_by>0; reler HEAD/base antes da escrita; confirmar os mesmos SHAs no Git remoto; criar merge em repositório bare por merge-tree/commit-tree; push não-forçado exclusivamente para a branch head; leitura pós-ação deve comprovar novo HEAD contendo a base observada e behind_by=0; fan-out máximo 3; nenhum caminho integra PR na main ou executa deploy."
+    "evidence_contract": "PR aberta same-repo, sem conflito e behind_by>0; draft apenas com ci:recuperado; somente a recuperada mais antiga; HEAD/base relidos; merge-tree/commit-tree; push não-forçado; pós-leitura behind_by=0; nenhum merge/deploy."
   },
   "risk": {
     "production": false,
