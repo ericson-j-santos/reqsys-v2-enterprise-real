@@ -2,8 +2,8 @@
   <section class="ari-page" data-testid="route-analytics-runtime-intelligence" aria-labelledby="titulo-ari">
     <div class="cabecalho">
       <div>
-        <p class="eyebrow">Analytics · runtime · evidência</p>
-        <h1 id="titulo-ari">Analytics Runtime Intelligence</h1>
+        <p class="eyebrow">Análise · execução · evidência</p>
+        <h1 id="titulo-ari">Inteligência operacional de indicadores</h1>
         <p class="muted">
           Consolida validações analíticas e prontidão operacional sem promover amostras locais a evidência de produção.
         </p>
@@ -94,10 +94,10 @@ const carregando = ref(false)
 const erro = ref('')
 
 const scoreCards = [
-  { campo: 'health_score', titulo: 'Health Score' },
+  { campo: 'health_score', titulo: 'Índice de saúde' },
   { campo: 'production_ready', titulo: 'Produção' },
   { campo: 'runtime_sql_validation', titulo: 'SQL estático' },
-  { campo: 'staging_validation', titulo: 'Staging' },
+  { campo: 'staging_validation', titulo: 'Homologação' },
 ]
 
 function formatarScore(campo) {
@@ -139,7 +139,7 @@ async function carregarSnapshot() {
   try {
     const resposta = await fetch(API_BASE, { headers: { Accept: 'application/json' } })
     const payload = await resposta.json().catch(() => ({}))
-    if (!resposta.ok) throw new Error('Falha ao carregar Analytics Runtime Intelligence')
+    if (!resposta.ok) throw new Error('Falha ao carregar Inteligência operacional de indicadores')
     snapshot.value = payload.data || payload
   } catch {
     erro.value = 'Não foi possível carregar o ARI; o estado permanece bloqueado.'
