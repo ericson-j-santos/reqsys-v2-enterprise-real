@@ -1,25 +1,28 @@
 # Runbook — Operational Intelligence Platform
 
-## Sintoma: relatório não enviado
+## Diagnóstico de runtime
 
-1. Consultar `delivery_audit`.
-2. Consultar `execution_logs`.
-3. Validar `correlation_id`.
-4. Reexecutar diagnóstico runtime.
-5. Se houver tentativas esgotadas, consultar `dead_letter_queue`.
-6. Reprocessar somente com aprovação se status estiver `DEGRADADO` ou `BLOQUEADO`.
+1. Consultar `/monitoramento-operacional/runtime/health`.
+2. Preservar o `correlation_id` da execução.
+3. Enviar sinais controlados para `/monitoramento-operacional/runtime/diagnostico`.
+4. Registrar score, riscos, recomendações e ação sugerida.
+5. Se o estado for `DEGRADADO` ou `BLOQUEADO`, não promover ambiente nem executar ação destrutiva sem os gates aplicáveis.
 
-## Sintoma: CI verde mas dashboard degradado
+## Falha operacional
 
-1. Validar evento em `operational_events`.
-2. Verificar métricas em `runtime_metrics`.
-3. Conferir health endpoint.
-4. Bloquear promoção se não houver evidência operacional.
+1. Confirmar evidência no SHA/runtime atuais.
+2. Verificar `/api/runtime/health`, readiness, métricas e dashboard.
+3. Identificar causa raiz antes de rerun.
+4. Usar a remediação governada atual; não criar retry paralelo para contornar falha.
+5. Registrar correlação entre incidente, execução e evidência.
 
-## Sintoma: excesso de tentativas
+## CI verde, runtime degradado
 
-1. Abrir incidente.
-2. Bloquear automação.
-3. Validar dependência externa.
-4. Registrar causa raiz.
-5. Reativar somente após teste controlado.
+CI verde é necessário, mas não suficiente. Validar os sinais de runtime e evidência pública antes de promoção.
+
+## Escalada
+
+- Falha transitória comprovada: revalidar de forma idempotente.
+- Falha recorrente: abrir causa raiz e prevenção.
+- Estado bloqueado: interromper avanço automático.
+- Evidência ausente ou obsoleta: permanecer fail-closed.

@@ -1,0 +1,869 @@
+{
+  "schema_version": "0.1.0",
+  "capability": "LowCode Solution Factory P0",
+  "status": "planned",
+  "correlation_id": "be60d31c-909f-4beb-9422-be752a0820e7",
+  "generated_at": "2026-07-02T18:47:34.709482+00:00",
+  "solution_name": "ReqSysLowCode",
+  "display_name": "ReqSys Low-Code",
+  "description": "Versao low-code do ReqSys sem API propria, usando Dataverse, Power Apps, Power Automate, Copilot Studio, security roles e ALM governado.",
+  "target_environment": "dev",
+  "modules": [
+    "dataverse",
+    "powerapps",
+    "powerautomate",
+    "copilot",
+    "security"
+  ],
+  "publisher": {
+    "name": "ReqSys",
+    "prefix": "reqsys"
+  },
+  "governance": {
+    "mode": "dry_run_blueprint",
+    "sandbox_first": true,
+    "requires_human_or_pipeline_approval": true,
+    "no_custom_reqsys_api_required": true,
+    "external_write_guardrails": [
+      "nao importar em producao sem aprovacao",
+      "nao gravar client secrets no ReqSys",
+      "usar connection references por ambiente",
+      "gerar evidencias e plano de rollback"
+    ]
+  },
+  "dataverse": {
+    "tables": [
+      {
+        "logical_name": "reqsys_demanda",
+        "display_name": "Demandas",
+        "description": "Entrada governada de demandas, ideias e solicitacoes.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_origem",
+            "type": "choice",
+            "display_name": "Origem"
+          },
+          {
+            "name": "reqsys_solicitante",
+            "type": "lookup",
+            "target": "systemuser",
+            "display_name": "Solicitante"
+          },
+          {
+            "name": "reqsys_resultado_esperado",
+            "type": "multiline_text",
+            "display_name": "Resultado esperado"
+          },
+          {
+            "name": "reqsys_score_priorizacao",
+            "type": "whole_number",
+            "display_name": "Score de priorizacao"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_requisito",
+        "display_name": "Requisitos",
+        "description": "Requisitos funcionais, nao funcionais, regras e criterios.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_demanda_id",
+            "type": "lookup",
+            "target": "reqsys_demanda",
+            "display_name": "Demanda"
+          },
+          {
+            "name": "reqsys_tipo",
+            "type": "choice",
+            "display_name": "Tipo"
+          },
+          {
+            "name": "reqsys_criterios_aceite",
+            "type": "multiline_text",
+            "display_name": "Criterios de aceite"
+          },
+          {
+            "name": "reqsys_regra_negocio",
+            "type": "multiline_text",
+            "display_name": "Regra de negocio"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_aprovacao",
+        "display_name": "Aprovacoes",
+        "description": "Decisoes formais sobre demandas, requisitos e releases.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_referencia",
+            "type": "text",
+            "display_name": "Referencia"
+          },
+          {
+            "name": "reqsys_aprovador",
+            "type": "lookup",
+            "target": "systemuser",
+            "display_name": "Aprovador"
+          },
+          {
+            "name": "reqsys_parecer",
+            "type": "multiline_text",
+            "display_name": "Parecer"
+          },
+          {
+            "name": "reqsys_decidido_em",
+            "type": "datetime",
+            "display_name": "Decidido em"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_evidencia",
+        "display_name": "Evidencias",
+        "description": "Evidencias de qualidade, operacao, release e governanca.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_referencia",
+            "type": "text",
+            "display_name": "Referencia"
+          },
+          {
+            "name": "reqsys_tipo_evidencia",
+            "type": "choice",
+            "display_name": "Tipo de evidencia"
+          },
+          {
+            "name": "reqsys_url",
+            "type": "url",
+            "display_name": "URL"
+          },
+          {
+            "name": "reqsys_conteudo",
+            "type": "multiline_text",
+            "display_name": "Conteudo"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      },
+      {
+        "logical_name": "reqsys_release",
+        "display_name": "Releases",
+        "description": "Pacotes de mudanca, go/no-go, comunicacao e rollback.",
+        "ownership": "UserOrTeam",
+        "auditing_enabled": true,
+        "change_tracking_enabled": true,
+        "columns": [
+          {
+            "name": "reqsys_codigo",
+            "type": "text",
+            "required": true,
+            "max_length": 80,
+            "display_name": "Codigo"
+          },
+          {
+            "name": "reqsys_titulo",
+            "type": "text",
+            "required": true,
+            "max_length": 250,
+            "display_name": "Titulo"
+          },
+          {
+            "name": "reqsys_status",
+            "type": "choice",
+            "required": true,
+            "display_name": "Status"
+          },
+          {
+            "name": "reqsys_prioridade",
+            "type": "choice",
+            "required": false,
+            "display_name": "Prioridade"
+          },
+          {
+            "name": "reqsys_versao",
+            "type": "text",
+            "display_name": "Versao"
+          },
+          {
+            "name": "reqsys_janela",
+            "type": "datetime",
+            "display_name": "Janela"
+          },
+          {
+            "name": "reqsys_rollback",
+            "type": "multiline_text",
+            "display_name": "Plano de rollback"
+          },
+          {
+            "name": "reqsys_go_no_go",
+            "type": "choice",
+            "display_name": "Go/No-Go"
+          }
+        ],
+        "views": [
+          {
+            "name": "Ativos",
+            "filter": "reqsys_status ne \"arquivado\""
+          },
+          {
+            "name": "Pendentes de aprovacao",
+            "filter": "reqsys_status eq \"em_aprovacao\""
+          },
+          {
+            "name": "Risco alto",
+            "filter": "reqsys_prioridade eq \"alta\""
+          }
+        ],
+        "forms": [
+          {
+            "name": "Principal",
+            "type": "main"
+          },
+          {
+            "name": "Rapido",
+            "type": "quick_create"
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "from": "reqsys_requisito",
+        "to": "reqsys_demanda",
+        "type": "many_to_one"
+      },
+      {
+        "from": "reqsys_aprovacao",
+        "to": "reqsys_demanda",
+        "type": "many_to_one"
+      },
+      {
+        "from": "reqsys_evidencia",
+        "to": "reqsys_release",
+        "type": "many_to_one"
+      }
+    ],
+    "choices": {
+      "status": [
+        "novo",
+        "em_triagem",
+        "em_aprovacao",
+        "aprovado",
+        "em_execucao",
+        "validado",
+        "arquivado"
+      ],
+      "prioridade": [
+        "baixa",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "origem": [
+        "power_app",
+        "teams",
+        "copilot",
+        "importacao",
+        "manual"
+      ],
+      "tipo_requisito": [
+        "funcional",
+        "nao_funcional",
+        "regra_negocio",
+        "integracao",
+        "seguranca"
+      ]
+    }
+  },
+  "apps": {
+    "canvas_app": {
+      "app_type": "canvas",
+      "name": "ReqSysLowCode Canvas App",
+      "logical_name": "reqsys_reqsyslowcode_canvas",
+      "theme": {
+        "primary": "#2563EB",
+        "accent": "#10B981",
+        "warning": "#F59E0B",
+        "danger": "#DC2626"
+      },
+      "start_screen": "scrDashboard",
+      "layout": "responsive_tablet",
+      "navigation": [
+        {
+          "label": "Painel ReqSys",
+          "target": "scrDashboard"
+        },
+        {
+          "label": "Demandas",
+          "target": "scrDemandas"
+        },
+        {
+          "label": "Requisitos",
+          "target": "scrRequisitos"
+        },
+        {
+          "label": "Aprovacoes",
+          "target": "scrAprovacoes"
+        },
+        {
+          "label": "Evidencias",
+          "target": "scrEvidencias"
+        }
+      ],
+      "screens": [
+        {
+          "name": "scrDashboard",
+          "title": "Painel ReqSys",
+          "purpose": "Resumo operacional com demandas, aprovacoes, riscos e releases.",
+          "data_sources": [
+            "reqsys_demanda",
+            "reqsys_aprovacao",
+            "reqsys_release"
+          ],
+          "components": [
+            "Header",
+            "KpiStrip",
+            "DemandasRecentes",
+            "AprovacoesPendentes",
+            "ReleaseStatus"
+          ]
+        },
+        {
+          "name": "scrDemandas",
+          "title": "Demandas",
+          "purpose": "Criar, classificar e acompanhar demandas.",
+          "data_sources": [
+            "reqsys_demanda"
+          ],
+          "components": [
+            "DemandForm",
+            "DemandGallery",
+            "PriorityBadge",
+            "SubmitForApprovalButton"
+          ]
+        },
+        {
+          "name": "scrRequisitos",
+          "title": "Requisitos",
+          "purpose": "Detalhar requisitos, regras e criterios de aceite.",
+          "data_sources": [
+            "reqsys_requisito",
+            "reqsys_demanda"
+          ],
+          "components": [
+            "RequirementForm",
+            "AcceptanceCriteriaEditor",
+            "TraceabilityPanel"
+          ]
+        },
+        {
+          "name": "scrAprovacoes",
+          "title": "Aprovacoes",
+          "purpose": "Decidir aprovacao, rejeicao ou devolucao para ajuste.",
+          "data_sources": [
+            "reqsys_aprovacao"
+          ],
+          "components": [
+            "ApprovalQueue",
+            "DecisionPanel",
+            "AuditTimeline"
+          ]
+        },
+        {
+          "name": "scrEvidencias",
+          "title": "Evidencias",
+          "purpose": "Registrar evidencias de qualidade, operacao e release.",
+          "data_sources": [
+            "reqsys_evidencia",
+            "reqsys_release"
+          ],
+          "components": [
+            "EvidenceUpload",
+            "EvidenceGallery",
+            "ReleaseLink"
+          ]
+        }
+      ],
+      "offline": {
+        "enabled": false,
+        "reason": "P0 usa Dataverse online e ALM sandbox-first."
+      }
+    }
+  },
+  "flows": [
+    {
+      "name": "ReqSys - Intake de demanda",
+      "trigger": "Dataverse: row added on Demandas",
+      "actions": [
+        "Calcular prioridade",
+        "Criar aprovacao inicial",
+        "Notificar Teams"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps",
+        "shared_teams"
+      ],
+      "run_as": "service_principal_or_owner"
+    },
+    {
+      "name": "ReqSys - Aprovacao de requisito",
+      "trigger": "Dataverse: status em_aprovacao on Requisitos",
+      "actions": [
+        "Start and wait for approval",
+        "Atualizar requisito",
+        "Registrar evidencia"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps",
+        "shared_approvals"
+      ],
+      "run_as": "service_principal_or_owner"
+    },
+    {
+      "name": "ReqSys - Release governance",
+      "trigger": "Manual button or scheduled",
+      "actions": [
+        "Consolidar evidencias",
+        "Gerar go/no-go",
+        "Notificar stakeholders"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps",
+        "shared_teams",
+        "shared_sharepointonline"
+      ],
+      "run_as": "service_principal_or_owner"
+    },
+    {
+      "name": "ReqSys - Copilot handoff",
+      "trigger": "Copilot Studio action",
+      "actions": [
+        "Criar demanda",
+        "Vincular contexto",
+        "Retornar numero da demanda"
+      ],
+      "connection_references": [
+        "shared_commondataserviceforapps"
+      ],
+      "run_as": "service_principal_or_owner"
+    }
+  ],
+  "copilot": {
+    "name": "ReqSysLowCode Copilot",
+    "target": "copilot_studio",
+    "language": "pt-BR",
+    "instructions": [
+      "Atue como orquestrador low-code do ReqSys.",
+      "Converta pedidos vagos em demandas estruturadas no Dataverse.",
+      "Sempre confirme antes de criar aprovacao, release ou acao externa.",
+      "Explique status, pendencias e proximo passo em linguagem executiva."
+    ],
+    "topics": [
+      {
+        "name": "Criar demanda",
+        "intent": "Registrar nova solicitacao",
+        "action": "ReqSys - Copilot handoff"
+      },
+      {
+        "name": "Consultar status",
+        "intent": "Consultar demanda ou requisito",
+        "data_source": "reqsys_demanda"
+      },
+      {
+        "name": "Preparar aprovacao",
+        "intent": "Gerar resumo para aprovador",
+        "data_source": "reqsys_aprovacao"
+      },
+      {
+        "name": "Resumo de release",
+        "intent": "Gerar go/no-go executivo",
+        "data_source": "reqsys_release"
+      }
+    ],
+    "knowledge_sources": [
+      "Dataverse ReqSysLowCode",
+      "SharePoint evidencias governadas"
+    ]
+  },
+  "security_roles": [
+    {
+      "name": "ReqSys Solicitante",
+      "description": "Cria demandas e consulta itens proprios.",
+      "privileges": {
+        "reqsys_demanda": [
+          "read_own",
+          "create_own",
+          "append_own"
+        ],
+        "reqsys_requisito": [
+          "read_own",
+          "create_own",
+          "append_own"
+        ]
+      }
+    },
+    {
+      "name": "ReqSys Aprovador",
+      "description": "Avalia demandas e requisitos em aprovacao.",
+      "privileges": {
+        "reqsys_demanda": [
+          "read_org",
+          "write_assigned",
+          "append_org"
+        ],
+        "reqsys_requisito": [
+          "read_org",
+          "write_assigned",
+          "append_org"
+        ],
+        "reqsys_aprovacao": [
+          "read_org",
+          "write_assigned",
+          "append_org"
+        ]
+      }
+    },
+    {
+      "name": "ReqSys Administrador Low-Code",
+      "description": "Administra a solution low-code e suas configuracoes.",
+      "privileges": {
+        "reqsys_demanda": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_requisito": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_aprovacao": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_evidencia": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ],
+        "reqsys_release": [
+          "create_org",
+          "read_org",
+          "write_org",
+          "delete_org",
+          "append_org"
+        ]
+      }
+    },
+    {
+      "name": "ReqSys Auditor",
+      "description": "Consulta evidencias, aprovacoes e releases sem alterar dados.",
+      "privileges": {
+        "reqsys_demanda": [
+          "read_org"
+        ],
+        "reqsys_requisito": [
+          "read_org"
+        ],
+        "reqsys_aprovacao": [
+          "read_org"
+        ],
+        "reqsys_evidencia": [
+          "read_org"
+        ],
+        "reqsys_release": [
+          "read_org"
+        ]
+      }
+    }
+  ],
+  "alm_package": {
+    "package_name": "reqsys-lowcode-solution",
+    "solution_name": "ReqSysLowCode",
+    "publisher_prefix": "reqsys",
+    "target_repository": "ericson-j-santos/reqsys-powerplatform-alm",
+    "target_environment": "dev",
+    "mode": "dry_run_manifest",
+    "expected_pipeline": "lowcode-solution-factory-p0.yml",
+    "pac_cli_steps": [
+      "pac auth create",
+      "pac solution init --publisher-prefix reqsys --publisher-name ReqSys",
+      "pac solution add-reference",
+      "pac solution pack",
+      "pac solution import"
+    ],
+    "connection_references": [
+      "shared_commondataserviceforapps",
+      "shared_teams",
+      "shared_approvals",
+      "shared_sharepointonline"
+    ],
+    "requires_approval": true,
+    "secrets_required": [
+      "POWERPLATFORM_APP_ID",
+      "POWERPLATFORM_CLIENT_SECRET",
+      "POWERPLATFORM_TENANT_ID",
+      "DEV_ENVIRONMENT_URL ou TARGET_ENVIRONMENT_URL"
+    ]
+  },
+  "canvas_markdown": "# ReqSys Low-Code - Canvas da Solution\n\n## Visao geral\n\nSolution: `ReqSysLowCode`  \nAmbiente alvo: `dev`  \nModo: `dry_run_blueprint`  \nStatus: `planned`\n\n## Canvas App\n\nApp: `ReqSysLowCode Canvas App`  \nTela inicial: `scrDashboard`  \nLayout: `responsive_tablet`\n\n| Tela | Objetivo | Componentes |\n| --- | --- | --- |\n| Painel ReqSys | Resumo operacional com demandas, aprovacoes, riscos e releases. | Header, KpiStrip, DemandasRecentes, AprovacoesPendentes, ReleaseStatus |\n| Demandas | Criar, classificar e acompanhar demandas. | DemandForm, DemandGallery, PriorityBadge, SubmitForApprovalButton |\n| Requisitos | Detalhar requisitos, regras e criterios de aceite. | RequirementForm, AcceptanceCriteriaEditor, TraceabilityPanel |\n| Aprovacoes | Decidir aprovacao, rejeicao ou devolucao para ajuste. | ApprovalQueue, DecisionPanel, AuditTimeline |\n| Evidencias | Registrar evidencias de qualidade, operacao e release. | EvidenceUpload, EvidenceGallery, ReleaseLink |\n\n## Dataverse\n\n| Tabela | Logical name | Colunas |\n| --- | --- | ---: |\n| Demandas | `reqsys_demanda` | 8 |\n| Requisitos | `reqsys_requisito` | 8 |\n| Aprovacoes | `reqsys_aprovacao` | 8 |\n| Evidencias | `reqsys_evidencia` | 8 |\n| Releases | `reqsys_release` | 8 |\n\n## Power Automate\n\n| Flow | Trigger | Acoes |\n| --- | --- | --- |\n| ReqSys - Intake de demanda | Dataverse: row added on Demandas | Calcular prioridade, Criar aprovacao inicial, Notificar Teams |\n| ReqSys - Aprovacao de requisito | Dataverse: status em_aprovacao on Requisitos | Start and wait for approval, Atualizar requisito, Registrar evidencia |\n| ReqSys - Release governance | Manual button or scheduled | Consolidar evidencias, Gerar go/no-go, Notificar stakeholders |\n| ReqSys - Copilot handoff | Copilot Studio action | Criar demanda, Vincular contexto, Retornar numero da demanda |\n\n## Copilot Studio\n\nAgente: `ReqSysLowCode Copilot`  \nTopicos: Criar demanda, Consultar status, Preparar aprovacao, Resumo de release\n\n## Security roles\n\nReqSys Solicitante, ReqSys Aprovador, ReqSys Administrador Low-Code, ReqSys Auditor\n",
+  "package": {
+    "package_name": "reqsys-lowcode-solution",
+    "zip_filename": "reqsys-lowcode-solution.zip",
+    "files": [
+      {
+        "path": "CANVAS.md",
+        "size": 2061
+      },
+      {
+        "path": "alm/package-plan.json",
+        "size": 862
+      },
+      {
+        "path": "copilot/copilot-studio.json",
+        "size": 1034
+      },
+      {
+        "path": "dataverse/schema.json",
+        "size": 10998
+      },
+      {
+        "path": "manifest.json",
+        "size": 24064
+      },
+      {
+        "path": "powerapps/canvas-app.json",
+        "size": 2559
+      },
+      {
+        "path": "powerautomate/flows.json",
+        "size": 1443
+      },
+      {
+        "path": "security/security-roles.json",
+        "size": 2061
+      }
+    ],
+    "zip_base64": "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"
+  }
+}

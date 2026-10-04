@@ -1,0 +1,30 @@
+# Microsoft Graph Planner→Teams Watch
+
+## Objetivo
+
+Monitorar por GitHub Actions, sem custo adicional, mudanças oficiais do Microsoft Graph que possam destravar ou alterar o E2E Planner→Teams do ReqSys. O foco é `ChannelMessage.Read.*`, `ChannelMessage.Send*`, consentimento administrativo, resource-specific consent (RSC), mensagens de canal, change notifications e autenticação.
+
+## Requisitos
+
+1. Incorporar o monitor ao próprio `Scheduled Operational Watch`, preservando o cron existente de 4 horas; não criar novo workflow nem novo cron.
+2. Consultar apenas Microsoft Learn e Microsoft Graph changelog oficiais.
+3. Persistir baseline e deduplicação na issue #2165 preservando o contrato de governança da issue (descrição, estados, causa raiz, aceite, riscos, dependências, evidências, PR, responsável, prioridade e rastreabilidade).
+4. A primeira coleta deve semear baseline sem comentário de alerta.
+5. Mudança relevante deve registrar fonte oficial, evidência SHA-256, efeito no bloqueio, risco e menor adaptação segura/idempotente.
+6. Novo item relevante do changelog deve alertar uma única vez; replay não pode duplicar comentário.
+7. Erro isolado de fonte deve gerar evidência degradada, nunca alerta material.
+8. O monitor não concede permissões, não altera consentimento, tenant, segredo, ambiente ou deploy.
+9. Actions externas devem usar SHA imutável.
+10. Cada execução deve publicar artifact sanitizado.
+11. O alerta deve exigir validação E2E em DEV com `correlation_id` único, caso negativo, caso positivo, readback independente e replay sem duplicidade.
+12. O disparo manual de validação deve usar exclusivamente o Authorized Actions Gateway na issue #1705 com o comando exato `/reqsys run microsoft-graph-planner-teams-watch`, mapeado sem inputs ao `scheduled-operational-watch.yml` em `main`; nenhum workflow, ref ou parâmetro arbitrário pode vir do comentário.
+13. A deduplicação do RSS deve usar watermark de publicação e IDs recentes limitados; truncar uma lista histórica de IDs não pode fazer entradas antigas reaparecerem como novas.
+14. A migração do estado RSS legado deve semear o watermark atual sem alerta; o replay do mesmo feed deve permanecer sem comentário.
+15. Mudanças genéricas de método de autenticação de usuário não são materiais por si só; alterações de autenticação só entram no alerta quando houver contexto de Microsoft Graph/Teams, credenciais de aplicação, service principal, token/OAuth, consentimento ou permissões relevantes.
+
+## Critérios de aceite
+
+- Testes contratuais provam ausência de novo workflow/cron, preservação do monitor operacional existente, fontes oficiais, issue durável, fail-closed para alertas e SHAs imutáveis.
+- O workflow real sem mudança material semeia/atualiza estado sem comentário de alerta; o mesmo caminho pode ser disparado de forma governada pelo comando exato da issue #1705.
+- Uma mudança material futura produz um único comentário na issue #2165.
+- `READY_FOR_PR=passed` deve pertencer ao HEAD exato e a branch deve estar `behind_by=0` antes da abertura da PR.

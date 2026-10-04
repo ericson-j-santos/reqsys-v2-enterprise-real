@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ReqSys Enterprise Docs v0.1.0</title>
+  <style>
+    :root { --azul:#005CA9; --laranja:#F39200; --verde:#168821; --cinza:#f5f7fa; --texto:#1f2937; --borda:#d8dee9; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; color:var(--texto); background:#fff; line-height:1.55; }
+    header { background:linear-gradient(135deg,var(--azul),#003f73); color:#fff; padding:32px 24px; }
+    header h1 { margin:0 0 8px; font-size:28px; }
+    header p { margin:0; opacity:.95; }
+    main { max-width:1100px; margin:0 auto; padding:24px; }
+    section { margin:0 0 28px; }
+    h2 { border-left:6px solid var(--azul); padding-left:12px; margin-top:32px; }
+    h3 { margin-top:24px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+    .card { border:1px solid var(--borda); border-radius:12px; padding:16px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+    .kpi { font-size:22px; font-weight:700; color:var(--azul); }
+    .tag { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; background:#e7f1fb; color:var(--azul); }
+    .ok { background:#e8f5e9; color:var(--verde); }
+    .warn { background:#fff4e0; color:#8a5300; }
+    table { width:100%; border-collapse:collapse; margin:12px 0 20px; }
+    th, td { border:1px solid var(--borda); padding:10px; text-align:left; vertical-align:top; }
+    th { background:var(--cinza); }
+    code, pre { background:#f3f4f6; border:1px solid #e5e7eb; border-radius:6px; }
+    code { padding:2px 4px; }
+    pre { padding:14px; overflow:auto; }
+    a { color:var(--azul); }
+    footer { margin-top:40px; padding:16px 24px; background:#f9fafb; border-top:1px solid var(--borda); font-size:13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys Enterprise Docs</h1>
+    <p>Documentação viva, versionada e offline — versão 0.1.0 · 28/06/2026</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Visão executiva</h2>
+      <div class="grid">
+        <div class="card"><div class="kpi">0.1.0</div><p>Versão inicial da documentação MkDocs.</p></div>
+        <div class="card"><div class="kpi">Offline</div><p>Arquivo autocontido para ambiente corporativo sem MkDocs.</p></div>
+        <div class="card"><div class="kpi">CI</div><p>Build strict preparado via GitHub Actions.</p></div>
+        <div class="card"><div class="kpi">Pages</div><p>Publicação preparada para GitHub Pages após merge.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Links de acesso</h2>
+      <table>
+        <thead><tr><th>Destino</th><th>Link/Referência</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Documentação GitHub Pages</td><td><a href="https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/">https://ericson-j-santos.github.io/reqsys-v2-enterprise-real/</a></td><td><span class="tag warn">depende de merge/deploy</span></td></tr>
+          <tr><td>API pública</td><td><a href="https://reqsys-api.fly.dev">https://reqsys-api.fly.dev</a></td><td><span class="tag">runtime</span></td></tr>
+          <tr><td>Frontend público</td><td><a href="https://reqsys-app.fly.dev">https://reqsys-app.fly.dev</a></td><td><span class="tag">app</span></td></tr>
+          <tr><td>Fallback offline</td><td><code>docs/offline/reqsys-docs-v0.1.0.html</code></td><td><span class="tag ok">versionado</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>API Runtime</h2>
+      <table>
+        <thead><tr><th>Método</th><th>Endpoint</th><th>Finalidade</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET</code></td><td><code>/api/runtime/health</code></td><td>Verificação operacional da API.</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/runtime/dashboard</code></td><td>Sinais do dashboard runtime.</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/runtime/analytics</code></td><td>Evidências e analytics operacionais.</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/requisitos/{id}</code></td><td>Consulta mockada de requisito.</td></tr>
+          <tr><td><code>POST</code></td><td><code>/api/requisitos</code></td><td>Recebimento/criação mockada de requisito.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Exemplo GET</h3>
+      <pre>{
+  "id": "REQ-001",
+  "titulo": "Registrar requisito via fluxo automatizado",
+  "tipo": "funcional",
+  "status": "rascunho",
+  "prioridade": "alta",
+  "origem": "power_automate",
+  "metadata": {
+    "versao_contrato": "0.1.0",
+    "correlation_id": "reqsys-demo-0001"
+  }
+}</pre>
+
+      <h3>Exemplo POST</h3>
+      <pre>{
+  "titulo": "Registrar requisito via Power Automate",
+  "descricao": "Fluxo de recebimento POST para praticar estrutura de dados.",
+  "tipo": "funcional",
+  "prioridade": "media",
+  "origem": "power_automate"
+}</pre>
+    </section>
+
+    <section>
+      <h2>Governança</h2>
+      <table>
+        <thead><tr><th>Item</th><th>Evidência</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr><td>Fonte MkDocs</td><td><code>mkdocs.yml</code> + <code>docs/*.md</code></td><td><span class="tag ok">implementado</span></td></tr>
+          <tr><td>Fallback corporativo</td><td><code>docs/offline/reqsys-docs-v0.1.0.html</code></td><td><span class="tag ok">implementado</span></td></tr>
+          <tr><td>Manifesto</td><td><code>docs/VERSION.json</code></td><td><span class="tag ok">implementado</span></td></tr>
+          <tr><td>Changelog</td><td><code>docs/CHANGELOG.md</code></td><td><span class="tag ok">implementado</span></td></tr>
+          <tr><td>CI</td><td><code>.github/workflows/docs-mkdocs.yml</code></td><td><span class="tag ok">preparado</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Execução local opcional</h2>
+      <pre>pip install mkdocs mkdocs-material pymdown-extensions
+mkdocs serve
+mkdocs build --strict</pre>
+      <p>Se esses comandos forem bloqueados no ambiente corporativo, usar diretamente este HTML offline versionado.</p>
+    </section>
+
+    <section>
+      <h2>Próximo incremento recomendado</h2>
+      <ol>
+        <li>Integrar OpenAPI/Swagger da API mockada.</li>
+        <li>Adicionar diagramas Mermaid vivos.</li>
+        <li>Renderizar artifacts JSON operacionais dentro da documentação.</li>
+        <li>Automatizar release versionada da documentação.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    ReqSys Enterprise Docs · v0.1.0 · arquivo autocontido para consumo sem MkDocs local · correlation_id documental: reqsys-docs-0.1.0-20260628
+  </footer>
+</body>
+</html>

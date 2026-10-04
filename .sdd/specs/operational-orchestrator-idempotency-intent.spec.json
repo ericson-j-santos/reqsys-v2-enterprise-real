@@ -1,0 +1,23 @@
+{
+  "feature_name": "operational-orchestrator-idempotency-intent",
+  "project": "ReqSys Operational Orchestrator",
+  "created_at": "2026-09-28",
+  "updated_at": "2026-09-28",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Idempotência fail-closed por intenção completa para a Action Queue do Operational Orchestrator.",
+  "runtime_target": "backend-operational-orchestrator",
+  "environment": "CI/DEV",
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_operational_orchestrator.py",
+      "backend/tests/test_operational_orchestrator_api.py",
+      "scripts/validate_operational_orchestrator_e2e.py"
+    ],
+    "evidence_contract": "Provar replay equivalente, rejeição de intenção divergente e leitura SQLite independente preservando a ação original no SHA atual."
+  }
+}

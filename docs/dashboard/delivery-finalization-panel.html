@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Delivery Finalization Panel</title>
+  <style>
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:#f6f8fb; color:#1f2937; }
+    header { background:#005CA9; color:white; padding:24px; }
+    main { max-width:1100px; margin:0 auto; padding:20px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+    .card { background:white; border-left:5px solid #198754; border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(15,23,42,.08); }
+    .label { color:#6b7280; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; }
+    .value { font-size:2rem; font-weight:700; margin-top:6px; }
+    table { width:100%; border-collapse:collapse; margin-top:20px; background:white; border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(15,23,42,.08); }
+    th, td { padding:12px; border-bottom:1px solid #e5e7eb; text-align:left; }
+    th { background:#eef4fb; color:#0f3557; }
+    code { background:#eef2f7; padding:2px 5px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys — Delivery Finalization Panel</h1>
+    <p>Painel navegável de fechamento da entrega operacional, local-first e sem dependências externas.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card"><div class="label">Score final estimado</div><div class="value">99,54%</div></div>
+      <div class="card"><div class="label">PRs recentes rastreados</div><div class="value">49</div></div>
+      <div class="card"><div class="label">Taxa de merge</div><div class="value">100%</div></div>
+      <div class="card"><div class="label">Falhas abertas</div><div class="value">0</div></div>
+    </section>
+    <section>
+      <h2>Artifacts finais</h2>
+      <table>
+        <thead><tr><th>Artifact</th><th>Uso</th><th>Consumidor</th></tr></thead>
+        <tbody>
+          <tr><td><code>delivery-readiness-report.json</code></td><td>Readiness da entrega</td><td>Dashboard dinâmico</td></tr>
+          <tr><td><code>delivery-completion-snapshot.json</code></td><td>Conclusão da entrega</td><td>Dashboard dinâmico</td></tr>
+          <tr><td><code>delivery-finalization-report.json</code></td><td>Fechamento executivo</td><td>Painel de finalização</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>Regras de uso</h2>
+      <table>
+        <thead><tr><th>Regra</th><th>Decisão</th></tr></thead>
+        <tbody>
+          <tr><td>Report-only</td><td>Não substitui gates obrigatórios.</td></tr>
+          <tr><td>Estado evidenciado</td><td>Não declarar 100% sem artifact real completo.</td></tr>
+          <tr><td>Produção/deploy</td><td>Somente com PR específico e evidência própria.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
