@@ -31,8 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-      TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
+      TEAMS_GATEWAY_BASE_URL: ${{ vars.TEAMS_GATEWAY_BASE_URL }}
+      TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
       PYTHONUNBUFFERED: "1"
 
     steps:
@@ -53,18 +53,20 @@ jobs:
         id: teams-config
         shell: bash
         run: |
-          if [[ -z "${TEAMS_WEBHOOK_URL}" ]]; then
+          if [[ -z "${TEAMS_GATEWAY_BASE_URL}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "reason=Secret TEAMS_WEBHOOK_URL ausente" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_URL ausente; envio foi ignorado sem invalidar o CI."
-          elif [[ -z "${TEAMS_WEBHOOK_RECIPIENT}" || "${TEAMS_WEBHOOK_RECIPIENT}" != *"@"* ]]; then
+            echo "reason=Variable TEAMS_GATEWAY_BASE_URL ausente" >> "$GITHUB_OUTPUT"
+            echo "::error title=Teams gateway não configurado::TEAMS_GATEWAY_BASE_URL é obrigatória para a rota canônica."
+            exit 1
+          elif [[ -z "${TEAMS_GATEWAY_DESTINO_ID}" || "${TEAMS_GATEWAY_DESTINO_ID}" != *"@"* ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "reason=Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Teams não configurado::Secret TEAMS_WEBHOOK_RECIPIENT ausente ou inválido (precisa ser e-mail/UPN); envio foi ignorado sem invalidar o CI."
+            echo "reason=Secret TEAMS_GATEWAY_DESTINO_ID ausente ou inválido" >> "$GITHUB_OUTPUT"
+            echo "::error title=Teams gateway não configurado::TEAMS_GATEWAY_DESTINO_ID precisa ser e-mail/UPN."
+            exit 1
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "reason=configuração disponível" >> "$GITHUB_OUTPUT"
-            echo "Secrets TEAMS_WEBHOOK_URL/TEAMS_WEBHOOK_RECIPIENT disponíveis; notificação será enviada."
+            echo "reason=gateway canônico disponível" >> "$GITHUB_OUTPUT"
+            echo "Teams Messaging Gateway canônico configurado; notificação será enviada."
           fi
 
       - name: Enviar notificação
@@ -353,17 +355,22 @@ jobs:
               json.dump(card, card_file, ensure_ascii=False)
               card_path = card_file.name
 
+          evidence_path = Path(tempfile.gettempdir()) / f"teams-commit-{os.environ['RUN_ID']}.json"
           completed = subprocess.run(
               [
                   sys.executable,
-                  "tools/geradores/teams_graph_gateway_autocontido.py",
-                  "send-webhook",
-                  "--title",
+                  "scripts/notificar_teams.py",
+                  "--titulo",
                   title,
-                  "--message",
+                  "--texto",
                   message,
-                  "--adaptive-card-file",
-                  card_path,
+                  "--modo",
+                  "flow_bot",
+                  "--destino-tipo",
+                  "chat_1a1",
+                  "--strict",
+                  "--output",
+                  str(evidence_path),
               ],
               text=True,
               capture_output=True,
@@ -377,7 +384,12 @@ jobs:
           if completed.returncode != 0:
               raise SystemExit(completed.returncode)
 
-          result = json.loads(completed.stdout)
+          result = json.loads(evidence_path.read_text(encoding="utf-8"))
+          evidence_path.unlink(missing_ok=True)
+          result["success"] = bool(result.get("entregue"))
+          result["status_code"] = result.get("status_code") or result.get("provider_response", {}).get("status_code")
+          result["correlation_id"] = result.get("correlation_id") or result.get("provider_response", {}).get("correlation_id")
+
           if not result.get("success"):
               raise SystemExit(f"Teams Gateway não confirmou envio: {result}")
           status_code = result.get("status_code")
