@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PR Structural Queue no PR CI Watch",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "Push na main dispara a fila estrutural no workflow PR CI Watch existente.",
+    "PR conflitante tem prioridade sobre diff vazio, branch atrasada e CI.",
+    "PR com changed_files=0 falha fechado e não recebe diff artificial.",
+    "Branch atrasada só é sincronizada automaticamente quando é o bloqueio estrutural prioritário e possui diff real.",
+    "Update de branch usa expected_head_sha e falha se o HEAD mudou.",
+    "A fila considera PRs mais antigos primeiro dentro da mesma prioridade.",
+    "Conflito de código nunca é resolvido automaticamente.",
+    "Testes preventivos da classificação estrutural ficam verdes.",
+    "workflow_run destinado a PR não é criado quando o workflow de origem roda na main.",
+    "PR Evidence Gate usa somente CI — ReqSys v2 Enterprise como sinal canônico de workflow_run e consulta os demais gates pelo HEAD.",
+    "Ollama CI Triage deduplica por head_sha e cancela diagnóstico obsoleto.",
+    "CI Observability deduplica por workflow de origem e head_sha com cancel-in-progress.",
+    "Workflows alterados usam actions externas fixadas por SHA.",
+    "PR Evidence Gate mantém pull_request para registrar o check no HEAD e limita workflow_run ao CI principal com main excluída."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_pr_ci_watch.py",
+      "tests/test_ci_fanout_guard.py"
+    ],
+    "tests": [
+      "tests/test_pr_ci_watch.py",
+      "tests/test_ci_fanout_guard.py"
+    ],
+    "evidence_contract": "A fila avalia mergeabilidade antes de CI; PR Evidence Gate registra check no HEAD via pull_request e usa apenas o CI principal como sinal workflow_run, com main excluída para reduzir fan-out."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pr-structural-queue.requirements.md",
+    "workflow": ".github/workflows/pr-ci-watch.yml",
+    "implementation": "scripts/pr_ci_watch.py",
+    "tests": "tests/test_pr_ci_watch.py",
+    "pull_request": "#121",
+    "fanout_test": "tests/test_ci_fanout_guard.py",
+    "evidence_gate": ".github/workflows/pr-evidence-gate.yml",
+    "ollama_triage": ".github/workflows/ollama-ci-triage.yml",
+    "ci_observability": ".github/workflows/ci-observability.yml"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "github-pr-queue-governance"
+  }
+}

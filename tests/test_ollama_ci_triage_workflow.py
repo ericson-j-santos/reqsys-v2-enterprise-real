@@ -24,9 +24,12 @@ def test_workflow_is_event_driven_and_non_recursive() -> None:
 
 def test_automatic_path_checks_out_only_trusted_control_plane() -> None:
     raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "github.event.repository.default_branch" in raw
-    assert "github.event.workflow_run.head_sha" not in raw
-    assert "persist-credentials: false" in raw
+    checkout = raw.split("- name: Checkout do control-plane confiável", 1)[1].split(
+        "- name: Executar triagem governada", 1
+    )[0]
+    assert "github.event.repository.default_branch" in checkout
+    assert "github.event.workflow_run.head_sha" not in checkout
+    assert "persist-credentials: false" in checkout
     assert "pull_request_target:" not in raw
 
 
