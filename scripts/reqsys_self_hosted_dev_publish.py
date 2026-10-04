@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
-from ctypes import wintypes
+import ctypes.wintypes as wintypes
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
@@ -333,6 +333,7 @@ def discover_public_ids() -> tuple[str, str]:
         ) for v in values):
             return values
     except (OSError, ValueError, PublishError):
+        # Descoberta opcional: IDs vazios mantêm a publicação em modo fail-closed.
         pass
     return "", ""
 

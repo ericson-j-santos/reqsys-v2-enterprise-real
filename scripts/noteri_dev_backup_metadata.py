@@ -74,6 +74,7 @@ def collect() -> dict:
         if match:
             distribution["zip_sha256"] = match.group(1)
     except (OSError, ValueError):
+        # A consulta externa é metadado opcional; em falha, o hash permanece desconhecido.
         pass
     return {"schema_version": 1, "host": "Noteri", "source_sha": os.environ.get("GITHUB_SHA"),
             "correlation_id": os.environ.get("CORRELATION_ID"),

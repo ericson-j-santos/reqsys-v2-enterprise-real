@@ -104,7 +104,7 @@ class FakeApi:
                 "papel": "viewer", "permissoes": [], "session_epoch": 0,
                 "authz_version": AUTHZ, **self.session_changes,
             }, self.session_success)
-        pytest.fail("route was not closed")
+        raise AssertionError("route was not closed")
 
 
 @pytest.mark.parametrize("encoded,code", (
@@ -279,7 +279,7 @@ def test_http_200_false_build_envelope_blocks_before_supplied_secret(monkeypatch
         def call(self, path, **kwargs):
             if path == "/api/runtime/build-info":
                 return 200, envelope({"build_sha": SOURCE_SHA}, False)
-            pytest.fail("must not authenticate an unsuccessful build envelope")
+            raise AssertionError("must not authenticate an unsuccessful build envelope")
     monkeypatch.setattr(m, "source_context", lambda _: (tmp_path, tmp_path, object(), {}))
     monkeypatch.setattr(m, "validate_candidate", lambda _: None)
     monkeypatch.setattr(m, "FixedApi", BadBuild)

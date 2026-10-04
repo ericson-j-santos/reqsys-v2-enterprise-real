@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
-from ctypes import wintypes
+import ctypes.wintypes as wintypes
 from datetime import datetime, timezone
 import hashlib
 import importlib.util

@@ -212,6 +212,7 @@ def capture(argv: list[str], timeout: int = 90) -> bytes:
             try:
                 process.wait(timeout=3)
             except subprocess.TimeoutExpired:
+                # Limpeza best-effort: o processo já recebeu kill e pode encerrar depois do timeout.
                 pass
         process.stdout.close()
         thread.join(timeout=0.1)
