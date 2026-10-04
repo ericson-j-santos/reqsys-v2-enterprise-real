@@ -1,6 +1,8 @@
 name: PR Evidence Gate
 
 on:
+  # Mantém o check associado ao HEAD do PR para branch protection/GMQ.
+  # O fan-out da main continua bloqueado no workflow_run abaixo.
   pull_request:
     branches:
       - main
@@ -10,12 +12,14 @@ on:
       - reopened
       - ready_for_review
   workflow_run:
+    # O CI principal é o único sinal canônico; o gate consulta os demais
+    # workflows pelo HEAD atual. Main é excluída antes da criação do run.
     workflows:
       - CI — ReqSys v2 Enterprise
-      - Governance Quality Gates
-      - Governança Padrão Ouro
     types:
       - completed
+    branches-ignore:
+      - main
   workflow_dispatch:
     inputs:
       pr_number:

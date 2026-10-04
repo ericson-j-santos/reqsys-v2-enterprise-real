@@ -8,6 +8,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
+from app.core.cofre_verificador_cego import (
+    CHAVE_OPERACIONAL_VERIFICADOR,
+    VerificadorCegoIndisponivel,
+    verificar_valor_cego,
+)
 from app.core.config import settings
 from app.core.envelope import ok
 from app.core.secrets import (
@@ -19,6 +24,7 @@ from app.core.secrets import (
     write_secret_to_vault,
 )
 from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
+from app.core.verificador_constante import comparar_constante
 from app.db import get_db
 from app.models.vault_token import VaultToken
 from app.services.auditoria import registrar_evento
@@ -27,7 +33,8 @@ _require_cofre_admin = require_admin_or_service_token('cofre:runtime_evidence')
 
 router = APIRouter(prefix='/v1/cofre', tags=['Cofre'])
 
-_BLOCKED_KEYS = {'__master_key__'}
+_MANAGEMENT_BLOCKED_KEYS = {'__master_key__'}
+_LOOKUP_BLOCKED_KEYS = {'__master_key__', CHAVE_OPERACIONAL_VERIFICADOR}
 
 
 class GravarSegredoPayload(BaseModel):
@@ -37,7 +44,7 @@ class GravarSegredoPayload(BaseModel):
     @field_validator('key')
     @classmethod
     def key_nao_reservada(cls, v: str) -> str:
-        if v.strip() in _BLOCKED_KEYS:
+        if v.strip() in _MANAGEMENT_BLOCKED_KEYS:
             raise ValueError('Chave reservada não permitida')
         if not v.strip():
             raise ValueError('Chave não pode ser vazia')
@@ -53,6 +60,28 @@ class GravarSegredoPayload(BaseModel):
 
 class ResolverSegredoPayload(BaseModel):
     key: str
+
+
+class VerificarSegredoPayload(BaseModel):
+    key: str
+    value: str
+
+    @field_validator('key')
+    @classmethod
+    def key_nao_reservada(cls, v: str) -> str:
+        key = v.strip()
+        if key in _LOOKUP_BLOCKED_KEYS:
+            raise ValueError('Chave reservada não permitida')
+        if not key:
+            raise ValueError('Chave não pode ser vazia')
+        return key
+
+    @field_validator('value')
+    @classmethod
+    def value_nao_vazio(cls, v: str) -> str:
+        if not v:
+            raise ValueError('Valor não pode ser vazio')
+        return v
 
 
 class CriarTokenPayload(BaseModel):
@@ -132,7 +161,7 @@ def _check_vault_token(
             return VaultTokenContext(ator=f'token:{scoped.label}', key_patterns=json.loads(scoped.key_patterns))
 
     if x_vault_token:
-        if settings.vault_api_token and x_vault_token == settings.vault_api_token:
+        if settings.vault_api_token and comparar_constante(x_vault_token, settings.vault_api_token):
             _auditar(db, None, 'token-legado-global', 'COFRE_TOKEN_LEGADO_USADO', 'global')
             return VaultTokenContext(ator='token-legado-global', key_patterns=None)
         # Um token apresentado mas não reconhecido (inclusive token escopado já
@@ -209,7 +238,7 @@ def remover_segredo(
     x_correlation_id: str | None = Header(default=None),
 ):
     """Remove um segredo do cofre."""
-    if key in _BLOCKED_KEYS:
+    if key in _LOOKUP_BLOCKED_KEYS:
         raise HTTPException(status_code=400, detail='Chave reservada não pode ser removida por esta rota')
     removido = delete_secret_from_vault(key)
     _auditar(db, x_correlation_id, ctx.ator, 'COFRE_SEGREDO_REMOVIDO', key, {'removido': removido})
@@ -297,7 +326,7 @@ def obter_segredo(
     Ideal para scripts e aplicações: GET /v1/cofre/segredos/MINHA_CHAVE
     Autenticação via header: X-Vault-Token: <VAULT_API_TOKEN ou token escopado>
     """
-    if key in _BLOCKED_KEYS:
+    if key in _LOOKUP_BLOCKED_KEYS:
         raise HTTPException(status_code=400, detail='Chave reservada')
     _exigir_escopo(ctx, key)
     value = read_secret_from_vault(key)
@@ -319,7 +348,7 @@ def resolver_segredo(
     Retorna o valor de um segredo via POST (alias de GET /segredos/{key}).
     Autenticação via header: X-Vault-Token: <VAULT_API_TOKEN ou token escopado>
     """
-    if payload.key in _BLOCKED_KEYS:
+    if payload.key in _LOOKUP_BLOCKED_KEYS:
         raise HTTPException(status_code=400, detail='Chave reservada')
     _exigir_escopo(ctx, payload.key)
     value = read_secret_from_vault(payload.key)
@@ -328,3 +357,38 @@ def resolver_segredo(
         raise HTTPException(status_code=404, detail=f'Segredo "{payload.key}" não encontrado no cofre')
     _auditar(db, x_correlation_id, ctx.ator, 'COFRE_SEGREDO_LIDO', payload.key)
     return ok({'key': payload.key, 'value': value})
+
+
+@router.post('/verificar')
+def verificar_segredo(
+    payload: VerificarSegredoPayload,
+    ctx: VaultTokenContext = Depends(_check_vault_token),
+    db: Session = Depends(get_db),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Compara um valor candidato com o segredo armazenado sem expor o valor bruto ou marcador."""
+    _exigir_escopo(ctx, payload.key)
+    value = read_secret_from_vault(payload.key)
+    if value is None:
+        _auditar(db, x_correlation_id, ctx.ator, 'COFRE_SEGREDO_VERIFICADO_FALHA', payload.key)
+        raise HTTPException(status_code=404, detail=f'Segredo "{payload.key}" não encontrado no cofre')
+    try:
+        result = verificar_valor_cego(payload.key, value, payload.value)
+    except VerificadorCegoIndisponivel:
+        _auditar(db, x_correlation_id, ctx.ator, 'COFRE_VERIFICADOR_INDISPONIVEL', payload.key)
+        raise HTTPException(status_code=503, detail='Verificador de segredo indisponível')
+
+    _auditar(
+        db,
+        x_correlation_id,
+        ctx.ator,
+        'COFRE_SEGREDO_VERIFICADO',
+        payload.key,
+        {'match': result.match, 'verifier_version': result.verifier_version},
+    )
+    return ok({
+        'key': result.key,
+        'match': result.match,
+        'verifier_version': result.verifier_version,
+        'value_exposed': result.value_exposed,
+    })
