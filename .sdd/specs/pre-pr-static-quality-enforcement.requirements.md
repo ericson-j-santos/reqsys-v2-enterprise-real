@@ -39,3 +39,5 @@ O gate pré-PR compilava Python, mas não executava Ruff nos arquivos alterados.
 - `Pre-PR Readiness Gate` verde no HEAD final;
 - política de merge exige `Pre-PR Readiness Gate`;
 - CI completo da PR verde no mesmo HEAD.
+
+9. PR recuperado sincronizado (`behind_by=0`) e sem diferença de conteúdo contra a base deve ser classificado como `not_applicable`, mesmo quando o HEAD é um commit de sincronização acima da base; branch atrasada ou com diff real continua fail-closed.

@@ -118,6 +118,7 @@ export const NAV_TEMAS = [
     icon: 'mdi-sitemap',
     items: [
       { to: '/arquitetura', icon: 'mdi-sitemap', title: 'Mapa da solução', tip: 'Visão completa da aplicação, serviços, integrações e automações.' },
+      { to: '/arquitetura-viva', icon: 'mdi-graph-outline', title: 'Arquitetura Viva', tip: 'Diagramas navegáveis, auditáveis e explicáveis por IA com fontes e nível de confiança.' },
       { to: '/coordenacao-adr', icon: 'mdi-book-open-variant', title: 'Coordenação de decisões de arquitetura', tip: 'Coordenação geral que classifica demandas pelas decisões de arquitetura e aponta violações das verificações obrigatórias.' },
     ],
   },

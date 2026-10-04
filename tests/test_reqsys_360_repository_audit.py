@@ -163,5 +163,16 @@ class ReqSys360RepositoryAuditTests(unittest.TestCase):
         self.assertFalse(any(item['file'] == 'docs/used.md' for item in inventory['unreferenced_docs']))
 
 
+    def test_servicos_de_teste_nao_sao_classificados_como_orfaos(self):
+        temp, repo = self.make_repo()
+        self.addCleanup(temp.cleanup)
+        (repo / 'frontend/src/services/runtimeUrlPolicy.test.js').write_text(
+            "export const fake = true",
+            encoding='utf-8',
+        )
+
+        self.assertEqual(audit.service_candidates(repo), [])
+
+
 if __name__ == '__main__':
     unittest.main()
