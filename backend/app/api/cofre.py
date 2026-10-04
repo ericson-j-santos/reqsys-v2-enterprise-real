@@ -14,7 +14,6 @@ from app.core.cofre_verificador_cego import (
     verificar_valor_cego,
 )
 from app.core.config import settings
-from app.core.verificador_constante import comparar_constante
 from app.core.envelope import ok
 from app.core.secrets import (
     _vault_service_name,
@@ -25,6 +24,7 @@ from app.core.secrets import (
     write_secret_to_vault,
 )
 from app.core.service_tokens import ServiceAuthContext, require_admin_or_service_token
+from app.core.verificador_constante import comparar_constante
 from app.db import get_db
 from app.models.vault_token import VaultToken
 from app.services.auditoria import registrar_evento
