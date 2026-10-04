@@ -152,13 +152,24 @@ jobs:
           if ($e.host -ne 'DESKTOP-PDQK954') { throw 'host_mismatch' }
           if ($e.production_touched) { throw 'production_touched' }
           if ($e.secrets_read) { throw 'secret_read_detected' }
-          if (-not $e.control_plane_bridge) { throw 'control_plane_bridge_missing' }
-          if ($e.profile_mount_rw) { throw 'legacy_profile_mount_detected' }
-          if (-not $e.api_e2e.estudo_readback) { throw 'api_readback_missing' }
-          if (-not $e.api_e2e.idempotent_replay) { throw 'idempotency_missing' }
-          if ($e.api_e2e.final_profile -ne 'NORMAL') { throw 'api_final_profile_not_normal' }
-          if (-not $e.browser_e2e.estudo_observed_in_ui) { throw 'ui_estudo_not_observed' }
-          if ($e.browser_e2e.final_profile -ne 'NORMAL') { throw 'ui_final_profile_not_normal' }
+          if ($e.runtime_provider -eq 'self_hosted_dev') {
+            if ($e.maintenance_verified -ne $true) { throw 'portable_maintenance_not_verified' }
+            if ($e.maintenance_read_only -ne $true) { throw 'portable_maintenance_not_read_only' }
+            if ($e.expected_sha -ne "${{ github.sha }}") { throw 'portable_same_sha_mismatch' }
+            if ($e.legacy_runtime_touched -ne $false) { throw 'legacy_runtime_touched' }
+            if ($e.usable -ne $false) { throw 'portable_maintenance_cannot_claim_usable' }
+            if ($e.authenticated_flow_verified -ne $false) { throw 'portable_maintenance_cannot_claim_login' }
+            if ($e.legacy_study_mode_e2e_executed -ne $false) { throw 'legacy_e2e_claim_invalid' }
+          } else {
+            if (-not $e.control_plane_bridge) { throw 'control_plane_bridge_missing' }
+            if ($e.profile_mount_rw) { throw 'legacy_profile_mount_detected' }
+            if (-not $e.api_e2e.estudo_readback) { throw 'api_readback_missing' }
+            if (-not $e.api_e2e.idempotent_replay) { throw 'idempotency_missing' }
+            if ($e.api_e2e.final_profile -ne 'NORMAL') { throw 'api_final_profile_not_normal' }
+            if (-not $e.browser_e2e.estudo_observed_in_ui) { throw 'ui_estudo_not_observed' }
+            if ($e.browser_e2e.final_profile -ne 'NORMAL') { throw 'ui_final_profile_not_normal' }
+          }
+
 
       - name: Upload runtime evidence
         if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode')

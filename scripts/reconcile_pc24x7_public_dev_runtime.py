@@ -16,6 +16,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts import self_hosted_dev_maintenance as portable_dev
+except ModuleNotFoundError:
+    import self_hosted_dev_maintenance as portable_dev
+
 
 def _load_provision_module():
     module_path = Path(__file__).resolve().with_name("provision_pc24x7_teams_bot_runtime.py")
@@ -579,6 +584,22 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         raise ReconcileError(f"confirmation_required:{CONFIRMATION}")
     if args.environment != "dev":
         raise ReconcileError("environment_must_be_dev")
+
+    try:
+        portable = portable_dev.verify_if_active(args.expected_sha)
+    except portable_dev.PortableRuntimeError as exc:
+        raise ReconcileError(exc.code) from exc
+    if portable is not None:
+        evidence = {**portable, "correlation_id": args.correlation_id,
+                    "credentials_reused": False,
+                    "legacy_reconciliation_deferred": True}
+        args.evidence_file.parent.mkdir(parents=True, exist_ok=True)
+        args.evidence_file.write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
+        return evidence
     if not args.vault_name.strip():
         raise ReconcileError("vault_name_missing")
     if not args.expected_tenant_id.strip():
