@@ -263,6 +263,8 @@ def service_candidates(repo: Path) -> list[dict]:
     if not services.exists():
         return candidates
     for file in services.glob("*.js"):
+        if is_test_path(file):
+            continue
         stem = file.stem
         hits = []
         needle_variants = [f"services/{stem}", f"./{stem}", f"../services/{stem}"]

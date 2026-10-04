@@ -17,6 +17,9 @@ public static class ReqSysEndpoints
         app.MapGet("/api/connectors/health", (ReqSysStore store, HttpContext context) =>
             ApiEnvelope<object>.Ok(BuildConnectorHealth(store, context), context));
 
+        app.MapGet("/api/connectors/metrics", (ReqSysStore store) =>
+            Results.Text(BuildConnectionBrokerMetrics(store), "text/plain; version=0.0.4; charset=utf-8"));
+
         app.MapPost("/api/connectors/capabilities/check", async (ReqSysStore store, HttpContext context) =>
             ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(store, context), context));
 
@@ -81,6 +84,9 @@ public static class ReqSysEndpoints
 
         v1.MapGet("/connectors/health", (ReqSysStore store, HttpContext context) =>
             ApiEnvelope<object>.Ok(BuildConnectorHealth(store, context), context));
+
+        v1.MapGet("/connectors/metrics", (ReqSysStore store) =>
+            Results.Text(BuildConnectionBrokerMetrics(store), "text/plain; version=0.0.4; charset=utf-8"));
 
         v1.MapPost("/connectors/capabilities/check", async (ReqSysStore store, HttpContext context) =>
             ApiEnvelope<object>.Ok(await BuildCapabilityCheckAsync(store, context), context));
@@ -294,6 +300,69 @@ public static class ReqSysEndpoints
 
         return app;
     }
+
+    private static string BuildConnectionBrokerMetrics(ReqSysStore store)
+    {
+        var capabilities = store.ListarConnectorCapabilities();
+        var auditEvents = store.ListarAuditoria();
+        var builder = new StringBuilder();
+
+        AppendPrometheusMetadata(
+            builder,
+            "reqsys_connection_broker_capabilities_total",
+            "Total de capabilities registradas no Connection Broker.");
+        builder.AppendLine($"reqsys_connection_broker_capabilities_total {capabilities.Count}");
+
+        AppendPrometheusMetadata(
+            builder,
+            "reqsys_connection_broker_capabilities_by_status_total",
+            "Total de capabilities por status operacional.");
+        foreach (var group in capabilities.GroupBy(item => item.Status).OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            builder.AppendLine(
+                $"reqsys_connection_broker_capabilities_by_status_total{{status=\"{SanitizePrometheusLabel(group.Key)}\"}} {group.Count()}");
+        }
+
+        AppendPrometheusMetadata(
+            builder,
+            "reqsys_connection_broker_capabilities_by_criticality_total",
+            "Total de capabilities por criticidade.");
+        foreach (var group in capabilities.GroupBy(item => item.Criticidade).OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            builder.AppendLine(
+                $"reqsys_connection_broker_capabilities_by_criticality_total{{criticality=\"{SanitizePrometheusLabel(group.Key)}\"}} {group.Count()}");
+        }
+
+        AppendPrometheusMetadata(
+            builder,
+            "reqsys_connection_broker_human_confirmation_required_total",
+            "Total de capabilities que exigem confirmacao humana.");
+        builder.AppendLine(
+            $"reqsys_connection_broker_human_confirmation_required_total {capabilities.Count(item => item.RequiresHumanConfirmation)}");
+
+        AppendPrometheusMetadata(
+            builder,
+            "reqsys_connection_broker_audit_events_total",
+            "Total de eventos de auditoria do Connection Broker mantidos no processo.");
+        builder.AppendLine(
+            $"reqsys_connection_broker_audit_events_total {auditEvents.Count(item => item.Entidade == "connection_broker")}");
+
+        return builder.ToString();
+    }
+
+    private static void AppendPrometheusMetadata(StringBuilder builder, string name, string help)
+    {
+        builder.AppendLine($"# HELP {name} {help}");
+        builder.AppendLine($"# TYPE {name} gauge");
+    }
+
+    private static string SanitizePrometheusLabel(string value) =>
+        value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\r", string.Empty, StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
+
 
     private static object BuildConnectorHealth(ReqSysStore store, HttpContext context)
     {

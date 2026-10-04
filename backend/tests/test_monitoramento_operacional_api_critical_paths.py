@@ -11,9 +11,25 @@ from app.api.monitoramento_operacional import (
 )
 from app.core.feature_metrics import REGISTRY
 from app.main import app
-from app.schemas.monitoramento_operacional import ItemMonitorado, MonitoramentoOperacional, ResumoMonitoramento
+from app.schemas.monitoramento_operacional import (
+    ItemMonitorado,
+    MonitoramentoOperacional,
+    ResumoMonitoramento,
+    TempoOperacional,
+)
 
 client = TestClient(app)
+
+
+def _tempo_operacional_teste() -> TempoOperacional:
+    return TempoOperacional(
+        previsao_proxima_acao='fixture de teste',
+        eta_proxima_verificacao_minutos=10,
+        tempo_medio_proxima_acao_minutos=15,
+        tempo_medio_resolucao_horas=1.0,
+        tempo_medio_review_minutos=20,
+        sla_operacional_minutos=60,
+    )
 
 
 def test_runtime_status_mapeia_estados():
@@ -36,6 +52,7 @@ def test_runtime_risk_score_com_lista_vazia():
             bloqueios=0,
             estado_geral='desconhecido',
         ),
+        tempo_operacional=_tempo_operacional_teste(),
         itens=[],
     )
     assert _runtime_risk_score(snapshot) == 50
@@ -53,6 +70,7 @@ def test_runtime_risk_score_pondera_severidade():
             bloqueios=1,
             estado_geral='vermelho',
         ),
+        tempo_operacional=_tempo_operacional_teste(),
         itens=[
             ItemMonitorado(
                 tipo='a',
