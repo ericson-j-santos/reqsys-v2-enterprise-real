@@ -123,3 +123,21 @@ def test_recovered_draft_is_promoted_to_ready_before_any_merge() -> None:
     assert "pullRequestId: currentDraft.node_id" in block
     assert "Merge: não executado neste ciclo" in block
     assert block.index("markPullRequestReadyForReview") < block.index("github.rest.pulls.merge({")
+
+
+def test_queue_reconcile_is_event_driven_and_has_no_schedule() -> None:
+    text = _text()
+    assert 'repository_dispatch:' in text
+    assert 'types: [governed_pr_queue_reconcile]' in text
+    assert 'reconcile-recovered-pr-queue:' in text
+    assert 'schedule:' not in text
+
+
+def test_queue_reconcile_prioritizes_mergeability_before_ci() -> None:
+    text = _text()
+    block = text.split('reconcile-recovered-pr-queue:', maxsplit=1)[1].split('  increment-gate-on-open:', maxsplit=1)[0]
+    assert "pr.mergeable_state === 'dirty'" in block
+    assert 'comparison.behind_by > 0' in block
+    assert "action = 'recover_ci'" in block
+    assert "labels: ['ci:recuperado']" in block
+    assert 'live.head.sha !== selected.head_sha' in block
