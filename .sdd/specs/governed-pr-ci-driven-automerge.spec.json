@@ -2,14 +2,14 @@
   "feature_name": "governed-pr-ci-driven-automerge",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-09-19",
-  "updated_at": "2026-09-22",
+  "updated_at": "2026-10-04",
   "phase": "implementation",
   "approvals": {
     "requirements": true,
     "design": true,
     "tasks": true
   },
-  "description": "Conecta a Governed Merge Queue ao merge automático fail-closed no HEAD exato sob autorização operacional permanente do owner, sem exigir aprovação por PR e sem cron/deploy/promoção. A elegibilidade também exige estabilidade fail-closed da base e do head.",
+  "description": "Merge CI-driven fail-closed; drafts ci:recuperado podem virar ready após gates verdes, encerrando o ciclo sem merge para forçar nova validação.",
   "environment": "GitHub CI",
   "production_enabled": false,
   "sdd_gate": {
@@ -17,6 +17,6 @@
       "tests/test_governed_pr_automation_dispatch_contract.py",
       "tests/test_governed_merge_queue_current_sha_stability_contract.py"
     ],
-    "evidence_contract": "workflow_run success da Governed Merge Queue; label merge-queue:eligible; autorização operacional permanente do owner; revalidação do HEAD e mergeabilidade imediatamente antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção. Revalidação da base atual, do base_sha e da comparação base/head imediatamente antes da elegibilidade e do merge."
+    "evidence_contract": "workflow_run success da Governed Merge Queue; label merge-queue:eligible; autorização operacional permanente do owner; revalidação do HEAD e mergeabilidade imediatamente antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção. Revalidação da base atual, do base_sha e da comparação base/head imediatamente antes da elegibilidade e do merge. Draft ci:recuperado: ready após gates verdes, retorno sem merge e novo ciclo ready_for_review."
   }
 }
