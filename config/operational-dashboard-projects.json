@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "repositories": [
+    {"repository": "ericson-j-santos/reqsys-v2-enterprise-real", "label": "ReqSys Produto", "group": "produto", "priority": "P0"},
+    {"repository": "ericson-j-santos/desktop-pc24x7-runtime", "label": "Runtime Desktop PC24x7", "group": "runtime", "priority": "P0"},
+    {"repository": "ericson-j-santos/noteri-runtime", "label": "Runtime Noteri", "group": "runtime", "priority": "P0"},
+    {"repository": "ericson-j-santos/reqsys-infrastructure-pc24x7", "label": "Infraestrutura PC24x7", "group": "runtime", "priority": "P0"},
+    {"repository": "ericson-j-santos/painel-powerbi", "label": "Painel Power BI", "group": "produto", "priority": "P1"},
+    {"repository": "ericson-j-santos/email-report", "label": "Email Report", "group": "produto", "priority": "P1"},
+    {"repository": "ericson-j-santos/portal-portabilidade-2025", "label": "Portal Portabilidade 2025", "group": "produto", "priority": "P1"},
+    {"repository": "ericson-j-santos/engineering-worker-pool", "label": "Engineering Worker Pool", "group": "engenharia", "priority": "P1"},
+    {"repository": "ericson-j-santos/reqsys-engineering-orchestrator", "label": "Engineering Orchestrator", "group": "engenharia", "priority": "P1"},
+    {"repository": "ericson-j-santos/observability-platform", "label": "Observability Platform", "group": "engenharia", "priority": "P1"},
+    {"repository": "ericson-j-santos/e2e-platform", "label": "E2E Platform", "group": "engenharia", "priority": "P1"},
+    {"repository": "ericson-j-santos/chatgpt-operational-rules", "label": "Regras Operacionais", "group": "governanca", "priority": "P0"},
+    {"repository": "ericson-j-santos/reqsys-data-platform", "label": "ReqSys Data Platform", "group": "dados", "priority": "P2"},
+    {"repository": "ericson-j-santos/powerbi-platform", "label": "Power BI Platform", "group": "dados", "priority": "P2"},
+    {"repository": "ericson-j-santos/report-builder-platform", "label": "Report Builder Platform", "group": "dados", "priority": "P2"},
+    {"repository": "ericson-j-santos/ocr-evidence-engine", "label": "OCR Evidence Engine", "group": "produto", "priority": "P2"},
+    {"repository": "ericson-j-santos/fecap-clipping-automation", "label": "FECAP Clipping Automation", "group": "produto", "priority": "P2"},
+    {"repository": "ericson-j-santos/central-pesquisas-habitacionais", "label": "Central Pesquisas Habitacionais", "group": "produto", "priority": "P2"}
+  ]
+}

@@ -1,0 +1,111 @@
+name: Docs MkDocs
+
+on:
+  pull_request:
+    paths:
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - "docs-site/**"
+      - "docs/offline/**"
+      - ".github/workflows/docs-mkdocs.yml"
+      - ".github/workflows/deploy-reqsys-pages-composite.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - "docs-site/**"
+      - "docs/offline/**"
+      - ".github/workflows/docs-mkdocs.yml"
+      - ".github/workflows/deploy-reqsys-pages-composite.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+concurrency:
+  group: docs-mkdocs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build MkDocs strict
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-docs.txt
+
+      - name: Build documentation
+        shell: bash
+        run: |
+          set +e
+          mkdocs build --strict --site-dir site > mkdocs-build.log 2>&1
+          status=$?
+          cat mkdocs-build.log
+          echo "$status" > mkdocs-build-status.txt
+          exit "$status"
+
+      - name: Upload MkDocs diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkdocs-build-log
+          path: |
+            mkdocs-build.log
+            mkdocs-build-status.txt
+          if-no-files-found: ignore
+
+      - name: Preserve offline fallback in artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p site/offline
+          if [[ -f docs/offline/reqsys-docs-v0.1.0.html ]]; then
+            cp docs/offline/reqsys-docs-v0.1.0.html site/offline/reqsys-docs-v0.1.0.html
+          elif [[ -f docs-site/offline/reqsys-docs-v0.1.0.html ]]; then
+            cp docs-site/offline/reqsys-docs-v0.1.0.html site/offline/reqsys-docs-v0.1.0.html
+          else
+            echo "Fallback offline não encontrado em docs/offline nem docs-site/offline." >&2
+            exit 1
+          fi
+
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkdocs-site
+          path: site
+          if-no-files-found: error
+          retention-days: 30
+
+  request-canonical-pages:
+    name: Solicitar publicação canônica do Pages
+    needs: build-docs
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delegar publicação ao dashboard Teams
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run teams-notification-dashboard.yml \
+            --repo "${{ github.repository }}" \
+            --ref main
+          echo "MkDocs validado; publicação delegada ao pipeline canônico do ReqSys Pages."

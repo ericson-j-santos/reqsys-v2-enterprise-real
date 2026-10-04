@@ -1,0 +1,40 @@
+name: Reusable Python Quality
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version
+        required: false
+        default: "3.12"
+        type: string
+      working-directory:
+        description: Working directory
+        required: false
+        default: "."
+        type: string
+      test-command:
+        description: Deterministic validation command
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Run validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "${{ inputs.test-command }}"

@@ -1,0 +1,91 @@
+name: Instrumented Executive Readiness
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/build_instrumented_executive_readiness.py"
+      - "tests/test_build_instrumented_executive_readiness.py"
+      - ".github/workflows/instrumented-executive-readiness.yml"
+      - "docs/contracts/instrumented-executive-readiness.md"
+  workflow_run:
+    workflows: ["ReqSys Single State Consumer Readiness", "Runtime Validation Consolidator", "CI Lead Time Analytics"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: instrumented-executive-readiness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_build_instrumented_executive_readiness.py
+      - name: Build runtime evidence snapshot
+        run: |
+          python scripts/runtime_validation_consolidator.py \
+            --repo "${{ github.repository }}" \
+            --branch "${{ github.ref_name }}" \
+            --output-dir artifacts/runtime-validation-consolidator \
+            --publish-executive-brief .tmp/runtime-executive-brief.json
+      - name: Build canonical consumer readiness
+        run: |
+          mkdir -p .tmp/state artifacts/reqsys-single-state-consumer-readiness
+          cp docs/ops-dashboard/data/runtime-executive-index.json .tmp/state/runtime.json 2>/dev/null || echo '{}' > .tmp/state/runtime.json
+          cp docs/ops-dashboard/data/merge-intelligence-index.json .tmp/state/quality.json
+          echo '{}' > .tmp/state/parallelism.json
+          python scripts/build_unified_executive_integration_index.py --parallelism .tmp/state/parallelism.json --runtime .tmp/state/runtime.json --quality .tmp/state/quality.json --output .tmp/state/unified.json
+          python scripts/publish_reqsys_single_state.py --source .tmp/state/unified.json --output .tmp/state/single-state.json
+          python scripts/validate_reqsys_single_state_consumers.py --state .tmp/state/single-state.json --report artifacts/reqsys-single-state-consumer-readiness/report.json
+      - name: Download latest CI lead-time evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .tmp/ci artifacts/ci-lead-time-analytics
+          RUN_ID="$(gh run list --workflow ci-lead-time-analytics.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$RUN_ID" ]; then
+            gh run download "$RUN_ID" -D .tmp/ci || true
+            FILE="$(find .tmp/ci -name ci-lead-time-analytics.json -print -quit)"
+            [ -z "$FILE" ] || cp "$FILE" artifacts/ci-lead-time-analytics/ci-lead-time-analytics.json
+          fi
+      - name: Build instrumented executive contract
+        run: |
+          python scripts/build_instrumented_executive_readiness.py \
+            --readiness artifacts/reqsys-single-state-consumer-readiness/report.json \
+            --runtime artifacts/runtime-validation-consolidator/runtime-validation-snapshot.json \
+            --merge docs/ops-dashboard/data/merge-intelligence-index.json \
+            --ci artifacts/ci-lead-time-analytics/ci-lead-time-analytics.json \
+            --output artifacts/instrumented-executive-readiness/report.json
+      - name: Publish summary
+        run: |
+          python - <<'PY'
+          import json, os
+          data = json.load(open('artifacts/instrumented-executive-readiness/report.json', encoding='utf-8'))
+          i = data['indicators']
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('# Instrumented Executive Readiness\n\n')
+              out.write(f"- Status: **{data['status']}**\n")
+              out.write(f"- Operational readiness: **{data['operational_readiness_percent']}%**\n")
+              out.write(f"- Metric coverage: **{data['metric_coverage_percent']}%**\n")
+              out.write(f"- CI stability: **{i['ci_stability_percent']}**\n")
+              out.write(f"- Parallel throughput: **{i['throughput_parallel_percent']}% ({i['throughput_parallel_class']})**\n")
+              out.write('- Mode: **report-only**\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-executive-readiness
+          path: artifacts/instrumented-executive-readiness/report.json
+          retention-days: 90

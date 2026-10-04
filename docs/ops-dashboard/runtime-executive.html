@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys Runtime Executive</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --blue: #38bdf8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #111827, #1e293b);
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin-top: 0; }
+    main { padding: 24px; max-width: 1180px; margin: 0 auto; }
+    a { color: var(--blue); text-decoration: none; }
+    .subtitle, .small { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .card {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.25);
+    }
+    .kpi-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .kpi-value { font-size: 30px; font-weight: 700; margin-top: 8px; word-break: break-word; }
+    .status { display: inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+    .passed, .healthy, .low, .safe, .merge_paralelo_seguro, .true { background: rgba(34,197,94,.16); color: var(--green); border: 1px solid rgba(34,197,94,.45); }
+    .warning, .yellow, .medium, .unknown, .aguardar_estabilizacao, .false { background: rgba(245,158,11,.16); color: var(--yellow); border: 1px solid rgba(245,158,11,.45); }
+    .critical, .failed, .high, .blocked { background: rgba(239,68,68,.16); color: var(--red); border: 1px solid rgba(239,68,68,.45); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 12px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #020617; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+    .links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+    .link-btn { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #0b1220; }
+    section { margin-top: 20px; }
+    @media (max-width: 760px) { main, header { padding: 16px; } .grid { grid-template-columns: 1fr; } table { font-size: 13px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys Runtime Executive</h1>
+    <p class="subtitle">Visão executiva pública de produção, gerada por contrato estático e sem chamadas GitHub/API em runtime. Guardrail: <code>no_runtime_github_api_call</code>.</p>
+    <div class="links">
+      <a class="link-btn" href="./index.html">Ops Dashboard</a>
+      <a class="link-btn" href="./data/runtime-executive-index.json">Contrato JSON</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="grid" aria-label="Indicadores executivos">
+      <div class="card"><div class="kpi-label">Status</div><div id="summary-status" class="kpi-value">Carregando</div></div>
+      <div class="card"><div class="kpi-label">Score executivo</div><div id="summary-score" class="kpi-value">-</div></div>
+      <div class="card"><div class="kpi-label">Risco</div><div id="summary-risk" class="kpi-value">-</div></div>
+      <div class="card"><div class="kpi-label">Confiança</div><div id="summary-confidence" class="kpi-value">-</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Produção e governança</h2>
+      <p class="small">Sinais derivados de health, readiness, merge intelligence, evidence gate, finalization e runtime validation.</p>
+      <table>
+        <thead><tr><th>Domínio</th><th>Status/Risco</th><th>Valor principal</th><th>Evidência</th></tr></thead>
+        <tbody id="runtime-executive-cards"><tr><td colspan="4">Carregando...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Links de evidência</h2>
+      <div class="links" id="runtime-executive-links"></div>
+    </section>
+
+    <section class="card">
+      <h2>Contrato bruto</h2>
+      <pre id="runtime-executive-details">{}</pre>
+    </section>
+  </main>
+
+  <script>
+    const CONTRACT_URL = './data/runtime-executive-index.json';
+
+    function normalize(value, fallback = '-') {
+      if (value === null || value === undefined || value === '') return fallback;
+      return String(value);
+    }
+
+    function badge(value) {
+      const normalized = normalize(value, 'unknown').toLowerCase().replaceAll(' ', '_');
+      return `<span class="status ${normalized}">${normalize(value, 'unknown')}</span>`;
+    }
+
+    function setText(id, value) {
+      const node = document.getElementById(id);
+      if (node) node.textContent = normalize(value);
+    }
+
+    function mainValue(card) {
+      if (!card || typeof card !== 'object') return '-';
+      return normalize(
+        card.score ??
+        card.readiness_percent ??
+        card.mergeability_score ??
+        card.validation_score ??
+        card.final_score ??
+        card.passed_count ??
+        card.available
+      );
+    }
+
+    function evidenceValue(card) {
+      if (!card || typeof card !== 'object') return '-';
+      return normalize(
+        card.source_artifact ??
+        card.source_artifacts ??
+        card.base_url ??
+        card.recommendation ??
+        card.source_missing
+      );
+    }
+
+    function renderCards(cards) {
+      const rows = Object.entries(cards || {}).map(([name, card]) => {
+        const riskOrStatus = card.risk || card.risk_level || card.status || 'unknown';
+        const evidence = evidenceValue(card);
+        const evidenceText = typeof evidence === 'object' ? JSON.stringify(evidence) : evidence;
+        return `<tr><td>${name}</td><td>${badge(riskOrStatus)}</td><td>${mainValue(card)}</td><td>${evidenceText}</td></tr>`;
+      });
+      document.getElementById('runtime-executive-cards').innerHTML = rows.length
+        ? rows.join('')
+        : '<tr><td colspan="4">Nenhum card disponível.</td></tr>';
+    }
+
+    function renderLinks(links) {
+      const allowedLinks = Object.entries(links || {}).filter(([, href]) => href);
+      document.getElementById('runtime-executive-links').innerHTML = allowedLinks.length
+        ? allowedLinks.map(([name, href]) => `<a class="link-btn" href="${href}">${name}</a>`).join('')
+        : '<span class="small">Nenhum link de evidência disponível.</span>';
+    }
+
+    async function loadRuntimeExecutive() {
+      try {
+        const response = await fetch(CONTRACT_URL, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const summary = payload.summary || {};
+        setText('summary-status', summary.status);
+        setText('summary-score', summary.executive_score);
+        setText('summary-risk', summary.risk);
+        setText('summary-confidence', summary.confidence);
+        renderCards(payload.cards || {});
+        renderLinks(payload.links || {});
+        document.getElementById('runtime-executive-details').textContent = JSON.stringify(payload, null, 2);
+      } catch (error) {
+        setText('summary-status', 'unavailable');
+        document.getElementById('runtime-executive-cards').innerHTML =
+          `<tr><td colspan="4">Falha ao carregar contrato executivo: ${error.message}</td></tr>`;
+        document.getElementById('runtime-executive-details').textContent = JSON.stringify({
+          error: error.message,
+          contract: CONTRACT_URL
+        }, null, 2);
+      }
+    }
+
+    loadRuntimeExecutive();
+  </script>
+</body>
+</html>

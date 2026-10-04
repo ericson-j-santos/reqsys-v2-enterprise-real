@@ -1,11 +1,11 @@
 <template>
-  <div class="hub-page">
+  <div class="hub-page" data-testid="route-hub-lowcode">
     <!-- Header -->
     <div class="page-header">
       <div>
-        <div class="text-h5 font-weight-bold mb-1">Hub Low-Code & IA</div>
+        <div class="text-h5 font-weight-bold mb-1">Central de automações & IA</div>
         <div class="text-body-2 text-medium-emphasis">
-          Pacotes de contexto IA, flows Power Automate, bot ReqSysAgent e pipelines GitHub ALM.
+          Pacotes de contexto IA, flows Power Automate, bot ReqSysAgent e pipelines ciclo de entrega no GitHub.
         </div>
         <div v-if="ambienteAtual.url_acesso" class="text-caption text-medium-emphasis mt-1">
           Ambiente: <strong>{{ ambienteAtual.ambiente }}</strong> Â· Acesso:
@@ -42,7 +42,7 @@
           Envio ao Planner ativo via {{ webhook.origem }}: <code>{{ webhook.url_mascarada }}</code>
         </v-alert>
         <v-alert v-else type="info" variant="tonal" density="compact" class="mb-4">
-          Escolha o ambiente Power Platform, descubra o flow de Planner e salve a URL do trigger HTTP nesta tela.
+          Escolha o ambiente Power Platform, descubra o flow de Planner e salve a endereço do trigger HTTP nesta tela.
         </v-alert>
 
         <v-row dense align="end">
@@ -142,7 +142,7 @@
           <v-col cols="12" md="8">
             <v-text-field
               v-model="planner.webhookUrl"
-              label="HTTP POST URL do trigger"
+              label="Endereço para envio HTTP"
               placeholder="https://prod-xx.logic.azure.com/..."
               variant="outlined"
               density="compact"
@@ -233,8 +233,10 @@
       </v-alert>
 
       <v-alert v-if="!pacotes.configurado && !pacotes.erro" type="info" variant="tonal" class="ma-4" density="compact">
-        Configure <code>SHAREPOINT_SITE_ID</code>, <code>AZURE_CLIENT_SECRET</code> e
-        execute <code>New-IACodigosSync.ps1</code> para ativar o catálogo de pacotes IA.
+        Configure <code>SHAREPOINT_SITE_ID</code> e o perfil governado
+        <code>sharepoint-package-catalog-read</code> em <code>REQSYS_IDENTITY_GOVERNANCE_FILE</code>,
+        com o segredo resolvido pelo <code>current_secret_ref</code>. Depois, execute
+        <code>New-IACodigosSync.ps1</code> para ativar o catálogo de pacotes IA.
       </v-alert>
 
       <v-table v-if="pacotes.itens.length" density="comfortable">
@@ -296,7 +298,9 @@
           <v-divider />
 
           <v-alert v-if="!flows.configurado" type="info" variant="tonal" class="ma-4" density="compact">
-            Configure <code>POWERAUTOMATE_ENV_ID</code> e <code>AZURE_CLIENT_SECRET</code>.
+            Configure <code>DATAVERSE_ENVIRONMENT_URL</code> e as credenciais dedicadas
+            <code>DATAVERSE_TENANT_ID</code>, <code>DATAVERSE_CLIENT_ID</code> e
+            <code>DATAVERSE_CLIENT_SECRET</code>.
           </v-alert>
 
           <v-list v-if="flows.flows.length" density="comfortable">
@@ -387,7 +391,7 @@
         density="compact"
         icon="mdi-pipe-disconnected"
       >
-        <strong>{{ falhasConsecutivas }} deploys consecutivos falhando.</strong>
+        <strong>{{ falhasConsecutivas }} implantações consecutivas falhando.</strong>
         Causa provável: connection reference <code>new_sharedplanner_e51d2</code> não configurada nos ambientes Test/Prod.
         Execute <code>.\scripts\07-obter-connection-ids.ps1</code> após criar uma conexão Planner em
         <a href="https://make.powerapps.com" target="_blank" class="text-error">make.powerapps.com</a>.

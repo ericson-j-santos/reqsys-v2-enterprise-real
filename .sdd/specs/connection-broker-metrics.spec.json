@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Metricas do Connection Broker",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-21",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_connection_broker_metrics_contract.py"
+    ],
+    "tests": [
+      "tests/test_connection_broker_metrics_contract.py",
+      "backend-dotnet/tests/ReqSys.Api.Tests/ConnectionBrokerMetricsTests.cs"
+    ],
+    "evidence_contract": "Os aliases /api/connectors/metrics e /v1/connectors/metrics retornam somente metricas agregadas em formato Prometheus text/plain, com labels sanitizadas e sem credenciais, payloads ou detalhes de auditoria."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/connection-broker-metrics.requirements.md",
+    "implementation": "backend-dotnet/src/ReqSys.Api/Endpoints/ReqSysEndpoints.cs",
+    "tests": [
+      "tests/test_connection_broker_metrics_contract.py",
+      "backend-dotnet/tests/ReqSys.Api.Tests/ConnectionBrokerMetricsTests.cs"
+    ],
+    "documentation": "docs/api/connection-broker-runtime-contract.md",
+    "pull_request": "#69"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "connection-broker-observability"
+  }
+}

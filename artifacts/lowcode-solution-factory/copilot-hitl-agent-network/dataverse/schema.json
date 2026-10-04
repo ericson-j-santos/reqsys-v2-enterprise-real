@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0.0",
+  "tables": [
+    {
+      "logical_name": "reqsys_workflow_instance",
+      "display_name": "Instâncias de Workflow",
+      "ownership": "UserOrTeam",
+      "auditing_enabled": true,
+      "change_tracking_enabled": true,
+      "alternate_keys": ["reqsys_correlation_id"],
+      "columns": [
+        {"name": "reqsys_correlation_id", "type": "text", "required": true, "max_length": 80},
+        {"name": "reqsys_workflow_type", "type": "choice", "required": true},
+        {"name": "reqsys_state", "type": "choice", "required": true},
+        {"name": "reqsys_state_version", "type": "whole_number", "required": true},
+        {"name": "reqsys_context_json", "type": "multiline_text", "required": true},
+        {"name": "reqsys_current_owner", "type": "lookup", "target": "systemuser"},
+        {"name": "reqsys_sla_expires_at", "type": "datetime"},
+        {"name": "reqsys_last_transition_at", "type": "datetime"},
+        {"name": "reqsys_resume_token_hash", "type": "text", "max_length": 128}
+      ]
+    },
+    {
+      "logical_name": "reqsys_workflow_transition",
+      "display_name": "Transições de Workflow",
+      "ownership": "Organization",
+      "auditing_enabled": true,
+      "append_only": true,
+      "columns": [
+        {"name": "reqsys_workflow_instance_id", "type": "lookup", "target": "reqsys_workflow_instance", "required": true},
+        {"name": "reqsys_from_state", "type": "choice", "required": true},
+        {"name": "reqsys_to_state", "type": "choice", "required": true},
+        {"name": "reqsys_transition_version", "type": "whole_number", "required": true},
+        {"name": "reqsys_actor_type", "type": "choice", "required": true},
+        {"name": "reqsys_actor_id", "type": "text", "required": true},
+        {"name": "reqsys_reason", "type": "multiline_text"},
+        {"name": "reqsys_payload_hash", "type": "text", "required": true, "max_length": 128},
+        {"name": "reqsys_occurred_at", "type": "datetime", "required": true}
+      ]
+    },
+    {
+      "logical_name": "reqsys_approval_request",
+      "display_name": "Solicitações de Aprovação",
+      "ownership": "UserOrTeam",
+      "auditing_enabled": true,
+      "columns": [
+        {"name": "reqsys_workflow_instance_id", "type": "lookup", "target": "reqsys_workflow_instance", "required": true},
+        {"name": "reqsys_level", "type": "choice", "required": true},
+        {"name": "reqsys_status", "type": "choice", "required": true},
+        {"name": "reqsys_assigned_to", "type": "lookup", "target": "systemuser", "required": true},
+        {"name": "reqsys_due_at", "type": "datetime", "required": true},
+        {"name": "reqsys_escalation_count", "type": "whole_number", "required": true},
+        {"name": "reqsys_decision", "type": "choice"},
+        {"name": "reqsys_decision_reason", "type": "multiline_text"},
+        {"name": "reqsys_decided_at", "type": "datetime"}
+      ]
+    },
+    {
+      "logical_name": "reqsys_agent_execution",
+      "display_name": "Execuções de Agentes",
+      "ownership": "Organization",
+      "auditing_enabled": true,
+      "columns": [
+        {"name": "reqsys_workflow_instance_id", "type": "lookup", "target": "reqsys_workflow_instance", "required": true},
+        {"name": "reqsys_agent_name", "type": "text", "required": true},
+        {"name": "reqsys_input_hash", "type": "text", "required": true},
+        {"name": "reqsys_output_json", "type": "multiline_text"},
+        {"name": "reqsys_status", "type": "choice", "required": true},
+        {"name": "reqsys_started_at", "type": "datetime", "required": true},
+        {"name": "reqsys_finished_at", "type": "datetime"},
+        {"name": "reqsys_error_code", "type": "text"}
+      ]
+    },
+    {
+      "logical_name": "reqsys_integration_outbox",
+      "display_name": "Outbox de Integrações",
+      "ownership": "Organization",
+      "auditing_enabled": true,
+      "columns": [
+        {"name": "reqsys_workflow_instance_id", "type": "lookup", "target": "reqsys_workflow_instance", "required": true},
+        {"name": "reqsys_destination", "type": "choice", "required": true},
+        {"name": "reqsys_operation", "type": "text", "required": true},
+        {"name": "reqsys_idempotency_key", "type": "text", "required": true},
+        {"name": "reqsys_payload_json", "type": "multiline_text", "required": true},
+        {"name": "reqsys_status", "type": "choice", "required": true},
+        {"name": "reqsys_attempts", "type": "whole_number", "required": true},
+        {"name": "reqsys_next_attempt_at", "type": "datetime"},
+        {"name": "reqsys_external_reference", "type": "text"}
+      ]
+    }
+  ],
+  "choices": {
+    "workflow_state": ["received", "analyzing", "awaiting_analyst", "awaiting_po", "awaiting_manager", "approved", "rejected", "expired", "executing", "completed", "failed"],
+    "approval_level": ["analyst", "product_owner", "manager"],
+    "approval_status": ["pending", "approved", "rejected", "expired", "reassigned", "cancelled"],
+    "actor_type": ["human", "agent", "workflow", "integration"],
+    "destination": ["github", "azure_devops", "redmine", "teams", "email"]
+  },
+  "relationships": [
+    {"from": "reqsys_workflow_transition", "to": "reqsys_workflow_instance", "type": "many_to_one"},
+    {"from": "reqsys_approval_request", "to": "reqsys_workflow_instance", "type": "many_to_one"},
+    {"from": "reqsys_agent_execution", "to": "reqsys_workflow_instance", "type": "many_to_one"},
+    {"from": "reqsys_integration_outbox", "to": "reqsys_workflow_instance", "type": "many_to_one"}
+  ]
+}

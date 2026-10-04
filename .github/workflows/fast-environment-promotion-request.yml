@@ -1,0 +1,106 @@
+name: Fast Environment Promotion Request
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options: [dev, stg, prod]
+      deploy:
+        description: "Executar deploy antes da homologação"
+        required: true
+        type: boolean
+        default: true
+      confirm_prod:
+        description: "Confirmo a solicitação de deploy em PROD"
+        required: true
+        type: boolean
+        default: false
+      expected_sha:
+        description: "SHA esperado; vazio usa a main atual"
+        required: false
+        type: string
+        default: ""
+      issue_number:
+        description: "Issue de auditoria"
+        required: true
+        type: string
+        default: "729"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: fast-environment-promotion-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validar política de aprovação
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          DEPLOY: ${{ inputs.deploy }}
+          CONFIRM_PROD: ${{ inputs.confirm_prod }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET_ENV" = "prod" ] && [ "$DEPLOY" = "true" ] && [ "$CONFIRM_PROD" != "true" ]; then
+            echo "::error::Deploy em PROD exige confirm_prod=true."
+            exit 1
+          fi
+
+      - name: Resolver SHA
+        id: sha
+        env:
+          INPUT_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_SHA" ]; then
+            value="$INPUT_SHA"
+          else
+            value="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Disparar homologação governada
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_ENV: ${{ inputs.environment }}
+          DEPLOY: ${{ inputs.deploy }}
+          EXPECTED_SHA: ${{ steps.sha.outputs.value }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          approve_prod=""
+          if [ "$TARGET_ENV" = "prod" ] && [ "$DEPLOY" = "true" ]; then
+            approve_prod="APROVO-PROD"
+          fi
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/fly-environment-homologation-gate.yml/dispatches" \
+            -f ref=main \
+            -F "inputs[environment]=$TARGET_ENV" \
+            -F "inputs[deploy]=$DEPLOY" \
+            -F "inputs[issue_number]=$ISSUE_NUMBER" \
+            -F "inputs[expected_sha]=$EXPECTED_SHA" \
+            -F "inputs[strict_publication_sync]=true" \
+            -F "inputs[run_dry_run]=true" \
+            -F "inputs[comment_issue]=true" \
+            -F "inputs[approve_prod_deploy]=$approve_prod" \
+            -F "inputs[smoke_timeout_seconds]=20"
+
+      - name: Resumo
+        run: |
+          {
+            echo "# Solicitação de promoção"
+            echo "- Ambiente: **${{ inputs.environment }}**"
+            echo "- Deploy: **${{ inputs.deploy }}**"
+            echo "- SHA: \`${{ steps.sha.outputs.value }}\`"
+            echo "- Aprovação textual: **automatizada pelo wrapper**"
+            echo "- Aprovação do GitHub Environment: **preservada**"
+          } >> "$GITHUB_STEP_SUMMARY"

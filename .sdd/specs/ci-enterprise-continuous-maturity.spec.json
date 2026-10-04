@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "CI Enterprise Continuous Maturity",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-21",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_ci_enterprise_continuous_maturity_contract.py"
+    ],
+    "tests": [
+      "tests/test_ci_enterprise_continuous_maturity_contract.py"
+    ],
+    "evidence_contract": "O fast path, a regressao enterprise, a observabilidade e os guardrails usam as superficies canonicas atuais da main; CI Enterprise Fast permanece obrigatorio no SHA atual e o workflow historico ci-enterprise-observability nao e reintroduzido."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/ci-enterprise-continuous-maturity.requirements.md",
+    "fast_workflow": ".github/workflows/ci-enterprise-fast.yml",
+    "regression_workflow": ".github/workflows/ci-enterprise-regression.yml",
+    "observability_workflow": ".github/workflows/ci-observability.yml",
+    "guardrails": "scripts/ci_enterprise_guardrails.py",
+    "merge_policy": "governance/merge/current-sha-required-workflows.json",
+    "test": "tests/test_ci_enterprise_continuous_maturity_contract.py",
+    "pull_request": "#70"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "ci-governance-documentation-contract"
+  }
+}

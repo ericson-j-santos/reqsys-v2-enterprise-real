@@ -2,13 +2,31 @@ import hashlib
 import hmac
 import json
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.envelope import ok
 from app.db import get_db
 from app.services import figma_client, figma_github_sync, git_parser, webhook_processor
+from app.services.agile_git_sync import sincronizar_work_items_git
+from app.services.async_workflow_jobs import (
+    AsyncWorkflowJobRequest,
+    build_correlation_id,
+    enqueue_async_workflow_job,
+    process_async_workflow_job,
+)
+from app.services.async_workflow_jobs import (
+    store as async_workflow_store,
+)
 
 router = APIRouter(prefix='/v1/webhooks', tags=['Webhooks Git'])
 
@@ -58,13 +76,16 @@ async def webhook_github(
 
     event = (x_github_event or '').lower()
     vinculos: list[dict] = []
+    eventos_agile: list[dict] = []
 
     if event == 'push':
         vinculos = git_parser.processar_push_github(payload)
+        eventos_agile = git_parser.processar_push_github_agile(payload)
     elif event == 'pull_request':
         action = payload.get('action', '')
         if action in ('opened', 'reopened', 'closed', 'edited', 'synchronize'):
             vinculos = git_parser.processar_pr_github(payload)
+            eventos_agile = git_parser.processar_pr_github_agile(payload)
     elif event in ('issues', 'issue_comment'):
         sync_result = figma_github_sync.handle_github_issue_event(db, payload)
         return ok({'evento': event, 'processado': True, 'figma_github': sync_result.as_dict()})
@@ -73,12 +94,19 @@ async def webhook_github(
     else:
         return ok({'evento': event, 'processado': False, 'motivo': 'Evento não suportado.'})
 
-    if not vinculos:
+    if not vinculos and not eventos_agile:
         return ok({'evento': event, 'processado': True, 'vinculos_criados': 0,
-                   'motivo': 'Nenhum código REQ-XXXXXX encontrado nos commits/PR.'})
+                   'work_items_atualizados': 0,
+                   'motivo': 'Nenhum codigo REQ-* ou AGI-* encontrado nos commits/PR.'})
 
-    ids = webhook_processor.salvar_vinculos(db, vinculos)
-    return ok({'evento': event, 'processado': True, 'vinculos_criados': len(ids)})
+    ids = webhook_processor.salvar_vinculos(db, vinculos) if vinculos else []
+    agile_ids = sincronizar_work_items_git(db, eventos_agile) if eventos_agile else []
+    return ok({
+        'evento': event,
+        'processado': True,
+        'vinculos_criados': len(ids),
+        'work_items_atualizados': len(agile_ids),
+    })
 
 
 @router.post('/figma')
@@ -133,17 +161,64 @@ async def webhook_gitlab(
 
     event = (x_gitlab_event or '').lower()
     vinculos: list[dict] = []
+    eventos_agile: list[dict] = []
 
     if 'push' in event:
         vinculos = git_parser.processar_push_gitlab(payload)
+        eventos_agile = git_parser.processar_push_gitlab_agile(payload)
     elif 'merge request' in event:
         vinculos = git_parser.processar_mr_gitlab(payload)
+        eventos_agile = git_parser.processar_mr_gitlab_agile(payload)
     else:
         return ok({'evento': event, 'processado': False, 'motivo': 'Evento não suportado.'})
 
-    if not vinculos:
+    if not vinculos and not eventos_agile:
         return ok({'evento': event, 'processado': True, 'vinculos_criados': 0,
-                   'motivo': 'Nenhum código REQ-XXXXXX encontrado nos commits/MR.'})
+                   'work_items_atualizados': 0,
+                   'motivo': 'Nenhum codigo REQ-* ou AGI-* encontrado nos commits/MR.'})
 
-    ids = webhook_processor.salvar_vinculos(db, vinculos)
-    return ok({'evento': event, 'processado': True, 'vinculos_criados': len(ids)})
+    ids = webhook_processor.salvar_vinculos(db, vinculos) if vinculos else []
+    agile_ids = sincronizar_work_items_git(db, eventos_agile) if eventos_agile else []
+    return ok({
+        'evento': event,
+        'processado': True,
+        'vinculos_criados': len(ids),
+        'work_items_atualizados': len(agile_ids),
+    })
+
+
+@router.post('/async-httpx/jobs', status_code=status.HTTP_202_ACCEPTED)
+async def criar_job_httpx_assincrono(
+    payload: AsyncWorkflowJobRequest,
+    background_tasks: BackgroundTasks,
+    x_correlation_id: str | None = Header(default=None),
+):
+    correlation_id = build_correlation_id(x_correlation_id)
+    job = await enqueue_async_workflow_job(payload, correlation_id)
+    background_tasks.add_task(process_async_workflow_job, job.job_id)
+    return ok({
+        'job_id': job.job_id,
+        'status': job.status.value,
+        'correlation_id': job.correlation_id,
+        'status_url': f'/v1/webhooks/async-httpx/jobs/{job.job_id}',
+        'message': 'Processamento recebido e enfileirado.',
+    })
+
+
+@router.get('/async-httpx/jobs/{job_id}')
+async def consultar_job_httpx_assincrono(job_id: str):
+    job = await async_workflow_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail='Job assíncrono não encontrado.')
+    return ok(job.to_public_dict())
+
+
+@router.get('/async-httpx/health')
+async def async_httpx_health():
+    return ok({
+        'service': 'async-httpx-workflows',
+        'status': 'ok',
+        'queue_backend': 'in_memory',
+        'worker_mode': 'fastapi_background_task',
+        'enterprise_upgrade_path': ['redis', 'rabbitmq', 'azure_service_bus'],
+    })
