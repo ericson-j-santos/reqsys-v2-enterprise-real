@@ -1,0 +1,434 @@
+name: CI Lead Time Analytics
+
+on:
+  workflow_dispatch:
+    inputs:
+      window_minutes:
+        description: 'Duração fixa da janela de análise em minutos.'
+        required: false
+        default: '60'
+        type: string
+      min_completed_runs:
+        description: 'Mínimo de execuções concluídas para tornar a janela elegível.'
+        required: false
+        default: '30'
+        type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/ci-lead-time-analytics.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/governance-quality-gates.yml'
+      - '.github/workflows/branch-protection-audit.yml'
+      - '.github/workflows/pr-evidence-gate.yml'
+      - '.github/workflows/governed-pr-automation.yml'
+      - '.github/workflows/workflow-command-center.yml'
+      - 'scripts/build_ci_process_improvement_analytics.py'
+      - 'scripts/build_ci_fixed_window_analytics.py'
+      - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/ci_health_regression_monitor.py'
+      - 'scripts/governance_drift_monitor.py'
+      - 'scripts/compare_ci_process_baseline.py'
+      - 'scripts/annotate_ci_window_comparability.py'
+      - 'scripts/update_ci_process_history.py'
+      - 'scripts/update_ci_fixed_window_history.py'
+      - 'scripts/restore_ci_process_history.py'
+      - 'scripts/enrich_command_center_ci_history.py'
+      - 'scripts/enrich_command_center_ci_fixed_history.py'
+      - 'scripts/ci_fixed_window_sustainability.py'
+      - 'tests/scripts/test_build_ci_process_improvement_analytics.py'
+      - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
+      - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
+      - 'tests/test_ci_health_regression_watch.py'
+      - 'tests/test_governance_drift_monitor.py'
+      - 'tests/scripts/test_compare_ci_process_baseline.py'
+      - 'tests/scripts/test_annotate_ci_window_comparability.py'
+      - 'tests/scripts/test_update_ci_process_history.py'
+      - 'tests/scripts/test_update_ci_fixed_window_history.py'
+      - 'tests/scripts/test_restore_ci_process_history.py'
+      - 'tests/scripts/test_enrich_command_center_ci_history.py'
+      - 'tests/scripts/test_ci_fixed_window_sustainability.py'
+      - 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
+      - 'docs/contracts/ci-lead-time-analytics.schema.json'
+      - 'docs/runbooks/ci-lead-time-analytics.md'
+  schedule:
+    - cron: '45 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ci-lead-time-analytics.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/governance-quality-gates.yml'
+      - '.github/workflows/branch-protection-audit.yml'
+      - '.github/workflows/pr-evidence-gate.yml'
+      - '.github/workflows/governed-pr-automation.yml'
+      - '.github/workflows/workflow-command-center.yml'
+      - 'scripts/build_ci_fixed_window_analytics.py'
+      - 'scripts/enrich_ci_pr_efficiency.py'
+      - 'scripts/ci_health_regression_monitor.py'
+      - 'scripts/governance_drift_monitor.py'
+      - 'scripts/update_ci_fixed_window_history.py'
+      - 'scripts/enrich_command_center_ci_fixed_history.py'
+      - 'scripts/ci_fixed_window_sustainability.py'
+      - 'tests/scripts/test_build_ci_fixed_window_analytics.py'
+      - 'tests/scripts/test_enrich_ci_pr_efficiency.py'
+      - 'tests/test_ci_health_regression_watch.py'
+      - 'tests/test_governance_drift_monitor.py'
+      - 'tests/scripts/test_update_ci_fixed_window_history.py'
+      - 'tests/scripts/test_ci_fixed_window_sustainability.py'
+      - 'docs/runbooks/ci-lead-time-analytics.md'
+
+concurrency:
+  group: ci-lead-time-analytics-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+jobs:
+  lead-time-report:
+    name: Build CI lead time analytics
+    runs-on: ubuntu-latest
+    env:
+      WINDOW_MINUTES: ${{ github.event.inputs.window_minutes || '60' }}
+      WINDOW_SETTLE_MINUTES: '5'
+      WINDOW_ANCHOR_MINUTE: '40'
+      MIN_COMPLETED_RUNS: ${{ github.event.inputs.min_completed_runs || '30' }}
+      MIN_COMPLETION_COVERAGE_PERCENT: '90'
+      MAX_FETCH_PAGES: '20'
+      PR_SAMPLE_MIN_PRS: '3'
+      PR_SAMPLE_MAX_LOOKBACK_MINUTES: '360'
+      PR_SAMPLE_MAX_AGE_DAYS: '7'
+      LEAD_TIME_ALERT_SECONDS: '3600'
+      LEAD_TIME_WARNING_SECONDS: '900'
+      BASELINE_INCIDENT_MINUTES: '143'
+      PROCESS_BASELINE_PATH: 'audit/baselines/ci-process-improvement-baseline-2026-09-02.json'
+      CI_PROCESS_HISTORY_PATH: 'audit/history/ci-process-improvement-history.jsonl'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Restore process improvement history from main artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/restore_ci_process_history.py
+
+      - name: Validate process-improvement statistics
+        run: |
+          python tests/scripts/test_build_ci_process_improvement_analytics.py
+          python tests/scripts/test_build_ci_fixed_window_analytics.py
+          python tests/scripts/test_enrich_ci_pr_efficiency.py
+          python tests/scripts/test_compare_ci_process_baseline.py
+          python tests/scripts/test_annotate_ci_window_comparability.py
+          python tests/scripts/test_update_ci_process_history.py
+          python tests/scripts/test_update_ci_fixed_window_history.py
+          python tests/scripts/test_restore_ci_process_history.py
+          python tests/scripts/test_enrich_command_center_ci_history.py
+          python tests/scripts/test_ci_fixed_window_sustainability.py
+          python tests/test_ci_health_regression_watch.py
+          python tests/test_governance_drift_monitor.py
+
+      - name: Build fixed-hour analytics artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+        run: python scripts/build_ci_fixed_window_analytics.py
+
+      - name: Compare current window with frozen historical baseline
+        run: python scripts/compare_ci_process_baseline.py
+
+      - name: Annotate historical baseline comparability
+        run: python scripts/annotate_ci_window_comparability.py
+
+      - name: Enrich artifact with PR efficiency metrics
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python scripts/enrich_ci_pr_efficiency.py
+
+      - name: Update fixed-window process improvement history
+        run: python scripts/update_ci_fixed_window_history.py
+
+      - name: Analyze rolling 14-day CI health
+        id: ci_health
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          LOOKBACK_DAYS: '14'
+        run: python scripts/ci_health_regression_monitor.py
+
+      - name: Upload CI lead time analytics evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-lead-time-analytics-${{ github.run_id }}
+          path: audit/
+          if-no-files-found: error
+          retention-days: 30
+
+
+  ci-health-alert:
+    name: Notify only on material CI regression
+    needs: lead-time-report
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - name: Download current CI analytics evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ci-lead-time-analytics-${{ github.run_id }}
+          path: audit
+
+      - name: Synchronize material regression episode
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          REPORT_JSON: audit/ci-health-regression-watch/report.json
+          REPORT_MD: audit/ci-health-regression-watch/report.md
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT_JSON, 'utf8'));
+            const markdown = fs.readFileSync(process.env.REPORT_MD, 'utf8');
+            const marker = '<!-- reqsys-ci-health-regression-watch -->';
+
+            const openIssues = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100
+              }
+            );
+            const current = openIssues.find(
+              item => !item.pull_request && String(item.body || '').includes(marker)
+            );
+
+            if (!report.material_regression) {
+              if (current) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: current.number,
+                  state: 'closed'
+                });
+              }
+              return;
+            }
+
+            const signatureParts = Array.from(report.active_metrics || []);
+            for (const alert of report.alerts || []) {
+              if (alert.metric === 'post_merge_false_green') {
+                for (const item of alert.evidence || []) {
+                  signatureParts.push('false-green:' + String(item.merge_sha || ''));
+                }
+              }
+              if (alert.metric === 'sha_divergence') {
+                for (const item of alert.evidence || []) {
+                  signatureParts.push(
+                    'sha-divergence:' +
+                    String(item.pr_number || '') +
+                    ':' +
+                    String(item.current_head_sha || '')
+                  );
+                }
+              }
+            }
+            const signature = signatureParts.sort().join('|');
+            const body =
+              markdown +
+              '\n<!-- alert_signature:' +
+              signature +
+              ' -->\n' +
+              '- Workflow run: https://github.com/' +
+              context.repo.owner +
+              '/' +
+              context.repo.repo +
+              '/actions/runs/' +
+              context.runId +
+              '\n';
+
+            const title =
+              '[CI Health] Regressão material: ' +
+              Array.from(report.active_metrics || []).join(', ');
+
+            if (!current) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body
+              });
+              return;
+            }
+
+            const match = String(current.body || '').match(
+              /<!-- alert_signature:([^>]*) -->/
+            );
+            const previousSignature = match ? match[1] : '';
+            if (previousSignature === signature) {
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: current.number,
+              title,
+              body
+            });
+
+  governance-drift-report:
+    name: Detect material governance drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout evaluated SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate governance monitor contract
+        run: python tests/test_governance_drift_monitor.py
+
+      - name: Analyze material governance drift
+        id: governance_drift
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVALUATED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/governance_drift_monitor.py
+
+      - name: Publish governance summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f audit/governance-drift-monitor/report.md ]]; then
+            cat audit/governance-drift-monitor/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload governance drift evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: governance-drift-monitor-${{ github.run_id }}
+          path: audit/governance-drift-monitor/
+          if-no-files-found: error
+          retention-days: 30
+
+  governance-drift-alert:
+    name: Notify only on material governance drift
+    needs: governance-drift-report
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - name: Download governance drift evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: governance-drift-monitor-${{ github.run_id }}
+          path: audit/governance-drift-monitor
+
+      - name: Synchronize material governance drift episode
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          REPORT_JSON: audit/governance-drift-monitor/report.json
+          REPORT_MD: audit/governance-drift-monitor/report.md
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT_JSON, 'utf8'));
+            const markdown = fs.readFileSync(process.env.REPORT_MD, 'utf8');
+            const marker = '<!-- reqsys-governance-drift-monitor -->';
+
+            const openIssues = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100
+              }
+            );
+            const current = openIssues.find(
+              item => !item.pull_request && String(item.body || '').includes(marker)
+            );
+
+            if (!report.material_drift) {
+              if (current) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: current.number,
+                  state: 'closed',
+                  state_reason: 'completed'
+                });
+              }
+              return;
+            }
+
+            const signature = JSON.stringify(
+              (report.drifts || []).map(item => ({
+                kind: item.kind,
+                evidence: item.evidence
+              }))
+            );
+            const body =
+              markdown +
+              '\n<!-- alert_signature:' +
+              Buffer.from(signature, 'utf8').toString('base64') +
+              ' -->\n' +
+              '- Workflow run: https://github.com/' +
+              context.repo.owner +
+              '/' +
+              context.repo.repo +
+              '/actions/runs/' +
+              context.runId +
+              '\n';
+            const title =
+              '[Governance] Desvio material: ' +
+              Array.from(report.active_drifts || []).join(', ');
+
+            if (!current) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body
+              });
+              return;
+            }
+
+            const match = String(current.body || '').match(
+              /<!-- alert_signature:([^>]*) -->/
+            );
+            const previousSignature = match ? match[1] : '';
+            const nextSignature = Buffer.from(signature, 'utf8').toString('base64');
+            if (previousSignature === nextSignature) {
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: current.number,
+              title,
+              body
+            });
+

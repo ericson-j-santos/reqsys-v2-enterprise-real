@@ -1,71 +1,28 @@
-# Release — Codex Ollama Gateway Provider v0.2.0
+# Release Note — Codex Ollama Gateway Provider v0.2.0
 
-Data: 2026-06-22  
-Branch: `feature/ollama-gateway-provider`  
-Issue: #95
+## Entregas
 
-## Resumo
+- Provider `ollama_gateway` no Codex governado (`POST /v1/codex/analyze`).
+- Bootstrap v0.2.0 do gateway com `POST /v1/chat`.
+- Script `scripts/sincronizar_ollama_gateway_repo.sh`.
+- Documentação e contratos Tier 1 atualizados.
 
-Incremento para conectar o **Codex Local/Online no ReqSys** ao **ReqSys Ollama Local Gateway** sem transformar o gateway em produto concorrente.
-
-## Decisão operacional
-
-O componente mantido como principal é:
-
-```text
-Codex Local/Online no ReqSys
-```
-
-O gateway passa a ser:
-
-```text
-Provider local governado de IA
-```
-
-## Mudanças implementadas
-
-| Área | Mudança |
-|---|---|
-| Backend | Novo provider `ollama_gateway` no serviço `codex_governado` |
-| Configuração | Novas variáveis `CODEX_OLLAMA_GATEWAY_*` |
-| API | `/v1/codex/status` passa a listar `ollama_gateway` |
-| Testes | Teste unitário para contrato HTTP do gateway sem rede real |
-| Infra | Exemplo `.env` atualizado para provider canônico local |
-| Documentação | Decisão de arquitetura e matriz de equivalência |
-
-## Variáveis adicionadas
+## Configuração
 
 ```env
-CODEX_OLLAMA_GATEWAY_URL=
-CODEX_OLLAMA_GATEWAY_API_KEY=
-CODEX_OLLAMA_GATEWAY_MODEL=
-CODEX_OLLAMA_GATEWAY_TIMEOUT_SECONDS=60
+CODEX_OLLAMA_GATEWAY_URL=http://localhost:8008
+CODEX_OLLAMA_GATEWAY_API_KEY=placeholder-local-dev
+CODEX_OLLAMA_GATEWAY_MODEL=qwen2.5-coder:7b
 ```
 
-## Validação prevista no CI
+## Validação
 
 ```bash
-pytest backend/tests/test_codex_governado.py
+cd backend && pytest tests/test_codex_governado.py -v
+cd docs/ollama-local-gateway/bootstrap-files && pytest -q
+python3 tools/codex-local-online/validate.py
 ```
 
-## Riscos mitigados
+## Referência
 
-| Risco | Mitigação |
-|---|---|
-| Expor Ollama direto na rede | ReqSys consome gateway, não porta `11434` |
-| Duplicar produto | Gateway tratado só como provider |
-| Acoplamento forte | Contrato HTTP isolado |
-| Chamada real nos testes | Teste usa monkeypatch em `_post_json` |
-| Falta de rastreabilidade | Issue #95 e documentação versionada |
-
-## Próximo incremento recomendado
-
-Implementar tela operacional no ReqSys para selecionar provider:
-
-- `mock`
-- `ollama`
-- `ollama_gateway`
-- `openai`
-- `claude`
-
-com health check do gateway e status do modelo local.
+Issue #95 — Integrar provider Ollama Local Gateway ao Codex.

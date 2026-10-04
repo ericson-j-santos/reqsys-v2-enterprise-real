@@ -9,17 +9,29 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-import requests
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.codex_auditoria import CodexAuditoria
+from app.services.ai_provider_router import AIProviderRouter
+from app.services.llm_provider import (
+    LLMGateway,
+)
+from app.services.llm_provider import (
+    _post_json as _llm_post_json,
+)
+from app.services.llm_provider import (
+    extrair_resposta_gemini as _llm_extrair_resposta_gemini,
+)
+from app.services.llm_provider import (
+    extrair_resposta_textual as _llm_extrair_resposta_textual,
+)
 
 logger = logging.getLogger('reqsys.codex_governado')
 audit_logger = logging.getLogger('reqsys.audit.codex_governado')
 
-Provider = Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude']
+Provider = Literal['mock', 'ollama', 'ollama_gateway', 'openai', 'claude', 'groq', 'gemini']
 
 _PADROES_SENSIVEIS = [
     re.compile(r'(senha|password|passwd)\s*[:=]', re.I),
@@ -85,114 +97,93 @@ def montar_prompt(contexto: str, entrada: str) -> str:
     )
 
 
-def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None = None, timeout: int = 45) -> dict[str, Any]:
-    resposta = requests.post(url, json=payload, headers=headers or {}, timeout=timeout)
-    resposta.raise_for_status()
-    return resposta.json()
+def _post_json(
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str] | None = None,
+    timeout: int = 45,
+) -> dict[str, Any]:
+    return _llm_post_json(url, payload, headers, timeout)
+
+
+def _gateway() -> LLMGateway:
+    return LLMGateway(post_json=_post_json)
 
 
 def _extrair_resposta_textual(data: dict[str, Any]) -> str:
-    """Normaliza respostas de provedores internos/externos sem acoplar o ReqSys ao contrato de um gateway."""
-    candidatos = [
-        data.get('response'),
-        data.get('resposta'),
-        data.get('resultado'),
-        data.get('answer'),
-        data.get('content'),
-    ]
-    envelope = data.get('data')
-    if isinstance(envelope, dict):
-        candidatos.extend([
-            envelope.get('response'),
-            envelope.get('resposta'),
-            envelope.get('resultado'),
-            envelope.get('answer'),
-            envelope.get('content'),
-        ])
-    for candidato in candidatos:
-        if candidato:
-            return str(candidato)
-    return json.dumps(data, ensure_ascii=False)
+    return _llm_extrair_resposta_textual(data)
 
 
-def chamar_ollama(prompt: str) -> str:
-    base_url = (settings.codex_ollama_base_url or 'http://localhost:11434').rstrip('/')
-    payload = {
-        'model': settings.codex_ollama_model,
-        'prompt': prompt,
-        'stream': False,
-        'options': {'temperature': 0.1},
-    }
-    data = _post_json(f'{base_url}/api/generate', payload)
-    return str(data.get('response') or '')
+def _extrair_resposta_gemini(data: dict[str, Any]) -> str:
+    return _llm_extrair_resposta_gemini(data)
+
+
+def _router() -> AIProviderRouter:
+    return AIProviderRouter(gateway=_gateway())
+
+
+def chamar_ollama(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='ollama',
+        model=settings.codex_ollama_model,
+        prompt=prompt,
+        correlation_id=correlation_id,
+    ).text
 
 
 def chamar_ollama_gateway(prompt: str, contexto: str, entrada: str, correlation_id: str) -> str:
-    """Consome o ReqSys Ollama Local Gateway como provider HTTP governado.
-
-    Diferença para `chamar_ollama`:
-    - `ollama` chama diretamente a porta nativa do Ollama (`/api/generate`);
-    - `ollama_gateway` chama o gateway independente (`/v1/chat`), com API key, auditoria e roteamento local.
-
-    O ReqSys continua sendo o produto principal. O gateway é apenas provider/infra.
-    """
-    if not settings.codex_ollama_gateway_url:
-        raise RuntimeError('CODEX_OLLAMA_GATEWAY_URL ausente')
-
-    base_url = settings.codex_ollama_gateway_url.rstrip('/')
-    model = settings.codex_ollama_gateway_model or settings.codex_ollama_model
-    payload = {
-        'model': model,
-        'task_type': 'code',
-        'prompt': prompt,
-        'contexto': contexto,
-        'entrada': entrada,
-        'correlation_id': correlation_id,
-        'source': 'reqsys-codex-local-online',
-    }
-    headers = {'Content-Type': 'application/json'}
-    if settings.codex_ollama_gateway_api_key:
-        headers['X-API-Key'] = settings.codex_ollama_gateway_api_key
-
-    timeout = max(1, int(settings.codex_ollama_gateway_timeout_seconds))
-    data = _post_json(f'{base_url}/v1/chat', payload, headers=headers, timeout=timeout)
-    return _extrair_resposta_textual(data)
+    return _router().generate_text(
+        provider='ollama_gateway',
+        model=settings.codex_ollama_gateway_model or settings.codex_ollama_model,
+        prompt=prompt,
+        context=contexto,
+        input_text=entrada,
+        correlation_id=correlation_id,
+    ).text
 
 
-def chamar_openai(prompt: str) -> str:
-    if not settings.codex_openai_key:
-        raise RuntimeError('CODEX_OPENAI_KEY ausente')
-    payload = {
-        'model': settings.codex_openai_model,
-        'messages': [
-            {'role': 'system', 'content': _SYSTEM_PROMPT},
-            {'role': 'user', 'content': prompt},
-        ],
-        'temperature': 0.1,
-    }
-    headers = {'Authorization': f'Bearer {settings.codex_openai_key}', 'Content-Type': 'application/json'}
-    data = _post_json('https://api.openai.com/v1/chat/completions', payload, headers=headers)
-    return str(data['choices'][0]['message']['content'])
+def chamar_openai(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='openai',
+        model=settings.codex_openai_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+        correlation_id=correlation_id,
+        api_key=settings.codex_openai_key,
+    ).text
 
 
-def chamar_claude(prompt: str) -> str:
-    if not settings.codex_claude_key:
-        raise RuntimeError('CODEX_CLAUDE_KEY ausente')
-    payload = {
-        'model': settings.codex_claude_model,
-        'max_tokens': 1600,
-        'temperature': 0.1,
-        'system': _SYSTEM_PROMPT,
-        'messages': [{'role': 'user', 'content': prompt}],
-    }
-    headers = {
-        'x-api-key': settings.codex_claude_key,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-    }
-    data = _post_json('https://api.anthropic.com/v1/messages', payload, headers=headers)
-    blocos = data.get('content') or []
-    return '\n'.join(str(item.get('text') or '') for item in blocos if isinstance(item, dict))
+def chamar_claude(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='claude',
+        model=settings.codex_claude_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+        correlation_id=correlation_id,
+        api_key=settings.codex_claude_key,
+    ).text
+
+
+def chamar_groq(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='groq',
+        model=settings.groq_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+        correlation_id=correlation_id,
+        api_key=settings.groq_api_key,
+    ).text
+
+
+def chamar_gemini(prompt: str, correlation_id: str = '') -> str:
+    return _router().generate_text(
+        provider='gemini',
+        model=settings.gemini_model,
+        prompt=prompt,
+        system_prompt=_SYSTEM_PROMPT,
+        correlation_id=correlation_id,
+        api_key=settings.gemini_api_key,
+    ).text
 
 
 def resposta_mock(contexto: str, entrada: str, correlation_id: str) -> str:
@@ -210,13 +201,17 @@ def executar_provider(provider: Provider, prompt: str, contexto: str, entrada: s
     if provider == 'mock':
         return resposta_mock(contexto, entrada, correlation_id)
     if provider == 'ollama':
-        return chamar_ollama(prompt)
+        return chamar_ollama(prompt, correlation_id)
     if provider == 'ollama_gateway':
         return chamar_ollama_gateway(prompt, contexto, entrada, correlation_id)
     if provider == 'openai':
-        return chamar_openai(prompt)
+        return chamar_openai(prompt, correlation_id)
     if provider == 'claude':
-        return chamar_claude(prompt)
+        return chamar_claude(prompt, correlation_id)
+    if provider == 'groq':
+        return chamar_groq(prompt, correlation_id)
+    if provider == 'gemini':
+        return chamar_gemini(prompt, correlation_id)
     raise RuntimeError(f'Provider nao suportado: {provider}')
 
 
@@ -351,7 +346,11 @@ def analisar_governado(
         'resultado': resposta[:8000],
         'status': 'analise_governada_concluida',
     }
-    publicacao = publicar_reqsys(reqsys_payload) if publicar_no_reqsys else {'publicado': False, 'motivo': 'publicacao_nao_solicitada'}
+    publicacao = (
+        publicar_reqsys(reqsys_payload)
+        if publicar_no_reqsys
+        else {'publicado': False, 'motivo': 'publicacao_nao_solicitada'}
+    )
     reqsys_publicado = bool(publicacao.get('publicado'))
     score_confianca = calcular_score_confianca(provider, False, reqsys_publicado)
     latencia_ms = int((time.perf_counter() - inicio) * 1000)
@@ -389,7 +388,11 @@ def resumo_operacional(db: Session, limite: int = 10) -> dict[str, Any]:
     publicados = db.query(CodexAuditoria).filter(CodexAuditoria.reqsys_publicado.is_(True)).count()
     latencia_media = db.query(func.avg(CodexAuditoria.latencia_ms)).scalar() or 0
     confianca_media = db.query(func.avg(CodexAuditoria.score_confianca)).scalar() or 0
-    por_provider = dict(db.query(CodexAuditoria.provider, func.count(CodexAuditoria.id)).group_by(CodexAuditoria.provider).all())
+    por_provider = dict(
+        db.query(CodexAuditoria.provider, func.count(CodexAuditoria.id))
+        .group_by(CodexAuditoria.provider)
+        .all()
+    )
     recentes = (
         db.query(CodexAuditoria)
         .order_by(CodexAuditoria.id.desc())

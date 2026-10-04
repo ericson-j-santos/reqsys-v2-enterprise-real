@@ -46,7 +46,7 @@ def test_provider_ollama_gateway_usa_api_governada(monkeypatch):
     monkeypatch.setattr(svc.settings, 'codex_ollama_gateway_timeout_seconds', 30)
     monkeypatch.setattr(svc, '_post_json', fake_post_json)
 
-    resultado = svc.analisar_governado(
+    resultado = analisar_governado(
         provider='ollama_gateway',
         contexto='validar provider local governado',
         entrada='analisar codigo sem dado sensivel',

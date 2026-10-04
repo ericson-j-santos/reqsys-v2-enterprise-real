@@ -1,0 +1,69 @@
+# Central IA/Teams DEV via locator PC24x7 assinado — Requisitos
+
+## Contexto evidenciado
+
+O run `35649334799` do workflow `PC24x7 Teams Service Token Bootstrap`, no SHA `3c744ba2bc55548baf7f66465a9fa5909191c433`, autenticou com sucesso no Azure por OIDC e acessou o Key Vault, porém falhou fechado ao emitir o token S2S com `service_token_mint_failed:http_401`.
+
+A causa de arquitetura é que o bootstrap e o E2E ainda fixavam `https://reqsys-api-dev.fly.dev`, apesar de o runtime DEV canônico já ser PC24x7 e o contrato do projeto exigir que consumidores CI resolvam o locator público Ed25519 vigente.
+
+## Requisito 1 — nenhuma dependência Fly no bootstrap/E2E Teams DEV
+
+Os workflows `pc24x7-teams-token-bootstrap.yml` e `pc24x7-teams-ephemeral-e2e.yml`, bem como seus scripts executores, não podem usar `reqsys-api-dev.fly.dev` como URL padrão ou fallback.
+
+A ausência de runtime resolvido deve falhar fechado como configuração ausente, sem tentar Fly.
+
+## Requisito 2 — resolução pelo locator PC24x7 assinado
+
+Antes de qualquer chamada ao runtime DEV, ambos os workflows devem:
+
+1. executar `node scripts/resolve_pc24x7_dev_locator.mjs --self-test`;
+2. resolver o locator vigente com `--output`;
+3. aceitar apenas a URL retornada por `steps.locator.outputs.base_url`;
+4. exportar essa URL como `REQSYS_API_BASE_URL`;
+5. preservar o locator sanitizado no artifact da execução.
+
+O resolver existente já valida Ed25519, ambiente `dev`, TTL máximo, `issued_at`, `selected_url` e domínio HTTPS `*.trycloudflare.com`.
+
+## Requisito 2A — prefixo público do gateway PC24x7
+
+O `selected_url` do locator representa a origem pública do nginx PC24x7. Rotas FastAPI registradas como `/v1/...` devem ser chamadas externamente como `/api/v1/...`, porque o gateway nginx remove apenas o prefixo `/api/` antes de encaminhar ao backend.
+
+Os executores devem centralizar essa composição de URL, adicionar `/api` exatamente uma vez e falhar fechado para paths que não pertençam ao contrato `/v1/`. O run `35909950763`, SHA `843efd943e985b881ea97ac4ea6cf5a3129897f3`, evidenciou `service_token_mint_failed:http_404` após locator, OIDC e Key Vault terem passado. A correção do prefixo foi integrada pela PR #2038, mas o run pós-merge `35911403390`, SHA `e6b7acbf89fdc7edfa93b3087720574cd3610263`, permaneceu em HTTP 404. Portanto o prefixo era uma inconsistência real, porém não a causa única do incidente.
+
+## Requisito 3 — bootstrap e E2E same-SHA
+
+Bootstrap S2S e E2E da Central IA/Teams só podem executar contra runtime cujo `GET /api/runtime/build-info` reporte `build_sha` exatamente igual a `github.sha` do `workflow_dispatch`.
+
+O run `35911937199`, no SHA `e6b7acbf89fdc7edfa93b3087720574cd3610263`, falhou exatamente na etapa `Validar runtime PC24x7 no mesmo SHA`, antes de token/conversa. Isso comprova que o runtime físico publicado estava defasado em relação à `main`.
+
+Divergência deve falhar antes de OIDC, Key Vault, emissão/reuso de token, conversa ou qualquer outra mutação.
+
+## Requisito 4 — disparo runtime governado
+
+O E2E real deve executar somente por `workflow_dispatch` governado. O gatilho legado `workflow_run: Fly DEV Fast Deploy` deve ser removido.
+
+Em PR, apenas o contrato/testes podem rodar; nenhuma chamada real ao runtime Teams DEV deve ocorrer.
+
+## Requisito 5 — preservação de segurança
+
+- DEV apenas;
+- nenhum TEST/HML/PROD;
+- nenhum segredo em log/artifact;
+- bootstrap continua usando OIDC + Key Vault;
+- E2E continua revogando token efêmero em `finally`;
+- locator contém somente evidência pública/sanitizada;
+- falha de locator, SHA, readiness, autenticação, entrega ou revogação permanece fail-closed.
+
+## Critérios de aceite
+
+1. `reqsys-api-dev.fly.dev` não aparece nos dois workflows nem como default nos dois scripts executores.
+2. Ambos os workflows resolvem `resolve_pc24x7_dev_locator.mjs` e usam `steps.locator.outputs.base_url`.
+3. O bootstrap falha com `REQSYS_API_BASE_URL_missing` quando executado sem runtime resolvido.
+4. O E2E falha com `REQSYS_API_BASE_URL_missing` quando executado sem runtime resolvido.
+5. Bootstrap e E2E validam `/api/runtime/build-info` e bloqueiam em `pc24x7_runtime_sha_mismatch` antes de qualquer mutação.
+6. O E2E não contém mais `workflow_run: Fly DEV Fast Deploy`.
+7. Testes direcionados e operacionais ficam verdes no HEAD exato.
+8. Bootstrap e E2E compõem rotas públicas FastAPI como `/api/v1/...`, sem `/v1/...` direto na origem do Quick Tunnel e sem duplicar `/api`.
+9. Testes de regressão validam a composição do prefixo público no bootstrap e no E2E.
+10. O bootstrap registra evidência sanitizada distinta para `pc24x7_runtime_probe_failed` e `pc24x7_runtime_sha_mismatch`.
+11. Após eventual merge autorizado e publicação DEV autorizada no PC24x7, reexecutar bootstrap via gateway; somente se `READY`, executar E2E no mesmo SHA do runtime.

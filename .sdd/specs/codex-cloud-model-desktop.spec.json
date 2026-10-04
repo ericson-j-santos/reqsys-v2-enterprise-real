@@ -1,0 +1,19 @@
+{
+  "feature_name": "codex-cloud-model-desktop",
+  "project": "ReqSys v2 Enterprise — Codex Local / Ollama",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Permite alinhar de forma persistente e reversível o modelo Ollama usado pelo ReqSys no perfil do usuário Windows sem editar .env nem defaults globais.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_configure_codex_ollama_windows.py"
+    ],
+    "evidence_contract": "A configuração deve alterar apenas CODEX_OLLAMA_MODEL, CODEX_OLLAMA_GATEWAY_MODEL e CODEX_OLLAMA_BASE_URL em HKCU\\Environment, aceitar somente endpoint HTTP loopback, criar backup antes de aplicar, permitir rollback e nunca manipular credenciais."
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T18:00:00-03:00",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "branch": "main",
+  "baseline_document": "docs/governance/branch-protection-enterprise-baseline.md",
+  "audit_scope": "required_checks_and_merge_policy",
+  "evidence_state": "versioned_baseline",
+  "required_checks_recommended": [
+    "Governança Padrão Ouro",
+    "Governance Quality Gates",
+    "CI — ReqSys v2 Enterprise",
+    "CI Enterprise Fast",
+    "Branch Protection Audit",
+    "Governed Merge Queue"
+  ],
+  "merge_policy_recommended": {
+    "allow_auto_merge": true,
+    "squash_merge": true,
+    "merge_commit": false,
+    "rebase_merge": false,
+    "require_pr_before_merge": true,
+    "require_up_to_date_branch": true,
+    "require_conversation_resolution": true,
+    "dismiss_stale_approvals": true,
+    "block_force_pushes": true,
+    "block_deletions": true
+  },
+  "known_connector_limitations": [
+    "ruleset application is not exposed by the current connector",
+    "branch protection must be confirmed by GitHub Settings or a dedicated API workflow"
+  ],
+  "risk": {
+    "current_risk": "medium",
+    "target_risk": "low",
+    "reason": "baseline exists and auto-merge is enabled; ruleset enforcement still needs explicit evidence from GitHub branch protection API/settings"
+  },
+  "next_actions": [
+    "confirm required checks in GitHub branch protection/ruleset settings",
+    "publish artifact from Branch Protection Audit workflow",
+    "feed docs/ops-dashboard/data with branch protection maturity",
+    "block high-risk PRs without governed queue evidence"
+  ]
+}

@@ -1,0 +1,51 @@
+name: Workflow Flakiness Inventory
+on:
+  pull_request:
+    branches: [main]
+    paths: ["scripts/analyze_workflow_flakiness.py", "tests/test_analyze_workflow_flakiness.py", ".github/workflows/workflow-flakiness-inventory.yml"]
+  schedule:
+    - cron: "35 5 * * *"
+  workflow_dispatch:
+permissions: {contents: read, actions: read}
+concurrency:
+  group: workflow-flakiness-inventory-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'daily' }}
+  cancel-in-progress: true
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --disable-pip-version-check pytest
+      - run: python -m pytest -q tests/test_analyze_workflow_flakiness.py
+  inventory:
+    if: github.event_name != 'pull_request'
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env: {GH_TOKEN: "${{ github.token }}"}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect recent workflow runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp artifacts/workflow-flakiness
+          : > .tmp/runs.ndjson
+          for page in 1 2 3 4 5; do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100&page=${page}" > ".tmp/page-${page}.json"
+            jq -c '.workflow_runs[]' ".tmp/page-${page}.json" >> .tmp/runs.ndjson
+            [[ "$(jq '.workflow_runs | length' ".tmp/page-${page}.json")" -lt 100 ]] && break
+          done
+          jq -s '{workflow_runs: .}' .tmp/runs.ndjson > .tmp/runs.json
+      - run: python scripts/analyze_workflow_flakiness.py --runs .tmp/runs.json --output artifacts/workflow-flakiness/report.json
+      - name: Publish summary
+        run: |
+          echo "## Workflow Flakiness Inventory" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Runs analyzed: \`$(jq -r '.runs_analyzed' artifacts/workflow-flakiness/report.json)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- High risk: \`$(jq -r '.high_risk_workflows | length' artifacts/workflow-flakiness/report.json)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production touched: \`false\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with: {name: workflow-flakiness-inventory, path: artifacts/workflow-flakiness/report.json, if-no-files-found: error, retention-days: 30}

@@ -1,0 +1,831 @@
+name: ReqSys Authorized Actions Gateway
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: reqsys-authorized-actions-gateway-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Dispatch allowlisted GitHub Action
+    if: >-
+      github.event.issue.number == 1705 &&
+      github.event.comment.user.login == 'ericson-j-santos' &&
+      (
+        github.event.comment.body == '/reqsys run bootstrap-wsjf-m365-dev' ||
+        github.event.comment.body == '/reqsys run fly-dev-fast-deploy' ||
+        github.event.comment.body == '/reqsys run login-dev-gate' ||
+        github.event.comment.body == '/reqsys run deploy-pages-current-main' ||
+        github.event.comment.body == '/reqsys run validate-public-access-current-main' ||
+        github.event.comment.body == '/reqsys run runtime-e2e-dev' ||
+        github.event.comment.body == '/reqsys run rsm-service-case-e2e-current-main' ||
+        github.event.comment.body == '/reqsys run kubernetes-argocd-e2e-dev' ||
+        github.event.comment.body == '/reqsys run environment-observability-build-only-dev' ||
+        github.event.comment.body == '/reqsys run pending-agent-pr-permission-watch' ||
+        github.event.comment.body == '/reqsys run bacen-57-simulation-assessment' ||
+        github.event.comment.body == '/reqsys run cofre-runtime-evidence-dev' ||
+        github.event.comment.body == '/reqsys run desktop-rdc-recovery' ||
+        github.event.comment.body == '/reqsys run noteri-control-plane-probe' ||
+        github.event.comment.body == '/reqsys run noteri-headless-control-plane-activation' ||
+        github.event.comment.body == '/reqsys run figma-github-e2e-dev' ||
+        github.event.comment.body == '/reqsys run fabric-oidc-readonly-probe' ||
+        github.event.comment.body == '/reqsys run report-factory-fabric-dev-access-bootstrap' ||
+        github.event.comment.body == '/reqsys run report-factory-fabric-dev-e2e' ||
+        github.event.comment.body == '/reqsys run codex-ollama-e2e-dev' ||
+        github.event.comment.body == '/reqsys run change-impact-benchmark-pr2144' ||
+        github.event.comment.body == '/reqsys run github-copilot-ollama-mcp-ingress-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-smoke-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-handoff-e2e-dev' ||
+        github.event.comment.body == '/reqsys run codex-worker-pool-token-restore-dev' ||
+        github.event.comment.body == '/reqsys run noteri-desktop-network-probe' ||
+        github.event.comment.body == '/reqsys run noteri-desktop-watchdog-recovery' ||
+        github.event.comment.body == '/reqsys run noteri-desktop-admin-broker-kick' ||
+        github.event.comment.body == '/reqsys run pc24x7-runner-registry-repair' ||
+        github.event.comment.body == '/reqsys run desktop-one-time-reboot-dev' ||
+        github.event.comment.body == '/reqsys run desktop-runner-recover-via-orchestrator' ||
+        github.event.comment.body == '/reqsys run desktop-runner-bootstrap-via-orchestrator' ||
+        github.event.comment.body == '/reqsys run noteri-alm-runner-bootstrap' ||
+        github.event.comment.body == '/reqsys run desktop-runner-pickup-canary' ||
+        github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev' ||
+        github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
+        github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
+        github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
+        github.event.comment.body == '/reqsys run teams-bot-dev-identity-bootstrap' ||
+        github.event.comment.body == '/reqsys run noteri-study-mode-dev-reconcile' ||
+        github.event.comment.body == '/reqsys run pc24x7-public-dev-reconcile' ||
+        github.event.comment.body == '/reqsys run main-post-merge-current-main' ||
+        github.event.comment.body == '/reqsys run post-merge-replay-control' ||
+        github.event.comment.body == '/reqsys run post-merge-negative-missing-control' ||
+        github.event.comment.body == '/reqsys run protect-observability-platform-main' ||
+        github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main' ||
+        github.event.comment.body == '/reqsys run protect-engineering-worker-pool-main-noteri' ||
+        github.event.comment.body == '/reqsys run protect-e2e-platform-main' ||
+        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset' ||
+        github.event.comment.body == '/reqsys run microsoft-graph-planner-teams-watch' ||
+        github.event.comment.body == '/reqsys run protect-reqsys-main-ruleset-noteri'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Resolve static allowlist
+        id: route
+        shell: bash
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          mode='default'
+          case "$COMMENT_BODY" in
+            '/reqsys run bootstrap-wsjf-m365-dev')
+              target='bootstrap-wsjf-m365-dev.yml'
+              ;;
+            '/reqsys run fly-dev-fast-deploy')
+              target='fly-dev-fast-deploy.yml'
+              ;;
+            '/reqsys run login-dev-gate')
+              target='login-multi-ambiente-gate.yml'
+              mode='dev-only'
+              ;;
+            '/reqsys run deploy-pages-current-main')
+              target='deploy-reqsys-pages-composite.yml'
+              mode='current-main'
+              ;;
+            '/reqsys run validate-public-access-current-main')
+              target='validacao-acessos.yml'
+              mode='strict-current-main'
+              ;;
+            '/reqsys run runtime-e2e-dev')
+              target='runtime-e2e-continuous.yml'
+              ;;
+            '/reqsys run rsm-service-case-e2e-current-main')
+              target='rsm-service-case-e2e.yml'
+              ;;
+            '/reqsys run kubernetes-argocd-e2e-dev')
+              target='ci-e2e-governado.yml'
+              ;;
+            '/reqsys run environment-observability-build-only-dev')
+              target='environment-observability-promotion.yml'
+              mode='build-only'
+              ;;
+            '/reqsys run pending-agent-pr-permission-watch')
+              target='pending-development-agent-pr-permission-watch.yml'
+              ;;
+            '/reqsys run bacen-57-simulation-assessment')
+              target='bacen-57-simulation-assessment.yml'
+              ;;
+            '/reqsys run cofre-runtime-evidence-dev')
+              target='cofre-runtime-evidence-gate.yml'
+              ;;
+            '/reqsys run desktop-rdc-recovery')
+              target='desktop-rdc-recovery.yml'
+              ;;
+            '/reqsys run noteri-control-plane-probe')
+              target='noteri-control-plane-probe.yml'
+              ;;
+            '/reqsys run noteri-headless-control-plane-activation')
+              target='noteri-headless-control-plane-activation.yml'
+              ;;
+            '/reqsys run figma-github-e2e-dev')
+              target='figma-github-e2e-dev.yml'
+              ;;
+            '/reqsys run fabric-oidc-readonly-probe')
+              target='fabric-oidc-readonly-probe.yml'
+              ;;
+            '/reqsys run report-factory-fabric-dev-access-bootstrap')
+              target='report-factory-fabric-dev-access-bootstrap.yml'
+              ;;
+            '/reqsys run report-factory-fabric-dev-e2e')
+              target='report-factory-fabric-dev-preflight.yml'
+              ;;
+            '/reqsys run codex-ollama-e2e-dev')
+              target='codex-ollama-e2e-dev.yml'
+              mode='codex-e2e'
+              ;;
+            '/reqsys run change-impact-benchmark-pr2144')
+              target='codex-ollama-e2e-dev.yml'
+              mode='change-impact-pr2144'
+              ;;
+            '/reqsys run github-copilot-ollama-mcp-ingress-dev')
+              target='codex-ollama-e2e-dev.yml'
+              mode='mcp-ingress'
+              ;;
+            '/reqsys run codex-worker-pool-smoke-dev')
+              target='codex-worker-pool-smoke-dev.yml'
+              mode='smoke'
+              ;;
+            '/reqsys run codex-worker-pool-handoff-e2e-dev')
+              target='codex-worker-pool-handoff.yml'
+              mode='work-e2e'
+              ;;
+            '/reqsys run codex-worker-pool-token-restore-dev')
+              target='codex-worker-pool-smoke-dev.yml'
+              mode='restore'
+              ;;
+            '/reqsys run noteri-desktop-network-probe')
+              target='noteri-desktop-network-probe.yml'
+              ;;
+            '/reqsys run noteri-desktop-watchdog-recovery')
+              target='noteri-desktop-watchdog-recovery.yml'
+              ;;
+            '/reqsys run noteri-desktop-admin-broker-kick')
+              target='noteri-desktop-admin-broker-kick.yml'
+              ;;
+            '/reqsys run pc24x7-runner-registry-repair')
+              target='pc24x7-runner-registry-repair.yml'
+              ;;
+            '/reqsys run desktop-one-time-reboot-dev')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='reboot-once'
+              ;;
+            '/reqsys run desktop-runner-recover-via-orchestrator')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-recover'
+              ;;
+            '/reqsys run desktop-runner-bootstrap-via-orchestrator')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-bootstrap'
+              ;;
+            '/reqsys run noteri-alm-runner-bootstrap')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='alm-runner-bootstrap'
+              ;;
+            '/reqsys run desktop-runner-pickup-canary')
+              target='noteri-desktop-watchdog-recovery.yml'
+              mode='runner-canary'
+              ;;
+            '/reqsys run pc24x7-todo-runtime-reconcile-dev')
+              target='todo-global-hourly-cycle.yml'
+              mode='reconcile-runtime'
+              ;;
+            '/reqsys run todo-global-hourly-cycle-dev')
+              target='todo-global-hourly-cycle.yml'
+              mode='cycle'
+              ;;
+            '/reqsys run pc24x7-teams-token-bootstrap-dev')
+              target='pc24x7-teams-token-bootstrap.yml'
+              ;;
+            '/reqsys run pc24x7-teams-e2e-dev')
+              target='pc24x7-teams-ephemeral-e2e.yml'
+              ;;
+            '/reqsys run teams-bot-dev-identity-bootstrap')
+              target='teams-bot-dev-provision.yml'
+              mode='identity-bootstrap'
+              ;;
+            '/reqsys run noteri-study-mode-dev-reconcile')
+              target='noteri-study-mode-dev-reconcile.yml'
+              ;;
+            '/reqsys run pc24x7-public-dev-reconcile')
+              target='noteri-study-mode-dev-reconcile.yml'
+              mode='public-static'
+              ;;
+            '/reqsys run main-post-merge-current-main')
+              target='main-post-merge-validation.yml'
+              mode='exact-main'
+              ;;
+            '/reqsys run microsoft-graph-planner-teams-watch')
+              target='scheduled-operational-watch.yml'
+              ;;
+            '/reqsys run post-merge-replay-control')
+              target='actions-dispatcher.yml'
+              mode='post-merge-replay-control'
+              ;;
+            '/reqsys run post-merge-negative-missing-control')
+              target='actions-dispatcher.yml'
+              mode='post-merge-negative-missing-control'
+              ;;
+            '/reqsys run protect-observability-platform-main')
+              target='branch-protection-audit.yml'
+              mode='apply-observability-platform'
+              ;;
+            '/reqsys run protect-engineering-worker-pool-main')
+              target='branch-protection-audit.yml'
+              mode='apply-engineering-worker-pool'
+              ;;
+            '/reqsys run protect-engineering-worker-pool-main-noteri')
+              target='branch-protection-audit.yml'
+              mode='apply-engineering-worker-pool-noteri'
+              ;;
+            '/reqsys run protect-e2e-platform-main')
+              target='branch-protection-audit.yml'
+              mode='apply-e2e-platform'
+              ;;
+            '/reqsys run protect-reqsys-main-ruleset')
+              target='branch-protection-audit.yml'
+              mode='apply-reqsys-main'
+              ;;
+            '/reqsys run protect-reqsys-main-ruleset-noteri')
+              target='branch-protection-audit.yml'
+              mode='apply-reqsys-main-noteri'
+              ;;
+            *)
+              echo 'command_not_allowlisted' >&2
+              exit 2
+              ;;
+          esac
+          printf 'target=%s\n' "$target" >> "$GITHUB_OUTPUT"
+          printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
+
+      - name: Capture current main SHA
+        id: main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          test -n "$sha"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve exact PR #2144 workload SHA
+        id: change_impact_target
+        if: steps.route.outputs.mode == 'change-impact-pr2144'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/2144")"
+          PR_JSON="$pr_json" python - <<'PY'
+          import json, os, re
+          pr = json.loads(os.environ["PR_JSON"])
+          if pr.get("state") != "closed":
+              raise SystemExit("change_impact_pr2144_not_closed")
+          if pr.get("merged") is not True:
+              raise SystemExit("change_impact_pr2144_not_merged")
+          if (pr.get("base") or {}).get("ref") != "main":
+              raise SystemExit("change_impact_pr2144_base_mismatch")
+          head = pr.get("head") or {}
+          if ((head.get("repo") or {}).get("full_name")) != os.environ["GITHUB_REPOSITORY"]:
+              raise SystemExit("change_impact_pr2144_repo_mismatch")
+          if head.get("ref") != "copilot/change-impact-benchmark-20260928":
+              raise SystemExit("change_impact_pr2144_branch_mismatch")
+          sha = str(pr.get("merge_commit_sha") or "")
+          if not re.fullmatch(r"[0-9a-f]{40}", sha):
+              raise SystemExit("change_impact_pr2144_merge_sha_invalid")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"sha={sha}\n")
+          PY
+
+      - name: Dispatch fixed workflow on main
+        id: dispatch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          TARGET_MODE: ${{ steps.route.outputs.mode }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          CHANGE_IMPACT_TARGET_SHA: ${{ steps.change_impact_target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_WORKFLOW" in
+            bootstrap-wsjf-m365-dev.yml|fly-dev-fast-deploy.yml|login-multi-ambiente-gate.yml|deploy-reqsys-pages-composite.yml|validacao-acessos.yml|runtime-e2e-continuous.yml|rsm-service-case-e2e.yml|ci-e2e-governado.yml|environment-observability-promotion.yml|pending-development-agent-pr-permission-watch.yml|bacen-57-simulation-assessment.yml|cofre-runtime-evidence-gate.yml|desktop-rdc-recovery.yml|noteri-control-plane-probe.yml|noteri-headless-control-plane-activation.yml|figma-github-e2e-dev.yml|fabric-oidc-readonly-probe.yml|report-factory-fabric-dev-access-bootstrap.yml|report-factory-fabric-dev-preflight.yml|codex-ollama-e2e-dev.yml|codex-worker-pool-smoke-dev.yml|codex-worker-pool-handoff.yml|noteri-desktop-network-probe.yml|noteri-desktop-watchdog-recovery.yml|noteri-desktop-admin-broker-kick.yml|pc24x7-runner-registry-repair.yml|todo-global-hourly-cycle.yml|pc24x7-teams-token-bootstrap.yml|pc24x7-teams-ephemeral-e2e.yml|teams-bot-dev-provision.yml|noteri-study-mode-dev-reconcile.yml|main-post-merge-validation.yml|scheduled-operational-watch.yml|actions-dispatcher.yml|branch-protection-audit.yml) ;;
+            *) echo 'target_workflow_not_allowlisted' >&2; exit 3 ;;
+          esac
+          if [ "$TARGET_WORKFLOW" = "fly-dev-fast-deploy.yml" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f deploy=true)"
+          elif [ "$TARGET_WORKFLOW" = "login-multi-ambiente-gate.yml" ]; then
+            test "$TARGET_MODE" = "dev-only" || { echo 'login_gate_mode_not_allowlisted' >&2; exit 3; }
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f environment=dev)"
+          elif [ "$TARGET_WORKFLOW" = "deploy-reqsys-pages-composite.yml" ]; then
+            test "$TARGET_MODE" = "current-main" || { echo 'pages_deploy_mode_not_allowlisted' >&2; exit 3; }
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f expected_sha="$EXPECTED_SHA" \
+              -f authorization=DEPLOY_PAGES)"
+          elif [ "$TARGET_WORKFLOW" = "validacao-acessos.yml" ]; then
+            test "$TARGET_MODE" = "strict-current-main" || { echo 'public_access_validation_mode_not_allowlisted' >&2; exit 3; }
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f fail_on_unavailable=true)"
+          elif [ "$TARGET_WORKFLOW" = "environment-observability-promotion.yml" ]; then
+            test "$TARGET_MODE" = "build-only" || { echo 'environment_observability_mode_not_allowlisted' >&2; exit 3; }
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f promote_to=development \
+              -f build_only=true)"
+          elif [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f environment=dev \
+              -f timeout_seconds=20)"
+          elif [ "$TARGET_WORKFLOW" = "codex-ollama-e2e-dev.yml" ]; then
+            case "$TARGET_MODE" in
+              codex-e2e|mcp-ingress)
+                run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --ref main \
+                  -f mode="$TARGET_MODE")"
+                ;;
+              change-impact-pr2144)
+                case "$CHANGE_IMPACT_TARGET_SHA" in
+                  ''|*[!0-9a-f]*) echo 'change_impact_target_sha_invalid' >&2; exit 3 ;;
+                esac
+                [ "${#CHANGE_IMPACT_TARGET_SHA}" -eq 40 ] || { echo 'change_impact_target_sha_invalid_length' >&2; exit 3; }
+                run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --ref main \
+                  -f mode="$TARGET_MODE" \
+                  -f target_sha="$CHANGE_IMPACT_TARGET_SHA")"
+                ;;
+              *) echo 'codex_ollama_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+          elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-smoke-dev.yml" ] && [ "$TARGET_MODE" = "restore" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=restore)"
+          elif [ "$TARGET_WORKFLOW" = "codex-worker-pool-handoff.yml" ]; then
+            test "$TARGET_MODE" = "work-e2e" || { echo 'worker_pool_handoff_mode_not_allowlisted' >&2; exit 3; }
+            request_id="$(python -c 'import hashlib, os; raw=(os.environ["GITHUB_REPOSITORY"]+":2020:main").encode("utf-8"); print(hashlib.sha256(raw).hexdigest()[:24])')"
+            correlation_id="work-v1-e2e-${GITHUB_RUN_ID}"
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f issue_number=2020 \
+              -f request_id="$request_id" \
+              -f base_branch=main \
+              -f base_sha="$EXPECTED_SHA" \
+              -f correlation_id="$correlation_id")"
+          elif [ "$TARGET_WORKFLOW" = "noteri-study-mode-dev-reconcile.yml" ] && [ "$TARGET_MODE" = "public-static" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=public-static)"
+          elif [ "$TARGET_WORKFLOW" = "noteri-desktop-watchdog-recovery.yml" ]; then
+            case "$TARGET_MODE" in
+              default) recovery_mode='watchdog' ;;
+              runner-recover|runner-bootstrap|runner-canary|reboot-once|alm-runner-bootstrap) recovery_mode="$TARGET_MODE" ;;
+              *) echo 'desktop_runner_recovery_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$recovery_mode")"
+          elif [ "$TARGET_WORKFLOW" = "actions-dispatcher.yml" ]; then
+            case "$TARGET_MODE" in
+              post-merge-replay-control) test_case='replay' ;;
+              post-merge-negative-missing-control) test_case='missing-required-workflow' ;;
+              *) echo 'post_merge_control_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=post-merge \
+              -f merge_sha=2a7f113a1f0677a0ecd27c69c7c3f8a7a5fe5f58 \
+              -f pr_number=2157 \
+              -f head_sha=da23ddec0f0afba4fdf123c9e80ab4d831ffc133 \
+              -f test_case="$test_case")"
+          elif [ "$TARGET_WORKFLOW" = "main-post-merge-validation.yml" ]; then
+            test "$TARGET_MODE" = "exact-main" || { echo 'main_post_merge_mode_not_allowlisted' >&2; exit 3; }
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f commit_sha="$EXPECTED_SHA")"
+          elif [ "$TARGET_WORKFLOW" = "branch-protection-audit.yml" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$TARGET_MODE")"
+          elif [ "$TARGET_WORKFLOW" = "report-factory-fabric-dev-preflight.yml" ]; then
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode=publish-e2e)"
+          elif [ "$TARGET_WORKFLOW" = "todo-global-hourly-cycle.yml" ]; then
+            case "$TARGET_MODE" in
+              cycle|reconcile-runtime) ;;
+              *) echo 'todo_global_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f operation="$TARGET_MODE")"
+          elif [ "$TARGET_WORKFLOW" = "teams-bot-dev-provision.yml" ]; then
+            if [ "$TARGET_MODE" != "identity-bootstrap" ]; then
+              echo 'teams_bot_dev_mode_not_allowlisted' >&2
+              exit 3
+            fi
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f operation=identity-bootstrap)"
+          else
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main)"
+          fi
+
+          case "$run_url" in
+            "https://github.com/${GITHUB_REPOSITORY}/actions/runs/"*) ;;
+            *) echo 'dispatch_run_url_invalid' >&2; exit 4 ;;
+          esac
+          run_id="${run_url##*/}"
+          case "$run_id" in
+            ''|*[!0-9]*) echo 'dispatch_run_id_invalid' >&2; exit 4 ;;
+          esac
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+          printf 'run_url=%s\n' "$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Validate exact dispatched run evidence
+        id: evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.dispatch.outputs.run_url }}
+        run: |
+          set -euo pipefail
+          run_json=''
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            run_json="$(gh run view "$TARGET_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json databaseId,url,headSha,status,event 2>/dev/null || true)"
+            [ -n "$run_json" ] && break
+            sleep 5
+          done
+          test -n "$run_json"
+          RUN_JSON="$run_json" python - <<'PY'
+          import json, os
+          run = json.loads(os.environ['RUN_JSON'])
+          expected_id = int(os.environ['TARGET_RUN_ID'])
+          expected_url = os.environ['TARGET_RUN_URL']
+          expected_sha = os.environ['EXPECTED_SHA']
+          if run.get('databaseId') != expected_id:
+              raise SystemExit('dispatched_run_id_mismatch')
+          if run.get('url') != expected_url:
+              raise SystemExit('dispatched_run_url_mismatch')
+          if run.get('headSha') != expected_sha:
+              raise SystemExit('dispatched_run_sha_mismatch')
+          if run.get('event') != 'workflow_dispatch':
+              raise SystemExit('dispatched_run_event_mismatch')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f"run_id={run['databaseId']}\n")
+              fh.write(f"run_url={run['url']}\n")
+              fh.write(f"run_status={run['status']}\n")
+          PY
+
+      - name: Validate self-hosted runner pickup
+        id: pickup
+        if: steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-handoff.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || (steps.route.outputs.target == 'todo-global-hourly-cycle.yml' && steps.route.outputs.mode == 'reconcile-runtime') || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          status='pending'
+          pickup_source='none'
+          wait_seconds=0
+          pickup_timeout_seconds=60
+          poll_seconds=5
+          for attempt in $(seq 1 $((pickup_timeout_seconds / poll_seconds))); do
+            status="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
+            started_self_hosted_jobs="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?filter=latest&per_page=100" \
+                --jq '[.jobs[] | select(.started_at != null and ((.labels // []) | index("self-hosted") != null) and ((.runner_name // "") != "") and ((.conclusion // "") != "skipped"))] | length' \
+                2>/dev/null || printf '0'
+            )"
+            case "$started_self_hosted_jobs" in
+              ''|*[!0-9]*) started_self_hosted_jobs=0 ;;
+            esac
+            if [ "$started_self_hosted_jobs" -gt 0 ]; then
+              status='in_progress'
+              pickup_source='self_hosted_runner_assigned'
+              break
+            fi
+            case "$status" in
+              pending|queued|requested|waiting)
+                sleep "$poll_seconds"
+                wait_seconds=$((wait_seconds + poll_seconds))
+                ;;
+              *)
+                pickup_source='run_status'
+                break
+                ;;
+            esac
+          done
+          case "$status" in
+            pending|queued|requested|waiting)
+              pickup_source='timeout'
+              printf 'error=SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\n' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          printf 'source=%s\n' "$pickup_source" >> "$GITHUB_OUTPUT"
+          printf 'wait_seconds=%s\n' "$wait_seconds" >> "$GITHUB_OUTPUT"
+
+      - name: Cancel self-hosted run without pickup
+        id: cleanup
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-handoff.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || (steps.route.outputs.target == 'todo-global-hourly-cycle.yml' && steps.route.outputs.mode == 'reconcile-runtime') || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          cleanup_status='cancel_failed'
+          cleanup_error=''
+          if gh run cancel "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY"; then
+            cleanup_status='cancel_requested'
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              state="$(gh run view "$TARGET_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | @tsv' 2>/dev/null || true)"
+              if [ -n "$state" ]; then
+                IFS=$'\t' read -r status conclusion <<< "$state"
+                if [ "$status" = 'completed' ] && [ "$conclusion" = 'cancelled' ]; then
+                  cleanup_status='cancelled'
+                  break
+                fi
+              fi
+              sleep 5
+            done
+            if [ "$cleanup_status" != 'cancelled' ]; then
+              cleanup_error='RUN_CANCEL_NOT_CONFIRMED'
+            fi
+          else
+            cleanup_error='RUN_CANCEL_REQUEST_FAILED'
+          fi
+          printf 'status=%s\n' "$cleanup_status" >> "$GITHUB_OUTPUT"
+          printf 'error=%s\n' "$cleanup_error" >> "$GITHUB_OUTPUT"
+
+      - name: Write sanitized dispatch evidence
+        shell: bash
+        env:
+          COMMAND: ${{ github.event.comment.body }}
+          TARGET_WORKFLOW: ${{ steps.route.outputs.target }}
+          TARGET_MODE: ${{ steps.route.outputs.mode }}
+          EXPECTED_SHA: ${{ steps.main.outputs.sha }}
+          CHANGE_IMPACT_TARGET_SHA: ${{ steps.change_impact_target.outputs.sha }}
+          TARGET_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          TARGET_RUN_URL: ${{ steps.evidence.outputs.run_url }}
+          TARGET_RUN_STATUS: ${{ steps.evidence.outputs.run_status }}
+          RUNNER_PICKUP_STATUS: ${{ steps.pickup.outputs.status }}
+          RUNNER_PICKUP_SOURCE: ${{ steps.pickup.outputs.source }}
+          RUNNER_PICKUP_ERROR: ${{ steps.pickup.outputs.error }}
+          RUNNER_PICKUP_WAIT_SECONDS: ${{ steps.pickup.outputs.wait_seconds }}
+          TARGET_CLEANUP_STATUS: ${{ steps.cleanup.outputs.status }}
+          TARGET_CLEANUP_ERROR: ${{ steps.cleanup.outputs.error }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          evidence = {
+              'status': 'dispatched',
+              'authorization': 'exact_issue_actor_command_allowlist',
+              'issue_number': 1705,
+              'actor': os.environ['GITHUB_ACTOR'],
+              'command': os.environ['COMMAND'],
+              'target_workflow': os.environ['TARGET_WORKFLOW'],
+              'target_mode': os.environ.get('TARGET_MODE') or 'default',
+              'target_ref': 'main',
+              'target_sha': os.environ['EXPECTED_SHA'],
+              'workload_sha': os.environ.get('CHANGE_IMPACT_TARGET_SHA') or None,
+              'target_run_id': int(os.environ['TARGET_RUN_ID']),
+              'target_run_url': os.environ['TARGET_RUN_URL'],
+              'target_run_status': os.environ['TARGET_RUN_STATUS'],
+              'runner_pickup_status': os.environ.get('RUNNER_PICKUP_STATUS') or None,
+              'runner_pickup_source': os.environ.get('RUNNER_PICKUP_SOURCE') or None,
+              'runner_pickup_error': os.environ.get('RUNNER_PICKUP_ERROR') or None,
+              'runner_pickup_wait_seconds': int(os.environ.get('RUNNER_PICKUP_WAIT_SECONDS') or '0'),
+              'target_cleanup_status': os.environ.get('TARGET_CLEANUP_STATUS') or None,
+              'target_cleanup_error': os.environ.get('TARGET_CLEANUP_ERROR') or None,
+              'gateway_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'secrets_read': False,
+              'production_touched': False,
+          }
+          with open('authorized-action-dispatch.json', 'w', encoding='utf-8') as fh:
+              json.dump(evidence, fh, indent=2, sort_keys=True)
+              fh.write('\n')
+          PY
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: authorized-action-dispatch-${{ github.run_id }}
+          path: authorized-action-dispatch.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail closed when self-hosted runner pickup times out or is busy
+        if: (steps.route.outputs.target == 'desktop-rdc-recovery.yml' || steps.route.outputs.target == 'noteri-control-plane-probe.yml' || steps.route.outputs.target == 'noteri-headless-control-plane-activation.yml' || steps.route.outputs.target == 'codex-ollama-e2e-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-smoke-dev.yml' || steps.route.outputs.target == 'codex-worker-pool-handoff.yml' || steps.route.outputs.target == 'noteri-desktop-network-probe.yml' || steps.route.outputs.target == 'noteri-desktop-watchdog-recovery.yml' || steps.route.outputs.target == 'noteri-desktop-admin-broker-kick.yml' || steps.route.outputs.target == 'report-factory-fabric-dev-access-bootstrap.yml' || (steps.route.outputs.target == 'todo-global-hourly-cycle.yml' && steps.route.outputs.mode == 'reconcile-runtime') || steps.route.outputs.target == 'teams-bot-dev-provision.yml' || steps.route.outputs.target == 'noteri-study-mode-dev-reconcile.yml') && steps.pickup.outputs.error == 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY'
+        shell: bash
+        run: |
+          echo 'SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY' >&2
+          exit 4
+
+  publish-todo-event:
+    name: Publish governed ChatGPT TodoEvent
+    permissions:
+      contents: read
+      id-token: write
+    if: >-
+      github.event.issue.number == 1705 &&
+      github.event.comment.user.login == 'ericson-j-santos' &&
+      startsWith(github.event.comment.body, '/reqsys todo-event-v1 ')
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 10
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+
+    steps:
+      - name: Checkout immutable event SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Node 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
+
+      - name: Validar contrato local antes de autenticar
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest==9.0.3 PyYAML==6.0.3
+          python -m py_compile scripts/todo_global_chat_event_gateway.py scripts/todo_global_hourly_cycle.py
+          python -m pytest -q tests/test_todo_global_chat_event_gateway.py tests/test_todo_global_hourly_cycle.py
+
+      - name: Validar configuração OIDC governada
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in REQSYS_KEY_VAULT_NAME CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
+            test -n "${!name:-}" || {
+              echo "::error::${name} missing"
+              exit 2
+            }
+          done
+
+      - name: Login Azure OIDC governado
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolver locator DEV assinado
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/todo-global-chat-event
+          node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/todo-global-chat-event/locator.json
+
+      - name: Ler token de produtor sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-pc24x7-todo-runtime-producer-token --query value --output tsv --only-show-errors)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          printf 'TODO_GLOBAL_RUNTIME_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
+      - name: Validar runtime público no mesmo SHA
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.locator.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"].lower()
+
+          def observed(path):
+              request = Request(
+                  base + path,
+                  headers={"Accept": "application/json", "User-Agent": "TODOGlobalChatGateway/1.0"},
+              )
+              with urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read(262144).decode("utf-8"))
+              data = payload.get("data", payload)
+              return str(data.get("build_sha") or "").lower()
+
+          reqsys_sha = observed("/api/runtime/build-info")
+          todo_sha = observed("/runtime-core/api/runtime/build-info")
+          if reqsys_sha != expected:
+              raise SystemExit("reqsys_public_api_sha_mismatch")
+          if todo_sha != expected:
+              raise SystemExit("todo_runtime_public_sha_mismatch")
+          PY
+
+      - name: Publicar TodoEvent e comprovar readback + replay
+        shell: bash
+        env:
+          RUNTIME_BASE: ${{ steps.locator.outputs.base_url }}/runtime-core
+        run: |
+          set -euo pipefail
+          python scripts/todo_global_chat_event_gateway.py \
+            --github-event-path "$GITHUB_EVENT_PATH" \
+            --runtime-url "$RUNTIME_BASE" \
+            --timeout-seconds 180 \
+            --poll-seconds 5 \
+            --output artifacts/todo-global-chat-event/evidence.json
+
+      - name: Publicar resumo sanitizado
+        if: always()
+        shell: bash
+        run: |
+          {
+            printf '%s\n' "## TODO Global Chat Event Gateway"
+            printf '%s\n' "- SHA: \`$GITHUB_SHA\`"
+            printf '%s\n' "- Issue autorizadora: \`#1705\`"
+            if [[ -f artifacts/todo-global-chat-event/evidence.json ]]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/todo-global-chat-event/evidence.json").read_text(encoding="utf-8"))
+          print(f"- Event ID: \`{data['event_id']}\`")
+          print(f"- Correlation ID: \`{data['correlation_id']}\`")
+          print(f"- Estado terminal: \`{data['terminal_status']}\`")
+          print(f"- Readback independente: \`{data['readback_verified']}\`")
+          print(f"- Replay idempotente: \`{data['replay_duplicate_event']}\`")
+          PY
+            else
+              printf '%s\n' '- Estado: `BLOQUEADO/PARCIAL`'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preservar evidência sanitizada
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: todo-global-chat-event-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/todo-global-chat-event/evidence.json
+          if-no-files-found: warn
+          retention-days: 30

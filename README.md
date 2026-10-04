@@ -42,6 +42,25 @@ cd backend
 pip install -r requirements.txt
 ```
 
+## Observabilidade runtime e correlation analytics
+
+O incremento REQSYS#326 adiciona a fundação de observabilidade runtime com `correlation_id` unificado, topology preview e artifacts lógicos `runtime-correlation-report.json` e `runtime-observability-report.json` via `/api/runtime/analytics`. O dashboard runtime (`/api/runtime/dashboard`) também passa a expor correlation analytics, incident correlation, operational trace chains e grafo de dependências de ambientes sem dependência externa obrigatória.
+
+## Runtime público e readiness operacional
+
+O incremento REQSYS#325 adiciona validação read-only dos ambientes públicos Fly.io/DuckDNS. O comando abaixo gera `public-runtime-validation.json` e `ops-readiness-report.json` sem acessar secrets e sem alterar produção:
+
+```bash
+python scripts/validate_public_runtime.py \
+  --base-url https://reqsys-api.fly.dev \
+  --environment prod \
+  --include-optional-evidence \
+  --output artifacts/runtime/public-runtime-validation.json \
+  --readiness-output artifacts/runtime/ops-readiness-report.json
+```
+
+Os artifacts consolidam status HTTP, tempo de resposta, CORS básico, API `/health`, runtime dashboard, sinais de login, Incident Timeline e classificação `unavailable`, `degraded`, `partial` ou `healthy`.
+
 ## Execução rápida
 
 ### Backend
@@ -77,9 +96,14 @@ npm run dev
 
 ### Docker
 
+`docker-compose.yml` sozinho não publica porta de nginx nem Postgres (ADR-043)
+— sempre combine com um dos overlays de ambiente abaixo:
+
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
+
+Esta stack local (`http://localhost:8083`) é independente do app `reqsys-api-dev`/`reqsys-app-dev` no Fly.io — não depende de rede pública nem de secrets do Fly, e cobre os mesmos `required_secret_names` do ambiente `dev` em `infra/fly-environments.json` (`JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, já com defaults de dev no `docker-compose.yml`). Use-a para todo o dia a dia de desenvolvimento; o Fly dev só entra em jogo se algo precisar ser validado num ambiente público de fato.
 
 ## Matriz de ambientes (URLs explícitas)
 
@@ -160,6 +184,10 @@ powershell -ExecutionPolicy Bypass -File .\agendar-subida-stack-docker.ps1 -Desa
 
 Todos os três domínios estão no `server_name` do `infra/nginx/default.prod.conf` e no `CORS_ORIGINS` do `.env`.
 
+### Padrão ouro Fly.io + DuckDNS
+
+A matriz canônica de ambientes Fly.io, aliases DuckDNS, arquivos `fly*.toml`, volumes persistentes, promoção e rollback está em [`docs/PADRAO_OURO_FLYIO_DUCKDNS.md`](docs/PADRAO_OURO_FLYIO_DUCKDNS.md). Use esse runbook como referência antes de publicar `dev`, `staging` ou `prod`.
+
 ### Domínios locais — requerem entrada no `hosts`
 
 | Domínio | Uso | Porta |
@@ -208,7 +236,18 @@ Configurado via `SSRS_BASE_URL=https://NOTERI:443/ReportServer` no `.env`.
 
 ### Execução sem Docker (modo local)
 
-**Linux / WSL:**
+#### Fluxo rápido de desenvolvimento
+
+Use este modo para iterar no dia a dia sem Docker e sem nginx. O Vite faz proxy de `/api` para o backend e o script usa uma cópia temporária do SQLite por padrão, evitando sujar `backend/reqsys.db` no git.
+
+```bash
+bash scripts/dev-local.sh
+# Acesse: http://127.0.0.1:5173
+```
+
+Se precisar usar o banco versionado diretamente, execute com `REQSYS_USE_TRACKED_DB=1`, mas restaure o arquivo antes de commitar caso ele seja alterado.
+
+**Linux / WSL (stack local completa com nginx opcional):**
 ```bash
 bash scripts/executar-local.sh
 # Acesse: http://localhost:8081
@@ -462,9 +501,55 @@ npm run test:e2e:stable
 
 ## Próximos incrementos já previstos
 
-- SQL Server real com migrations Alembic
+- Cortar hml/prod (Fly.io) de SQLite para Postgres — dev/test/prod-local (Docker) e CI já centralizados em Postgres ([ADR-043](docs/ADR/ADR-043-backup-rotacao-retencao.md)); runbook manual em [docs/runbooks/migracao-postgres-fly.md](docs/runbooks/migracao-postgres-fly.md)
+- SQL Server real em produção, alternativa ainda não provisionada (migrations Alembic já cobrem o schema atual — ver [ADR-042](docs/ADR/ADR-042-postgres-local-dev-alembic.md))
 - Refresh token
 - RBAC validado no backend por dependência FastAPI
 - Integrações reais Redmine / Planner / SharePoint
 - Exportação PDF/Excel
 - Pipeline de CI/CD (GitHub Actions)
+
+
+## Ops Dashboard Drill-down + Incident Timeline
+
+O Ops Dashboard estatico aprofunda o runtime operacional com drill-down por dominio e uma Incident Timeline local. A geracao continua read-only e sem rede externa: usa o relatorio do Repository Health Watchdog quando existir, integra `artifacts/runtime-health-center/runtime-health-report.json` e consome `artifacts/runtime-operational-evidence-graph/runtime-operational-evidence-graph.json` quando disponivel.
+
+```bash
+python scripts/generate_ops_dashboard_data.py --repo ericson-j-santos/reqsys-v2-enterprise-real --output docs/ops-dashboard/data/health.json
+```
+
+O contrato `docs/ops-dashboard/data/health.json` esta em `schema_version=1.1.0` e publica `runtime_domain_drilldowns`, `incident_timeline` e `runtime_sources` para filtros locais por severidade, dominio e status.
+
+## Runtime Health Center
+
+O ReqSys possui um agregador local de status operacional para o incremento Runtime Ops Governance P1. Ele consolida sinais locais de CI/CD, Evidence Gate, governança, runtime risk scoring, documentação viva, ambientes e remediação sem acessar rede externa, ler secrets ou alterar produção.
+
+```bash
+python scripts/runtime_health_center.py --output artifacts/runtime-health-center/runtime-health-report.json
+```
+
+O workflow `Runtime Health Center` publica o artifact `runtime-health-report` com `maturity_percent`, `operational_risk`, `confidence_level`, status por domínio, matriz de padrão ouro e próximas ações obrigatórias.
+## Runtime Health Center P2 — Environment Drift + Evidence Ingestion
+
+O Runtime Health Center passa a emitir contrato `schema_version=1.1.0` com ingestão local e read-only de artifacts operacionais já produzidos por workflows. A coleta não acessa rede externa, não lê arquivos `.env`, não materializa valores sensíveis e não executa deploy.
+
+Novos blocos do `runtime-health-report.json`:
+
+- `ingested_artifacts`: inventário dos artifacts conhecidos e disponíveis localmente, incluindo status normalizado e erro de parse quando aplicável.
+- `runtime_operational_evidence_graph`: consolidação mínima do grafo de evidências a partir dos artifacts ingeridos.
+- `runtime_risk_scoring`: visão consolidada do domínio de risco runtime combinada ao nível de drift.
+- `pr_evidence_gate`: referência ao gate existente, com `duplicated=false` para preservar a arquitetura atual.
+- `environment_drift`: detector local que compara `docker-compose.dev.yml`, `docker-compose.test.yml` e `docker-compose.prod.yml` por estrutura operacional, sem ler segredos.
+- `base_maturity_percent`: maturidade antes da penalidade de drift.
+- `maturity_percent`: maturidade final após penalidade de drift (`none`, `low`, `medium`, `high`).
+
+Classificação de drift:
+
+| Nível | Critério operacional |
+| --- | --- |
+| `none` | Nenhuma divergência relevante detectada. |
+| `low` | Divergência esperada e governada, como chaves operacionais extras de produção sem exposição de segredo. |
+| `medium` | Divergência que exige revisão, como ausência de healthcheck produtivo ou desalinhamento de serviços base. |
+| `high` | Bloqueio de segurança ou produção, como arquivo ausente, porta direta do backend em produção ou gates produtivos ausentes. |
+
+O drift reduz a maturidade final e pode elevar `operational_risk`. Drift `high` força risco `high`; drift `medium` mantém risco alto quando a maturidade final ainda não atinge patamar robusto; drift `low` impede classificação `low` quando todos os demais sinais estiverem verdes.

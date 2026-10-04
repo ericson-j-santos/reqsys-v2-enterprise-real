@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/contracts/trilha-a-runtime-publico.schema.json",
+  "title": "ReqSys Trilha A — Runtime Público Report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "trail_id", "trail_name", "mode", "status", "summary", "capabilities", "issues", "artifacts"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "trail_id": { "type": "string", "const": "trilha-a" },
+    "trail_name": { "type": "string" },
+    "mode": { "type": "string", "enum": ["report_only"] },
+    "status": { "type": "string", "enum": ["passed", "passed_with_warnings", "failed"] },
+    "summary": { "type": "object" },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "issues": { "type": "array" },
+    "artifacts": { "type": "object" }
+  }
+}

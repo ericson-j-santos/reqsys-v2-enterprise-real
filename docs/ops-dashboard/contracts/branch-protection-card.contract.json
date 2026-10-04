@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "component": "BranchProtectionMaturityCard",
+  "source": "docs/ops-dashboard/data/branch-protection-maturity.json",
+  "owner_domain": "operational_governance",
+  "required_fields": [
+    "state",
+    "maturity_percent",
+    "confidence_level",
+    "operational_risk",
+    "target_maturity_percent",
+    "evidence",
+    "missing_evidence",
+    "safe_parallel_pr_capacity"
+  ],
+  "status_mapping": {
+    "green": "maturity_percent >= 90 && missing_evidence.length == 0",
+    "yellow": "maturity_percent >= 70 && missing_evidence.length > 0",
+    "red": "maturity_percent < 70"
+  },
+  "drilldown_routes": [
+    {
+      "label": "Baseline",
+      "path_field": "evidence[branch_protection_baseline].path"
+    },
+    {
+      "label": "Audit artifact",
+      "path_field": "evidence[branch_protection_audit_artifact].path"
+    },
+    {
+      "label": "Ruleset evidence gap",
+      "path_field": "missing_evidence[github_ruleset_api_snapshot].path"
+    }
+  ],
+  "non_goals": [
+    "do not mutate branch protection settings from the UI",
+    "do not enable merge or deploy actions from this card",
+    "do not duplicate health.json as a second aggregator"
+  ],
+  "acceptance_criteria": [
+    "render maturity percent, risk, confidence and safe PR capacity",
+    "show missing ruleset evidence as warning, not as passed state",
+    "provide links or drilldown targets for evidence paths",
+    "keep health.json as the primary operational aggregator"
+  ]
+}

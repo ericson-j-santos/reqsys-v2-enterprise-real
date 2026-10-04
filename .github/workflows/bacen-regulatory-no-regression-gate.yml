@@ -1,0 +1,108 @@
+name: BACEN Regulatory No Regression Gate 1.5
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'governance/bacen/normative/**'
+      - 'scripts/bacen_derived_status.py'
+      - 'scripts/validate_bacen_regulatory_no_regression.py'
+      - 'tests/test_bacen_derived_status.py'
+      - 'tests/test_validate_bacen_regulatory_no_regression.py'
+      - '.github/workflows/bacen-regulatory-no-regression-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-regulatory-no-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-regression:
+    name: BACEN — Gate 1.5 com T congelado
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout do SHA do PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependência determinística
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+
+      - name: Compilar comparador
+        run: python -m py_compile scripts/validate_bacen_regulatory_no_regression.py
+
+      - name: Executar testes unitários
+        run: python -m unittest tests.test_validate_bacen_regulatory_no_regression -v
+
+      - name: Resolver base, head e instante T único
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+            HEAD_REF="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_REF="${{ github.sha }}^"
+            HEAD_REF="${{ github.sha }}"
+          fi
+          git cat-file -e "${BASE_REF}^{commit}"
+          git cat-file -e "${HEAD_REF}^{commit}"
+          AS_OF="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "base_ref=${BASE_REF}" >> "$GITHUB_OUTPUT"
+          echo "head_ref=${HEAD_REF}" >> "$GITHUB_OUTPUT"
+          echo "as_of=${AS_OF}" >> "$GITHUB_OUTPUT"
+          echo "T congelado: ${AS_OF}"
+
+      - name: Comparar status derivados base × head
+        id: gate
+        continue-on-error: true
+        run: |
+          python scripts/validate_bacen_regulatory_no_regression.py \
+            --base-ref '${{ steps.context.outputs.base_ref }}' \
+            --head-ref '${{ steps.context.outputs.head_ref }}' \
+            --as-of '${{ steps.context.outputs.as_of }}'
+
+      - name: Publicar evidência Gate 1.5
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-regulatory-no-regression-evidence
+          path: artifacts/bacen/bacen-regulatory-no-regression.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Resumo
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## BACEN Gate 1.5 — não regressão regulatória'
+            echo
+            echo '- Base: `${{ steps.context.outputs.base_ref }}`'
+            echo '- Head: `${{ steps.context.outputs.head_ref }}`'
+            echo '- T congelado: `${{ steps.context.outputs.as_of }}`'
+            echo '- Mesmo T para base/head: `true`'
+            echo
+            if [[ -f artifacts/bacen/bacen-regulatory-no-regression.json ]]; then
+              echo '```json'
+              cat artifacts/bacen/bacen-regulatory-no-regression.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bloquear regressão regulatória
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.gate.outcome }}' = 'success'

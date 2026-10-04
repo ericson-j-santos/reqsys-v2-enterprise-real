@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test')
-const { login } = require('./helpers/auth')
+const { login, navegarMenu } = require('./helpers/auth')
 
 test.describe.configure({ retries: 1 })
 
 async function irParaSegredos(page) {
     await login(page)
-    await page.getByRole('link', { name: /^Segredos$/i }).click()
+    await navegarMenu(page, { temaId: 'governanca', tituloLink: /^Segredos$/i })
     await expect(page).toHaveURL(/\/segredos-status/, { timeout: 15000 })
     await expect(page.getByRole('heading', { name: /status de segredos/i })).toBeVisible({ timeout: 10000 })
 }
@@ -24,10 +24,18 @@ test('botão Atualizar está visível', async ({ page }) => {
     await expect(btn.first()).toBeVisible()
 })
 
-test('botão Abrir cofre está visível', async ({ page }) => {
+test('botão Inicializar cofre está visível', async ({ page }) => {
     await irParaSegredos(page)
-    const btn = page.getByTestId('btn-abrir-cofre').or(
-        page.getByRole('link', { name: /abrir cofre/i })
+    const btn = page.getByTestId('btn-inicializar-vault').or(
+        page.getByRole('button', { name: /inicializar cofre/i })
+    )
+    await expect(btn.first()).toBeVisible()
+})
+
+test('botão Gravar segredo está visível', async ({ page }) => {
+    await irParaSegredos(page)
+    const btn = page.getByTestId('btn-gravar-segredo').or(
+        page.getByRole('button', { name: /gravar segredo/i })
     )
     await expect(btn.first()).toBeVisible()
 })

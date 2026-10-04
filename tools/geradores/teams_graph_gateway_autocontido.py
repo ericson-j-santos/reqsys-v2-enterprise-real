@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+"""ReqSys Teams Gateway autocontido para Graph e webhook.
+
+Configuração:
+- TEAMS_WEBHOOK_URL para notificações automáticas de commits.
+- AZURE_TENANT_ID, AZURE_CLIENT_ID e AZURE_CLIENT_SECRET para Graph app-only.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Mapping
+
+GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
+TOKEN_SCOPE = "https://graph.microsoft.com/.default"
+
+
+class GatewayError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class GatewayConfig:
+    tenant_id: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    webhook_url: str | None = None
+    timeout_seconds: int = 20
+    max_attempts: int = 3
+    webhook_recipient: str | None = None
+
+    @classmethod
+    def from_env(cls) -> "GatewayConfig":
+        return cls(
+            tenant_id=os.getenv("AZURE_TENANT_ID"),
+            client_id=os.getenv("AZURE_CLIENT_ID"),
+            client_secret=os.getenv("AZURE_CLIENT_SECRET"),
+            webhook_url=os.getenv("TEAMS_WEBHOOK_URL"),
+            webhook_recipient=os.getenv("TEAMS_WEBHOOK_RECIPIENT"),
+            timeout_seconds=int(os.getenv("HTTP_TIMEOUT_SECONDS", "20")),
+            max_attempts=int(os.getenv("HTTP_MAX_ATTEMPTS", "3")),
+        )
+
+    @property
+    def graph_configured(self) -> bool:
+        return bool(self.tenant_id and self.client_id and self.client_secret)
+
+
+@dataclass(frozen=True)
+class GatewayResult:
+    success: bool
+    route: str
+    correlation_id: str
+    status_code: int | None = None
+    message_id: str | None = None
+    response: Mapping[str, Any] | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "success": self.success,
+            "route": self.route,
+            "correlation_id": self.correlation_id,
+            "status_code": self.status_code,
+            "message_id": self.message_id,
+            "response": dict(self.response or {}),
+        }
+
+
+class HttpClient:
+    def __init__(self, config: GatewayConfig) -> None:
+        self.config = config
+
+    @staticmethod
+    def safe_json(raw: str) -> dict[str, Any]:
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {"value": parsed}
+        except json.JSONDecodeError:
+            return {"message": raw[:1000]}
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        payload: Mapping[str, Any] | None = None,
+        form: Mapping[str, str] | None = None,
+    ) -> tuple[int, dict[str, Any]]:
+        if payload is not None and form is not None:
+            raise ValueError("payload e form são mutuamente exclusivos")
+
+        request_headers = {"Accept": "application/json", **dict(headers or {})}
+        body: bytes | None = None
+        if payload is not None:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            request_headers["Content-Type"] = "application/json; charset=utf-8"
+        elif form is not None:
+            body = urllib.parse.urlencode(form).encode("utf-8")
+            request_headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+        last_error: Exception | None = None
+        for attempt in range(1, self.config.max_attempts + 1):
+            request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
+            try:
+                with urllib.request.urlopen(request, timeout=self.config.timeout_seconds) as response:
+                    raw = response.read().decode("utf-8", errors="replace")
+                    return int(response.status), self.safe_json(raw)
+            except urllib.error.HTTPError as exc:
+                raw = exc.read().decode("utf-8", errors="replace")
+                if exc.code not in {429, 500, 502, 503, 504} or attempt == self.config.max_attempts:
+                    raise GatewayError(f"HTTP {exc.code}: {self.safe_json(raw)}") from exc
+                retry_after = int(exc.headers.get("Retry-After", "1"))
+                time.sleep(min(retry_after, 5))
+                last_error = exc
+            except (urllib.error.URLError, TimeoutError) as exc:
+                last_error = exc
+                if attempt == self.config.max_attempts:
+                    break
+                time.sleep(min(2 ** (attempt - 1), 4))
+        raise GatewayError(f"Falha de comunicação após {self.config.max_attempts} tentativas: {last_error}")
+
+
+class TeamsGateway:
+    def __init__(self, config: GatewayConfig | None = None, http: HttpClient | None = None) -> None:
+        self.config = config or GatewayConfig.from_env()
+        self.http = http or HttpClient(self.config)
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "service": "reqsys-teams-gateway",
+            "webhook_configured": bool(self.config.webhook_url),
+            "graph_configured": self.config.graph_configured,
+            "routes": ["webhook", "graph_delegated_chat", "graph_app_channel"],
+            "capabilities": ["plain_text", "adaptive_card_1_5"],
+        }
+
+    def send_webhook(
+        self,
+        message: str,
+        title: str,
+        dry_run: bool = False,
+        adaptive_card: Mapping[str, Any] | None = None,
+        event_type: str = "commit-notification",
+    ) -> GatewayResult:
+        self._validate_message(message)
+        if adaptive_card is not None:
+            self._validate_adaptive_card(adaptive_card)
+        if not event_type.strip():
+            raise GatewayError("event_type obrigatório")
+        if not self.config.webhook_url:
+            raise GatewayError("TEAMS_WEBHOOK_URL não configurado")
+        if not self.config.webhook_recipient or "@" not in self.config.webhook_recipient:
+            raise GatewayError(
+                "TEAMS_WEBHOOK_RECIPIENT não configurado ou inválido "
+                "(o flow de destino só entrega em 'Chat with Flow bot' 1:1; "
+                "precisa ser o e-mail/UPN de uma pessoa, não um nome de canal)"
+            )
+        correlation_id = str(uuid.uuid4())
+        payload: dict[str, Any] = {
+            "to": self.config.webhook_recipient,
+            "title": title,
+            "content": message,
+            "signature": "ReqSys",
+            "stampDate": datetime.now(timezone.utc).isoformat(),
+            "correlationId": correlation_id,
+            "eventType": event_type,
+        }
+        if adaptive_card is not None:
+            payload["renderMode"] = "adaptive-card"
+            payload["adaptiveCard"] = dict(adaptive_card)
+            payload["adaptiveCardJson"] = json.dumps(adaptive_card, ensure_ascii=False, separators=(",", ":"))
+        if dry_run:
+            return GatewayResult(True, "webhook", correlation_id, response={"planned": True, "payload": payload})
+        status, response = self.http.request(
+            "POST",
+            self.config.webhook_url,
+            headers={"X-Correlation-ID": correlation_id},
+            payload=payload,
+        )
+        self._validar_contrato_resposta(response, correlation_id, event_type)
+        return GatewayResult(200 <= status < 300, "webhook", correlation_id, status_code=status, response=response)
+
+    @staticmethod
+    def _validar_contrato_resposta(
+        response: Mapping[str, Any], correlation_id: str, event_type: str
+    ) -> None:
+        """Rejeita respostas que confirmem explicitamente um correlationId ou
+        eventType diferentes dos enviados — sinal de que o fluxo de destino
+        processou/roteou a chamada como um evento diferente (ex.: um cartão
+        estático de outro fluxo, como o de aprovação de requisitos)."""
+        resposta_correlation_id = response.get("correlationId")
+        if isinstance(resposta_correlation_id, str) and resposta_correlation_id != correlation_id:
+            raise GatewayError(
+                f"Contrato violado: resposta confirmou correlationId={resposta_correlation_id!r}, "
+                f"esperado {correlation_id!r}"
+            )
+        resposta_event_type = response.get("eventType") or response.get("type")
+        if isinstance(resposta_event_type, str) and resposta_event_type != event_type:
+            raise GatewayError(
+                f"Contrato violado: resposta confirmou eventType={resposta_event_type!r}, "
+                f"esperado {event_type!r}"
+            )
+
+    def _app_token(self) -> str:
+        if not self.config.graph_configured:
+            raise GatewayError("Credenciais Graph não configuradas")
+        token_url = f"https://login.microsoftonline.com/{urllib.parse.quote(self.config.tenant_id or '')}/oauth2/v2.0/token"
+        _, response = self.http.request(
+            "POST",
+            token_url,
+            form={
+                "client_id": self.config.client_id or "",
+                "client_secret": self.config.client_secret or "",
+                "scope": TOKEN_SCOPE,
+                "grant_type": "client_credentials",
+            },
+        )
+        token = response.get("access_token")
+        if not isinstance(token, str) or not token:
+            raise GatewayError("Microsoft Identity não retornou access_token")
+        return token
+
+    def send_channel(self, team_id: str, channel_id: str, message: str, dry_run: bool = False) -> GatewayResult:
+        self._validate_id(team_id, "team_id")
+        self._validate_id(channel_id, "channel_id")
+        self._validate_message(message)
+        correlation_id = str(uuid.uuid4())
+        if dry_run:
+            return GatewayResult(True, "graph_app_channel", correlation_id, response={"planned": True})
+        token = self._app_token()
+        status, response = self.http.request(
+            "POST",
+            f"{GRAPH_BASE_URL}/teams/{urllib.parse.quote(team_id, safe='')}/channels/{urllib.parse.quote(channel_id, safe='')}/messages",
+            headers={"Authorization": f"Bearer {token}", "client-request-id": correlation_id},
+            payload={"body": {"contentType": "text", "content": message}},
+        )
+        message_id = response.get("id") if isinstance(response.get("id"), str) else None
+        return GatewayResult(200 <= status < 300, "graph_app_channel", correlation_id, status, message_id, response)
+
+    def send_chat(self, chat_id: str, message: str, token: str, dry_run: bool = False) -> GatewayResult:
+        self._validate_id(chat_id, "chat_id")
+        self._validate_message(message)
+        if not token.strip():
+            raise GatewayError("Token delegado obrigatório")
+        correlation_id = str(uuid.uuid4())
+        if dry_run:
+            return GatewayResult(True, "graph_delegated_chat", correlation_id, response={"planned": True})
+        status, response = self.http.request(
+            "POST",
+            f"{GRAPH_BASE_URL}/chats/{urllib.parse.quote(chat_id, safe='')}/messages",
+            headers={"Authorization": f"Bearer {token}", "client-request-id": correlation_id},
+            payload={"body": {"contentType": "text", "content": message}},
+        )
+        message_id = response.get("id") if isinstance(response.get("id"), str) else None
+        return GatewayResult(200 <= status < 300, "graph_delegated_chat", correlation_id, status, message_id, response)
+
+    @staticmethod
+    def _validate_id(value: str, name: str) -> None:
+        if not value.strip() or len(value) > 500:
+            raise GatewayError(f"{name} inválido")
+
+    @staticmethod
+    def _validate_message(message: str) -> None:
+        if not message.strip():
+            raise GatewayError("Mensagem obrigatória")
+        if len(message) > 28_000:
+            raise GatewayError("Mensagem excede 28.000 caracteres")
+
+    @staticmethod
+    def _validate_adaptive_card(card: Mapping[str, Any]) -> None:
+        if card.get("type") != "AdaptiveCard":
+            raise GatewayError("Adaptive Card precisa ter type=AdaptiveCard")
+        version = card.get("version")
+        if not isinstance(version, str) or not version.strip():
+            raise GatewayError("Adaptive Card precisa declarar version")
+        body = card.get("body")
+        if not isinstance(body, list) or not body:
+            raise GatewayError("Adaptive Card precisa ter body não vazio")
+        encoded = json.dumps(card, ensure_ascii=False)
+        if len(encoded) > 28_000:
+            raise GatewayError("Adaptive Card excede 28.000 caracteres")
+
+
+def load_adaptive_card(path: str | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    try:
+        parsed = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GatewayError(f"Não foi possível carregar Adaptive Card: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise GatewayError("Adaptive Card deve ser um objeto JSON")
+    return parsed
+
+
+def self_test() -> dict[str, Any]:
+    assert HttpClient.safe_json("1") == {"value": 1}
+    assert HttpClient.safe_json("ok") == {"message": "ok"}
+    config = GatewayConfig(webhook_url="https://example.invalid/hook", webhook_recipient="teste@example.invalid")
+    card = {"type": "AdaptiveCard", "version": "1.5", "body": [{"type": "TextBlock", "text": "teste"}]}
+    result = TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True, adaptive_card=card)
+    assert result.success and result.route == "webhook"
+    assert result.response and result.response["payload"]["renderMode"] == "adaptive-card"
+    assert result.response["payload"]["eventType"] == "commit-notification"
+    try:
+        TeamsGateway._validar_contrato_resposta(
+            {"correlationId": "outro-id"}, correlation_id="123", event_type="commit-notification"
+        )
+        raise AssertionError("correlationId divergente deveria falhar")
+    except GatewayError:
+        pass
+    try:
+        TeamsGateway._validar_contrato_resposta(
+            {"eventType": "requirement"}, correlation_id="123", event_type="commit-notification"
+        )
+        raise AssertionError("eventType divergente deveria falhar")
+    except GatewayError:
+        pass
+    TeamsGateway._validar_contrato_resposta({}, correlation_id="123", event_type="commit-notification")
+    try:
+        TeamsGateway(config).send_webhook("teste", "ReqSys", dry_run=True, adaptive_card={"type": "MessageCard"})
+        raise AssertionError("card inválido deveria falhar")
+    except GatewayError:
+        pass
+    try:
+        TeamsGateway(GatewayConfig(webhook_url="https://example.invalid/hook")).send_webhook(
+            "teste", "ReqSys", dry_run=True
+        )
+        raise AssertionError("destinatário ausente deveria falhar")
+    except GatewayError:
+        pass
+    try:
+        TeamsGateway(config).send_chat("chat", "teste", "")
+        raise AssertionError("token vazio deveria falhar")
+    except GatewayError:
+        pass
+    return {"passed": 10, "status": "ok"}
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser()
+    sub = root.add_subparsers(dest="command", required=True)
+    sub.add_parser("status")
+    sub.add_parser("self-test")
+    webhook = sub.add_parser("send-webhook")
+    webhook.add_argument("--message", required=True)
+    webhook.add_argument("--title", default="ReqSys Teams Gateway")
+    webhook.add_argument("--adaptive-card-file")
+    webhook.add_argument("--event-type", default="commit-notification")
+    webhook.add_argument("--dry-run", action="store_true")
+    channel = sub.add_parser("send-channel")
+    channel.add_argument("--team-id", required=True)
+    channel.add_argument("--channel-id", required=True)
+    channel.add_argument("--message", required=True)
+    channel.add_argument("--dry-run", action="store_true")
+    chat = sub.add_parser("send-chat")
+    chat.add_argument("--chat-id", required=True)
+    chat.add_argument("--message", required=True)
+    chat.add_argument("--delegated-token", default=os.getenv("TEAMS_DELEGATED_TOKEN", ""))
+    chat.add_argument("--dry-run", action="store_true")
+    return root
+
+
+def main() -> int:
+    args = parser().parse_args()
+    gateway = TeamsGateway()
+    try:
+        if args.command == "status":
+            result: Any = gateway.status()
+        elif args.command == "self-test":
+            result = self_test()
+        elif args.command == "send-webhook":
+            card = load_adaptive_card(args.adaptive_card_file)
+            result = gateway.send_webhook(
+                args.message, args.title, args.dry_run, adaptive_card=card, event_type=args.event_type
+            ).as_dict()
+        elif args.command == "send-channel":
+            result = gateway.send_channel(args.team_id, args.channel_id, args.message, args.dry_run).as_dict()
+        else:
+            result = gateway.send_chat(args.chat_id, args.message, args.delegated_token, args.dry_run).as_dict()
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    except (GatewayError, ValueError) as exc:
+        print(json.dumps({"success": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

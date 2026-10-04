@@ -1,0 +1,205 @@
+{
+  "schema_version": "1.0.0",
+  "trail": "D",
+  "trail_name": "Qualidade e Governança",
+  "generated_at": "2026-06-30T21:39:28.632419Z",
+  "correlation_id": "e8274b86-bae4-489c-8081-6564ceed3255",
+  "repository": "local/reqsys",
+  "run_id": "artifact-ingestion-refresh-local",
+  "parallelizable": true,
+  "dimensions_total": 6,
+  "state": "passed",
+  "decision": "continuar_incremento_qualidade",
+  "average_score": 99.25,
+  "min_score": 95.52,
+  "max_score": 100.0,
+  "blockers": [],
+  "dimensions": [
+    {
+      "dimension": "ci-watch",
+      "status": "passed",
+      "score": 100.0,
+      "duration_seconds": 0.03,
+      "summary": "estrutura local do PR CI Watch validada",
+      "details": {
+        "checks": [
+          {
+            "file": ".github/workflows/ci.yml",
+            "exists": true
+          },
+          {
+            "file": ".github/workflows/pr-ci-watch.yml",
+            "exists": true
+          },
+          {
+            "file": "scripts/pr_ci_watch.py",
+            "exists": true
+          },
+          {
+            "name": "pr_ci_watch_compile",
+            "status": "passed"
+          },
+          {
+            "marker": "concurrency:",
+            "found": true
+          },
+          {
+            "marker": "exclude-run-id",
+            "found": true
+          },
+          {
+            "marker": "pr-ci-watch.json",
+            "found": true
+          }
+        ]
+      },
+      "blockers": [],
+      "recommendations": []
+    },
+    {
+      "dimension": "contract",
+      "status": "passed",
+      "score": 100.0,
+      "duration_seconds": 1.25,
+      "summary": "10 contract test file(s), 3 check(s)",
+      "details": {
+        "checks": [
+          {
+            "name": "backend_contract_tests",
+            "status": "passed",
+            "tests": [
+              "tests/test_power_automate_provisioning_workflow_contract.py",
+              "tests/test_runtime_evidence_ingestion_contract.py"
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "skipped": 0,
+              "errors": 0
+            }
+          },
+          {
+            "name": "artifact_contract_validator",
+            "status": "passed",
+            "exit_code": 0
+          },
+          {
+            "name": "operational_json_artifact_schema",
+            "status": "passed"
+          }
+        ],
+        "contract_test_files": [
+          "backend/tests/test_power_automate_provisioning_workflow_contract.py",
+          "backend/tests/test_runtime_evidence_ingestion_contract.py",
+          "tests/test_autonomous_delivery_cycle_contract.py",
+          "tests/test_dev_environment_readiness_contract.py",
+          "tests/test_environments_validation_dashboard_contract.py",
+          "tests/test_operational_observability_hub_contract_hydration.py",
+          "tests/test_strategic_governance_dashboard_contract.py",
+          "tests/test_strategic_governance_navigation_contract.py",
+          "tests/test_strategic_governance_trend_dashboard_contract.py",
+          "tests/test_validate_openapi_contract.py"
+        ]
+      },
+      "blockers": [],
+      "recommendations": []
+    },
+    {
+      "dimension": "coverage",
+      "status": "passed",
+      "score": 95.52,
+      "duration_seconds": 18.02,
+      "summary": "coverage 95.52% (gate 60.0%)",
+      "details": {
+        "exit_code": 0,
+        "coverage_percent": 95.52,
+        "threshold_percent": 60.0,
+        "stdout_tail": "les skipped due to complete coverage.\nRequired test coverage of 60% reached. Total coverage: 95.52%\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_ia.py:329: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:338: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:347: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:358: GROQ_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:371: GROQ_API_KEY não configurada ou sem quota\n1032 passed, 5 skipped, 9 warnings in 15.50s\n--- Logging error ---\nTraceback (most recent call last):\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 152, in _export\n    self._exporter.export(\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/trace/export/__init__.py\", line 307, in export\n    self.out.write(self.formatter(span))\nValueError: I/O operation on closed file.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/lib/python3.12/logging/__init__.py\", line 1163, in emit\n    stream.write(msg + self.terminator)\nValueError: I/O operation on closed file.\nCall stack:\n  File \"/usr/lib/python3.12/threading.py\", line 1030, in _bootstrap\n    self._bootstrap_inner()\n  File \"/usr/lib/python3.12/threading.py\", line 1073, in _bootstrap_inner\n    self.run()\n  File \"/usr/lib/python3.12/threading.py\", line 1010, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 141, in worker\n    self._export(BatchExportStrategy.EXPORT_ALL)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 165, in _export\n    self._logger.exception(\nMessage: 'Exception while exporting %s.'\nArguments: ('Span',)\n"
+      },
+      "blockers": [],
+      "recommendations": []
+    },
+    {
+      "dimension": "mutation",
+      "status": "passed",
+      "score": 100.0,
+      "duration_seconds": 1.24,
+      "summary": "mutation probe em 3 modulos criticos",
+      "details": {
+        "mode": "lightweight_probe",
+        "targets": [
+          "tests/test_public_smoke_routes.py",
+          "tests/test_runtime_evidence_ingestion_contract.py",
+          "tests/test_runtime_evidence_analytics.py"
+        ],
+        "pytest_summary": {
+          "passed": 10,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0
+        },
+        "exit_code": 0
+      },
+      "blockers": [],
+      "recommendations": []
+    },
+    {
+      "dimension": "schema",
+      "status": "passed",
+      "score": 100.0,
+      "duration_seconds": 0.04,
+      "summary": "33/33 schemas JSON validos",
+      "details": {
+        "schemas_validated": 33,
+        "schemas_failed": [],
+        "registry_version": "1.0.0",
+        "required_gates": [
+          "schema_contract_gate",
+          "schema_version_gate",
+          "example_validation_gate",
+          "breaking_change_gate",
+          "additional_properties_gate",
+          "required_fields_gate",
+          "enum_evolution_gate",
+          "contract_registry_gate",
+          "ci_artifact_gate",
+          "runtime_validation_gate"
+        ],
+        "schemas_total": 33,
+        "schema_governance_gate": {
+          "status": "passed",
+          "exit_code": 0
+        }
+      },
+      "blockers": [],
+      "recommendations": []
+    },
+    {
+      "dimension": "tests",
+      "status": "passed",
+      "score": 100.0,
+      "duration_seconds": 10.45,
+      "summary": "1032 passed, 0 failed",
+      "details": {
+        "exit_code": 0,
+        "pytest_summary": {
+          "passed": 1032,
+          "failed": 0,
+          "skipped": 5,
+          "errors": 0
+        },
+        "stdout_tail": " = context.run(func, *args)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_ia.py:329: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:338: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:347: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:358: GROQ_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:371: GROQ_API_KEY não configurada ou sem quota\n1032 passed, 5 skipped, 9 warnings in 9.07s\n--- Logging error ---\nTraceback (most recent call last):\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 152, in _export\n    self._exporter.export(\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/trace/export/__init__.py\", line 307, in export\n    self.out.write(self.formatter(span))\nValueError: I/O operation on closed file.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/lib/python3.12/logging/__init__.py\", line 1163, in emit\n    stream.write(msg + self.terminator)\nValueError: I/O operation on closed file.\nCall stack:\n  File \"/usr/lib/python3.12/threading.py\", line 1030, in _bootstrap\n    self._bootstrap_inner()\n  File \"/usr/lib/python3.12/threading.py\", line 1073, in _bootstrap_inner\n    self.run()\n  File \"/usr/lib/python3.12/threading.py\", line 1010, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 141, in worker\n    self._export(BatchExportStrategy.EXPORT_ALL)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 165, in _export\n    self._logger.exception(\nMessage: 'Exception while exporting %s.'\nArguments: ('Span',)\n"
+      },
+      "blockers": [],
+      "recommendations": []
+    }
+  ],
+  "recommended_actions": [
+    {
+      "priority": "P3",
+      "action": "manter_gates_ci_obrigatorio",
+      "detail": "Trilha D verde — manter CI ReqSys v2 Enterprise como gate canonico"
+    }
+  ],
+  "mode": "report_only"
+}
