@@ -1,0 +1,43 @@
+{
+  "feature_name": "teams-commit-canonical-gateway",
+  "project": "ReqSys v2 Enterprise — GitHub Actions / Teams notifications",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Migra a notificação de commits do webhook Power Automate direto para o Teams Messaging Gateway canônico do ReqSys após falha HTTP 401 no endpoint legado, preservando entrega fail-closed e evidência por execução.",
+  "requirements": [
+    "O workflow Teams Commit Notification não deve consumir TEAMS_WEBHOOK_URL diretamente.",
+    "A entrega deve usar scripts/notificar_teams.py com TEAMS_GATEWAY_BASE_URL e TEAMS_GATEWAY_DESTINO_ID.",
+    "Falha ou ausência de confirmação de entrega deve manter o workflow vermelho.",
+    "O contrato de CI deve impedir regressão para o webhook direto."
+  ],
+  "sdd_gate": {
+    "tests": [
+      ".github/workflows/teams-commit-notification-contract.yml",
+      ".github/workflows/teams-service-operational-readiness.yml"
+    ],
+    "evidence_contract": "O HEAD do PR deve comprovar por contrato que Teams Commit Notification usa o Teams Messaging Gateway canônico, sem TEAMS_WEBHOOK_URL direto e com --strict. A conclusão funcional exige, após merge, execução real com entrega confirmada."
+  },
+  "schema_version": "1.0",
+  "increment_type": "fix",
+  "status": "implementation",
+  "acceptance_criteria": [
+    "Teams Commit Notification não referencia TEAMS_WEBHOOK_URL diretamente.",
+    "O workflow usa scripts/notificar_teams.py com TEAMS_GATEWAY_BASE_URL e TEAMS_GATEWAY_DESTINO_ID.",
+    "O envio usa flow_bot e --strict para falhar quando a entrega não for confirmada.",
+    "Teams Commit Notification Contract valida a rota canônica e impede regressão ao webhook direto.",
+    "Actions externas alteradas neste incremento estão fixadas por SHA imutável.",
+    "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pelo gateway canônico antes de declarar a correção funcional concluída."
+  ],
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "github-teams-notification-governance"
+  }
+}
