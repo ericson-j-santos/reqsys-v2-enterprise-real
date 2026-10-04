@@ -36,3 +36,13 @@ def test_queue_keeps_safety_boundaries() -> None:
     assert '--force' not in agent
     assert 'github.rest.pulls.merge' not in agent
     assert "merge_method: 'squash'" in governed
+
+def test_persistent_blocker_is_checkpointed_and_notified_without_fly() -> None:
+    notify = read('.github/workflows/notify-teams-reqsys-logs.yml')
+    assert '- PR CI Watch' in notify
+    assert '<!-- reqsys-recovered-queue-blocked -->' in notify
+    assert 'ci:recuperado' in notify
+    assert 'TEAMS_GATEWAY_BASE_URL: ""' in notify
+    assert 'false &&' not in notify
+    assert 'reqsys-api.fly.dev' not in notify
+    assert 'REQSYS_LOG_STRICT: "true"' in notify

@@ -33,3 +33,7 @@ Falha determinística de código continua fail-closed até existir executor gove
 - sem merge no mesmo ciclo que converte draft para ready;
 - sem deploy/promoção;
 - sem workflow novo.
+
+## Notificação de bloqueio
+
+Quando o `PR CI Watch` termina vermelho em uma PR `ci:recuperado`, o workflow existente `Notify Teams - ReqSys Logs` registra um comentário idempotente no PR e envia o alerta usando `TEAMS_WEBHOOK_URL`. O gateway Fly permanece desativado; não existe fallback para Fly.io.
