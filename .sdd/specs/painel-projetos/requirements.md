@@ -31,6 +31,9 @@ anteriores.
     requisitos sem projeto vinculado não são contados artificialmente.
 13. O detalhe do projeto mostra os vínculos atuais disponíveis: itens de
     execução, requisitos, branch, issue/PR, Planner, correlação e evidência.
+14. O teste ponta a ponta da rota `/painel-projetos` valida explicitamente que
+    a distribuição da saúde é exposta como imagem acessível com o nome
+    **Distribuição da saúde dos projetos**, prevenindo regressão da semântica.
 
 ## Fora de escopo
 
