@@ -5,17 +5,16 @@ from fnmatch import fnmatch
 from secrets import token_urlsafe
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, field_validator
+from sqlalchemy.orm import Session
 
 from app.core.cofre_verificador_cego import (
     CHAVE_OPERACIONAL_VERIFICADOR,
     VerificadorCegoIndisponivel,
     verificar_valor_cego,
 )
-from app.core.verificador_constante import comparar_constante
-from pydantic import BaseModel, field_validator
-from sqlalchemy.orm import Session
-
 from app.core.config import settings
+from app.core.verificador_constante import comparar_constante
 from app.core.envelope import ok
 from app.core.secrets import (
     _vault_service_name,
