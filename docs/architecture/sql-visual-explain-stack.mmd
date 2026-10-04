@@ -1,0 +1,11 @@
+flowchart TD
+  A[SQL informado] --> B[Query Intelligence]
+  A --> C[Gerador offline]
+  B --> D[Análise estática e riscos]
+  C --> E[Markdown e Mermaid]
+  D --> F[Revisão humana]
+  E --> F
+  F --> G[EXPLAIN em ambiente controlado]
+  G --> H{Execução real é segura?}
+  H -->|Sim e autorizada| I[EXPLAIN ANALYZE]
+  H -->|Não| J[Somente EXPLAIN/documentação]

@@ -44,6 +44,14 @@ test('não traduz identificador técnico route-specs', () => {
   assert.equal(isLikelyHumanLiteral('route-specs'), false)
 })
 
+test('não traduz identificador técnico dentro de v-icon', () => {
+  const source = '<template><div><v-icon>mdi-source-branch</v-icon><span>Abrir branch</span></div></template>'
+  const after = transformVue(source)
+
+  assert.match(after, /<v-icon>mdi-source-branch<\/v-icon>/)
+  assert.match(after, /Abrir versão de código/)
+})
+
 test('ainda simplifica termos em texto de tela dentro do template', () => {
   const source = '<template><h1>Painel de status do runtime</h1></template>'
   const after = transformVue(source)

@@ -262,6 +262,40 @@ def candidate_pytests(files: list[str], root: Path) -> list[str]:
     return sorted(candidates)
 
 
+SCRIPT_FILE_REFERENCE_RE = re.compile(r"scripts/[A-Za-z0-9_./-]+\.py")
+BACKEND_IMPORT_RE = re.compile(r"(?m)^\s*(?:from\s+app(?:\.|\s)|import\s+app(?:\.|\s|$))")
+
+
+def targeted_tests_need_backend_profile(targeted: list[str], root: Path) -> bool:
+    """Detecta testes direcionados que precisam das dependências oficiais do backend.
+
+    Além de testes sob backend/tests, cobre testes de raiz que executam scripts
+    versionados e esses scripts importam app.*, evitando falso vermelho por
+    dependência ausente no Pre-PR.
+    """
+    for rel in targeted:
+        if rel.startswith("backend/tests/"):
+            return True
+        if not rel.startswith("tests/"):
+            continue
+        test_path = root / rel
+        try:
+            source = test_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "backend/" in source or BACKEND_IMPORT_RE.search(source):
+            return True
+        for script_ref in SCRIPT_FILE_REFERENCE_RE.findall(source):
+            script_path = root / script_ref
+            try:
+                script_source = script_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if "backend/" in script_source or BACKEND_IMPORT_RE.search(script_source):
+                return True
+    return False
+
+
 def _timed_check(name: str, command: list[str], *, cwd: Path | None = None) -> CheckResult:
     started = time.monotonic()
     completed = run(command, cwd=cwd)
@@ -429,7 +463,8 @@ def is_not_applicable_noop(
     behind_by: int,
     files: list[str],
 ) -> bool:
-    return behind_by == 0 and head_sha == base_sha and not files
+    # PR recuperado pode ter commit de sincronização acima da base sem diff real.
+    return behind_by == 0 and not files
 
 
 def parse_args() -> argparse.Namespace:
