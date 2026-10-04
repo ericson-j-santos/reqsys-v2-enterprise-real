@@ -118,3 +118,15 @@ def test_pr_evidence_gate_skips_default_branch_workflow_run_after_merge():
     assert 'workflow_run_default_branch_post_merge' in text
     assert 'github.event.workflow_run.head_branch' in text
     assert 'github.event.repository.default_branch' in text
+
+def test_pr_evidence_gate_requires_language_only_for_relevant_frontend_paths():
+    text = read_workflow()
+
+    assert 'CONDITIONAL_LANGUAGE_WORKFLOW_NAME: Linguagem simples PT-BR' in text
+    assert 'github.rest.pulls.listFiles' in text
+    assert "path.startsWith('frontend/src/')" in text
+    assert "'frontend/scripts/validate-user-facing-language.mjs'" in text
+    assert "'frontend/scripts/fix-user-facing-language.mjs'" in text
+    assert 'requiresLanguageGate(changedFiles)' in text
+    assert 'Linguagem simples - autocorreção governada' not in text
+

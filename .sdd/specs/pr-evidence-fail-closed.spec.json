@@ -1,0 +1,20 @@
+{
+  "feature_name": "pr-evidence-fail-closed",
+  "project": "ReqSys v2 Enterprise — governança de CI/CD",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Impede READY_FOR_MERGE quando um workflow governado aplicável ao HEAD atual estiver ausente, falhar, for skipped/neutral ou quando sucesso antigo mascarar a execução mais recente; o gate de linguagem PT-BR é condicionado aos caminhos de frontend que realmente o disparam.",
+  "sdd_gate": {
+    "tests": [
+      "scripts/validate_workflow_regression_contracts.py",
+      "tests/test_pr_evidence_gate_workflow.py"
+    ],
+    "evidence_contract": "PR Evidence Gate avalia o HEAD exato, usa a execução mais recente por workflow, falha fechado para ausência/failure/skipped/neutral dos workflows aplicáveis e exige Linguagem simples PT-BR somente quando o diff toca caminhos cobertos por esse gate."
+  }
+}

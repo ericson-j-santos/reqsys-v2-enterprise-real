@@ -83,6 +83,7 @@ jobs:
       GOVERNED_WORKFLOW_NAMES: |
         Governance Quality Gates
         Governança Padrão Ouro
+      CONDITIONAL_LANGUAGE_WORKFLOW_NAME: Linguagem simples PT-BR
       OPTIONAL_WORKFLOW_NAMES: |
         NGINX Security Profile
       STALL_AFTER_SECONDS: '300'
@@ -188,6 +189,25 @@ jobs:
               return error?.status === 403 && /rate limit/i.test(message);
             }
 
+            async function listPullRequestFiles(prNumber) {
+              const files = await github.paginate(
+                github.rest.pulls.listFiles,
+                { owner, repo, pull_number: Number(prNumber), per_page: 100 },
+              );
+              return files.map((file) => String(file.filename || ''));
+            }
+
+            function requiresLanguageGate(paths) {
+              const exactPaths = new Set([
+                'frontend/scripts/validate-user-facing-language.mjs',
+                'frontend/scripts/validate-user-facing-language.test.mjs',
+                'frontend/scripts/fix-user-facing-language.mjs',
+                'frontend/scripts/fix-user-facing-language.test.mjs',
+                '.github/workflows/linguagem-simples-gate.yml',
+              ]);
+              return paths.some((path) => path.startsWith('frontend/src/') || exactPaths.has(path));
+            }
+
             async function getPullRequest() {
               if (context.payload.pull_request) return context.payload.pull_request;
               const workflowRunPullRequest = context.payload.workflow_run?.pull_requests?.[0];
@@ -262,11 +282,11 @@ jobs:
 
             function summarizeWorkflow({ name, runSummaries, strict }) {
               const matchingRuns = runSummaries.filter((run) => run.name === name);
-              const successfulRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
-              const failedRuns = matchingRuns.filter((run) => run.status === 'completed' && run.conclusion && !['success', 'skipped', 'neutral'].includes(run.conclusion));
-              const skippedRuns = matchingRuns.filter((run) => run.status === 'completed' && ['skipped', 'neutral'].includes(run.conclusion));
-              const activeRuns = matchingRuns.filter((run) => run.status !== 'completed');
               const latest = [...matchingRuns].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0] || null;
+              const successfulRuns = latest?.status === 'completed' && latest?.conclusion === 'success' ? [latest] : [];
+              const failedRuns = latest?.status === 'completed' && latest?.conclusion && !['success', 'skipped', 'neutral'].includes(latest.conclusion) ? [latest] : [];
+              const skippedRuns = latest?.status === 'completed' && ['skipped', 'neutral'].includes(latest?.conclusion) ? [latest] : [];
+              const activeRuns = latest && latest.status !== 'completed' ? [latest] : [];
 
               return {
                 name,
@@ -305,13 +325,15 @@ jobs:
                 const result = summarizeWorkflow({ name, runSummaries, strict: false });
 
                 if (result.matching_runs === 0) {
-                  governedSkips.push(`Governed workflow did not run on current head SHA: ${name}`);
-                } else if (result.active_runs > 0 && result.successful_runs === 0) {
+                  failures.push(`Governed workflow has no run on current head SHA: ${name}`);
+                } else if (result.active_runs > 0) {
                   pending.push(`Governed workflow still running on current head SHA: ${name}`);
-                } else if (result.successful_runs === 0 && result.failed_runs > 0) {
+                } else if (result.failed_runs > 0) {
                   failures.push(`Governed workflow failed on current head SHA: ${name}`);
-                } else if (result.successful_runs === 0 && result.skipped_runs > 0) {
-                  governedSkips.push(`Governed workflow completed as skipped or neutral on current head SHA: ${name}`);
+                } else if (result.skipped_runs > 0) {
+                  failures.push(`Governed workflow was skipped or neutral on current head SHA: ${name}`);
+                } else if (result.successful_runs === 0) {
+                  failures.push(`Governed workflow has no successful latest run on current head SHA: ${name}`);
                 }
 
                 return result;
@@ -399,7 +421,15 @@ jobs:
               pr = await getPullRequest();
               headSha = pr.head.sha;
               const strictWorkflowNames = parseList(process.env.STRICT_WORKFLOW_NAMES);
-              const governedWorkflowNames = parseList(process.env.GOVERNED_WORKFLOW_NAMES);
+              const changedFiles = await listPullRequestFiles(pr.number);
+              const languageWorkflowName = String(process.env.CONDITIONAL_LANGUAGE_WORKFLOW_NAME || '').trim();
+              const conditionalGovernedWorkflowNames = (
+                languageWorkflowName && requiresLanguageGate(changedFiles)
+              ) ? [languageWorkflowName] : [];
+              const governedWorkflowNames = [...new Set([
+                ...parseList(process.env.GOVERNED_WORKFLOW_NAMES),
+                ...conditionalGovernedWorkflowNames,
+              ])];
               const optionalWorkflowNames = parseList(process.env.OPTIONAL_WORKFLOW_NAMES);
               relevantWorkflowNames = new Set([
                 ...strictWorkflowNames,
