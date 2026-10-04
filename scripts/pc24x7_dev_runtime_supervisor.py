@@ -18,6 +18,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts import self_hosted_dev_maintenance as portable_dev
+except ModuleNotFoundError:
+    import self_hosted_dev_maintenance as portable_dev
+
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_TUNNEL = ROOT / "scripts" / "pc24x7_public_dev_tunnel.py"
 LOCATOR_PUBLISHER = ROOT / "scripts" / "pc24x7_dev_locator_publisher.py"
@@ -91,6 +96,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Supervisor ReqSys DEV no PC24x7")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
+    try:
+        portable = portable_dev.control_if_active(apply=args.apply, publish=args.apply)
+    except portable_dev.PortableRuntimeError as exc:
+        print(json.dumps({
+            "ready": False, "runtime_provider": "self_hosted_dev",
+            "maintenance_verified": False, "usable": False,
+            "error": exc.code, "legacy_runtime_touched": False,
+            "production_touched": False, "secrets_read": False,
+        }, sort_keys=True))
+        return 2
+    if portable is not None:
+        print(json.dumps({**portable, "ready": portable.get("local_runtime_contract_ready") is True
+                          and (portable.get("published") is True if args.apply else True),
+                          "apply": args.apply, "legacy_supervision_deferred": False}, sort_keys=True))
+        return 0
 
     payload: dict[str, Any] = {
         "schema_version": "2.0.0",

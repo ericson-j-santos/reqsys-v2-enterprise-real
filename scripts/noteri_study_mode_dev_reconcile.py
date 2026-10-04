@@ -28,6 +28,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts import self_hosted_dev_maintenance as portable_dev
+except ModuleNotFoundError:
+    import self_hosted_dev_maintenance as portable_dev
+
 EXPECTED_HOST = "DESKTOP-PDQK954"
 DEV_GATEWAY_PORT = "8083"
 DEV_API_PORT = "8210"
@@ -1575,6 +1580,16 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     require_host()
     if args.confirm != CONFIRM:
         raise ReconcileError("confirmation_invalid")
+
+    try:
+        portable = portable_dev.verify_if_active(args.expected_sha)
+    except portable_dev.PortableRuntimeError as exc:
+        raise ReconcileError(exc.code) from exc
+    if portable is not None:
+        return {**portable, "ok": True,
+                "legacy_study_mode_e2e_executed": False,
+                "control_plane_bridge": False,
+                "profile_mount_rw": False}
     if git_head(repo_root) != args.expected_sha:
         raise ReconcileError("git_head_mismatch")
 
