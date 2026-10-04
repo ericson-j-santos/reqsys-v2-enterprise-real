@@ -1,0 +1,76 @@
+schema_version: 1.0.0
+control_id: BACEN-05
+scope: prod
+mode: fail_safe
+source_sha: ff15db8b175d37434d5ec26b34e66a4cb9584538
+classification:
+  allowed: [USED_IN_PROD, NOT_USED_IN_PROD, UNVERIFIED]
+  default: UNVERIFIED
+rules:
+  - absence_of_evidence_never_implies_not_used
+  - NOT_USED_IN_PROD_requires_explicit_verifiable_evidence
+  - UNVERIFIED_remains_in_governance_review_scope
+  - classification_does_not_approve_DPA_or_legal_signoff
+vendors:
+  - id: T01
+    name: Microsoft Entra ID
+    classification: USED_IN_PROD
+    evidence: [.github/workflows/deploy-production-sync.yml]
+  - id: T02
+    name: Azure Bot Service / Bot Framework
+    classification: UNVERIFIED
+    evidence: [backend/app/core/config.py]
+  - id: T03
+    name: Microsoft Power Automate
+    classification: UNVERIFIED
+    evidence: []
+  - id: T04
+    name: Microsoft Graph API
+    classification: UNVERIFIED
+    evidence: [backend/app/core/config.py]
+  - id: T05
+    name: Microsoft Dataverse
+    classification: UNVERIFIED
+    evidence: []
+  - id: T06
+    name: GitHub
+    classification: USED_IN_PROD
+    evidence: [.github/workflows/deploy-production-sync.yml]
+  - id: T07
+    name: Figma
+    classification: UNVERIFIED
+    evidence: []
+  - id: T08
+    name: Redmine
+    classification: UNVERIFIED
+    evidence: []
+  - id: T09
+    name: SQL Server Reporting Services (SSRS)
+    classification: UNVERIFIED
+    evidence: []
+  - id: T10
+    name: Google Gemini API
+    classification: UNVERIFIED
+    evidence: []
+  - id: T11
+    name: Groq API
+    classification: UNVERIFIED
+    evidence: []
+  - id: T12
+    name: PostgreSQL
+    classification: UNVERIFIED
+    evidence: [infra/fly-environments.json]
+    note: historical retirement inventory is not proof of current PostgreSQL use in PROD
+  - id: T13
+    name: Redis
+    classification: UNVERIFIED
+    evidence: [infra/fly-environments.json]
+    note: historical retirement inventory is not proof of current Redis use in PROD
+  - id: T14
+    name: Fly.io
+    classification: NOT_USED_IN_PROD
+    evidence: [docs/releases/flyio-retirement-20261002.md, config/flyio-retirement-policy.json]
+    note: provider retired permanently on 2026-10-02; remote inventory and credentials were removed
+notes:
+  - This inventory narrows investigation but does not promote BACEN-05 to implemented.
+  - T14 remains in the register for audit history, with current production classification NOT_USED_IN_PROD backed by retirement evidence.

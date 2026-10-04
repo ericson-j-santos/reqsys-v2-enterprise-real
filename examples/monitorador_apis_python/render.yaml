@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: monitorador-apis-python
+    runtime: docker
+    plan: free
+    dockerfilePath: ./examples/monitorador_apis_python/Dockerfile
+    dockerContext: ./examples/monitorador_apis_python
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"

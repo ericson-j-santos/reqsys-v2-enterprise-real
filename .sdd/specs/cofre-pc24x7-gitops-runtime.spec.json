@@ -1,0 +1,19 @@
+{
+  "feature_name": "cofre-pc24x7-gitops-runtime",
+  "project": "ReqSys v2 Enterprise — Cofre DEV PC24x7",
+  "created_at": "2026-09-18",
+  "updated_at": "2026-09-18",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Consolida em Git o mount protegido da passphrase, o volume persistente do Cofre e o executor E2E governado já comprovado em DEV PC24x7, sem versionar valores secretos.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_cofre_pc24x7_gitops.py"
+    ],
+    "evidence_contract": "O valor da passphrase permanece fora do Git; o overlay deve apontar para arquivo protegido do host, montar o segredo somente leitura e persistir /data. O E2E deve permanecer restrito a DEV e produzir somente evidência sanitizada."
+  }
+}

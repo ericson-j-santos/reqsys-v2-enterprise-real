@@ -1,6 +1,6 @@
 const SQL_KEYWORDS = new Set(['select', 'from', 'where', 'join', 'inner', 'left', 'right', 'full', 'outer', 'cross', 'on', 'group', 'by', 'order', 'having', 'limit', 'offset', 'with', 'recursive', 'union', 'all', 'distinct', 'case', 'when', 'then', 'else', 'end', 'as', 'and', 'or'])
 
-const PII_PATTERNS = [/\bcpf\b/i, /\bcnpj\b/i, /\bemail\b/i, /\btelefone\b/i, /\bcelular\b/i, /\bnome\b/i, /\bendereco\b/i, /\bconta\b/i, /\bagencia\b/i]
+const PERSONAL_DATA_PATTERNS = [/\bcpf\b/i, /\bcnpj\b/i, /\bemail\b/i, /\btelefone\b/i, /\bcelular\b/i, /\bnome\b/i, /\bendereco\b/i, /\bconta\b/i, /\bagencia\b/i]
 const DESTRUCTIVE_PATTERNS = [/\bdelete\b/i, /\bupdate\b/i, /\binsert\b/i, /\bdrop\b/i, /\btruncate\b/i, /\balter\b/i, /\bcreate\b/i, /\bgrant\b/i, /\brevoke\b/i]
 
 export function normalizeSql(sql) {
@@ -44,7 +44,12 @@ function extractJoins(sql) {
   const joins = []
   let match
   while ((match = regex.exec(normalizeSql(sql))) !== null) {
-    joins.push({ type: match[1].trim().toUpperCase(), table: match[2], alias: match[3] && !SQL_KEYWORDS.has(match[3].toLowerCase()) ? match[3] : null, condition: (match[4] || '').trim() })
+    joins.push({
+      type: match[1].trim().toUpperCase(),
+      table: match[2],
+      alias: match[3] && !SQL_KEYWORDS.has(match[3].toLowerCase()) ? match[3] : null,
+      condition: (match[4] || '').trim(),
+    })
   }
   return joins
 }
@@ -66,7 +71,6 @@ function extractCtes(sql) {
 
   while (index < cteBody.length) {
     const remaining = cteBody.slice(index)
-
     if (depth === 0 && /^\s*select\b/i.test(remaining)) break
 
     if (depth === 0) {
@@ -89,41 +93,43 @@ function extractCtes(sql) {
 
 function calculateRisk({ sql, columns, tables, joins, filters, ctes }) {
   const findings = []
-  let score = 0
-  if (!normalizeSql(sql)) return { score: 0, level: 'none', findings }
+  let value = 0
+  if (!normalizeSql(sql)) return { value: 0, level: 'none', findings }
 
   if (columns.some((column) => column === '*') || /select\s+\*/i.test(sql)) {
-    score += 20
-    findings.push({ severity: 'medium', type: 'performance', message: 'Uso de SELECT * detectado. Prefira projeção explícita de colunas.' })
+    value += 20
+    findings.push({ severity: 'medium', type: 'desempenho', message: 'Uso de SELECT * detectado. Prefira informar as colunas necessárias.' })
   }
   if (!filters && tables.length > 0) {
-    score += 15
-    findings.push({ severity: 'medium', type: 'performance', message: 'Consulta sem cláusula WHERE detectada.' })
+    value += 15
+    findings.push({ severity: 'medium', type: 'desempenho', message: 'Consulta sem cláusula WHERE detectada.' })
   }
   for (const join of joins) {
     if (!join.condition && !/cross/i.test(join.type)) {
-      score += 25
+      value += 25
       findings.push({ severity: 'high', type: 'integridade', message: `JOIN sem condição ON detectado para ${join.table}.` })
     }
   }
   if (DESTRUCTIVE_PATTERNS.some((pattern) => pattern.test(sql))) {
-    score += 40
-    findings.push({ severity: 'critical', type: 'seguranca', message: 'Comando potencialmente destrutivo detectado. Este módulo não deve executar SQL.' })
+    value += 40
+    findings.push({ severity: 'critical', type: 'seguranca', message: 'Comando potencialmente destrutivo detectado. A análise não executa SQL.' })
   }
-  const piiColumns = columns.filter((column) => PII_PATTERNS.some((pattern) => pattern.test(column)))
-  if (piiColumns.length) {
-    score += 20
-    findings.push({ severity: 'high', type: 'lgpd', message: `Possível exposição de PII: ${piiColumns.join(', ')}.` })
+  const personalDataColumns = columns.filter((column) => PERSONAL_DATA_PATTERNS.some((pattern) => pattern.test(column)))
+  if (personalDataColumns.length) {
+    value += 20
+    findings.push({ severity: 'high', type: 'dados-pessoais', message: `Possível exposição de dados pessoais: ${personalDataColumns.join(', ')}.` })
   }
   if (ctes.length >= 3) {
-    score += 10
-    findings.push({ severity: 'low', type: 'manutenibilidade', message: 'Consulta com múltiplas CTEs. Recomenda-se documentação da intenção de cada etapa.' })
+    value += 10
+    findings.push({ severity: 'low', type: 'manutenibilidade', message: 'Consulta com várias CTEs. Documente a intenção de cada etapa.' })
   }
-  if (/over\s*\(/i.test(sql)) findings.push({ severity: 'info', type: 'analytics', message: 'Função de janela detectada. Validar partição e ordenação da métrica.' })
+  if (/over\s*\(/i.test(sql)) {
+    findings.push({ severity: 'info', type: 'analise', message: 'Função de janela detectada. Verifique a partição e a ordenação da métrica.' })
+  }
 
-  const boundedScore = Math.min(100, score)
-  const level = boundedScore >= 75 ? 'critical' : boundedScore >= 50 ? 'high' : boundedScore >= 25 ? 'medium' : 'low'
-  return { score: boundedScore, level, findings }
+  const bounded = Math.min(100, value)
+  const level = bounded >= 75 ? 'critical' : bounded >= 50 ? 'high' : bounded >= 25 ? 'medium' : 'low'
+  return { value: bounded, level, findings }
 }
 
 function buildGraph({ tables, joins, filters, orderBy, groupBy, ctes }) {
@@ -141,20 +147,22 @@ function buildGraph({ tables, joins, filters, orderBy, groupBy, ctes }) {
   })
   if (tables[0] && filters) edges.push({ from: `table:${tables[0].alias || tables[0].table}`, to: 'clause:where', label: 'filtra' })
   if (filters && groupBy) edges.push({ from: 'clause:where', to: 'clause:group', label: 'agrega' })
-  if ((groupBy || filters || tables[0]) && orderBy) edges.push({ from: groupBy ? 'clause:group' : filters ? 'clause:where' : `table:${tables[0].alias || tables[0].table}`, to: 'clause:order', label: 'ordena' })
+  if ((groupBy || filters || tables[0]) && orderBy) {
+    edges.push({ from: groupBy ? 'clause:group' : filters ? 'clause:where' : `table:${tables[0].alias || tables[0].table}`, to: 'clause:order', label: 'ordena' })
+  }
   return { nodes, edges }
 }
 
 function summarize({ tables, joins, filters, groupBy, orderBy, ctes }) {
   if (!tables.length && !ctes.length) return 'Informe uma consulta SELECT para gerar a intenção lógica.'
-  const partes = []
-  if (ctes.length) partes.push(`usa ${ctes.length} CTE(s) como etapa(s) intermediária(s)`)
-  if (tables.length) partes.push(`consulta dados de ${tables.map((item) => item.table).join(', ')}`)
-  if (joins.length) partes.push(`relaciona ${joins.length} junção(ões)`)
-  if (filters) partes.push('aplica filtros de negócio')
-  if (groupBy) partes.push('agrega resultados')
-  if (orderBy) partes.push('ordena a saída')
-  return `${partes.join(', ')}.`
+  const parts = []
+  if (ctes.length) parts.push(`usa ${ctes.length} CTE(s) como etapa(s) intermediária(s)`)
+  if (tables.length) parts.push(`consulta dados de ${tables.map((item) => item.table).join(', ')}`)
+  if (joins.length) parts.push(`relaciona ${joins.length} junção(ões)`)
+  if (filters) parts.push('aplica filtros de negócio')
+  if (groupBy) parts.push('agrega resultados')
+  if (orderBy) parts.push('ordena a saída')
+  return `${parts.join(', ')}.`
 }
 
 export function analyzeSql(sql) {
@@ -168,5 +176,20 @@ export function analyzeSql(sql) {
   const ctes = extractCtes(normalized)
   const risk = calculateRisk({ sql: normalized, columns, tables, joins, filters, ctes })
   const graph = buildGraph({ tables, joins, filters, orderBy, groupBy, ctes })
-  return { normalizedSql: normalized, summary: summarize({ tables, joins, filters, groupBy, orderBy, ctes }), columns, tables, joins, filters, groupBy, orderBy, ctes, riskScore: risk.score, riskLevel: risk.level, findings: risk.findings, graph }
+
+  return {
+    normalizedSql: normalized,
+    summary: summarize({ tables, joins, filters, groupBy, orderBy, ctes }),
+    columns,
+    tables,
+    joins,
+    filters,
+    groupBy,
+    orderBy,
+    ctes,
+    riskScore: risk.value,
+    riskLevel: risk.level,
+    findings: risk.findings,
+    graph,
+  }
 }

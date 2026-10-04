@@ -1,0 +1,48 @@
+name: BACEN DPA Reference Integrity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml"
+      - "scripts/validate_bacen_dpa_reference_integrity.py"
+      - ".github/workflows/bacen-dpa-reference-integrity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml"
+      - "scripts/validate_bacen_dpa_reference_integrity.py"
+      - ".github/workflows/bacen-dpa-reference-integrity.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-dpa-reference-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-05 DPA Reference Integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML
+      - run: python -m py_compile scripts/validate_bacen_dpa_reference_integrity.py
+      - name: Validate references
+        run: |
+          python scripts/validate_bacen_dpa_reference_integrity.py \
+            --contract governance/bacen/VENDOR-DPA-EVIDENCE-CONTRACT.yaml \
+            --output artifacts/bacen/bacen-05-dpa-reference-integrity.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bacen-05-dpa-reference-integrity
+          path: artifacts/bacen/bacen-05-dpa-reference-integrity.json
+          if-no-files-found: error
+          retention-days: 365

@@ -1,0 +1,12 @@
+schema_version: 1.0.0
+control_id: BACEN-07
+evidence_status: canonical_reference
+artifact_path: artifacts/bacen/bacen-07-audit-evidence-index.json
+artifact_name: bacen-audit-evidence-index
+workflow_path: .github/workflows/bacen-audit-evidence-index.yml
+source_policy: governance/bacen/AUDIT-EVIDENCE-RETENTION-POLICY.md
+source_generator: scripts/consolidate_bacen_audit_evidence.py
+control_status: implemented
+production_touched: false
+contains_sensitive_content: false
+purpose: resolver_indice_canonico_de_auditoria_sem_substituir_artifact_de_execucao
