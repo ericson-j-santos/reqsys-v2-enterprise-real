@@ -8,6 +8,8 @@ on:
     workflows:
       - Governed Merge Queue
     types: [completed]
+  repository_dispatch:
+    types: [governed_pr_queue_reconcile]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -52,6 +54,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  reconcile-recovered-pr-queue:
+    name: Reconcile recovered PR queue
+    if: github.event_name == 'repository_dispatch' && github.event.action == 'governed_pr_queue_reconcile'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout control plane
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Select oldest actionable PR
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', base: 'main', sort: 'created', direction: 'asc', per_page: 100 });
+            const rank = { recover_conflict: 0, recover_behind: 1, recover_ci: 2, merge_candidate: 3, inspect: 4, wait_ci: 5 };
+            const rows = [];
+            for (const summary of pulls) {
+              if (summary.head.repo?.full_name !== `${owner}/${repo}`) continue;
+              const pr = (await github.rest.pulls.get({ owner, repo, pull_number: summary.number })).data;
+              const baseSha = (await github.rest.git.getRef({ owner, repo, ref: `heads/${pr.base.ref}` })).data.object.sha;
+              const comparison = (await github.rest.repos.compareCommits({ owner, repo, base: baseSha, head: pr.head.sha })).data;
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, { owner, repo, head_sha: pr.head.sha, event: 'pull_request', per_page: 100 });
+              const failed = runs.some(run => run.status === 'completed' && ['failure','timed_out','action_required','startup_failure'].includes(run.conclusion));
+              const pending = runs.some(run => run.status !== 'completed');
+              let action = 'inspect';
+              if (pr.mergeable === false || pr.mergeable_state === 'dirty') action = 'recover_conflict';
+              else if (comparison.behind_by > 0) action = 'recover_behind';
+              else if (failed) action = 'recover_ci';
+              else if (pending || runs.length === 0) action = 'wait_ci';
+              else if (pr.mergeable === true) action = 'merge_candidate';
+              rows.push({ number: pr.number, created_at: pr.created_at, head_sha: pr.head.sha, mergeable: pr.mergeable, mergeable_state: pr.mergeable_state, behind_by: comparison.behind_by, action });
+            }
+            const actionable = rows.filter(row => !['wait_ci'].includes(row.action));
+            actionable.sort((a,b) => (rank[a.action]-rank[b.action]) || (new Date(a.created_at)-new Date(b.created_at)) || (a.number-b.number));
+            const selected = actionable[0] || null;
+            await core.summary.addHeading('Governed PR Queue').addRaw(JSON.stringify({ selected, candidates: rows.length }, null, 2)).write();
+            if (!selected || !selected.action.startsWith('recover_')) return;
+            const live = (await github.rest.pulls.get({ owner, repo, pull_number: selected.number })).data;
+            if (live.state !== 'open' || live.head.sha !== selected.head_sha) { core.setFailed('PR changed before recovery checkpoint'); return; }
+            await github.rest.issues.addLabels({ owner, repo, issue_number: selected.number, labels: ['ci:recuperado'] });
+            const marker = '<!-- governed-pr-queue-controller -->';
+            const body = `${marker}\n### Governed PR Queue — recuperação acionável\n\n- Ação: \`${selected.action}\`\n- HEAD: \`${selected.head_sha}\`\n- behind_by: \`${selected.behind_by}\`\n- mergeable_state: \`${selected.mergeable_state}\`\n- Prioridade: mergeabilidade/behind antes de CI.\n- Merge/deploy: não executados neste checkpoint.`;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: selected.number, per_page: 100 });
+            const existing = comments.find(item => String(item.body || '').includes(marker));
+            if (existing) await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number: selected.number, body });
+
   increment-gate-on-open:
     name: Increment gate — abertura de PR
     if: github.event_name == 'pull_request'
