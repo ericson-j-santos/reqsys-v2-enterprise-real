@@ -7,9 +7,9 @@ Responsabilidades:
 - gerar evidência JSON/Markdown;
 - marcar falhas reais como bloqueantes;
 - reexecutar, no máximo uma vez, apenas falhas transitórias de workflows explicitamente permitidos;
-- varrer PRs abertos periodicamente para evitar CI vermelho abandonado;
+- varrer PRs abertos por estado estrutural e CI, priorizando conflitos, diff vazio e branch atrasada;
 - manter um único comentário operacional por PR;
-- nunca alterar código, segredos, produção ou executar merge automaticamente.
+- sincronizar no máximo uma branch atrasada por ciclo quando houver diff real, mergeabilidade e SHA esperado estável;\n- nunca resolver conflito de código automaticamente, nunca inventar diff e nunca executar merge diretamente.
 """
 from __future__ import annotations
 
@@ -130,6 +130,38 @@ class FailureDetail:
     failed_steps: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class PRStructure:
+    number: str
+    html_url: str | None
+    created_at: str | None
+    head_sha: str
+    base_sha: str
+    mergeable: bool | None
+    mergeable_state: str
+    behind_by: int
+    ahead_by: int
+    changed_files: int
+    draft: bool
+
+    @property
+    def structural_state(self) -> str:
+        state = self.mergeable_state.casefold()
+        if self.mergeable is False or state in {"dirty", "conflicting"}:
+            return "conflicting"
+        if self.changed_files == 0:
+            return "empty_change"
+        if self.behind_by > 0:
+            return "behind"
+        if self.mergeable is None or state == "unknown":
+            return "pending_mergeability"
+        return "clean"
+
+    @property
+    def priority(self) -> int:
+        return {"conflicting": 0, "empty_change": 1, "behind": 2, "pending_mergeability": 3, "clean": 4}[self.structural_state]
+
+
 def request_json(
     method: str,
     url: str,
@@ -215,11 +247,68 @@ def fetch_failure_details(repo: str, run_id: int, token: str) -> list[FailureDet
 
 
 def fetch_open_prs(repo: str, token: str) -> list[dict[str, Any]]:
-    url = f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&sort=updated&direction=asc"
+    url = f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&sort=created&direction=asc"
     data = request_json("GET", url, token)
     if not isinstance(data, list):
         raise RuntimeError("Resposta inesperada ao consultar PRs abertos.")
     return [item for item in data if isinstance(item, dict)]
+
+
+def fetch_pr_structure(repo: str, pr: dict[str, Any], token: str) -> PRStructure:
+    number = str(pr.get("number") or "")
+    detail = request_json("GET", f"https://api.github.com/repos/{repo}/pulls/{number}", token)
+    if not isinstance(detail, dict):
+        raise RuntimeError(f"Resposta inesperada ao consultar PR #{number}.")
+    head = detail.get("head") or {}
+    base = detail.get("base") or {}
+    head_sha, base_sha = str(head.get("sha") or ""), str(base.get("sha") or "")
+    if not number or not head_sha or not base_sha:
+        raise RuntimeError("PR sem número/head/base SHA.")
+    comparison = request_json("GET", f"https://api.github.com/repos/{repo}/compare/{base_sha}...{head_sha}", token)
+    if not isinstance(comparison, dict):
+        raise RuntimeError(f"Resposta inesperada ao comparar PR #{number}.")
+    return PRStructure(
+        number=number, html_url=detail.get("html_url"), created_at=detail.get("created_at"),
+        head_sha=head_sha, base_sha=base_sha, mergeable=detail.get("mergeable"),
+        mergeable_state=str(detail.get("mergeable_state") or "unknown"),
+        behind_by=int(comparison.get("behind_by") or 0), ahead_by=int(comparison.get("ahead_by") or 0),
+        changed_files=int(detail.get("changed_files") or 0), draft=bool(detail.get("draft")),
+    )
+
+
+def update_pr_branch(repo: str, structure: PRStructure, token: str) -> None:
+    request_json("PUT", f"https://api.github.com/repos/{repo}/pulls/{structure.number}/update-branch", token, {"expected_head_sha": structure.head_sha})
+
+
+def render_structural_sweep_markdown(repo: str, structures: list[PRStructure], update_result: dict[str, Any] | None) -> str:
+    lines = ["# PR CI Watch — fila estrutural", "", "Prioridade: conflito → diff vazio → branch atrasada → CI.", "", "| PR | Estado | Behind | Diff | Draft | HEAD |", "|---:|---|---:|---:|---|---|"]
+    for item in structures:
+        lines.append(f"| [#{item.number}](https://github.com/{repo}/pull/{item.number}) | `{item.structural_state}` | `{item.behind_by}` | `{item.changed_files}` | `{item.draft}` | `{item.head_sha[:12]}` |")
+    if update_result:
+        lines += ["", "## Sincronização automática", "", f"- PR: `#{update_result['pr_number']}`", f"- HEAD esperado: `{update_result['expected_head_sha']}`", f"- Executada: `{update_result['executed']}`", f"- Motivo: `{update_result['reason']}`"]
+    return "\n".join(lines) + "\n"
+
+
+def sweep_structural_prs(repo: str, token: str, *, report_dir: Path, auto_update_behind: bool, comment: bool) -> tuple[list[PRStructure], str]:
+    structures = [fetch_pr_structure(repo, pr, token) for pr in fetch_open_prs(repo, token)]
+    structures.sort(key=lambda item: (item.priority, item.created_at or "", int(item.number)))
+    update_result: dict[str, Any] | None = None
+    blocker = next((item for item in structures if item.structural_state != "clean"), None)
+    if blocker is not None:
+        if blocker.structural_state == "behind" and auto_update_behind:
+            update_pr_branch(repo, blocker, token)
+            update_result = {"pr_number": blocker.number, "expected_head_sha": blocker.head_sha, "executed": True, "reason": "oldest_safe_behind_branch_updated"}
+        else:
+            reasons = {"conflicting": "conflict_requires_objective_reconciliation", "empty_change": "empty_change_requires_work_recovery", "pending_mergeability": "mergeability_not_computed_fail_closed", "behind": "automatic_update_disabled"}
+            update_result = {"pr_number": blocker.number, "expected_head_sha": blocker.head_sha, "executed": False, "reason": reasons.get(blocker.structural_state, "no_safe_automatic_action")}
+        if comment and blocker.structural_state in {"conflicting", "empty_change"}:
+            message = f"{COMMENT_MARKER}\n## PR CI Watch — bloqueio estrutural\n\n- Estado: `{blocker.structural_state}`\n- HEAD: `{blocker.head_sha}`\n- behind_by: `{blocker.behind_by}`\n- changed_files: `{blocker.changed_files}`\n\nA fila foi interrompida neste PR porque a correção exige reconciliação objetiva; não será feito merge, force-push nem criação artificial de diff."
+            upsert_comment(repo, blocker.number, token, message)
+    markdown = render_structural_sweep_markdown(repo, structures, update_result)
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "pr-structural-sweep.json").write_text(json.dumps({"repo": repo, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "priority_order": ["conflicting", "empty_change", "behind", "pending_mergeability", "clean"], "update_result": update_result, "prs": [asdict(item) | {"structural_state": item.structural_state, "priority": item.priority} for item in structures]}, ensure_ascii=False, indent=2), encoding="utf-8")
+    (report_dir / "pr-structural-sweep.md").write_text(markdown, encoding="utf-8")
+    return structures, markdown
 
 
 def latest_relevant_runs(
@@ -650,6 +739,8 @@ def main() -> int:
     parser.add_argument("--auto-remediate", action="store_true")
     parser.add_argument("--trigger-run-id")
     parser.add_argument("--sweep-open-prs", action="store_true")
+    parser.add_argument("--structural-sweep", action="store_true")
+    parser.add_argument("--auto-update-behind", action="store_true")
     parser.add_argument(
         "--fail-on-unhealthy",
         action="store_true",
@@ -664,6 +755,16 @@ def main() -> int:
 
     report_dir = Path(args.report_dir)
     exclude_run_id = parse_optional_int(args.exclude_run_id)
+
+    if args.structural_sweep:
+        structures, markdown = sweep_structural_prs(args.repo, token, report_dir=report_dir, auto_update_behind=args.auto_update_behind, comment=args.comment)
+        step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if step_summary:
+            with open(step_summary, "a", encoding="utf-8") as handle:
+                handle.write(markdown)
+        if args.fail_on_unhealthy and any(item.structural_state in {"conflicting", "empty_change"} for item in structures):
+            return 1
+        return 0
 
     if args.sweep_open_prs:
         analyses, markdown = sweep_open_prs(
