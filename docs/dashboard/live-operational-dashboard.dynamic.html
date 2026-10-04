@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReqSys — Dynamic Runtime Dashboard</title>
+  <style>
+    :root { --blue:#005CA9; --orange:#F39200; --teal:#00B3AD; --green:#198754; --yellow:#B7791F; --red:#B00020; --bg:#f6f8fb; --card:#fff; --text:#1f2937; --muted:#6b7280; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    header { background:linear-gradient(135deg,var(--blue),#083a6b); color:white; padding:24px; }
+    main { max-width:1280px; margin:0 auto; padding:20px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+    .card { background:var(--card); border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(15,23,42,.08); border-left:5px solid var(--blue); }
+    .good { border-left-color:var(--green); } .warn { border-left-color:var(--yellow); } .risk { border-left-color:var(--orange); } .bad { border-left-color:var(--red); }
+    .label { color:var(--muted); font-size:.82rem; text-transform:uppercase; letter-spacing:.05em; }
+    .value { font-size:2rem; font-weight:700; margin-top:6px; }
+    .unit { color:var(--muted); font-size:.9rem; }
+    section { margin-top:22px; }
+    table { width:100%; border-collapse:collapse; background:white; border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(15,23,42,.08); }
+    th, td { padding:12px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; }
+    th { background:#eef4fb; color:#0f3557; }
+    .badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:.78rem; font-weight:700; }
+    .green { background:#e8f5ee; color:var(--green); } .yellow { background:#fff7e6; color:var(--yellow); } .red { background:#fdecec; color:var(--red); } .blue { background:#e7f1fb; color:var(--blue); }
+    code { background:#eef2f7; padding:2px 5px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ReqSys — Dynamic Runtime Dashboard</h1>
+    <p>Command center local-first para artifacts operacionais JSON, sem CDN, sem secrets e com fallback governado.</p>
+  </header>
+  <main>
+    <section class="grid" id="cards"></section>
+    <section><h2>Top gargalos por P95</h2><table><thead><tr><th>Workflow</th><th>Runs</th><th>Success</th><th>P95</th><th>Max</th></tr></thead><tbody id="bottlenecks"></tbody></table></section>
+    <section><h2>Predições operacionais</h2><table><thead><tr><th>Predição</th><th>Recomendação</th><th>Risco</th></tr></thead><tbody id="predictions"></tbody></table></section>
+    <section><h2>Maturidade operacional</h2><table><thead><tr><th>Dimensão</th><th>Atual</th><th>Alvo</th><th>Gap</th><th>Status</th></tr></thead><tbody id="maturity"></tbody></table></section>
+    <section><h2>Artifacts catalogados</h2><table><thead><tr><th>Artifact</th><th>Workflow</th><th>Consumer</th><th>Risco</th></tr></thead><tbody id="artifacts"></tbody></table></section>
+    <section><h2>Checks do command center</h2><table><thead><tr><th>Check</th><th>Status</th><th>Score/Cobertura</th></tr></thead><tbody id="commandChecks"></tbody></table></section>
+    <section><h2>Status de entrega</h2><table><thead><tr><th>Grupo</th><th>PRs</th><th>Estado</th><th>Foco</th></tr></thead><tbody id="delivery"></tbody></table></section>
+    <section><h2>Burndown de entrega</h2><table><thead><tr><th>Dimensão</th><th>Atual</th><th>Alvo</th><th>Gap</th><th>Status</th></tr></thead><tbody id="deliveryBurndown"></tbody></table></section>
+    <section><h2>Evidências de entrega</h2><table><thead><tr><th>Evidência</th><th>Tipo</th><th>Caminho</th></tr></thead><tbody id="deliveryEvidence"></tbody></table></section>
+    <section><h2>Readiness de entrega</h2><table><thead><tr><th>Check</th><th>Score</th><th>Status</th></tr></thead><tbody id="deliveryReadiness"></tbody></table></section>
+    <section><h2>Conclusão de entrega</h2><table><thead><tr><th>Marco</th><th>Percentual</th><th>Status</th></tr></thead><tbody id="deliveryCompletion"></tbody></table></section>
+    <section><h2>Snapshot executivo de maturidade de entrega</h2><table><thead><tr><th>Dimensão</th><th>Atual evidenciado</th><th>Alvo</th><th>Gap</th><th>Semáforo</th><th>Confiança</th><th>Evidências</th><th>Próxima ação</th></tr></thead><tbody id="deliveryMaturity"></tbody></table></section>
+    <section><h2>Fontes de dados</h2><table><thead><tr><th>Fonte</th><th>Status</th><th>Observação</th></tr></thead><tbody id="sources"></tbody></table></section>
+  </main>
+  <script>
+    const sources = [
+      { key: 'leadTime', label: 'CI Lead Time Analytics', href: '../audit/ci-lead-time-analytics.json' },
+      { key: 'history', label: 'Operational History Snapshot', href: '../audit/history/operational-history-snapshot.json' },
+      { key: 'predictive', label: 'Runtime Predictive Analytics', href: '../audit/predictive/runtime-predictive-analytics.json' },
+      { key: 'maturity', label: 'Operational Maturity Score', href: '../audit/maturity/operational-maturity-score.json' },
+      { key: 'discovery', label: 'Operational Artifact Discovery Index', href: '../audit/artifact-discovery/operational-artifact-discovery-index.json' },
+      { key: 'release', label: 'Golden Release Readiness', href: '../audit/release-readiness/golden-release-readiness.json' },
+      { key: 'releaseValidation', label: 'Release Validation Layer', href: '../audit/release-validation/release-validation-layer.json' },
+      { key: 'commandCenter', label: 'Command Center Readiness', href: '../audit/command-center/command-center-readiness.json' },
+      { key: 'extendedContracts', label: 'Extended Operational Contract Validation', href: '../audit/extended-contract-validation/extended-operational-contract-validation.json' },
+      { key: 'delivery', label: 'Delivery Status Report', href: '../audit/delivery/delivery-status-report.json' },
+      { key: 'deliveryBurndown', label: 'Delivery Burndown Snapshot', href: '../audit/delivery-burndown/delivery-burndown-snapshot.json' },
+      { key: 'deliveryEvidence', label: 'Delivery Evidence Report', href: '../audit/delivery-evidence/delivery-evidence-report.json' },
+      { key: 'deliveryReadiness', label: 'Delivery Readiness Report', href: '../audit/delivery-readiness/delivery-readiness-report.json' },
+      { key: 'deliveryCompletion', label: 'Delivery Completion Snapshot', href: '../audit/delivery-completion/delivery-completion-snapshot.json' },
+      { key: 'deliveryMaturity', label: 'Delivery Maturity Snapshot', href: '../audit/delivery-maturity/delivery-maturity-snapshot.json' },
+      { key: 'publicRuntime', label: 'Public Runtime Evidence', href: '../audit/runtime/public-runtime-evidence-index.json' }
+    ];
+
+    const fallback = {
+      leadTime: { success_rate_percent: 0, failure_rate_percent: 0, p50_seconds: 0, p95_seconds: 0, max_seconds: 0, bottlenecks: [] },
+      history: { risk:'unknown', baseline:{ incident_lead_time_minutes:143 } },
+      predictive: { risk_score: 0, risk_level: 'unknown', predictions: ['predictive_artifact_unavailable'], recommendations: ['execute_runtime_predictive_analytics_workflow'] },
+      maturity: { average_percent: 0, average_gap_pp: 0, risk: 'unknown', dimensions: [] },
+      discovery: { artifact_count: 0, schema_coverage_percent: 0, dashboard_consumer_coverage_percent: 0, artifacts: [] },
+      release: { score_percent: 0, readiness: 'unknown', risk: 'unknown', checks: [] },
+      releaseValidation: { release_readiness_score: 0, readiness: 'unknown', risk: 'unknown', quality_gates: [] },
+      commandCenter: { score_percent: 0, status: 'unknown', source_coverage_percent: 0, checks: [] },
+      extendedContracts: { status: 'unknown', contracts: [] },
+      delivery: { tracked_prs: 0, merged_prs: 0, merge_rate_percent: 0, current_maturity_percent: 0, remaining_gap_pp: 0, groups: [] },
+      deliveryBurndown: { total_gap_pp: 0, largest_gap: { name: 'unknown' }, dimensions: [] },
+      deliveryEvidence: { evidence_count: 0, coverage_percent: 0, status: 'unknown', evidences: [] },
+      deliveryReadiness: { score_percent: 0, status: 'unknown', remaining_gap_pp: 0, checks: [] },
+      deliveryCompletion: { completion_percent: 0, target_percent: 99.5, remaining_gap_pp: 0, status: 'unknown', milestones: [] },
+      deliveryMaturity: { average_current_percent: 0, average_target_percent: 0, average_gap_percent: 0, dimensions: [] },
+      publicRuntime: { summary: { operational_status: 'unknown', readiness_percent: 0, strict_gate_passed: false }, strict_gate_passed: false }
+    };
+
+    async function loadJson(source) {
+      try {
+        const response = await fetch(source.href, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return { ok: true, data: await response.json(), error: null };
+      } catch (error) {
+        return { ok: false, data: fallback[source.key], error: error.message };
+      }
+    }
+
+    function secondsToMinutes(value) { return Math.round((Number(value || 0) / 60) * 10) / 10; }
+    function badge(status) {
+      if (status === 'passed' || status === true || status === 'low' || status === 'verde' || status === 'medium_low' || status === 'ready_with_observation' || status === 'consolidado' || status === 'stable' || status === 'closed' || status === 'completed' || status === 'consolidated' || status === 'completed_with_observation') return '<span class="badge green">verde</span>';
+      if (status === 'warning' || status === 'unknown' || status === 'amarelo' || status === 'medium' || status === 'em_consolidacao' || status === 'open' || status === 'attention' || status === 'consolidating') return '<span class="badge yellow">atenção</span>';
+      return '<span class="badge red">risco</span>';
+    }
+    function riskClass(level) {
+      if (level === 'high') return 'bad';
+      if (level === 'medium' || level === 'unknown' || level === 'open' || level === 'attention' || level === 'consolidating') return 'warn';
+      return 'good';
+    }
+    function card(label, value, unit, status) {
+      return `<div class="card ${riskClass(status)}"><div class="label">${label}</div><div class="value">${value}<span class="unit">${unit}</span></div>${badge(status)}</div>`;
+    }
+
+    async function render() {
+      const loaded = {};
+      const statuses = [];
+      for (const source of sources) {
+        loaded[source.key] = await loadJson(source);
+        statuses.push(`<tr><td>${source.label}</td><td>${loaded[source.key].ok ? '<span class="badge green">carregado</span>' : '<span class="badge yellow">fallback</span>'}</td><td>${loaded[source.key].error || 'OK'} — <code>${source.href}</code></td></tr>`);
+      }
+      const lead = loaded.leadTime.data;
+      const hist = loaded.history.data;
+      const predictive = loaded.predictive.data;
+      const maturity = loaded.maturity.data;
+      const discovery = loaded.discovery.data;
+      const release = loaded.release.data;
+      const releaseValidation = loaded.releaseValidation.data;
+      const commandCenter = loaded.commandCenter.data;
+      const extendedContracts = loaded.extendedContracts.data;
+      const delivery = loaded.delivery.data;
+      const burndown = loaded.deliveryBurndown.data;
+      const evidence = loaded.deliveryEvidence.data;
+      const deliveryReadiness = loaded.deliveryReadiness.data;
+      const completion = loaded.deliveryCompletion.data;
+      const deliveryMaturity = loaded.deliveryMaturity.data;
+      const publicRuntime = loaded.publicRuntime.data;
+      const publicSummary = publicRuntime.summary || publicRuntime;
+      document.getElementById('cards').innerHTML = [
+        card('Public runtime readiness', publicSummary.readiness_percent || 0, '%', publicSummary.operational_status || 'unknown'),
+        card('Success rate', lead.success_rate_percent || 0, '%', (lead.success_rate_percent || 0) >= 95 ? 'low' : 'medium'),
+        card('P95 lead time', secondsToMinutes(lead.p95_seconds), 'min', (lead.p95_seconds || 0) < 900 ? 'low' : 'medium'),
+        card('Predictive risk score', predictive.risk_score || 0, '/100', predictive.risk_level),
+        card('Maturity score', maturity.average_percent || 0, '%', maturity.risk),
+        card('Release readiness', release.score_percent || 0, '%', release.risk),
+        card('Release validation score', releaseValidation.release_readiness_score || 0, '%', releaseValidation.risk),
+        card('Release validation state', releaseValidation.readiness || 'unknown', '', releaseValidation.readiness),
+        card('Command center', commandCenter.score_percent || 0, '%', commandCenter.status),
+        card('Contracts validation', extendedContracts.status || 'unknown', '', extendedContracts.status),
+        card('Tracked PRs', delivery.tracked_prs || 0, '', delivery.status || 'stable'),
+        card('Merge rate', delivery.merge_rate_percent || 0, '%', delivery.status || 'stable'),
+        card('Delivery maturity', delivery.current_maturity_percent || 0, '%', delivery.status || 'stable'),
+        card('Delivery readiness', deliveryReadiness.score_percent || 0, '%', deliveryReadiness.status),
+        card('Delivery completion', completion.completion_percent || 0, '%', completion.status),
+        card('Exec maturity avg', deliveryMaturity.average_current_percent || 0, '%', (deliveryMaturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention'),
+        card('Completion gap', completion.remaining_gap_pp || 0, 'p.p.', completion.status),
+        card('Exec maturity gap', deliveryMaturity.average_gap_percent || 0, 'p.p.', (deliveryMaturity.average_gap_percent || 0) <= 5 ? 'low' : 'attention'),
+        card('Delivery readiness gap', deliveryReadiness.remaining_gap_pp || 0, 'p.p.', deliveryReadiness.status),
+        card('Delivery total gap', burndown.total_gap_pp || 0, 'p.p.', (burndown.total_gap_pp || 0) <= 1 ? 'low' : 'open'),
+        card('Largest delivery gap', burndown.largest_gap?.name || 'unknown', '', (burndown.total_gap_pp || 0) <= 1 ? 'low' : 'open'),
+        card('Delivery evidences', evidence.evidence_count || 0, '', evidence.status || 'stable'),
+        card('Evidence coverage', evidence.coverage_percent || 0, '%', evidence.status || 'stable'),
+        card('Artifacts catalogados', discovery.artifact_count || 0, '', 'low'),
+        card('Schema coverage', discovery.schema_coverage_percent || 0, '%', (discovery.schema_coverage_percent || 0) >= 60 ? 'low' : 'medium'),
+        card('Baseline incidente', hist.baseline?.incident_lead_time_minutes || 143, 'min', 'medium_low')
+      ].join('');
+      document.getElementById('bottlenecks').innerHTML = (lead.bottlenecks || []).slice(0, 10).map(item => `<tr><td>${item.name}</td><td>${item.runs}</td><td>${item.success_rate_percent}%</td><td>${secondsToMinutes(item.p95_seconds)}min</td><td>${secondsToMinutes(item.max_seconds)}min</td></tr>`).join('') || '<tr><td colspan="5">Sem dados carregados; usando fallback governado.</td></tr>';
+      const recommendations = predictive.recommendations || [];
+      document.getElementById('predictions').innerHTML = (predictive.predictions || []).map((item, index) => `<tr><td>${item}</td><td>${recommendations[index] || recommendations[0] || 'monitorar'}</td><td>${badge(predictive.risk_level)}</td></tr>`).join('') || '<tr><td colspan="3">Sem predições carregadas.</td></tr>';
+      document.getElementById('maturity').innerHTML = (maturity.dimensions || []).map(item => `<tr><td>${item.name}</td><td>${item.current_percent}%</td><td>${item.target_percent}%</td><td>${item.gap_pp} p.p.</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="5">Sem score de maturidade carregado.</td></tr>';
+      document.getElementById('artifacts').innerHTML = (discovery.artifacts || []).map(item => `<tr><td>${item.name}</td><td>${item.workflow}</td><td><code>${item.consumer}</code></td><td>${badge(item.risk)}</td></tr>`).join('') || '<tr><td colspan="4">Sem índice de artifacts carregado.</td></tr>';
+      document.getElementById('commandChecks').innerHTML = (commandCenter.checks || []).map(item => `<tr><td>${item.name}</td><td>${badge(item.passed)}</td><td>${item.coverage_percent || item.score || '-'}</td></tr>`).join('') || '<tr><td colspan="3">Sem readiness do command center carregado.</td></tr>';
+      document.getElementById('delivery').innerHTML = (delivery.groups || []).map(item => `<tr><td>${item.range}</td><td>${item.prs}</td><td>${badge(item.state)}</td><td>${item.focus}</td></tr>`).join('') || '<tr><td colspan="4">Sem status de entrega carregado.</td></tr>';
+      document.getElementById('deliveryBurndown').innerHTML = (burndown.dimensions || []).map(item => `<tr><td>${item.name}</td><td>${item.current_percent}%</td><td>${item.target_percent}%</td><td>${item.gap_pp} p.p.</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="5">Sem burndown de entrega carregado.</td></tr>';
+      document.getElementById('deliveryEvidence').innerHTML = (evidence.evidences || []).map(item => `<tr><td>${item.name}</td><td>${item.type}</td><td><code>${item.path}</code></td></tr>`).join('') || '<tr><td colspan="3">Sem evidence report de entrega carregado.</td></tr>';
+      document.getElementById('deliveryReadiness').innerHTML = (deliveryReadiness.checks || []).map(item => `<tr><td>${item.name}</td><td>${item.score}%</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="3">Sem readiness de entrega carregado.</td></tr>';
+      document.getElementById('deliveryCompletion').innerHTML = (completion.milestones || []).map(item => `<tr><td>${item.name}</td><td>${item.percent}%</td><td>${badge(item.status)}</td></tr>`).join('') || '<tr><td colspan="3">Sem snapshot de conclusão carregado.</td></tr>';
+      document.getElementById('deliveryMaturity').innerHTML = (deliveryMaturity.dimensions || []).map(item => `<tr><td>${item.name}</td><td>${item.current_percent}%</td><td>${item.target_percent}%</td><td>${item.gap_percent} p.p.</td><td>${badge(item.status_semáforo)}</td><td>${item.confidence_level}</td><td>${(item.evidence_links || []).map(link => `<code>${link}</code>`).join('<br>')}</td><td>${item.next_recommended_action}</td></tr>`).join('') || '<tr><td colspan="8">Sem snapshot executivo de maturidade carregado.</td></tr>';
+      document.getElementById('sources').innerHTML = statuses.join('');
+    }
+    render();
+  </script>
+</body>
+</html>

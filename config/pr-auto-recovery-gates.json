@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "controlled-draft-pr",
+  "default_enabled": false,
+  "required_gates": {
+    "original_pr_open": true,
+    "original_pr_mergeable_false": true,
+    "replacement_pr_draft": true,
+    "replacement_branch_from_current_main": true,
+    "comment_original_pr": true,
+    "close_original_pr": false,
+    "auto_merge": false,
+    "deploy": false,
+    "secret_mutation": false,
+    "branch_protection_mutation": false
+  },
+  "allowlist": [
+    "docs/**",
+    "frontend/**",
+    "scripts/**",
+    ".github/workflows/pr-*.yml",
+    ".github/workflows/*quality*.yml",
+    ".github/workflows/*governance*.yml"
+  ],
+  "blocklist": [
+    "secrets/**",
+    "infra/production/**",
+    "terraform/prod/**",
+    ".github/CODEOWNERS",
+    ".github/workflows/*deploy*.yml",
+    ".github/workflows/*release*.yml",
+    ".github/workflows/*production*.yml"
+  ],
+  "limits": {
+    "max_changed_files": 12,
+    "max_total_changes": 900,
+    "max_workflow_files": 2
+  }
+}

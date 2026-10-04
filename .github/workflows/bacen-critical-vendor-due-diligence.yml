@@ -1,0 +1,60 @@
+name: BACEN Critical Vendor Due Diligence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_critical_vendor_due_diligence.py"
+      - ".github/workflows/bacen-critical-vendor-due-diligence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml"
+      - "scripts/generate_bacen_critical_vendor_due_diligence.py"
+      - ".github/workflows/bacen-critical-vendor-due-diligence.yml"
+  schedule:
+    - cron: "29 7 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bacen-critical-vendor-due-diligence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: BACEN-05 Critical Vendor Due Diligence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check PyYAML
+      - run: python -m py_compile scripts/generate_bacen_critical_vendor_due_diligence.py
+      - name: Generate evidence
+        run: |
+          python scripts/generate_bacen_critical_vendor_due_diligence.py \
+            --register governance/bacen/CLOUD-THIRD-PARTY-REGISTER.yaml \
+            --output artifacts/bacen/bacen-05-critical-vendor-due-diligence.json
+      - name: Validate artifact
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-05-critical-vendor-due-diligence.json").read_text())
+          assert report["control_id"] == "BACEN-05"
+          assert report["production_touched"] is False
+          assert report["control_status"] in {"partial", "implemented"}
+          PY
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacen-05-critical-vendor-due-diligence
+          path: artifacts/bacen/bacen-05-critical-vendor-due-diligence.json
+          if-no-files-found: error
+          retention-days: 365

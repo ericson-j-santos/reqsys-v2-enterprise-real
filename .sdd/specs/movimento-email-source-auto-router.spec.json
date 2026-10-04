@@ -1,0 +1,23 @@
+{
+  "feature_name": "movimento-email-source-auto-router",
+  "project": "ReqSys v2 Enterprise — Prospecção Movimento",
+  "created_at": "2026-09-19",
+  "updated_at": "2026-09-19",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Roteia a origem do Movimento em DEV: corporate quando disponível; equivalência DEV somente para ausência de configuração ou DNS, preservando fail-closed para erros reais.",
+  "runtime_target": "pc24x7",
+  "environment": "DEV",
+  "production_enabled": false,
+  "sdd_gate": {
+    "tests": [
+      "tests/test_movimento_email_source_router.py",
+      "tests/test_movimento_email_equivalent_dev.py"
+    ],
+    "evidence_contract": "Registrar selected_source, fallback_used/reason, flags synthetic/equivalent/corporate e resultado idempotente; nunca DSN, segredo ou dados de negócio."
+  }
+}

@@ -1,0 +1,67 @@
+name: ReqSys Product Intelligence Living Backlog
+
+on:
+  pull_request:
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/reqsys-product-intelligence-living-backlog.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/product-intelligence/**"
+      - "schemas/product-intelligence/**"
+      - "examples/product-intelligence/**"
+      - "tools/product_intelligence/**"
+      - ".github/workflows/reqsys-product-intelligence-living-backlog.yml"
+
+jobs:
+  reqsys-product-intelligence-living-backlog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Product Intelligence event
+        run: |
+          python tools/product_intelligence/validate_product_intelligence_event.py examples/product-intelligence/product-intelligence-event.example.json
+
+      - name: Generate requirement quality score
+        run: |
+          python tools/product_intelligence/score_requirement_quality.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate functional traceability graph
+        run: |
+          python tools/product_intelligence/build_functional_traceability_graph.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate product intelligence dashboard
+        run: |
+          python tools/product_intelligence/generate_product_intelligence_dashboard.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate product decision intelligence
+        run: |
+          python tools/product_intelligence/generate_product_decision_intelligence.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Generate living backlog
+        run: |
+          python tools/product_intelligence/generate_living_backlog.py examples/product-intelligence/product-intelligence-event.example.json reports/product-intelligence
+
+      - name: Publish living backlog summary
+        run: |
+          cat reports/product-intelligence/reqsys-product-intelligence-living-backlog.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload living backlog artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-product-intelligence-living-backlog
+          path: reports/product-intelligence/
+          if-no-files-found: error

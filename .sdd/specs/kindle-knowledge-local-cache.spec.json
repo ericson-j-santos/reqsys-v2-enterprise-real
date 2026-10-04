@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "kindle-knowledge-local-cache",
+  "project": "ReqSys v2 Enterprise — Kindle Knowledge",
+  "created_at": "2026-09-21",
+  "updated_at": "2026-09-21",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Materializa um cache local governado das consultas Kindle nos hosts DEV Noteri e PC24x7, com leitura independente, evidência sanitizada e replay idempotente.",
+  "scope": "local-dev",
+  "files": [
+    "scripts/kindle_knowledge_local_cache.py",
+    ".github/workflows/kindle-knowledge-local-cache.yml",
+    ".github/self-hosted-runner-policy.json",
+    "tests/test_kindle_knowledge_local_cache.py"
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_kindle_knowledge_local_cache.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "O bundle deve conter exatamente 7 consultas; o workflow deve permanecer allowlisted, limitado aos hosts DEV autorizados, sem leitura de segredos ou produção; materialização deve produzir hash SHA-256 e leitura independente; replay da mesma versão deve resultar sem alterações; evidência deve permanecer vinculada ao correlation_id e ao SHA executado."
+  },
+  "runtime_validation": {
+    "environment": "DEV",
+    "hosts": [
+      "Noteri",
+      "DESKTOP-PDQK954"
+    ],
+    "canonical_root": "C:\\dev\\chatgpt-workers\\kindle-knowledge-local",
+    "workflow": ".github/workflows/kindle-knowledge-local-cache.yml",
+    "positive_case": "materialização das 7 consultas e leitura independente do SQL",
+    "idempotency_case": "replay com --expect-no-changes",
+    "negative_controls": [
+      "host não autorizado",
+      "output_root fora do caminho canônico",
+      "token obrigatório ausente na consulta"
+    ]
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "destructive": false
+  },
+  "runtime_shell": "powershell"
+}

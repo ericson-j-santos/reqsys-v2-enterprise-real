@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Action Immutability Gate",
+  "status": "implemented_pending_ci",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_validate_action_immutability.py"
+    ],
+    "evidence_contract": "Workflows novos ou alterados exigem SHA Git completo para Actions/reusable workflows externos e digest sha256 para docker://; ações locais ./ são a única exceção explícita. O scanner inventaria todo o legado e falha fechado no diff."
+  },
+  "traceability": {
+    "workflow": ".github/workflows/pre-pr-readiness.yml",
+    "pull_request": "pending"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "merge": false,
+    "secrets": false
+  }
+}

@@ -1,17 +1,50 @@
 import hashlib
 import json
+import time
 from base64 import b64decode
 from urllib import request
 from urllib.error import HTTPError, URLError
 
+from app.core.resilience import CircuitBreaker, HTTPErrorNaoRetentavel, call_with_retry
 from app.core.secrets import get_secret
+
+GITHUB_VERSION_MAX_RETRIES = 3
+GITHUB_VERSION_RETRY_BACKOFF_SECONDS = 0.5
+GITHUB_VERSION_CIRCUIT_FAILURE_THRESHOLD = 3
+GITHUB_VERSION_CIRCUIT_COOLDOWN_SECONDS = 60
+
+_circuit = CircuitBreaker(
+    name='github_version_checker',
+    failure_threshold=GITHUB_VERSION_CIRCUIT_FAILURE_THRESHOLD,
+    cooldown_seconds=GITHUB_VERSION_CIRCUIT_COOLDOWN_SECONDS,
+)
+
+
+def reset_circuit_breaker() -> None:
+    """Reseta o estado do circuit breaker (uso em testes)."""
+    _circuit.reset()
 
 
 def _hash_conteudo(conteudo: str) -> str:
     return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
 
 
-def verificar_versao_github(repo: str, file_path: str, hash_reqsys: str) -> dict:
+def _do_fetch(req: request.Request) -> dict:
+    try:
+        with request.urlopen(req, timeout=10) as resp:  # nosec B310
+            return json.loads(resp.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise HTTPErrorNaoRetentavel(exc) from exc
+
+
+def verificar_versao_github(
+    repo: str,
+    file_path: str,
+    hash_reqsys: str,
+    *,
+    sleep=time.sleep,
+    max_retries: int = GITHUB_VERSION_MAX_RETRIES,
+) -> dict:
     """
     Verifica no GitHub se já existe uma versão do arquivo e compara com o
     conteúdo que o ReqSys quer publicar.
@@ -36,9 +69,16 @@ def verificar_versao_github(repo: str, file_path: str, hash_reqsys: str) -> dict
 
     try:
         req = request.Request(url=url, headers=headers, method="GET")
-        with request.urlopen(req, timeout=10) as resp:  # nosec B310
-            data = json.loads(resp.read().decode("utf-8"))
-    except HTTPError as exc:
+        data = call_with_retry(
+            lambda: _do_fetch(req),
+            max_retries=max_retries,
+            backoff_seconds=GITHUB_VERSION_RETRY_BACKOFF_SECONDS,
+            retry_on=(URLError,),
+            sleep=sleep,
+            circuit=_circuit,
+        )
+    except HTTPErrorNaoRetentavel as wrapper:
+        exc = wrapper.original
         if exc.code == 404:
             return {
                 "status": "nao_encontrado",
@@ -56,7 +96,7 @@ def verificar_versao_github(repo: str, file_path: str, hash_reqsys: str) -> dict
             "conteudo_github": None,
             "mensagem": f"Erro HTTP {exc.code} ao verificar versão no GitHub.",
         }
-    except (URLError, Exception) as exc:
+    except Exception as exc:
         return {
             "status": "erro",
             "arquivo_github": file_path,

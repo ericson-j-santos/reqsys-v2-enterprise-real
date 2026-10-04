@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "artifact": "teams-gateway-control-center-site-recovery",
+  "source_project_uri": "sites-project://appgprj_6a615cfc7c9881918dee3af3303d631a",
+  "recovered_source": {
+    "filename": "teams_gateway_control_center_autocontido_v2.html",
+    "library_created_at": "2026-09-03T03:10:47.948646Z",
+    "size_bytes": 20375,
+    "repository_path": "tools/teams-gateway-control-center-site-recovery/index.html"
+  },
+  "recovery_status": "partial_source_recovery",
+  "original_snapshot_status": "not_accessible_from_current_connection",
+  "known_original_stack": [
+    "Next.js 16",
+    "React 19"
+  ],
+  "canonical_reqsys_refs": [
+    "frontend/src/views/PainelIntegracaoView.vue",
+    "docs/servicos/teams-notification-control-center.md",
+    "backend/app/api/teams_gateway.py",
+    "backend/app/services/teams_gateway.py"
+  ],
+  "safety": {
+    "secrets_included": false,
+    "runtime_changed": false,
+    "deployment_performed": false,
+    "production_touched": false
+  }
+}

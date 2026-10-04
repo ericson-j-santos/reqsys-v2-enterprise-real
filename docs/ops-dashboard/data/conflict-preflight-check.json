@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T13:30:00-03:00",
+  "scope": "conflict_preflight_check",
+  "runtime_impact": "none",
+  "validation_steps": [
+    "list_open_prs_against_main",
+    "collect_changed_files_per_pr",
+    "compare_path_intersections",
+    "classify_risk_by_path",
+    "block_stack_when_critical_overlap_exists",
+    "allow_parallel_pr_only_for_independent_scope"
+  ],
+  "path_risk": [
+    {
+      "pattern": ".github/workflows/**",
+      "risk": "high"
+    },
+    {
+      "pattern": "backend/**",
+      "risk": "high"
+    },
+    {
+      "pattern": "backend-dotnet/**",
+      "risk": "high"
+    },
+    {
+      "pattern": "frontend/src/**",
+      "risk": "medium_high"
+    },
+    {
+      "pattern": "docs/**",
+      "risk": "low_medium"
+    },
+    {
+      "pattern": "CHANGELOG.md",
+      "risk": "medium_high"
+    }
+  ],
+  "green_output_example": {
+    "status": "green",
+    "overlapping_files": [],
+    "risk_level": "low",
+    "recommendation": "parallel_pr_allowed"
+  }
+}

@@ -1,0 +1,1 @@
+A PR #1594 contém o incremento inicial do gerador de integrações. O estado funcional deve permanecer como parcialmente validado até CI do SHA corrente e E2E real em DEV.

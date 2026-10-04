@@ -1,0 +1,128 @@
+name: CI Advisory Router
+
+on:
+  workflow_run:
+    workflows:
+      - CI — ReqSys v2 Enterprise
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: "SHA para diagnóstico manual"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-advisory-router-${{ github.event.workflow_run.head_sha || inputs.head_sha || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  route:
+    name: Consolidar análises report-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: Resolver PR e superfícies alteradas
+        id: route
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const source = context.payload.workflow_run;
+            const headSha = source?.head_sha || context.payload.inputs?.head_sha || context.sha;
+
+            let pr = null;
+            if (source?.pull_requests?.length) {
+              pr = source.pull_requests[0];
+            } else if (source?.head_sha) {
+              const associated = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: source.head_sha,
+              });
+              pr = associated.data.find(item => item.state === 'open') || associated.data[0] || null;
+            }
+
+            let files = [];
+            if (pr?.number) {
+              files = await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+            }
+
+            const paths = files.map(item => item.filename).filter(Boolean);
+            const executable = paths.some(path =>
+              /^(backend|frontend|runtime|services|config|infra|docker|nginx)(\/|$)/.test(path) ||
+              /^(Dockerfile|docker-compose|fly.*\.toml)/.test(path)
+            );
+            const preview = paths.some(path =>
+              /^(backend|frontend|runtime|services|infra|docker|nginx)(\/|$)/.test(path) ||
+              /^(Dockerfile|docker-compose|fly.*\.toml)/.test(path)
+            );
+            const predictive = paths.some(path =>
+              /^(backend|frontend|runtime|services|config)(\/|$)/.test(path)
+            );
+
+            const recommendations = [
+              { workflow: 'PR Fast Classifier', applicable: Boolean(pr?.number) },
+              { workflow: 'Runtime Risk Scoring', applicable: executable },
+              { workflow: 'PR Quality Review', applicable: executable },
+              { workflow: 'Predictive Regression Guard', applicable: predictive },
+              { workflow: 'Preview Environment Contract', applicable: preview },
+            ];
+
+            const payload = {
+              schema_version: '1.0.0',
+              contract: 'reqsys-ci-advisory-router',
+              mode: 'report_only',
+              source_workflow: source?.name || 'workflow_dispatch',
+              source_run_id: source?.id || null,
+              source_conclusion: source?.conclusion || null,
+              head_sha: headSha,
+              pr_number: pr?.number || null,
+              changed_file_count: paths.length,
+              recommendations,
+              automatic_dispatch: false,
+              critical_path_blocker: false,
+              production_touched: false,
+            };
+
+            const fs = require('fs');
+            fs.mkdirSync('artifacts/ci-advisory-router', { recursive: true });
+            fs.writeFileSync(
+              'artifacts/ci-advisory-router/ci-advisory-router.json',
+              JSON.stringify(payload, null, 2) + '\n'
+            );
+
+            core.setOutput('pr_number', String(pr?.number || ''));
+            core.notice(JSON.stringify(payload));
+
+      - name: Publicar evidência consolidada
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-advisory-router-${{ github.run_id }}
+          path: artifacts/ci-advisory-router/ci-advisory-router.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Resumo
+        shell: bash
+        run: |
+          {
+            echo "# CI Advisory Router"
+            echo ""
+            echo "As análises report-only foram removidas do caminho crítico do pull request."
+            echo "O artifact informa quais diagnósticos manuais são aplicáveis após o CI canônico."
+          } >> "$GITHUB_STEP_SUMMARY"
