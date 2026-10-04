@@ -17,34 +17,29 @@ Capturar e classificar execuções do GitHub Actions sem depender de envio manua
 
 | Variável | Uso |
 |---|---|
-| `REQSYS_GITHUB_TOKEN` | token para consultar GitHub Actions API |
-| `GITHUB_TOKEN` | alternativa para execução em ambiente GitHub |
+| `GITHUB_TOKEN` | token para consulta GitHub Actions API |
+| `REQSYS_GITHUB_TOKEN` | fallback governado para token dedicado |
 
-## Exemplo de consulta
+## Operação
 
-```bash
-curl -H "Authorization: Bearer <jwt_admin>" \
-  "http://localhost:8000/v1/actions-runtime/github/runs?repo=ericson-j-santos/reqsys-v2-enterprise-real&branch=main&per_page=20"
-```
-
-## Interpretação
-
-| Health | Significado | Decisão |
-|---|---|---|
-| `healthy` | run concluído com sucesso | seguir |
-| `running` | run em andamento | aguardar |
-| `unhealthy` | falha, cancelamento ou timeout | corrigir antes de merge |
-| `unknown` | estado não mapeado | investigar |
+1. Validar autenticação.
+2. Chamar `/v1/actions-runtime/status`.
+3. Para análise manual, enviar runs para `/v1/actions-runtime/snapshot`.
+4. Para consulta real, configurar token e usar `/v1/actions-runtime/github/runs`.
+5. Para eventos automatizados, configurar webhook GitHub com evento `workflow_run`.
 
 ## Decisão operacional
 
-O campo `decisao` deve orientar a próxima ação:
+| Decisão | Ação |
+|---|---|
+| `operacao_estavel` | permitir continuidade da fila |
+| `aguardar_finalizacao_dos_workflows` | não promover nem mergear |
+| `corrigir_falhas_de_actions_antes_de_novo_merge` | bloquear merge e abrir correção |
+| `investigar_instabilidade_operacional` | avaliar ruído/flaky antes de promover |
 
-- `operacao_estavel`
-- `aguardar_finalizacao_dos_workflows`
-- `corrigir_falhas_de_actions_antes_de_novo_merge`
-- `investigar_instabilidade_operacional`
+## Segurança
 
-## Próximo incremento
-
-Persistir snapshots em banco e expor visualização no Runtime Center.
+- Nunca registrar token GitHub em log.
+- Nunca retornar token em payload de API.
+- Endpoints de consulta real e webhook exigem perfil admin.
+- A automação não executa merge ou retry automaticamente no P0.

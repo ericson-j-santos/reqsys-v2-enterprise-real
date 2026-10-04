@@ -1,0 +1,39 @@
+name: Planner Teams Power Platform Environment Probe
+
+on:
+  push:
+    branches:
+      - chore/planner-teams-dev-acceptance
+    paths:
+      - .github/workflows/planner-teams-env-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Power Platform — ambientes visíveis
+    runs-on: ubuntu-latest
+    environment: reqsys-power-platform-dev
+    timeout-minutes: 5
+    env:
+      TENANT_ID: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+      CLIENT_ID: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+    steps:
+      - name: Consultar ambientes sem escrita
+        shell: bash
+        run: |
+          set -euo pipefail
+          token_json=$(curl -fsS -X POST "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token" \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode 'grant_type=client_credentials' \
+            --data-urlencode "client_id=${CLIENT_ID}" \
+            --data-urlencode "client_secret=${CLIENT_SECRET}" \
+            --data-urlencode 'scope=https://api.powerplatform.com/.default')
+          token=$(jq -r '.access_token // empty' <<<"$token_json")
+          test -n "$token"
+          response=$(curl -fsS 'https://api.powerplatform.com/environmentmanagement/environments?api-version=2024-10-01' \
+            -H "Authorization: Bearer ${token}")
+          jq '{total:(.value|length), environments:[.value[]|{id:(.id // .name // ""), name:(.displayName // .properties.displayName // .name // ""), type:(.type // .properties.environmentSku // ""), url:(.url // .properties.environmentUrl // .properties.linkedEnvironmentMetadata.instanceUrl // ""), state:(.state // .properties.provisioningState // "")} ]}' <<<"$response"

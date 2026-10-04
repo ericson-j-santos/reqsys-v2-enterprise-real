@@ -1,0 +1,191 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-26T18:40:10.639677+00:00",
+  "name": "runtime-ops-governance-p1",
+  "mode": "review_only",
+  "runtime_health_center": {
+    "sources": {
+      "ci_analytics": {
+        "path": "reports/github-runtime-analytics/github-runtime-analytics.json",
+        "present": false,
+        "state": "UNKNOWN"
+      },
+      "operational_timeline": {
+        "path": "reports/github-runtime-analytics/runtime-operational-correlation-timeline.json",
+        "present": false,
+        "state": "UNKNOWN"
+      },
+      "evidence_graph": {
+        "path": "reports/github-runtime-analytics/runtime-operational-evidence-graph.json",
+        "present": false,
+        "state": "UNKNOWN"
+      },
+      "health_dashboard": {
+        "path": "docs/operations/operational-health-dashboard.example.json",
+        "present": true,
+        "state": "OPERATIONAL_HEALTH_DASHBOARD_READY"
+      },
+      "product_readiness": {
+        "path": "reports/product-intelligence/product-intelligence-runtime-readiness-gate.json",
+        "present": false,
+        "state": "UNKNOWN"
+      }
+    },
+    "coverage": [
+      "CI",
+      "PRs",
+      "workflows",
+      "Fly.io",
+      "environments",
+      "coverage",
+      "drift",
+      "evidence",
+      "analytics"
+    ]
+  },
+  "ci_auto_remediation": {
+    "rerun_policy": "one safe rerun only for transient_infrastructure after evidence snapshot",
+    "known_failure_taxonomy": [
+      {
+        "class": "frontend_contract",
+        "safe_action": "apply focused import/export fix and rebuild"
+      },
+      {
+        "class": "transient_infrastructure",
+        "safe_action": "single governed rerun after cooldown"
+      },
+      {
+        "class": "dependency_security",
+        "safe_action": "block deploy and open dependency remediation"
+      },
+      {
+        "class": "regression",
+        "safe_action": "block rerun-only strategy; require code/test fix"
+      }
+    ],
+    "auto_fix_scope": "lightweight, focused, non-secret, non-deploy changes only"
+  },
+  "environment_drift_detector": {
+    "environments": [
+      {
+        "environment": "dev",
+        "required_variables": [
+          "APP_ENV",
+          "DATABASE_URL",
+          "JWT_ISSUER",
+          "JWT_AUDIENCE",
+          "JWT_EXP_MINUTES",
+          "CORS_ORIGINS"
+        ],
+        "secret_fingerprints_required": [
+          "JWT_SECRET",
+          "FLY_API_TOKEN",
+          "GITHUB_TOKEN"
+        ],
+        "checks": [
+          "health endpoint reachable",
+          "deployed version matches release evidence",
+          "migration head matches expected revision",
+          "required variables present without exposing values",
+          "secret presence compared by fingerprint only"
+        ],
+        "external_mutation": "disabled"
+      },
+      {
+        "environment": "hml",
+        "required_variables": [
+          "APP_ENV",
+          "DATABASE_URL",
+          "JWT_ISSUER",
+          "JWT_AUDIENCE",
+          "JWT_EXP_MINUTES",
+          "CORS_ORIGINS"
+        ],
+        "secret_fingerprints_required": [
+          "JWT_SECRET",
+          "FLY_API_TOKEN",
+          "GITHUB_TOKEN"
+        ],
+        "checks": [
+          "health endpoint reachable",
+          "deployed version matches release evidence",
+          "migration head matches expected revision",
+          "required variables present without exposing values",
+          "secret presence compared by fingerprint only"
+        ],
+        "external_mutation": "disabled"
+      },
+      {
+        "environment": "prod",
+        "required_variables": [
+          "APP_ENV",
+          "DATABASE_URL",
+          "JWT_ISSUER",
+          "JWT_AUDIENCE",
+          "JWT_EXP_MINUTES",
+          "CORS_ORIGINS"
+        ],
+        "secret_fingerprints_required": [
+          "JWT_SECRET",
+          "FLY_API_TOKEN",
+          "GITHUB_TOKEN"
+        ],
+        "checks": [
+          "health endpoint reachable",
+          "deployed version matches release evidence",
+          "migration head matches expected revision",
+          "required variables present without exposing values",
+          "secret presence compared by fingerprint only"
+        ],
+        "external_mutation": "disabled"
+      },
+      {
+        "environment": "flyio",
+        "required_variables": [
+          "APP_ENV",
+          "DATABASE_URL",
+          "JWT_ISSUER",
+          "JWT_AUDIENCE",
+          "JWT_EXP_MINUTES",
+          "CORS_ORIGINS"
+        ],
+        "secret_fingerprints_required": [
+          "JWT_SECRET",
+          "FLY_API_TOKEN",
+          "GITHUB_TOKEN"
+        ],
+        "checks": [
+          "health endpoint reachable",
+          "deployed version matches release evidence",
+          "migration head matches expected revision",
+          "required variables present without exposing values",
+          "secret presence compared by fingerprint only"
+        ],
+        "external_mutation": "disabled"
+      }
+    ],
+    "secret_policy": "compare presence/fingerprint metadata only; never persist secret values"
+  },
+  "runtime_evidence_consolidator": {
+    "artifacts": [
+      "runtime-ops-governance-p1.json",
+      "runtime-ops-governance-p1.md",
+      "runtime-ops-governance-p1.html"
+    ],
+    "executive_report": "enabled",
+    "maturity_score": 46
+  },
+  "runtime_governance_engine": {
+    "health_score": 46,
+    "state": "NOT_READY",
+    "deployment_confidence": "low",
+    "rollback_policy": "manual approval required with pre/post evidence snapshots"
+  },
+  "limits": [
+    "no_deploy",
+    "no_external_write",
+    "no_secret_value_capture",
+    "human_review_required"
+  ],
+  "next_recommended_increment": "runtime-ops-governance-p2-live-connectors"
+}

@@ -9,34 +9,39 @@ import httpx
 from app.core.config import settings
 from app.schemas.agents import AgentProvisionRequest
 from app.services.agent_generator import PACKAGE_NAME, gerar_pacote_agentes
-
-_TOKEN_URL = 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token'
+from app.services.microsoft_oauth import acquire_client_credentials_token
 
 
 def _normalizar_env_url(value: str | None) -> str:
-    env_url = (value or settings.copilotstudio_environment_url or '').strip()
+    env_url = (
+        value
+        or settings.dataverse_environment_url
+        or settings.copilotstudio_environment_url
+        or ''
+    ).strip()
     if not env_url:
         return ''
     return env_url.rstrip('/') + '/'
 
 
 def _tem_credenciais_entra() -> bool:
-    return bool(settings.azure_tenant_id and settings.azure_client_id and settings.azure_client_secret)
+    return bool(
+        settings.dataverse_tenant_id
+        and settings.dataverse_client_id
+        and settings.dataverse_client_secret
+    )
 
 
 async def _token_dataverse(env_url: str) -> str:
     async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(
-            _TOKEN_URL.format(tenant=settings.azure_tenant_id),
-            data={
-                'grant_type': 'client_credentials',
-                'client_id': settings.azure_client_id,
-                'client_secret': settings.azure_client_secret,
-                'scope': env_url.rstrip('/') + '/.default',
-            },
+        return await acquire_client_credentials_token(
+            client=client,
+            tenant_id=settings.dataverse_tenant_id,
+            client_id=settings.dataverse_client_id,
+            client_secret=settings.dataverse_client_secret,
+            scope=env_url.rstrip('/') + '/.default',
+            resource='dataverse',
         )
-        resp.raise_for_status()
-        return resp.json()['access_token']
 
 
 async def _provisionar_via_webhook(payload: dict[str, Any]) -> dict[str, Any]:
@@ -85,7 +90,11 @@ async def _importar_solution_dataverse(request: AgentProvisionRequest, package: 
             'provisioned': False,
             'message': 'Credenciais Entra ID nao configuradas para Dataverse.',
             'details': {
-                'expected_settings': ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET'],
+                'expected_settings': [
+                    'DATAVERSE_TENANT_ID',
+                    'DATAVERSE_CLIENT_ID',
+                    'DATAVERSE_CLIENT_SECRET',
+                ],
             },
         }
 

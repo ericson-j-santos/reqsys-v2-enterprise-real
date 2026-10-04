@@ -1,0 +1,175 @@
+{
+  "schema_version": "1.2.0",
+  "correlation_id": "d61aa286-015e-451d-ad3d-c54278c2103e",
+  "generated_at": "2026-06-28T00:08:29Z",
+  "repository": "ericson-j-santos/reqsys-v2-enterprise-real",
+  "branch": "main",
+  "mode": "report_only",
+  "state": "green",
+  "confidence": "low",
+  "executive_status": "Runtime operacional saudável",
+  "runtime_score": 65,
+  "health_matrix": [
+    {
+      "id": "ci_github",
+      "label": "CI GitHub Actions",
+      "status": "unknown",
+      "score": 40,
+      "source": "fallback",
+      "detail": "0 verde(s) de 0 runs"
+    },
+    {
+      "id": "fly_dev",
+      "label": "Fly.io DEV",
+      "status": "declared",
+      "score": 85,
+      "source": "declared",
+      "detail": "https://reqsys-api-dev.fly.dev/health"
+    },
+    {
+      "id": "fly_homolog",
+      "label": "Fly.io HOMOLOG",
+      "status": "declared",
+      "score": 85,
+      "source": "declared",
+      "detail": "https://reqsys-api-stg.fly.dev/health"
+    },
+    {
+      "id": "fly_prod",
+      "label": "Fly.io PROD",
+      "status": "declared",
+      "score": 85,
+      "source": "declared",
+      "detail": "https://reqsys-api.fly.dev/health"
+    },
+    {
+      "id": "evidence_gate",
+      "label": "Evidence Gate",
+      "status": "unknown",
+      "score": 40,
+      "source": "fallback",
+      "detail": "PR Evidence Gate / artifact local"
+    },
+    {
+      "id": "security_gates",
+      "label": "Security & Governance Gates",
+      "status": "green",
+      "score": 100,
+      "source": "fallback",
+      "detail": "workflows com keywords de seguranca/governanca"
+    }
+  ],
+  "quarantine": {
+    "active": false,
+    "reason": null,
+    "reasons": [],
+    "blocked_actions": [],
+    "policy": "AOP-SEC-QUARANTINE-001"
+  },
+  "retry_policy": {
+    "allowed": false,
+    "policy": "AOP-CI-RETRY-001",
+    "attempts": 2,
+    "cooldown_minutes": 30,
+    "eligible_reruns": 0,
+    "blocked_reason": null,
+    "blocked_reasons": [],
+    "anti_loop": true,
+    "anti_loop_triggered": false
+  },
+  "data_sources": [
+    {
+      "stage": "github_api",
+      "status": "unavailable",
+      "confidence": "low"
+    },
+    {
+      "stage": "cached_artifact",
+      "status": "unavailable",
+      "confidence": "low"
+    },
+    {
+      "stage": "baseline",
+      "status": "ok",
+      "confidence": "low"
+    }
+  ],
+  "maturity": {
+    "level": "managed",
+    "state": "green",
+    "score": 65,
+    "signals": {
+      "total_runs": 0,
+      "automated_backlog_items": 0,
+      "has_critical_gap": false
+    }
+  },
+  "summary": {
+    "runs": 0,
+    "green": 0,
+    "yellow": 0,
+    "red": 0,
+    "pending": 0,
+    "remediation_candidates": 0,
+    "blocked_remediations": 0,
+    "executed_remediations": 0,
+    "runtime_score": 65,
+    "quarantine_active": false
+  },
+  "runs": [],
+  "remediation_plan": [],
+  "executed_remediations": [],
+  "automatic_backlog": [],
+  "regression_detection": {
+    "enabled": true,
+    "state": "no_regression_detected",
+    "failed_workflows": []
+  },
+  "environment_sync": {
+    "strategy": "dev_to_homolog_to_prod",
+    "production_execution": "blocked_without_explicit_governed_promotion",
+    "flyio_health_endpoints": {
+      "dev": "https://reqsys-api-dev.fly.dev/health",
+      "homolog": "https://reqsys-api-stg.fly.dev/health",
+      "prod": "https://reqsys-api.fly.dev/health"
+    },
+    "required_evidence": [
+      "health_check",
+      "ci_green",
+      "rollback_metadata",
+      "change_ticket_for_prod"
+    ]
+  },
+  "rollback_policy": {
+    "status": "standby",
+    "execution": "manual_approval_required",
+    "automatic_destructive_actions": false,
+    "safe_actions": [
+      "rerun_failed_jobs_allowlisted",
+      "publish_evidence",
+      "open_backlog_gap"
+    ],
+    "required_metadata": [
+      "source_ref",
+      "target_environment",
+      "last_green_sha",
+      "correlation_id"
+    ]
+  },
+  "evidence_consolidation": {
+    "artifact": "runtime-health-validator-evidence",
+    "files": [
+      "runtime-health-validator.json",
+      "summary.md"
+    ],
+    "dashboard_entrypoint": "summary.md"
+  },
+  "guardrails": {
+    "merge": false,
+    "deploy": false,
+    "production_change": false,
+    "branch_protection_change": false,
+    "secrets_change": false,
+    "anti_loop": true
+  }
+}

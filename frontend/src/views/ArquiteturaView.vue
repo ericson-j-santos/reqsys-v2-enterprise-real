@@ -1,9 +1,9 @@
 <template>
-  <section class="page">
+  <section class="page" data-testid="route-arquitetura">
     <div class="page-header">
       <div>
         <h1>Mapa da Solução</h1>
-        <p class="muted">Ecossistema ReqSys completo — componentes Web, API, Power Platform e ALM · v3.1.0</p>
+        <p class="muted">Ecossistema ReqSys completo — componentes Web, serviço, Power Platform e administração do ciclo de entrega · v3.1.0</p>
       </div>
     </div>
 
@@ -14,7 +14,7 @@
       </v-tab>
       <v-tab value="lowcode">
         <v-icon start size="16">mdi-microsoft</v-icon>
-        Low-Code · Power Platform
+        Automações · Power Platform
       </v-tab>
     </v-tabs>
 
@@ -32,10 +32,10 @@
                 🌐 Browser<br><small>Chrome / Edge / Firefox</small>
               </div>
               <div class="arch-node arch-node--external">
-                🦆 DuckDNS<br><small>tieridev · tierin · tieriprod</small>
+                🔐 Locator assinado<br><small>Desenvolvimento · Ed25519 · Cloudflare Tunnel</small>
               </div>
               <div class="arch-node arch-node--external">
-                ✈️ Fly.io CDN<br><small>reqsys-app.fly.dev</small>
+                📚 GitHub Pages<br><small>Documentação e SPA de desenvolvimento</small>
               </div>
             </div>
           </div>
@@ -43,7 +43,7 @@
           <div class="arch-arrow">↓</div>
 
           <div class="arch-row">
-            <div class="arch-label">Frontend</div>
+            <div class="arch-label">Aplicação</div>
             <div class="arch-nodes">
               <div class="arch-node arch-node--frontend">
                 🖼️ Vue 3 + Vuetify<br><small>10 views · Pinia · Vue Router</small>
@@ -60,7 +60,7 @@
           <div class="arch-arrow">↓ &nbsp;HTTPS · Axios · JWT Bearer</div>
 
           <div class="arch-row">
-            <div class="arch-label">Backend</div>
+            <div class="arch-label">Serviço</div>
             <div class="arch-nodes">
               <div class="arch-node arch-node--backend">
                 🐍 FastAPI Python 3.12<br><small>24 endpoints · JWT · 59 testes Pytest</small>
@@ -77,7 +77,7 @@
             <div class="arch-label">Dados</div>
             <div class="arch-nodes">
               <div class="arch-node arch-node--data">
-                🗃️ SQLite<br><small>/data/reqsys.db · Fly.io volume persistente</small>
+                🗃️ SQLite<br><small>Persistência local configurável</small>
               </div>
               <div class="arch-node arch-node--data">
                 🏢 SQL Server<br><small>DATABASE_URL configurável (produção)</small>
@@ -85,19 +85,22 @@
             </div>
           </div>
 
-          <div class="arch-arrow">↕ &nbsp;Graph API · REST</div>
+          <div class="arch-arrow">↕ &nbsp;Microsoft Graph · REST</div>
 
           <div class="arch-row">
             <div class="arch-label">Integrações</div>
             <div class="arch-nodes">
               <div class="arch-node arch-node--integration">
-                ⚡ Power Platform<br><small>Hub Low-Code API /v1/hub-lowcode</small>
+                ⚡ Power Platform<br><small>Central de automações /v1/hub-lowcode</small>
               </div>
               <div class="arch-node arch-node--integration">
-                📊 SharePoint<br><small>IA_Catalogo_Projetos via Graph API</small>
+                📊 SharePoint<br><small>IA_Catalogo_Projetos via Microsoft Graph</small>
               </div>
               <div class="arch-node arch-node--integration">
-                🐙 GitHub ALM<br><small>Runs do repo reqsys-powerplatform-alm</small>
+                🐙 ciclo de entrega no GitHub<br><small>Runs do repo reqsys-powerplatform-alm</small>
+              </div>
+              <div class="arch-node arch-node--integration">
+                🎨 Figma ↔ GitHub<br><small>Sync bidirecional · /v1/integracoes/figma-github</small>
               </div>
             </div>
           </div>
@@ -106,7 +109,7 @@
         <!-- VIEWS DO FRONTEND -->
         <div class="subsection-title">
           <v-icon size="15">mdi-application</v-icon>
-          Views do Frontend · 10 telas
+          Views do Aplicação · principais telas
         </div>
         <v-row>
           <v-col
@@ -130,7 +133,7 @@
         <!-- MÓDULOS BACKEND -->
         <div class="subsection-title mt-6">
           <v-icon size="15">mdi-api</v-icon>
-          Módulos do Backend · FastAPI · 24 endpoints validados
+          Módulos do Serviço · FastAPI · 24 endpoints validados
         </div>
         <v-row>
           <v-col
@@ -151,26 +154,38 @@
           </v-col>
         </v-row>
 
-        <!-- AMBIENTES FLY.IO -->
+        <!-- AMBIENTES OPERACIONAIS -->
         <div class="subsection-title mt-6">
           <v-icon size="15">mdi-cloud-outline</v-icon>
-          Ambientes · Fly.io · Região GRU (São Paulo)
+          Ambientes operacionais
         </div>
         <v-table density="compact" class="env-table mb-4">
           <thead>
             <tr>
               <th>Ambiente</th>
-              <th>Frontend</th>
-              <th>Backend API</th>
-              <th>DuckDNS</th>
+              <th>Aplicação</th>
+              <th>Serviço</th>
+              <th>Situação</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="env in ambientesFlyio" :key="env.nome">
-              <td><v-chip size="x-small" :color="env.cor" variant="tonal">{{ env.nome }}</v-chip></td>
-              <td><code class="small-code">{{ env.frontend }}</code></td>
-              <td><code class="small-code">{{ env.backend }}</code></td>
-              <td><code class="small-code">{{ env.duckdns }}</code></td>
+            <tr
+              v-for="env in ambientesOperacionais"
+              :key="env.id"
+              :class="['ambiente-row', { 'ambiente-row--disabled': !env.navegavel }]"
+              :tabindex="env.navegavel ? 0 : undefined"
+              :role="env.navegavel ? 'link' : undefined"
+              :aria-label="env.navegavel ? `Abrir ambiente ${env.label}` : `${env.label}: sem destino remoto configurado`"
+              :aria-disabled="env.navegavel ? undefined : 'true'"
+              :data-testid="`ambiente-linha-${env.shortId}`"
+              @click="env.navegavel && abrirAmbiente(env.id)"
+              @keydown.enter.prevent="env.navegavel && abrirAmbiente(env.id)"
+              @keydown.space.prevent="env.navegavel && abrirAmbiente(env.id)"
+            >
+              <td><v-chip size="x-small" :color="env.color" variant="tonal">{{ env.label }}</v-chip></td>
+              <td><code class="small-code">{{ env.frontendHost }}</code></td>
+              <td><code class="small-code">{{ env.backendHost }}</code></td>
+              <td><span class="small-code">{{ env.navegavel ? env.uso : 'Sem destino remoto' }}</span></td>
             </tr>
           </tbody>
         </v-table>
@@ -186,10 +201,10 @@
               <v-card-text class="pa-3">
                 <div class="d-flex align-center gap-2 mb-2">
                   <v-icon color="success" size="16">mdi-check-circle</v-icon>
-                  <span class="comp-name">Backend · Pytest</span>
+                  <span class="comp-name">Serviço · Pytest</span>
                   <v-chip size="x-small" color="success" variant="tonal">59 passing</v-chip>
                 </div>
-                <div class="muted" style="font-size:11px">test_auth · test_requisitos · test_dashboard</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">test_auth · test_requisitos · test_dashboard</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -198,10 +213,10 @@
               <v-card-text class="pa-3">
                 <div class="d-flex align-center gap-2 mb-2">
                   <v-icon color="success" size="16">mdi-check-circle</v-icon>
-                  <span class="comp-name">Frontend · E2E Playwright</span>
+                  <span class="comp-name">Aplicação · E2E Playwright</span>
                   <v-chip size="x-small" color="success" variant="tonal">30 passing</v-chip>
                 </div>
-                <div class="muted" style="font-size:11px">login · dashboard · relatórios · requisitos · segredos</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">acesso · painel · relatórios · requisitos · segredos</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -210,10 +225,10 @@
               <v-card-text class="pa-3">
                 <div class="d-flex align-center gap-2 mb-2">
                   <v-icon color="info" size="16">mdi-code-braces</v-icon>
-                  <span class="comp-name">Backend .NET · xUnit</span>
+                  <span class="comp-name">Serviço .NET · xUnit</span>
                   <v-chip size="x-small" color="info" variant="tonal">em evolução</v-chip>
                 </div>
-                <div class="muted" style="font-size:11px">dotnet test ReqSys.DotNet.sln</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">dotnet test ReqSys.DotNet.sln</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -227,45 +242,44 @@
         <v-row>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Backend</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Serviço</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload</pre>
-                <div class="muted mt-2" style="font-size:11px">Porta 8000 · docs em /docs</div>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Porta 8000 · docs em /docs</div>
               </v-card-text>
             </v-card>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Frontend</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Aplicação</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">cd frontend
 npm install
 npm run dev</pre>
-                <div class="muted mt-2" style="font-size:11px">Porta 5173 · Vite HMR</div>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Porta 5173 · Vite HMR</div>
               </v-card-text>
             </v-card>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Docker (prod local)</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Docker (prod local)</v-card-title>
               <v-card-text class="pa-3 pt-1">
                 <pre class="code-block">docker compose \
   -f docker-compose.yml \
   -f docker-compose.prod.yml \
   up --build -d</pre>
-                <div class="muted mt-2" style="font-size:11px">Gateway nginx na porta 8081</div>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Gateway nginx na porta 8081</div>
               </v-card-text>
             </v-card>
           </v-col>
           <v-col cols="12" md="6">
             <v-card class="comp-card" elevation="0">
-              <v-card-title class="pa-3 pb-1" style="font-size:13px;font-weight:700">Deploy Fly.io</v-card-title>
+              <v-card-title class="pa-3 pb-1" style="font-size:var(--font-size-md);font-weight:700">Execução remota</v-card-title>
               <v-card-text class="pa-3 pt-1">
-                <pre class="code-block">.\scripts\fly-deploy.ps1 -Env prod
-# ou: -Env dev | -Env staging</pre>
-                <div class="muted mt-2" style="font-size:11px">Requer flyctl autenticado</div>
+                <pre class="code-block">Nenhum destino remoto configurado</pre>
+                <div class="muted mt-2" style="font-size:var(--font-size-xs)">Publicação remota permanece bloqueada até definição governada.</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -299,6 +313,27 @@ npm run dev</pre>
           Tópico "Capturar Tarefas" → InvokeFlowAction → ForEach linha → Create Task Planner
         </div>
 
+        <div class="flow-diagram mt-2">
+          <div class="flow-node flow-node--user">
+            👤 Designer / PO<br><small>Teams, Web ou Figma</small>
+          </div>
+          <div class="flow-connector">→</div>
+          <div class="flow-node flow-node--bot">
+            🤖 ReqSysAgent<br><small>Tópico Sincronizar Figma</small>
+          </div>
+          <div class="flow-connector">→</div>
+          <div class="flow-node flow-node--flow">
+            ⚡ ReqSys serviço<br><small>POST /figma-github/sync</small>
+          </div>
+          <div class="flow-connector">→</div>
+          <div class="flow-node flow-node--planner">
+            🐙 GitHub Issues<br><small>Issues e comentários vinculados</small>
+          </div>
+        </div>
+        <div class="flow-label muted mt-1 mb-4">
+          Tópico "Sincronizar Figma GitHub" → serviço ReqSys → vínculos Figma/GitHub auditáveis em /figma-github
+        </div>
+
         <!-- COMPONENTES DA SOLUTION -->
         <div class="subsection-title">
           <v-icon size="15">mdi-puzzle</v-icon>
@@ -325,8 +360,8 @@ npm run dev</pre>
 
         <!-- ALM PIPELINE -->
         <div class="subsection-title mt-6">
-          <v-icon size="15">mdi-source-branch</v-icon>
-          Pipeline ALM · GitHub Actions · ericson-j-santos/reqsys-powerplatform-alm
+          <v-icon size="15">mdi-source-versão de código</v-icon>
+          Fluxo do ciclo de entrega · GitHub Actions · ericson-j-santos/reqsys-powerplatform-alm
         </div>
         <div class="pipeline-flow mb-4">
           <div
@@ -342,8 +377,8 @@ npm run dev</pre>
             <div v-if="i < almPipeline.length - 1" class="pipeline-arrow">→</div>
           </div>
         </div>
-        <div class="muted mb-6" style="font-size:11px;padding-left:4px">
-          Workflow de exportação cria PR automaticamente → merge dispara deploy em Build/Test → aprovação em main → Prod + GitHub Release
+        <div class="muted mb-6" style="font-size:var(--font-size-xs);padding-left:var(--space-xs)">
+          Fluxo de trabalho de exportação cria Solicitação de integração automaticamente → integração de alterações dispara implantação em Build/Test → aprovação em main → Prod + GitHub Release
         </div>
 
         <!-- AMBIENTES DATAVERSE -->
@@ -353,13 +388,13 @@ npm run dev</pre>
         </div>
         <v-table density="compact" class="env-table mb-6">
           <thead>
-            <tr><th>Slug</th><th>URL Org</th><th>Papel no ALM</th></tr>
+            <tr><th>Slug</th><th>endereço Org</th><th>Papel no administração do ciclo de entrega</th></tr>
           </thead>
           <tbody>
             <tr v-for="env in dataverseEnvs" :key="env.slug">
               <td><v-chip size="x-small" :color="env.cor" variant="tonal">{{ env.slug }}</v-chip></td>
               <td><code class="small-code">{{ env.url }}</code></td>
-              <td class="muted" style="font-size:11px">{{ env.papel }}</td>
+              <td class="muted" style="font-size:var(--font-size-xs)">{{ env.papel }}</td>
             </tr>
           </tbody>
         </v-table>
@@ -367,7 +402,7 @@ npm run dev</pre>
         <!-- HUB LOW-CODE API -->
         <div class="subsection-title">
           <v-icon size="15">mdi-api</v-icon>
-          Hub Low-Code API · Ponte ReqSys Web ↔ Power Platform
+          Central de automações · Ponte ReqSys Web ↔ Power Platform
         </div>
         <v-row class="mb-6">
           <v-col
@@ -388,7 +423,7 @@ npm run dev</pre>
         <!-- SHAREPOINT E SPN -->
         <div class="subsection-title">
           <v-icon size="15">mdi-shield-account</v-icon>
-          SharePoint · Graph API · SPN
+          SharePoint · Microsoft Graph · SPN
         </div>
         <v-row>
           <v-col cols="12" sm="6" md="4">
@@ -398,8 +433,8 @@ npm run dev</pre>
                   <v-icon color="warning" size="16">mdi-microsoft-sharepoint</v-icon>
                   <span class="comp-name">IA_Catalogo_Projetos</span>
                 </div>
-                <div class="muted" style="font-size:11px">Lista SharePoint · tieri659.sharepoint.com</div>
-                <div class="comp-desc mt-1">Catálogo de projetos IA. Lido por /hub-lowcode/pacotes via Graph API.</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">Lista SharePoint · tieri659.sharepoint.com</div>
+                <div class="comp-desc mt-1">Catálogo de projetos IA. Lido por /hub-lowcode/pacotes via Microsoft Graph.</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -410,8 +445,8 @@ npm run dev</pre>
                   <v-icon color="info" size="16">mdi-key-chain-variant</v-icon>
                   <span class="comp-name">SPN cb8c924f</span>
                 </div>
-                <div class="muted" style="font-size:11px">Service Principal · tenant 6d09c88c</div>
-                <div class="comp-desc mt-1">Administrador nos 4 ambientes. 3 permissões Graph API: Sites.Read.All · Sites.ReadWrite.All · Sites.Manage.All</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">Service Principal · tenant 6d09c88c</div>
+                <div class="comp-desc mt-1">Administrador nos 4 ambientes. 3 permissões Microsoft Graph: Sites.Read.All · Sites.ReadWrite.All · Sites.Manage.All</div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -422,7 +457,7 @@ npm run dev</pre>
                   <v-icon color="success" size="16">mdi-microsoft-teams</v-icon>
                   <span class="comp-name">Teams · Canal ativo</span>
                 </div>
-                <div class="muted" style="font-size:11px">Bot ReqSysAgent instalado e publicado</div>
+                <div class="muted" style="font-size:var(--font-size-xs)">Bot ReqSysAgent instalado e publicado</div>
                 <div class="comp-desc mt-1">Usuários conversam com o bot no Teams para capturar e criar tarefas no Planner.</div>
               </v-card-text>
             </v-card>
@@ -448,45 +483,74 @@ npm run dev</pre>
 
       </v-window-item>
     </v-window>
+
+    <ConfirmacaoAmbienteProducaoDialog
+      v-model="confirmacaoProdAberta"
+      :url="destinoPendente?.url || ''"
+      @confirmar="confirmarNavegacaoProd"
+      @cancelar="cancelarNavegacaoProd"
+    />
   </section>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import ConfirmacaoAmbienteProducaoDialog from '../components/ConfirmacaoAmbienteProducaoDialog.vue'
+import { useNavegacaoAmbiente } from '../composables/useNavegacaoAmbiente'
+import { AMBIENTES_OPERACIONAIS } from '../constants/ambientesOperacionais'
 
 const aba = ref('web')
 
 const webViews = [
-  { nome: 'Dashboard',       rota: '/',                icone: 'mdi-view-dashboard',          cor: 'secondary', desc: 'KPIs consolidados, cards de métricas e pipeline operacional' },
-  { nome: 'Requisitos',      rota: '/requisitos',      icone: 'mdi-file-document-edit',      cor: 'primary',   desc: 'CRUD de requisitos com status, urgência, área e sistema' },
-  { nome: 'Pipeline',        rota: '/pipeline',        icone: 'mdi-pipe',                    cor: 'info',      desc: 'Fluxo Entrada → Normalização → Estruturação → Publicação' },
+  { nome: 'Painel',          rota: '/',                icone: 'mdi-view-dashboard',          cor: 'secondary', desc: 'KPIs consolidados, cards de métricas e fluxo operacional' },
+  { nome: 'Requisitos',      rota: '/requisitos',      icone: 'mdi-file-document-edit',      cor: 'primary',   desc: 'CRUD de requisitos com situação, urgência, área e sistema' },
+  { nome: 'Fluxo',           rota: '/pipeline',        icone: 'mdi-pipe',                    cor: 'info',      desc: 'Fluxo Entrada → Normalização → Estruturação → Publicação' },
   { nome: 'Task Console',    rota: '/task-console',    icone: 'mdi-clipboard-check-outline', cor: 'accent',    desc: 'Revisar tarefas e preparar envio para o Planner' },
-  { nome: 'Qualidade IA',    rota: '/qualidade-ia',    icone: 'mdi-brain',                   cor: 'deep-purple', desc: 'Score, tendência histórica e recomendações do módulo de IA' },
-  { nome: 'Relatórios SSRS', rota: '/relatorios',      icone: 'mdi-file-chart-outline',      cor: 'success',   desc: 'Catálogo e status dos relatórios SSRS do servidor NOTERI' },
+  { nome: 'Qualidade IA',    rota: '/qualidade-ia',    icone: 'mdi-brain',                   cor: 'deep-purple', desc: 'Nota, tendência histórica e recomendações do módulo de IA' },
+  { nome: 'Relatórios SSRS', rota: '/relatorios',      icone: 'mdi-file-chart-outline',      cor: 'success',   desc: 'Catálogo e situação dos relatórios SSRS do servidor NOTERI' },
   { nome: 'Segredos',        rota: '/segredos-status', icone: 'mdi-key-chain-variant',       cor: 'warning',   desc: 'Diagnóstico da origem de cada segredo (env / cofre / padrão)' },
   { nome: 'Rastreabilidade', rota: '/rastreabilidade', icone: 'mdi-vector-link',             cor: 'indigo',    desc: 'Matriz Requisito → História → Issue Redmine → Commit Git' },
-  { nome: 'Specs SDD',       rota: '/specs',           icone: 'mdi-file-code-outline',       cor: 'deep-orange', desc: 'Especificações de features do my-first-spec-project (.sdd)' },
+  { nome: 'Especificações da solução',       rota: '/specs',           icone: 'mdi-file-code-outline',       cor: 'deep-orange', desc: 'Especificações de funcionalidades do my-first-spec-project (.sdd)' },
   { nome: 'Auditoria',       rota: '/auditoria',       icone: 'mdi-shield-search',           cor: 'error',     desc: 'Linha do tempo de eventos, correlation_id e governança' },
+  { nome: 'Figma GitHub',    rota: '/figma-github',    icone: 'mdi-vector-square',           cor: 'pink',      desc: 'Sincronização governada Figma ↔ GitHub com retorno em tela e tabela analítica' },
+  { nome: 'Central de automações',    rota: '/hub-lowcode',     icone: 'mdi-lightning-bolt-circle',   cor: 'teal',      desc: 'Pacotes IA, flows Power Automate, bot ReqSysAgent e fluxo ciclo de entrega no GitHub' },
+  { nome: 'Monitoramento',   rota: '/monitoramento-operacional', icone: 'mdi-monitor-dashboard', cor: 'cyan', desc: 'Estado operacional de Solicitações de integração, verificações obrigatórias, integrações e pendências' },
 ]
 
 const backendModulos = [
-  { nome: 'Autenticação',    prefixo: '/v1/auth',           endpoints: '1',  desc: 'Login por e-mail, JWT com papel (admin / analista)' },
-  { nome: 'Sistema',         prefixo: '/v1/sistema',        endpoints: '5',  desc: 'Health check, versão, endpoints, segredos-status, cofre' },
-  { nome: 'Dashboard',       prefixo: '/v1/dashboard',      endpoints: '2',  desc: 'KPIs de requisitos e informações gerais' },
+  { nome: 'Autenticação',    prefixo: '/v1/auth',           endpoints: '1',  desc: 'Acesso por e-mail, JWT com papel (admin / analista)' },
+  { nome: 'Sistema',         prefixo: '/v1/sistema',        endpoints: '5',  desc: 'Health check, versão, endpoints, segredos-situação, cofre' },
+  { nome: 'Painel',          prefixo: '/v1/dashboard',      endpoints: '2',  desc: 'KPIs de requisitos e informações gerais' },
   { nome: 'Requisitos',      prefixo: '/v1/requisitos',     endpoints: '3',  desc: 'CRUD, validação de payload e registro de solicitações' },
   { nome: 'Qualidade IA',    prefixo: '/v1/qualidade-ia',   endpoints: '5',  desc: 'Resumo, tendência, export CSV/PDF e snapshot manual' },
   { nome: 'Auditoria',       prefixo: '/v1/auditoria',      endpoints: '2',  desc: 'Eventos de auditoria e configuração de infra' },
-  { nome: 'Cofre',           prefixo: '/v1/cofre',          endpoints: '1',  desc: 'Status do cofre local (Credential Manager)' },
-  { nome: 'Specs SDD',       prefixo: '/v1/specs',          endpoints: '3',  desc: 'Features, exemplos e templates de especificação' },
-  { nome: 'Relatórios SSRS', prefixo: '/v1/relatorios',     endpoints: '3',  desc: 'Catálogo, status e health do servidor SSRS NOTERI' },
-  { nome: 'Hub Low-Code',    prefixo: '/v1/hub-lowcode',    endpoints: '4',  desc: 'Status, pacotes SharePoint, flows Dataverse, runs GitHub' },
+  { nome: 'Cofre',           prefixo: '/v1/cofre',          endpoints: '6',  desc: 'Cofre local AES-GCM: init, situação, gravar, remover e resolver segredos' },
+  { nome: 'Especificações da solução',       prefixo: '/v1/specs',          endpoints: '3',  desc: 'Funcionalidades, exemplos e templates de especificação' },
+  { nome: 'Relatórios SSRS', prefixo: '/v1/relatorios',     endpoints: '3',  desc: 'Catálogo, situação e health do servidor SSRS NOTERI' },
+  { nome: 'Central de automações',    prefixo: '/v1/hub-lowcode',    endpoints: '4',  desc: 'Situação, pacotes SharePoint, flows Dataverse, runs GitHub' },
+  { nome: 'Figma GitHub',    prefixo: '/v1/integracoes/figma-github', endpoints: '2', desc: 'Sync bidirecional Figma ↔ GitHub e consulta de vínculos em tela' },
 ]
 
-const ambientesFlyio = [
-  { nome: 'prod',    cor: 'success', frontend: 'reqsys-app.fly.dev',     backend: 'reqsys-api.fly.dev',     duckdns: 'tieriprod.duckdns.org' },
-  { nome: 'staging', cor: 'warning', frontend: 'reqsys-app-stg.fly.dev', backend: 'reqsys-api-stg.fly.dev', duckdns: 'tierin.duckdns.org'    },
-  { nome: 'dev',     cor: 'info',    frontend: 'reqsys-app-dev.fly.dev', backend: 'reqsys-api-dev.fly.dev', duckdns: 'tieridev.duckdns.org'  },
-]
+const ambientesOperacionais = computed(() =>
+  AMBIENTES_OPERACIONAIS.filter((item) => !item.onlyLocal).map((item) => ({
+    ...item,
+    navegavel: item.navegavel !== false && Boolean(item.frontend),
+    frontendHost: item.frontend.replace(/^https?:\/\//, '') || 'não publicado',
+    backendHost: item.backend.replace(/^https?:\/\//, '') || 'não publicado',
+  })),
+)
+
+const {
+  confirmacaoProdAberta,
+  destinoPendente,
+  solicitarNavegacao,
+  confirmarNavegacaoProd,
+  cancelarNavegacaoProd,
+} = useNavegacaoAmbiente()
+
+function abrirAmbiente(id) {
+  solicitarNavegacao(id, { path: '/arquitetura', preserveRoute: false })
+}
 
 const solutionComps = [
   {
@@ -498,6 +562,11 @@ const solutionComps = [
     nome: 'Capturar Tarefas',     tipo: 'Tópico · Bot',
     icone: 'mdi-comment-text',    cor: 'indigo',
     desc:  'Coleta linhas de tarefa → confirmação → InvokeFlowAction → informa resultado',
+  },
+  {
+    nome: 'Sincronizar Figma GitHub', tipo: 'Tópico · Bot',
+    icone: 'mdi-vector-square',   cor: 'pink',
+    desc:  'Aciona sync Figma ↔ GitHub via serviço ReqSys e orienta consulta em /figma-github',
   },
   {
     nome: 'Criar no Planner',     tipo: 'Flow · Power Automate',
@@ -523,31 +592,31 @@ const solutionComps = [
 
 const almPipeline = [
   { nome: 'Dev (tieri)', icone: 'mdi-pencil',          cor: 'primary', desc: 'Editar bot ou flow no Copilot Studio / Power Apps' },
-  { nome: 'Export',      icone: 'mdi-export',          cor: 'info',    desc: 'pac solution export → unpack → PR automático' },
+  { nome: 'Export',      icone: 'mdi-export',          cor: 'info',    desc: 'pac solution export → unpack → Solicitação de integração automático' },
   { nome: 'Build',       icone: 'mdi-package-variant', cor: 'warning', desc: 'pack → import Build env → export managed' },
-  { nome: 'Test',        icone: 'mdi-test-tube',       cor: 'orange',  desc: 'Deploy automático em Test após merge do PR' },
-  { nome: 'Prod',        icone: 'mdi-rocket-launch',   cor: 'success', desc: 'Merge em main → deploy Prod + GitHub Release' },
+  { nome: 'Test',        icone: 'mdi-test-tube',       cor: 'orange',  desc: 'Implantação automática em Test após integração de alterações do Solicitação de integração' },
+  { nome: 'Prod',        icone: 'mdi-rocket-launch',   cor: 'success', desc: 'Integração de alterações em main → implantação em Prod + GitHub Release' },
 ]
 
 const dataverseEnvs = [
   { slug: 'reqsys-dev',   url: 'orga258f260.crm2.dynamics.com', papel: 'Desenvolvimento · mesmo ambiente tieri default', cor: 'primary' },
   { slug: 'reqsys-build', url: 'org4ee98db6.crm2.dynamics.com', papel: 'Empacotamento e build da solution gerenciada',   cor: 'info'    },
-  { slug: 'reqsys-test',  url: 'orgf2ca7436.crm2.dynamics.com', papel: 'Testes automatizados E2E do ALM',                cor: 'warning' },
+  { slug: 'reqsys-test',  url: 'orgf2ca7436.crm2.dynamics.com', papel: 'Testes automatizados E2E do administração do ciclo de entrega',                cor: 'warning' },
   { slug: 'reqsys-prod',  url: 'org2dd77e2a.crm2.dynamics.com', papel: 'Produção Power Platform',                        cor: 'success' },
 ]
 
 const hubEndpoints = [
-  { rota: '/status',   desc: 'Resumo consolidado do hub (card no Dashboard ReqSys Web)' },
+  { rota: '/status',   desc: 'Resumo consolidado do hub (card no Painel ReqSys Web)' },
   { rota: '/pacotes',  desc: 'Catálogo IA da lista SharePoint IA_Catalogo_Projetos' },
   { rota: '/flows',    desc: '11 flows Dataverse + execuções do flow principal Planner' },
-  { rota: '/github',   desc: 'Últimos 10 runs do GitHub Actions do repo ALM' },
+  { rota: '/github',   desc: 'Últimos 10 runs do GitHub Actions do repo administração do ciclo de entrega' },
 ]
 
 const scripts = [
   {
-    nome: 'Exportar para ALM',
+    nome: 'Exportar para administração do ciclo de entrega',
     cmd:  '.\\scripts\\05-primeiro-export.ps1',
-    desc: 'Exporta solution do Dev, desempacota e cria PR no GitHub',
+    desc: 'Exporta solution do Dev, desempacota e cria Solicitação de integração no GitHub',
   },
   {
     nome: 'Testes E2E Power Platform',
@@ -555,9 +624,9 @@ const scripts = [
     desc: '5 testes E2E integrados. Use -CriarTarefaTeste para escrever no Planner',
   },
   {
-    nome: 'Dashboard em tempo real',
-    cmd:  '.\\scripts\\gerar-dashboard.ps1',
-    desc: 'Gera dashboard.html com dados do flow, bot e tarefas Planner',
+    nome: 'Painel em tempo real',
+    cmd:  '.\\scripts\\gerar-painel.ps1',
+    desc: 'Gera painel.html com dados do flow, bot e tarefas Planner',
   },
 ]
 </script>
@@ -568,20 +637,20 @@ const scripts = [
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 20px 24px;
-  margin-bottom: 32px;
+  padding: var(--space-xl) var(--space-xl);
+  margin-bottom: var(--space-2xl);
 }
 
 .arch-row {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin: 6px 0;
+  margin: var(--space-sm) 0;
 }
 
 .arch-label {
   width: 90px;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -600,9 +669,9 @@ const scripts = [
 .arch-node {
   flex: 1;
   min-width: 140px;
-  padding: 10px 14px;
+  padding: var(--space-md) var(--space-lg);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 700;
   text-align: center;
   line-height: 1.4;
@@ -611,8 +680,8 @@ const scripts = [
 .arch-node small {
   display: block;
   font-weight: 400;
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-xs);
 }
 
 .arch-node--external    { background: rgba(100,100,100,.1); border: 1px solid rgba(100,100,100,.25); }
@@ -622,9 +691,9 @@ const scripts = [
 .arch-node--integration { background: rgba(46,125,50,.1);   border: 1px solid rgba(46,125,50,.3);    }
 
 .arch-arrow {
-  padding: 2px 0 2px 106px;
+  padding: var(--space-xs) 0 var(--space-xs) 106px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 /* ─── Flow Diagram ─── */
@@ -637,20 +706,20 @@ const scripts = [
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 6px;
+  padding: var(--space-xl);
+  margin-bottom: var(--space-sm);
 }
 
 .flow-label {
   text-align: center;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 .flow-node {
   text-align: center;
-  padding: 12px 20px;
+  padding: var(--space-md) var(--space-xl);
   border-radius: 10px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 700;
   line-height: 1.4;
   min-width: 130px;
@@ -659,14 +728,14 @@ const scripts = [
 .flow-node small {
   display: block;
   font-weight: 400;
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-xs);
 }
 
 .flow-connector {
-  padding: 0 10px;
+  padding: 0 var(--space-md);
   color: var(--muted);
-  font-size: 20px;
+  font-size: var(--font-size-xl);
   font-weight: 300;
 }
 
@@ -684,24 +753,24 @@ const scripts = [
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 20px;
+  padding: var(--space-lg) var(--space-xl);
 }
 
 .pipeline-step {
   text-align: center;
-  padding: 8px 14px;
+  padding: var(--space-sm) var(--space-lg);
   min-width: 90px;
 }
 
 .pipeline-nome {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 
 .pipeline-desc {
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-xs);
   max-width: 100px;
 }
 
@@ -709,8 +778,8 @@ const scripts = [
   display: flex;
   align-items: center;
   color: var(--muted);
-  font-size: 16px;
-  padding: 0 2px;
+  font-size: var(--font-size-lg);
+  padding: 0 var(--space-xs);
 }
 
 /* ─── Component Cards ─── */
@@ -720,19 +789,19 @@ const scripts = [
 }
 
 .comp-name {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 700;
   color: var(--text);
 }
 
 .comp-rota {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-family: 'Consolas', 'Fira Code', monospace;
   color: var(--muted);
 }
 
 .comp-desc {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
   line-height: 1.4;
 }
@@ -742,15 +811,15 @@ const scripts = [
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--muted);
-  margin-bottom: 10px;
-  padding-left: 2px;
+  margin-bottom: var(--space-md);
+  padding-left: var(--space-xs);
   border-left: 3px solid var(--accent);
-  padding-left: 8px;
+  padding-left: var(--space-sm);
 }
 
 /* ─── Tables ─── */
@@ -760,13 +829,36 @@ const scripts = [
   overflow: hidden;
 }
 
+.env-table .ambiente-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.env-table .ambiente-row:hover {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.env-table .ambiente-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.env-table .ambiente-row--disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.env-table .ambiente-row--disabled:hover {
+  background: transparent;
+}
+
 /* ─── Code blocks ─── */
 .code-block {
   background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 11px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-xs);
   font-family: 'Consolas', 'Fira Code', monospace;
   white-space: pre-wrap;
   margin: 0;
@@ -775,7 +867,7 @@ const scripts = [
 }
 
 .small-code {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-family: 'Consolas', monospace;
   color: var(--muted);
 }
@@ -791,8 +883,8 @@ const scripts = [
   }
   .flow-connector {
     transform: rotate(90deg);
-    font-size: 14px;
-    padding: 2px 0;
+    font-size: var(--font-size-base);
+    padding: var(--space-xs) 0;
   }
   .pipeline-flow {
     flex-direction: column;

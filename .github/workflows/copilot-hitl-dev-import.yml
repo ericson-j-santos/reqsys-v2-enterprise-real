@@ -1,0 +1,166 @@
+name: Copilot HITL DEV Import
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite IMPORT_DEV para autorizar a importação somente em DEV'
+        required: true
+        type: string
+      publish_changes:
+        description: 'Publicar alterações após a importação'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  OUTPUT_DIR: artifacts/lowcode-solution-factory/copilot-hitl-agent-network/generated
+  PACKAGE_PATH: artifacts/lowcode-solution-factory/copilot-hitl-agent-network/generated/ReqSysCopilotHITL_unmanaged.zip
+  DEPLOYMENT_SETTINGS_PATH: artifacts/lowcode-solution-factory/copilot-hitl-agent-network/generated/deployment-settings.dev.json
+  SOLUTION_UNIQUE_NAME: ReqSysCopilotHITL
+  PYTHONPATH: backend:.
+
+concurrency:
+  group: copilot-hitl-dev-import
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate DEV import contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: reqsys-power-platform-dev
+    steps:
+      - name: Enforce explicit DEV confirmation
+        shell: bash
+        run: |
+          if [[ '${{ inputs.confirmation }}' != 'IMPORT_DEV' ]]; then
+            echo '::error::Confirmação inválida. Informe IMPORT_DEV.'
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Run import guardrail tests
+        run: python -m pytest backend/tests/test_validate_copilot_hitl_dev_import.py backend/tests/test_materialize_copilot_hitl_solution.py -q
+
+      - name: Materialize unmanaged Solution
+        run: python scripts/materialize_copilot_hitl_solution.py --output "$OUTPUT_DIR"
+
+      - name: Materialize protected deployment settings
+        env:
+          DEPLOYMENT_SETTINGS_JSON: ${{ secrets.POWER_PLATFORM_DEPLOYMENT_SETTINGS_JSON }}
+        shell: bash
+        run: |
+          if [[ -z "$DEPLOYMENT_SETTINGS_JSON" ]]; then
+            echo '::error::Secret POWER_PLATFORM_DEPLOYMENT_SETTINGS_JSON não configurado no Environment DEV.'
+            exit 1
+          fi
+          printf '%s' "$DEPLOYMENT_SETTINGS_JSON" > "$DEPLOYMENT_SETTINGS_PATH"
+
+      - name: Validate target, package and deployment settings
+        env:
+          POWER_PLATFORM_ENVIRONMENT_URL: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+        run: |
+          python scripts/validate_copilot_hitl_dev_import.py \
+            --package "$PACKAGE_PATH" \
+            --settings "$DEPLOYMENT_SETTINGS_PATH" \
+            --environment-url "$POWER_PLATFORM_ENVIRONMENT_URL"
+
+      - name: Upload validated import bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-copilot-hitl-dev-import-bundle
+          path: |
+            ${{ env.PACKAGE_PATH }}
+            ${{ env.DEPLOYMENT_SETTINGS_PATH }}
+            ${{ env.OUTPUT_DIR }}/materialization-manifest.json
+          retention-days: 7
+          if-no-files-found: error
+
+  import-dev:
+    name: Import and smoke test DEV
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: reqsys-power-platform-dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download validated import bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: reqsys-copilot-hitl-dev-import-bundle
+          path: import-bundle
+
+      - name: Normalize artifact paths
+        shell: bash
+        run: |
+          PACKAGE="$(find import-bundle -name 'ReqSysCopilotHITL_unmanaged.zip' -print -quit)"
+          SETTINGS="$(find import-bundle -name 'deployment-settings.dev.json' -print -quit)"
+          test -n "$PACKAGE" || { echo '::error::Pacote não encontrado no artifact.'; exit 1; }
+          test -n "$SETTINGS" || { echo '::error::Deployment settings não encontrado no artifact.'; exit 1; }
+          echo "PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
+          echo "SETTINGS=$SETTINGS" >> "$GITHUB_ENV"
+
+      - name: Install Power Platform CLI
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Validate service principal against DEV
+        uses: microsoft/powerplatform-actions/who-am-i@v1
+        with:
+          environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+          app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          client-secret: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+
+      - name: Import unmanaged Solution in DEV
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
+          app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
+          client-secret: ${{ secrets.POWER_PLATFORM_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
+          solution-file: ${{ env.PACKAGE }}
+          force-overwrite: true
+          publish-changes: ${{ inputs.publish_changes }}
+          run-asynchronously: true
+          max-async-wait-time: 20
+          use-deployment-settings-file: true
+          deployment-settings-file: ${{ env.SETTINGS }}
+
+      - name: Smoke test imported Solution
+        shell: bash
+        run: |
+          set -euo pipefail
+          pac solution list | tee solution-list.txt
+          grep -F "$SOLUTION_UNIQUE_NAME" solution-list.txt >/dev/null || {
+            echo "::error::Solution $SOLUTION_UNIQUE_NAME não localizada após a importação."
+            exit 1
+          }
+
+      - name: Publish DEV import evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-copilot-hitl-dev-import-evidence
+          path: solution-list.txt
+          retention-days: 30
+          if-no-files-found: warn

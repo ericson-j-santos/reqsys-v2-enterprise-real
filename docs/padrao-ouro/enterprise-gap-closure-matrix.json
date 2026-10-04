@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0.0",
+  "reference_date": "2026-07-06",
+  "purpose": "Backlog Pareto para fechar os gaps de produção corporativa madura do ReqSys sem abrir frentes paralelas sem governança.",
+  "target_state": {
+    "controlled_production_percent": 80,
+    "gold_standard_percent": 70,
+    "operating_model": "plataforma enterprise evolutiva com runtime operacional unificado, UX guiada e governança auditável"
+  },
+  "gaps": [
+    {
+      "id": "OPS-GAP-AGENT-RUNTIME-001",
+      "priority": "P0",
+      "pillar": "multiagentes",
+      "current_maturity_percent": 78,
+      "target_maturity_percent": 86,
+      "gap": "Runtime operacional unificado de agentes ainda parcialmente coordenado.",
+      "minimum_increment": "Definir state machine canônica, envelope de evento e contrato de memória operacional compartilhada antes de novas automações autônomas.",
+      "acceptance_evidence": ["ADR ou runbook do runtime de agentes", "schema de evento versionado", "validador report-only do fluxo agente -> evento -> evidência"],
+      "owners": ["Architecture Governance", "AI Governance", "Runtime Operations"],
+      "rollback": "Desabilitar consumo do novo evento e manter agentes no modo coordenado atual."
+    },
+    {
+      "id": "OPS-GAP-UX-ENTERPRISE-001",
+      "priority": "P1",
+      "pillar": "ux_enterprise",
+      "current_maturity_percent": 62,
+      "target_maturity_percent": 75,
+      "gap": "Experiência operacional ainda depende de telas e fluxos com complexidade elevada para adoção corporativa.",
+      "minimum_increment": "Consolidar guided flows para entrada de requisito, decisão de governança, evidência de CI e monitoramento executivo.",
+      "acceptance_evidence": ["rota navegável com fluxo guiado", "teste unitário ou E2E focado", "screenshot ou vídeo quando houver alteração visual"],
+      "owners": ["Product Experience", "Frontend Platform"],
+      "rollback": "Remover a entrada de navegação do guided flow e preservar rotas existentes."
+    },
+    {
+      "id": "OPS-GAP-WORKFLOW-ENGINE-001",
+      "priority": "P1",
+      "pillar": "workflow_engine",
+      "current_maturity_percent": 68,
+      "target_maturity_percent": 78,
+      "gap": "Workflow engine visual ainda não transforma o produto em operação low-code madura.",
+      "minimum_increment": "Versionar topologia mínima de workflow com estados, transições, permissões e evidências obrigatórias.",
+      "acceptance_evidence": ["contrato de workflow", "dashboard ou documentação navegável", "teste de validação de transições"],
+      "owners": ["Low-Code Platform", "Architecture Governance"],
+      "rollback": "Manter visualização read-only e bloquear escrita de transições."
+    },
+    {
+      "id": "OPS-GAP-OBSERVABILITY-001",
+      "priority": "P2",
+      "pillar": "observabilidade_distribuida",
+      "current_maturity_percent": 74,
+      "target_maturity_percent": 84,
+      "gap": "Tracing distribuído entre agentes, workflows e integrações ainda é parcial.",
+      "minimum_increment": "Padronizar correlation_id, causation_id e workflow_run_id em artifacts de agentes, CI e runtime health.",
+      "acceptance_evidence": ["artifact consolidado", "relatório de correlação", "dashboard com deep links para workflow run"],
+      "owners": ["Runtime Operations", "SRE"],
+      "rollback": "Reverter para relatório local report-only sem impacto no runtime."
+    },
+    {
+      "id": "OPS-GAP-RBAC-ABAC-001",
+      "priority": "P2",
+      "pillar": "seguranca_governanca",
+      "current_maturity_percent": 82,
+      "target_maturity_percent": 90,
+      "gap": "RBAC/ABAC, policy engine central e auditoria forense ainda não estão consolidados como controle único.",
+      "minimum_increment": "Mapear matriz recurso -> papel -> contexto -> evidência de auditoria para rotas críticas antes de expandir permissões.",
+      "acceptance_evidence": ["matriz RBAC/ABAC", "teste de autorização crítico", "runbook de auditoria unificada"],
+      "owners": ["Security Governance", "Backend Platform"],
+      "rollback": "Reaplicar RBAC atual e bloquear regras ABAC novas por feature flag."
+    },
+    {
+      "id": "OPS-GAP-GITOPS-CHECKS-001",
+      "priority": "P0",
+      "pillar": "gitops_ci_cd",
+      "current_maturity_percent": 81,
+      "target_maturity_percent": 88,
+      "gap": "Branch protection pode esperar checks antigos ou workflows renomeados, gerando ruído operacional.",
+      "minimum_increment": "Gerar inventário de checks obrigatórios versus workflows existentes e classificar stale checks antes de alterar proteção.",
+      "acceptance_evidence": ["relatório de branch protection", "lista de checks stale", "decisão registrada para renomear/remover check"],
+      "owners": ["Platform Engineering", "CI Governance"],
+      "rollback": "Restaurar lista anterior de checks obrigatórios documentada no relatório."
+    }
+  ]
+}

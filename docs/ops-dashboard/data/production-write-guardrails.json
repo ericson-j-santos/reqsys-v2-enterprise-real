@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T13:30:00-03:00",
+  "scope": "production_write_guardrails",
+  "runtime_impact": "none",
+  "default_mode": "read_first",
+  "requires_human_approval_for_prod_write": true,
+  "minimum_fields": [
+    "correlation_id",
+    "actor",
+    "reason",
+    "scope",
+    "rollback",
+    "environment"
+  ],
+  "authorization_matrix": [
+    {
+      "action": "health_or_status_read",
+      "dev": "allowed",
+      "test": "allowed",
+      "prod": "allowed"
+    },
+    {
+      "action": "idempotent_write",
+      "dev": "allowed",
+      "test": "allowed_with_log",
+      "prod": "requires_approval"
+    },
+    {
+      "action": "destructive_operation",
+      "dev": "restricted",
+      "test": "restricted",
+      "prod": "blocked_by_default"
+    }
+  ]
+}

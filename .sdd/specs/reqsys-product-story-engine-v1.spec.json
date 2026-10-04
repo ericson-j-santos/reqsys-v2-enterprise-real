@@ -1,0 +1,44 @@
+{
+  "feature_name": "reqsys-product-story-engine-v1",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Transforma o log semanal evidenciado em drafts governados para apresentação pública do produto, sem publicação automática.",
+  "source_contract": {
+    "artifact": "reqsys-weekly-accomplishment-log",
+    "required_dimensions": [
+      "implemented",
+      "validated",
+      "evidenced",
+      "consolidated"
+    ]
+  },
+  "publication_policy": {
+    "mode": "review_only",
+    "human_review_required": true,
+    "automatic_publish": false,
+    "sensitive_content_fail_closed": true,
+    "idempotency": "sha256(pr_number + head_sha + post_text)"
+  },
+  "acceptance_criteria": [
+    "Somente entregas implementadas, validadas, evidenciadas e consolidadas podem ficar READY_FOR_HUMAN_REVIEW.",
+    "Lacunas de evidência ou sinais sensíveis bloqueiam o candidato.",
+    "O mesmo PR/SHA/texto gera o mesmo content_hash.",
+    "O workflow consome o artifact do log semanal e publica somente artifacts de revisão.",
+    "Nenhuma chamada de publicação no LinkedIn faz parte deste incremento.",
+    "O Pre-PR Readiness deve retornar READY_FOR_PR=passed no HEAD exato antes da abertura de PR."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_reqsys_product_story_engine.py",
+      "tests/test_reqsys_product_story_workflow.py"
+    ],
+    "evidence_contract": "Artifact JSON/Markdown registra fonte, PR, SHA, checks, blockers, score operacional, content_hash, visual_brief e estado READY_FOR_HUMAN_REVIEW/BLOCKED."
+  }
+}
