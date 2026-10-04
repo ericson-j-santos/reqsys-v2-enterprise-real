@@ -1,0 +1,48 @@
+name: User Experience Environment History
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/smoke_user_experience_environments.py'
+      - 'tests/test_smoke_user_experience_environments.py'
+      - '.github/workflows/user-experience-environment-history.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: user-experience-environment-history-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-smoke:
+    # Fly.io retirado definitivamente; exige inventário explícito de runtimes autorizados.
+    runs-on: ubuntu-latest
+    if: ${{ false }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Validate implementation
+        run: |
+          python -m py_compile scripts/smoke_user_experience_environments.py
+          python -m unittest tests/test_smoke_user_experience_environments.py
+
+      - name: Execute DEV STG PROD report-only smoke
+        run: |
+          python scripts/smoke_user_experience_environments.py \
+            --output evidence/ux/user-experience-environment-history.json \
+            --timeout 15
+
+      - name: Publish auditable evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: user-experience-environment-history-${{ github.sha }}
+          path: evidence/ux/user-experience-environment-history.json
+          retention-days: 90

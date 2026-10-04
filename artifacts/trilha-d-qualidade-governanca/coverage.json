@@ -1,0 +1,15 @@
+{
+  "dimension": "coverage",
+  "status": "passed",
+  "score": 95.52,
+  "duration_seconds": 18.02,
+  "summary": "coverage 95.52% (gate 60.0%)",
+  "details": {
+    "exit_code": 0,
+    "coverage_percent": 95.52,
+    "threshold_percent": 60.0,
+    "stdout_tail": "les skipped due to complete coverage.\nRequired test coverage of 60% reached. Total coverage: 95.52%\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_ia.py:329: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:338: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:347: GEMINI_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:358: GROQ_API_KEY não configurada ou sem quota\nSKIPPED [1] tests/test_ia.py:371: GROQ_API_KEY não configurada ou sem quota\n1032 passed, 5 skipped, 9 warnings in 15.50s\n--- Logging error ---\nTraceback (most recent call last):\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 152, in _export\n    self._exporter.export(\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/trace/export/__init__.py\", line 307, in export\n    self.out.write(self.formatter(span))\nValueError: I/O operation on closed file.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/lib/python3.12/logging/__init__.py\", line 1163, in emit\n    stream.write(msg + self.terminator)\nValueError: I/O operation on closed file.\nCall stack:\n  File \"/usr/lib/python3.12/threading.py\", line 1030, in _bootstrap\n    self._bootstrap_inner()\n  File \"/usr/lib/python3.12/threading.py\", line 1073, in _bootstrap_inner\n    self.run()\n  File \"/usr/lib/python3.12/threading.py\", line 1010, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 141, in worker\n    self._export(BatchExportStrategy.EXPORT_ALL)\n  File \"/workspace/backend/.venv/lib/python3.12/site-packages/opentelemetry/sdk/_shared_internal/__init__.py\", line 165, in _export\n    self._logger.exception(\nMessage: 'Exception while exporting %s.'\nArguments: ('Span',)\n"
+  },
+  "blockers": [],
+  "recommendations": []
+}

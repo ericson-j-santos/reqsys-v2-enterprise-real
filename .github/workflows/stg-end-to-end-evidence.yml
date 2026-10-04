@@ -1,0 +1,277 @@
+name: STG End-to-End Evidence
+
+on:
+  # Atualiza a evidência canônica diretamente, sem watcher intermediário.
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stg-end-to-end-evidence.yml"
+      - ".github/workflows/environment-promotion-readiness-gate.yml"
+      - ".github/workflows/environment-promotion-history.yml"
+      - ".github/workflows/stg-enforcement-approval.yml"
+      - ".github/workflows/stg-blocking-policy-authorization.yml"
+      - "scripts/evaluate_environment_promotion_gate.py"
+      - "scripts/update_environment_promotion_history.py"
+      - "scripts/build_stg_enforcement_approval.py"
+      - "scripts/validate_stg_policy_approval.py"
+      - "docs/contracts/environment-promotion-policy-v1.json"
+      - "docs/contracts/stg-blocking-change-authorization.json"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["STG Blocking Policy Authorization"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: stg-end-to-end-evidence-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect immutable STG workflow evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/stg-e2e artifacts/stg-end-to-end-evidence
+          gh api "repos/${GITHUB_REPOSITORY}/commits/main" > .tmp/stg-e2e/main.json
+
+          collect_run() {
+            key="$1"
+            workflow="$2"
+            artifact="$3"
+            expected_file="$4"
+
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=success&per_page=20" \
+              --jq '.workflow_runs[0] // {}' > ".tmp/stg-e2e/${key}-run.json"
+
+            run_id="$(jq -r '.id // empty' ".tmp/stg-e2e/${key}-run.json")"
+            if [ -z "$run_id" ]; then
+              echo '{}' > ".tmp/stg-e2e/${key}-artifact.json"
+              echo '{}' > ".tmp/stg-e2e/${key}-payload.json"
+              return
+            fi
+
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
+              > ".tmp/stg-e2e/${key}-artifacts.json"
+            jq --arg name "$artifact" \
+              '[.artifacts[] | select(.name == $name and .expired == false)][0] // {}' \
+              ".tmp/stg-e2e/${key}-artifacts.json" \
+              > ".tmp/stg-e2e/${key}-artifact.json"
+
+            artifact_id="$(jq -r '.id // empty' ".tmp/stg-e2e/${key}-artifact.json")"
+            if [ -z "$artifact_id" ]; then
+              echo '{}' > ".tmp/stg-e2e/${key}-payload.json"
+              return
+            fi
+
+            mkdir -p ".tmp/stg-e2e/${key}-content"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > ".tmp/stg-e2e/${key}.zip"
+            unzip -q ".tmp/stg-e2e/${key}.zip" -d ".tmp/stg-e2e/${key}-content"
+            payload="$(find ".tmp/stg-e2e/${key}-content" -name "$expected_file" -print -quit)"
+            if [ -n "$payload" ]; then
+              cp "$payload" ".tmp/stg-e2e/${key}-payload.json"
+            else
+              echo '{}' > ".tmp/stg-e2e/${key}-payload.json"
+            fi
+          }
+
+          collect_run readiness environment-promotion-readiness-gate.yml environment-promotion-readiness-stg report.json
+          collect_run history environment-promotion-history.yml environment-promotion-history history.json
+          collect_run approval stg-enforcement-approval.yml stg-enforcement-approval approval.json
+          collect_run authorization stg-blocking-policy-authorization.yml stg-policy-approval-validation report.json
+
+      - name: Build consolidated evidence report
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path('.tmp/stg-e2e')
+          output = Path('artifacts/stg-end-to-end-evidence')
+          output.mkdir(parents=True, exist_ok=True)
+
+          def load(name: str) -> dict:
+              path = root / name
+              if not path.exists():
+                  return {}
+              data = json.loads(path.read_text(encoding='utf-8'))
+              return data if isinstance(data, dict) else {}
+
+          main_sha = str(load('main.json').get('sha') or '')
+          definitions = {
+              'readiness': ('Environment Promotion Readiness Gate', 'reqsys-environment-promotion-readiness-gate'),
+              'history': ('Environment Promotion History', 'reqsys-environment-promotion-history'),
+              'approval': ('STG Enforcement Approval', 'reqsys-stg-enforcement-approval'),
+              'authorization': ('STG Blocking Policy Authorization', None),
+          }
+
+          stages = {}
+          blocking_reasons = []
+          payloads = {}
+          for key, (workflow_name, expected_contract) in definitions.items():
+              run = load(f'{key}-run.json')
+              artifact = load(f'{key}-artifact.json')
+              payload = load(f'{key}-payload.json')
+              payloads[key] = payload
+              metadata_valid = bool(
+                  run.get('id')
+                  and run.get('conclusion') == 'success'
+                  and artifact.get('id')
+                  and not artifact.get('expired', False)
+              )
+              contract_valid = bool(payload) and (
+                  expected_contract is None or payload.get('contract') == expected_contract
+              )
+              valid = metadata_valid and contract_valid
+              if not metadata_valid:
+                  blocking_reasons.append(f'{key}_evidence_missing_or_invalid')
+              elif not contract_valid:
+                  blocking_reasons.append(f'{key}_payload_contract_invalid')
+              stages[key] = {
+                  'workflow': workflow_name,
+                  'run_id': run.get('id'),
+                  'run_url': run.get('html_url'),
+                  'status': run.get('status'),
+                  'conclusion': run.get('conclusion'),
+                  'event': run.get('event'),
+                  'head_branch': run.get('head_branch'),
+                  'head_sha': run.get('head_sha'),
+                  'artifact': {
+                      'id': artifact.get('id'),
+                      'name': artifact.get('name'),
+                      'digest': artifact.get('digest'),
+                      'expired': artifact.get('expired'),
+                      'expires_at': artifact.get('expires_at'),
+                  },
+                  'metadata_valid': metadata_valid,
+                  'contract_valid': contract_valid,
+                  'valid': valid,
+              }
+
+          readiness = payloads['readiness']
+          history = payloads['history']
+          approval = payloads['approval']
+
+          latest_stg = next(
+              (point for point in reversed(history.get('points') or []) if point.get('environment') == 'stg'),
+              {},
+          )
+          readiness_history_consistent = bool(
+              readiness.get('environment') == 'stg'
+              and latest_stg
+              and latest_stg.get('decision') == readiness.get('decision')
+              and latest_stg.get('correlation_id') == readiness.get('correlation_id')
+          )
+          if not readiness_history_consistent:
+              blocking_reasons.append('readiness_history_payload_link_invalid')
+
+          history_run_id = stages['history'].get('run_id')
+          approval_evidence = approval.get('evidence') or {}
+          approval_history_consistent = bool(
+              approval.get('requested_decision') == 'approve'
+              and approval.get('effective_approval') is True
+              and str(approval_evidence.get('source_run_id') or '') == str(history_run_id or '')
+          )
+          if not approval_history_consistent:
+              blocking_reasons.append('history_approval_payload_link_invalid')
+
+          chain_shas = [stages[key].get('head_sha') for key in ('readiness', 'history', 'approval')]
+          main_chain_consistent = all(chain_shas) and len(set(chain_shas)) == 1 and chain_shas[0] == main_sha
+          if not main_chain_consistent:
+              blocking_reasons.append('readiness_history_approval_not_bound_to_current_main_sha')
+
+          blocking_reasons = list(dict.fromkeys(blocking_reasons))
+          complete = not blocking_reasons
+          correlation_seed = ':'.join(str(stages[key].get('run_id') or 'missing') for key in definitions)
+          correlation_id = 'stg-e2e-' + hashlib.sha256(f'{main_sha}:{correlation_seed}'.encode()).hexdigest()[:20]
+
+          report = {
+              'schema_version': '1.1.0',
+              'contract': 'reqsys-stg-end-to-end-evidence',
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'correlation_id': correlation_id,
+              'main_sha': main_sha,
+              'status': 'complete' if complete else 'incomplete',
+              'blocking': not complete,
+              'blocking_reasons': blocking_reasons,
+              'chain_integrity': {
+                  'readiness_history_approval_current_main_sha': main_chain_consistent,
+                  'readiness_history_payload_link': readiness_history_consistent,
+                  'history_approval_payload_link': approval_history_consistent,
+                  'authorization_is_policy_sha_scoped': True,
+              },
+              'stages': stages,
+              'guardrails': {
+                  'report_only': True,
+                  'automatic_deploy': False,
+                  'automatic_policy_change': False,
+                  'branch_protection_change': False,
+              },
+              'next_action': 'evidence_chain_validated_no_action_required' if complete else blocking_reasons[0],
+          }
+
+          (output / 'report.json').write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          lines = [
+              '# STG End-to-End Evidence', '',
+              f"- Status: **{report['status']}**",
+              f"- Main SHA: `{main_sha}`",
+              f"- Correlation ID: `{correlation_id}`",
+              f"- Metadata chain: **{main_chain_consistent}**",
+              f"- Readiness → History: **{readiness_history_consistent}**",
+              f"- History → Approval: **{approval_history_consistent}**",
+              f"- Blocking reasons: **{', '.join(blocking_reasons) or 'none'}**",
+              '', '| Stage | Run | Metadata | Contract | Valid |', '|---|---:|---|---|---|',
+          ]
+          for key, stage in stages.items():
+              run = f"[{stage['run_id']}]({stage['run_url']})" if stage.get('run_id') and stage.get('run_url') else 'missing'
+              lines.append(f"| {key} | {run} | {stage['metadata_valid']} | {stage['contract_valid']} | {stage['valid']} |")
+          lines.extend(['', '- Automatic deploy: **disabled**', '- Automatic policy change: **disabled**', '- Report-only: **enabled**'])
+          (output / 'report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('\n'.join(lines) + '\n')
+          PY
+
+      - name: Validate report contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('artifacts/stg-end-to-end-evidence/report.json').read_text(encoding='utf-8'))
+          assert report['schema_version'] == '1.1.0'
+          assert report['contract'] == 'reqsys-stg-end-to-end-evidence'
+          assert set(report['stages']) == {'readiness', 'history', 'approval', 'authorization'}
+          assert set(report['chain_integrity']) == {
+              'readiness_history_approval_current_main_sha',
+              'readiness_history_payload_link',
+              'history_approval_payload_link',
+              'authorization_is_policy_sha_scoped',
+          }
+          assert report['guardrails'] == {
+              'report_only': True,
+              'automatic_deploy': False,
+              'automatic_policy_change': False,
+              'branch_protection_change': False,
+          }
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stg-end-to-end-evidence
+          path: artifacts/stg-end-to-end-evidence/
+          retention-days: 365

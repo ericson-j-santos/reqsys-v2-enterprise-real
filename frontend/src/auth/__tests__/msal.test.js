@@ -1,21 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ── Mocks declarados antes dos vi.mock() ─────────────────────────────────────
 const mockHandleRedirectPromise = vi.fn()
 const mockLoginRedirect = vi.fn()
 const mockGetAllAccounts = vi.fn(() => [])
 const mockGetConfiguration = vi.fn(() => ({ auth: { clientId: 'test-client-id' } }))
 const mockInitialize = vi.fn()
+const mockConstructor = vi.fn()
+const mockAcquireTokenSilent = vi.fn()
+const mockAcquireTokenPopup = vi.fn()
 
-// PublicClientApplication precisa ser uma classe real (constructor) para suportar `new`
+function encodedRequestParams(state = 'opaque') {
+  return btoa(JSON.stringify({ state, correlationId: 'corr-test' }))
+}
+
 vi.mock('@azure/msal-browser', () => {
   class PublicClientApplication {
-    constructor() {
+    constructor(config) {
+      mockConstructor(config)
       this.initialize = mockInitialize
       this.handleRedirectPromise = mockHandleRedirectPromise
       this.loginRedirect = mockLoginRedirect
       this.getAllAccounts = mockGetAllAccounts
       this.getConfiguration = mockGetConfiguration
+      this.acquireTokenSilent = mockAcquireTokenSilent
+      this.acquireTokenPopup = mockAcquireTokenPopup
     }
   }
   return { PublicClientApplication }
@@ -36,53 +44,230 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-// Resetar módulos entre testes para limpar o singleton _instance
 beforeEach(() => {
   vi.resetModules()
+  vi.unstubAllEnvs()
+  window.history.replaceState({}, '', '/')
+  mockConstructor.mockReset()
   mockHandleRedirectPromise.mockReset().mockResolvedValue(null)
   mockLoginRedirect.mockReset().mockResolvedValue(undefined)
   mockInitialize.mockReset().mockResolvedValue(undefined)
+  mockGetAllAccounts.mockReset().mockReturnValue([])
+  mockAcquireTokenSilent.mockReset()
+  mockAcquireTokenPopup.mockReset()
   localStorage.clear()
   sessionStorage.clear()
 })
 
-// ─── getMsalInstance ──────────────────────────────────────────────────────────
+describe('getAuthCallbackUri', () => {
+  it('retorna o callback publico absoluto registrado no Microsoft Entra ID', async () => {
+    const { getAuthCallbackUri } = await import('../env')
+    expect(getAuthCallbackUri()).toBe(`${window.location.origin}/auth/callback.html`)
+  })
+
+  it('prioriza VITE_MSAL_REDIRECT_URI quando configurado por ambiente', async () => {
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-dev.example.invalid/auth/callback.html')
+    const { getAuthCallbackUri } = await import('../env')
+    expect(getAuthCallbackUri()).toBe('https://reqsys-dev.example.invalid/auth/callback.html')
+  })
+
+  it('monta callback por VITE_PUBLIC_URL e VITE_MSAL_CALLBACK_PATH quando redirect absoluto nao foi definido', async () => {
+    vi.stubEnv('VITE_PUBLIC_URL', 'https://reqsys-stg.example.invalid/')
+    vi.stubEnv('VITE_MSAL_CALLBACK_PATH', 'auth/callback.html')
+    const { getAuthCallbackUri } = await import('../env')
+    expect(getAuthCallbackUri()).toBe('https://reqsys-stg.example.invalid/auth/callback.html')
+  })
+
+  it('recusa redirects Fly.io aposentados', async () => {
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-app-dev.fly.dev/auth/callback.html')
+    const { getAuthCallbackUri } = await import('../env')
+    expect(() => getAuthCallbackUri()).toThrow('retirado definitivamente')
+  })
+})
 
 describe('getMsalInstance', () => {
-  it('retorna null quando azure_enabled é false', async () => {
+  it('retorna null quando azure_enabled e false', async () => {
     const { api } = await import('../../services/api')
     api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
     const { getMsalInstance } = await import('../msal')
     expect(await getMsalInstance()).toBeNull()
   })
 
-  it('retorna instância MSAL quando azure_enabled é true', async () => {
+  it('retorna instancia MSAL quando azure_enabled e true', async () => {
     const { getMsalInstance } = await import('../msal')
     const instance = await getMsalInstance()
     expect(instance).not.toBeNull()
   })
 
-  it('chama initialize() exatamente uma vez (singleton)', async () => {
+  it('chama initialize() exatamente uma vez', async () => {
     const { getMsalInstance } = await import('../msal')
     await getMsalInstance()
     await getMsalInstance()
     expect(mockInitialize).toHaveBeenCalledTimes(1)
   })
+
+  it('configura MSAL para redirect no callback publico registrado', async () => {
+    const { getMsalInstance } = await import('../msal')
+    await getMsalInstance()
+    expect(mockConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        auth: expect.objectContaining({
+          redirectUri: `${window.location.origin}/auth/callback.html`,
+          postLogoutRedirectUri: `${window.location.origin}/login`,
+          navigateToLoginRequestUrl: false,
+          onRedirectNavigate: expect.any(Function),
+        }),
+        cache: expect.objectContaining({
+          cacheLocation: 'sessionStorage',
+        }),
+      })
+    )
+  })
+
+  it('configura MSAL com redirect e logout por variaveis VITE_MSAL_*', async () => {
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', 'https://reqsys-dev.example.invalid/auth/callback.html')
+    vi.stubEnv('VITE_MSAL_POST_LOGOUT_REDIRECT_URI', 'https://reqsys-dev.example.invalid/login')
+    const { getMsalInstance } = await import('../msal')
+    await getMsalInstance()
+    expect(mockConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        auth: expect.objectContaining({
+          redirectUri: 'https://reqsys-dev.example.invalid/auth/callback.html',
+          postLogoutRedirectUri: 'https://reqsys-dev.example.invalid/login',
+        }),
+      })
+    )
+  })
+
+  it('aciona o handoff temporario imediatamente antes do redirect Microsoft', async () => {
+    const { getMsalInstance } = await import('../msal')
+    await getMsalInstance()
+    sessionStorage.setItem('msal.interaction.status', JSON.stringify({ clientId: 'test-client-id', type: 'signin' }))
+    sessionStorage.setItem('msal.test-client-id.request.params', encodedRequestParams())
+    sessionStorage.setItem('msal.test-client-id.code.verifier', 'verifier')
+    sessionStorage.setItem('msal.test-client-id.request.origin', `${window.location.origin}/login`)
+
+    const config = mockConstructor.mock.calls[0][0]
+    config.auth.onRedirectNavigate()
+
+    expect(localStorage.getItem('reqsys_msal_redirect_handoff_v1')).toContain('opaque')
+    expect(localStorage.getItem('reqsys_msal_redirect_handoff_v1')).not.toContain('idtoken')
+  })
+
+  it('restaura o callback pelo handoff mesmo se a API de configuracao estiver indisponivel', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockClear()
+    const { persistMsalRedirectHandoff } = await import('../msalRedirectHandoff')
+    const redirectUri = 'https://reqsys.example.test/auth/callback.html'
+    vi.stubEnv('VITE_MSAL_REDIRECT_URI', redirectUri)
+    sessionStorage.setItem('msal.interaction.status', JSON.stringify({ clientId: 'test-client-id', type: 'signin' }))
+    sessionStorage.setItem('msal.test-client-id.request.params', encodedRequestParams())
+    sessionStorage.setItem('msal.test-client-id.code.verifier', 'verifier')
+    sessionStorage.setItem('msal.test-client-id.request.origin', `${window.location.origin}/login`)
+    expect(persistMsalRedirectHandoff({
+      clientId: 'test-client-id',
+      tenantId: '6d09c88c-test',
+      redirectUri,
+    })).toBe(true)
+    sessionStorage.clear()
+    window.history.replaceState({}, '', '/#code=auth-code&state=opaque')
+
+    const { getMsalInstance } = await import('../msal')
+    expect(await getMsalInstance()).not.toBeNull()
+    expect(api.get).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem('msal.test-client-id.code.verifier')).toBe('verifier')
+    expect(localStorage.getItem('reqsys_msal_redirect_handoff_v1')).toBeNull()
+  })
 })
 
-// ─── handleRedirectResult ────────────────────────────────────────────────────
+describe('loginMicrosoftRedirect', () => {
+  it('chama loginRedirect com escopos, select_account, callback e redirectStartPage', async () => {
+    const { loginMicrosoftRedirect, SCOPES } = await import('../msal')
+    await loginMicrosoftRedirect()
+    expect(mockLoginRedirect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopes: SCOPES,
+        prompt: 'select_account',
+        redirectUri: `${window.location.origin}/auth/callback.html`,
+        redirectStartPage: `${window.location.origin}/login`,
+      })
+    )
+  })
+
+  it('usa VITE_MSAL_LOGIN_REDIRECT_START_PAGE no loginRedirect quando configurado', async () => {
+    vi.stubEnv('VITE_MSAL_LOGIN_REDIRECT_START_PAGE', 'https://reqsys-stg.example.invalid/login')
+    const { loginMicrosoftRedirect } = await import('../msal')
+    await loginMicrosoftRedirect()
+    expect(mockLoginRedirect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectStartPage: 'https://reqsys-stg.example.invalid/login',
+      })
+    )
+  })
+
+  it('limpa estado de interacao e retenta em interaction_in_progress', async () => {
+    const interactionErr = Object.assign(new Error(), { errorCode: 'interaction_in_progress' })
+    mockLoginRedirect
+      .mockReset()
+      .mockRejectedValueOnce(interactionErr)
+      .mockResolvedValueOnce(undefined)
+
+    localStorage.setItem('msal.test-client-id.interaction.status', 'interaction_in_progress')
+    localStorage.setItem('msal.test-client-id.request.correlationId', 'abc')
+
+    const { loginMicrosoftRedirect } = await import('../msal')
+    await loginMicrosoftRedirect()
+
+    expect(mockLoginRedirect).toHaveBeenCalledTimes(2)
+    expect(localStorage.getItem('msal.test-client-id.interaction.status')).toBeNull()
+    expect(localStorage.getItem('msal.test-client-id.request.correlationId')).toBeNull()
+  })
+
+  it('lanca erro quando Azure AD nao esta configurado', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { loginMicrosoftRedirect } = await import('../msal')
+    await expect(loginMicrosoftRedirect()).rejects.toThrow('Azure AD nao configurado')
+  })
+})
 
 describe('handleRedirectResult', () => {
-  it('retorna null quando não há redirect pendente', async () => {
+  it('limpa o callback quando nao existe configuracao MSAL valida', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    window.history.replaceState({}, '', '/#error=invalid_request&state=opaque')
+    const { handleRedirectResult } = await import('../msal')
+
+    await expect(handleRedirectResult()).resolves.toBeNull()
+    expect(window.location.hash).toBe('')
+  })
+
+  it('retorna null quando nao ha redirect pendente', async () => {
     mockHandleRedirectPromise.mockResolvedValue(null)
     const { handleRedirectResult } = await import('../msal')
     expect(await handleRedirectResult()).toBeNull()
   })
 
-  it('retorna idToken quando há redirect bem-sucedido', async () => {
+  it('retorna idToken quando ha redirect bem-sucedido', async () => {
     mockHandleRedirectPromise.mockResolvedValue({ idToken: 'eyJ.payload.sig' })
     const { handleRedirectResult } = await import('../msal')
     expect(await handleRedirectResult()).toBe('eyJ.payload.sig')
+  })
+
+  it.each([
+    ['query', '/?code=auth-code&state=opaque', '?code=auth-code&state=opaque'],
+    ['fragmento', '/#code=auth-code&state=opaque', '#code=auth-code&state=opaque'],
+  ])('entrega o retorno em %s explicitamente ao parser do MSAL', async (_origem, url, hash) => {
+    window.history.replaceState({}, '', url)
+    const { handleRedirectResult } = await import('../msal')
+
+    await handleRedirectResult()
+
+    expect(mockHandleRedirectPromise).toHaveBeenCalledWith({
+      hash,
+      navigateToLoginRequestUrl: false,
+    })
+    if (url.includes('?')) expect(window.location.search).toBe('')
   })
 
   it.each([
@@ -90,14 +275,27 @@ describe('handleRedirectResult', () => {
     'state_not_found',
     'no_cached_authority_error',
     'interaction_in_progress',
-  ])('suprime %s silenciosamente (retorna null)', async (errorCode) => {
+    'timed_out',
+  ])('suprime %s silenciosamente', async (errorCode) => {
     const err = Object.assign(new Error(errorCode), { errorCode })
     mockHandleRedirectPromise.mockRejectedValue(err)
     const { handleRedirectResult } = await import('../msal')
     await expect(handleRedirectResult()).resolves.toBeNull()
   })
 
-  it('propaga erros desconhecidos (não suprime)', async () => {
+  it.each([
+    'no_token_request_cache_error',
+    'state_not_found',
+  ])('propaga %s quando a URL contem retorno OAuth', async (errorCode) => {
+    window.history.replaceState({}, '', '/?code=auth-code&state=opaque')
+    const err = Object.assign(new Error(errorCode), { errorCode })
+    mockHandleRedirectPromise.mockRejectedValue(err)
+    const { handleRedirectResult } = await import('../msal')
+
+    await expect(handleRedirectResult()).rejects.toMatchObject({ errorCode })
+  })
+
+  it('propaga erros desconhecidos', async () => {
     const err = Object.assign(new Error('unexpected failure'), { errorCode: 'unknown_error' })
     mockHandleRedirectPromise.mockRejectedValue(err)
     const { handleRedirectResult } = await import('../msal')
@@ -105,38 +303,209 @@ describe('handleRedirectResult', () => {
   })
 })
 
-// ─── loginMicrosoft ───────────────────────────────────────────────────────────
+describe('acquireIdTokenSilent', () => {
+  it('retorna id_token via acquireTokenSilent quando ha conta em cache', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ idToken: 'fresh-id-token' })
 
-describe('loginMicrosoft', () => {
-  it('chama loginRedirect com openid/profile/email e select_account', async () => {
-    const { loginMicrosoft, SCOPES } = await import('../msal')
-    await loginMicrosoft()
-    expect(mockLoginRedirect).toHaveBeenCalledWith(
-      expect.objectContaining({ scopes: SCOPES, prompt: 'select_account' })
+    const { acquireIdTokenSilent, SCOPES } = await import('../msal')
+    const idToken = await acquireIdTokenSilent()
+
+    expect(idToken).toBe('fresh-id-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
     )
   })
 
-  it('limpa chaves de interação do localStorage e retenta em interaction_in_progress', async () => {
-    const interactionErr = Object.assign(new Error(), { errorCode: 'interaction_in_progress' })
-    mockLoginRedirect
-      .mockRejectedValueOnce(interactionErr)
-      .mockResolvedValueOnce(undefined)
-
-    localStorage.setItem('msal.test-client-id.interaction.status', 'interaction_in_progress')
-    localStorage.setItem('msal.test-client-id.request.correlationId', 'abc')
-
-    const { loginMicrosoft } = await import('../msal')
-    await loginMicrosoft()
-
-    expect(mockLoginRedirect).toHaveBeenCalledTimes(2)
-    expect(localStorage.getItem('msal.test-client-id.interaction.status')).toBeNull()
-    expect(localStorage.getItem('msal.test-client-id.request.correlationId')).toBeNull()
+  it('retorna null (sem lancar) quando nao ha conta Microsoft em cache', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquireIdTokenSilent } = await import('../msal')
+    await expect(acquireIdTokenSilent()).resolves.toBeNull()
+    expect(mockAcquireTokenSilent).not.toHaveBeenCalled()
   })
 
-  it('lança erro quando Azure AD não está configurado', async () => {
+  it('retorna null (sem lancar, sem popup) quando a sessao SSO nao esta mais valida', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+
+    const { acquireIdTokenSilent } = await import('../msal')
+    await expect(acquireIdTokenSilent()).resolves.toBeNull()
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('retorna null quando Azure AD nao esta configurado no servidor', async () => {
     const { api } = await import('../../services/api')
     api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
-    const { loginMicrosoft } = await import('../msal')
-    await expect(loginMicrosoft()).rejects.toThrow('Azure AD não configurado')
+    const { acquireIdTokenSilent } = await import('../msal')
+    await expect(acquireIdTokenSilent()).resolves.toBeNull()
+  })
+})
+
+describe('acquireTeamsGraphToken', () => {
+  it('retorna access_token via acquireTokenSilent quando ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ accessToken: 'silent-token' })
+
+    const { acquireTeamsGraphToken, TEAMS_GRAPH_SCOPES } = await import('../msal')
+    const token = await acquireTeamsGraphToken()
+
+    expect(token).toBe('silent-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: TEAMS_GRAPH_SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
+    )
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('cai para acquireTokenPopup quando o silent exige interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+    mockAcquireTokenPopup.mockResolvedValue({ accessToken: 'popup-token' })
+
+    const { acquireTeamsGraphToken } = await import('../msal')
+    const token = await acquireTeamsGraphToken()
+
+    expect(token).toBe('popup-token')
+    expect(mockAcquireTokenPopup).toHaveBeenCalledTimes(1)
+  })
+
+  it('lanca erro quando nao ha conta Microsoft logada', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquireTeamsGraphToken } = await import('../msal')
+    await expect(acquireTeamsGraphToken()).rejects.toThrow('Nenhuma conta Microsoft logada')
+  })
+
+  it('propaga erros do silent que nao sao de interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockRejectedValue(new Error('falha de rede'))
+
+    const { acquireTeamsGraphToken } = await import('../msal')
+    await expect(acquireTeamsGraphToken()).rejects.toThrow('falha de rede')
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('lanca erro quando Azure AD nao esta configurado', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { acquireTeamsGraphToken } = await import('../msal')
+    await expect(acquireTeamsGraphToken()).rejects.toThrow('Azure AD nao configurado')
+  })
+})
+
+describe('acquirePowerPlatformToken', () => {
+  it('retorna access_token via acquireTokenSilent quando ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ accessToken: 'pp-silent-token' })
+
+    const { acquirePowerPlatformToken, POWER_PLATFORM_SCOPES } = await import('../msal')
+    const token = await acquirePowerPlatformToken()
+
+    expect(token).toBe('pp-silent-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: POWER_PLATFORM_SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
+    )
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('cai para acquireTokenPopup quando o silent exige interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+    mockAcquireTokenPopup.mockResolvedValue({ accessToken: 'pp-popup-token' })
+
+    const { acquirePowerPlatformToken } = await import('../msal')
+    const token = await acquirePowerPlatformToken()
+
+    expect(token).toBe('pp-popup-token')
+    expect(mockAcquireTokenPopup).toHaveBeenCalledTimes(1)
+  })
+
+  it('retorna null (sem lancar) quando nao ha conta Microsoft logada, ex.: login demo', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquirePowerPlatformToken } = await import('../msal')
+    await expect(acquirePowerPlatformToken()).resolves.toBeNull()
+    expect(mockAcquireTokenSilent).not.toHaveBeenCalled()
+  })
+
+  it('retorna null quando Azure AD nao esta configurado no servidor', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { acquirePowerPlatformToken } = await import('../msal')
+    await expect(acquirePowerPlatformToken()).resolves.toBeNull()
+  })
+
+  it('propaga erros do silent que nao sao de interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockRejectedValue(new Error('falha de rede'))
+
+    const { acquirePowerPlatformToken } = await import('../msal')
+    await expect(acquirePowerPlatformToken()).rejects.toThrow('falha de rede')
+  })
+})
+
+describe('acquireFlowManagementToken', () => {
+  it('retorna access_token via acquireTokenSilent quando ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockResolvedValue({ accessToken: 'flow-silent-token' })
+
+    const { acquireFlowManagementToken, FLOW_MANAGEMENT_SCOPES } = await import('../msal')
+    const token = await acquireFlowManagementToken()
+
+    expect(token).toBe('flow-silent-token')
+    expect(mockAcquireTokenSilent).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: FLOW_MANAGEMENT_SCOPES, account: { username: 'user@tieri659.onmicrosoft.com' } })
+    )
+    expect(mockAcquireTokenPopup).not.toHaveBeenCalled()
+  })
+
+  it('cai para acquireTokenPopup quando o silent exige interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    const interactionErr = Object.assign(new Error('interaction required'), { name: 'InteractionRequiredAuthError' })
+    mockAcquireTokenSilent.mockRejectedValue(interactionErr)
+    mockAcquireTokenPopup.mockResolvedValue({ accessToken: 'flow-popup-token' })
+
+    const { acquireFlowManagementToken } = await import('../msal')
+    const token = await acquireFlowManagementToken()
+
+    expect(token).toBe('flow-popup-token')
+    expect(mockAcquireTokenPopup).toHaveBeenCalledTimes(1)
+  })
+
+  it('retorna null (sem lancar) quando nao ha conta Microsoft logada', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { acquireFlowManagementToken } = await import('../msal')
+    await expect(acquireFlowManagementToken()).resolves.toBeNull()
+    expect(mockAcquireTokenSilent).not.toHaveBeenCalled()
+  })
+
+  it('propaga erros do silent que nao sao de interacao', async () => {
+    mockGetAllAccounts.mockReturnValue([{ username: 'user@tieri659.onmicrosoft.com' }])
+    mockAcquireTokenSilent.mockRejectedValue(new Error('falha de rede'))
+
+    const { acquireFlowManagementToken } = await import('../msal')
+    await expect(acquireFlowManagementToken()).rejects.toThrow('falha de rede')
+  })
+})
+
+describe('getContaAtual', () => {
+  it('retorna a primeira conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([{ localAccountId: 'user-123', username: 'user@tieri659.onmicrosoft.com' }])
+    const { getContaAtual } = await import('../msal')
+    const conta = await getContaAtual()
+    expect(conta).toEqual({ localAccountId: 'user-123', username: 'user@tieri659.onmicrosoft.com' })
+  })
+
+  it('retorna null quando nao ha conta logada', async () => {
+    mockGetAllAccounts.mockReturnValue([])
+    const { getContaAtual } = await import('../msal')
+    expect(await getContaAtual()).toBeNull()
+  })
+
+  it('retorna null quando Azure AD nao esta configurado', async () => {
+    const { api } = await import('../../services/api')
+    api.get.mockResolvedValueOnce({ data: { data: { azure_enabled: false } } })
+    const { getContaAtual } = await import('../msal')
+    expect(await getContaAtual()).toBeNull()
   })
 })

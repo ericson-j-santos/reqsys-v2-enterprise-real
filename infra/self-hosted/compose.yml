@@ -1,0 +1,117 @@
+# Stack independente: nao combinar com docker-compose.yml.
+name: ${COMPOSE_PROJECT_NAME:?defina um projeto isolado por ambiente}
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: reqsys_owner
+      POSTGRES_DB: reqsys
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
+    secrets: [db_owner_password, db_app_password]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-reqsys.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U reqsys_owner -d reqsys"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [data]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    logging: *logging
+    volumes: [redis_data:/data]
+    networks: [data]
+  api:
+    build: ../../backend
+    restart: unless-stopped
+    logging: *logging
+    entrypoint: ["python", "/opt/reqsys/start_api.py"]
+    environment:
+      APP_ENV: ${APP_ENV:?defina development ou production}
+      ALLOW_DEMO_LOGIN: "false"
+      JWT_ISSUER: ${COMPOSE_PROJECT_NAME}
+      JWT_AUDIENCE: ${PUBLIC_ORIGIN:?defina a origem publica}
+      CORS_ORIGINS: ${PUBLIC_ORIGIN}
+      APP_PUBLIC_URL: ${PUBLIC_ORIGIN}
+      API_PUBLIC_URL: ${PUBLIC_ORIGIN}/api
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      OPERATIONAL_QUEUE_PROVIDER: redis
+      OPERATIONAL_QUEUE_REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      ENABLE_GITHUB_REDMINE_IMPORT: "false"
+    secrets: [db_app_password, jwt_secret]
+    volumes:
+      - ./start_api.py:/opt/reqsys/start_api.py:ro
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 60s
+    networks: [data, edge, outbound]
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: /api
+        VITE_PUBLIC_URL: ${PUBLIC_ORIGIN}
+        VITE_MSAL_REDIRECT_URI: ${PUBLIC_ORIGIN}/auth/callback.html
+        VITE_MSAL_POST_LOGOUT_REDIRECT_URI: ${PUBLIC_ORIGIN}/
+        VITE_MSAL_LOGIN_REDIRECT_START_PAGE: ${PUBLIC_ORIGIN}/
+    restart: unless-stopped
+    logging: *logging
+    networks: [edge]
+  gateway:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    logging: *logging
+    volumes: [./nginx.conf:/etc/nginx/conf.d/default.conf:ro]
+    depends_on:
+      api: {condition: service_healthy}
+      frontend: {condition: service_started}
+    networks: [edge]
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?hostname ou http://localhost para ensaio}
+      ACME_EMAIL: ${ACME_EMAIL:?email para certificados}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-18080}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTPS_PORT:-18443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [gateway]
+    networks: [edge, outbound]
+networks:
+  data: {internal: true}
+  edge: {internal: true}
+  outbound: {}
+volumes:
+  postgres_data: {}
+  redis_data: {}
+  caddy_data: {}
+  caddy_config: {}
+secrets:
+  db_owner_password:
+    file: ${REQSYS_SECRET_DIR:?diretorio privado}/db_owner_password
+  db_app_password:
+    file: ${REQSYS_SECRET_DIR}/db_app_password
+  jwt_secret:
+    file: ${REQSYS_SECRET_DIR}/jwt_secret

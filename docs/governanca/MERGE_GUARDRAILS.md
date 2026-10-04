@@ -2,136 +2,84 @@
 
 ## Objetivo
 
-Impedir merge acidental ou prematuro antes da conclusão dos gates mínimos de qualidade, governança e rastreabilidade.
+Impedir integração acidental ou prematura na `main`, preservando evidência atual, mergeabilidade e proteção contra mudança concorrente do HEAD.
 
-Este documento formaliza a regra operacional: nenhum PR deve ser integrado na `main` antes de CI verde, revisão concluída, PR fora de draft e validação explícita pós-check.
+O PR #58 nasceu após um incidente de merge prematuro em 2026-06-20. Desde então, o repositório evoluiu e hoje possui controles mais fortes do que o workflow isolado originalmente proposto. Este documento consolida a decisão no estado canônico atual, sem criar uma superfície de CI duplicada.
 
----
+## Regra canônica atual
 
-## Incidente motivador
+Um PR só pode ser integrado quando, no HEAD atual:
 
-Em 2026-06-20, o PR #54 foi mergeado antes de aguardar a validação final da esteira. O evento expôs a necessidade de um guardrail explícito para evitar que decisões manuais avancem antes dos gates.
+- estiver aberto e fora de draft;
+- estiver com `behind_by=0`;
+- estiver mergeável e sem conflitos;
+- todos os workflows obrigatórios aplicáveis estiverem verdes;
+- revisões/conversas exigidas estiverem satisfeitas;
+- a evidência pertencer ao SHA vigente;
+- a decisão de merge for invalidada se o HEAD mudar;
+- a mutação de merge usar proteção equivalente a `expected_head_sha`.
 
----
+A autorização operacional vigente permite merge automático quando todos esses critérios estiverem satisfeitos. Não é necessária uma confirmação manual adicional por PR quando a autorização já existe; a automação não pode, porém, contornar nenhum gate.
 
-## Regra canônica
+## Controles canônicos
 
-Um PR só pode ser mergeado quando todos os critérios abaixo estiverem satisfeitos:
+### Pre-PR Readiness
 
-| Gate | Obrigatório | Critério |
-|---|---:|---|
-| PR aberto | Sim | `state = open` |
-| PR não draft | Sim | `draft = false` somente após CI verde |
-| CI verde | Sim | Todos os checks obrigatórios com sucesso |
-| Revisão concluída | Sim | Aprovação/revisão humana ou técnica registrada |
-| Sem conflitos | Sim | Branch mergeável |
-| Changelog/docs | Sim | Atualização aplicável ao escopo |
-| Pós-validação planejada | Sim | Plano de validação pós-merge documentado |
+`Pre-PR Readiness Gate` antecipa falhas determinísticas, exige branch atualizada e produz evidência vinculada ao HEAD avaliado.
 
----
+### Governed Merge Queue
+
+`Governed Merge Queue` revalida o contexto do PR, a estabilidade do SHA, os workflows obrigatórios e a integração contra a base real antes de considerar o PR elegível.
+
+### Proteção contra corrida de HEAD
+
+O fluxo de merge deve:
+
+1. capturar o SHA avaliado;
+2. validar checks e mergeabilidade nesse SHA;
+3. reler o PR imediatamente antes da mutação;
+4. abortar se o SHA mudou;
+5. enviar o SHA esperado na chamada de merge.
+
+### Branch protection / ruleset
+
+A `main` deve continuar protegida contra force-push e exclusão e exigir os checks definidos pela governança vigente. Conversas bloqueantes devem ser resolvidas quando a proteção exigir.
+
+## Checklist do PR
+
+O template canônico contém a seção **Integração governada**, com verificação de:
+
+- saída intencional de draft;
+- `behind_by=0`;
+- checks obrigatórios verdes;
+- ausência de conflitos/conversas bloqueantes;
+- evidência no SHA atual;
+- rota governada de merge;
+- validação pós-merge quando aplicável.
+
+## Por que o workflow antigo não é restaurado
+
+O arquivo histórico `.github/workflows/merge-guardrails.yml` fazia validações de checklist e estado do PR, mas hoje seria redundante com os controles canônicos acima e aumentaria a superfície de workflows.
+
+Além disso, a versão histórica usava referência mutável de action e exigia confirmação final manual, ambos incompatíveis com a governança vigente. A correção preserva o objetivo do PR #58 sem reintroduzir mecanismos superados.
 
 ## Estados proibidos para merge
 
-É proibido executar merge quando:
+É proibido mergear quando qualquer uma destas condições ocorrer:
 
-- PR estiver em draft;
-- CI estiver `queued`, `in_progress`, `pending`, `failed`, `cancelled` ou ausente;
-- não houver revisão registrada;
-- o PR estiver divergente sem atualização com `main`;
-- houver alerta de segurança, segredo, token ou configuração sensível;
-- a descrição não contiver checklist de release;
-- houver CodeRabbit, review ou comentário bloqueante pendente;
-- o ambiente alvo não estiver declarado.
+- PR em draft;
+- branch atrás da `main`;
+- conflito de merge;
+- workflow obrigatório ausente, pendente, falho ou cancelado;
+- HEAD diferente do SHA que foi validado;
+- evidência reaproveitada de SHA anterior;
+- revisão/conversa obrigatória pendente;
+- tentativa de bypass de proteção.
 
----
+## Pós-merge
 
-## Checklist obrigatório no PR
-
-Todo PR deve conter este bloco antes de ser marcado como pronto para revisão:
-
-```markdown
-## Merge Guardrails
-
-- [ ] PR mantido em draft durante implementação.
-- [ ] CI executado e verde.
-- [ ] Revisão concluída.
-- [ ] Sem comentários bloqueantes pendentes.
-- [ ] Ambiente alvo declarado.
-- [ ] Documentação/ADR/CHANGELOG atualizados quando aplicável.
-- [ ] Plano de validação pós-merge documentado.
-- [ ] Merge autorizado somente após confirmação final.
-```
-
----
-
-## Fluxo operacional obrigatório
-
-1. Criar branch.
-2. Abrir PR em draft.
-3. Executar implementação.
-4. Aguardar CI.
-5. Corrigir falhas.
-6. Validar novamente.
-7. Atualizar documentação viva.
-8. Marcar ready for review.
-9. Revisar.
-10. Realizar squash merge.
-11. Validar pós-merge.
-12. Atualizar monitoramento operacional.
-
----
-
-## Medidas técnicas recomendadas
-
-### Branch protection
-
-Configurar no GitHub para `main`:
-
-- Require pull request before merging.
-- Require approvals.
-- Require status checks to pass before merging.
-- Require branches to be up to date before merging.
-- Block force pushes.
-- Block deletions.
-- Require conversation resolution before merging.
-- Restrict bypass quando possível.
-
-### GitHub Actions guard
-
-Criar workflow que falhe quando:
-
-- PR estiver draft e alguém tentar promover indevidamente;
-- corpo do PR não tiver checklist de guardrails;
-- checks obrigatórios não forem encontrados;
-- labels obrigatórias não estiverem presentes;
-- branch não seguir convenção.
-
-### CODEOWNERS
-
-Definir responsáveis por:
-
-- `.github/workflows/**`;
-- `docs/adr/**`;
-- `docs/governanca/**`;
-- `config/**`;
-- `src/**`.
-
----
-
-## Resposta a merge prematuro
-
-Quando ocorrer merge prematuro:
-
-1. Registrar incidente no PR ou issue.
-2. Verificar commit de merge.
-3. Validar CI pós-merge.
-4. Criar hotfix se houver falha.
-5. Documentar causa raiz.
-6. Adicionar ou reforçar guardrail.
-7. Atualizar monitoramento operacional.
-
----
+Quando aplicável, validar a `main` resultante e registrar evidência no SHA efetivamente integrado. Falha pós-merge deve gerar correção nova e rastreável, sem reescrever histórico protegido.
 
 ## Decisão
 
-A partir deste registro, o padrão oficial do ReqSys passa a ser: merge só acontece após CI verde, revisão, saída intencional de draft e confirmação final.
+O objetivo do PR #58 permanece válido: evitar merge prematuro. A implementação canônica é consolidar o checklist no template e reutilizar os mecanismos vigentes de Pre-PR Readiness, Governed Merge Queue, branch protection e proteção por SHA esperado, em vez de adicionar um workflow paralelo.

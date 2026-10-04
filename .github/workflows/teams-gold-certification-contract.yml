@@ -1,0 +1,56 @@
+name: Teams Gold Certification Contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/teams-gold-certification.yml
+      - .github/workflows/teams-gold-certification-contract.yml
+      - docs/runbooks/teams-notification-service.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validar contrato de certificação
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar estrutura e política
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow='.github/workflows/teams-gold-certification.yml'
+          test -s "$workflow"
+          markers=(
+            'MIN_OBSERVATION_DAYS: "30"'
+            'MIN_DELIVERY_SUCCESS_PERCENT: "99.0"'
+            'MIN_MONITOR_SUCCESS_PERCENT: "99.0"'
+            'gold_certified'
+            'certification_suspended'
+            'observation'
+            'evidence_sha256'
+            'retention-days: 365'
+            'teams-commit-notification.yml'
+            'teams-dashboard-availability-monitor.yml'
+          )
+          for marker in "${markers[@]}"; do
+            grep -Fq "$marker" "$workflow" || {
+              echo "::error title=Contrato incompleto::Marcador ausente: $marker"
+              exit 1
+            }
+          done
+          ! grep -Fq 'TEAMS_WEBHOOK_URL:' "$workflow"
+          python - <<'PY'
+          from pathlib import Path
+          content = Path('.github/workflows/teams-gold-certification.yml').read_text(encoding='utf-8')
+          required = ['actions: read', 'contents: read', 'issues: write']
+          missing = [item for item in required if item not in content]
+          if missing:
+              raise SystemExit(f'Permissões obrigatórias ausentes: {missing}')
+          print('Contrato de certificação validado.')
+          PY

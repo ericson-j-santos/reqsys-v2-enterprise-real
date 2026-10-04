@@ -1,0 +1,141 @@
+name: Nonprod Parallelism Governed Executor
+
+on:
+  workflow_dispatch:
+    inputs:
+      approval_artifact_id:
+        description: "Artifact ID produced by Parallelism Change Approval"
+        required: true
+        type: string
+      metrics_artifact_id:
+        description: "Artifact ID produced by Parallelism Effect Index"
+        required: true
+        type: string
+      target_environment:
+        description: "Non-production target"
+        required: true
+        type: choice
+        options: [dev, stg]
+      action:
+        description: "Apply approved stage or rollback"
+        required: true
+        type: choice
+        options: [APPLY, ROLLBACK]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: nonprod-parallelism-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.target_environment }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APPROVAL_ARTIFACT_ID: ${{ inputs.approval_artifact_id }}
+      METRICS_ARTIFACT_ID: ${{ inputs.metrics_artifact_id }}
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+      EXECUTION_ACTION: ${{ inputs.action }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile and test executor contract
+        run: |
+          python -m py_compile scripts/execute_parallelism_change.py
+          python -m unittest tests/test_execute_parallelism_change.py -v
+
+      - name: Download governed inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/parallelism-executor/approval .tmp/parallelism-executor/metrics
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${APPROVAL_ARTIFACT_ID}" \
+            --jq '{id, name, expired}' > .tmp/parallelism-executor/approval-artifact.json
+          jq -e '.expired == false and (.name | startswith("reqsys-parallelism-approval-receipt-"))' \
+            .tmp/parallelism-executor/approval-artifact.json >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${APPROVAL_ARTIFACT_ID}/zip" \
+            > .tmp/parallelism-executor/approval.zip
+          unzip -q .tmp/parallelism-executor/approval.zip -d .tmp/parallelism-executor/approval
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${METRICS_ARTIFACT_ID}" \
+            --jq '{id, name, expired}' > .tmp/parallelism-executor/metrics-artifact.json
+          jq -e '.expired == false and .name == "reqsys-parallelism-effect-index"' \
+            .tmp/parallelism-executor/metrics-artifact.json >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${METRICS_ARTIFACT_ID}/zip" \
+            > .tmp/parallelism-executor/metrics.zip
+          unzip -q .tmp/parallelism-executor/metrics.zip -d .tmp/parallelism-executor/metrics
+
+          receipt_file="$(find .tmp/parallelism-executor/approval -name 'parallelism-approval-receipt.json' -print -quit)"
+          metrics_file="$(find .tmp/parallelism-executor/metrics -name '*parallelism*index*.json' -print -quit)"
+          test -n "$receipt_file"
+          test -n "$metrics_file"
+          printf '%s' "$receipt_file" > .tmp/parallelism-executor/receipt-path.txt
+          printf '%s' "$metrics_file" > .tmp/parallelism-executor/metrics-path.txt
+
+      - name: Execute governed stage transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt_file="$(cat .tmp/parallelism-executor/receipt-path.txt)"
+          metrics_file="$(cat .tmp/parallelism-executor/metrics-path.txt)"
+          python scripts/execute_parallelism_change.py \
+            --receipt "$receipt_file" \
+            --metrics "$metrics_file" \
+            --environment "$TARGET_ENVIRONMENT" \
+            --action "$EXECUTION_ACTION" \
+            --actor "$GITHUB_ACTOR" \
+            --output .tmp/parallelism-executor/parallelism-execution-receipt.json
+
+      - name: Validate execution guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.environment == "dev" or .environment == "stg"' \
+            .tmp/parallelism-executor/parallelism-execution-receipt.json >/dev/null
+          jq -e '(.change.delta | abs) <= 1' \
+            .tmp/parallelism-executor/parallelism-execution-receipt.json >/dev/null
+          jq -e '.guardrails.non_production_only == true' \
+            .tmp/parallelism-executor/parallelism-execution-receipt.json >/dev/null
+          jq -e '.guardrails.production_promotion_allowed == false' \
+            .tmp/parallelism-executor/parallelism-execution-receipt.json >/dev/null
+          jq -e '.guardrails.automatic_rollback_required_on_instability == true' \
+            .tmp/parallelism-executor/parallelism-execution-receipt.json >/dev/null
+
+      - name: Publish executive summary
+        shell: bash
+        run: |
+          status="$(jq -r '.status' .tmp/parallelism-executor/parallelism-execution-receipt.json)"
+          target_stage="$(jq -r '.change.target_stage' .tmp/parallelism-executor/parallelism-execution-receipt.json)"
+          execution_sha="$(jq -r '.execution_sha256' .tmp/parallelism-executor/parallelism-execution-receipt.json)"
+          {
+            echo "# Nonprod Parallelism Execution"
+            echo ""
+            echo "| Indicator | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`$TARGET_ENVIRONMENT\` |"
+            echo "| Action | \`$EXECUTION_ACTION\` |"
+            echo "| Status | \`$status\` |"
+            echo "| Target stage | \`$target_stage\` |"
+            echo "| Execution SHA-256 | \`$execution_sha\` |"
+            echo "| Production promotion | \`false\` |"
+            echo "| Rollback on instability | \`required\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-parallelism-execution-${{ inputs.target_environment }}-${{ github.run_id }}
+          path: |
+            .tmp/parallelism-executor/parallelism-execution-receipt.json
+            .tmp/parallelism-executor/approval-artifact.json
+            .tmp/parallelism-executor/metrics-artifact.json
+          retention-days: 90

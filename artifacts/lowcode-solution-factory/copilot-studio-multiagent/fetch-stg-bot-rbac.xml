@@ -1,0 +1,15 @@
+﻿<fetch>
+  <entity name="bot">
+    <attribute name="botid" />
+    <attribute name="name" />
+    <attribute name="schemaname" />
+    <attribute name="authenticationmode" />
+    <attribute name="authenticationtrigger" />
+    <attribute name="accesscontrolpolicy" />
+    <attribute name="statecode" />
+    <attribute name="statuscode" />
+    <filter>
+      <condition attribute="name" operator="eq" value="ReqSys Copilot Studio Orquestrador" />
+    </filter>
+  </entity>
+</fetch>

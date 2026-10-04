@@ -1,5 +1,5 @@
 <template>
-  <div class="ai-rec-page">
+  <div class="ai-rec-page" data-testid="route-recomendacoes-ia">
     <div class="page-header">
       <div>
         <h1>Recomendações IA</h1>
@@ -62,7 +62,7 @@
                   <v-chip size="small">Área {{ selectedIncident.modulo }}</v-chip>
                   <v-chip size="small">Sistema {{ selectedIncident.funcionalidade }}</v-chip>
                   <v-chip size="small" color="warning" variant="flat">Urgência {{ selectedIncident.severidade }}</v-chip>
-                  <v-chip size="small" color="primary" variant="flat">Score {{ selectedIncident.score_atual }}</v-chip>
+                  <v-chip size="small" color="primary" variant="flat">Nota {{ selectedIncident.score_atual }}</v-chip>
                 </div>
               </v-card-text>
             </v-card>
@@ -92,7 +92,7 @@
               <v-col cols="12">
                 <v-textarea v-model="createForm.recomendacao" label="Texto da recomendação" rows="4">
                   <template #append-inner>
-                    <v-tooltip text="Gerar com IA" location="top">
+                    <v-tooltip text="Gerar com IA" location="top" aria-label="Gerar com IA">
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"
@@ -140,7 +140,7 @@
                 <v-select v-model="outcomeForm.foi_aplicada" :items="booleanOptions" label="Aplicada?" />
                 <v-text-field v-model="outcomeForm.versao_aplicada" label="Versão aplicada" />
                 <v-select v-model="outcomeForm.outcome_positivo" :items="nullableBooleanOptions" label="Outcome positivo?" />
-                <v-text-field v-model.number="outcomeForm.score_pos_correcao" type="number" min="0" max="1" step="0.01" label="Score pós-correção" />
+                <v-text-field v-model.number="outcomeForm.score_pos_correcao" type="number" min="0" max="1" step="0.01" label="Índice pós-correção" />
                 <v-textarea v-model="outcomeForm.observacao" label="Observação" rows="2" />
                 <v-btn block color="primary" :loading="savingOutcome" @click="saveOutcome">Registrar outcome</v-btn>
               </v-card-text>
@@ -291,24 +291,24 @@ function fillRecommendationIds(id) {
 
 async function loadMetrics() {
   const response = await api.get(`/v1/dashboard/ia?janela_dias=${windowDays.value}`)
-  metrics.value = response.data
+  metrics.value = response.data.data
 }
 
 async function loadIncidents() {
   loadingIncidents.value = true
   try {
-    const params = new URLSearchParams({ limit: '30' })
-    if (incidentSearch.value?.trim()) params.set('search', incidentSearch.value.trim())
-    const response = await api.get(`/v1/incidentes?${params.toString()}`)
-    incidents.value = response.data
+    const params = { limit: 30 }
+    if (incidentSearch.value?.trim()) params.search = incidentSearch.value.trim()
+    const response = await api.get('/v1/incidentes', { params })
+    incidents.value = response.data.data
   } finally {
     loadingIncidents.value = false
   }
 }
 
 async function loadRecommendations() {
-  const response = await api.get('/v1/recomendacoes?limit=20')
-  recommendations.value = response.data
+  const response = await api.get('/v1/recomendacoes', { params: { limit: 20 } })
+  recommendations.value = response.data.data
   if (!selectedRecommendation.value && recommendations.value.length) await selectRecommendation(recommendations.value[0].id)
 }
 
@@ -329,7 +329,7 @@ async function selectIncident(id) {
   if (!id) return
   try {
     const response = await api.get(`/v1/incidentes/${id}`)
-    selectedIncident.value = response.data
+    selectedIncident.value = response.data.data
     applyIncidentToForm(selectedIncident.value)
   } catch (error) {
     showError(error, 'Erro ao buscar requisito/incidente.')
@@ -348,9 +348,10 @@ async function generateRecommendation() {
       contexto_incidente: createForm.contexto_incidente,
       tipo_recomendacao: createForm.tipo_recomendacao,
     })
-    createForm.recomendacao = response.data.recomendacao
-    createForm.confianca_ia = response.data.confianca_ia
-    createForm.modelo = response.data.modelo
+    const payload = response.data.data
+    createForm.recomendacao = payload.recomendacao
+    createForm.confianca_ia = payload.confianca_ia
+    createForm.modelo = payload.modelo
   } catch (error) {
     showError(error, 'Erro ao gerar recomendação com IA.')
   } finally {
@@ -368,7 +369,7 @@ async function createRecommendation() {
     const response = await api.post('/v1/recomendacoes', { ...createForm })
     await loadRecommendations()
     await loadMetrics()
-    await selectRecommendation(response.data.id)
+    await selectRecommendation(response.data.data.id)
   } catch (error) {
     showError(error, 'Erro ao criar recomendação.')
   } finally {
@@ -378,8 +379,8 @@ async function createRecommendation() {
 
 async function selectRecommendation(id) {
   const response = await api.get(`/v1/recomendacoes/${id}`)
-  selectedRecommendation.value = response.data
-  fillRecommendationIds(response.data.id)
+  selectedRecommendation.value = response.data.data
+  fillRecommendationIds(response.data.data.id)
 }
 
 async function saveDecision() {
@@ -444,7 +445,7 @@ onMounted(loadAll)
 
 .page-header h1 {
   font-size: 1.55rem;
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-xs);
 }
 
 .page-header p {

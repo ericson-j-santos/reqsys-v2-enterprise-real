@@ -1,0 +1,20 @@
+{
+  "feature_name": "Governed exact-SHA post-merge evidence materialization",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_governed_post_merge_materializer_workflow.py",
+      "tests/test_governed_pr_automation_dispatch_contract.py",
+      "tests/test_main_post_merge_actions_discovery_guard.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ],
+    "pre_pr_tests": [
+      "tests/test_governed_post_merge_materializer_workflow.py",
+      "tests/test_governed_pr_automation_dispatch_contract.py",
+      "tests/test_main_post_merge_actions_discovery_guard.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ]
+  }
+}

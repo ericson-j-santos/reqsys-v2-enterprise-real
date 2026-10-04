@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "cmn4893-prod-technical-exception",
+  "increment_type": "gap_fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise — governança BACEN",
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Exceção governada e temporária, válida até 2026-12-31, para avaliar deploy técnico em PROD quando o único bloqueio institucional da família CMN-4893 for a ausência de legal_entity/entity_type, preservando pending_decision e proibindo finalidade ou alegação de conformidade regulatória.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_cmn4893_prod_technical_exception.py",
+      "tests/test_bacen_production_readiness_wiring.py",
+      "tests/test_bacen_production_hard_gate_contract.py"
+    ],
+    "evidence_contract": "A exceção cobre apenas family_applicability_pending; somente legal_entity/entity_type são diferidos; decisão autoritativa permanece pending_decision; decisão efetiva applicable é exclusiva da avaliação técnica PROD durante a validade; regulatory_finality_allowed=false; regulatory_compliance_claim_allowed=false; demais gates permanecem obrigatórios; expira fail-closed após 2026-12-31."
+  },
+  "traceability": {
+    "issue": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1505",
+    "approval": "https://github.com/ericson-j-santos/reqsys-v2-enterprise-real/issues/1505#issuecomment-5782326463",
+    "requirements": ".sdd/specs/cmn4893-prod-technical-exception.requirements.md",
+    "exception": "governance/bacen/exceptions/CMN4893-SCOPE-DATA-PROD-TECHNICAL-EXCEPTION-2026-09-22.yaml",
+    "implementation": "scripts/validate_bacen_production_readiness_authoritative.py",
+    "gate2_workflow": ".github/workflows/bacen-production-readiness-gate2.yml",
+    "hard_gate_workflow": ".github/workflows/bacen-production-hard-gate.yml"
+  },
+  "risk": {
+    "production": true,
+    "deploy": false,
+    "secrets": false,
+    "scope": "production_governance",
+    "regulatory_finality": false
+  },
+  "acceptance_criteria": [
+    "A exceção é restrita a prod e ao blocker family_applicability_pending.",
+    "Somente institutional_scope.legal_entity e institutional_scope.entity_type são diferidos.",
+    "O registro autoritativo permanece pending_decision.",
+    "A decisão efetiva applicable é usada apenas para avaliação técnica de PROD enquanto a exceção estiver ativa.",
+    "A exceção permanece ativa até 2026-12-31 inclusive e expira fail-closed em 2027-01-01.",
+    "A decisão institucional final desativa automaticamente a exceção.",
+    "Nenhum outro blocker ou gate de produção é ignorado.",
+    "Nenhuma declaração de conformidade regulatória é permitida pela exceção.",
+    "Pre-PR Readiness Gate e testes focados aprovam o HEAD exato antes da PR."
+  ]
+}

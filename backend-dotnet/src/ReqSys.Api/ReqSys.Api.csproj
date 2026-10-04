@@ -3,4 +3,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>ReqSys.Api</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="config/connectors/connection-broker-registry.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

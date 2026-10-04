@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Continuação verificável das integrações DEV",
+  "increment_type": "hotfix",
+  "status": "implementation",
+  "approvals": {"requirements": true},
+  "sdd_gate": {
+    "tests": [
+      "tests/scripts/test_continuar_integracoes_dev.py",
+      "tests/scripts/test_planner_publish_reprocess_pendentes.py",
+      "tests/test_planner_reprocess_runtime_target.py"
+    ],
+    "evidence_contract": "Preflight registra bloqueios sem segredos; reprocessamento exige runtime DEV com SHA esperado e falha em erros de negócio."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/continuar-integracoes-dev.requirements.md",
+    "implementation": ["scripts/continuar_integracoes_dev.py", "scripts/planner_publish_reprocess_pendentes.py"],
+    "runbook": "docs/runbooks/todo-integracoes-dev.md",
+    "pull_request": "#2194"
+  },
+  "risk": {"production": false, "secrets_committed": false}
+}

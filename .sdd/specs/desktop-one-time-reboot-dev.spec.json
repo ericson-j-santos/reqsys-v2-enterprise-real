@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Desktop owner-authorized one-time reboot DEV",
+  "status": "implementation",
+  "increment_type": "gap_fix",
+  "environment": "DEV",
+  "source_host": "Noteri",
+  "target_host": "DESKTOP-PDQK954",
+  "gateway_command": "/reqsys run desktop-one-time-reboot-dev",
+  "workflow": ".github/workflows/noteri-desktop-watchdog-recovery.yml",
+  "workflow_mode": "reboot-once",
+  "canonical_rules_sha": "3dc23924279f04672d87fcc3c5a7a7cbff2e4794",
+  "canonical_executor": "scripts/owner_remote_host_power_once.py",
+  "risk": 3,
+  "guardrails": {
+    "arbitrary_target": false,
+    "arbitrary_command": false,
+    "operation": "reboot",
+    "shutdown": false,
+    "poweroff": false,
+    "production": false,
+    "secrets": false,
+    "authorization_window_minutes": 10,
+    "authorization_consumed_before_submit": true,
+    "negative_replay_required": true,
+    "authorization_revoked": true
+  },
+  "evidence_contract": {
+    "same_reqsys_sha": true,
+    "rules_sha_required": true,
+    "correlation_id_required": true,
+    "independent_post_reboot_validation_required": true,
+    "exit_code_zero_not_sufficient": true
+  },
+  "approvals": {
+    "requirements": true
+  },
+  "acceptance_criteria": [
+    "O gateway aceita somente o comando exato /reqsys run desktop-one-time-reboot-dev e o traduz para o modo reboot-once do workflow existente.",
+    "O job reboot-once executa apenas no Noteri e fixa DESKTOP-PDQK954 como alvo DEV sem input arbitrário.",
+    "A autorização remota é consumida antes da submissão, o replay é bloqueado e a autorização é revogada.",
+    "Run verde comprova somente submissão do reboot; recuperação exige leitura independente pós-reboot no SHA corrente.",
+    "Após retorno, a validação exige Orchestrator/capability, listener, pickup GitHub e E2E NORMAL -> ESTUDO -> replay -> NORMAL."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_desktop_one_time_reboot_dev.py",
+      "tests/test_reqsys_authorized_actions_gateway.py"
+    ]
+  },
+  "requirements": ".sdd/specs/desktop-one-time-reboot-dev.requirements.md"
+}
