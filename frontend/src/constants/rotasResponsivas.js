@@ -33,6 +33,7 @@ export const ROTAS_RESPONSIVAS = [
   { path: '/arquitetura', testId: 'route-arquitetura', titulo: 'Arquitetura' },
   { path: '/arquitetura-viva', testId: 'route-arquitetura-viva', titulo: 'Arquitetura Viva' },
   { path: '/govbi-ia', testId: 'route-govbi-ia', titulo: 'GovBI IA' },
+  { path: '/query-intelligence', testId: 'route-query-intelligence', titulo: 'Análise de consultas SQL' },
   { path: '/codex', testId: 'route-codex', titulo: 'Codex controlado' },
   { path: '/monitoramento-operacional', testId: 'route-monitoramento-operacional', titulo: 'Monitoramento operacional' },
   { path: '/estatisticas', testId: 'route-estatisticas', titulo: 'Estatísticas' },

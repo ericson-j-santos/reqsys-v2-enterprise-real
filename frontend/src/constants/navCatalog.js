@@ -55,6 +55,7 @@ export const NAV_TEMAS = [
       { to: '/financeiro', icon: 'mdi-cash-multiple', title: 'Financeiro', tip: 'Taxa CDI diária com armazenamento temporário interno e fonte no Banco Central.' },
       { to: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', tip: 'Catálogo e situação dos relatórios corporativos.' },
       { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural com controles do ReqSys.' },
+      { to: '/query-intelligence', icon: 'mdi-file-search-outline', title: 'Análise de consultas', tip: 'Examinar consultas SQL sem executar comandos, com relações lógicas e alertas de risco.' },
     ],
   },
   {
