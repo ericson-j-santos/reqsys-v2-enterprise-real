@@ -1,7 +1,9 @@
 {
   "feature_name": "Painel dos projetos atuais no acesso público DEV",
   "approvals": {
-    "requirements": true
+    "requirements": true,
+    "design": true,
+    "tasks": true
   },
   "sdd_gate": {
     "tests": [
@@ -14,6 +16,13 @@
       "frontend/src/constants/rotasResponsivas.test.js",
       "frontend/tests/e2e/painel-projetos.spec.js",
       "frontend/tests/e2e/acessibilidade-rotas.spec.js"
-    ]
-  }
+    ],
+    "evidence_contract": "A semântica acessível do panorama do portfólio deve permanecer coberta pelo E2E frontend/tests/e2e/painel-projetos.spec.js."
+  },
+  "updated_at": "2026-10-04",
+  "acceptance_criteria": [
+    "A rota /painel-projetos preserva a experiência Pulso atual.",
+    "A distribuição da saúde do portfólio é exposta como imagem acessível com o nome Distribuição da saúde dos projetos.",
+    "O E2E da rota valida explicitamente a semântica acessível para prevenir regressão."
+  ]
 }
