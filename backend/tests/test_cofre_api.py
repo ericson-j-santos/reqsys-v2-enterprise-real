@@ -1,13 +1,14 @@
 """Testes de integração para os endpoints REST do cofre (app/api/cofre.py)."""
 from __future__ import annotations
 
-from base64 import b64encode
+from base64 import b64decode, b64encode
 
-import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi.testclient import TestClient
 
+from app.api.cofre import _hash_token
 from app.core import secrets as secrets_module
+from app.core.cofre_verificador_cego import CHAVE_OPERACIONAL_VERIFICADOR
 from app.core.config import settings as _settings
 from app.db import SessionLocal
 from app.main import app
@@ -59,9 +60,13 @@ def _vault_patch(monkeypatch) -> _FakeKeyring:
 
 
 def _setup_vault_secret(fk: _FakeKeyring, key: str, value: str) -> None:
-    """Inicializa vault e insere segredo diretamente no FakeKeyring."""
-    master_key = AESGCM.generate_key(bit_length=256)
-    fk.set_password(SVC, secrets_module._MASTER_KEY_SLOT, b64encode(master_key).decode())
+    """Inicializa vault uma vez e insere segredo diretamente no FakeKeyring."""
+    raw_master_key = fk.get_password(SVC, secrets_module._MASTER_KEY_SLOT)
+    if raw_master_key:
+        master_key = b64decode(raw_master_key)
+    else:
+        master_key = AESGCM.generate_key(bit_length=256)
+        fk.set_password(SVC, secrets_module._MASTER_KEY_SLOT, b64encode(master_key).decode())
     nonce = b'\x00' * secrets_module._NONCE_BYTES
     blob = AESGCM(master_key).encrypt(nonce, value.encode(), None)
     fk.set_password(SVC, key, b64encode(nonce + blob).decode())
@@ -264,7 +269,7 @@ class TestCofreResolver:
         assert resp.status_code == 400
 
     def test_chave_inexistente_retorna_404(self, monkeypatch):
-        fk = _vault_patch(monkeypatch)
+        _vault_patch(monkeypatch)
         monkeypatch.setattr(_settings, 'vault_api_token', self.TOKEN)
         resp = client.post(
             '/v1/cofre/resolver',
@@ -580,3 +585,90 @@ class TestCofreTokensEscopados:
         token = criar.json()['data']['token']
         resp = client.get('/v1/cofre/segredos/PRIORIDADE_KEY', headers={'X-Vault-Token': token})
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/cofre/verificar — comparação cega
+# ---------------------------------------------------------------------------
+
+class TestCofreVerificar:
+    TOKEN = 'vault-token-verificacao-cega'
+    PEPPER = 'pepper-operacional-com-mais-de-trinta-e-dois-bytes'
+
+    def _setup(self, monkeypatch):
+        fk = _vault_patch(monkeypatch)
+        monkeypatch.setattr(_settings, 'vault_api_token', self.TOKEN)
+        _setup_vault_secret(fk, 'SEGREDO_VERIFICAVEL', 'valor-correto')
+        _setup_vault_secret(fk, CHAVE_OPERACIONAL_VERIFICADOR, self.PEPPER)
+        return fk
+
+    def test_match_true_sem_expor_valor_ou_digest(self, monkeypatch):
+        self._setup(monkeypatch)
+        resp = client.post(
+            '/v1/cofre/verificar',
+            json={'key': 'SEGREDO_VERIFICAVEL', 'value': 'valor-correto'},
+            headers={'X-Vault-Token': self.TOKEN, 'X-Correlation-Id': 'corr-verifica-ok'},
+        )
+        assert resp.status_code == 200
+        data = resp.json()['data']
+        assert data['match'] is True
+        assert data['value_exposed'] is False
+        assert set(data) == {'key', 'match', 'verifier_version', 'value_exposed'}
+
+    def test_match_false_sem_expor_valor(self, monkeypatch):
+        self._setup(monkeypatch)
+        resp = client.post(
+            '/v1/cofre/verificar',
+            json={'key': 'SEGREDO_VERIFICAVEL', 'value': 'valor-incorreto'},
+            headers={'X-Vault-Token': self.TOKEN},
+        )
+        assert resp.status_code == 200
+        assert resp.json()['data']['match'] is False
+        assert 'value' not in resp.json()['data']
+
+    def test_sem_pepper_falha_fechado_503(self, monkeypatch):
+        fk = _vault_patch(monkeypatch)
+        monkeypatch.setattr(_settings, 'vault_api_token', self.TOKEN)
+        _setup_vault_secret(fk, 'SEGREDO_VERIFICAVEL', 'valor-correto')
+        resp = client.post(
+            '/v1/cofre/verificar',
+            json={'key': 'SEGREDO_VERIFICAVEL', 'value': 'valor-correto'},
+            headers={'X-Vault-Token': self.TOKEN},
+        )
+        assert resp.status_code == 503
+        assert resp.json()['detail'] == 'Verificador de segredo indisponível'
+        assert 'pepper' not in resp.text.lower()
+        assert 'chave operacional' not in resp.text.lower()
+
+    def test_pepper_nao_pode_ser_lido_resolvido_ou_verificado(self, monkeypatch):
+        self._setup(monkeypatch)
+        headers = {'X-Vault-Token': self.TOKEN}
+
+        assert client.get(f'/v1/cofre/segredos/{CHAVE_OPERACIONAL_VERIFICADOR}', headers=headers).status_code == 400
+        assert client.post('/v1/cofre/resolver', json={'key': CHAVE_OPERACIONAL_VERIFICADOR}, headers=headers).status_code == 400
+        assert client.post(
+            '/v1/cofre/verificar',
+            json={'key': CHAVE_OPERACIONAL_VERIFICADOR, 'value': self.PEPPER},
+            headers=headers,
+        ).status_code == 422
+
+    def test_token_escopado_precisa_autorizar_chave_alvo(self, monkeypatch):
+        self._setup(monkeypatch)
+        db = SessionLocal()
+        try:
+            token = 'token-verificar-escopado'
+            db.add(VaultToken(
+                label='verificador',
+                token_hash=_hash_token(token),
+                key_patterns='["OUTRA_*"]',
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        resp = client.post(
+            '/v1/cofre/verificar',
+            json={'key': 'SEGREDO_VERIFICAVEL', 'value': 'valor-correto'},
+            headers={'X-Vault-Token': token},
+        )
+        assert resp.status_code == 403
