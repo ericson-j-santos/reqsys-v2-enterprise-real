@@ -6,7 +6,11 @@
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-06-21",
   "updated_at": "2026-10-04",
-  "approvals": {"requirements": true, "design": true, "tasks": true},
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
   "sdd_gate": {
     "pre_pr_tests": [
       "frontend/src/services/queryIntelligence.test.js"
@@ -37,5 +41,20 @@
       "docs/changelog/query-intelligence-platform-v1.md"
     ]
   },
-  "risk": {"production": false, "deploy": false, "secrets": false, "scope": "frontend-query-analysis"}
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "frontend-query-analysis"
+  },
+  "acceptance_criteria": [
+    "A rota /query-intelligence permanece registrada no router, navegacao e catalogo responsivo.",
+    "A analise de SQL e estatica e nao executa a consulta informada.",
+    "Comandos destrutivos como DROP, DELETE, UPDATE ou TRUNCATE geram achado de seguranca conforme a regra do analisador.",
+    "A inferencia de PII permanece limitada a nomes de colunas e nao afirma descoberta de dados reais.",
+    "O servico unitario queryIntelligence.test.js permanece verde.",
+    "O E2E query-intelligence.spec.js cobre abertura da rota e analise sem execucao.",
+    "A tela usa design tokens para font-size, padding e margin validados pelo gate atual.",
+    "A branch permanece com behind_by=0 e os gates obrigatorios verdes no HEAD atual."
+  ]
 }

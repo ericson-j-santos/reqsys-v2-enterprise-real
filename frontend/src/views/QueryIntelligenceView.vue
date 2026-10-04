@@ -156,7 +156,7 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; }
 .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
 .metric { padding: var(--space-md); border-radius: 12px; background: rgba(148, 163, 184, 0.12); }
 .metric span { display: block; font-size: var(--font-size-xs); color: var(--muted); }
-.metric strong { font-size: 24px; }
+.metric strong { font-size: var(--font-size-2xl); }
 .graph { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-sm); }
 .graph-node { min-height: 96px; padding: var(--space-md); border: 1px solid var(--line); border-radius: 14px; background: rgba(15, 23, 42, 0.03); }
 .graph-node strong, .graph-node span, .graph-node small { display: block; }
