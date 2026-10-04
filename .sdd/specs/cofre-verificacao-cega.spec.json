@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Verificacao cega do cofre",
+  "increment_type": "security",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-22",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "POST /v1/cofre/verificar compara valor candidato sem retornar segredo, digest ou fingerprint.",
+    "A chave operacional REQSYS_COFRE_VERIFICADOR_PEPPER fica armazenada no cofre e nao pode ser lida ou resolvida pelas rotas S2S.",
+    "Ausencia ou fraqueza da chave operacional falha fechado com 503.",
+    "Tokens escopados atuais continuam suportados e precisam autorizar a chave alvo.",
+    "Fallback VAULT_API_TOKEN usa comparacao em tempo constante.",
+    "Auditoria do cofre atual e preservada.",
+    "Testes positivos, negativos, de escopo e fail-closed ficam verdes no HEAD atual.",
+    "A branch fica behind_by=0, sem conflitos e com gates obrigatorios verdes."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "backend/tests/test_cofre_api.py",
+      "backend/tests/test_cofre_verificador_cego.py",
+      "backend/tests/test_verificador_constante.py"
+    ],
+    "tests": [
+      "backend/tests/test_cofre_api.py",
+      "backend/tests/test_cofre_verificador_cego.py",
+      "backend/tests/test_verificador_constante.py"
+    ],
+    "evidence_contract": "A verificacao cega preserva tokens escopados e auditoria atuais, falha fechado sem pepper e nunca retorna material reutilizavel do segredo."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/cofre-verificacao-cega.requirements.md",
+    "implementation": [
+      "backend/app/api/cofre.py",
+      "backend/app/core/cofre_verificador_cego.py",
+      "backend/app/core/verificador_constante.py"
+    ],
+    "tests": [
+      "backend/tests/test_cofre_api.py",
+      "backend/tests/test_cofre_verificador_cego.py",
+      "backend/tests/test_verificador_constante.py"
+    ],
+    "documentation": [
+      "docs/adr/ADR-024-verificacao-cega-cofre.md",
+      "docs/runbooks/cofre-verificacao-cega.md"
+    ],
+    "pull_request": "#82"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "vault-blind-verification"
+  }
+}

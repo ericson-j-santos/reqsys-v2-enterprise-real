@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "PR Scope Labeler hardening",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "PR Scope Labeler não usa pull_request_target.",
+    "PR Scope Labeler permanece read-only e sem issues:write.",
+    "O workflow não adiciona nem remove labels.",
+    "CodeRabbit permanece desativado operacionalmente.",
+    "PR Quality Review permanece a referência de revisão canônica.",
+    "Teste preventivo fica verde no HEAD atual.",
+    "A branch fica behind_by=0 e sem conflitos."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "tests/test_pr_scope_labeler_hardening.py"
+    ],
+    "tests": [
+      "tests/test_pr_scope_labeler_hardening.py"
+    ],
+    "evidence_contract": "O labeler permanece read-only e CodeRabbit não volta a ser dependência operacional."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pr-scope-labeler-hardening.requirements.md",
+    "workflow": ".github/workflows/pr-scope-labeler.yml",
+    "coderabbit": ".coderabbit.yaml",
+    "test": "tests/test_pr_scope_labeler_hardening.py",
+    "pull_request": "#119"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "github-pr-review-governance"
+  }
+}
