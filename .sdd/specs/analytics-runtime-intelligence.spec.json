@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Analytics Runtime Intelligence and Operational Sync",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-22",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "ARI expoe snapshot pela rota /api/analytics-runtime-intelligence/snapshot e preserva alias /v1.",
+    "Sem evidencias externas completas, production_ready permanece false e draft_recomendado true.",
+    "Validacao SQL e somente estatica e declara production_evidence=false.",
+    "Staging validator default falha fechado.",
+    "Fallback frontend nunca promove estado saudavel.",
+    "Figma permanece evidence_pending sem readback atual.",
+    "Operational Sync nao usa estados hardcoded de PRs; sem input retorna evidence_required.",
+    "A nova rota esta registrada no router, navCatalog, rotas responsivas e responsabilidade ReqSys 360.",
+    "Testes backend, frontend e engine ficam verdes no HEAD atual.",
+    "A branch fica behind_by=0 e sem conflitos antes do merge."
+  ],
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "backend/tests/test_analytics_runtime_intelligence.py",
+      "tests/test_operational_sync_engine.py"
+    ],
+    "tests": [
+      "backend/tests/test_analytics_runtime_intelligence.py",
+      "frontend/src/views/__tests__/analytics-runtime-intelligence-view.test.js",
+      "tests/test_operational_sync_engine.py"
+    ],
+    "evidence_contract": "ARI e Operational Sync distinguem contrato/versionamento de evidencia externa real; ausencia de evidencia falha fechado e nunca gera production readiness."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/analytics-runtime-intelligence.requirements.md",
+    "backend": [
+      "backend/app/api/analytics_runtime_intelligence.py",
+      "backend/app/services/ari_runtime_sql_adapter.py",
+      "backend/app/services/ari_staging_validator.py"
+    ],
+    "frontend": "frontend/src/views/AnalyticsRuntimeIntelligenceView.vue",
+    "operational_sync": "tools/operational_sync/operational_sync_engine.py",
+    "tests": [
+      "backend/tests/test_analytics_runtime_intelligence.py",
+      "frontend/src/views/__tests__/analytics-runtime-intelligence-view.test.js",
+      "tests/test_operational_sync_engine.py"
+    ],
+    "pull_request": "#81"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "analytics-operational-readiness"
+  }
+}
