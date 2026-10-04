@@ -6,7 +6,7 @@ Automatizar a validação de PRs verdes, **bloquear abertura de novas frentes** 
 
 ## Princípio operacional
 
-O caminho CI-driven executa merge automaticamente quando a `Governed Merge Queue` e todos os workflows obrigatórios estão verdes no HEAD exato, o PR está aberto, não-draft, mergeável e contém `merge-queue:eligible`.
+O caminho CI-driven executa merge automaticamente quando a `Governed Merge Queue` e os workflows obrigatórios estão verdes no HEAD exato, o PR está aberto, não-draft, mergeável e contém `merge-queue:eligible`. Para `ci:recuperado`, draft verde é primeiro promovido para ready e o ciclo termina sem merge; `ready_for_review` força nova validação.
 
 A autorização operacional permanente do owner está nas regras canônicas do ReqSys; não é necessária solicitação ou label adicional por PR. O `workflow_dispatch` permanece como contingência manual e mantém modo `dry-run`.
 
@@ -91,10 +91,13 @@ O PR será bloqueado no merge se:
 Nenhuma ação humana adicional é necessária após abrir a PR. O fluxo normal é:
 
 ```text
-PR aberta
+PR recuperada aberta/draft
 → gates obrigatórios no HEAD atual
 → Governed Merge Queue verde
 → merge-queue:eligible
+→ ready automático sem merge
+→ nova validação no mesmo HEAD
+→ Governed Merge Queue verde novamente
 → revalidação final
 → squash merge automático com SHA esperado
 ```

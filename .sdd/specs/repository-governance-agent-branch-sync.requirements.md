@@ -12,14 +12,14 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 
 1. A cada `push` na `main`, o agente deve inspecionar PRs abertas cuja base seja `main`.
 2. O agente só pode atualizar branches pertencentes ao próprio repositório; forks externos devem ser ignorados.
-3. PRs em draft, com conflito, mergeabilidade desconhecida ou cujo estado/SHA tenha mudado antes da mutação não podem ser atualizadas.
+3. PRs em draft são ignoradas por padrão; a única exceção é PR same-repo com `ci:recuperado`, que pode ter somente a branch sincronizada. Conflito, mergeabilidade desconhecida ou mudança de estado/SHA continuam bloqueando.
 4. A decisão de atualização deve usar `behind_by > 0` contra o SHA de base relido imediatamente antes da mutação.
 5. A sincronização deve preservar proteção equivalente a compare-and-swap: HEAD e base são relidos pela API e confirmados novamente no Git remoto antes de criar o commit; o push deve ser não-forçado, de modo que avanço concorrente da branch rejeite a escrita em vez de sobrescrevê-la.
 6. A sincronização Git deve operar em repositório `bare`, usando `merge-tree --write-tree` e `commit-tree`; não pode fazer checkout nem executar código controlado pela branch do PR.
 7. O commit de sincronização deve ter como primeiro parent o HEAD esperado da PR e como segundo parent o SHA observado da `main`.
 8. Após o push, o agente deve reler o PR e comprovar novo HEAD contendo a base observada com `behind_by=0`.
 9. Ausência de confirmação funcional deve falhar o job; código de saída zero isolado não é sucesso.
-10. O fan-out máximo por avanço da `main` deve ser 3 PRs para evitar tempestade de CI.
+10. O fan-out geral máximo continua em 3 PRs; quando existir `ci:recuperado`, selecionar somente a PR recuperada mais antiga por número para avanço serial.
 11. O agente não pode integrar PR na `main`, executar deploy/promoção, force-push, alterar segredo ou branch protection.
 12. O `Governed Merge Queue` e o `Governed PR Automation` continuam responsáveis pela validação e pela integração depois que os gates do novo HEAD ficarem verdes.
 13. O `GITHUB_TOKEN` nativo deve permanecer somente leitura (`contents: read`, `pull-requests: read`) e ser usado apenas para observação. A escrita deve usar token temporário da GitHub App governada `REQSYS_STACK_REBASE_APP_ID`/`REQSYS_STACK_REBASE_PRIVATE_KEY`, solicitando somente `contents: write`; não pode solicitar `pull-requests: write`, usar PAT ou usar o `GITHUB_TOKEN` como fallback de escrita.
@@ -29,7 +29,7 @@ Eliminar o retrabalho recorrente causado por PRs que ficam atrás da `main` apó
 
 ## Controles negativos
 
-- draft => não atualiza;
+- draft sem `ci:recuperado` => não atualiza; draft com `ci:recuperado` pode ser sincronizado, mas nunca integrado na `main` por este agente;
 - fork externo => não atualiza;
 - conflito => não atualiza;
 - mergeabilidade desconhecida => não atualiza;
