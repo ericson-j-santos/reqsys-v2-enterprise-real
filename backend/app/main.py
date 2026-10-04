@@ -12,6 +12,7 @@ from app.api import (
     actions_runtime_center,
     agents,
     agile_runtime,
+    analytics_runtime_intelligence,
     auditoria,
     auth,
     change_evidence,
@@ -124,6 +125,7 @@ app.include_router(auth.router)
 app.include_router(requisitos.router)
 app.include_router(requisitos.api_router)
 app.include_router(agile_runtime.router)
+app.include_router(analytics_runtime_intelligence.router)
 app.include_router(dashboard.router)
 app.include_router(diagramas.router)
 app.include_router(estatisticas.router)

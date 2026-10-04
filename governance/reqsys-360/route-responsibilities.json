@@ -78,6 +78,12 @@
       "area": "user-final-shell",
       "status": "transitional-proposed",
       "responsibility": "Ajuda da proposta de shell; mantida compatível sem promovê-la a fonte canônica."
+    },
+    {
+      "route": "/analytics-runtime-intelligence",
+      "area": "indicadores",
+      "status": "canonical",
+      "responsibility": "Síntese de validações analíticas e prontidão baseada em evidências; não substitui o estado técnico corrente de /monitoramento-operacional."
     }
   ],
   "navigation_duplicate_decisions": [
@@ -125,6 +131,10 @@
     {
       "subject": "Painel de Integrações x Central de Automações",
       "decision": "/painel-integracao é canônico para saúde/eventos das integrações. /hub-lowcode é canônico para descoberta, configuração e instalação de automações."
+    },
+    {
+      "subject": "ARI x Monitoramento Operacional",
+      "decision": "Analytics Runtime Intelligence sintetiza validações analíticas e gaps de evidência. /monitoramento-operacional permanece a fonte canônica do estado técnico corrente; ARI não pode promover amostras locais ou fallback de UI a evidência de produção."
     }
   ],
   "architectural_variants": [

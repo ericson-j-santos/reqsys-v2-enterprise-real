@@ -56,6 +56,7 @@ export const NAV_TEMAS = [
       { to: '/relatorios', icon: 'mdi-file-chart-outline', title: 'Relatórios', tip: 'Catálogo e situação dos relatórios corporativos.' },
       { to: '/govbi-ia', icon: 'mdi-database-search', title: 'GovBI IA', tip: 'Consultas analíticas em linguagem natural com controles do ReqSys.' },
       { to: '/query-intelligence', icon: 'mdi-file-search-outline', title: 'Análise de consultas', tip: 'Examinar consultas SQL sem executar comandos, com relações lógicas e alertas de risco.' },
+      { to: '/analytics-runtime-intelligence', icon: 'mdi-chart-timeline-variant-shimmer', title: 'Inteligência operacional', tip: 'Consolidar validações analíticas e prontidão com evidências explícitas e fail-closed.' },
     ],
   },
   {
