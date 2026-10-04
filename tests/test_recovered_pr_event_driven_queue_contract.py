@@ -46,3 +46,18 @@ def test_persistent_blocker_is_checkpointed_and_notified_without_fly() -> None:
     assert 'false &&' not in notify
     assert 'reqsys-api.fly.dev' not in notify
     assert 'REQSYS_LOG_STRICT: "true"' in notify
+
+def test_deterministic_technical_failure_reuses_ollama_worker_pool_on_same_pr_branch() -> None:
+    workflow = read('.github/workflows/ollama-ci-triage.yml')
+    script = read('scripts/ollama_ci_triage.py')
+
+    assert '"CI — ReqSys v2 Enterprise"' in workflow
+    assert '"CI Enterprise Fast"' in workflow
+    assert "MODE: ${{ github.event_name == 'workflow_run' && 'execute' || inputs.mode }}" in workflow
+    assert 'target_branch' in script
+    assert 'base_sha' in script
+    assert 'same_repository' in script
+    assert 'sha_current' in script
+    assert 'enqueue_worker_pool' in script
+    assert 'DETERMINISTIC_TECHNICAL_CATEGORIES' in script
+    assert 'DETERMINISTIC_BLOCKED_CATEGORIES' in script

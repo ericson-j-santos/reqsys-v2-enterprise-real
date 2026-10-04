@@ -115,7 +115,7 @@ jobs:
               `- Run: [${run.id}](${run.html_url})`,
               `- Conclusão: \`${run.conclusion}\``,
               '- Estado: blocked_after_event_driven_remediation',
-              '- Próximo passo: corrigir causa determinística no mesmo PR; não fechar, recriar ou usar force-push.',
+              '- Próximo passo: Ollama CI Triage/Codex Worker Pool tentará correção na mesma branch quando elegível; casos não elegíveis permanecem fail-closed no mesmo PR.',
             ].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner, repo, issue_number: pr.number, per_page: 100,
@@ -144,7 +144,7 @@ jobs:
           REQSYS_LOG_ENVIRONMENT: PR #${{ steps.queue_checkpoint.outputs.pr_number }}
           REQSYS_LOG_SEVERITY: error
           REQSYS_LOG_STATUS: ${{ github.event.workflow_run.conclusion }}
-          REQSYS_LOG_SUMMARY: Fila recuperada bloqueada após remediação automática orientada por evento
+          REQSYS_LOG_SUMMARY: Fila recuperada com falha persistente; triagem Ollama/Codex segue na mesma branch quando elegível
           REQSYS_LOG_WORKFLOW: ${{ github.event.workflow_run.name }}
           REQSYS_LOG_RUN_ID: ${{ github.event.workflow_run.id }}
           REQSYS_LOG_RUN_URL: ${{ github.event.workflow_run.html_url }}

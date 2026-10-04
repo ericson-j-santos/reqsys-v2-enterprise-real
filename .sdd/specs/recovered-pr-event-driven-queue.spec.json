@@ -9,16 +9,18 @@
     "design": true,
     "tasks": true
   },
-  "description": "Fila ci:recuperado orientada por eventos: sync serial, auto-ready em duas fases, merge por SHA, pós-merge checkpoint e avanço; sem Work e sem novo workflow.",
+  "description": "Fila ci:recuperado orientada por eventos: PR CI Watch para transitórios, Ollama/Codex Worker Pool para falhas técnicas elegíveis na mesma branch, sync serial, auto-ready em duas fases, merge por SHA, pós-merge checkpoint/Teams e avanço; sem Work e sem novo workflow.",
   "environment": "GitHub Actions",
   "production_enabled": false,
   "sdd_gate": {
     "tests": [
       "tests/test_repository_governance_agent.py",
       "tests/test_governed_pr_automation_dispatch_contract.py",
-      "tests/test_recovered_pr_event_driven_queue_contract.py"
+      "tests/test_recovered_pr_event_driven_queue_contract.py",
+      "tests/test_ollama_ci_triage.py",
+      "tests/test_ollama_ci_triage_workflow.py"
     ],
-    "evidence_contract": "Recovered draft -> sync serial -> green -> ready sem merge -> revalidation -> SHA-protected merge -> post-merge checkpoint -> next PR dispatch."
+    "evidence_contract": "CI failure -> PR CI Watch safe rerun; deterministic technical eligible -> Ollama CI Triage -> Worker Pool same target_branch/base_sha; recovered draft -> serial sync -> green -> ready sem merge -> revalidation -> SHA-protected merge -> post-merge checkpoint/Teams -> next PR dispatch."
   },
   "risk": {
     "production": false,
