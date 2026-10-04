@@ -56,6 +56,12 @@
       "responsibility": "Mapa da solução, componentes, integrações e relação com decisões arquiteturais."
     },
     {
+      "route": "/arquitetura-viva",
+      "area": "arquitetura",
+      "status": "canonical",
+      "responsibility": "Arquitetura viva navegável com fontes, metadados auditáveis, dependências e limites explícitos de confiança."
+    },
+    {
       "route": "/home",
       "area": "user-final-shell",
       "status": "transitional-proposed",
@@ -94,7 +100,11 @@
   "component_reuse_decisions": [
     {
       "component": "UserFinalShellView",
-      "paths": ["/home", "/workspace", "/ajuda"],
+      "paths": [
+        "/home",
+        "/workspace",
+        "/ajuda"
+      ],
       "classification": "intentional-transitional-shell",
       "rationale": "As três rotas pertencem à mesma proposta transitória de shell do usuário final e compartilham intencionalmente o mesmo componente enquanto o contrato permanecer proposed."
     }

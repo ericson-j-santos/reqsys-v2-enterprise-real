@@ -324,3 +324,36 @@ def test_noop_is_not_applicable_only_for_exact_base_without_diff() -> None:
         behind_by=1,
         files=[],
     )
+
+
+def test_targeted_tests_need_backend_profile_detects_transitive_script_import(tmp_path: Path) -> None:
+    test_file = tmp_path / "tests" / "test_runtime_bridge.py"
+    script = tmp_path / "scripts" / "runtime_bridge.py"
+    test_file.parent.mkdir(parents=True)
+    script.parent.mkdir(parents=True)
+    test_file.write_text(
+        'import subprocess\nsubprocess.run(["python", "scripts/runtime_bridge.py"])\n',
+        encoding="utf-8",
+    )
+    script.write_text("from app.main import app\n", encoding="utf-8")
+
+    assert MODULE.targeted_tests_need_backend_profile(
+        ["tests/test_runtime_bridge.py"],
+        tmp_path,
+    )
+
+
+def test_targeted_tests_need_backend_profile_ignores_root_test_sem_backend(tmp_path: Path) -> None:
+    test_file = tmp_path / "tests" / "test_pure.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("def test_ok(): assert True\n", encoding="utf-8")
+
+    assert not MODULE.targeted_tests_need_backend_profile(
+        ["tests/test_pure.py"],
+        tmp_path,
+    )
+
+
+def test_workflow_usa_inferencia_transitiva_para_instalar_backend() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "targeted_tests_need_backend_profile" in workflow
