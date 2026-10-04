@@ -1,6 +1,11 @@
 name: Teams Commit Notification
 
 on:
+  workflow_run:
+    workflows:
+      - "Ollama CI Triage"
+      - "PR CI Remediation"
+    types: [completed]
   push:
     branches:
       - main
@@ -17,6 +22,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -31,10 +37,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Configurar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
@@ -74,6 +80,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           MANUAL_MESSAGE: ${{ inputs.message }}
           EVENT_PATH: ${{ github.event_path }}
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           python - <<'PY'
@@ -83,8 +90,12 @@ jobs:
           import os
           import subprocess
           import sys
+          import re
           import tempfile
+          import zipfile
+          from io import BytesIO
           from pathlib import Path
+          from urllib.request import Request, urlopen
 
           event = json.loads(Path(os.environ["EVENT_PATH"]).read_text(encoding="utf-8"))
           repository = os.environ["REPOSITORY"]
@@ -96,6 +107,43 @@ jobs:
           repository_url = f"{server_url}/{repository}"
           event_name = os.environ["EVENT_NAME"]
 
+          def github_json(path):
+              request = Request(
+                  f"https://api.github.com/repos/{repository}/{path.lstrip('/')}",
+                  headers={
+                      "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urlopen(request, timeout=30) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          def artifact_json(run_id, prefix, filename):
+              payload = github_json(f"actions/runs/{run_id}/artifacts?per_page=100")
+              artifacts = [
+                  item for item in payload.get("artifacts", [])
+                  if str(item.get("name") or "").startswith(prefix) and not item.get("expired")
+              ]
+              if not artifacts:
+                  return None
+              artifact = max(artifacts, key=lambda item: int(item.get("id") or 0))
+              request = Request(
+                  artifact["archive_download_url"],
+                  headers={
+                      "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urlopen(request, timeout=30) as response:
+                  archive = BytesIO(response.read())
+              with zipfile.ZipFile(archive) as bundle:
+                  candidates = [name for name in bundle.namelist() if name.endswith(filename)]
+                  if not candidates:
+                      return None
+                  return json.loads(bundle.read(candidates[0]).decode("utf-8"))
+
           if event_name == "push":
               head = event.get("head_commit") or {}
               commit_message = str(head.get("message") or "Commit sem mensagem").splitlines()[0]
@@ -103,8 +151,15 @@ jobs:
               compare_url = event.get("compare") or commit_url
               commits = event.get("commits") or []
               commit_count = len(commits) or 1
-              title = "ReqSys — novo commit"
-              subtitle = commit_message
+              merge_match = re.search(r"governed CI-driven merge PR #(\d+)", commit_message, flags=re.IGNORECASE)
+              if merge_match:
+                  pr_number = int(merge_match.group(1))
+                  title = f"ReqSys — PR #{pr_number} integrado"
+                  subtitle = commit_message
+              else:
+                  pr_number = None
+                  title = "ReqSys — novo commit"
+                  subtitle = commit_message
               facts = [
                   {"title": "Repositório", "value": repository},
                   {"title": "Branch", "value": os.environ["REF_NAME"]},
@@ -116,6 +171,11 @@ jobs:
                   {"type": "Action.OpenUrl", "title": "Ver alterações", "url": compare_url},
                   {"type": "Action.OpenUrl", "title": "Abrir workflow", "url": run_url},
               ]
+              if pr_number:
+                  actions.insert(
+                      0,
+                      {"type": "Action.OpenUrl", "title": f"Abrir PR #{pr_number}", "url": f"{repository_url}/pull/{pr_number}"},
+                  )
               message = (
                   f"**{title}**\n\n"
                   f"{commit_message}\n\n"
@@ -125,6 +185,69 @@ jobs:
                   f"**Autor:** {author}\n\n"
                   f"[Ver alterações]({compare_url}) · [Abrir workflow]({run_url})"
               )
+          elif event_name == "workflow_run":
+              source = event.get("workflow_run") or {}
+              source_name = str(source.get("name") or "")
+              source_run_id = int(source.get("id") or 0)
+              source_url = str(source.get("html_url") or run_url)
+              source_conclusion = str(source.get("conclusion") or "unknown")
+
+              if source_name == "Ollama CI Triage":
+                  evidence = artifact_json(source_run_id, "ollama-ci-triage-", "evidence.json") or {}
+                  pr = evidence.get("pr") if isinstance(evidence.get("pr"), dict) else {}
+                  triage = evidence.get("triage") if isinstance(evidence.get("triage"), dict) else {}
+                  pool = evidence.get("worker_pool") if isinstance(evidence.get("worker_pool"), dict) else {}
+                  pr_number = pr.get("number")
+                  pool_status = str(pool.get("status") or "not_enqueued")
+                  if pool_status == "enqueued":
+                      title = f"ReqSys — PR #{pr_number} correção automática acionada" if pr_number else "ReqSys — correção automática acionada"
+                  elif pool_status == "blocked":
+                      title = f"ReqSys — PR #{pr_number} correção automática bloqueada" if pr_number else "ReqSys — correção automática bloqueada"
+                  else:
+                      title = f"ReqSys — PR #{pr_number} triagem automática concluída" if pr_number else "ReqSys — triagem automática concluída"
+                  subtitle = str(triage.get("root_cause") or evidence.get("result") or "Falha de CI analisada")
+                  facts = [
+                      {"title": "Workflow", "value": str(evidence.get("workflow") or "CI")},
+                      {"title": "Categoria", "value": str(triage.get("category") or "n/a")},
+                      {"title": "Worker Pool", "value": pool_status},
+                      {"title": "HEAD", "value": str(evidence.get("analyzed_sha") or "n/a")[:12]},
+                      {"title": "Resultado", "value": str(evidence.get("result") or source_conclusion)},
+                  ]
+                  actions = [{"type": "Action.OpenUrl", "title": "Abrir triagem", "url": source_url}]
+                  if pr_number:
+                      actions.insert(0, {"type": "Action.OpenUrl", "title": f"Abrir PR #{pr_number}", "url": f"{repository_url}/pull/{pr_number}"})
+                  message = (
+                      f"**{title}**\n\n{subtitle}\n\n"
+                      f"**Worker Pool:** {pool_status}\n\n"
+                      f"**HEAD:** {str(evidence.get('analyzed_sha') or 'n/a')[:12]}\n\n"
+                      f"[Abrir triagem]({source_url})"
+                  )
+              elif source_name == "PR CI Remediation":
+                  report = artifact_json(source_run_id, "pr-ci-remediation-evidence-", "report.json") or {}
+                  reruns = int(report.get("reruns_executed") or 0)
+                  if reruns <= 0:
+                      with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                          output.write("notification_skipped=true\n")
+                          output.write("skip_reason=no_material_remediation\n")
+                      raise SystemExit(0)
+                  pr_number = report.get("target_pr_number")
+                  title = f"ReqSys — PR #{pr_number} CI reexecutado" if pr_number else "ReqSys — CI reexecutado"
+                  subtitle = f"{reruns} reexecução(ões) transitória(s) disparada(s) de forma governada."
+                  facts = [
+                      {"title": "PR", "value": f"#{pr_number}" if pr_number else "fila"},
+                      {"title": "Reexecuções", "value": str(reruns)},
+                      {"title": "HEAD", "value": str(report.get("target_head_sha") or "n/a")[:12]},
+                      {"title": "Estado", "value": "remediação automática"},
+                  ]
+                  actions = [{"type": "Action.OpenUrl", "title": "Abrir remediação", "url": source_url}]
+                  if pr_number:
+                      actions.insert(0, {"type": "Action.OpenUrl", "title": f"Abrir PR #{pr_number}", "url": f"{repository_url}/pull/{pr_number}"})
+                  message = f"**{title}**\n\n{subtitle}\n\n[Abrir remediação]({source_url})"
+              else:
+                  with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                      output.write("notification_skipped=true\n")
+                      output.write("skip_reason=workflow_run_not_supported\n")
+                  raise SystemExit(0)
           elif event_name == "schedule":
               title = "ReqSys — canário Teams"
               subtitle = "Validação semanal da integração GitHub → Teams"
@@ -263,6 +386,7 @@ jobs:
 
           correlation_id = result.get("correlation_id", "n/a")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("notification_skipped=false\n")
               output.write(f"correlation_id={correlation_id}\n")
               output.write(f"status_code={status_code or 'accepted'}\n")
           PY
@@ -281,6 +405,9 @@ jobs:
               echo "- Status: ignorado"
               echo "- Motivo: ${{ steps.teams-config.outputs.reason }}"
               echo "- Ação manual: Settings → Secrets and variables → Actions"
+            elif [[ "${{ steps.notify.outputs.notification_skipped }}" == "true" ]]; then
+              echo "- Status: ignorado — sem mudança material"
+              echo "- Motivo: ${{ steps.notify.outputs.skip_reason }}"
             elif [[ "${{ steps.notify.outcome }}" == "success" ]]; then
               echo "- Status: entregue/aceito"
               echo "- HTTP: ${{ steps.notify.outputs.status_code }}"

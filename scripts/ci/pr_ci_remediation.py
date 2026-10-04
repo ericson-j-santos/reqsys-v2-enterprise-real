@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -34,6 +35,7 @@ LABEL_COLORS = {
     "ci:parado": "e99695",
 }
 MANAGED_LABELS = set(LABEL_COLORS)
+SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,7 @@ class PullRequest:
 class WorkflowRun:
     id: int
     name: str
+    status: str
     conclusion: str
     run_attempt: int
     html_url: str
@@ -132,8 +135,48 @@ def fetch_open_prs(repo: str, token: str) -> list[PullRequest]:
     ]
 
 
+def fetch_pull_request(repo: str, token: str, pr_number: int) -> PullRequest | None:
+    payload = github_request("GET", api(repo, f"pulls/{int(pr_number)}"), token)
+    if payload.get("state") != "open":
+        return None
+    head = payload.get("head") or {}
+    head_repo = head.get("repo") or {}
+    if head_repo.get("full_name") != repo:
+        return None
+    return PullRequest(
+        number=int(payload["number"]),
+        title=payload.get("title") or "",
+        html_url=payload.get("html_url") or "",
+        head_sha=head["sha"],
+        head_ref=head["ref"],
+    )
+
+
+def select_prs(
+    repo: str,
+    token: str,
+    *,
+    pr_number: int | None = None,
+    expected_head_sha: str = "",
+) -> tuple[list[PullRequest], str | None]:
+    if pr_number is None:
+        return fetch_open_prs(repo, token), None
+    if pr_number <= 0:
+        raise ValueError("pr_number_invalido")
+    pr = fetch_pull_request(repo, token, pr_number)
+    if pr is None:
+        return [], "target_pr_not_open_or_same_repo"
+    expected = expected_head_sha.strip().lower()
+    if expected:
+        if not SHA40_RE.fullmatch(expected):
+            raise ValueError("head_sha_invalido")
+        if pr.head_sha.lower() != expected:
+            return [], "stale_workflow_event"
+    return [pr], None
+
+
 def fetch_runs_for_sha(repo: str, token: str, sha: str) -> list[WorkflowRun]:
-    query = urlencode({"head_sha": sha, "event": "pull_request", "status": "completed", "per_page": 100})
+    query = urlencode({"head_sha": sha, "event": "pull_request", "per_page": 100})
     payload = github_request("GET", api(repo, f"actions/runs?{query}"), token)
     runs: list[WorkflowRun] = []
     for item in payload.get("workflow_runs", []):
@@ -142,6 +185,7 @@ def fetch_runs_for_sha(repo: str, token: str, sha: str) -> list[WorkflowRun]:
             WorkflowRun(
                 id=int(item["id"]),
                 name=item.get("name") or "",
+                status=item.get("status") or "unknown",
                 conclusion=conclusion,
                 run_attempt=int(item.get("run_attempt") or 1),
                 html_url=item.get("html_url") or "",
@@ -160,6 +204,8 @@ def latest_by_workflow(runs: list[WorkflowRun]) -> list[WorkflowRun]:
 
 def classify(run: WorkflowRun, policy: dict[str, Any], *, now: datetime | None = None) -> tuple[str, str, str, int]:
     age = age_minutes(run.updated_at, now)
+    if run.status != "completed":
+        return "CI_PENDENTE", "none", "workflow_pending", age
     lowered = run.name.lower()
     blocked = any(keyword.lower() in lowered for keyword in policy["never_auto_remediate_keywords"])
     allowlisted = run.name in set(policy["rerun_allowlist"])
@@ -244,6 +290,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="artifacts/pr-ci-remediation")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--skip-labels", action="store_true")
+    parser.add_argument("--pr-number", type=int)
+    parser.add_argument("--head-sha", default="")
     return parser.parse_args()
 
 
@@ -255,18 +303,28 @@ def main() -> int:
         return 2
 
     policy = load_policy(Path(args.policy))
-    prs = fetch_open_prs(args.repo, token)
+    prs, skipped_reason = select_prs(
+        args.repo,
+        token,
+        pr_number=args.pr_number,
+        expected_head_sha=args.head_sha,
+    )
     all_decisions: list[RemediationDecision] = []
     reruns = 0
     interventions = 0
 
-    if args.execute and not args.skip_labels:
+    if args.execute and not args.skip_labels and prs:
         ensure_labels(args.repo, token)
 
+    pending_prs = 0
     for pr in prs:
+        latest_runs = latest_by_workflow(fetch_runs_for_sha(args.repo, token, pr.head_sha))
+        pending_runs = [run for run in latest_runs if run.status != "completed"]
+        if pending_runs:
+            pending_prs += 1
         failed_runs = [
-            run for run in latest_by_workflow(fetch_runs_for_sha(args.repo, token, pr.head_sha))
-            if run.conclusion not in {"success", "neutral", "skipped"}
+            run for run in latest_runs
+            if run.status == "completed" and run.conclusion not in {"success", "neutral", "skipped"}
         ]
         pr_decisions: list[RemediationDecision] = []
         for run in failed_runs:
@@ -295,14 +353,18 @@ def main() -> int:
                 )
             )
         all_decisions.extend(pr_decisions)
-        if args.execute and not args.skip_labels:
+        if args.execute and not args.skip_labels and not pending_runs:
             replace_managed_labels(args.repo, token, pr.number, desired_labels(pr_decisions, policy))
 
     report = {
         "schema_version": "1.0.0",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "execute": bool(args.execute),
+        "target_pr_number": args.pr_number,
+        "target_head_sha": args.head_sha or None,
+        "skipped_reason": skipped_reason,
         "prs_scanned": len(prs),
+        "prs_pending": pending_prs,
         "prs_with_failures": len({item.pr_number for item in all_decisions}),
         "reruns_executed": reruns,
         "human_interventions": interventions,
