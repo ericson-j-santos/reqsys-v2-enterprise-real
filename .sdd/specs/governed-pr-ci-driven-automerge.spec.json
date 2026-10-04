@@ -9,14 +9,15 @@
     "design": true,
     "tasks": true
   },
-  "description": "Merge CI-driven fail-closed; drafts ci:recuperado podem virar ready após gates verdes, encerrando o ciclo sem merge para forçar nova validação.",
+  "description": "Merge CI-driven fail-closed e seleção event-driven da fila recuperada, considerando conflito/mergeabilidade e behind antes de falhas de CI.",
   "environment": "GitHub CI",
   "production_enabled": false,
   "sdd_gate": {
     "tests": [
       "tests/test_governed_pr_automation_dispatch_contract.py",
+      "tests/test_governed_pr_queue_controller.py",
       "tests/test_governed_merge_queue_current_sha_stability_contract.py"
     ],
-    "evidence_contract": "workflow_run success da Governed Merge Queue; label merge-queue:eligible; autorização operacional permanente do owner; revalidação do HEAD e mergeabilidade imediatamente antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção. Revalidação da base atual, do base_sha e da comparação base/head imediatamente antes da elegibilidade e do merge. Draft ci:recuperado: ready após gates verdes, retorno sem merge e novo ciclo ready_for_review."
+    "evidence_contract": "workflow_run success da Governed Merge Queue; label merge-queue:eligible; autorização operacional permanente do owner; revalidação do HEAD e mergeabilidade imediatamente antes da mutação; workflows obrigatórios verdes; merge squash com sha esperado; sem schedule/deploy/promoção. Revalidação da base atual, do base_sha e da comparação base/head imediatamente antes da elegibilidade e do merge. Draft ci:recuperado: ready após gates verdes, retorno sem merge e novo ciclo ready_for_review. A reconciliação event-driven governed_pr_queue_reconcile considera mergeable_state=dirty e behind_by>0 antes de CI, seleciona deterministicamente o PR acionável e preserva o HEAD no checkpoint."
   }
 }
