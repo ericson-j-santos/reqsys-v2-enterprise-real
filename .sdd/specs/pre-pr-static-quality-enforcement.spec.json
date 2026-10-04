@@ -9,7 +9,7 @@
     "tests": [
       "tests/test_pre_pr_readiness.py"
     ],
-    "evidence_contract": "READY_FOR_PR only passes after changed Python Ruff, shell syntax, scoped referenced contract tests or explicit SDD-declared Python tests, exact head SHA and current base validation; generic stems such as main/index cannot overselect unrelated suites."
+    "evidence_contract": "READY_FOR_PR only passes after changed Python Ruff, shell syntax, scoped referenced contract tests or explicit SDD-declared Python tests, exact head SHA and current base validation; recovered PRs with behind_by=0 and empty content diff are not_applicable even when HEAD is a synchronization commit above the base; stale branches or real diffs remain fail-closed."
   },
   "traceability": {
     "implementation": "scripts/pre_pr_readiness.py",

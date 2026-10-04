@@ -316,3 +316,12 @@ def test_git_object_sync_smoke_and_concurrent_push_is_rejected(tmp_path: Path) -
     )
     assert rejected.returncode != 0
     assert _git(remote, "rev-parse", "refs/heads/feature-race").stdout.strip() == concurrent_sha
+
+def test_recovered_draft_queue_is_serial_and_explicit() -> None:
+    text = _text()
+    assert "ci:recuperado" in text
+    assert "recoveredPulls" in text
+    assert "recoveredPulls.slice(0, 1)" in text
+    assert "(observed.draft && !recoveredDraft)" in text
+    assert "(current.draft && !currentRecoveredDraft)" in text
+    assert "draft_not_recovered" in text

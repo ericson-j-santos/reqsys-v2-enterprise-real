@@ -10,7 +10,7 @@ A autorização operacional permanente do owner está definida nas regras canôn
 
 1. O gatilho automático deve ser a conclusão do workflow `Governed Merge Queue`, não `schedule`/cron.
 2. Somente runs `success` originados de `pull_request` podem iniciar avaliação de merge.
-3. O PR deve estar aberto, não-draft, com base `main`, `mergeable=true` e possuir a label `merge-queue:eligible`.
+3. O PR deve estar aberto, base `main`, `mergeable=true` e possuir `merge-queue:eligible`. Draft é bloqueado por padrão; se também possuir `ci:recuperado`, pode ser promovido para ready somente após todos os workflows obrigatórios verdes no HEAD exato.
 4. Todos os workflows obrigatórios definidos em `REQUIRED_WORKFLOWS` devem estar `completed/success` no HEAD exato.
 5. O SHA do PR deve coincidir com o `head_sha` da execução da fila governada.
 6. Imediatamente antes do merge, o PR e suas labels devem ser relidos; HEAD, mergeabilidade e `merge-queue:eligible` devem permanecer válidos. Qualquer divergência bloqueia a mutação.
@@ -20,6 +20,7 @@ A autorização operacional permanente do owner está definida nas regras canôn
 10. O workflow não pode executar deploy, promoção de ambiente, alteração de segredos ou permissões administrativas.
 11. O caminho manual existente por `workflow_dispatch` deve permanecer disponível como contingência governada, sem ser pré-requisito para o caminho CI-driven.
 12. O caminho CI-driven não exige label ou solicitação de autorização por PR; a autorização permanente do owner é condicionada aos gates objetivos deste contrato.
+13. A promoção de uma PR `ci:recuperado` de draft para ready encerra o ciclo sem merge; `ready_for_review` inicia nova validação antes de qualquer integração.
 
 ## Critérios de aceite
 

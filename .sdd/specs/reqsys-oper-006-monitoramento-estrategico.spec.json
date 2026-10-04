@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "REQSYS-OPER-006 monitoramento estrategico das pendencias",
+  "increment_type": "consolidate",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-20",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "backend/tests/test_monitoramento_operacional.py"
+    ],
+    "tests": [
+      "backend/tests/test_monitoramento_operacional.py"
+    ],
+    "evidence_contract": "O endpoint /monitoramento-operacional preserva coleta dinamica atual e adiciona contrato 1.2.0 com proximos passos, criterios de fechamento, agregados derivados e tempo operacional; os testes validam valores dos agregados contra os itens reais."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/reqsys-oper-006-monitoramento-estrategico.requirements.md",
+    "schema": "backend/app/schemas/monitoramento_operacional.py",
+    "service": "backend/app/services/monitoramento_snapshot.py",
+    "tests": [
+      "backend/tests/test_monitoramento_operacional.py"
+    ],
+    "documentation": [
+      "docs/monitoramento-operacional-api.md",
+      "docs/releases/2026-06-20-reqsys-oper-006-monitoramento-estrategico.md"
+    ],
+    "pull_request": "#61"
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "operational-monitoring-contract"
+  }
+}
