@@ -1,0 +1,30 @@
+{
+  "feature_name": "recovered-pr-event-driven-queue",
+  "project": "ReqSys v2 Enterprise — Engineering Control Plane",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Fila ci:recuperado orientada por eventos: sync serial, auto-ready em duas fases, merge por SHA, pós-merge checkpoint e avanço; sem Work e sem novo workflow.",
+  "environment": "GitHub Actions",
+  "production_enabled": false,
+  "sdd_gate": {
+    "tests": [
+      "tests/test_repository_governance_agent.py",
+      "tests/test_governed_pr_automation_dispatch_contract.py",
+      "tests/test_recovered_pr_event_driven_queue_contract.py"
+    ],
+    "evidence_contract": "Recovered draft -> sync serial -> green -> ready sem merge -> revalidation -> SHA-protected merge -> post-merge checkpoint -> next PR dispatch."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets_mutation": false,
+    "force_push": false,
+    "branch_protection_mutation": false
+  }
+}

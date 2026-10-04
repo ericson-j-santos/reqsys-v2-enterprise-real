@@ -13,11 +13,14 @@ import SpecsView from '../views/SpecsView.vue'
 import TaskConsoleView from '../views/TaskConsoleView.vue'
 import AgileRuntimeView from '../views/AgileRuntimeView.vue'
 import ArquiteturaView from '../views/ArquiteturaView.vue'
+import ArquiteturaVivaView from '../views/ArquiteturaVivaView.vue'
 import GovernancaEnterpriseView from '../views/GovernancaEnterpriseView.vue'
 import HubLowCodeView from '../views/HubLowCodeView.vue'
 import CopilotMemoryInstallerView from '../views/CopilotMemoryInstallerView.vue'
 import WsjfPlannerExcelInstallerView from '../views/WsjfPlannerExcelInstallerView.vue'
 import GovBIView from '../views/GovBIView.vue'
+import QueryIntelligenceView from '../views/QueryIntelligenceView.vue'
+import AnalyticsRuntimeIntelligenceView from '../views/AnalyticsRuntimeIntelligenceView.vue'
 import CodexView from '../views/CodexView.vue'
 import PainelIntegracaoView from '../views/PainelIntegracaoView.vue'
 import PainelProjetosView from '../views/PainelProjetosView.vue'
@@ -94,10 +97,13 @@ export const routes = [
   },
   { path: '/financeiro', component: FinanceiroView, meta: { recurso: 'dashboard:read' } },
   { path: '/arquitetura', component: ArquiteturaView, meta: { recurso: 'dashboard:read' } },
+  { path: '/arquitetura-viva', component: ArquiteturaVivaView, meta: { recurso: 'dashboard:read' } },
   { path: '/governanca', component: GovernancaEnterpriseView, meta: { recurso: 'dashboard:read' } },
   { path: '/monitoramento-operacional', component: MonitoramentoOperacionalView, meta: { recurso: 'dashboard:read' } },
   { path: '/integracoes/pentaho', component: PentahoIntegracoesView, meta: { recurso: 'dashboard:read' } },
   { path: '/govbi-ia', alias: '/govbi', component: GovBIView, meta: { recurso: 'dashboard:read' } },
+  { path: '/query-intelligence', component: QueryIntelligenceView, meta: { recurso: 'dashboard:read' } },
+  { path: '/analytics-runtime-intelligence', component: AnalyticsRuntimeIntelligenceView, meta: { recurso: 'dashboard:read' } },
   { path: '/codex', component: CodexView, meta: { recurso: 'dashboard:read' } },
   { path: '/orquestrador-ia', component: OrquestradorIAView, meta: { recurso: 'dashboard:read' } },
   { path: '/coordenacao-adr', component: CoordenacaoAdrView, meta: { recurso: 'dashboard:read' } },

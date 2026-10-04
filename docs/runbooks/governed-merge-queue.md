@@ -124,7 +124,7 @@ O workflow `.github/workflows/repository-governance-agent.yml` complementa a fil
 Quando a `main` avança:
 
 1. lista PRs abertas com base `main`;
-2. ignora draft, forks externos, conflitos e mergeabilidade desconhecida;
+2. ignora drafts por padrão; permite somente draft `ci:recuperado`, além de ignorar forks externos, conflitos e mergeabilidade desconhecida;
 3. relê HEAD e base e seleciona somente PRs com `behind_by > 0`;
 4. confirma novamente os mesmos SHAs no Git remoto antes da escrita;
 5. em um repositório Git `bare`, calcula o merge por `merge-tree --write-tree` e cria o commit por `commit-tree`, sem checkout nem execução de código da branch candidata;

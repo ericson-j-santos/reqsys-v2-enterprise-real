@@ -26,7 +26,12 @@ anteriores.
     última sincronização, Planner, correlação e evidência quando disponíveis.
 11. O panorama da saúde do portfólio expõe um nome acessível e não apresenta
     violações automatizáveis WCAG 2.2 A/AA no catálogo de rotas autenticadas.
-12. O teste ponta a ponta da rota `/painel-projetos` valida explicitamente que
+12. Cada projeto exibido corresponde a um `repositorio` explícito dos itens do
+    Agile Execução; múltiplos itens do mesmo repositório são consolidados e
+    requisitos sem projeto vinculado não são contados artificialmente.
+13. O detalhe do projeto mostra os vínculos atuais disponíveis: itens de
+    execução, requisitos, branch, issue/PR, Planner, correlação e evidência.
+14. O teste ponta a ponta da rota `/painel-projetos` valida explicitamente que
     a distribuição da saúde é exposta como imagem acessível com o nome
     **Distribuição da saúde dos projetos**, prevenindo regressão da semântica.
 
