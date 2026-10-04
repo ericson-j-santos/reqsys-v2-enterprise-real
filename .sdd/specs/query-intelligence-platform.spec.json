@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Analise inteligente de consultas SQL",
+  "increment_type": "feature",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-06-21",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "sdd_gate": {
+    "pre_pr_tests": [
+      "frontend/src/services/queryIntelligence.test.js"
+    ],
+    "tests": [
+      "frontend/src/services/queryIntelligence.test.js",
+      "frontend/tests/e2e/query-intelligence.spec.js",
+      "frontend/tests/e2e/responsividade.spec.js"
+    ],
+    "evidence_contract": "A rota /query-intelligence deve analisar SQL sem executa-lo, sinalizar comandos destrutivos e permanecer coberta pelos testes unitarios e ponta a ponta."
+  },
+  "traceability": {
+    "pull_request": "#73",
+    "implementation": [
+      "frontend/src/services/queryIntelligence.js",
+      "frontend/src/views/QueryIntelligenceView.vue",
+      "frontend/src/router/index.js",
+      "frontend/src/constants/navCatalog.js"
+    ],
+    "tests": [
+      "frontend/src/services/queryIntelligence.test.js",
+      "frontend/tests/e2e/query-intelligence.spec.js",
+      "frontend/tests/e2e/responsividade.spec.js"
+    ],
+    "documentation": [
+      "docs/adr/ADR-020-query-intelligence-platform.md",
+      "docs/reference/query-intelligence-platform.md",
+      "docs/changelog/query-intelligence-platform-v1.md"
+    ]
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "frontend-query-analysis"
+  },
+  "acceptance_criteria": [
+    "A rota /query-intelligence permanece registrada no router, navegacao e catalogo responsivo.",
+    "A analise de SQL e estatica e nao executa a consulta informada.",
+    "Comandos destrutivos como DROP, DELETE, UPDATE ou TRUNCATE geram achado de seguranca conforme a regra do analisador.",
+    "A inferencia de PII permanece limitada a nomes de colunas e nao afirma descoberta de dados reais.",
+    "O servico unitario queryIntelligence.test.js permanece verde.",
+    "O E2E query-intelligence.spec.js cobre abertura da rota e analise sem execucao.",
+    "A tela usa design tokens para font-size, padding e margin validados pelo gate atual.",
+    "A branch permanece com behind_by=0 e os gates obrigatorios verdes no HEAD atual."
+  ]
+}

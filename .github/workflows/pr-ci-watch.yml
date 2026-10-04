@@ -1,6 +1,9 @@
 name: PR CI Watch
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_run:
@@ -36,6 +39,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  structural-queue:
+    name: PR Structural Queue
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+      issues: write
+      pull-requests: write
+    env:
+      REPORT_DIR: artifacts/pr-ci-watch
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Avaliar fila estrutural e sincronizar no máximo um PR seguro
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/pr_ci_watch.py --repo "${GITHUB_REPOSITORY}" --report-dir "${REPORT_DIR}" --structural-sweep --auto-update-behind --comment
+
+      - name: Publicar evidência estrutural
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-structural-queue-${{ github.run_id }}
+          path: artifacts/pr-ci-watch
+          if-no-files-found: error
+          retention-days: 30
+
   watch-pr:
     name: PR CI Watch seguro
     if: github.event_name == 'pull_request'

@@ -49,3 +49,14 @@
 - [ ] Sem breaking changes em endpoints OCR (`/v1/ocr/*`)
 - [ ] Teste com `.\scripts\validate-ocr-setup.ps1` passou
 - [ ] Endpoint `/v1/ocr/readiness` retorna `ready=true`
+
+## Integração governada
+
+- [ ] PR fora de draft somente após estabilização da implementação.
+- [ ] Branch atualizada com a `main` (`behind_by=0`).
+- [ ] Todos os checks obrigatórios verdes no HEAD atual.
+- [ ] Sem conflitos e sem conversas bloqueantes pendentes.
+- [ ] Evidências pertencem ao SHA atual; evidência de SHA anterior não autoriza merge.
+- [ ] Merge executado somente pela rota governada/autorizada, protegido pelo HEAD esperado.
+- [ ] Validação pós-merge prevista quando aplicável.
+

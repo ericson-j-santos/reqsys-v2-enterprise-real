@@ -4,7 +4,7 @@ from app.api.monitoramento_operacional import _metric_line
 from app.core.config import settings
 from app.main import app
 from app.schemas.monitoramento_operacional import ItemMonitorado
-from app.services.monitoramento_snapshot import classificar_estado_geral
+from app.services.monitoramento_snapshot import classificar_estado_geral, criar_tempo_operacional
 
 
 def test_monitoramento_operacional_status_200():
@@ -12,8 +12,13 @@ def test_monitoramento_operacional_status_200():
     assert res.status_code == 200
     body = res.json()
     assert body['success'] is True
-    assert body['data']['schema_version'] == '1.0.0'
-    assert body['data']['resumo']['total_itens'] == len(body['data']['itens'])
+    assert body['data']['schema_version'] == '1.2.0'
+    itens = body['data']['itens']
+    resumo = body['data']['resumo']
+    assert resumo['total_itens'] == len(itens)
+    assert resumo['frentes_criticas'] == sum(1 for item in itens if item['severidade'] == 'critica')
+    assert resumo['itens_prontos_para_merge'] == sum(1 for item in itens if item['pronto_para_merge'])
+    assert 'tempo_operacional' in body['data']
 
 
 def test_monitoramento_operacional_propaga_correlation_id():
@@ -47,6 +52,39 @@ def test_monitoramento_operacional_expoe_modo_coleta():
 
     assert data['modo_coleta'] in {'live', 'hibrido', 'preview'}
     assert isinstance(data.get('coleta_detalhes'), dict)
+
+
+def test_monitoramento_operacional_expoe_proximos_passos_e_criterios():
+    res = TestClient(app).get('/monitoramento-operacional')
+    itens = res.json()['data']['itens']
+
+    assert itens
+    assert all(item.get('criterio_de_fechamento') for item in itens)
+    pendencias = [item for item in itens if item['estado'] in {'amarelo', 'vermelho', 'bloqueado', 'desconhecido'}]
+    assert all(item.get('proximo_passo') for item in pendencias)
+
+
+def test_monitoramento_operacional_expoe_tempo_operacional():
+    tempo = TestClient(app).get('/monitoramento-operacional').json()['data']['tempo_operacional']
+
+    assert tempo['previsao_proxima_acao']
+    assert tempo['eta_proxima_verificacao_minutos'] > 0
+    assert tempo['tempo_medio_proxima_acao_minutos'] > 0
+    assert tempo['tempo_medio_resolucao_horas'] > 0
+    assert tempo['tempo_medio_review_minutos'] > 0
+    assert tempo['sla_operacional_minutos'] > 0
+
+
+def test_criar_tempo_operacional_cobre_estados():
+    bloqueado = criar_tempo_operacional('bloqueado')
+    amarelo = criar_tempo_operacional('amarelo')
+    verde = criar_tempo_operacional('verde')
+
+    assert bloqueado.eta_proxima_verificacao_minutos == 10
+    assert bloqueado.sla_operacional_minutos == 60
+    assert amarelo.tempo_medio_review_minutos == 45
+    assert verde.eta_proxima_verificacao_minutos == 30
+    assert verde.sla_operacional_minutos == 240
 
 
 def test_runtime_observability_health_bloqueia_sem_govbi_base_url(monkeypatch):
