@@ -9,16 +9,19 @@
     "design": true,
     "tasks": true
   },
-  "description": "Fila ci:recuperado orientada por eventos: sync serial, auto-ready em duas fases, merge por SHA, pós-merge checkpoint e avanço; sem Work e sem novo workflow.",
+  "description": "Fila ci:recuperado orientada por eventos: PR CI Remediation reage ao término dos gates, Ollama/Codex Worker Pool trata falhas técnicas elegíveis, sync serial, auto-ready em duas fases, merge por SHA, checkpoint/Teams e avanço pós-merge; sem Work e sem novo workflow.",
   "environment": "GitHub Actions",
   "production_enabled": false,
   "sdd_gate": {
     "tests": [
       "tests/test_repository_governance_agent.py",
       "tests/test_governed_pr_automation_dispatch_contract.py",
-      "tests/test_recovered_pr_event_driven_queue_contract.py"
+      "tests/test_recovered_pr_event_driven_queue_contract.py",
+      "tests/test_pr_ci_remediation.py",
+      "tests/test_ollama_ci_triage.py",
+      "tests/test_ollama_ci_triage_workflow.py"
     ],
-    "evidence_contract": "Recovered draft -> sync serial -> green -> ready sem merge -> revalidation -> SHA-protected merge -> post-merge checkpoint -> next PR dispatch."
+    "evidence_contract": "CI completion -> PR CI Remediation no PR/HEAD exatos; transitório allowlisted -> rerun; falha técnica determinística elegível -> Ollama CI Triage -> Worker Pool na mesma branch/base_sha; recovered draft -> sync serial -> green -> ready sem merge -> revalidation -> SHA-protected merge -> post-merge checkpoint/Teams -> próxima PR."
   },
   "risk": {
     "production": false,
@@ -26,5 +29,17 @@
     "secrets_mutation": false,
     "force_push": false,
     "branch_protection_mutation": false
-  }
+  },
+  "acceptance_criteria": [
+    "PR CI Remediation possui workflow_run para CI principal, CI Enterprise Fast e Pre-PR Readiness Gate.",
+    "O cron de PR CI Remediation permanece apenas como watchdog.",
+    "Evento workflow_run atua somente no PR e HEAD associados e ignora SHA stale.",
+    "Workflow ainda pendente não marca PR como recuperado.",
+    "Falhas transitórias allowlisted podem ser reexecutadas sem esperar cron.",
+    "Falhas técnicas determinísticas elegíveis continuam no Ollama CI Triage e Worker Pool na mesma branch.",
+    "Teams Commit Notification observa Ollama CI Triage e PR CI Remediation e só envia mudança material.",
+    "Push de merge governado na main é reconhecido como PR integrado.",
+    "GitHub permanece fonte canônica e ChatGPT é apenas interface/watchdog opcional.",
+    "Nenhum novo workflow ativo é criado e não há dependência de ChatGPT Work."
+  ]
 }
