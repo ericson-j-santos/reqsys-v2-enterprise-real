@@ -31,3 +31,19 @@ A autorização operacional permanente do owner está definida nas regras canôn
 5. O merge automático ocorre depois da `Governed Merge Queue` verde, sem exigir `governed-merge-approved`.
 6. Teste contratual comprova revalidação imediatamente anterior ao merge de HEAD, mergeabilidade e `merge-queue:eligible`.
 7. Deploy, promoção e demais ações críticas permanecem fora da autorização de merge.
+
+## Fila recuperada orientada por eventos
+
+14. A fila deve considerar conflito ou `mergeable_state=dirty` e `behind_by>0` como bloqueios acionáveis mesmo sem check vermelho.
+15. A prioridade é conflito/inmergeável → branch atrás da `main` → falha de CI → candidato a merge.
+16. Dentro da mesma classe de ação, o PR mais antigo deve ser selecionado primeiro.
+17. PR com apenas checks pendentes não deve receber correção artificial.
+18. O controlador deve ser acionado por evento `repository_dispatch`, sem `schedule`/cron.
+19. Antes de registrar o checkpoint de recuperação, o HEAD deve ser relido e coincidir com o SHA selecionado.
+20. A primeira etapa pode somente materializar checkpoint/label; handoff automático para executor de correção exige contrato separado e não pode reduzir gates existentes.
+
+## Critérios de aceite adicionais
+
+8. Teste unitário cobre conflito, behind, falha de CI, prioridade e ausência de ação para checks apenas pendentes.
+9. Teste contratual comprova `repository_dispatch governed_pr_queue_reconcile`, ausência de schedule e leitura de mergeabilidade/behind.
+
