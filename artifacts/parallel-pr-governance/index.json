@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-27T19:04:00-03:00",
+  "items": [
+    "capacity.json",
+    "conflict-matrix.json",
+    "safe-lanes.json",
+    "risk-ledger.json",
+    "parallel-pr-queue.md"
+  ],
+  "usage": "status and queue coordination"
+}

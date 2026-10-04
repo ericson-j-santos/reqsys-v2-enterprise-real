@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reqsys.local/schemas/agile-runtime.schema.json",
+  "title": "ReqSys Agile Runtime Core",
+  "type": "object",
+  "required": ["workItem", "sprint", "workflow", "traceability", "evidence"],
+  "properties": {
+    "workItem": {
+      "type": "object",
+      "required": ["id", "type", "title", "description", "status", "priority", "traceability", "evidence"],
+      "properties": {
+        "id": { "type": "string", "minLength": 3 },
+        "type": {
+          "type": "string",
+          "enum": ["epic", "feature", "story", "task", "bug", "spike", "risk", "tech_debt", "adr"]
+        },
+        "title": { "type": "string", "minLength": 5 },
+        "description": { "type": "string", "minLength": 10 },
+        "status": { "$ref": "#/$defs/workflowStatus" },
+        "priority": { "type": "string", "enum": ["P0", "P1", "P2", "P3"] },
+        "storyPoints": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "businessValue": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "riskScore": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "ownerAi": { "type": "string" },
+        "sprintId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 5 }
+        },
+        "traceability": { "$ref": "#/$defs/traceability" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "sprint": {
+      "type": "object",
+      "required": ["id", "name", "goal", "startDate", "endDate", "capacityPoints", "committedPoints", "donePoints", "metrics"],
+      "properties": {
+        "id": { "type": "string", "minLength": 3 },
+        "name": { "type": "string", "minLength": 3 },
+        "goal": { "type": "string", "minLength": 10 },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "capacityPoints": { "type": "integer", "minimum": 0 },
+        "committedPoints": { "type": "integer", "minimum": 0 },
+        "donePoints": { "type": "integer", "minimum": 0 },
+        "metrics": { "$ref": "#/$defs/sprintMetrics" }
+      },
+      "additionalProperties": false
+    },
+    "workflow": {
+      "type": "object",
+      "required": ["currentStatus", "allowedNextStatuses"],
+      "properties": {
+        "currentStatus": { "$ref": "#/$defs/workflowStatus" },
+        "allowedNextStatuses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/workflowStatus" }
+        },
+        "blockedReason": { "type": "string" },
+        "lastTransitionAt": { "type": "string", "format": "date-time" },
+        "lastTransitionBy": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "traceability": { "$ref": "#/$defs/traceability" },
+    "evidence": { "$ref": "#/$defs/evidence" }
+  },
+  "$defs": {
+    "workflowStatus": {
+      "type": "string",
+      "enum": [
+        "novo",
+        "refinando",
+        "pronto_para_sprint",
+        "planejado",
+        "em_execucao",
+        "em_revisao",
+        "em_ci",
+        "homologacao",
+        "evidenciado",
+        "producao",
+        "monitorado",
+        "concluido",
+        "bloqueado",
+        "reprovado",
+        "cancelado",
+        "reaberto"
+      ]
+    },
+    "traceability": {
+      "type": "object",
+      "required": ["requirementId", "repository", "branch", "changeRequest", "ci", "deploy"],
+      "properties": {
+        "requirementId": { "type": "string" },
+        "repository": { "type": "string" },
+        "branch": { "type": "string" },
+        "changeRequest": {
+          "type": "object",
+          "required": ["provider", "id", "url", "status"],
+          "properties": {
+            "provider": { "type": "string", "enum": ["github", "gitlab"] },
+            "id": { "type": "string" },
+            "url": { "type": "string" },
+            "status": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "ci": {
+          "type": "object",
+          "required": ["provider", "runId", "status", "url"],
+          "properties": {
+            "provider": { "type": "string", "enum": ["github_actions", "gitlab_ci", "other"] },
+            "runId": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "running", "success", "failed", "cancelled", "unknown"] },
+            "url": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "deploy": {
+          "type": "object",
+          "required": ["environment", "status"],
+          "properties": {
+            "environment": { "type": "string", "enum": ["dev", "test", "homolog", "prod", "none"] },
+            "status": { "type": "string", "enum": ["not_started", "deployed", "failed", "rolled_back", "unknown"] },
+            "url": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["qualityGate", "testStatus", "ciStatus", "evidenceUrls"],
+      "properties": {
+        "qualityGate": { "type": "string", "enum": ["not_evaluated", "approved", "rejected", "warning"] },
+        "testStatus": { "type": "string", "enum": ["not_run", "passed", "failed", "partial"] },
+        "ciStatus": { "type": "string", "enum": ["pending", "running", "success", "failed", "cancelled", "unknown"] },
+        "evidenceUrls": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "validatedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "sprintMetrics": {
+      "type": "object",
+      "required": ["velocity", "leadTimeHours", "cycleTimeHours", "throughput", "ciPassRatePercent", "completionPercent"],
+      "properties": {
+        "velocity": { "type": "number", "minimum": 0 },
+        "leadTimeHours": { "type": "number", "minimum": 0 },
+        "cycleTimeHours": { "type": "number", "minimum": 0 },
+        "throughput": { "type": "integer", "minimum": 0 },
+        "ciPassRatePercent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "completionPercent": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

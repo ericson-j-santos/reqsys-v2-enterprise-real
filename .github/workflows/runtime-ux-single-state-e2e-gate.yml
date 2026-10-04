@@ -1,0 +1,92 @@
+name: Runtime UX Single State E2E Gate
+
+on:
+  pull_request:
+    paths:
+      - "scripts/validate_runtime_ux_single_state_e2e.py"
+      - "tests/test_validate_runtime_ux_single_state_e2e.py"
+      - ".github/workflows/runtime-ux-single-state-e2e-gate.yml"
+  workflow_run:
+    workflows: ["ReqSys Single State Runtime UX Correlation"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: runtime-ux-single-state-e2e-${{ github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test
+        run: |
+          python -m py_compile scripts/validate_runtime_ux_single_state_e2e.py
+          python -m unittest tests/test_validate_runtime_ux_single_state_e2e.py -v
+
+  attest-chain:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore Estado Único artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/e2e/source .tmp/e2e/output
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=reqsys-single-state-runtime-ux&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          test -n "$artifact_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > .tmp/e2e/source.zip
+          unzip -q .tmp/e2e/source.zip -d .tmp/e2e/source
+          single_state="$(find .tmp/e2e/source -name reqsys-single-state-runtime-ux.json -print -quit)"
+          test -n "$single_state"
+          echo "SINGLE_STATE=$single_state" >> "$GITHUB_ENV"
+
+      - name: Validate end-to-end correlation
+        run: |
+          python scripts/validate_runtime_ux_single_state_e2e.py \
+            --single-state "$SINGLE_STATE" \
+            --output .tmp/e2e/output/runtime-ux-single-state-e2e.json
+
+      - name: Preserve production guardrails
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('.tmp/e2e/output/runtime-ux-single-state-e2e.json').read_text())
+          assert value['mode'] == 'advisory'
+          assert value['production_blocker'] is False
+          assert value['promotion_allowed'] is False
+          assert value['human_approval_required'] is True
+          print(f"e2e state: {value['status']}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-ux-single-state-e2e
+          path: .tmp/e2e/output
+          retention-days: 90

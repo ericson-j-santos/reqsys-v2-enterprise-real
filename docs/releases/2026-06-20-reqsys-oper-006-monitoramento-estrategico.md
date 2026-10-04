@@ -22,11 +22,11 @@ Este incremento evolui o snapshot `/monitoramento-operacional` para rastrear pen
 - Integração Planner end-to-end real.
 - Unificação total de pipeline e evidências HTML.
 
-## Rebase operacional — 2026-06-22
+## Reconciliação operacional — 2026-10-04
 
-- Branch limpa criada a partir da `main` atual.
-- Alterações funcionais e documentais do PR #61 reaplicadas sobre a base atual.
-- Objetivo: eliminar divergência operacional e permitir criação de merge ref para CI.
-- PR deve permanecer em draft até CI verde no último head, revisão concluída e autorização explícita.
+- Alterações funcionais foram portadas para a arquitetura atual de `schemas` + `services/monitoramento_snapshot.py`, sem sobrescrever a API de observabilidade evoluída na `main`.
+- O contrato 1.2.0 preserva `modo_coleta` e `coleta_detalhes` e acrescenta próximos passos, critérios de fechamento, agregados derivados e tempo operacional.
+- O teste de resumo valida valores reais derivados dos itens, evitando falso verde por mera existência de campos.
+- A branch é sincronizada com a `main` no commit de recuperação e volta a ser validada pelos gates atuais no novo HEAD.
 
 Refs #30 #31 #32 #33 #46

@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "correlation_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "agent": "agent-arquiteto",
+  "generated_at": "2026-06-28T12:00:00Z",
+  "contexto": {
+    "repositorio": "reqsys-v2-enterprise-real",
+    "branch": "main",
+    "escopo": "análise arquitetural pós-merge",
+    "artefatos_consultados": [
+      "docs/padrao-ouro/living-architecture-index.json",
+      "docs/adr/ADR_INDEX.md"
+    ]
+  },
+  "diagnostico": {
+    "estado_atual": "intermediario",
+    "gargalos": [
+      "Cobertura de testes E2E limitada a responsividade"
+    ],
+    "debito_tecnico": [
+      "Migração parcial para TypeScript no frontend"
+    ]
+  },
+  "riscos": [
+    {
+      "id": "RISK-001",
+      "descricao": "Build do frontend quebra por import inconsistente",
+      "severidade": "alta",
+      "mitigacao": "Corrigir import nomeado em PainelIntegracaoView.vue"
+    }
+  ],
+  "acoes_recomendadas": [
+    {
+      "prioridade": "P1",
+      "descricao": "Corrigir import default em PainelIntegracaoView.vue",
+      "owner": "agent-frontend",
+      "esforco": "baixo"
+    }
+  ],
+  "quick_wins": [
+    {
+      "descricao": "Corrigir import { api } em PainelIntegracaoView.vue",
+      "impacto": "Desbloqueia build e runtime da SPA",
+      "esforco": "baixo"
+    }
+  ],
+  "proximo_incremento": {
+    "tipo": "gap_fix",
+    "descricao": "Corrigir import inconsistente no frontend",
+    "agente_sugerido": "agent-frontend",
+    "dependencias": []
+  },
+  "nivel_confianca": 0.92,
+  "campo_nao_permitido": true
+}

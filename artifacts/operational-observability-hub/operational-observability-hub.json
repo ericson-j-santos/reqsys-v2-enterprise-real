@@ -1,0 +1,182 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T12:32:24Z",
+  "source": "operational-observability-hub",
+  "status": "watch",
+  "confidence_level": "high",
+  "maturity_percent": 0.0,
+  "operational_risk": "medium",
+  "commit_sha": "53e0721f",
+  "workflow_run_id": null,
+  "correlation_id": "b144b9bf-e508-4743-b85e-0d56eba88727",
+  "repository": "local/reqsys",
+  "mode": "report_only",
+  "pareto_increment": {
+    "multi_environment_evidence": true,
+    "metrics_history_persisted": false,
+    "longitudinal_analytics": false,
+    "environment_drift_detection": true,
+    "governed_alerts": true,
+    "slo_sla_evidence": true,
+    "ci_runtime_observability_correlation": true,
+    "contract_artifacts_hydrated": true,
+    "openapi_validation_available": false,
+    "routes_drift_available": false,
+    "semantic_diff_available": false
+  },
+  "sources": {
+    "multi_environment": {
+      "environments_total": 4,
+      "ready": 2,
+      "degraded": 1,
+      "url_matrix_misaligned": 0,
+      "promotion_order": [
+        "dev",
+        "hml",
+        "prod"
+      ],
+      "overall_probe_status": "degraded"
+    },
+    "environment_drift": {
+      "drift_level": "MEDIO",
+      "findings": 1
+    },
+    "slo_evidence": {
+      "slo_count": 3,
+      "breach_count": 1,
+      "met_count": 0,
+      "no_data_count": 2
+    },
+    "longitudinal": {
+      "windows": {
+        "7d": {
+          "points": 0
+        },
+        "30d": {
+          "points": 0
+        }
+      },
+      "trend": {
+        "direction": "unknown",
+        "points": 0
+      }
+    },
+    "history_index": {
+      "snapshot_count": 0,
+      "risk": "medium",
+      "maturity_percent": 0.0
+    },
+    "contract_governance": {
+      "hydrated": true,
+      "contract_index": {
+        "available": true,
+        "version": "0.3.0",
+        "status": "governed",
+        "runtime_contract_sync": "partial",
+        "gap": "semantic_backend_route_sync_pending"
+      },
+      "openapi_validation": {
+        "available": false,
+        "status": "unknown",
+        "valid": null,
+        "error_count": 0
+      },
+      "routes_drift": {
+        "available": false,
+        "status": null,
+        "drift_count": 0,
+        "missing_in_backend": 0,
+        "missing_in_openapi": 0,
+        "mode": "canonical_strict_gate"
+      },
+      "semantic_diff": {
+        "available": false,
+        "status": null,
+        "drift_count": 0,
+        "missing_in_backend": 0,
+        "missing_in_openapi": 0,
+        "mode": "advisory_only"
+      },
+      "summary": {
+        "artifacts_available": 1,
+        "canonical_drift_count": 0,
+        "semantic_drift_count": 0,
+        "validation_passed": false,
+        "sync_gap": "semantic_backend_route_sync_pending"
+      }
+    }
+  },
+  "governed_alert": {
+    "alert_level": "MEDIUM",
+    "alert_type": "ENVIRONMENT_DRIFT",
+    "noise_level": "LOW",
+    "action_policy": "MANUAL_REVIEW_REQUIRED",
+    "should_alert": true,
+    "mode": "governed_report_only"
+  },
+  "correlation_chain": [
+    {
+      "sequence": 1,
+      "event": "coordenador_status_captured",
+      "source": "coordenador-status-consolidator",
+      "correlation_level": "governance",
+      "state": "yellow",
+      "decision": "bloquear_novas_frentes_e_tratar_gaps",
+      "correlation_id": "017b233b-9af8-4755-9693-7165929f50ed"
+    },
+    {
+      "sequence": 2,
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "dev",
+      "status": "ready",
+      "readiness_percent": 100.0,
+      "correlation_id": "b144b9bf-e508-4743-b85e-0d56eba88727"
+    },
+    {
+      "sequence": 3,
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "hml",
+      "status": "ready",
+      "readiness_percent": 100.0,
+      "correlation_id": "b144b9bf-e508-4743-b85e-0d56eba88727"
+    },
+    {
+      "sequence": 4,
+      "event": "environment_probe",
+      "source": "multi-environment-evidence",
+      "correlation_level": "runtime",
+      "environment": "prod",
+      "status": "degraded",
+      "readiness_percent": 50.0,
+      "correlation_id": "b144b9bf-e508-4743-b85e-0d56eba88727"
+    },
+    {
+      "sequence": 5,
+      "event": "contract_artifacts_hydrated",
+      "source": "contract-governance-artifacts",
+      "correlation_level": "contract",
+      "artifacts_available": 1,
+      "canonical_drift_count": 0,
+      "semantic_drift_count": 0,
+      "validation_passed": false,
+      "sync_gap": "semantic_backend_route_sync_pending",
+      "correlation_id": "b144b9bf-e508-4743-b85e-0d56eba88727"
+    }
+  ],
+  "recommended_actions": [
+    "Alinhar disponibilidade entre ambientes promoviveis.",
+    "Tratar breach SLO env_probe_availability: actual=66.67%",
+    "Alerta governado MEDIUM: ENVIRONMENT_DRIFT — MANUAL_REVIEW_REQUIRED",
+    "Tratar gap de sincronização contrato: semantic_backend_route_sync_pending"
+  ],
+  "guardrails": [
+    "report_only",
+    "no_auto_deploy",
+    "no_production_mutation",
+    "human_review_required"
+  ]
+}

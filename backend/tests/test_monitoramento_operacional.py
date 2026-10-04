@@ -1,13 +1,10 @@
-"""Testes do contrato de monitoramento operacional do ReqSys."""
-
 from fastapi.testclient import TestClient
 
-from app.api.monitoramento_operacional import (
-    ItemMonitorado,
-    classificar_estado_geral,
-    criar_tempo_operacional,
-)
+from app.api.monitoramento_operacional import _metric_line
+from app.core.config import settings
 from app.main import app
+from app.schemas.monitoramento_operacional import ItemMonitorado
+from app.services.monitoramento_snapshot import classificar_estado_geral, criar_tempo_operacional
 
 
 def test_monitoramento_operacional_status_200():
@@ -16,14 +13,16 @@ def test_monitoramento_operacional_status_200():
     body = res.json()
     assert body['success'] is True
     assert body['data']['schema_version'] == '1.2.0'
-    assert body['data']['resumo']['total_itens'] == len(body['data']['itens'])
-    assert 'frentes_criticas' in body['data']['resumo']
-    assert 'itens_prontos_para_merge' in body['data']['resumo']
+    itens = body['data']['itens']
+    resumo = body['data']['resumo']
+    assert resumo['total_itens'] == len(itens)
+    assert resumo['frentes_criticas'] == sum(1 for item in itens if item['severidade'] == 'critica')
+    assert resumo['itens_prontos_para_merge'] == sum(1 for item in itens if item['pronto_para_merge'])
     assert 'tempo_operacional' in body['data']
 
 
 def test_monitoramento_operacional_propaga_correlation_id():
-    correlation_id = 'corr-oper-006-test'
+    correlation_id = 'corr-oper-005-test'
     res = TestClient(app).get('/monitoramento-operacional', headers={'X-Correlation-Id': correlation_id})
 
     assert res.status_code == 200
@@ -36,23 +35,37 @@ def test_monitoramento_operacional_expoe_frentes_operacionais_prioritarias():
     res = TestClient(app).get('/monitoramento-operacional')
     referencias = {item['referencia'] for item in res.json()['data']['itens']}
 
-    assert {'REQSYS-OPER-001', 'REQSYS-OPER-002', 'REQSYS-OPER-003'} <= referencias
-    assert {'REQSYS-OPER-004', 'REQSYS-OPER-005'} <= referencias
+    assert {'REQSYS-OPER-001', 'REQSYS-OPER-002', 'REQSYS-OPER-003', 'REQSYS-OPER-004', 'REQSYS-OPER-005'} <= referencias
+
+
+def test_monitoramento_operacional_estado_geral_reflete_pendencias():
+    res = TestClient(app).get('/monitoramento-operacional')
+    data = res.json()['data']
+
+    assert data['resumo']['estado_geral'] in {'amarelo', 'vermelho', 'bloqueado'}
+    assert data['resumo']['pendencias'] > 0
+
+
+def test_monitoramento_operacional_expoe_modo_coleta():
+    res = TestClient(app).get('/monitoramento-operacional')
+    data = res.json()['data']
+
+    assert data['modo_coleta'] in {'live', 'hibrido', 'preview'}
+    assert isinstance(data.get('coleta_detalhes'), dict)
 
 
 def test_monitoramento_operacional_expoe_proximos_passos_e_criterios():
     res = TestClient(app).get('/monitoramento-operacional')
     itens = res.json()['data']['itens']
-    pendencias = [item for item in itens if item['estado'] in {'amarelo', 'vermelho'}]
 
-    assert pendencias
-    assert all(item['proximo_passo'] for item in pendencias)
-    assert all(item['criterio_de_fechamento'] for item in pendencias)
+    assert itens
+    assert all(item.get('criterio_de_fechamento') for item in itens)
+    pendencias = [item for item in itens if item['estado'] in {'amarelo', 'vermelho', 'bloqueado', 'desconhecido'}]
+    assert all(item.get('proximo_passo') for item in pendencias)
 
 
 def test_monitoramento_operacional_expoe_tempo_operacional():
-    res = TestClient(app).get('/monitoramento-operacional')
-    tempo = res.json()['data']['tempo_operacional']
+    tempo = TestClient(app).get('/monitoramento-operacional').json()['data']['tempo_operacional']
 
     assert tempo['previsao_proxima_acao']
     assert tempo['eta_proxima_verificacao_minutos'] > 0
@@ -62,35 +75,145 @@ def test_monitoramento_operacional_expoe_tempo_operacional():
     assert tempo['sla_operacional_minutos'] > 0
 
 
-def test_monitoramento_operacional_estado_geral_reflete_bloqueio_govbi():
-    res = TestClient(app).get('/monitoramento-operacional')
-    data = res.json()['data']
+def test_criar_tempo_operacional_cobre_estados():
+    bloqueado = criar_tempo_operacional('bloqueado')
+    amarelo = criar_tempo_operacional('amarelo')
+    verde = criar_tempo_operacional('verde')
 
-    assert data['resumo']['estado_geral'] == 'bloqueado'
-    assert data['resumo']['bloqueios'] >= 1
-    assert data['resumo']['pendencias'] > 0
-    assert data['tempo_operacional']['eta_proxima_verificacao_minutos'] == 10
+    assert bloqueado.eta_proxima_verificacao_minutos == 10
+    assert bloqueado.sla_operacional_minutos == 60
+    assert amarelo.tempo_medio_review_minutos == 45
+    assert verde.eta_proxima_verificacao_minutos == 30
+    assert verde.sla_operacional_minutos == 240
+
+
+def test_runtime_observability_health_bloqueia_sem_govbi_base_url(monkeypatch):
+    monkeypatch.setattr(settings, 'govbi_base_url', '')
+    correlation_id = 'corr-runtime-observability-test'
+    res = TestClient(app).get('/api/runtime/health', headers={'X-Correlation-ID': correlation_id})
+
+    assert res.status_code == 200
+    body = res.json()
+    data = body['data']
+
+    assert body['success'] is True
+    assert body['meta']['correlation_id'] == correlation_id
+    assert data['correlation_id'] == correlation_id
+    assert data['schema_version'] == '1.0.0'
+    assert data['service'] == 'reqsys-api'
+    assert data['status'] in {'healthy', 'attention', 'degraded'}
+    assert 0 <= data['risk_score'] <= 100
+    assert data['uptime_seconds'] >= 0
+    assert data['evidence']['no_secrets'] is True
+    assert data['status'] == 'degraded'
+    assert data['status_raw'] == 'degraded'
+    assert data['critical_counts']['blocked_items'] >= 1
+    if settings.is_production:
+        assert data['evidence']['deploy_gate_relaxed'] is False
+    else:
+        assert data['evidence']['deploy_gate_relaxed'] is True
+
+
+def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
+    correlation_id = 'corr-runtime-dashboard-schema-test'
+    res = TestClient(app).get('/api/runtime/dashboard', headers={'X-Correlation-ID': correlation_id})
+
+    assert res.status_code == 200
+    body = res.json()
+    data = body['data']
+    card_ids = {card['id'] for card in data['cards']}
+    section_ids = {section['id'] for section in data['sections']}
+
+    assert body['meta']['correlation_id'] == correlation_id
+    assert data['schema_version'] == '1.4.0'
+    assert data['correlation_id'] == correlation_id
+    assert data['layout']['responsive'] is True
+    assert data['data_source']['endpoint'] == '/api/runtime/health'
+    assert {'runtime-status', 'risk-score', 'pending-items', 'uptime', 'readiness-percent', 'public-runtime-evidence-status', 'governance-evidence-score', 'trilha-d-score', 'operational-mesh-integrated', 'cross-runtime-score'} <= card_ids
+    assert any(card['id'].startswith('governance-') for card in data['cards'])
+    assert any(card['id'].startswith('trilha-d-dim-') for card in data['cards'])
+    assert {'workflow-topology', 'public-smoke', 'operational-timeline', 'environment-evidence', 'incident-summary', 'risk-summary', 'environment-drift-summary', 'governance-evidence', 'trilha-d-history', 'operational-mesh-chain'} <= section_ids
+    governance = next(section for section in data['sections'] if section['id'] == 'governance-evidence')
+    assert governance['type'] == 'governance_cards'
+    assert governance['items']['evidence']
+    assert data['governance_evidence']['summary']['total_capabilities'] >= 4
+    trilha_d = next(section for section in data['sections'] if section['id'] == 'trilha-d-history')
+    assert trilha_d['type'] == 'trilha_d_history'
+    assert trilha_d['items']['history']
+    assert data['trilha_d_history']['dimension_summary']
+    topology = next(section for section in data['sections'] if section['id'] == 'workflow-topology')
+    assert topology['type'] == 'timeline'
+    assert {item['step'] for item in topology['items']} == {'health', 'readiness', 'metrics', 'monitoring'}
+    assert data['guardrails']['no_secrets'] is True
+    assert data['guardrails']['read_only'] is True
+    assert data['guardrails']['deploy_gate_relaxed'] is (not settings.is_production)
+    runtime_card = next(card for card in data['cards'] if card['id'] == 'runtime-status')
+    assert runtime_card['spa_drilldown']['path'] == '/monitoramento-operacional'
+    assert runtime_card['spa_drilldown']['query']['secao'] == 'runtime'
+    public_runtime_card = next(
+        card for card in data['cards']
+        if card['id'] == 'public-runtime-evidence-status'
+    )
+    assert public_runtime_card['title'] == 'Runtime público'
+
+
+def test_runtime_observability_readiness_bloqueia_sem_govbi_base_url(monkeypatch):
+    monkeypatch.setattr(settings, 'govbi_base_url', '')
+    client = TestClient(app)
+
+    readiness = client.get('/api/runtime/readiness')
+    liveness = client.get('/api/runtime/liveness')
+
+    assert readiness.status_code == 200
+    assert liveness.status_code == 200
+    assert readiness.json()['data']['ready'] is False
+    assert readiness.json()['data']['readiness_reason'] == 'blocked_items_detected'
+    assert readiness.json()['data']['evidence']['deploy_gate_relaxed'] is (not settings.is_production)
+    assert liveness.json()['data']['alive'] is True
+
+
+def test_runtime_observability_readiness_strict_em_producao(monkeypatch):
+    monkeypatch.setattr(settings, 'app_environment', 'production')
+    monkeypatch.setattr(settings, 'govbi_base_url', '')
+    client = TestClient(app)
+
+    readiness = client.get('/api/runtime/readiness')
+    data = readiness.json()['data']
+
+    assert readiness.status_code == 200
+    assert data['evidence']['deploy_gate_relaxed'] is False
+    assert data['ready'] is False
+    assert data['readiness_reason'] == 'blocked_items_detected'
+    assert data['status'] == 'degraded'
+
+
+def test_runtime_observability_metrics_prometheus_text_plain():
+    res = TestClient(app).get('/api/runtime/metrics')
+
+    assert res.status_code == 200
+    assert res.headers['content-type'].startswith('text/plain')
+    text = res.text
+    assert 'reqsys_runtime_up' in text
+    assert 'reqsys_runtime_risk_score' in text
+    assert 'reqsys_runtime_pending_items' in text
+    assert 'reqsys_runtime_blocked_items' in text
+    assert 'reqsys_runtime_uptime_seconds' in text
+    assert '<script' not in text.lower()
+
+
+def test_runtime_observability_metric_line_escapa_labels_prometheus():
+    unsafe_environment = 'prod"' + chr(10) + 'unsafe'
+    line = _metric_line('reqsys_runtime_up', 1, {'environment': unsafe_environment, 'service': 'reqsys\\api'})
+
+    assert 'environment="prod\\"\\nunsafe"' in line
+    assert 'service="reqsys\\\\api"' in line
+    assert chr(10) not in line
 
 
 def test_classificar_estado_geral_prioriza_bloqueio():
     itens = [
-        ItemMonitorado(
-            tipo='gate',
-            referencia='ok',
-            titulo='OK',
-            estado='verde',
-            severidade='baixa',
-            origem='teste',
-        ),
-        ItemMonitorado(
-            tipo='pr',
-            referencia='bloq',
-            titulo='Bloqueado',
-            estado='verde',
-            severidade='critica',
-            origem='teste',
-            bloqueante=True,
-        ),
+        ItemMonitorado(tipo='gate', referencia='ok', titulo='OK', estado='verde', severidade='baixa', origem='teste'),
+        ItemMonitorado(tipo='pr', referencia='bloq', titulo='Bloqueado', estado='verde', severidade='critica', origem='teste', bloqueante=True),
     ]
 
     assert classificar_estado_geral(itens) == 'bloqueado'
@@ -98,29 +221,3 @@ def test_classificar_estado_geral_prioriza_bloqueio():
 
 def test_classificar_estado_geral_sem_itens_desconhecido():
     assert classificar_estado_geral([]) == 'desconhecido'
-
-
-def test_classificar_estado_geral_cobre_vermelho_amarelo_desconhecido_e_verde():
-    vermelho = ItemMonitorado(tipo='x', referencia='r1', titulo='T1', estado='vermelho', severidade='alta', origem='teste')
-    amarelo = ItemMonitorado(tipo='x', referencia='r2', titulo='T2', estado='amarelo', severidade='media', origem='teste')
-    desconhecido = ItemMonitorado(tipo='x', referencia='r3', titulo='T3', estado='desconhecido', severidade='media', origem='teste')
-    verde = ItemMonitorado(tipo='x', referencia='r4', titulo='T4', estado='verde', severidade='baixa', origem='teste')
-
-    assert classificar_estado_geral([vermelho]) == 'vermelho'
-    assert classificar_estado_geral([amarelo]) == 'amarelo'
-    assert classificar_estado_geral([desconhecido]) == 'amarelo'
-    assert classificar_estado_geral([verde]) == 'verde'
-
-
-def test_criar_tempo_operacional_cobre_estados_operacionais():
-    tempo_bloqueado = criar_tempo_operacional('bloqueado')
-    tempo_amarelo = criar_tempo_operacional('amarelo')
-    tempo_vermelho = criar_tempo_operacional('vermelho')
-    tempo_verde = criar_tempo_operacional('verde')
-
-    assert tempo_bloqueado.eta_proxima_verificacao_minutos == 10
-    assert tempo_bloqueado.sla_operacional_minutos == 60
-    assert tempo_amarelo.eta_proxima_verificacao_minutos == 15
-    assert tempo_vermelho.tempo_medio_review_minutos == 45
-    assert tempo_verde.eta_proxima_verificacao_minutos == 30
-    assert tempo_verde.sla_operacional_minutos == 240

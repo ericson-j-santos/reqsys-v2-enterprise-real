@@ -1,0 +1,98 @@
+name: ReqSys Product Story Engine
+
+on:
+  workflow_run:
+    workflows:
+      - ReqSys Weekly Accomplishment Log
+    types:
+      - completed
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/reqsys-product-story-engine.yml"
+      - ".sdd/specs/reqsys-product-story-engine-v1.*"
+      - "docs/runbooks/reqsys-product-story-engine.md"
+      - "scripts/reqsys_product_story_engine.py"
+      - "tests/test_reqsys_product_story_engine.py"
+      - "tests/test_reqsys_product_story_workflow.py"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: reqsys-product-story-engine-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    name: Gerar drafts governados para revisão
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar Product Story Engine
+        run: |
+          python -m unittest -v tests/test_reqsys_product_story_engine.py
+          python -m unittest -v tests/test_reqsys_product_story_workflow.py
+
+      - name: Resolver execução fonte
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_run_id="${{ github.event.workflow_run.id }}"
+          if [[ -z "$source_run_id" ]]; then
+            source_run_id="$(gh run list               --workflow reqsys-weekly-accomplishment-log.yml               --branch main               --status success               --limit 1               --json databaseId               --jq '.[0].databaseId // empty')"
+          fi
+          test -n "$source_run_id" || {
+            echo "Nenhum run semanal verde disponível como fonte." >&2
+            exit 1
+          }
+          echo "run_id=$source_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar evidência semanal
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="artifacts/reqsys-product-story-engine/source"
+          mkdir -p "$source_dir"
+          gh run download "${{ steps.source.outputs.run_id }}"             --name reqsys-weekly-accomplishment-log             --dir "$source_dir"
+          test -f "$source_dir/reqsys-weekly-accomplishment-log.json"
+
+      - name: Gerar candidatos
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/reqsys_product_story_engine.py             --input artifacts/reqsys-product-story-engine/source/reqsys-weekly-accomplishment-log.json             --output-dir artifacts/reqsys-product-story-engine/output             --limit 3
+
+      - name: Publicar resumo no run
+        if: always()
+        shell: bash
+        run: |
+          report="artifacts/reqsys-product-story-engine/output/product-story-candidates.md"
+          if [[ -f "$report" ]]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar artifact de revisão
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqsys-product-story-engine
+          path: |
+            artifacts/reqsys-product-story-engine/output/product-story-candidates.json
+            artifacts/reqsys-product-story-engine/output/product-story-candidates.md
+          if-no-files-found: error
+          retention-days: 90

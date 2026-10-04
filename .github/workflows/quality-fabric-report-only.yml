@@ -1,0 +1,149 @@
+name: Quality Fabric — Report Only
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "governance/testing/**"
+      - "scripts/testing/**"
+      - "tests/test_testing_orchestrator.py"
+      - "tests/test_differential_coverage.py"
+      - "tests/test_quality_fabric_report_only.py"
+      - ".github/workflows/quality-fabric-report-only.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-fabric-report-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-fabric-report:
+    name: Quality Fabric evidence (report-only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Detectar escopo
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/quality-fabric-changed.txt
+
+          backend=false
+          frontend=false
+          e2e=false
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            case "$file" in
+              backend/*) backend=true ;;
+            esac
+            case "$file" in
+              frontend/*) frontend=true ;;
+            esac
+            case "$file" in
+              frontend/tests/e2e/*|frontend/playwright.config.*|frontend/src/router/*|frontend/src/views/Login*|frontend/src/views/*Auth*|frontend/src/services/auth*|frontend/src/stores/*auth*)
+                e2e=true
+                ;;
+            esac
+          done < /tmp/quality-fabric-changed.txt
+
+          {
+            echo "base_sha=$BASE_SHA"
+            echo "head_sha=$HEAD_SHA"
+            echo "backend=$backend"
+            echo "frontend=$frontend"
+            echo "e2e=$e2e"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Dependências mínimas do Quality Fabric
+        run: python -m pip install --disable-pip-version-check "pytest>=8.2,<9" "jsonschema>=4.22,<5" "PyYAML>=6,<7"
+
+      - name: Dependências backend
+        if: steps.scope.outputs.backend == 'true'
+        run: python -m pip install --disable-pip-version-check -r backend/requirements.txt
+
+      - name: Node.js 20
+        if: steps.scope.outputs.frontend == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Dependências frontend
+        if: steps.scope.outputs.frontend == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Chromium para E2E selecionado
+        if: steps.scope.outputs.e2e == 'true'
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Preparar diretório de evidências
+        run: mkdir -p artifacts/quality-fabric/runtime
+
+      - name: Executar Quality Fabric
+        run: |
+          python scripts/testing/orchestrate.py \
+            --profile pr_report \
+            --base-sha "${{ steps.scope.outputs.base_sha }}" \
+            --head-sha "${{ steps.scope.outputs.head_sha }}" \
+            --output-dir artifacts/quality-fabric/runtime
+
+      - name: Medir cobertura diferencial do backend
+        if: steps.scope.outputs.backend == 'true'
+        run: |
+          python scripts/testing/differential_coverage.py \
+            --coverage-json artifacts/quality-fabric/runtime/backend-coverage.json \
+            --base-sha "${{ steps.scope.outputs.base_sha }}" \
+            --head-sha "${{ steps.scope.outputs.head_sha }}" \
+            --minimum 85 \
+            --output-dir artifacts/quality-fabric/runtime
+
+      - name: Publicar resumo no GitHub
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f artifacts/quality-fabric/runtime/quality-summary.md ]]; then
+            cat artifacts/quality-fabric/runtime/quality-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -f artifacts/quality-fabric/runtime/differential-coverage.md ]]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/quality-fabric/runtime/differential-coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: quality-fabric-report-${{ github.run_id }}
+          path: artifacts/quality-fabric/runtime/
+          if-no-files-found: warn
+          retention-days: 14

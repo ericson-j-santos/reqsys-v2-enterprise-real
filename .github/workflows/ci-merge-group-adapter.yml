@@ -1,0 +1,90 @@
+name: CI Merge Group Adapter
+
+on:
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-merge-group-adapter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  route-and-validate:
+    name: CI Merge Group Route and Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Resolve merge group identity
+        id: identity
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+            test -n "$MERGE_BASE_SHA"
+            test -n "$MERGE_HEAD_SHA"
+            BASE_SHA="$MERGE_BASE_SHA"
+            HEAD_SHA="$MERGE_HEAD_SHA"
+          else
+            BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+            HEAD_SHA="${GITHUB_SHA}"
+          fi
+          git fetch --no-tags --depth=200 origin || true
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/changed-files.txt
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "changed_count=$(wc -l < /tmp/changed-files.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Execute deterministic enterprise guardrails
+        run: |
+          python -m py_compile scripts/ci_enterprise_guardrails.py
+          python scripts/ci_enterprise_guardrails.py
+
+      - name: Validate critical workflow coverage contract
+        run: |
+          pip install PyYAML
+          python scripts/audit_critical_workflow_event_coverage.py \
+            --output artifacts/merge-group/critical-workflow-event-coverage.json
+
+      - name: Publish merge group evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-merge-group-adapter-evidence
+          path: |
+            /tmp/changed-files.txt
+            artifacts/merge-group/
+            ci-reports/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Executive summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## CI Merge Group Adapter"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Base SHA | \`${{ steps.identity.outputs.base_sha }}\` |"
+            echo "| Head SHA | \`${{ steps.identity.outputs.head_sha }}\` |"
+            echo "| Arquivos alterados | ${{ steps.identity.outputs.changed_count }} |"
+            echo "| Promoção automática | desabilitada |"
+            echo "| Aprovação humana de produção | obrigatória |"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-25T01:02:00Z",
+  "scope": "Product Intelligence Final Evidence Index",
+  "overall_status": "pending",
+  "progress": {
+    "technical": 72,
+    "operational": 70,
+    "end_user": 58,
+    "governance": 86,
+    "production": 42
+  },
+  "evidences": [
+    {
+      "id": "PI-FEI-001",
+      "type": "pull_request",
+      "source": "GitHub Pull Request",
+      "link": "pending",
+      "status": "pending",
+      "owner": "product-intelligence-governance",
+      "reference_date": "2026-06-25T01:02:00Z",
+      "residual_risk": "PR ainda não validado por checks no momento inicial do incremento.",
+      "next_step": "Abrir PR em draft e aguardar GitHub Actions."
+    },
+    {
+      "id": "PI-FEI-002",
+      "type": "ci_checks",
+      "source": "GitHub Actions",
+      "link": "pending",
+      "status": "pending",
+      "owner": "ci-governance",
+      "reference_date": "2026-06-25T01:02:00Z",
+      "residual_risk": "Checks ainda precisam executar no branch do PR.",
+      "next_step": "Capturar conclusões dos workflows bloqueantes."
+    },
+    {
+      "id": "PI-FEI-003",
+      "type": "documentation",
+      "source": "Repository docs",
+      "link": "docs/product/PRODUCT_INTELLIGENCE_FINAL_EVIDENCE_INDEX.md",
+      "status": "validated",
+      "owner": "product-intelligence-governance",
+      "reference_date": "2026-06-25T01:02:00Z",
+      "residual_risk": "Validação final depende de merge e checks pós-merge.",
+      "next_step": "Validar rastreabilidade após merge em main."
+    }
+  ],
+  "gates": [
+    {
+      "name": "PR CI green",
+      "status": "pending",
+      "required": true,
+      "evidence_link": "pending"
+    },
+    {
+      "name": "Mergeability positive",
+      "status": "pending",
+      "required": true,
+      "evidence_link": "pending"
+    },
+    {
+      "name": "No unresolved review threads",
+      "status": "pending",
+      "required": true,
+      "evidence_link": "pending"
+    },
+    {
+      "name": "Post-merge main validation",
+      "status": "pending",
+      "required": true,
+      "evidence_link": "pending"
+    }
+  ],
+  "risks": [
+    {
+      "id": "PI-FEI-R001",
+      "description": "Evidência final pode ser documental se workflows específicos ainda não publicarem artifact dedicado.",
+      "severity": "medium",
+      "mitigation": "Exigir captura explícita dos checks e registrar artifacts disponíveis antes de consolidar."
+    },
+    {
+      "id": "PI-FEI-R002",
+      "description": "Produção não deve ser declarada pronta apenas por documentação.",
+      "severity": "medium",
+      "mitigation": "Manter gate de produção como pendente até validação real de ambiente/deploy."
+    }
+  ]
+}
