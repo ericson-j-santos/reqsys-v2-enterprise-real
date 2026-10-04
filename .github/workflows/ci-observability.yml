@@ -14,6 +14,12 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  # Evita acumular relatórios equivalentes enquanto o mesmo SHA gera
+  # múltiplos eventos; o mais recente substitui o diagnóstico obsoleto.
+  group: ci-observability-${{ github.event.workflow_run.head_sha || github.sha }}-${{ github.event.workflow_run.name || github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   ci-observability:
     name: Dashboard CI Duration & Flaky Signals
@@ -66,7 +72,7 @@ jobs:
           cat ci-observability/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publicar painel CI Observability
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-observability-dashboard
           path: ci-observability/
