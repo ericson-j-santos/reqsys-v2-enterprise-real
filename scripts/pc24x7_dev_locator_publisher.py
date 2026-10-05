@@ -19,6 +19,9 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 def _load_maintenance_module():
     try:
         from scripts import self_hosted_dev_maintenance
@@ -34,9 +37,6 @@ def _load_maintenance_module():
 
 
 portable_dev = _load_maintenance_module()
-
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 BASE = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ReqSys"
 RUNTIME = BASE / "RuntimeSupervisor"
