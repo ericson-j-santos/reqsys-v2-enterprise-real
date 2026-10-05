@@ -44,6 +44,10 @@ REQUIRED_PUBLIC_ENDPOINTS = (
     "/api/runtime/readiness",
     "/api/runtime/build-info",
 )
+CRITICAL_ROUTE_PROBES = (
+    ("/v1/cofre/runtime/control-status", frozenset({401, 403})),
+    ("/v1/teams-gateway/flow-bot/owners", frozenset({401, 403})),
+)
 
 
 class RejectRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -144,6 +148,16 @@ def probe_status(base_url: str, path: str) -> int | None:
         return None
 
 
+def critical_route_ready(base_url: str, path: str, expected_statuses: frozenset[int]) -> bool:
+    """Prova que uma rota crítica chega ao backend sem usar credenciais.
+
+    401/403 são sucesso de contrato para superfícies autenticadas: comprovam que
+    o request não caiu no frontend/Nginx legado. 404/405/2xx inesperado falham.
+    """
+    status = probe_status(base_url, path)
+    return status in expected_statuses
+
+
 def static_frontend_ready(base_url: str) -> bool:
     try:
         request = urllib.request.Request(
@@ -169,6 +183,7 @@ def static_frontend_ready(base_url: str) -> bool:
 def runtime_contract_ready(base_url: str) -> bool:
     return (
         all(probe(base_url, path) for path in REQUIRED_PUBLIC_ENDPOINTS)
+        and all(critical_route_ready(base_url, path, statuses) for path, statuses in CRITICAL_ROUTE_PROBES)
         and static_frontend_ready(base_url)
         and probe_status(base_url, "/@vite/client") == 404
     )
@@ -222,6 +237,10 @@ def build_payload(urls: list[str], *, now_epoch: int | None = None) -> dict:
         "runtime_contract": {
             "version": "2.0.0",
             "required_endpoints": list(REQUIRED_PUBLIC_ENDPOINTS),
+            "critical_route_probes": [
+                {"path": path, "expected_statuses": sorted(statuses)}
+                for path, statuses in CRITICAL_ROUTE_PROBES
+            ],
             "static_frontend_required": True,
             "vite_hmr_forbidden": True,
         },
