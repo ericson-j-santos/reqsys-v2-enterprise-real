@@ -25,6 +25,15 @@ on:
   schedule:
     - cron: '17 11 * * 1-5'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Token S2S a validar/provisionar
+        required: true
+        default: teams
+        type: choice
+        options:
+          - teams
+          - cofre-runtime
 
 permissions:
   contents: read
@@ -132,7 +141,10 @@ jobs:
     env:
       COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: reqsys-pc24x7-teams-service-token
+      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: ${{ inputs.mode == 'cofre-runtime' && 'reqsys-cofre-runtime-evidence-service-token' || 'reqsys-pc24x7-teams-service-token' }}
+      REQSYS_SERVICE_TOKEN_SCOPE: ${{ inputs.mode == 'cofre-runtime' && 'cofre:runtime_evidence' || 'teams_gateway:ai_conversations' }}
+      REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev' }}
+      REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness' }}
       PC24X7_TEAMS_ALLOW_PROVISION: 'true'
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
