@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "CI-driven state machine opt-in PR opening",
+  "increment_type": "gap_fix",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "traceability": {
+    "workflow": ".github/workflows/governed-pr-automation.yml",
+    "tests": "tests/test_ci_driven_state_machine.py",
+    "requirements": ".sdd/specs/ci-driven-state-machine.requirements.md"
+  },
+  "acceptance_criteria": [
+    "Pre-PR success abre PR apenas para automation/*.",
+    "HEAD é revalidado antes e depois da criação.",
+    "Branch behind/diverged é recusada.",
+    "PR existente é tratado idempotentemente.",
+    "Nenhum deploy/promoção é executado."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_ci_driven_state_machine.py"
+    ]
+  }
+}
