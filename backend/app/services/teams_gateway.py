@@ -15,12 +15,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.secrets import get_secret
 from app.core.resilience import (
     CircuitBreaker,
     CircuitBreakerOpenError,
     call_with_retry_async,
 )
+from app.core.secrets import get_secret
 from app.models.bot_conversa_referencia import BotConversaReferencia
 from app.models.teams_flow_bot_owner import TeamsFlowBotOwner
 from app.schemas.teams_gateway import (
