@@ -16,10 +16,20 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-try:
-    from scripts import self_hosted_dev_maintenance as portable_dev
-except ModuleNotFoundError:
-    import self_hosted_dev_maintenance as portable_dev
+def _load_sibling_module(filename: str, module_name: str):
+    module_path = Path(__file__).resolve().with_name(filename)
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"{module_name}_loader_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+portable_dev = _load_sibling_module(
+    "self_hosted_dev_maintenance.py",
+    "reqsys_self_hosted_dev_maintenance",
+)
 
 
 def _load_provision_module():
