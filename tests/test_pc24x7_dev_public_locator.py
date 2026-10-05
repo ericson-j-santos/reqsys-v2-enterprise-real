@@ -618,7 +618,7 @@ def test_public_access_validation_resolves_locator_and_smokes_real_dev_same_sha(
 
 
 def test_locator_requires_critical_backend_routes_before_publication() -> None:
-    raw = LOCATOR.read_text(encoding="utf-8")
+    raw = PUBLISHER.read_text(encoding="utf-8")
     assert "CRITICAL_ROUTE_PROBES" in raw
     assert '"/v1/cofre/runtime/control-status"' in raw
     assert '"/v1/teams-gateway/flow-bot/owners"' in raw
