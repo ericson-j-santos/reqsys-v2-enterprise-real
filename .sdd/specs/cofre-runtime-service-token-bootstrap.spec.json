@@ -2,20 +2,13 @@
   "schema_version": "1.0",
   "feature_name": "cofre-runtime-service-token-bootstrap",
   "increment_type": "fix",
-  "status": "implementation",
-  "project": "ReqSys v2 Enterprise",
-  "created_at": "2026-10-05",
-  "updated_at": "2026-10-05",
   "approvals": {
-    "requirements": true,
-    "design": true,
-    "tasks": true
+    "requirements": true
   },
   "sdd_gate": {
     "tests": [
       "tests/test_cofre_runtime_service_token_bootstrap_workflow.py"
-    ],
-    "evidence_contract": "Workflow prova bootstrap least-privilege, OIDC/Key Vault e evidência sanitizada; E2E pós-merge exige status ready sem valor secreto."
+    ]
   },
   "risk": {
     "production": false,
@@ -29,5 +22,11 @@
     "Token Cofre usa secret dedicado no Key Vault.",
     "Validação usa control-status do Cofre.",
     "Falha fechada sem exposição de segredo."
-  ]
+  ],
+  "phase": "implementation",
+  "traceability": {
+    "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    "tests": "tests/test_cofre_runtime_service_token_bootstrap_workflow.py",
+    "requirements": ".sdd/specs/cofre-runtime-service-token-bootstrap.requirements.md"
+  }
 }
