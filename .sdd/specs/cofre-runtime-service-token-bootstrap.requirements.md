@@ -21,3 +21,12 @@ PC24x7 → Cofre local `human_admin_jwt:dev` → API ReqSys `POST /v1/admin/serv
 4. Token ausente/inválido só é recriado se `human_admin_jwt:dev` estiver válido.
 5. Resultado publicado contém apenas status/metadados sanitizados.
 6. O push desta especificação é o checkpoint canônico para disparar novamente o Pre-PR Readiness no HEAD exato.
+
+
+## Critérios de aceite
+
+- O modo `cofre-runtime` reutiliza o workflow canônico sem criar nova superfície.
+- O token usa escopo mínimo `cofre:runtime_evidence` e secret dedicado no Key Vault.
+- A validação ocorre em `/v1/cofre/runtime/control-status`.
+- Teams permanece o modo padrão.
+- Nenhum valor secreto é publicado em logs ou artifacts.
