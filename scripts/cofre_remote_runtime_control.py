@@ -29,9 +29,10 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 class Client:
-    def __init__(self, base_url: str, admin_jwt: str, correlation_id: str, timeout: int) -> None:
+    def __init__(self, base_url: str, admin_jwt: str, correlation_id: str, timeout: int, service_token: str = "") -> None:
         self.base_url = base_url.rstrip("/")
         self.admin_jwt = admin_jwt.strip()
+        self.service_token = service_token.strip()
         self.correlation_id = correlation_id
         self.timeout = timeout
 
@@ -45,10 +46,13 @@ class Client:
     ) -> dict[str, Any]:
         headers = {
             "Accept": "application/json",
-            "Authorization": f"Bearer {self.admin_jwt}",
             "X-Correlation-ID": self.correlation_id,
             "User-Agent": "reqsys-cofre-remote-runtime-control/1.0",
         }
+        if self.service_token:
+            headers["X-Service-Token"] = self.service_token
+        elif self.admin_jwt:
+            headers["Authorization"] = f"Bearer {self.admin_jwt}"
         body = None
         if payload is not None:
             headers["Content-Type"] = "application/json"
@@ -169,13 +173,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--admin-jwt", default=os.getenv("COFRE_ADMIN_JWT", ""))
+    parser.add_argument("--service-token", default=os.getenv("COFRE_RUNTIME_SERVICE_TOKEN", ""))
     parser.add_argument("--timeout", type=int, default=20)
     parser.add_argument("--wait-seconds", type=int, default=180)
     parser.add_argument("--restart-evidence-file", type=Path)
     parser.add_argument("--evidence-file", type=Path, required=True)
     args = parser.parse_args()
-    if not args.admin_jwt.strip():
-        parser.error("--admin-jwt ou COFRE_ADMIN_JWT é obrigatório")
+    if not args.admin_jwt.strip() and not args.service_token.strip():
+        parser.error("COFRE_RUNTIME_SERVICE_TOKEN ou COFRE_ADMIN_JWT é obrigatório")
     if len(args.expected_sha) != 40 or any(ch not in "0123456789abcdef" for ch in args.expected_sha.lower()):
         parser.error("--expected-sha deve ser SHA completo")
     if args.action == "verify" and args.restart_evidence_file is None:
@@ -185,7 +190,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    client = Client(args.base_url, args.admin_jwt, args.correlation_id, args.timeout)
+    client = Client(args.base_url, args.admin_jwt, args.correlation_id, args.timeout, args.service_token)
     try:
         if args.action == "inspect":
             result = inspect_runtime(client, args.expected_sha.lower())
