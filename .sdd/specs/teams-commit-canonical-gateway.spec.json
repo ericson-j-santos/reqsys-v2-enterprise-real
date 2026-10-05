@@ -21,17 +21,17 @@
       ".github/workflows/teams-commit-notification-contract.yml",
       ".github/workflows/teams-service-operational-readiness.yml"
     ],
-    "evidence_contract": "O HEAD do PR deve comprovar por contrato que Teams Commit Notification usa o Teams Messaging Gateway canônico, sem TEAMS_WEBHOOK_URL direto e com --strict. A conclusão funcional exige, após merge, execução real com entrega confirmada."
+    "evidence_contract": "O HEAD do PR deve comprovar resolução fail-closed do locator Ed25519 vigente, selected_url HTTPS sob *.trycloudflare.com, ausência de vars.TEAMS_GATEWAY_BASE_URL/Fly.io/webhook direto e envio por scripts/notificar_teams.py com flow_bot + --strict. A conclusão funcional exige E2E real pós-merge."
   },
   "schema_version": "1.0",
   "increment_type": "fix",
   "status": "implementation",
   "acceptance_criteria": [
     "Teams Commit Notification não referencia TEAMS_WEBHOOK_URL diretamente.",
-    "O workflow usa scripts/notificar_teams.py com TEAMS_GATEWAY_BASE_URL e TEAMS_GATEWAY_DESTINO_ID.",
-    "O envio usa flow_bot e --strict para falhar quando a entrega não for confirmada.",
-    "Teams Commit Notification Contract valida a rota canônica e impede regressão ao webhook direto.",
-    "Actions externas alteradas neste incremento estão fixadas por SHA imutável.",
+    "O workflow resolve o runtime DEV vigente por scripts/resolve_pc24x7_dev_locator.mjs e usa apenas selected_url assinado sob *.trycloudflare.com.",
+    "O workflow não usa vars.TEAMS_GATEWAY_BASE_URL nem qualquer endpoint fly.io/fly.dev.",
+    "O envio usa scripts/notificar_teams.py com TEAMS_GATEWAY_DESTINO_ID, flow_bot e --strict.",
+    "Teams Commit Notification Contract valida a resolução assinada e impede regressão para URL estática, Fly.io ou webhook direto.",
     "Após o merge, uma execução real de Teams Commit Notification deve confirmar entrega pelo gateway canônico antes de declarar a correção funcional concluída."
   ],
   "risk": {
