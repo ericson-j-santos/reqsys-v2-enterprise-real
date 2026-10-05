@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Authorized Cofre runtime bootstrap gateway",
+  "increment_type": "gap_fix",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "traceability": {
+    "workflow": ".github/workflows/reqsys-authorized-actions-gateway.yml",
+    "tests": "tests/test_cofre_runtime_bootstrap_gateway.py",
+    "requirements": ".sdd/specs/cofre-runtime-bootstrap-gateway.requirements.md"
+  },
+  "acceptance_criteria": [
+    "Comando exato Cofre é allowlisted.",
+    "Target é pc24x7-teams-token-bootstrap.yml.",
+    "Mode é forçado a cofre-runtime.",
+    "Dispatcher aceita somente teams ou cofre-runtime.",
+    "Nenhum segredo é input do gateway."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_cofre_runtime_bootstrap_gateway.py"
+    ]
+  }
+}
