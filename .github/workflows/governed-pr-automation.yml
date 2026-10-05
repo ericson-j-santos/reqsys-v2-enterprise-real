@@ -7,6 +7,7 @@ on:
   workflow_run:
     workflows:
       - Governed Merge Queue
+      - Pre-PR Readiness Gate
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -52,6 +53,79 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  open-pr-after-pre-pr:
+    name: Abrir PR após READY_FOR_PR
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'Pre-PR Readiness Gate' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'automation/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Revalidar HEAD aprovado e abrir PR idempotentemente
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            const branch = run.head_branch;
+            const approvedSha = run.head_sha;
+
+            const { data: ref } = await github.rest.git.getRef({
+              owner, repo, ref: `heads/${branch}`,
+            });
+            if (ref.object.sha !== approvedSha) {
+              core.setFailed(`HEAD mudou após READY_FOR_PR: aprovado=${approvedSha} atual=${ref.object.sha}`);
+              return;
+            }
+
+            const existing = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', head: `${owner}:${branch}`, base: 'main', per_page: 100,
+            });
+            if (existing.length > 1) {
+              core.setFailed(`Mais de um PR aberto para ${branch}; intervenção necessária.`);
+              return;
+            }
+            if (existing.length === 1) {
+              if (existing[0].head.sha !== approvedSha) {
+                core.setFailed(`PR existente está em SHA diferente: ${existing[0].head.sha}`);
+                return;
+              }
+              core.notice(`PR #${existing[0].number} já existe no SHA aprovado.`);
+              return;
+            }
+
+            const { data: comparison } = await github.rest.repos.compareCommits({
+              owner, repo, base: 'main', head: approvedSha,
+            });
+            if (comparison.status === 'behind' || comparison.status === 'diverged' || comparison.behind_by > 0) {
+              core.setFailed(`Branch não está pronta para PR: status=${comparison.status} behind_by=${comparison.behind_by}`);
+              return;
+            }
+
+            const title = run.display_title || `chore: governed automation ${branch}`;
+            const body = [
+              'PR aberta automaticamente após READY_FOR_PR=passed.',
+              '',
+              `- Pre-PR run: ${run.html_url}`,
+              `- HEAD aprovado: \`${approvedSha}\``,
+              '- Base: `main`',
+              '- Continuação: CI → Governed Merge Queue → Governed PR Automation.',
+              '',
+              'A abertura não autoriza deploy ou promoção de ambiente.',
+            ].join('\n');
+
+            const { data: pr } = await github.rest.pulls.create({
+              owner, repo, head: branch, base: 'main', title, body, draft: false,
+            });
+            if (pr.head.sha !== approvedSha) {
+              core.setFailed(`PR criada em SHA inesperado: esperado=${approvedSha} atual=${pr.head.sha}`);
+              return;
+            }
+            core.notice(`PR #${pr.number} criada no SHA ${approvedSha}.`);
+
   increment-gate-on-open:
     name: Increment gate — abertura de PR
     if: github.event_name == 'pull_request'
