@@ -1,4 +1,5 @@
 from __future__ import annotations
+import sys
 
 import importlib.util
 from pathlib import Path
@@ -393,3 +394,24 @@ def test_authorized_gateway_exposes_only_exact_static_reconcile_command() -> Non
     assert "mode='public-static'" in raw
     assert "-f mode=public-static" in raw
     assert "-f environment=prod" not in raw
+
+
+def test_reconciler_loads_maintenance_as_sibling_for_direct_script_execution() -> None:
+    raw = SCRIPT.read_text(encoding="utf-8")
+    assert "def _load_sibling_module(filename: str, module_name: str)" in raw
+    assert '"self_hosted_dev_maintenance.py"' in raw
+    assert "from scripts import self_hosted_dev_maintenance" not in raw
+    assert "import self_hosted_dev_maintenance as portable_dev" not in raw
+
+
+def test_reconciler_direct_help_runs_without_scripts_package_import_error() -> None:
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--help"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "--expected-sha" in completed.stdout
