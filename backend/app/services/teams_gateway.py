@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ from app.core.resilience import (
     CircuitBreakerOpenError,
     call_with_retry_async,
 )
+from app.core.secrets import get_secret
 from app.models.bot_conversa_referencia import BotConversaReferencia
 from app.models.teams_flow_bot_owner import TeamsFlowBotOwner
 from app.schemas.teams_gateway import (
@@ -117,6 +119,41 @@ def remover_flow_bot_owner(db: Session, owner_id: int) -> None:
         raise ValueError(f'flow_bot owner nao encontrado: {owner_id}')
     db.delete(item)
     db.commit()
+
+
+def sincronizar_flow_bot_owner_do_cofre(db: Session) -> dict[str, Any]:
+    """Sincroniza o segredo do Cofre com o owner flow_bot ativo prioritário.
+
+    O valor nunca integra o retorno nem logs. A operação é idempotente e falha
+    fechada quando o Cofre não resolve a chave ou não existe owner ativo.
+    """
+    webhook_url = (get_secret('TEAMS_FLOW_BOT_WEBHOOK_URL', '') or '').strip()
+    if not webhook_url:
+        raise ValueError('teams_flow_bot_webhook_url_absent')
+
+    owners = listar_flow_bot_owners(db, apenas_ativos=True)
+    if not owners:
+        raise ValueError('teams_flow_bot_owner_active_absent')
+
+    owner = owners[0]
+    fingerprint = hashlib.sha256(webhook_url.encode('utf-8')).hexdigest()
+    current_fingerprint = hashlib.sha256((owner.webhook_url or '').encode('utf-8')).hexdigest()
+    changed = current_fingerprint != fingerprint
+    if changed:
+        owner.webhook_url = webhook_url
+        owner.observacao = 'webhook sincronizado do Cofre ReqSys'
+        db.commit()
+        db.refresh(owner)
+
+    return {
+        'owner_id': owner.id,
+        'owner_email': owner.owner_email,
+        'changed': changed,
+        'configured': bool(owner.webhook_url),
+        'webhook_sha256': fingerprint,
+        'secret_source': 'get_secret:TEAMS_FLOW_BOT_WEBHOOK_URL',
+        'secret_value_exposed': False,
+    }
 
 
 def _flow_bot_alvos(db: Session | None) -> list[tuple[str, str]]:

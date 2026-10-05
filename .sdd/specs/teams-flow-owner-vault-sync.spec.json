@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "teams-flow-owner-vault-sync",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-05",
+  "updated_at": "2026-10-05",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "Sincronização lê TEAMS_FLOW_BOT_WEBHOOK_URL somente via get_secret.",
+    "Owner ativo prioritário é atualizado apenas quando o fingerprint muda.",
+    "Resposta e logs não expõem a URL; somente SHA-256 e metadados seguros.",
+    "Ausência de segredo ou owner ativo falha fechada.",
+    "Replay com o mesmo segredo não grava novamente."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_teams_flow_bot_owner_vault_sync.py"
+    ],
+    "evidence_contract": "CI prova atualização idempotente Cofre→owner sem exposição do valor; aplicação real exige segredo já presente no Cofre e E2E Teams posterior."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": true,
+    "scope": "dev-teams-flow-owner-secret-sync"
+  }
+}

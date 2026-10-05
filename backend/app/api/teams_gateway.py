@@ -37,6 +37,7 @@ from app.services.teams_gateway import (
     remover_flow_bot_owner,
     salvar_conversa_referencia_bot,
     selecionar_rota,
+    sincronizar_flow_bot_owner_do_cofre,
     status_gateway,
     validar_jwt_bot_framework,
 )
@@ -265,6 +266,21 @@ def teams_gateway_flow_bot_owners_listar(db: Session = Depends(get_db)):
     """Lista os donos/backups cadastrados do canal flow_bot, em ordem de prioridade."""
     itens = listar_flow_bot_owners(db)
     return ok({'items': [_serializar_flow_bot_owner(item) for item in itens]})
+
+
+@router.post('/flow-bot/owners/sync-from-vault', dependencies=[Depends(require_admin)])
+def teams_gateway_flow_bot_owner_sync_from_vault(db: Session = Depends(get_db)):
+    """Sincroniza o owner ativo com o segredo do Cofre sem expor seu valor."""
+    try:
+        result = sincronizar_flow_bot_owner_do_cofre(db)
+    except ValueError as exc:
+        code = str(exc)
+        if code == 'teams_flow_bot_webhook_url_absent':
+            raise HTTPException(status_code=409, detail='Segredo Teams Flow Bot ausente no Cofre.') from None
+        if code == 'teams_flow_bot_owner_active_absent':
+            raise HTTPException(status_code=409, detail='Nenhum owner flow_bot ativo para sincronizar.') from None
+        raise
+    return ok(result)
 
 
 @router.post('/flow-bot/owners', dependencies=[Depends(require_admin)])
