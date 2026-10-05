@@ -26,10 +26,13 @@ def _load_sibling_module(filename: str, module_name: str):
     return module
 
 
-portable_dev = _load_sibling_module(
-    "self_hosted_dev_maintenance.py",
-    "reqsys_self_hosted_dev_maintenance",
-)
+try:
+    from scripts import self_hosted_dev_maintenance as portable_dev
+except (ImportError, ModuleNotFoundError):
+    portable_dev = _load_sibling_module(
+        "self_hosted_dev_maintenance.py",
+        "self_hosted_dev_maintenance",
+    )
 
 
 def _load_provision_module():
