@@ -24,3 +24,12 @@ def test_state_machine_is_idempotent_for_existing_pr() -> None:
     assert "pulls.list" in raw
     assert "existing.length === 1" in raw
     assert "PR #" in raw
+
+
+def test_state_transition_does_not_authorize_deploy_or_promotion() -> None:
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    block = raw.split("  open-pr-after-pre-pr:", 1)[1].split("  increment-gate-on-open:", 1)[0]
+    assert "deployments.create" not in block
+    assert "repos.createDeployment" not in block
+    assert "workflow_dispatch" not in block
+    assert "A abertura não autoriza deploy ou promoção de ambiente." in block
