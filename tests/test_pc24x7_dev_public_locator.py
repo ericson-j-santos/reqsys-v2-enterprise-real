@@ -615,3 +615,14 @@ def test_public_access_validation_resolves_locator_and_smokes_real_dev_same_sha(
     assert "vite_hmr_exposed" in workflow
     assert "runtime-smoke.json" in workflow
     assert "path: reports/" in workflow
+
+
+def test_locator_requires_critical_backend_routes_before_publication() -> None:
+    raw = PUBLISHER.read_text(encoding="utf-8")
+    assert "CRITICAL_ROUTE_PROBES" in raw
+    assert '"/v1/cofre/runtime/control-status"' in raw
+    assert '"/v1/teams-gateway/flow-bot/owners"' in raw
+    assert "frozenset({401, 403})" in raw
+    assert "def critical_route_ready" in raw
+    assert "404/405/2xx inesperado falham" in raw
+    assert "all(critical_route_ready" in raw
