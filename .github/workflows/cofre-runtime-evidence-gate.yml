@@ -84,8 +84,14 @@ jobs:
           set -euo pipefail
           mkdir -p "$ARTIFACT_DIR"
           node scripts/resolve_pc24x7_dev_locator.mjs --output "$ARTIFACT_DIR/signed-locator.json"
-          resolved="${{ steps.locator.outputs.base_url }}"
-          [[ "$resolved" == https://*.trycloudflare.com ]] || {
+
+      - name: Validar destino resolvido
+        env:
+          RESOLVED_BASE_URL: ${{ steps.locator.outputs.base_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RESOLVED_BASE_URL" == https://*.trycloudflare.com ]] || {
             echo "Locator resolveu destino não permitido." >&2
             exit 2
           }
