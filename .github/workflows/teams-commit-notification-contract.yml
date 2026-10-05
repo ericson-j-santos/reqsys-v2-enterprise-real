@@ -30,8 +30,13 @@ jobs:
           grep -Fq -- "--modo" .github/workflows/teams-commit-notification.yml
           grep -Fq '"flow_bot"' .github/workflows/teams-commit-notification.yml
           grep -Fq -- "--strict" .github/workflows/teams-commit-notification.yml
+          grep -Fq "resolve_pc24x7_dev_locator.mjs --self-test" .github/workflows/teams-commit-notification.yml
+          grep -Fq "signed-locator.json" .github/workflows/teams-commit-notification.yml
+          grep -Fq "steps.locator.outputs.base_url" .github/workflows/teams-commit-notification.yml
           grep -Fq "TEAMS_GATEWAY_BASE_URL" .github/workflows/teams-commit-notification.yml
           grep -Fq "TEAMS_GATEWAY_DESTINO_ID" .github/workflows/teams-commit-notification.yml
+          ! grep -Fq 'vars.TEAMS_GATEWAY_BASE_URL' .github/workflows/teams-commit-notification.yml
+          ! grep -Eq 'fly\\.io|fly\\.dev' .github/workflows/teams-commit-notification.yml
           ! grep -Fq "TEAMS_WEBHOOK_URL:" .github/workflows/teams-commit-notification.yml
           grep -Fq "Action.OpenUrl" .github/workflows/teams-commit-notification.yml
           ! grep -Fq "concurrency:" .github/workflows/teams-commit-notification.yml

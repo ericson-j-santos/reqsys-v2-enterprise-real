@@ -31,7 +31,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      TEAMS_GATEWAY_BASE_URL: ${{ vars.TEAMS_GATEWAY_BASE_URL }}
       TEAMS_GATEWAY_DESTINO_ID: ${{ secrets.TEAMS_GATEWAY_DESTINO_ID }}
       PYTHONUNBUFFERED: "1"
 
@@ -44,19 +43,48 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Preparar Node para locator DEV assinado
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
       - name: Validar gateway
         run: |
           python -m py_compile tools/geradores/teams_graph_gateway_autocontido.py
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
 
+      - name: Validar locator PC24x7 fail-closed
+        run: node scripts/resolve_pc24x7_dev_locator.mjs --self-test
+
+      - name: Resolver runtime PC24x7 DEV vigente
+        id: locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/teams-commit-notification
+          node scripts/resolve_pc24x7_dev_locator.mjs \
+            --output artifacts/teams-commit-notification/signed-locator.json
+
+      - name: Exportar Teams Gateway efêmero
+        shell: bash
+        env:
+          RESOLVED_GATEWAY_BASE_URL: ${{ steps.locator.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          [[ "$RESOLVED_GATEWAY_BASE_URL" == https://*.trycloudflare.com ]] || {
+            echo "::error::Locator resolveu destino não permitido"
+            exit 2
+          }
+          printf 'TEAMS_GATEWAY_BASE_URL=%s\n' "$RESOLVED_GATEWAY_BASE_URL" >> "$GITHUB_ENV"
+
       - name: Validar configuração do Teams
         id: teams-config
         shell: bash
         run: |
-          if [[ -z "${TEAMS_GATEWAY_BASE_URL}" ]]; then
+          if [[ -z "${TEAMS_GATEWAY_BASE_URL}" || "${TEAMS_GATEWAY_BASE_URL}" != https://*.trycloudflare.com ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "reason=Variable TEAMS_GATEWAY_BASE_URL ausente" >> "$GITHUB_OUTPUT"
-            echo "::error title=Teams gateway não configurado::TEAMS_GATEWAY_BASE_URL é obrigatória para a rota canônica."
+            echo "reason=Locator PC24x7 não resolveu gateway autorizado" >> "$GITHUB_OUTPUT"
+            echo "::error title=Teams gateway não configurado::Locator assinado não forneceu runtime PC24x7 autorizado."
             exit 1
           elif [[ -z "${TEAMS_GATEWAY_DESTINO_ID}" || "${TEAMS_GATEWAY_DESTINO_ID}" != *"@"* ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
