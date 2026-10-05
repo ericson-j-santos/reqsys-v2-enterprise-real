@@ -9,8 +9,9 @@ def test_pc24x7_public_dev_exposes_only_teams_gateway_v1_to_api() -> None:
     assert "location ^~ /v1/teams-gateway/" in raw
     block = raw.split("location ^~ /v1/teams-gateway/", 1)[1].split("}", 1)[0]
     assert "proxy_pass http://api:8000;" in block
-    assert "location /v1/" not in raw
-    assert "location ^~ /v1/" not in raw
+    lines = {line.strip() for line in raw.splitlines()}
+    assert "location /v1/ {" not in lines
+    assert "location ^~ /v1/ {" not in lines
 
 
 def test_teams_gateway_route_preserves_v1_prefix() -> None:
