@@ -23,7 +23,7 @@
     "secrets": true,
     "scope": "dev-cofre-service-token-bootstrap"
   },
-  "acceptance": [
+  "acceptance_criteria": [
     "Reutiliza workflow canônico sem crescimento da superfície.",
     "Modo Cofre usa escopo mínimo dedicado.",
     "Token Cofre usa secret dedicado no Key Vault.",
