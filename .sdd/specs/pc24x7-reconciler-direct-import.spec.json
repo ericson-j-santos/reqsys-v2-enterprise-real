@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-reconciler-direct-import",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-05",
+  "updated_at": "2026-10-05",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "Reconciler executado como python scripts/reconcile_pc24x7_public_dev_runtime.py carrega self_hosted_dev_maintenance sem depender do pacote scripts.",
+    "Carregamento usa caminho irmão de __file__.",
+    "--help executado por subprocess termina com exit 0.",
+    "Comportamento do módulo de manutenção não é alterado."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_public_dev_static_runtime.py"
+    ],
+    "evidence_contract": "Teste subprocess reproduz o modo de invocação do workflow Windows e comprova ausência do ImportError; E2E pós-merge exige reconcile físico no SHA novo."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "pc24x7-dev-reconciler-import"
+  }
+}
