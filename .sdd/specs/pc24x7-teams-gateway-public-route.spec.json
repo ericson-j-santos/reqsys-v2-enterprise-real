@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-teams-gateway-public-route",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-04",
+  "updated_at": "2026-10-04",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "PC24x7 public DEV encaminha /v1/teams-gateway/ ao backend preservando o prefixo /v1.",
+    "A correção não expõe genericamente /v1/.",
+    "O teste preventivo bloqueia remoção da rota ou proxy_pass com URI que remova o prefixo.",
+    "Após merge, Teams Commit Notification deve deixar de receber HTTP 405 e comprovar entrega real."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_teams_gateway_nginx_route.py"
+    ],
+    "evidence_contract": "Nginx público DEV expõe apenas /v1/teams-gateway/ para api:8000, preserva URI e não abre /v1 genericamente; conclusão exige E2E Teams pós-merge."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "pc24x7-public-dev-routing"
+  }
+}
