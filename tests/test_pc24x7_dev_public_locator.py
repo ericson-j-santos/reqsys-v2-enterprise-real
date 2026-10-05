@@ -2,6 +2,7 @@ import base64
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ SUPERVISOR = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor.py"
 INSTALLER = ROOT / "scripts" / "pc24x7_dev_runtime_supervisor_install.py"
 MANIFEST = ROOT / "infra" / "public-access-urls.json"
 PUBLISHER = ROOT / "scripts" / "pc24x7_dev_locator_publisher.py"
+TUNNEL = ROOT / "scripts" / "pc24x7_public_dev_tunnel.py"
 RESOLVER = ROOT / "scripts" / "resolve_pc24x7_dev_locator.mjs"
 PROMOTION = ROOT / ".github" / "workflows" / "fly-automatic-environment-promotion.yml"
 PC24X7_COMPOSE = ROOT / "docker-compose.pc24x7-public-dev.yml"
@@ -626,3 +628,24 @@ def test_locator_requires_critical_backend_routes_before_publication() -> None:
     assert "def critical_route_ready" in raw
     assert "404/405/2xx inesperado falham" in raw
     assert "all(critical_route_ready" in raw
+
+
+@pytest.mark.parametrize("script", [TUNNEL, PUBLISHER])
+def test_pc24x7_public_helpers_support_direct_script_execution(script: Path) -> None:
+    completed = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_pc24x7_public_helpers_have_file_path_import_fallback() -> None:
+    for script in (TUNNEL, PUBLISHER):
+        raw = script.read_text(encoding="utf-8")
+        assert "except (ImportError, ModuleNotFoundError):" in raw
+        assert '"self_hosted_dev_maintenance.py"' in raw
+        assert "spec_from_file_location" in raw
