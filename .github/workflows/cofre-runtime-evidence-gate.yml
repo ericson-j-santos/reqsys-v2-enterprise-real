@@ -24,7 +24,7 @@ on:
         type: string
         default: "20"
     secrets:
-      COFRE_ADMIN_JWT:
+      COFRE_RUNTIME_SERVICE_TOKEN:
         required: true
 
 permissions:
@@ -125,12 +125,12 @@ jobs:
 
       - name: Validar runtime remoto PC24x7 e SHA antes da mutação
         env:
-          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$ARTIFACT_DIR"
-          test -n "${COFRE_ADMIN_JWT:-}"
+          test -n "${COFRE_RUNTIME_SERVICE_TOKEN:-}"
           python scripts/cofre_remote_runtime_control.py inspect             --base-url "$BASE_URL"             --expected-sha "${{ github.sha }}"             --correlation-id "$CORRELATION_ID-preflight"             --timeout "$TIMEOUT_SECONDS"             --evidence-file "$ARTIFACT_DIR/runtime-preflight.json"
 
       - name: Preparar estado efêmero criptografado
@@ -144,7 +144,7 @@ jobs:
 
       - name: Validar ciclo antes do restart
         env:
-          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -152,7 +152,7 @@ jobs:
 
       - name: Solicitar restart autenticado somente da API DEV
         env:
-          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -160,7 +160,7 @@ jobs:
 
       - name: Comprovar novo boot no mesmo SHA
         env:
-          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -174,7 +174,7 @@ jobs:
 
       - name: Validar persistência e cleanup
         env:
-          COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}
+          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
