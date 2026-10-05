@@ -7,6 +7,7 @@ Somente URLs Quick Tunnel saudáveis, chave pública e payload assinado deixam o
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import base64
 import hashlib
 import hmac
@@ -18,13 +19,24 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
-try:
-    from scripts import self_hosted_dev_maintenance as portable_dev
-except ModuleNotFoundError:
-    import self_hosted_dev_maintenance as portable_dev
-
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+def _load_maintenance_module():
+    try:
+        from scripts import self_hosted_dev_maintenance
+        return self_hosted_dev_maintenance
+    except (ImportError, ModuleNotFoundError):
+        module_path = Path(__file__).resolve().with_name("self_hosted_dev_maintenance.py")
+        spec = importlib.util.spec_from_file_location("self_hosted_dev_maintenance", module_path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError("self_hosted_dev_maintenance_loader_unavailable")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+
+portable_dev = _load_maintenance_module()
 
 BASE = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ReqSys"
 RUNTIME = BASE / "RuntimeSupervisor"
