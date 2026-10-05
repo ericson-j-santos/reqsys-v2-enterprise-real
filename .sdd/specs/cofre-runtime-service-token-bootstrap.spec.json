@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "cofre-runtime-service-token-bootstrap",
+  "increment_type": "fix",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "tests/test_cofre_runtime_service_token_bootstrap_workflow.py"
+    ]
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": true,
+    "scope": "dev-cofre-service-token-bootstrap"
+  },
+  "acceptance_criteria": [
+    "Reutiliza workflow canônico sem crescimento da superfície.",
+    "Modo Cofre usa escopo mínimo dedicado.",
+    "Token Cofre usa secret dedicado no Key Vault.",
+    "Validação usa control-status do Cofre.",
+    "Falha fechada sem exposição de segredo."
+  ],
+  "phase": "implementation",
+  "traceability": {
+    "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    "tests": "tests/test_cofre_runtime_service_token_bootstrap_workflow.py",
+    "requirements": ".sdd/specs/cofre-runtime-service-token-bootstrap.requirements.md"
+  }
+}
