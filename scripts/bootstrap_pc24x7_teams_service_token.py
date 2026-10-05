@@ -8,9 +8,10 @@ from dataclasses import asdict, dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-SCOPE = 'teams_gateway:ai_conversations'
-LABEL = 'pc24x7-teams-dev'
-DEFAULT_SECRET_NAME = 'reqsys-pc24x7-teams-service-token'
+SCOPE = os.getenv('REQSYS_SERVICE_TOKEN_SCOPE', 'teams_gateway:ai_conversations').strip() or 'teams_gateway:ai_conversations'
+LABEL = os.getenv('REQSYS_SERVICE_TOKEN_LABEL', 'pc24x7-teams-dev').strip() or 'pc24x7-teams-dev'
+DEFAULT_SECRET_NAME = os.getenv('REQSYS_SERVICE_TOKEN_SECRET_NAME', 'reqsys-pc24x7-teams-service-token').strip() or 'reqsys-pc24x7-teams-service-token'
+VALIDATION_PATH = os.getenv('REQSYS_SERVICE_TOKEN_VALIDATION_PATH', '/v1/teams-gateway/ai-conversations/readiness').strip() or '/v1/teams-gateway/ai-conversations/readiness'
 DEFAULT_API = ''
 
 
@@ -55,7 +56,7 @@ def runtime_api_url(api_base: str, path: str) -> str:
 
 
 def validate_service_token(api_base: str, token: str) -> int:
-    status, _ = request_json('GET', runtime_api_url(api_base, '/v1/teams-gateway/ai-conversations/readiness'), headers={'X-Service-Token': token, 'X-Correlation-Id': 'pc24x7-token-bootstrap-readiness'})
+    status, _ = request_json('GET', runtime_api_url(api_base, VALIDATION_PATH), headers={'X-Service-Token': token, 'X-Correlation-Id': 'pc24x7-token-bootstrap-readiness'})
     return status
 
 
@@ -116,7 +117,7 @@ def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: s
 
     effective_admin_jwt = admin_jwt.strip() or read_admin_jwt(cofre_base, vault_token, environment='dev')
     new_token = mint_service_token(api_base, effective_admin_jwt)
-    client.set_secret(secret_name, new_token, tags={'environment': 'dev', 'consumer': 'pc24x7-teams-worker', 'scope': SCOPE, 'source': 'reqsys-service-token'})
+    client.set_secret(secret_name, new_token, tags={'environment': 'dev', 'consumer': LABEL, 'scope': SCOPE, 'source': 'reqsys-service-token'})
     readiness = validate_service_token(api_base, new_token)
     if readiness != 200:
         raise BootstrapError(f'new_service_token_readiness_failed:http_{readiness}')
