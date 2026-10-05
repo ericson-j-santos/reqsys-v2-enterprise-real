@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "feature_name": "cofre-runtime-service-token-bootstrap",
-  "increment_type": "feature",
+  "increment_type": "fix",
   "status": "implementation",
   "project": "ReqSys v2 Enterprise",
   "created_at": "2026-10-05",
@@ -11,14 +11,6 @@
     "design": true,
     "tasks": true
   },
-  "acceptance_criteria": [
-    "Workflow dedicado executa no PC24x7 DEV.",
-    "Usa human_admin_jwt:dev somente via Cofre local e VAULT_API_TOKEN mascarado.",
-    "Emite/reutiliza token com escopo cofre:runtime_evidence.",
-    "Armazena somente no Azure Key Vault sob reqsys-cofre-runtime-evidence-service-token.",
-    "Valida token em /v1/cofre/runtime/control-status.",
-    "Não usa COFRE_ADMIN_JWT do GitHub."
-  ],
   "sdd_gate": {
     "tests": [
       "tests/test_cofre_runtime_service_token_bootstrap_workflow.py"
@@ -30,5 +22,12 @@
     "deploy": false,
     "secrets": true,
     "scope": "dev-cofre-service-token-bootstrap"
-  }
+  },
+  "acceptance": [
+    "Reutiliza workflow canônico sem crescimento da superfície.",
+    "Modo Cofre usa escopo mínimo dedicado.",
+    "Token Cofre usa secret dedicado no Key Vault.",
+    "Validação usa control-status do Cofre.",
+    "Falha fechada sem exposição de segredo."
+  ]
 }
