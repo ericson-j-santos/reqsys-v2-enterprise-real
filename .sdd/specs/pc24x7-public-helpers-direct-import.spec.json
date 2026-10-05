@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "pc24x7-public-helpers-direct-import",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-05",
+  "updated_at": "2026-10-05",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "pc24x7_public_dev_tunnel.py executa diretamente sem depender do pacote scripts.",
+    "pc24x7_dev_locator_publisher.py executa diretamente sem depender do pacote scripts.",
+    "Quando scripts é importável, ambos reutilizam o módulo canônico.",
+    "Fallback carrega self_hosted_dev_maintenance.py pelo caminho irmão.",
+    "Testes subprocess executam --help nos dois scripts com exit 0."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_dev_public_locator.py"
+    ],
+    "evidence_contract": "CI reproduz execução direta dos dois helpers; E2E pós-merge exige túnel + locator publicados no SHA atual."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "pc24x7-dev-tunnel-locator-import"
+  }
+}
