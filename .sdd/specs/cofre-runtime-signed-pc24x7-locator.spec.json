@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "cofre-runtime-signed-pc24x7-locator",
+  "increment_type": "fix",
+  "status": "implementation",
+  "project": "ReqSys v2 Enterprise",
+  "created_at": "2026-10-05",
+  "updated_at": "2026-10-05",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "acceptance_criteria": [
+    "Cofre Runtime Evidence Gate não usa PC24X7_DEV_BASE_URL.",
+    "Gate resolve o locator Ed25519 vigente e falha fechado para assinatura/TTL/domínio inválidos.",
+    "Somente https://*.trycloudflare.com é aceito.",
+    "Fly.io e URL estática não participam do runtime DEV do Cofre.",
+    "Actions externas alteradas ficam pinadas por SHA."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_cofre_runtime_evidence_pc24x7.py"
+    ],
+    "evidence_contract": "HEAD exato comprova locator assinado dinâmico, ausência de PC24X7_DEV_BASE_URL/Fly.io e Actions imutáveis; uso operacional posterior deve validar runtime same-SHA."
+  },
+  "risk": {
+    "production": false,
+    "deploy": false,
+    "secrets": false,
+    "scope": "dev-cofre-runtime-resolution"
+  }
+}

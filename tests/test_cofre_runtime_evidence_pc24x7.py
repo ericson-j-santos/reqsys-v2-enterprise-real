@@ -11,7 +11,12 @@ def test_workflow_uses_pc24x7_dev_without_fly_or_self_hosted_runner():
     raw = WORKFLOW.read_text(encoding="utf-8")
     lowered = raw.lower()
 
-    assert "PC24X7_DEV_BASE_URL" in raw
+    assert "PC24X7_DEV_BASE_URL" not in raw
+    assert "resolve_pc24x7_dev_locator.mjs --self-test" in raw
+    assert "steps.locator.outputs.base_url" in raw
+    assert "https://*.trycloudflare.com" in raw
+    assert "fly.io" not in raw.lower()
+    assert "fly.dev" not in raw.lower()
     assert "pc24x7" in lowered
     assert "flyctl" not in lowered
     assert "reqsys-api-dev.fly.dev" not in lowered
