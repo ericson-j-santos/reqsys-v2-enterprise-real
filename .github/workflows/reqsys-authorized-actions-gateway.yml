@@ -56,6 +56,7 @@ jobs:
         github.event.comment.body == '/reqsys run desktop-runner-pickup-canary' ||
         github.event.comment.body == '/reqsys run pc24x7-todo-runtime-reconcile-dev' ||
         github.event.comment.body == '/reqsys run todo-global-hourly-cycle-dev' ||
+        github.event.comment.body == '/reqsys run cofre-runtime-service-token-bootstrap' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-token-bootstrap-dev' ||
         github.event.comment.body == '/reqsys run pc24x7-teams-e2e-dev' ||
         github.event.comment.body == '/reqsys run teams-bot-dev-identity-bootstrap' ||
@@ -209,8 +210,13 @@ jobs:
               target='todo-global-hourly-cycle.yml'
               mode='cycle'
               ;;
+            '/reqsys run cofre-runtime-service-token-bootstrap')
+              target='pc24x7-teams-token-bootstrap.yml'
+              mode='cofre-runtime'
+              ;;
             '/reqsys run pc24x7-teams-token-bootstrap-dev')
               target='pc24x7-teams-token-bootstrap.yml'
+              mode='teams'
               ;;
             '/reqsys run pc24x7-teams-e2e-dev')
               target='pc24x7-teams-ephemeral-e2e.yml'
@@ -360,6 +366,15 @@ jobs:
               --ref main \
               -f promote_to=development \
               -f build_only=true)"
+          elif [ "$TARGET_WORKFLOW" = "pc24x7-teams-token-bootstrap.yml" ]; then
+            case "$TARGET_MODE" in
+              teams|cofre-runtime) ;;
+              *) echo 'pc24x7_token_bootstrap_mode_not_allowlisted' >&2; exit 3 ;;
+            esac
+            run_url="$(gh workflow run "$TARGET_WORKFLOW" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f mode="$TARGET_MODE")"
           elif [ "$TARGET_WORKFLOW" = "cofre-runtime-evidence-gate.yml" ]; then
             run_url="$(gh workflow run "$TARGET_WORKFLOW" \
               --repo "$GITHUB_REPOSITORY" \
