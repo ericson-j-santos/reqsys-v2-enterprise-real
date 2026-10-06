@@ -65,8 +65,6 @@ jobs:
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     environment: development
     timeout-minutes: 25
-    outputs:
-      bootstrap_ready: ${{ steps.bootstrap.outputs.ready }}
     env:
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
@@ -74,12 +72,6 @@ jobs:
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
       EVIDENCE_FILE: artifacts/pc24x7-teams-runtime-reconcile/evidence.json
       CORRELATION_ID: pc24x7-teams-runtime-${{ github.run_id }}-${{ github.run_attempt }}
-      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: ${{ inputs.mode == 'cofre-runtime' && 'reqsys-cofre-runtime-evidence-service-token' || 'reqsys-pc24x7-teams-service-token' }}
-      REQSYS_SERVICE_TOKEN_SCOPE: ${{ inputs.mode == 'cofre-runtime' && 'cofre:runtime_evidence' || 'teams_gateway:ai_conversations' }}
-      REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev' }}
-      REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness' }}
-      PC24X7_TEAMS_ALLOW_PROVISION: 'true'
-      PC24X7_LOCAL_COFRE_CONTAINER: wt-pc24x7-piloto-api-1
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -111,6 +103,60 @@ jobs:
         run: |
           python scripts/reconcile_pc24x7_teams_dev_runtime.py --confirm RECONCILE-PC24X7-TEAMS-DEV --expected-sha "${{ github.sha }}" --vault-name "$env:REQSYS_KEY_VAULT_NAME" --expected-tenant-id "$env:CCP_AZURE_TENANT_ID" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publicar evidência sanitizada da reconciliação
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pc24x7-teams-runtime-reconcile-${{ github.run_id }}
+          path: artifacts/pc24x7-teams-runtime-reconcile/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  bootstrap-token-dev:
+    if: github.event_name != 'pull_request'
+    needs: [contract, reconcile-runtime-dev]
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    environment: development
+    timeout-minutes: 15
+    outputs:
+      bootstrap_ready: ${{ steps.bootstrap.outputs.ready }}
+    env:
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: ${{ inputs.mode == 'cofre-runtime' && 'reqsys-cofre-runtime-evidence-service-token' || 'reqsys-pc24x7-teams-service-token' }}
+      REQSYS_SERVICE_TOKEN_SCOPE: ${{ inputs.mode == 'cofre-runtime' && 'cofre:runtime_evidence' || 'teams_gateway:ai_conversations' }}
+      REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev' }}
+      REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness' }}
+      PC24X7_TEAMS_ALLOW_PROVISION: 'true'
+      PC24X7_LOCAL_COFRE_CONTAINER: wt-pc24x7-piloto-api-1
+    steps:
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validar configuração OIDC sem expor valores
+        shell: powershell
+        run: |
+          $names = @('REQSYS_KEY_VAULT_NAME','CCP_AZURE_CLIENT_ID','CCP_AZURE_TENANT_ID','CCP_AZURE_SUBSCRIPTION_ID')
+          foreach ($name in $names) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              Write-Error "$name não configurado. Bootstrap permanece fail-closed."
+              exit 2
+            }
+          }
+
+      - name: Login Azure por OIDC para bootstrap DEV
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
 
       - name: Resolver runtime PC24x7 DEV para bootstrap
         id: locator_bootstrap
@@ -149,26 +195,17 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Publicar evidência sanitizada da reconciliação
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: pc24x7-teams-runtime-reconcile-${{ github.run_id }}
-          path: artifacts/pc24x7-teams-runtime-reconcile/evidence.json
-          if-no-files-found: error
-          retention-days: 30
-
 
   bootstrap-dev:
     if: github.event_name != 'pull_request'
-    needs: [contract, reconcile-runtime-dev]
+    needs: [contract, reconcile-runtime-dev, bootstrap-token-dev]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - name: Confirmar resultado sanitizado do bootstrap PC24x7
         shell: bash
         env:
-          READY: ${{ needs.reconcile-runtime-dev.outputs.bootstrap_ready }}
+          READY: ${{ needs.bootstrap-token-dev.outputs.bootstrap_ready }}
         run: |
           set -euo pipefail
           test "$READY" = "true" || { echo "::error::PC24x7_BOOTSTRAP_NOT_READY"; exit 4; }
