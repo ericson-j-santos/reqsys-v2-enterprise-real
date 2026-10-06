@@ -1,0 +1,28 @@
+{
+  "feature_name": "pc24x7-github-actions-node24",
+  "project": "ReqSys v2 Enterprise — PC24x7 / Teams token bootstrap",
+  "created_at": "2026-10-06",
+  "updated_at": "2026-10-06",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Migra as Actions do workflow PC24x7 Teams Service Token Bootstrap para releases oficiais baseadas em Node.js 24, preserva pinagem imutável e comprova compatibilidade no runner físico.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
+      "tests/test_bootstrap_pc24x7_teams_service_token.py",
+      "tests/test_self_hosted_runner_governance.py"
+    ],
+    "evidence_contract": "O workflow usa somente os SHAs Node.js 24 aprovados para checkout, setup-python, azure/login e upload-artifact; os SHAs Node.js 20 anteriores ficam bloqueados por teste, e a aceitação exige execução real no DESKTOP-PDQK954 sem aviso de Node.js 20."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/pc24x7-github-actions-node24.requirements.md",
+    "regression_test": "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
+    "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    "runner": "DESKTOP-PDQK954",
+    "runner_version": "2.337.0"
+  }
+}
