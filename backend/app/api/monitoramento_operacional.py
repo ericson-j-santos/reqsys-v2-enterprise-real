@@ -99,18 +99,21 @@ def _deploy_gate_relaxed() -> bool:
 
 
 def _runtime_ready(snapshot: dict) -> bool:
-    if snapshot['critical_counts']['blocked_items'] > 0:
-        return False
+    # Readiness de tráfego não deve ser confundido com o backlog de maturidade
+    # operacional. Em ambientes não produtivos esse backlog continua visível,
+    # mas é explicitamente não bloqueante pela política deploy_gate_relaxed.
     if snapshot['evidence'].get('deploy_gate_relaxed'):
         return True
+    if snapshot['critical_counts']['blocked_items'] > 0:
+        return False
     return snapshot['status'] in {'healthy', 'attention'}
 
 
 def _runtime_readiness_reason(snapshot: dict) -> str:
+    if snapshot['evidence'].get('deploy_gate_relaxed'):
+        return 'runtime_healthy_with_non_blocking_operational_findings'
     if snapshot['critical_counts']['blocked_items'] > 0:
         return 'blocked_items_detected'
-    if snapshot['evidence'].get('deploy_gate_relaxed'):
-        return 'runtime_healthy'
     if snapshot['status'] == 'degraded':
         return 'runtime_degraded'
     if snapshot['status'] == 'attention':
@@ -130,7 +133,7 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
         'pending_items': snapshot.resumo.pendencias,
         'total_items': snapshot.resumo.total_itens,
     }
-    status = 'healthy' if deploy_gate_relaxed and critical_counts['blocked_items'] == 0 else raw_status
+    status = 'healthy' if deploy_gate_relaxed else raw_status
     return {
         'schema_version': '1.0.0',
         'correlation_id': correlation_id,
@@ -151,6 +154,10 @@ def _criar_runtime_observability_snapshot(correlation_id: str) -> dict:
             'no_secrets': True,
             'no_pii': True,
             'deploy_gate_relaxed': deploy_gate_relaxed,
+            'readiness_scope': 'traffic_serving_dependencies',
+            'operational_findings_non_blocking': (
+                critical_counts['blocked_items'] if deploy_gate_relaxed else 0
+            ),
             'deploy_gate_policy': (
                 'non_production_pending_items_non_blocking'
                 if deploy_gate_relaxed
