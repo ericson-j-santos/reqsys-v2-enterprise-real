@@ -68,3 +68,4 @@ def test_mint_roda_no_mesmo_job_self_hosted_que_le_o_cofre_local() -> None:
     assert 'VAULT_API_TOKEN' not in bootstrap
     assert 'COFRE_ADMIN_JWT' not in bootstrap
     assert 'PC24x7_BOOTSTRAP_READY=true' in bootstrap
+
