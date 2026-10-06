@@ -4,12 +4,12 @@ from pathlib import Path
 WORKFLOW = Path('.github/workflows/pc24x7-teams-token-bootstrap.yml')
 
 
-def test_bootstrap_usa_jwt_admin_e_identidade_mutadora() -> None:
+def test_bootstrap_nao_injeta_jwt_admin_do_github() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
     assert 'environment: development' in text
     assert 'CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}' in text
     assert 'CCP_AZURE_CLIENT_ID_DEV' not in text
-    assert 'COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}' in text
+    assert 'COFRE_ADMIN_JWT: ${{ secrets.COFRE_ADMIN_JWT }}' not in text
     assert 'VAULT_API_TOKEN: ${{ secrets.VAULT_API_TOKEN }}' not in text
     assert 'COFRE_API_URL: ${{ secrets.COFRE_API_URL }}' not in text
     assert "PC24X7_TEAMS_ALLOW_PROVISION: 'true'" in text
@@ -54,3 +54,10 @@ def test_bootstrap_autocorrige_runtime_pc24x7_antes_do_token() -> None:
     assert '--confirm RECONCILE-PC24X7-TEAMS-DEV' in text
     assert '--expected-sha "${{ github.sha }}"' in text
     assert 'Publicar evidência sanitizada da reconciliação' in text
+
+
+def test_bootstrap_script_prefere_cofre_local_quando_admin_jwt_nao_e_injetado() -> None:
+    script = Path('scripts/bootstrap_pc24x7_teams_service_token.py').read_text(encoding='utf-8')
+    assert "admin_jwt.strip() or read_admin_jwt(cofre_base, vault_token, environment='dev')" in script
+    assert "/v1/cofre/segredos/human_admin_jwt:{environment}" in script
+    assert "admin_jwt_expired_or_too_close_to_expiry" in script
