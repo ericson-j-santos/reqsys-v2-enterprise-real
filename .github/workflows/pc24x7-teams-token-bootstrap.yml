@@ -250,18 +250,6 @@ jobs:
             fi
           done
 
-      - name: Exportar credencial local do Cofre sem expor valor
-        shell: bash
-        run: |
-          set -euo pipefail
-          vault_token="${VAULT_API_TOKEN:-}"
-          if [ -z "$vault_token" ]; then
-            printf '%s\n' '{"status":"blocked","reason":"VAULT_API_TOKEN_missing_on_runner","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}' > pc24x7-teams-token-bootstrap.json
-            echo "::error::VAULT_API_TOKEN não está disponível no runner deste job; bootstrap permanece fail-closed."
-            exit 2
-          fi
-          echo "::add-mask::$vault_token"
-
       - name: Login Azure por OIDC da identidade mutadora
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
         with:
