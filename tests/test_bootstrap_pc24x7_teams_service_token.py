@@ -170,6 +170,34 @@ def test_local_runtime_reader_blocks_non_dev_container():
         assert str(exc) == 'local_cofre_target_blocked'
 
 
+def test_local_runtime_mint_uses_ephemeral_admin_without_keyring_lookup(monkeypatch):
+    seen = {}
+
+    class Completed:
+        returncode = 0
+        stdout = 'new-service-token\n'
+        stderr = ''
+
+    def fake_run(args, **kwargs):
+        seen['args'] = args
+        seen['probe'] = kwargs['input']
+        return Completed()
+
+    monkeypatch.setattr(module.subprocess, 'run', fake_run)
+    token = module.mint_service_token_from_local_runtime(
+        module.DEFAULT_LOCAL_COFRE_CONTAINER,
+        'https://dev.invalid',
+    )
+    assert token == 'new-service-token'
+    assert "from app.core.security import criar_token" in seen['probe']
+    assert "'papel':'admin'" in seen['probe']
+    assert 'minutos=5' in seen['probe']
+    assert 'read_secret_from_vault' not in seen['probe']
+    assert 'human_admin_jwt' not in seen['probe']
+    assert 'http://127.0.0.1:8000/api/v1/admin/service-tokens' in seen['probe']
+    assert seen['args'][0:5] == ['docker', 'exec', '-i', module.DEFAULT_LOCAL_COFRE_CONTAINER, 'python']
+
+
 def test_read_admin_jwt_blocks_expired_payload(monkeypatch):
     payload = {'data': {'value': json.dumps({'token': 'jwt', 'exp': int(time.time()) - 1})}}
     monkeypatch.setattr(module, 'request_json', lambda *args, **kwargs: (200, payload))
