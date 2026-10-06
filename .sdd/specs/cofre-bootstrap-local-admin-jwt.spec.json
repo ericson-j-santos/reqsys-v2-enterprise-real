@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Cofre bootstrap local admin JWT",
+  "increment_type": "gap_fix",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true
+  },
+  "traceability": {
+    "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
+    "script": "scripts/bootstrap_pc24x7_teams_service_token.py",
+    "tests": "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
+    "requirements": ".sdd/specs/cofre-bootstrap-local-admin-jwt.requirements.md"
+  },
+  "acceptance_criteria": [
+    "Workflow não injeta COFRE_ADMIN_JWT.",
+    "Script usa human_admin_jwt:dev quando JWT não é fornecido.",
+    "JWT expirado é rejeitado.",
+    "Segredos não aparecem em evidências.",
+    "Ausência da credencial local falha fechado."
+  ],
+  "sdd_gate": {
+    "tests": [
+      "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
+      "tests/test_bootstrap_pc24x7_teams_service_token.py"
+    ]
+  }
+}
