@@ -14,6 +14,7 @@ A issue #1760 exige evidência nova do ciclo completo do Cofre em DEV no SHA atu
 8. Estado transitório deve permanecer criptografado e ser removido ao final.
 9. Artifact e resumo não podem conter JWT, passphrase, token S2S ou segredo de teste.
 10. STG/PROD permanecem bloqueados neste incremento.
+11. O gateway público DEV deve encaminhar o prefixo autenticado `/v1/cofre/` à API, preservando `/v1`, para que status, init, tokens, segredos e controle de runtime não caiam no fallback HTML do frontend.
 
 ## Critérios de aceite
 - testes dirigidos passam no SHA da branch;
@@ -23,3 +24,4 @@ A issue #1760 exige evidência nova do ciclo completo do Cofre em DEV no SHA atu
 - `production_touched=false`;
 - nenhum merge automático.
 - o recreate/deploy GitOps permanece responsabilidade da PR #1798, sem duplicação neste incremento.
+- resposta HTML em qualquer rota `/v1/cofre/*` deve falhar fechada e identificar apenas método, rota, status, content-type e tamanho, sem corpo.

@@ -7,7 +7,8 @@
   },
   "sdd_gate": {
     "tests": [
-      "tests/test_provision_pc24x7_teams_bot_runtime.py"
+      "tests/test_provision_pc24x7_teams_bot_runtime.py",
+      "tests/test_pc24x7_teams_ephemeral_e2e.py"
     ]
   },
   "traceability": {
@@ -27,6 +28,7 @@
   },
   "validation": {
     "enterprise_runtime_governance": "required",
-    "compose_pass_through_test": "tests/test_provision_pc24x7_teams_bot_runtime.py::test_compose_passes_teams_credentials_without_inline_secret_literal"
+    "compose_pass_through_test": "tests/test_provision_pc24x7_teams_bot_runtime.py::test_compose_passes_teams_credentials_without_inline_secret_literal",
+    "provider_failure_diagnostic": "Priorizar status HTTP sanitizado persistido pela fila, sem copiar corpo ou mensagem do provedor."
   }
 }
