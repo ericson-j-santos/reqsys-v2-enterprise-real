@@ -1,5 +1,5 @@
 name: Prepare OCR Runtime Package
-description: Prepara wheel privado do OCR por SHA imutável sem materializar credencial no build.
+description: Prepara bundle privado do OCR com manifesto canônico por SHA imutável.
 
 inputs:
   app-id:
@@ -65,7 +65,7 @@ runs:
         path: .external/ocr-evidence-engine
         persist-credentials: false
 
-    - name: Gerar wheel e proveniência para o build
+    - name: Gerar e verificar bundle canônico para o build
       id: package
       shell: bash
       run: |
@@ -80,5 +80,5 @@ runs:
                 encoding="utf-8"
             )
         )
-        print(f"wheel_sha256={data['wheel_sha256']}")
+        print(f"wheel_sha256={data['files'][0]['sha256']}")
         PY
