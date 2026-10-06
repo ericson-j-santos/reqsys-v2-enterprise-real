@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import uuid
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -273,12 +274,27 @@ def _delivery_summary(status: int, payload: dict) -> dict:
     delivery = teams.get('entrega') if isinstance(teams.get('entrega'), dict) else {}
     queue = teams.get('fila') if isinstance(teams.get('fila'), dict) else {}
     queue_delivered = queue.get('status_evento') == 'ENVIADO'
+    failure_text = str(queue.get('motivo_falha') or delivery.get('erro') or '')
+    failure_category = None
+    if failure_text:
+        http_match = re.search(r'HTTP\s+(\d{3})', failure_text, flags=re.IGNORECASE)
+        if http_match:
+            failure_category = f'provider_http_{http_match.group(1)}'
+        elif 'nao configurado' in failure_text.lower() or 'não configurado' in failure_text.lower():
+            failure_category = 'channel_not_configured'
+        elif 'conversationreference' in failure_text.lower() or 'conversa_bot_nao_instalada' in failure_text.lower():
+            failure_category = 'bot_conversation_reference_missing'
+        else:
+            failure_category = 'provider_delivery_failed'
     return {
         'http_status': status,
         'conversation_id': data.get('conversation_id'),
         'duplicate': data.get('duplicate'),
         'teams_delivered': delivery.get('entregue') is True or queue_delivered,
         'teams_channel': delivery.get('canal_usado') or queue.get('canal_usado'),
+        'teams_mode': teams.get('modo'),
+        'queue_status': queue.get('status_evento'),
+        'delivery_failure_category': failure_category,
         'error': None if status < 400 else f'http_{status}',
         'secret_value_exposed': False,
     }

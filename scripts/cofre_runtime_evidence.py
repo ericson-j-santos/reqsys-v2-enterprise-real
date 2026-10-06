@@ -81,8 +81,15 @@ class ApiClient:
         try:
             with urlopen(request, timeout=self.timeout) as response:  # nosec B310
                 raw = response.read().decode("utf-8")
-                parsed = json.loads(raw) if raw else {}
                 status = int(response.status)
+                try:
+                    parsed = json.loads(raw) if raw.strip() else {}
+                except json.JSONDecodeError as exc:
+                    content_type = str(response.headers.get("Content-Type") or "unknown").split(";", 1)[0]
+                    raise GateError(
+                        f"{method} {path} retornou HTTP {status} com payload não JSON "
+                        f"(content-type={content_type}, bytes={len(raw.encode('utf-8'))})"
+                    ) from exc
         except HTTPError as exc:
             raw = exc.read().decode("utf-8", errors="replace")
             try:
