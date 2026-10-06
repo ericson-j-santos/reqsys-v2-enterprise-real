@@ -194,7 +194,7 @@ def test_local_runtime_mint_uses_ephemeral_admin_without_keyring_lookup(monkeypa
     assert 'minutos=5' in seen['probe']
     assert 'read_secret_from_vault' not in seen['probe']
     assert 'human_admin_jwt' not in seen['probe']
-    assert 'http://127.0.0.1:8000/api/v1/admin/service-tokens' in seen['probe']
+    assert 'http://127.0.0.1:8000/v1/admin/service-tokens' in seen['probe']
     assert seen['args'][0:5] == ['docker', 'exec', '-i', module.DEFAULT_LOCAL_COFRE_CONTAINER, 'python']
 
 

@@ -10,6 +10,7 @@ Eliminar o GitHub Secret COFRE_ADMIN_JWT do bootstrap S2S. No PC24x7, o runtime 
 4. Nenhum valor secreto é publicado.
 5. O bootstrap no PC24x7 emite o JWT administrativo efêmero e executa o mint dentro do container DEV; o JWT nunca deixa o container e não depende de `VAULT_API_TOKEN` global ou GitHub Secret.
 6. O alvo permanece fixado ao container DEV canônico; qualquer outro container ou ambiente falha fechado.
+7. Dentro do container, o mint usa a rota FastAPI direta `/v1/admin/service-tokens`; o prefixo `/api` fica restrito ao proxy externo.
 
 ## Critérios de aceite
 - Teste impede reintrodução de COFRE_ADMIN_JWT no workflow.
