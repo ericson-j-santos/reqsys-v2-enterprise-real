@@ -11,6 +11,7 @@ DEV_WORKFLOW = ROOT / ".github" / "workflows" / "fly-dev-fast-deploy.yml"
 ENTERPRISE_WORKFLOW = ROOT / ".github" / "workflows" / "fly-enterprise-sync.yml"
 BENCHMARK_WORKFLOW = ROOT / ".github" / "workflows" / "ocr-benchmark.yml"
 
+
 def _yaml(path: Path) -> dict:
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
@@ -19,6 +20,7 @@ def test_runtime_lock_is_private_repo_full_sha_and_expected_version() -> None:
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
 
     assert lock["repository"] == "ericson-j-santos/ocr-evidence-engine"
+    assert lock["sha"] == "15dd067032d7c55e22186ef3587c0d694d0392fd"
     assert re.fullmatch(r"[0-9a-f]{40}", lock["sha"])
     assert lock["package"] == "ocr-evidence-engine"
     assert lock["module"] == "ocr_evidencia"
@@ -46,29 +48,45 @@ def test_prepare_action_uses_ephemeral_read_only_app_token() -> None:
     assert "GH_PAT" not in text
 
 
-def test_prepare_script_records_sha256_without_credentials() -> None:
+def test_prepare_script_generates_and_verifies_canonical_bundle() -> None:
     text = (ROOT / "scripts" / "prepare_ocr_runtime_package.py").read_text(
         encoding="utf-8"
     )
 
-    assert "hashlib.sha256" in text
-    assert '"credentials_embedded": False' in text
+    assert "ocr_distribution_evidence.py" in text
+    assert '"generate"' in text
+    assert '"verify"' in text
+    assert "MANIFEST.sha256" in text
+    assert "SHA256SUMS" in text
+    assert "ocr_manifest_compatibility_mismatch" in text
     assert "ocr_source_sha_mismatch" in text
     assert "pip" in text and "wheel" in text and "--no-deps" in text
 
 
+def test_prepare_action_exports_hash_from_provider_provenance() -> None:
+    text = ACTION.read_text(encoding="utf-8")
+
+    assert "packaging==25.0" in text
+    assert "data['files'][0]['sha256']" in text
+    assert "data['wheel_sha256']" not in text
+
+
 def test_dockerfile_fails_closed_and_removes_local_copy_when_external_is_required() -> None:
-    for relative in ("backend/Dockerfile",):
-        text = (ROOT / relative).read_text(encoding="utf-8")
-        assert "ARG OCR_EXTERNAL_PACKAGE_REQUIRED=0" in text
-        assert 'test "$wheel_count" = "1"' in text
-        assert "provenance.json" in text
-        assert "OCR_ENGINE_SHA" in text
-        assert "OCR_ENGINE_VERSION" in text
-        assert "rm -rf /app/ocr_evidencia" in text
-        assert "site-packages" in text
-        assert "GITHUB_TOKEN" not in text
-        assert "REQSYS_STACK_REBASE_PRIVATE_KEY" not in text
+    text = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "ARG OCR_EXTERNAL_PACKAGE_REQUIRED=0" in text
+    assert 'test "$wheel_count" = "1"' in text
+    assert "provenance.json" in text
+    assert "MANIFEST.sha256" in text
+    assert "SHA256SUMS" in text
+    assert 'd["schema_version"]=="1.1.0"' in text
+    assert 'actual==expected_names' in text
+    assert "OCR_ENGINE_SHA" in text
+    assert "OCR_ENGINE_VERSION" in text
+    assert "rm -rf /app/ocr_evidencia" in text
+    assert "site-packages" in text
+    assert "GITHUB_TOKEN" not in text
+    assert "REQSYS_STACK_REBASE_PRIVATE_KEY" not in text
 
 
 def test_canonical_fly_workflows_prepare_package_and_require_external_runtime() -> None:
