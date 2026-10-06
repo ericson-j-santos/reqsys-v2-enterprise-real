@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Prepara o pacote OCR externo para o contexto de build sem persistir credenciais."""
+"""Prepara o bundle OCR externo e valida a evidência canônica do provedor."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -46,33 +44,47 @@ def _normalize_package_name(value: str) -> str:
     return re.sub(r"[-_.]+", "-", value).lower()
 
 
-def _wheel_metadata(wheel: Path) -> tuple[str, str]:
-    with zipfile.ZipFile(wheel) as archive:
-        metadata_names = [
-            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+def _clear_output_dir(output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for entry in output_dir.iterdir():
+        if entry.is_symlink() or entry.is_file():
+            entry.unlink()
+        else:
+            raise RuntimePackageError(f"ocr_output_entry_not_file:{entry.name}")
+
+
+def _run_evidence(
+    evidence_script: Path,
+    command: str,
+    output_dir: Path,
+    repository: str,
+    sha: str,
+) -> None:
+    if command == "generate":
+        args = [
+            sys.executable,
+            str(evidence_script),
+            "generate",
+            "--bundle-dir",
+            str(output_dir),
+            "--repository",
+            repository,
+            "--git-sha",
+            sha,
         ]
-        if len(metadata_names) != 1:
-            raise RuntimePackageError(
-                f"ocr_wheel_metadata_count_invalid:{len(metadata_names)}"
-            )
-        metadata = archive.read(metadata_names[0]).decode("utf-8")
-    name = version = ""
-    for line in metadata.splitlines():
-        if line.startswith("Name: "):
-            name = line[6:].strip()
-        elif line.startswith("Version: "):
-            version = line[9:].strip()
-    if not name or not version:
-        raise RuntimePackageError("ocr_wheel_metadata_incomplete")
-    return name, version
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    else:
+        args = [
+            sys.executable,
+            str(evidence_script),
+            "verify",
+            "--bundle-dir",
+            str(output_dir),
+            "--expected-repository",
+            repository,
+            "--expected-git-sha",
+            sha,
+        ]
+    subprocess.run(args, check=True)
 
 
 def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
@@ -88,13 +100,11 @@ def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
             f"ocr_source_sha_mismatch:expected={expected_sha}:actual={actual_sha}"
         )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    for candidate in output_dir.glob("*.whl"):
-        candidate.unlink()
-    provenance_path = output_dir / "provenance.json"
-    if provenance_path.exists():
-        provenance_path.unlink()
+    evidence_script = source / "scripts" / "ocr_distribution_evidence.py"
+    if not evidence_script.is_file():
+        raise RuntimePackageError("ocr_distribution_evidence_missing")
 
+    _clear_output_dir(output_dir)
     with tempfile.TemporaryDirectory(prefix="ocr-runtime-wheel-") as temp_dir:
         wheel_dir = Path(temp_dir)
         subprocess.run(
@@ -114,47 +124,43 @@ def prepare(lock_path: Path, source: Path, output_dir: Path) -> dict[str, str]:
         wheels = list(wheel_dir.glob("*.whl"))
         if len(wheels) != 1:
             raise RuntimePackageError(f"ocr_wheel_count_invalid:{len(wheels)}")
-        built_wheel = wheels[0]
-        package_name, version = _wheel_metadata(built_wheel)
-        if _normalize_package_name(package_name) != _normalize_package_name(
-            str(lock["package"])
-        ):
-            raise RuntimePackageError(
-                f"ocr_package_name_mismatch:expected={lock['package']}:actual={package_name}"
-            )
-        if version != str(lock["version"]):
-            raise RuntimePackageError(
-                f"ocr_package_version_mismatch:expected={lock['version']}:actual={version}"
-            )
+        shutil.copy2(wheels[0], output_dir / wheels[0].name)
 
-        destination = output_dir / built_wheel.name
-        shutil.copy2(built_wheel, destination)
+    repository = str(lock["repository"])
+    _run_evidence(evidence_script, "generate", output_dir, repository, expected_sha)
+    _run_evidence(evidence_script, "verify", output_dir, repository, expected_sha)
 
-    wheel_sha256 = _sha256(destination)
-    provenance = {
-        "schema_version": "1.0.0",
-        "repository": lock["repository"],
-        "source_sha": expected_sha,
-        "package": package_name,
-        "module": lock["module"],
-        "version": version,
-        "wheel": destination.name,
-        "wheel_sha256": wheel_sha256,
-        "credentials_embedded": False,
-    }
-    provenance_path.write_text(
-        json.dumps(provenance, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    provenance = json.loads(
+        (output_dir / "provenance.json").read_text(encoding="utf-8")
     )
+    package = provenance["package"]
+    file_entry = provenance["files"][0]
+    if _normalize_package_name(str(package["name"])) != _normalize_package_name(
+        str(lock["package"])
+    ):
+        raise RuntimePackageError(
+            f"ocr_package_name_mismatch:expected={lock['package']}:actual={package['name']}"
+        )
+    if str(package["version"]) != str(lock["version"]):
+        raise RuntimePackageError(
+            f"ocr_package_version_mismatch:expected={lock['version']}:actual={package['version']}"
+        )
+
+    canonical = (output_dir / "MANIFEST.sha256").read_bytes()
+    compatibility = (output_dir / "SHA256SUMS").read_bytes()
+    if canonical != compatibility:
+        raise RuntimePackageError("ocr_manifest_compatibility_mismatch")
+
     print(
         "OCR_RUNTIME_PACKAGE_READY "
-        f"source_sha={expected_sha} version={version} wheel_sha256={wheel_sha256}"
+        f"source_sha={expected_sha} version={package['version']} "
+        f"wheel_sha256={file_entry['sha256']}"
     )
     return {
         "sha": expected_sha,
-        "version": version,
-        "wheel_sha256": wheel_sha256,
-        "wheel": destination.name,
+        "version": str(package["version"]),
+        "wheel_sha256": str(file_entry["sha256"]),
+        "wheel": str(file_entry["filename"]),
     }
 
 
@@ -172,9 +178,10 @@ def main() -> int:
     except (
         RuntimePackageError,
         OSError,
+        KeyError,
+        TypeError,
         subprocess.CalledProcessError,
         json.JSONDecodeError,
-        zipfile.BadZipFile,
     ) as exc:
         print(f"OCR_RUNTIME_PACKAGE_BLOCKED {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
