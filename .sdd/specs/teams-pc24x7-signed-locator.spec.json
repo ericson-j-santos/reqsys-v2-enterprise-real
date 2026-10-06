@@ -25,7 +25,7 @@
       "tests/test_pc24x7_teams_ephemeral_e2e_workflow.py",
       "tests/test_pc24x7_dev_public_locator.py"
     ],
-    "evidence_contract": "Bootstrap e E2E DEV resolvem exclusivamente o locator Ed25519 vigente, nunca usam Fly como fallback, compõem rotas FastAPI públicas por /api/v1 exatamente uma vez e ambos bloqueiam antes de qualquer mutação quando build-info.build_sha diverge de github.sha. Entrega direta do bot só é aceita quando entregue=true; uma resposta entregue=false deve cair na fila governada, aceita somente quando status_evento=ENVIADO e canal_usado está presente. Falhas permanecem fail-closed e nenhum segredo é publicado."
+    "evidence_contract": "Bootstrap e E2E DEV resolvem exclusivamente o locator Ed25519 vigente, nunca usam Fly como fallback, compõem rotas FastAPI públicas por /api/v1 exatamente uma vez e ambos bloqueiam antes de qualquer mutação quando build-info.build_sha diverge de github.sha. Entrega direta do bot só é aceita quando entregue=true; uma resposta entregue=false deve cair na fila governada, aceita somente quando status_evento=ENVIADO e canal_usado está presente. Falhas da fila publicam apenas categoria sanitizada, modo, canal e status, nunca o corpo do provedor. Falhas permanecem fail-closed e nenhum segredo é publicado."
   },
   "runtime": {
     "provider": "pc24x7",

@@ -253,6 +253,30 @@ def test_delivery_summary_accepts_successful_gateway_queue():
     assert summary['teams_channel'] == 'flow_bot'
 
 
+def test_delivery_summary_classifies_queue_failure_without_exposing_provider_body():
+    summary = module._delivery_summary(200, {
+        'data': {
+            'conversation_id': 'conv-dev-queue',
+            'duplicate': False,
+            'teams': {
+                'modo': 'fila_gateway',
+                'entrega': None,
+                'fila': {
+                    'status_evento': 'FALHA',
+                    'canal_usado': 'bot',
+                    'motivo_falha': 'HTTP 401: sensitive-provider-body',
+                },
+            },
+        },
+    })
+
+    assert summary['teams_delivered'] is False
+    assert summary['teams_mode'] == 'fila_gateway'
+    assert summary['queue_status'] == 'FALHA'
+    assert summary['delivery_failure_category'] == 'provider_http_401'
+    assert 'sensitive-provider-body' not in str(summary)
+
+
 def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
     calls = []
     patch_valid_admin(monkeypatch)

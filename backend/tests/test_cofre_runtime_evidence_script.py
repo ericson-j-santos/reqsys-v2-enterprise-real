@@ -159,6 +159,34 @@ def test_parse_args_accepts_service_token_without_admin_jwt(tmp_path: Path):
     assert parsed.service_token == "scoped-service-token"
 
 
+def test_api_client_reports_route_for_non_json_success_without_body_exposure(monkeypatch):
+    class _Response:
+        status = 200
+        headers = {"Content-Type": "text/html; charset=utf-8"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'<html>sensitive-provider-body</html>'
+
+    monkeypatch.setattr(module, "urlopen", lambda *_args, **_kwargs: _Response())
+    client = module.ApiClient(
+        "https://example.test", "", 7, "corr-auth", "scoped-service-token"
+    )
+
+    with pytest.raises(module.GateError) as captured:
+        client.request("GET", "/v1/cofre/status")
+
+    message = str(captured.value)
+    assert "GET /v1/cofre/status retornou HTTP 200 com payload não JSON" in message
+    assert "content-type=text/html" in message
+    assert "sensitive-provider-body" not in message
+
+
 def test_invalid_state_key_is_rejected(tmp_path: Path):
     state_path = tmp_path / "state.bin"
     valid_key = Fernet.generate_key().decode("ascii")
