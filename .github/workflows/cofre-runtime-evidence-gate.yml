@@ -23,13 +23,10 @@ on:
         required: false
         type: string
         default: "20"
-    secrets:
-      COFRE_RUNTIME_SERVICE_TOKEN:
-        required: true
-
 permissions:
   contents: read
   actions: read
+  id-token: write
 
 concurrency:
   group: cofre-runtime-evidence-${{ github.workflow }}-${{ github.ref_name }}
@@ -108,6 +105,10 @@ jobs:
       BASE_URL: ${{ needs.validate-inputs.outputs.base_url }}
       TARGET_ENV: dev
       TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
+      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
+      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
+      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
     steps:
       - name: Checkout do SHA imutável
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -123,9 +124,24 @@ jobs:
       - name: Instalar dependência criptográfica mínima
         run: python -m pip install --disable-pip-version-check "cryptography>=44,<51"
 
+      - name: Login Azure por OIDC para ler token runtime do Key Vault
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Carregar token runtime do Cofre sem expor valor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${REQSYS_KEY_VAULT_NAME:-}"
+          token="$(az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME" --name reqsys-cofre-runtime-evidence-service-token --query value -o tsv)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "COFRE_RUNTIME_SERVICE_TOKEN=$token" >> "$GITHUB_ENV"
+
       - name: Validar runtime remoto PC24x7 e SHA antes da mutação
-        env:
-          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -143,24 +159,18 @@ jobs:
           echo "COFRE_STATE_FERNET_KEY=$state_key" >> "$GITHUB_ENV"
 
       - name: Validar ciclo antes do restart
-        env:
-          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           python scripts/cofre_runtime_evidence.py             --phase before-restart             --base-url "$BASE_URL"             --environment "$TARGET_ENV"             --correlation-id "$CORRELATION_ID"             --state-file "$STATE_FILE"             --evidence-file "$ARTIFACT_DIR/before-restart.json"             --timeout "$TIMEOUT_SECONDS"
 
       - name: Solicitar restart autenticado somente da API DEV
-        env:
-          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           python scripts/cofre_remote_runtime_control.py restart             --base-url "$BASE_URL"             --expected-sha "${{ github.sha }}"             --correlation-id "$CORRELATION_ID-restart"             --timeout "$TIMEOUT_SECONDS"             --evidence-file "$ARTIFACT_DIR/runtime-restart.json"
 
       - name: Comprovar novo boot no mesmo SHA
-        env:
-          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -173,8 +183,6 @@ jobs:
           python scripts/validate_public_runtime.py             --base-url "$BASE_URL"             --environment dev             --timeout "$TIMEOUT_SECONDS"             --endpoint /api/runtime/readiness             --output "$ARTIFACT_DIR/public-readiness.json"             --readiness-output "$ARTIFACT_DIR/public-readiness-summary.json"
 
       - name: Validar persistência e cleanup
-        env:
-          COFRE_RUNTIME_SERVICE_TOKEN: ${{ secrets.COFRE_RUNTIME_SERVICE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail

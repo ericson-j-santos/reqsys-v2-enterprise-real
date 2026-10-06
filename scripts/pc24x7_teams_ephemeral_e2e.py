@@ -271,12 +271,14 @@ def _delivery_summary(status: int, payload: dict) -> dict:
     data = _data(payload)
     teams = data.get('teams') if isinstance(data.get('teams'), dict) else {}
     delivery = teams.get('entrega') if isinstance(teams.get('entrega'), dict) else {}
+    queue = teams.get('fila') if isinstance(teams.get('fila'), dict) else {}
+    queue_delivered = queue.get('status_evento') == 'ENVIADO'
     return {
         'http_status': status,
         'conversation_id': data.get('conversation_id'),
         'duplicate': data.get('duplicate'),
-        'teams_delivered': delivery.get('entregue') is True,
-        'teams_channel': delivery.get('canal_usado'),
+        'teams_delivered': delivery.get('entregue') is True or queue_delivered,
+        'teams_channel': delivery.get('canal_usado') or queue.get('canal_usado'),
         'error': None if status < 400 else f'http_{status}',
         'secret_value_exposed': False,
     }
@@ -392,7 +394,7 @@ def execute_e2e(
         )
         evidence['delivery_attempts'].append(first)
 
-        delivered = first.get('teams_delivered') is True and first.get('teams_channel') == 'bot'
+        delivered = first.get('teams_delivered') is True and bool(first.get('teams_channel'))
         if not delivered:
             second = reply_same_conversation(
                 api_base,
@@ -402,7 +404,7 @@ def execute_e2e(
                 enviar_teams=True,
             )
             evidence['delivery_attempts'].append(second)
-            delivered = second.get('teams_delivered') is True and second.get('teams_channel') == 'bot'
+            delivered = second.get('teams_delivered') is True and bool(second.get('teams_channel'))
 
         if not delivered:
             last = evidence['delivery_attempts'][-1]

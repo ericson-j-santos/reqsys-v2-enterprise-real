@@ -233,6 +233,26 @@ def test_success_separates_creation_delivery_proves_idempotency_and_revokes(monk
     assert replies[0][3]['X-Area-ID'] == 'teams-gateway'
 
 
+def test_delivery_summary_accepts_successful_gateway_queue():
+    summary = module._delivery_summary(200, {
+        'data': {
+            'conversation_id': 'conv-dev-queue',
+            'duplicate': False,
+            'teams': {
+                'modo': 'fila_gateway',
+                'entrega': None,
+                'fila': {
+                    'status_evento': 'ENVIADO',
+                    'canal_usado': 'flow_bot',
+                },
+            },
+        },
+    })
+
+    assert summary['teams_delivered'] is True
+    assert summary['teams_channel'] == 'flow_bot'
+
+
 def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
     calls = []
     patch_valid_admin(monkeypatch)
