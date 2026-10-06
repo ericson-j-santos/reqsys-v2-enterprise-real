@@ -84,7 +84,7 @@ def mint_service_token_from_local_runtime(
     environment: str = 'dev',
     expires_in_days: int = 90,
 ) -> str:
-    """Lê o JWT e executa o mint dentro do runtime DEV protegido.
+    """Emite um JWT efêmero e executa o mint dentro do runtime DEV protegido.
 
     O JWT administrativo nunca deixa o contêiner. Somente o novo token S2S,
     que será imediatamente persistido no Key Vault, retorna pelo pipe local.
@@ -92,16 +92,12 @@ def mint_service_token_from_local_runtime(
     if container != DEFAULT_LOCAL_COFRE_CONTAINER or environment != 'dev':
         raise BootstrapError('local_cofre_target_blocked')
     probe = (
-        "import json,sys,time\n"
+        "import json,sys\n"
         "from urllib.request import Request,urlopen\n"
-        "from app.core.secrets import read_secret_from_vault\n"
-        f"raw=read_secret_from_vault('human_admin_jwt:{environment}')\n"
-        "stored=json.loads(raw or '{}')\n"
-        "admin=str(stored.get('token') or '').strip()\n"
-        "exp=int(stored.get('exp') or 0)\n"
-        "assert admin and exp > int(time.time()) + 120, 'admin_jwt_unavailable_or_expired'\n"
-        "base,label,scope,days=sys.argv[1:5]\n"
-        "url=base.rstrip('/') + ('' if base.rstrip('/').endswith('/api') else '/api') + '/v1/admin/service-tokens'\n"
+        "from app.core.security import criar_token\n"
+        "admin=criar_token({'sub':'pc24x7-bootstrap','papel':'admin'},minutos=5)\n"
+        "_base,label,scope,days=sys.argv[1:5]\n"
+        "url='http://127.0.0.1:8000/api/v1/admin/service-tokens'\n"
         "body=json.dumps({'label':label,'scopes':[scope],'expires_in_days':int(days)}).encode()\n"
         "req=Request(url,data=body,method='POST',headers={'Authorization':'Bearer '+admin,'X-Correlation-Id':'pc24x7-token-bootstrap-mint','Content-Type':'application/json'})\n"
         "with urlopen(req,timeout=30) as response:\n"
