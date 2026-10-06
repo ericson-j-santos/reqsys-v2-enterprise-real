@@ -30,8 +30,8 @@ def test_bootstrap_permanece_dev_only_e_resolve_locator_assinado() -> None:
 def test_bootstrap_bloqueia_runtime_defasado_antes_de_oidc_e_mutacao() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
     sha_gate = text.index('Validar runtime PC24x7 no mesmo SHA')
-    oidc = text.index('Login Azure por OIDC da identidade mutadora')
-    mutation = text.index('Validar ou provisionar token S2S DEV')
+    oidc = text.index('Login Azure por OIDC para reconciliar runtime DEV')
+    mutation = text.index('Validar ou provisionar token S2S no PC24x7')
     assert sha_gate < oidc < mutation
     assert "base + '/api/runtime/build-info'" in text
     assert "EXPECTED_SHA: ${{ github.sha }}" in text
@@ -61,3 +61,17 @@ def test_bootstrap_script_prefere_cofre_local_quando_admin_jwt_nao_e_injetado() 
     assert "admin_jwt.strip() or read_admin_jwt(cofre_base, vault_token, environment='dev')" in script
     assert "/v1/cofre/segredos/human_admin_jwt:{environment}" in script
     assert "admin_jwt_expired_or_too_close_to_expiry" in script
+
+
+def test_mint_roda_no_mesmo_job_self_hosted_que_le_o_cofre_local() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    reconcile = text.split('  reconcile-runtime-dev:', 1)[1].split('\n  bootstrap-dev:', 1)[0]
+    bootstrap = text.split('  bootstrap-dev:', 1)[1]
+    assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in reconcile
+    assert "GetEnvironmentVariable('VAULT_API_TOKEN')" in reconcile
+    assert 'Validar ou provisionar token S2S no PC24x7' in reconcile
+    assert 'bootstrap_pc24x7_teams_service_token.py' in reconcile
+    assert 'COFRE_ADMIN_JWT' not in reconcile
+    assert 'VAULT_API_TOKEN' not in bootstrap
+    assert 'COFRE_ADMIN_JWT' not in bootstrap
+    assert 'PC24x7_BOOTSTRAP_READY=true' in bootstrap
