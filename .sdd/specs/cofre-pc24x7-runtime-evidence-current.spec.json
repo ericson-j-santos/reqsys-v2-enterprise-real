@@ -18,6 +18,6 @@
       "backend/tests/test_cofre_runtime_evidence_script.py",
       "backend/tests/test_cofre_api.py"
     ],
-    "evidence_contract": "Evidência nova deve estar vinculada ao SHA atual, usar runtime_target=pc24x7, encaminhar /v1/cofre/ ao backend sem remover /v1, executar before/restart/after/cleanup, não tocar produção e não expor valores sensíveis."
+    "evidence_contract": "Evidência nova deve estar vinculada ao SHA atual, usar runtime_target=pc24x7, encaminhar /v1/cofre/ e /v1/auditoria/ ao backend sem remover /v1, executar before/restart/after/cleanup, não tocar produção e não expor valores sensíveis."
   }
 }
