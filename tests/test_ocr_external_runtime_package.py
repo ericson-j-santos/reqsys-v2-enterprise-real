@@ -20,6 +20,7 @@ def test_runtime_lock_is_private_repo_full_sha_and_expected_version() -> None:
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
 
     assert lock["repository"] == "ericson-j-santos/ocr-evidence-engine"
+    assert lock["sha"] == "15dd067032d7c55e22186ef3587c0d694d0392fd"
     assert re.fullmatch(r"[0-9a-f]{40}", lock["sha"])
     assert lock["package"] == "ocr-evidence-engine"
     assert lock["module"] == "ocr_evidencia"
