@@ -14,6 +14,7 @@ Ativar o runtime Teams Bot em DEV no PC24x7 reutilizando a credencial existente 
 6. O E2E deve exigir readiness `ready=true`, token efêmero revogado, replay idempotente e entrega via canal `bot`.
 7. Evidência final deve registrar `secret_value_exposed=false` e `production_touched=false`.
 8. TEST/HML/STG/PROD permanecem fora do escopo.
+9. Em falha de entrega, a evidência deve priorizar o status HTTP sanitizado já persistido pela fila para classificar o provedor, sem copiar corpo ou mensagem remota.
 
 ## Rastreabilidade
 

@@ -3,6 +3,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+
 from app.schemas.teams_gateway import TeamsGatewayMessageRequest
 from app.services import teams_gateway as svc
 
@@ -101,6 +103,35 @@ def test_enviar_gateway_bot_sucesso(mock_obter_referencia, mock_enviar_atividade
     url_chamada, payload_chamado = mock_enviar_atividade.await_args.args
     assert url_chamada == 'https://smba.trafficmanager.net/br/v3/conversations/conv-1/activities'
     assert payload_chamado['text'] == 'Ola via bot'
+
+
+@patch('app.services.teams_gateway._enviar_atividade_bot_framework', new_callable=AsyncMock)
+@patch('app.services.teams_gateway.obter_conversa_referencia_bot')
+def test_enviar_gateway_bot_http_failure_preserva_status_sem_corpo(
+    mock_obter_referencia, mock_enviar_atividade, monkeypatch
+):
+    _configurar_bot(monkeypatch, configurado=True)
+    mock_obter_referencia.return_value = MagicMock(
+        service_url='https://smba.trafficmanager.net/br/', conversation_id='conv-1'
+    )
+    request = httpx.Request('POST', 'https://smba.trafficmanager.net/br/v3/conversations/conv-1/activities')
+    response = httpx.Response(401, request=request, text='sensitive-provider-body')
+    mock_enviar_atividade.side_effect = httpx.HTTPStatusError(
+        'provider rejected request', request=request, response=response
+    )
+    payload = TeamsGatewayMessageRequest(
+        destino_tipo='chat', destino_id='aad-1', texto='Ola via bot', modo='bot'
+    )
+
+    resultado = _run(
+        svc.enviar_mensagem_gateway(payload, db=MagicMock(), correlation_id='corr-bot-http')
+    )
+
+    assert resultado['entregue'] is False
+    assert resultado['canal_usado'] == 'bot'
+    assert resultado['status_code'] == 401
+    assert resultado['erro'] == 'HTTP 401'
+    assert 'sensitive-provider-body' not in str(resultado)
 
 
 @patch('app.services.teams_gateway._enviar_webhook', new_callable=AsyncMock)

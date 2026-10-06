@@ -277,6 +277,28 @@ def test_delivery_summary_classifies_queue_failure_without_exposing_provider_bod
     assert 'sensitive-provider-body' not in str(summary)
 
 
+def test_delivery_summary_prefers_sanitized_provider_http_status():
+    summary = module._delivery_summary(200, {
+        'data': {
+            'conversation_id': 'conv-dev-queue',
+            'duplicate': False,
+            'teams': {
+                'modo': 'fila_gateway',
+                'fila': {
+                    'status_evento': 'FALHA',
+                    'canal_usado': 'bot',
+                    'status_http': 401,
+                    'motivo_falha': 'provider rejected request',
+                },
+            },
+        },
+    })
+
+    assert summary['provider_http_status'] == 401
+    assert summary['delivery_failure_category'] == 'provider_http_401'
+    assert 'provider rejected request' not in str(summary)
+
+
 def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
     calls = []
     patch_valid_admin(monkeypatch)
