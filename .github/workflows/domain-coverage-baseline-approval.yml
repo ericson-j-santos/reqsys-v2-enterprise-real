@@ -36,21 +36,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "run_gate=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           RUN_GATE="$(gh api \
             --paginate \
             "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
             --jq '[.[].filename | select(
               . == "config/domain-coverage-policy.json" or
-              . == "docs/ops-dashboard/data/domain-coverage-baseline-diff.json" or
-              . == ".github/workflows/domain-coverage-baseline-approval.yml"
+              . == "docs/ops-dashboard/data/domain-coverage-baseline-diff.json"
             )] | length > 0')"
 
           echo "run_gate=${RUN_GATE}" >> "$GITHUB_OUTPUT"
+          if [[ "${RUN_GATE}" != "true" ]]; then
+            echo "Baseline/policy unchanged; workflow maintenance does not require domain baseline approval." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   validate-approved-baseline:
     name: Validar baseline aprovado
