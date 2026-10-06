@@ -77,24 +77,42 @@ def read_admin_jwt(cofre_base: str, vault_token: str, *, environment: str = 'dev
     return token
 
 
-def read_admin_jwt_from_local_runtime(container: str, *, environment: str = 'dev') -> str:
-    """Lê o JWT somente do keyring persistente do runtime DEV no PC24x7.
+def mint_service_token_from_local_runtime(
+    container: str,
+    api_base: str,
+    *,
+    environment: str = 'dev',
+    expires_in_days: int = 90,
+) -> str:
+    """Lê o JWT e executa o mint dentro do runtime DEV protegido.
 
-    O valor trafega apenas pelo pipe local capturado pelo processo e nunca é
-    incluído na evidência sanitizada. A identidade Compose impede apontar este
-    bootstrap para outro container/ambiente.
+    O JWT administrativo nunca deixa o contêiner. Somente o novo token S2S,
+    que será imediatamente persistido no Key Vault, retorna pelo pipe local.
     """
     if container != DEFAULT_LOCAL_COFRE_CONTAINER or environment != 'dev':
         raise BootstrapError('local_cofre_target_blocked')
     probe = (
-        "import json\n"
+        "import json,sys,time\n"
+        "from urllib.request import Request,urlopen\n"
         "from app.core.secrets import read_secret_from_vault\n"
         f"raw=read_secret_from_vault('human_admin_jwt:{environment}')\n"
-        "print(raw or '')\n"
+        "stored=json.loads(raw or '{}')\n"
+        "admin=str(stored.get('token') or '').strip()\n"
+        "exp=int(stored.get('exp') or 0)\n"
+        "assert admin and exp > int(time.time()) + 120, 'admin_jwt_unavailable_or_expired'\n"
+        "base,label,scope,days=sys.argv[1:5]\n"
+        "url=base.rstrip('/') + ('' if base.rstrip('/').endswith('/api') else '/api') + '/v1/admin/service-tokens'\n"
+        "body=json.dumps({'label':label,'scopes':[scope],'expires_in_days':int(days)}).encode()\n"
+        "req=Request(url,data=body,method='POST',headers={'Authorization':'Bearer '+admin,'X-Correlation-Id':'pc24x7-token-bootstrap-mint','Content-Type':'application/json'})\n"
+        "with urlopen(req,timeout=30) as response:\n"
+        " payload=json.loads(response.read().decode())\n"
+        " token=str(payload.get('data',{}).get('token') or '').strip()\n"
+        " assert token, 'service_token_response_empty_token'\n"
+        " print(token)\n"
     )
     try:
         completed = subprocess.run(
-            ['docker', 'exec', '-i', container, 'python', '-'],
+            ['docker', 'exec', '-i', container, 'python', '-', api_base, LABEL, SCOPE, str(expires_in_days)],
             input=probe,
             capture_output=True,
             text=True,
@@ -105,20 +123,12 @@ def read_admin_jwt_from_local_runtime(container: str, *, environment: str = 'dev
             shell=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise BootstrapError(f'local_cofre_read_failed:{type(exc).__name__}') from None
+        raise BootstrapError(f'local_cofre_mint_failed:{type(exc).__name__}') from None
     if completed.returncode != 0:
-        raise BootstrapError(f'local_cofre_read_failed:exit_{completed.returncode}')
-    raw = completed.stdout.strip()
-    if not raw:
-        raise BootstrapError('admin_jwt_unavailable_local')
-    try:
-        stored = json.loads(raw)
-        token = str(stored['token']).strip()
-        exp = int(stored['exp'])
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise BootstrapError('admin_jwt_payload_invalid_local') from exc
-    if not token or exp <= int(time.time()) + 120:
-        raise BootstrapError('admin_jwt_expired_or_too_close_to_expiry')
+        raise BootstrapError(f'local_cofre_mint_failed:exit_{completed.returncode}')
+    token = completed.stdout.strip()
+    if not token:
+        raise BootstrapError('local_cofre_mint_empty_token')
     return token
 
 
@@ -164,10 +174,11 @@ def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: s
 
     effective_admin_jwt = admin_jwt.strip()
     if not effective_admin_jwt and local_cofre_container:
-        effective_admin_jwt = read_admin_jwt_from_local_runtime(local_cofre_container, environment='dev')
-    if not effective_admin_jwt:
-        effective_admin_jwt = read_admin_jwt(cofre_base, vault_token, environment='dev')
-    new_token = mint_service_token(api_base, effective_admin_jwt)
+        new_token = mint_service_token_from_local_runtime(local_cofre_container, api_base, environment='dev')
+    else:
+        if not effective_admin_jwt:
+            effective_admin_jwt = read_admin_jwt(cofre_base, vault_token, environment='dev')
+        new_token = mint_service_token(api_base, effective_admin_jwt)
     client.set_secret(secret_name, new_token, tags={'environment': 'dev', 'consumer': LABEL, 'scope': SCOPE, 'source': 'reqsys-service-token'})
     readiness = validate_service_token(api_base, new_token)
     if readiness != 200:

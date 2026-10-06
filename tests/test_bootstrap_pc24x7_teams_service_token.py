@@ -133,15 +133,9 @@ def test_direct_admin_jwt_mints_without_vault_lookup(monkeypatch):
 def test_local_runtime_admin_jwt_precedes_vault_api_lookup(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
-    monkeypatch.setattr(module, 'read_admin_jwt_from_local_runtime', lambda *_args, **_kwargs: 'admin-from-local-runtime')
+    monkeypatch.setattr(module, 'mint_service_token_from_local_runtime', lambda *_args, **_kwargs: 'new-service-token')
     monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('global vault lookup must not run')))
-    seen = {}
-
-    def mint(_api, jwt, **_kwargs):
-        seen['jwt'] = jwt
-        return 'new-service-token'
-
-    monkeypatch.setattr(module, 'mint_service_token', mint)
+    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('admin JWT must not leave the container')))
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
     result = module.bootstrap(
         api_base='https://dev.invalid',
@@ -151,7 +145,6 @@ def test_local_runtime_admin_jwt_precedes_vault_api_lookup(monkeypatch):
         secret_name='pc24x7-token',
         local_cofre_container=module.DEFAULT_LOCAL_COFRE_CONTAINER,
     )
-    assert seen['jwt'] == 'admin-from-local-runtime'
     assert result.token_created is True
 
 
@@ -163,15 +156,15 @@ def test_local_runtime_reader_fails_closed_when_secret_is_absent(monkeypatch):
 
     monkeypatch.setattr(module.subprocess, 'run', lambda *args, **kwargs: Completed())
     try:
-        module.read_admin_jwt_from_local_runtime(module.DEFAULT_LOCAL_COFRE_CONTAINER)
+        module.mint_service_token_from_local_runtime(module.DEFAULT_LOCAL_COFRE_CONTAINER, 'https://dev.invalid')
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
-        assert str(exc) == 'admin_jwt_unavailable_local'
+        assert str(exc) == 'local_cofre_mint_empty_token'
 
 
 def test_local_runtime_reader_blocks_non_dev_container():
     try:
-        module.read_admin_jwt_from_local_runtime('reqsys-api-prod')
+        module.mint_service_token_from_local_runtime('reqsys-api-prod', 'https://prod.invalid')
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert str(exc) == 'local_cofre_target_blocked'
