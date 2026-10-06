@@ -79,6 +79,7 @@ jobs:
       REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev' }}
       REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness' }}
       PC24X7_TEAMS_ALLOW_PROVISION: 'true'
+      PC24X7_LOCAL_COFRE_CONTAINER: wt-pc24x7-piloto-api-1
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -117,16 +118,6 @@ jobs:
         run: |
           node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-teams-runtime-reconcile/signed-locator.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Validar credencial local do Cofre sem expor valor
-        shell: powershell
-        run: |
-          $vaultToken = [Environment]::GetEnvironmentVariable('VAULT_API_TOKEN')
-          if ([string]::IsNullOrWhiteSpace($vaultToken)) {
-            Write-Error 'VAULT_API_TOKEN_missing_on_pc24x7'
-            exit 2
-          }
-          Write-Output "::add-mask::$vaultToken"
 
       - name: Instalar cliente Key Vault no PC24x7
         shell: powershell

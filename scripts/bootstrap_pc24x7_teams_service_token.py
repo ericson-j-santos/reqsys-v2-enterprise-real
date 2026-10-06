@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import time
 from dataclasses import asdict, dataclass
 from urllib.error import HTTPError, URLError
@@ -13,6 +14,7 @@ LABEL = os.getenv('REQSYS_SERVICE_TOKEN_LABEL', 'pc24x7-teams-dev').strip() or '
 DEFAULT_SECRET_NAME = os.getenv('REQSYS_SERVICE_TOKEN_SECRET_NAME', 'reqsys-pc24x7-teams-service-token').strip() or 'reqsys-pc24x7-teams-service-token'
 VALIDATION_PATH = os.getenv('REQSYS_SERVICE_TOKEN_VALIDATION_PATH', '/v1/teams-gateway/ai-conversations/readiness').strip() or '/v1/teams-gateway/ai-conversations/readiness'
 DEFAULT_API = ''
+DEFAULT_LOCAL_COFRE_CONTAINER = 'wt-pc24x7-piloto-api-1'
 
 
 class BootstrapError(RuntimeError):
@@ -75,6 +77,51 @@ def read_admin_jwt(cofre_base: str, vault_token: str, *, environment: str = 'dev
     return token
 
 
+def read_admin_jwt_from_local_runtime(container: str, *, environment: str = 'dev') -> str:
+    """Lê o JWT somente do keyring persistente do runtime DEV no PC24x7.
+
+    O valor trafega apenas pelo pipe local capturado pelo processo e nunca é
+    incluído na evidência sanitizada. A identidade Compose impede apontar este
+    bootstrap para outro container/ambiente.
+    """
+    if container != DEFAULT_LOCAL_COFRE_CONTAINER or environment != 'dev':
+        raise BootstrapError('local_cofre_target_blocked')
+    probe = (
+        "import json\n"
+        "from app.core.secrets import read_secret_from_vault\n"
+        f"raw=read_secret_from_vault('human_admin_jwt:{environment}')\n"
+        "print(raw or '')\n"
+    )
+    try:
+        completed = subprocess.run(
+            ['docker', 'exec', '-i', container, 'python', '-'],
+            input=probe,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=30,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise BootstrapError(f'local_cofre_read_failed:{type(exc).__name__}') from None
+    if completed.returncode != 0:
+        raise BootstrapError(f'local_cofre_read_failed:exit_{completed.returncode}')
+    raw = completed.stdout.strip()
+    if not raw:
+        raise BootstrapError('admin_jwt_unavailable_local')
+    try:
+        stored = json.loads(raw)
+        token = str(stored['token']).strip()
+        exp = int(stored['exp'])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise BootstrapError('admin_jwt_payload_invalid_local') from exc
+    if not token or exp <= int(time.time()) + 120:
+        raise BootstrapError('admin_jwt_expired_or_too_close_to_expiry')
+    return token
+
+
 def mint_service_token(api_base: str, admin_jwt: str, *, expires_in_days: int = 90) -> str:
     status, payload = request_json('POST', runtime_api_url(api_base, '/v1/admin/service-tokens'), headers={'Authorization': f'Bearer {admin_jwt}', 'X-Correlation-Id': 'pc24x7-token-bootstrap-mint'}, body={'label': LABEL, 'scopes': [SCOPE], 'expires_in_days': expires_in_days})
     if status not in (200, 201):
@@ -97,7 +144,7 @@ def keyvault_client(vault_name: str):
     return SecretClient(vault_url=f'https://{vault_name}.vault.azure.net', credential=AzureCliCredential())
 
 
-def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: str, secret_name: str, allow_provision: bool = True, admin_jwt: str = '') -> BootstrapResult:
+def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: str, secret_name: str, allow_provision: bool = True, admin_jwt: str = '', local_cofre_container: str = '') -> BootstrapResult:
     client = keyvault_client(vault_name)
     existing = None
     try:
@@ -115,7 +162,11 @@ def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: s
     elif not allow_provision:
         raise BootstrapError('service_token_missing_provisioning_disabled')
 
-    effective_admin_jwt = admin_jwt.strip() or read_admin_jwt(cofre_base, vault_token, environment='dev')
+    effective_admin_jwt = admin_jwt.strip()
+    if not effective_admin_jwt and local_cofre_container:
+        effective_admin_jwt = read_admin_jwt_from_local_runtime(local_cofre_container, environment='dev')
+    if not effective_admin_jwt:
+        effective_admin_jwt = read_admin_jwt(cofre_base, vault_token, environment='dev')
     new_token = mint_service_token(api_base, effective_admin_jwt)
     client.set_secret(secret_name, new_token, tags={'environment': 'dev', 'consumer': LABEL, 'scope': SCOPE, 'source': 'reqsys-service-token'})
     readiness = validate_service_token(api_base, new_token)
@@ -132,17 +183,18 @@ def main() -> int:
     cofre_base = os.getenv('COFRE_API_URL', api_base).strip() or api_base
     vault_token = os.getenv('VAULT_API_TOKEN', '').strip()
     admin_jwt = os.getenv('COFRE_ADMIN_JWT', '').strip()
+    local_cofre_container = os.getenv('PC24X7_LOCAL_COFRE_CONTAINER', '').strip()
     vault_name = os.getenv('REQSYS_KEY_VAULT_NAME', '').strip()
     secret_name = os.getenv('PC24X7_TEAMS_SERVICE_TOKEN_SECRET', DEFAULT_SECRET_NAME).strip() or DEFAULT_SECRET_NAME
     allow_provision = os.getenv('PC24X7_TEAMS_ALLOW_PROVISION', 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
-    if allow_provision and not admin_jwt and not vault_token:
+    if allow_provision and not admin_jwt and not vault_token and not local_cofre_container:
         print(json.dumps({'status': 'blocked', 'reason': 'ADMIN_CREDENTIAL_missing', 'secret_value_exposed': False}))
         return 4
     if not vault_name:
         print(json.dumps({'status': 'blocked', 'reason': 'REQSYS_KEY_VAULT_NAME_missing', 'secret_value_exposed': False}))
         return 4
     try:
-        result = bootstrap(api_base=api_base, cofre_base=cofre_base, vault_token=vault_token, vault_name=vault_name, secret_name=secret_name, allow_provision=allow_provision, admin_jwt=admin_jwt)
+        result = bootstrap(api_base=api_base, cofre_base=cofre_base, vault_token=vault_token, vault_name=vault_name, secret_name=secret_name, allow_provision=allow_provision, admin_jwt=admin_jwt, local_cofre_container=local_cofre_container)
     except BootstrapError as exc:
         print(json.dumps({'status': 'blocked', 'reason': str(exc), 'secret_value_exposed': False}))
         return 4

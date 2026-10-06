@@ -8,7 +8,8 @@ Eliminar o GitHub Secret COFRE_ADMIN_JWT do bootstrap S2S. O JWT humano deve ser
 2. O script mantém fallback para read_admin_jwt quando admin_jwt não é fornecido.
 3. read_admin_jwt usa human_admin_jwt:dev e rejeita JWT expirado ou próximo da expiração.
 4. Nenhum valor secreto é publicado.
-5. Ausência de VAULT_API_TOKEN no ambiente de execução falha fechado.
+5. O bootstrap no PC24x7 lê `human_admin_jwt:dev` diretamente do keyring persistente do container DEV, sem depender de `VAULT_API_TOKEN` global ou GitHub Secret.
+6. Ausência, payload inválido ou expiração da credencial local falha fechado.
 
 ## Critérios de aceite
 - Teste impede reintrodução de COFRE_ADMIN_JWT no workflow.
