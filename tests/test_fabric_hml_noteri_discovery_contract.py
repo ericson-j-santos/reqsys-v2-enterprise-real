@@ -30,6 +30,13 @@ class FabricHmlNoteriDiscoveryContractTests(unittest.TestCase):
         self.assertIn('"${{ github.ref }}" -eq "refs/heads/main"', workflow)
         self.assertIn("APPLY-FABRIC-HML-NONSECRET-VARS", workflow)
 
+    def test_workflow_provisions_python_with_node24_action(self):
+        workflow = Path(".github/workflows/fabric-hml-noteri-discovery.yml").read_text(encoding="utf-8")
+        setup = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"
+        self.assertEqual(workflow.count(setup), 2)
+        self.assertIn("python-version: '3.12'", workflow)
+        self.assertIn("architecture: 'x64'", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
