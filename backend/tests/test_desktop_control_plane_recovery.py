@@ -284,10 +284,12 @@ def test_dispatch_fails_closed_on_invalid_comment_creation(
 
 def test_dispatch_windows_component_health_is_fixed_and_idempotent(monkeypatch) -> None:
     _set_environment(monkeypatch)
-    now=datetime(2026,10,5,23,0,tzinfo=UTC); calls=[]
+    now = datetime(2026, 10, 5, 23, 0, tzinfo=UTC)
+    calls = []
     def transport(method,url,token,payload):
         calls.append((method,payload))
-        if method=="GET": return 200,[]
+        if method == "GET":
+            return 200, []
         assert payload=={"body":recovery.WINDOWS_COMPONENT_HEALTH_COMMAND}
         return 201,{"id":9876}
     result=recovery.dispatch_windows_component_health("corr-health-0001",transport=transport,now=now,token="token")
@@ -302,9 +304,11 @@ def test_reusable_comment_is_scoped_to_exact_health_command(monkeypatch) -> None
     now=datetime(2026,10,5,23,0,tzinfo=UTC)
     wrong=_comment(111,now,body=recovery.COMMAND)
     right=_comment(222,now,body=recovery.WINDOWS_COMPONENT_HEALTH_COMMAND)
-    calls=[]
-    def transport(method,url,token,payload):
-        calls.append(method); return 200,[wrong,right]
+    calls = []
+
+    def transport(method, url, token, payload):
+        calls.append(method)
+        return 200, [wrong, right]
     result=recovery.dispatch_windows_component_health("corr-health-0002",transport=transport,now=now,token="token")
     assert result["broker_comment_id"]==222
     assert result["reused_fresh_command"] is True
