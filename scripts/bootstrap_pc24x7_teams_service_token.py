@@ -97,7 +97,7 @@ def mint_service_token_from_local_runtime(
         "from app.core.security import criar_token\n"
         "admin=criar_token({'sub':'pc24x7-bootstrap','papel':'admin'},minutos=5)\n"
         "_base,label,scope,days=sys.argv[1:5]\n"
-        "url='http://127.0.0.1:8000/api/v1/admin/service-tokens'\n"
+        "url='http://127.0.0.1:8000/v1/admin/service-tokens'\n"
         "body=json.dumps({'label':label,'scopes':[scope],'expires_in_days':int(days)}).encode()\n"
         "req=Request(url,data=body,method='POST',headers={'Authorization':'Bearer '+admin,'X-Correlation-Id':'pc24x7-token-bootstrap-mint','Content-Type':'application/json'})\n"
         "with urlopen(req,timeout=30) as response:\n"

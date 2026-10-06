@@ -19,7 +19,8 @@
     "JWT expirado é rejeitado.",
     "Segredos não aparecem em evidências.",
     "Container ou ambiente diferente do alvo DEV canônico falha fechado.",
-    "JWT administrativo não atravessa stdout nem deixa o container DEV."
+    "JWT administrativo não atravessa stdout nem deixa o container DEV.",
+    "O mint dentro do container usa a rota direta /v1/admin/service-tokens, sem o prefixo externo /api."
   ],
   "sdd_gate": {
     "tests": [
