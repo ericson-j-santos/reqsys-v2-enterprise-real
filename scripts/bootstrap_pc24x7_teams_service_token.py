@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import time
 from dataclasses import asdict, dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -62,21 +61,6 @@ def validate_service_token(api_base: str, token: str) -> int:
     return status
 
 
-def read_admin_jwt(cofre_base: str, vault_token: str, *, environment: str = 'dev') -> str:
-    status, payload = request_json('GET', runtime_api_url(cofre_base, f'/v1/cofre/segredos/human_admin_jwt:{environment}'), headers={'X-Vault-Token': vault_token})
-    if status != 200:
-        raise BootstrapError(f'admin_jwt_unavailable:http_{status}')
-    try:
-        stored = json.loads(payload['data']['value'])
-        token = str(stored['token']).strip()
-        exp = int(stored['exp'])
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise BootstrapError('admin_jwt_payload_invalid') from exc
-    if not token or exp <= int(time.time()) + 120:
-        raise BootstrapError('admin_jwt_expired_or_too_close_to_expiry')
-    return token
-
-
 def mint_service_token_from_local_runtime(
     container: str,
     api_base: str,
@@ -84,32 +68,18 @@ def mint_service_token_from_local_runtime(
     environment: str = 'dev',
     expires_in_days: int = 90,
 ) -> str:
-    """Emite um JWT efêmero e executa o mint dentro do runtime DEV protegido.
-
-    O JWT administrativo nunca deixa o contêiner. Somente o novo token S2S,
-    que será imediatamente persistido no Key Vault, retorna pelo pipe local.
-    """
+    """Rotaciona o token pela operacao interna DEV-only do runtime local."""
     if container != DEFAULT_LOCAL_COFRE_CONTAINER or environment != 'dev':
         raise BootstrapError('local_cofre_target_blocked')
-    probe = (
-        "import json,sys\n"
-        "from urllib.request import Request,urlopen\n"
-        "from app.core.security import criar_token\n"
-        "admin=criar_token({'sub':'pc24x7-bootstrap','papel':'admin'},minutos=5)\n"
-        "_base,label,scope,days=sys.argv[1:5]\n"
-        "url='http://127.0.0.1:8000/v1/admin/service-tokens'\n"
-        "body=json.dumps({'label':label,'scopes':[scope],'expires_in_days':int(days)}).encode()\n"
-        "req=Request(url,data=body,method='POST',headers={'Authorization':'Bearer '+admin,'X-Correlation-Id':'pc24x7-token-bootstrap-mint','Content-Type':'application/json'})\n"
-        "with urlopen(req,timeout=30) as response:\n"
-        " payload=json.loads(response.read().decode())\n"
-        " token=str(payload.get('data',{}).get('token') or '').strip()\n"
-        " assert token, 'service_token_response_empty_token'\n"
-        " print(token)\n"
-    )
     try:
         completed = subprocess.run(
-            ['docker', 'exec', '-i', container, 'python', '-', api_base, LABEL, SCOPE, str(expires_in_days)],
-            input=probe,
+            [
+                'docker', 'exec', container, 'python', '-m',
+                'app.core.dev_service_token_bootstrap',
+                '--label', LABEL,
+                '--scope', SCOPE,
+                '--expires-in-days', str(expires_in_days),
+            ],
             capture_output=True,
             text=True,
             encoding='utf-8',
@@ -128,19 +98,6 @@ def mint_service_token_from_local_runtime(
     return token
 
 
-def mint_service_token(api_base: str, admin_jwt: str, *, expires_in_days: int = 90) -> str:
-    status, payload = request_json('POST', runtime_api_url(api_base, '/v1/admin/service-tokens'), headers={'Authorization': f'Bearer {admin_jwt}', 'X-Correlation-Id': 'pc24x7-token-bootstrap-mint'}, body={'label': LABEL, 'scopes': [SCOPE], 'expires_in_days': expires_in_days})
-    if status not in (200, 201):
-        raise BootstrapError(f'service_token_mint_failed:http_{status}')
-    try:
-        token = str(payload['data']['token']).strip()
-    except (KeyError, TypeError):
-        raise BootstrapError('service_token_response_without_token') from None
-    if not token:
-        raise BootstrapError('service_token_response_empty_token')
-    return token
-
-
 def keyvault_client(vault_name: str):
     try:
         from azure.identity import AzureCliCredential
@@ -150,7 +107,7 @@ def keyvault_client(vault_name: str):
     return SecretClient(vault_url=f'https://{vault_name}.vault.azure.net', credential=AzureCliCredential())
 
 
-def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: str, secret_name: str, allow_provision: bool = True, admin_jwt: str = '', local_cofre_container: str = '') -> BootstrapResult:
+def bootstrap(*, api_base: str, vault_name: str, secret_name: str, allow_provision: bool = True, local_cofre_container: str = '') -> BootstrapResult:
     client = keyvault_client(vault_name)
     existing = None
     try:
@@ -168,13 +125,9 @@ def bootstrap(*, api_base: str, cofre_base: str, vault_token: str, vault_name: s
     elif not allow_provision:
         raise BootstrapError('service_token_missing_provisioning_disabled')
 
-    effective_admin_jwt = admin_jwt.strip()
-    if not effective_admin_jwt and local_cofre_container:
-        new_token = mint_service_token_from_local_runtime(local_cofre_container, api_base, environment='dev')
-    else:
-        if not effective_admin_jwt:
-            effective_admin_jwt = read_admin_jwt(cofre_base, vault_token, environment='dev')
-        new_token = mint_service_token(api_base, effective_admin_jwt)
+    if not local_cofre_container:
+        raise BootstrapError('local_dev_runtime_required_for_provisioning')
+    new_token = mint_service_token_from_local_runtime(local_cofre_container, api_base, environment='dev')
     client.set_secret(secret_name, new_token, tags={'environment': 'dev', 'consumer': LABEL, 'scope': SCOPE, 'source': 'reqsys-service-token'})
     readiness = validate_service_token(api_base, new_token)
     if readiness != 200:
@@ -187,21 +140,18 @@ def main() -> int:
     if not api_base:
         print(json.dumps({'status': 'blocked', 'reason': 'REQSYS_API_BASE_URL_missing', 'secret_value_exposed': False}))
         return 4
-    cofre_base = os.getenv('COFRE_API_URL', api_base).strip() or api_base
-    vault_token = os.getenv('VAULT_API_TOKEN', '').strip()
-    admin_jwt = os.getenv('COFRE_ADMIN_JWT', '').strip()
     local_cofre_container = os.getenv('PC24X7_LOCAL_COFRE_CONTAINER', '').strip()
     vault_name = os.getenv('REQSYS_KEY_VAULT_NAME', '').strip()
     secret_name = os.getenv('PC24X7_TEAMS_SERVICE_TOKEN_SECRET', DEFAULT_SECRET_NAME).strip() or DEFAULT_SECRET_NAME
     allow_provision = os.getenv('PC24X7_TEAMS_ALLOW_PROVISION', 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
-    if allow_provision and not admin_jwt and not vault_token and not local_cofre_container:
-        print(json.dumps({'status': 'blocked', 'reason': 'ADMIN_CREDENTIAL_missing', 'secret_value_exposed': False}))
+    if allow_provision and not local_cofre_container:
+        print(json.dumps({'status': 'blocked', 'reason': 'PC24X7_LOCAL_COFRE_CONTAINER_missing', 'secret_value_exposed': False}))
         return 4
     if not vault_name:
         print(json.dumps({'status': 'blocked', 'reason': 'REQSYS_KEY_VAULT_NAME_missing', 'secret_value_exposed': False}))
         return 4
     try:
-        result = bootstrap(api_base=api_base, cofre_base=cofre_base, vault_token=vault_token, vault_name=vault_name, secret_name=secret_name, allow_provision=allow_provision, admin_jwt=admin_jwt, local_cofre_container=local_cofre_container)
+        result = bootstrap(api_base=api_base, vault_name=vault_name, secret_name=secret_name, allow_provision=allow_provision, local_cofre_container=local_cofre_container)
     except BootstrapError as exc:
         print(json.dumps({'status': 'blocked', 'reason': str(exc), 'secret_value_exposed': False}))
         return 4
