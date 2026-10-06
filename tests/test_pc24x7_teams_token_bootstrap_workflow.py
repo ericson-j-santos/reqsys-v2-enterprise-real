@@ -55,7 +55,8 @@ def test_bootstrap_autocorrige_runtime_pc24x7_antes_do_token() -> None:
 
 def test_bootstrap_script_prefere_cofre_local_quando_admin_jwt_nao_e_injetado() -> None:
     script = Path('scripts/bootstrap_pc24x7_teams_service_token.py').read_text(encoding='utf-8')
-    assert "admin_jwt.strip() or read_admin_jwt(cofre_base, vault_token, environment='dev')" in script
+    assert 'mint_service_token_from_local_runtime(local_cofre_container' in script
+    assert "read_admin_jwt(cofre_base, vault_token, environment='dev')" in script
     assert "/v1/cofre/segredos/human_admin_jwt:{environment}" in script
     assert "admin_jwt_expired_or_too_close_to_expiry" in script
 
@@ -69,7 +70,8 @@ def test_mint_roda_no_mesmo_job_self_hosted_que_le_o_cofre_local() -> None:
     assert 'Validar ou provisionar token S2S no PC24x7' not in reconcile
     assert "GetEnvironmentVariable('VAULT_API_TOKEN')" not in reconcile
     assert 'runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]' in token_job
-    assert "GetEnvironmentVariable('VAULT_API_TOKEN')" in token_job
+    assert 'PC24X7_LOCAL_COFRE_CONTAINER: wt-pc24x7-piloto-api-1' in token_job
+    assert "GetEnvironmentVariable('VAULT_API_TOKEN')" not in token_job
     assert 'Validar ou provisionar token S2S no PC24x7' in token_job
     assert 'bootstrap_pc24x7_teams_service_token.py' in token_job
     assert 'COFRE_ADMIN_JWT' not in token_job
@@ -86,5 +88,5 @@ def test_reconcile_publica_evidencia_antes_do_bootstrap_fail_closed() -> None:
     assert 'if: always()' in reconcile
     assert 'VAULT_API_TOKEN_missing_on_pc24x7' not in reconcile
     assert 'needs: [contract, reconcile-runtime-dev]' in token_job
-    assert 'VAULT_API_TOKEN_missing_on_pc24x7' in token_job
+    assert 'VAULT_API_TOKEN_missing_on_pc24x7' not in token_job
 
