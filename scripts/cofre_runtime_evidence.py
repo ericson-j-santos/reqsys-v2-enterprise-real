@@ -38,9 +38,17 @@ class HttpResponse:
 
 
 class ApiClient:
-    def __init__(self, base_url: str, admin_jwt: str, timeout: int, correlation_id: str):
+    def __init__(
+        self,
+        base_url: str,
+        admin_jwt: str,
+        timeout: int,
+        correlation_id: str,
+        service_token: str = "",
+    ):
         self.base_url = base_url.rstrip("/")
         self.admin_jwt = admin_jwt.strip()
+        self.service_token = service_token.strip()
         self.timeout = timeout
         self.correlation_id = correlation_id
 
@@ -60,6 +68,8 @@ class ApiClient:
         }
         if self.admin_jwt:
             headers["Authorization"] = f"Bearer {self.admin_jwt}"
+        if self.service_token:
+            headers["X-Service-Token"] = self.service_token
         if vault_token:
             headers["X-Vault-Token"] = vault_token
         body = None
@@ -154,7 +164,13 @@ def _check_audit(client: ApiClient, actions: set[str]) -> dict[str, Any]:
 
 
 def before_restart(args: argparse.Namespace) -> dict[str, Any]:
-    client = ApiClient(args.base_url, args.admin_jwt, args.timeout, args.correlation_id)
+    client = ApiClient(
+        args.base_url,
+        args.admin_jwt,
+        args.timeout,
+        args.correlation_id,
+        args.service_token,
+    )
     started = time.monotonic()
     status_before = _data(client.request("GET", "/v1/cofre/status"))
     initialized_by_gate = False
@@ -223,7 +239,13 @@ def before_restart(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def after_restart(args: argparse.Namespace) -> dict[str, Any]:
-    client = ApiClient(args.base_url, args.admin_jwt, args.timeout, args.correlation_id)
+    client = ApiClient(
+        args.base_url,
+        args.admin_jwt,
+        args.timeout,
+        args.correlation_id,
+        args.service_token,
+    )
     started = time.monotonic()
     state_path = Path(args.state_file)
     if not state_path.exists():
@@ -295,6 +317,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--environment", required=True, choices=("dev", "stg"))
     parser.add_argument("--admin-jwt", default=os.getenv("COFRE_ADMIN_JWT", ""))
+    parser.add_argument(
+        "--service-token",
+        default=os.getenv("COFRE_RUNTIME_SERVICE_TOKEN", ""),
+    )
     parser.add_argument("--state-key", default=os.getenv("COFRE_STATE_FERNET_KEY", ""))
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--state-file", required=True)
@@ -304,8 +330,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-attempt", default=os.getenv("GITHUB_RUN_ATTEMPT", "1"))
     parser.add_argument("--workflow-sha", default=os.getenv("GITHUB_SHA", "local"))
     args = parser.parse_args(argv)
-    if not args.admin_jwt.strip():
-        parser.error("--admin-jwt ou COFRE_ADMIN_JWT é obrigatório")
+    if not args.admin_jwt.strip() and not args.service_token.strip():
+        parser.error(
+            "--service-token/COFRE_RUNTIME_SERVICE_TOKEN ou "
+            "--admin-jwt/COFRE_ADMIN_JWT é obrigatório"
+        )
     if not args.state_key.strip():
         parser.error("--state-key ou COFRE_STATE_FERNET_KEY é obrigatório")
     if args.timeout < 1 or args.timeout > 120:

@@ -116,6 +116,49 @@ def test_api_client_uses_bearer_for_admin_jwt(monkeypatch):
     assert captured["timeout"] == 7
 
 
+def test_api_client_uses_scoped_service_token(monkeypatch):
+    captured = {}
+
+    class _Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{}'
+
+    def _fake_urlopen(request, timeout):
+        captured["authorization"] = request.get_header("Authorization")
+        captured["service_token"] = request.get_header("X-service-token")
+        return _Response()
+
+    monkeypatch.setattr(module, "urlopen", _fake_urlopen)
+    client = module.ApiClient(
+        "https://example.test", "", 7, "corr-auth", "scoped-service-token"
+    )
+    response = client.request("GET", "/v1/cofre/status")
+
+    assert response.status == 200
+    assert captured["authorization"] is None
+    assert captured["service_token"] == "scoped-service-token"
+
+
+def test_parse_args_accepts_service_token_without_admin_jwt(tmp_path: Path):
+    args = _base_args(tmp_path)
+    jwt_index = args.index("--admin-jwt")
+    del args[jwt_index:jwt_index + 2]
+    args.extend(["--service-token", "scoped-service-token"])
+
+    parsed = module.parse_args(args)
+
+    assert parsed.admin_jwt == ""
+    assert parsed.service_token == "scoped-service-token"
+
+
 def test_invalid_state_key_is_rejected(tmp_path: Path):
     state_path = tmp_path / "state.bin"
     valid_key = Fernet.generate_key().decode("ascii")

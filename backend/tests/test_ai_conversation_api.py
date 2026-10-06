@@ -141,6 +141,36 @@ def test_entrega_teams_prioriza_bot_direto(monkeypatch):
     assert result['entrega']['message_id'] == 'msg-1'
 
 
+def test_entrega_teams_faz_fallback_quando_bot_retorna_nao_entregue(monkeypatch):
+    db = MagicMock()
+    conversa = _conversation()
+    item = SimpleNamespace(id=56)
+    monkeypatch.setattr(
+        api,
+        'enviar_cartao_conversa_bot',
+        AsyncMock(return_value={'entregue': False, 'canal_usado': 'bot'}),
+    )
+    monkeypatch.setattr(api, '_enfileirar_teams', lambda *args, **kwargs: item)
+    monkeypatch.setattr(api, 'executar_item_fila', AsyncMock(return_value=item))
+    monkeypatch.setattr(api, 'serializar_item', lambda value: {'id': value.id})
+
+    result = asyncio.run(
+        api._entregar_resposta_teams(
+            db,
+            conversa=conversa,
+            resposta='resposta',
+            correlation_id='corr-not-delivered',
+            habilitado=True,
+        )
+    )
+
+    assert result == {
+        'modo': 'fila_gateway',
+        'entrega': None,
+        'fila': {'id': 56},
+    }
+
+
 @pytest.mark.parametrize(
     'direct_error',
     [AITeamsBotDeliveryError('sem referência'), RuntimeError('falha inesperada')],

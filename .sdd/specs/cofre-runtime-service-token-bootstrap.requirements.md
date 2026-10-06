@@ -31,3 +31,4 @@ PC24x7 → Cofre local `human_admin_jwt:dev` → API ReqSys `POST /v1/admin/serv
 - Teams permanece o modo padrão.
 - Nenhum valor secreto é publicado em logs ou artifacts.
 - O Cofre Runtime Evidence Gate autentica no Azure por OIDC e lê o token dedicado diretamente do Key Vault; não depende de cópia em GitHub Secrets.
+- O ciclo write/read/audit do gate usa o mesmo token dedicado no header `X-Service-Token`; JWT administrativo permanece apenas como compatibilidade explícita e não é requisito do workflow físico.
