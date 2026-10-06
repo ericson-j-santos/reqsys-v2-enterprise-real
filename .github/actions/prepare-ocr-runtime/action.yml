@@ -70,6 +70,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        python -m pip install --disable-pip-version-check packaging==25.0
         python scripts/prepare_ocr_runtime_package.py
         python - <<'PY' >> "$GITHUB_OUTPUT"
         import json
