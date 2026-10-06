@@ -3,6 +3,24 @@ from pathlib import Path
 
 WORKFLOW = Path('.github/workflows/pc24x7-teams-token-bootstrap.yml')
 
+NODE24_ACTIONS = {
+    'actions/checkout': '3d3c42e5aac5ba805825da76410c181273ba90b1',
+    'actions/setup-python': '5fda3b95a4ea91299a34e894583c3862153e4b97',
+    'actions/upload-artifact': '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+    'azure/login': 'a641126d1b8aa4d1fa005f4f92df94a3a4c4c906',
+}
+
+
+def test_workflow_usa_actions_node24_fixadas_por_sha() -> None:
+    text = WORKFLOW.read_text(encoding='utf-8')
+    for action, sha in NODE24_ACTIONS.items():
+        assert f'{action}@{sha}' in text
+    assert 'Node 24' in text
+    assert '11d5960a326750d5838078e36cf38b85af677262' not in text
+    assert 'a26af69be951a213d495a4c3e4e4022e16d87065' not in text
+    assert 'ea165f8d65b6e75b540449e92b4886f43607fa02' not in text
+    assert '7184910d9eb2b1c5e48f7073824a90609bb9b6d6' not in text
+
 
 def test_bootstrap_nao_injeta_jwt_admin_do_github() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
