@@ -69,6 +69,8 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
         self.assertIn("Configurações CodeQL ausentes", section)
         self.assertIn("Categoria CodeQL duplicada", section)
         self.assertIn("Linguagens CodeQL desconhecidas", section)
+        self.assertIn('root.rglob("processed/upload.sarif")', section)
+        self.assertNotIn('root.glob("codeql-sarif-*/processed/upload.sarif")', section)
 
     def test_push_main_and_manual_keep_full_scan(self):
         scope = self.section("  scope:\n", "  gitleaks:\n")

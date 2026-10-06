@@ -493,7 +493,10 @@ jobs:
               raise SystemExit(f"Linguagens CodeQL desconhecidas: {unknown}")
           expected = {f"/language:{language}/": names[language] for language in languages}
           found = set()
-          for sarif in root.glob("codeql-sarif-*/processed/upload.sarif"):
+          # download-artifact v8 extracts a single pattern match directly into
+          # `path`, while multiple matches retain one directory per artifact.
+          # Accept both layouts and keep category validation fail-closed.
+          for sarif in root.rglob("processed/upload.sarif"):
               payload = json.loads(sarif.read_text(encoding="utf-8"))
               categories = {
                   run.get("automationDetails", {}).get("id")
