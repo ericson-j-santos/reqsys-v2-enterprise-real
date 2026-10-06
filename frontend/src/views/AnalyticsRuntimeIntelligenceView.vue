@@ -120,15 +120,15 @@ function fallbackSnapshot() {
     staging_validation: { staging_ready: false },
     readiness_matrix: [
       {
-        capability: 'API ARI',
+        capability: 'serviço ARI',
         estado: 'EVIDENCIA_AUSENTE',
-        evidencia: 'A API não respondeu; o frontend não promove fallback a estado saudável.',
-        gap: 'Restabelecer API e repetir a coleta.',
+        evidencia: 'A serviço não respondeu; o aplicação não promove fallback a estado saudável.',
+        gap: 'Restabelecer serviço e repetir a coleta.',
         bloqueia_producao: true,
       },
     ],
     validacoes: [],
-    production_gaps: ['API ARI indisponível; manter fail-closed.'],
+    production_gaps: ['serviço ARI indisponível; manter fail-closed.'],
     figma: { status: 'evidence_pending', ready: false, evidence: 'Sem readback Figma atual.' },
   }
 }
