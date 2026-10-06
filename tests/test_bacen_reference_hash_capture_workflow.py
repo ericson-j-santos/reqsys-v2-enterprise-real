@@ -28,3 +28,14 @@ def test_normative_inputs_remain_fail_closed():
     assert "strict=true" in text
     assert 'if [[ "${{ github.event_name }}" == "pull_request" ]]' in text
     assert 'if [[ "${{ steps.scope.outputs.strict }}" == "true" ]]' in text
+
+
+def test_workflow_structure_is_not_duplicated():
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert text.count("- name: Resolve strict verification scope") == 1
+    assert text.count("- name: Capture official BCB references") == 1
+    assert text.count("- name: Print computed hash evidence") == 1
+    assert text.count("- name: Publish capture evidence") == 1
+    assert text.count("- name: Append summary") == 1
+    assert "validate_bacen_normative_axis\\.py)$'; then" in text
