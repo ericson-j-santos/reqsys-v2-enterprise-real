@@ -20,6 +20,7 @@ def test_bootstrap_permanece_dev_only_e_resolve_locator_assinado() -> None:
     assert 'https://reqsys-api-dev.fly.dev' not in text
     assert 'reqsys-api-stg' not in text
     assert 'reqsys-app.fly.dev' not in text
+    assert 'New-Item -ItemType Directory -Force -Path artifacts/pc24x7-teams-runtime-reconcile' in text
     assert '--output artifacts/pc24x7-teams-runtime-reconcile/signed-locator.json' in text
     assert 'steps.locator_bootstrap.outputs.base_url' in text
     assert 'reqsys-pc24x7-teams-service-token' in text

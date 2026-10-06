@@ -162,6 +162,7 @@ jobs:
         id: locator_bootstrap
         shell: powershell
         run: |
+          New-Item -ItemType Directory -Force -Path artifacts/pc24x7-teams-runtime-reconcile | Out-Null
           node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-teams-runtime-reconcile/signed-locator.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
