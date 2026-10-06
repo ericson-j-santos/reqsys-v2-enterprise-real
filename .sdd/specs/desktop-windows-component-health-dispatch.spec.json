@@ -1,0 +1,15 @@
+{
+  "feature_name": "Desktop Windows Component Health Dispatch",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_desktop_control_plane_recovery.py"
+    ]
+  },
+  "traceability": {
+    "producer": "POST /api/internal/desktop-control-plane/windows-component-health",
+    "consumer": "desktop-pc24x7-runtime:/desktop-runtime admin windows-component-health"
+  }
+}
