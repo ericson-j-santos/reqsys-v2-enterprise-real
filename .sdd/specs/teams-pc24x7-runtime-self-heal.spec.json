@@ -36,7 +36,9 @@
     "same_sha_build_info": "required",
     "runtime_health_http_200": "required",
     "sanitized_artifact": "required",
-    "bootstrap_after_reconcile": "required",
+    "reconcile_job_independent_result": "required",
+    "bootstrap_job_after_reconcile": "required",
+    "bootstrap_missing_local_credential": "fail_closed_without_retroactive_reconcile_failure",
     "self_hosted_runner_governance": "required"
   }
 }

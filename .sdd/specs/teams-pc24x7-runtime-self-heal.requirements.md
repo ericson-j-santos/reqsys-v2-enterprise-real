@@ -16,7 +16,9 @@ O bootstrap S2S da Central IA/Teams DEV exige que o runtime público PC24x7 exec
 8. A recriação reutiliza `recreate_cofre_dev_pc24x7.py`, o override administrativo observado no runtime e `config/pc24x7-teams-bot-runtime.override.yml`.
 9. Somente a API DEV é recriada; HML/STG/PROD não são tocados.
 10. A reconciliação só conclui quando `/api/runtime/build-info` reportar exatamente o SHA esperado e `/api/runtime/health` responder com sucesso.
-11. O workflow `pc24x7-teams-token-bootstrap.yml` executa a reconciliação antes de validar/provisionar o token S2S.
+11. O workflow `pc24x7-teams-token-bootstrap.yml` executa a reconciliação em um job dedicado antes de validar/provisionar o token S2S em outro job self-hosted.
 12. Falha na reconciliação bloqueia o bootstrap antes da mutação do token.
-13. A execução publica artifact sanitizado com correlation_id, SHA anterior/final e estado do runtime, sem valores sensíveis.
-14. O workflow self-hosted precisa permanecer explicitamente allowlisted em `.github/self-hosted-runner-policy.json`, coberto pelo ADR-046 e pelo teste de governança do repositório.
+13. A ausência de `VAULT_API_TOKEN` bloqueia o job de bootstrap de forma fail-closed, sem alterar para falha o resultado já concluído do job de reconciliação.
+14. A execução publica artifact sanitizado da reconciliação com correlation_id, SHA anterior/final e estado do runtime, sem valores sensíveis, antes de iniciar o bootstrap.
+15. O job de confirmação final consome exclusivamente o output sanitizado do job de bootstrap.
+16. O workflow self-hosted precisa permanecer explicitamente allowlisted em `.github/self-hosted-runner-policy.json`, coberto pelo ADR-046 e pelo teste de governança do repositório.
