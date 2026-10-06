@@ -38,6 +38,7 @@
     "sanitized_artifact": "required",
     "reconcile_job_independent_result": "required",
     "bootstrap_job_after_reconcile": "required",
+    "bootstrap_locator_output_directory": "created_before_signed_locator_resolution",
     "bootstrap_missing_local_credential": "fail_closed_without_retroactive_reconcile_failure",
     "self_hosted_runner_governance": "required"
   }

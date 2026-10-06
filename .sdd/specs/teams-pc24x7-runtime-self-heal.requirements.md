@@ -22,3 +22,4 @@ O bootstrap S2S da Central IA/Teams DEV exige que o runtime público PC24x7 exec
 14. A execução publica artifact sanitizado da reconciliação com correlation_id, SHA anterior/final e estado do runtime, sem valores sensíveis, antes de iniciar o bootstrap.
 15. O job de confirmação final consome exclusivamente o output sanitizado do job de bootstrap.
 16. O workflow self-hosted precisa permanecer explicitamente allowlisted em `.github/self-hosted-runner-policy.json`, coberto pelo ADR-046 e pelo teste de governança do repositório.
+17. O job de bootstrap cria seu diretório de artifacts no checkout limpo antes de resolver e gravar o locator assinado.
