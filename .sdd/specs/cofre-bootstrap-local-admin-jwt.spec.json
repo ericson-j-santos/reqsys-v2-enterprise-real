@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "feature_name": "Cofre bootstrap local admin JWT",
+  "feature_name": "Cofre bootstrap local com identidade de máquina DEV",
   "increment_type": "gap_fix",
   "phase": "validation",
   "approvals": {
@@ -9,23 +9,26 @@
   "traceability": {
     "workflow": ".github/workflows/pc24x7-teams-token-bootstrap.yml",
     "script": "scripts/bootstrap_pc24x7_teams_service_token.py",
-    "tests": "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
+    "backend_operation": "backend/app/core/dev_service_token_bootstrap.py",
+    "tests": "tests/test_pc24x7_teams_token_bootstrap_workflow.py, backend/tests/test_dev_service_token_bootstrap.py",
     "requirements": ".sdd/specs/cofre-bootstrap-local-admin-jwt.requirements.md"
   },
   "acceptance_criteria": [
     "Workflow não injeta COFRE_ADMIN_JWT.",
-    "No PC24x7, o script emite um JWT administrativo de cinco minutos e executa o mint dentro do container DEV.",
-    "O bootstrap local não depende de VAULT_API_TOKEN global nem de GitHub Secret para obter o JWT administrativo.",
-    "JWT expirado é rejeitado.",
+    "No PC24x7, uma operação interna sem endpoint HTTP rotaciona somente identidades S2S DEV allowlisted.",
+    "O bootstrap local não depende de JWT humano, VAULT_API_TOKEN global ou GitHub Secret administrativo.",
+    "Ambientes diferentes de desenvolvimento e validade superior a 90 dias são rejeitados.",
     "Segredos não aparecem em evidências.",
     "Container ou ambiente diferente do alvo DEV canônico falha fechado.",
-    "JWT administrativo não atravessa stdout nem deixa o container DEV.",
-    "O mint dentro do container usa a rota direta /v1/admin/service-tokens, sem o prefixo externo /api."
+    "Nenhum JWT administrativo é criado.",
+    "A rotação revoga credenciais anteriores e registra auditoria na mesma transação.",
+    "Somente o novo token S2S atravessa o pipe capturado para persistência imediata no Key Vault via OIDC."
   ],
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_teams_token_bootstrap_workflow.py",
-      "tests/test_bootstrap_pc24x7_teams_service_token.py"
+      "tests/test_bootstrap_pc24x7_teams_service_token.py",
+      "backend/tests/test_dev_service_token_bootstrap.py"
     ]
   }
 }

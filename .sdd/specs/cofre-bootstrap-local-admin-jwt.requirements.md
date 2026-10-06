@@ -1,20 +1,22 @@
-# Cofre bootstrap — credencial administrativa local
+# Cofre bootstrap — identidade de máquina local DEV
 
 ## Objetivo
-Eliminar o GitHub Secret COFRE_ADMIN_JWT do bootstrap S2S. No PC24x7, o runtime DEV emite um JWT administrativo de cinco minutos usando sua configuração protegida, consome-o localmente no mint e nunca o exporta.
+Eliminar definitivamente a dependência de identidade administrativa humana no bootstrap S2S. No PC24x7, uma operação interna sem endpoint HTTP rotaciona apenas identidades de máquina DEV explicitamente autorizadas e entrega o novo token ao processo OIDC que o persiste no Key Vault.
 
 ## Requisitos
 1. O workflow não injeta COFRE_ADMIN_JWT.
-2. O script mantém fallback para read_admin_jwt quando admin_jwt não é fornecido.
-3. read_admin_jwt usa human_admin_jwt:dev e rejeita JWT expirado ou próximo da expiração.
+2. O script não lê `human_admin_jwt`, `COFRE_ADMIN_JWT` nem `VAULT_API_TOKEN` para provisionar o token S2S.
+3. O bootstrap local não cria JWT administrativo e não chama a rota administrativa HTTP.
 4. Nenhum valor secreto é publicado.
-5. O bootstrap no PC24x7 emite o JWT administrativo efêmero e executa o mint dentro do container DEV; o JWT nunca deixa o container e não depende de `VAULT_API_TOKEN` global ou GitHub Secret.
+5. O bootstrap executa um comando interno dentro do container DEV, limitado a identidades `(label, scope)` allowlisted e validade máxima de 90 dias.
 6. O alvo permanece fixado ao container DEV canônico; qualquer outro container ou ambiente falha fechado.
-7. Dentro do container, o mint usa a rota FastAPI direta `/v1/admin/service-tokens`; o prefixo `/api` fica restrito ao proxy externo.
+7. A rotação revoga tokens anteriores da mesma identidade e grava o novo hash e o evento de auditoria na mesma transação.
+8. O token em claro existe apenas no pipe capturado pelo bootstrap e é persistido imediatamente no Key Vault pela identidade OIDC do workflow.
 
 ## Critérios de aceite
 - Teste impede reintrodução de COFRE_ADMIN_JWT no workflow.
-- Script comprova emissão efêmera com TTL de cinco minutos e consumo pelo endpoint loopback do runtime.
-- HTTP 401 de mint não é mascarado.
+- Testes impedem reintrodução de JWT humano ou chamada ao endpoint administrativo no bootstrap PC24x7.
+- Staging, produção, identidades fora da allowlist e validade acima de 90 dias falham fechados.
+- A rotação produz evento auditável sem registrar o valor do token.
 - Produção não é tocada.
-- Somente o novo token S2S destinado ao Key Vault pode retornar pelo pipe local.
+- Somente o novo token S2S destinado ao Key Vault retorna pelo pipe local.

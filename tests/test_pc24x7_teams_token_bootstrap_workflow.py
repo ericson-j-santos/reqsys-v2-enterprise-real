@@ -57,9 +57,16 @@ def test_bootstrap_autocorrige_runtime_pc24x7_antes_do_token() -> None:
 def test_bootstrap_script_prefere_cofre_local_quando_admin_jwt_nao_e_injetado() -> None:
     script = Path('scripts/bootstrap_pc24x7_teams_service_token.py').read_text(encoding='utf-8')
     assert 'mint_service_token_from_local_runtime(local_cofre_container' in script
-    assert "read_admin_jwt(cofre_base, vault_token, environment='dev')" in script
-    assert "/v1/cofre/segredos/human_admin_jwt:{environment}" in script
-    assert "admin_jwt_expired_or_too_close_to_expiry" in script
+    assert 'read_admin_jwt' not in script
+    assert 'human_admin_jwt' not in script
+    assert 'COFRE_ADMIN_JWT' not in script
+
+
+def test_bootstrap_local_nao_fabrica_identidade_humana() -> None:
+    script = Path('scripts/bootstrap_pc24x7_teams_service_token.py').read_text(encoding='utf-8')
+    assert 'app.core.dev_service_token_bootstrap' in script
+    assert "criar_token({'sub':'pc24x7-bootstrap','papel':'admin'}" not in script
+    assert 'http://127.0.0.1:8000/api/v1/admin/service-tokens' not in script
 
 
 def test_mint_roda_no_mesmo_job_self_hosted_que_le_o_cofre_local() -> None:

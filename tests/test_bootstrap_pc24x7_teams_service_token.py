@@ -1,7 +1,6 @@
 import importlib.util
 import json
 import sys
-import time
 from pathlib import Path
 
 SCRIPT = Path('scripts/bootstrap_pc24x7_teams_service_token.py')
@@ -38,8 +37,7 @@ def test_reuses_existing_valid_token_without_admin_jwt(monkeypatch):
     client = FakeClient('existing-token')
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
-    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
-    result = module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token')
+    result = module.bootstrap(api_base='https://dev.invalid', vault_name='kv', secret_name='pc24x7-token')
     assert result.status == 'ready'
     assert result.existing_token_reused is True
     assert result.token_created is False
@@ -50,10 +48,9 @@ def test_validation_only_blocks_before_mint_when_existing_token_invalid(monkeypa
     client = FakeClient('stale-token')
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 401)
-    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
-    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
+    monkeypatch.setattr(module, 'mint_service_token_from_local_runtime', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
     try:
-        module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token', allow_provision=False)
+        module.bootstrap(api_base='https://dev.invalid', vault_name='kv', secret_name='pc24x7-token', allow_provision=False)
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert str(exc) == 'existing_service_token_readiness_failed:http_401'
@@ -63,10 +60,9 @@ def test_validation_only_blocks_before_mint_when_existing_token_invalid(monkeypa
 def test_validation_only_blocks_when_secret_missing(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
-    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not read admin jwt')))
-    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
+    monkeypatch.setattr(module, 'mint_service_token_from_local_runtime', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('must not mint token')))
     try:
-        module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token', allow_provision=False)
+        module.bootstrap(api_base='https://dev.invalid', vault_name='kv', secret_name='pc24x7-token', allow_provision=False)
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert str(exc) == 'service_token_missing_provisioning_disabled'
@@ -100,10 +96,9 @@ def test_main_falha_fechado_sem_runtime_pc24x7_resolvido(monkeypatch, capsys):
 def test_mints_and_stores_when_secret_missing(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
-    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: 'admin-jwt')
-    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: 'new-service-token')
+    monkeypatch.setattr(module, 'mint_service_token_from_local_runtime', lambda *_args, **_kwargs: 'new-service-token')
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
-    result = module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token')
+    result = module.bootstrap(api_base='https://dev.invalid', vault_name='kv', secret_name='pc24x7-token', local_cofre_container=module.DEFAULT_LOCAL_COFRE_CONTAINER)
     assert result.token_created is True
     assert result.existing_token_reused is False
     assert len(client.set_calls) == 1
@@ -113,34 +108,23 @@ def test_mints_and_stores_when_secret_missing(monkeypatch):
     assert tags['scope'] == module.SCOPE
 
 
-def test_direct_admin_jwt_mints_without_vault_lookup(monkeypatch):
+def test_provisioning_requires_local_dev_runtime(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
-    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('cofre lookup must not run')))
-    seen = {}
-    def mint(_api, jwt, **_kwargs):
-        seen['jwt'] = jwt
-        return 'new-service-token'
-    monkeypatch.setattr(module, 'mint_service_token', mint)
-    monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
-    result = module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='', vault_name='kv', secret_name='pc24x7-token', admin_jwt='admin-from-environment')
-    assert seen['jwt'] == 'admin-from-environment'
-    assert result.token_created is True
-    assert result.readiness_http_status == 200
-    assert client.set_calls[0][1] == 'new-service-token'
+    try:
+        module.bootstrap(api_base='https://dev.invalid', vault_name='kv', secret_name='pc24x7-token')
+        assert False, 'expected BootstrapError'
+    except module.BootstrapError as exc:
+        assert str(exc) == 'local_dev_runtime_required_for_provisioning'
 
 
 def test_local_runtime_admin_jwt_precedes_vault_api_lookup(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
     monkeypatch.setattr(module, 'mint_service_token_from_local_runtime', lambda *_args, **_kwargs: 'new-service-token')
-    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('global vault lookup must not run')))
-    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('admin JWT must not leave the container')))
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 200)
     result = module.bootstrap(
         api_base='https://dev.invalid',
-        cofre_base='https://dev.invalid',
-        vault_token='',
         vault_name='kv',
         secret_name='pc24x7-token',
         local_cofre_container=module.DEFAULT_LOCAL_COFRE_CONTAINER,
@@ -170,7 +154,7 @@ def test_local_runtime_reader_blocks_non_dev_container():
         assert str(exc) == 'local_cofre_target_blocked'
 
 
-def test_local_runtime_mint_uses_ephemeral_admin_without_keyring_lookup(monkeypatch):
+def test_local_runtime_mint_uses_dev_only_internal_command(monkeypatch):
     seen = {}
 
     class Completed:
@@ -180,7 +164,7 @@ def test_local_runtime_mint_uses_ephemeral_admin_without_keyring_lookup(monkeypa
 
     def fake_run(args, **kwargs):
         seen['args'] = args
-        seen['probe'] = kwargs['input']
+        seen['kwargs'] = kwargs
         return Completed()
 
     monkeypatch.setattr(module.subprocess, 'run', fake_run)
@@ -189,33 +173,21 @@ def test_local_runtime_mint_uses_ephemeral_admin_without_keyring_lookup(monkeypa
         'https://dev.invalid',
     )
     assert token == 'new-service-token'
-    assert "from app.core.security import criar_token" in seen['probe']
-    assert "'papel':'admin'" in seen['probe']
-    assert 'minutos=5' in seen['probe']
-    assert 'read_secret_from_vault' not in seen['probe']
-    assert 'human_admin_jwt' not in seen['probe']
-    assert 'http://127.0.0.1:8000/v1/admin/service-tokens' in seen['probe']
-    assert seen['args'][0:5] == ['docker', 'exec', '-i', module.DEFAULT_LOCAL_COFRE_CONTAINER, 'python']
-
-
-def test_read_admin_jwt_blocks_expired_payload(monkeypatch):
-    payload = {'data': {'value': json.dumps({'token': 'jwt', 'exp': int(time.time()) - 1})}}
-    monkeypatch.setattr(module, 'request_json', lambda *args, **kwargs: (200, payload))
-    try:
-        module.read_admin_jwt('https://dev.invalid', 'vault')
-        assert False, 'expected BootstrapError'
-    except module.BootstrapError as exc:
-        assert 'expired_or_too_close' in str(exc)
+    assert seen['args'][0:6] == [
+        'docker', 'exec', module.DEFAULT_LOCAL_COFRE_CONTAINER, 'python', '-m',
+        'app.core.dev_service_token_bootstrap',
+    ]
+    assert seen['args'][-6:] == ['--label', module.LABEL, '--scope', module.SCOPE, '--expires-in-days', '90']
+    assert 'input' not in seen['kwargs']
 
 
 def test_http_200_without_readiness_does_not_finish(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(module, 'keyvault_client', lambda _: client)
-    monkeypatch.setattr(module, 'read_admin_jwt', lambda *_args, **_kwargs: 'admin-jwt')
-    monkeypatch.setattr(module, 'mint_service_token', lambda *_args, **_kwargs: 'new-service-token')
+    monkeypatch.setattr(module, 'mint_service_token_from_local_runtime', lambda *_args, **_kwargs: 'new-service-token')
     monkeypatch.setattr(module, 'validate_service_token', lambda *_: 503)
     try:
-        module.bootstrap(api_base='https://dev.invalid', cofre_base='https://dev.invalid', vault_token='vault', vault_name='kv', secret_name='pc24x7-token')
+        module.bootstrap(api_base='https://dev.invalid', vault_name='kv', secret_name='pc24x7-token', local_cofre_container=module.DEFAULT_LOCAL_COFRE_CONTAINER)
         assert False, 'expected BootstrapError'
     except module.BootstrapError as exc:
         assert 'readiness_failed' in str(exc)
@@ -229,20 +201,4 @@ def test_runtime_api_url_uses_public_gateway_prefix_exactly_once():
         module.runtime_api_url('https://pc24x7-dev.invalid/api', '/v1/admin/service-tokens')
         == 'https://pc24x7-dev.invalid/api/v1/admin/service-tokens'
     )
-
-
-def test_mint_service_token_uses_public_api_prefix(monkeypatch):
-    calls = []
-
-    def fake_request(method, url, *, headers, body=None):
-        calls.append((method, url, body))
-        return 201, {'data': {'token': 'service-token'}}
-
-    monkeypatch.setattr(module, 'request_json', fake_request)
-    token = module.mint_service_token('https://pc24x7-dev.invalid', 'admin-jwt')
-
-    assert token == 'service-token'
-    assert calls[0][0] == 'POST'
-    assert calls[0][1] == 'https://pc24x7-dev.invalid/api/v1/admin/service-tokens'
-    assert calls[0][2]['scopes'] == [module.SCOPE]
 
