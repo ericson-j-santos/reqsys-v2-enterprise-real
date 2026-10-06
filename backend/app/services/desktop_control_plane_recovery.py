@@ -14,6 +14,7 @@ ISSUE_NUMBER = 2
 EXPECTED_ACTOR = "ericson-j-santos"
 EXPECTED_ASSOCIATION = "OWNER"
 COMMAND = "/desktop-runtime admin recover-control-plane"
+WINDOWS_COMPONENT_HEALTH_COMMAND = "/desktop-runtime admin windows-component-health"
 GITHUB_API_BASE = "https://api.github.com"
 MAX_REUSE_AGE_SECONDS = 240
 DEV_ENVIRONMENTS = {"development", "dev", "desenvolvimento"}
@@ -123,7 +124,7 @@ def _parse_github_time(value: Any) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
-def _reusable_comment(comments: Any, now: datetime) -> int | None:
+def _reusable_comment(comments: Any, now: datetime, command: str = COMMAND) -> int | None:
     if not isinstance(comments, list):
         return None
     cutoff = now - timedelta(seconds=MAX_REUSE_AGE_SECONDS)
@@ -136,7 +137,7 @@ def _reusable_comment(comments: Any, now: datetime) -> int | None:
             continue
         if str(comment.get("author_association") or "").upper() != EXPECTED_ASSOCIATION:
             continue
-        if str(comment.get("body") or "").strip() != COMMAND:
+        if str(comment.get("body") or "").strip() != command:
             continue
         created = _parse_github_time(comment.get("created_at"))
         updated = _parse_github_time(comment.get("updated_at"))
@@ -151,6 +152,54 @@ def _reusable_comment(comments: Any, now: datetime) -> int | None:
         if comment_id > 0:
             candidates.append(comment_id)
     return max(candidates) if candidates else None
+
+
+def _dispatch_fixed_command(
+    correlation_id: str,
+    command: str,
+    contract: str,
+    *,
+    transport: GithubTransport = _github_json,
+    now: datetime | None = None,
+    token: str | None = None,
+) -> dict[str, Any]:
+    request_correlation_id = _normalize_correlation_id(correlation_id)
+    _ensure_dev()
+    github_token = token.strip() if token is not None else _github_token()
+    if not github_token:
+        raise DesktopRecoveryDispatchError("github_auth_unavailable", http_status=503)
+    observed_at = now or _now()
+    since = urllib.parse.quote((observed_at - timedelta(seconds=MAX_REUSE_AGE_SECONDS)).isoformat().replace("+00:00","Z"))
+    comments_url = f"{GITHUB_API_BASE}/repos/{REPOSITORY}/issues/{ISSUE_NUMBER}/comments?since={since}&per_page=100"
+    status, comments = transport("GET", comments_url, github_token, None)
+    if status != 200:
+        raise DesktopRecoveryDispatchError("github_comment_lookup_failed", http_status=503)
+    comment_id = _reusable_comment(comments, observed_at, command)
+    reused = comment_id is not None
+    if comment_id is None:
+        status, created = transport("POST", f"{GITHUB_API_BASE}/repos/{REPOSITORY}/issues/{ISSUE_NUMBER}/comments", github_token, {"body": command})
+        if status != 201 or not isinstance(created, dict):
+            raise DesktopRecoveryDispatchError("github_comment_create_failed", http_status=503)
+        try:
+            comment_id = int(created.get("id") or 0)
+        except (TypeError, ValueError):
+            comment_id = 0
+        if comment_id <= 0:
+            raise DesktopRecoveryDispatchError("github_comment_id_missing", http_status=503)
+    return {
+        "schema_version":"1.0.0","accepted":True,"environment":"dev","target_host":"DESKTOP-PDQK954",
+        "transport":"reqsys_dev_http_8083_to_desktop_runtime_broker","request_correlation_id":request_correlation_id,
+        "broker_comment_id":comment_id,"broker_correlation_id":f"desktop-admin-gh-comment-{comment_id}",
+        "reused_fresh_command":reused,"command_contract":contract,"arbitrary_command_supported":False,
+        "remote_shell_used":False,"production_touched":False,"secrets_exposed":False,"observed_at":observed_at.isoformat(),
+    }
+
+def dispatch_windows_component_health(
+    correlation_id: str, *, transport: GithubTransport = _github_json,
+    now: datetime | None = None, token: str | None = None,
+) -> dict[str, Any]:
+    return _dispatch_fixed_command(correlation_id, WINDOWS_COMPONENT_HEALTH_COMMAND,
+        "desktop_runtime_windows_component_health", transport=transport, now=now, token=token)
 
 
 def dispatch_control_plane_recovery(
