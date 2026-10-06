@@ -22,7 +22,7 @@ A correlação HTTP é preservada na resposta. O broker deriva `desktop-admin-gh
 
 Falha fechado fora de DEV, sem autenticação GitHub disponível, em divergência do correlation header ou quando o transporte GitHub não puder ser comprovado. Nenhum segredo é retornado.
 
-## Aceite
+## Critérios de aceite
 
 1. comando diferente não é reutilizado;
 2. repetição reutiliza somente comando exato e recente;
