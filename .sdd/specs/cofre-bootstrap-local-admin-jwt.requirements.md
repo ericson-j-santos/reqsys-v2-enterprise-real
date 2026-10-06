@@ -12,6 +12,10 @@ Eliminar definitivamente a dependência de identidade administrativa humana no b
 6. O alvo permanece fixado ao container DEV canônico; qualquer outro container ou ambiente falha fechado.
 7. A rotação revoga tokens anteriores da mesma identidade e grava o novo hash e o evento de auditoria na mesma transação.
 8. O token em claro existe apenas no pipe capturado pelo bootstrap e é persistido imediatamente no Key Vault pela identidade OIDC do workflow.
+9. A renovação humana oferece Device Code Flow para login e MFA pelo celular, troca o ID token pelo JWT interno e grava diretamente `human_admin_jwt:{env}` no Cofre.
+10. O fluxo pelo celular não imprime ID token, JWT interno nem device code opaco; somente a URL pública de verificação e o `user_code` temporário são exibidos.
+11. Se houver cache MSAL local compatível, o utilitário tenta renovação silenciosa sem exibir o refresh token; `invalid_grant` falha fechado e exige nova prova humana.
+12. Falhas transitórias 502/503 após a aprovação são retentadas mantendo tokens somente em memória.
 
 ## Critérios de aceite
 - Teste impede reintrodução de COFRE_ADMIN_JWT no workflow.
@@ -19,4 +23,6 @@ Eliminar definitivamente a dependência de identidade administrativa humana no b
 - Staging, produção, identidades fora da allowlist e validade acima de 90 dias falham fechados.
 - A rotação produz evento auditável sem registrar o valor do token.
 - Produção não é tocada.
-- Somente o novo token S2S destinado ao Key Vault retorna pelo pipe local.
+- Somente o novo token S2S destinado ao Key Vault pode retornar pelo pipe local.
+- Testes cobrem espera, `slow_down`, recusa, expiração e ausência de tokens na saída do Device Code Flow.
+- Testes cobrem renovação silenciosa, cache incompatível e recuperação transitória do gateway.
