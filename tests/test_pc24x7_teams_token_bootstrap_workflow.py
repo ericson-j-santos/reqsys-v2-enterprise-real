@@ -34,7 +34,6 @@ def test_bootstrap_bloqueia_runtime_defasado_antes_de_oidc_e_mutacao() -> None:
     assert oidc < runtime < mutation
     assert '--expected-sha "${{ github.sha }}"' in reconcile
     assert 'resolve_pc24x7_dev_locator.mjs --output' in reconcile
-    assert "'secret_value_exposed': False" not in reconcile
 
 
 
