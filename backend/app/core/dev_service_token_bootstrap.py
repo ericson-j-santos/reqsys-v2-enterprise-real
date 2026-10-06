@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from secrets import token_urlsafe
 
@@ -92,7 +93,7 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        token = rotate_dev_service_token(
+        credential = rotate_dev_service_token(
             db,
             label=args.label,
             scope=args.scope,
@@ -110,7 +111,7 @@ def main() -> int:
         db.close()
 
     # Unica saida sensivel; o chamador captura o pipe e grava imediatamente no Key Vault.
-    print(token)
+    sys.stdout.write(credential + '\n')
     return 0
 
 
