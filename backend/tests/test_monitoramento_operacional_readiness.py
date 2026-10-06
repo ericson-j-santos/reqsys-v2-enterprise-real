@@ -3,10 +3,10 @@
 from app.api.monitoramento_operacional import _runtime_readiness_reason, _runtime_ready
 
 
-def _snapshot(*, blocked_items: int = 0, status: str = 'healthy') -> dict:
+def _snapshot(*, blocked_items: int = 0, status: str = 'healthy', relaxed: bool = False) -> dict:
     return {
         'critical_counts': {'blocked_items': blocked_items},
-        'evidence': {'deploy_gate_relaxed': False},
+        'evidence': {'deploy_gate_relaxed': relaxed},
         'status': status,
     }
 
@@ -29,3 +29,10 @@ def test_runtime_readiness_healthy_mantem_estado_saudavel():
     snapshot = _snapshot(status='healthy')
 
     assert _runtime_readiness_reason(snapshot) == 'runtime_healthy'
+
+
+def test_runtime_readiness_dev_nao_confunde_backlog_operacional_com_trafego():
+    snapshot = _snapshot(blocked_items=3, status='degraded', relaxed=True)
+
+    assert _runtime_ready(snapshot) is True
+    assert _runtime_readiness_reason(snapshot) == 'runtime_healthy_with_non_blocking_operational_findings'

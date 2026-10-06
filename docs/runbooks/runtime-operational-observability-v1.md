@@ -10,6 +10,13 @@ Adicionar uma camada leve e governada de observabilidade operacional em runtime 
 |---|---|
 | `/api/runtime/health` | snapshot JSON consolidado de saúde operacional |
 | `/api/runtime/readiness` | prontidão operacional para tráfego controlado |
+
+No DEV e demais ambientes não produtivos, o readiness representa capacidade de
+servir tráfego. Achados de maturidade operacional permanecem visíveis em
+`critical_counts` e em `runtime_health`, mas são não bloqueantes quando
+`evidence.deploy_gate_relaxed=true`. Produção continua fail-closed para qualquer
+item bloqueante. O payload explicita esse limite por meio de
+`evidence.readiness_scope=traffic_serving_dependencies`.
 | `/api/runtime/liveness` | vida do processo/API |
 | `/api/runtime/metrics` | métricas `text/plain` compatíveis com scraping operacional |
 

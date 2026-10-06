@@ -4,7 +4,10 @@ from app.api.monitoramento_operacional import _metric_line
 from app.core.config import settings
 from app.main import app
 from app.schemas.monitoramento_operacional import ItemMonitorado
-from app.services.monitoramento_snapshot import classificar_estado_geral, criar_tempo_operacional
+from app.services.monitoramento_snapshot import (
+    classificar_estado_geral,
+    criar_tempo_operacional,
+)
 
 
 def test_monitoramento_operacional_status_200():
@@ -87,7 +90,7 @@ def test_criar_tempo_operacional_cobre_estados():
     assert verde.sla_operacional_minutos == 240
 
 
-def test_runtime_observability_health_bloqueia_sem_govbi_base_url(monkeypatch):
+def test_runtime_observability_health_preserva_achados_sem_bloquear_dev(monkeypatch):
     monkeypatch.setattr(settings, 'govbi_base_url', '')
     correlation_id = 'corr-runtime-observability-test'
     res = TestClient(app).get('/api/runtime/health', headers={'X-Correlation-ID': correlation_id})
@@ -105,7 +108,7 @@ def test_runtime_observability_health_bloqueia_sem_govbi_base_url(monkeypatch):
     assert 0 <= data['risk_score'] <= 100
     assert data['uptime_seconds'] >= 0
     assert data['evidence']['no_secrets'] is True
-    assert data['status'] == 'degraded'
+    assert data['status'] == ('degraded' if settings.is_production else 'healthy')
     assert data['status_raw'] == 'degraded'
     assert data['critical_counts']['blocked_items'] >= 1
     if settings.is_production:
@@ -157,7 +160,7 @@ def test_runtime_dashboard_schema_expoe_cards_e_drilldowns():
     assert public_runtime_card['title'] == 'Runtime público'
 
 
-def test_runtime_observability_readiness_bloqueia_sem_govbi_base_url(monkeypatch):
+def test_runtime_observability_readiness_dev_nao_bloqueia_sem_govbi_base_url(monkeypatch):
     monkeypatch.setattr(settings, 'govbi_base_url', '')
     client = TestClient(app)
 
@@ -166,9 +169,11 @@ def test_runtime_observability_readiness_bloqueia_sem_govbi_base_url(monkeypatch
 
     assert readiness.status_code == 200
     assert liveness.status_code == 200
-    assert readiness.json()['data']['ready'] is False
-    assert readiness.json()['data']['readiness_reason'] == 'blocked_items_detected'
+    assert readiness.json()['data']['ready'] is True
+    assert readiness.json()['data']['readiness_reason'] == 'runtime_healthy_with_non_blocking_operational_findings'
     assert readiness.json()['data']['evidence']['deploy_gate_relaxed'] is (not settings.is_production)
+    assert readiness.json()['data']['evidence']['readiness_scope'] == 'traffic_serving_dependencies'
+    assert readiness.json()['data']['evidence']['operational_findings_non_blocking'] >= 1
     assert liveness.json()['data']['alive'] is True
 
 

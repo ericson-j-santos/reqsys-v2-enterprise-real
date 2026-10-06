@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "feature_name": "Runtime traffic readiness separated from operational maturity",
+  "status": "ready_for_validation",
+  "approvals": {
+    "requirements": true
+  },
+  "sdd_gate": {
+    "tests": [
+      "backend/tests/test_monitoramento_operacional_readiness.py",
+      "backend/tests/test_monitoramento_operacional.py",
+      "backend/tests/test_main_critical_paths.py"
+    ]
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/runtime-traffic-readiness-semantics.requirements.md",
+    "implementation": "backend/app/api/monitoramento_operacional.py"
+  },
+  "implementation_constraints": {
+    "production_gate": "strict",
+    "non_production_operational_findings": "visible_non_blocking",
+    "readiness_scope": "traffic_serving_dependencies",
+    "destructive_automation_enabled": false
+  },
+  "validation": {
+    "dev_with_operational_findings": "ready_with_evidence",
+    "production_with_blockers": "not_ready",
+    "operational_findings_preserved": "required"
+  }
+}
