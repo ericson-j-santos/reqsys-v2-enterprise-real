@@ -69,10 +69,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Preparar Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 
@@ -89,7 +89,7 @@ jobs:
 
       - name: Publicar decisão BACEN manual
         if: always() && inputs.app_env == 'production'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: bacen-production-hard-gate-auth-manual
           path: artifacts/bacen-production-hard-gate/manual-auth-decision.json
@@ -164,7 +164,7 @@ jobs:
             | tee fly-auth-azure-report.json
 
       - name: Publicar evidência operacional
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: fly-auth-azure-report-manual
@@ -207,10 +207,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Preparar Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 
@@ -227,7 +227,7 @@ jobs:
 
       - name: Publicar decisão BACEN da célula production
         if: always() && matrix.environment == 'production'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: bacen-production-hard-gate-auth-production
           path: artifacts/bacen-production-hard-gate/matrix-auth-production-decision.json
@@ -269,7 +269,7 @@ jobs:
             | tee "fly-auth-azure-report-${{ matrix.environment }}.json"
 
       - name: Publicar evidência operacional
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: fly-auth-azure-report-${{ matrix.environment }}

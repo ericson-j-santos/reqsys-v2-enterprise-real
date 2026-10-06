@@ -40,64 +40,64 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
 
       - name: Download Public Runtime Evidence artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: public-runtime-evidence
           path: audit/runtime
 
       - name: Download Runtime Health Validator artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: runtime-health-validator-evidence
           path: artifacts/runtime-health-validator
 
       - name: Download Runtime Health Center artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: runtime-health-center-evidence
           path: artifacts/runtime-health-center
 
       - name: Download Runtime Production Smoke artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: runtime-production-smoke-governed
           path: artifacts/runtime-production-smoke
 
       - name: Download Runtime Executive Post-Deploy Smoke artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: runtime-executive-post-deploy-smoke
           path: artifacts/runtime-executive-post-deploy-smoke
 
       - name: Download Runtime Executive Post-Deploy History artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: runtime-executive-post-deploy-history
           path: artifacts/runtime-executive-post-deploy-history
 
       - name: Download Runtime Executive Regression Alert artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: runtime-executive-regression-alert
           path: artifacts/runtime-executive-regression-alert
 
       - name: Download unified operational signal artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: unified-operational-signal
@@ -234,7 +234,7 @@ jobs:
 
       - name: Publicar artifact consolidado
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runtime-validation-evidence
           path: |

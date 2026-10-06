@@ -15,7 +15,7 @@ def test_preflight_uses_existing_governed_oidc_identity_without_secret() -> None
     assert "CCP_AZURE_CLIENT_ID" in text
     assert "CCP_AZURE_TENANT_ID" in text
     assert "CCP_AZURE_SUBSCRIPTION_ID" in text
-    assert "azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6" in text
+    assert "azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in text
     assert "client-secret:" not in text
     assert "FABRIC_ACCESS_TOKEN" not in text
     assert "pull_request_target" not in text

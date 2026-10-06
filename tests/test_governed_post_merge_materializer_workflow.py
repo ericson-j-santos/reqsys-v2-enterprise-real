@@ -61,8 +61,8 @@ def test_materializer_is_replay_safe_and_fail_closed() -> None:
 def test_touched_dispatcher_actions_are_immutable() -> None:
     text = _text()
 
-    assert "actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b" in text
-    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in text
+    assert "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3" in text
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in text
     assert "actions/github-script@v7" not in text
     assert "actions/upload-artifact@v4" not in text
 

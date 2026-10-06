@@ -19,7 +19,7 @@ def test_acceptance_reuses_oidc_runtime_without_device_code() -> None:
 def test_runtime_is_reusable_and_oidc_only() -> None:
     source = RUNTIME.read_text(encoding="utf-8")
     assert "workflow_call:" in source
-    assert "azure/login@v2" in source
+    assert "azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in source
     assert "id-token: write" in source
     assert "POWER_PLATFORM_GRAPH_ACCESS_TOKEN" in source
     assert "planner_teams_runtime_e2e.mjs" in source

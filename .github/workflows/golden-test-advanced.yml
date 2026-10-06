@@ -23,8 +23,8 @@ jobs:
     name: Performance k6
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
       - name: Instalar backend
@@ -36,10 +36,10 @@ jobs:
           for i in {1..30}; do curl -fsS http://127.0.0.1:8000/health && exit 0; sleep 1; done
           cat /tmp/reqsys-api.log
           exit 1
-      - uses: grafana/setup-k6-action@v1
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1
       - name: Executar thresholds de carga
         run: k6 run --summary-export=artifacts-k6.json tests/performance/k6-smoke.js
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: k6-evidence
@@ -51,8 +51,8 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt mutmut
@@ -62,7 +62,7 @@ jobs:
           mutmut run --paths-to-mutate app/core --tests-dir tests --runner 'python -m pytest -q'
           mutmut results > mutation-results.txt
           test "$(mutmut results | grep -c 'survived')" -eq 0
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: mutation-evidence
@@ -73,8 +73,8 @@ jobs:
     name: Accessibility and visual regression
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
           cache: npm
@@ -116,7 +116,7 @@ jobs:
       - name: Exibir log do preview em caso de falha
         if: failure()
         run: cat /tmp/reqsys-web.log || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: accessibility-visual-evidence
@@ -131,8 +131,8 @@ jobs:
     name: Resilience contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
       - run: pip install pytest

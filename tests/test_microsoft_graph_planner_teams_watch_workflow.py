@@ -53,8 +53,8 @@ def test_monitor_uses_minimum_permissions_and_immutable_actions() -> None:
     raw = text()
     assert "contents: read" in raw
     assert "issues: write" in raw
-    assert "actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b" in raw
-    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in raw
+    assert "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3" in raw
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in raw
     assert "actions/github-script@v" not in raw
     assert "actions/upload-artifact@v" not in raw
 

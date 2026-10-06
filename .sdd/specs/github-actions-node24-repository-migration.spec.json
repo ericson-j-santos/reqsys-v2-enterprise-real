@@ -1,0 +1,25 @@
+{
+  "feature_name": "github-actions-node24-repository-migration",
+  "project": "ReqSys v2 Enterprise — GitHub Actions governance",
+  "created_at": "2026-10-06",
+  "updated_at": "2026-10-06",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true
+  },
+  "description": "Migra em lote governado todas as referências conhecidas a Actions Node.js 20 para releases Node.js 24 fixadas por SHA e adiciona proteção repository-wide contra regressão.",
+  "sdd_gate": {
+    "tests": [
+      "tests/test_github_actions_node24_migration.py",
+      "tests/test_validate_action_immutability.py"
+    ],
+    "evidence_contract": "O inventário repository-wide não contém os 17 SHAs nem as 15 tags mutáveis Node.js 20 removidas; as famílias migradas usam releases oficiais Node.js 24 fixadas por SHA, com YAML, imutabilidade e contratos afetados validados."
+  },
+  "traceability": {
+    "requirements": ".sdd/specs/github-actions-node24-repository-migration.requirements.md",
+    "regression_test": "tests/test_github_actions_node24_migration.py",
+    "workflow_scope": ".github/workflows/*.yml"
+  }
+}

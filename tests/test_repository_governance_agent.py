@@ -28,7 +28,7 @@ def test_builtin_token_is_read_only_and_app_token_is_contents_write_only() -> No
     assert "contents: write" not in header
     assert "pull-requests: write" not in header
 
-    assert "actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349" in text
+    assert "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1" in text
     assert "actions/create-github-app-token@v2" not in text
     assert "actions/github-script@v7" not in text
     assert "app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}" in text

@@ -25,6 +25,6 @@ def test_cofre_gate_no_longer_uses_expiring_admin_jwt() -> None:
     assert "COFRE_RUNTIME_SERVICE_TOKEN" in raw
     assert "COFRE_ADMIN_JWT" not in raw
     assert "id-token: write" in raw
-    assert "azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6" in raw
+    assert "azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in raw
     assert 'az keyvault secret show --vault-name "$REQSYS_KEY_VAULT_NAME"' in raw
     assert "secrets.COFRE_RUNTIME_SERVICE_TOKEN" not in raw

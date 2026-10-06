@@ -45,7 +45,7 @@ def test_agent_pr_is_bound_to_the_validated_sha_and_branch() -> None:
 def test_agent_pr_uses_governed_github_app_token() -> None:
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert "actions/create-github-app-token@v2" in workflow_text
+    assert "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1" in workflow_text
     assert "app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}" in workflow_text
     assert "private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}" in workflow_text
     assert "permission-actions: read" in workflow_text
@@ -78,7 +78,7 @@ def test_permission_watch_requests_exact_minimum_scope() -> None:
     steps = watcher["jobs"]["watch-pr-write"]["steps"]
     token_step = next(step for step in steps if step.get("id") == "app-token")
 
-    assert token_step["uses"] == "actions/create-github-app-token@v2"
+    assert token_step["uses"] == "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1"
     assert token_step["continue-on-error"] == "true"
     assert token_step["with"] == {
         "app-id": "${{ vars.REQSYS_STACK_REBASE_APP_ID }}",

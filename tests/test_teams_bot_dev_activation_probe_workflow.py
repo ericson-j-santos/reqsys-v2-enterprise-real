@@ -4,7 +4,7 @@ import yaml
 
 
 WORKFLOW = Path('.github/workflows/teams-bot-dev-activation-probe.yml')
-AZURE_LOGIN_SHA = '7184910d9eb2b1c5e48f7073824a90609bb9b6d6'
+AZURE_LOGIN_SHA = 'a641126d1b8aa4d1fa005f4f92df94a3a4c4c906'
 
 
 def _text() -> str:

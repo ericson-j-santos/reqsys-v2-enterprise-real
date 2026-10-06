@@ -22,7 +22,7 @@ jobs:
       run:
         working-directory: services/environment-observability-api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Validar configuração Docker Compose
         run: docker compose -f compose.observability.dev.yml config
       - name: Subir stack DEV
@@ -41,7 +41,7 @@ jobs:
           curl -fsS http://127.0.0.1:9093/api/v2/alerts > evidence/alertmanager-alerts.json || true
       - name: Publicar evidência
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: environment-observability-alert-lifecycle-${{ github.run_id }}
           path: services/environment-observability-api/evidence

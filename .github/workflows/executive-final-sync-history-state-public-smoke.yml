@@ -33,10 +33,10 @@ jobs:
       ENVIRONMENT: ${{ inputs.environment || 'dev' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Configure Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 
@@ -46,7 +46,7 @@ jobs:
           python -m unittest tests/test_smoke_executive_final_sync_history_state_public.py
 
       - name: Download canonical dashboard
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-final-sync-history-state-dashboard.yml
           name: ops-dashboard-static
@@ -56,7 +56,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download final synchronized state
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-final-sync-history-state.yml
           name: executive-final-sync-history-state
@@ -66,7 +66,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download previous environment history
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         continue-on-error: true
         with:
           workflow: executive-final-sync-history-state-public-smoke.yml
@@ -118,7 +118,7 @@ jobs:
           PY
 
       - name: Publish smoke evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-final-sync-history-state-public-smoke-${{ env.ENVIRONMENT }}
           path: output/evidence
@@ -126,7 +126,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish environment history
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-final-sync-history-state-public-history-${{ env.ENVIRONMENT }}
           path: output/history

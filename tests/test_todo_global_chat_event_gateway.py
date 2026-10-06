@@ -226,8 +226,8 @@ def test_workflow_is_owner_scoped_same_sha_and_never_executes_comment_body() -> 
 
 def test_workflow_actions_are_immutable() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in text
-    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in text
-    assert "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020" in text
-    assert "azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6" in text
-    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in text
+    assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in text
+    assert "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in text
+    assert "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020" in text
+    assert "azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in text
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in text

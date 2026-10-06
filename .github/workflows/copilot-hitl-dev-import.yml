@@ -43,10 +43,10 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
           cache: pip
@@ -84,7 +84,7 @@ jobs:
             --environment-url "$POWER_PLATFORM_ENVIRONMENT_URL"
 
       - name: Upload validated import bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: reqsys-copilot-hitl-dev-import-bundle
           path: |
@@ -102,10 +102,10 @@ jobs:
     environment: reqsys-power-platform-dev
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Download validated import bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: reqsys-copilot-hitl-dev-import-bundle
           path: import-bundle
@@ -121,10 +121,10 @@ jobs:
           echo "SETTINGS=$SETTINGS" >> "$GITHUB_ENV"
 
       - name: Install Power Platform CLI
-        uses: microsoft/powerplatform-actions/actions-install@v1
+        uses: microsoft/powerplatform-actions/actions-install@59c0b2abadc26618ca914c689ab9dc399da4d6bb
 
       - name: Validate service principal against DEV
-        uses: microsoft/powerplatform-actions/who-am-i@v1
+        uses: microsoft/powerplatform-actions/who-am-i@59c0b2abadc26618ca914c689ab9dc399da4d6bb
         with:
           environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
           app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -132,7 +132,7 @@ jobs:
           tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
 
       - name: Import unmanaged Solution in DEV
-        uses: microsoft/powerplatform-actions/import-solution@v1
+        uses: microsoft/powerplatform-actions/import-solution@59c0b2abadc26618ca914c689ab9dc399da4d6bb
         with:
           environment-url: ${{ secrets.POWER_PLATFORM_ENVIRONMENT_URL }}
           app-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
@@ -158,7 +158,7 @@ jobs:
 
       - name: Publish DEV import evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: reqsys-copilot-hitl-dev-import-evidence
           path: solution-list.txt

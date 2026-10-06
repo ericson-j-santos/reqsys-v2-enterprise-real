@@ -141,7 +141,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert "shell: pwsh" not in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw
-    assert raw.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 12
+    assert raw.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 12
     assert "actions/setup-python@" not in raw
     assert "Get-Command python" not in raw
     assert raw.count("Prepare pinned portable Python 3.12") == 6
@@ -153,7 +153,7 @@ def test_workflow_modes_are_bounded_governed_and_read_only() -> None:
     assert raw.count("$rulesScripts = Join-Path $env:GITHUB_WORKSPACE") == 6
     assert raw.count("PORTABLE_PYTHON_PTH_MISSING") == 6
     assert raw.count("--require-runner-version-preflight") == 5
-    assert raw.count("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02") == 6
+    assert raw.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 6
 
     # Modo watchdog legado continua restrito ao Noteri e à tarefa fixa existente.
     assert "if: ${{ inputs.mode == 'watchdog' || inputs.mode == '' }}" in raw

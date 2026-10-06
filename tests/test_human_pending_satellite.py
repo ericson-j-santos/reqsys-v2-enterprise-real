@@ -215,7 +215,7 @@ def test_human_pending_workflow_defaults_schedule_to_nonprod_scope():
 
 def test_human_pending_workflow_bootstraps_pytest_before_classifier():
     workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/human-pending-satellite.yml").read_text(encoding="utf-8")
-    setup_pos = workflow.index("actions/setup-python@v5")
+    setup_pos = workflow.index("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97")
     install_pos = workflow.index("python -m pip install --disable-pip-version-check pytest==9.0.3")
     test_pos = workflow.index("python -m pytest -q tests/test_human_pending_satellite.py")
     assert setup_pos < install_pos < test_pos

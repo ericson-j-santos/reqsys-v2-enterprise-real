@@ -284,10 +284,10 @@ class CiHealthRegressionMonitorTests(unittest.TestCase):
         self.assertIn("tests/test_ci_health_regression_watch.py", raw)
         self.assertIn("issues: write", raw)
         self.assertIn("if: github.event_name != 'pull_request'", raw)
-        self.assertIn("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", raw)
-        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", raw)
-        self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", raw)
-        self.assertIn("actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b", raw)
+        self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", raw)
+        self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", raw)
+        self.assertIn("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c", raw)
+        self.assertIn("actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3", raw)
         self.assertIn("reqsys-ci-health-regression-watch", raw)
 
 

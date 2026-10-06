@@ -37,12 +37,12 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Checkout do SHA sob teste
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
 
@@ -88,12 +88,12 @@ jobs:
 
     steps:
       - name: Checkout do SHA implantado
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
 
       - name: Autenticar ReqSys Enterprise por OIDC
-        uses: azure/login@v2
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
           client-id: ${{ secrets.POWER_PLATFORM_CLIENT_ID }}
           tenant-id: ${{ secrets.POWER_PLATFORM_TENANT_ID }}
@@ -135,7 +135,7 @@ jobs:
           sleep "$PLANNER_TEAMS_TRIGGER_WARMUP_SECONDS"
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
 
@@ -157,7 +157,7 @@ jobs:
 
       - name: Publicar evidência auditável
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runtime-e2e-planner-teams-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: audit/runtime-e2e/planner-teams/

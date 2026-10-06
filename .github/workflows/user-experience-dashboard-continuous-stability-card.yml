@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
       - name: Compile
@@ -39,7 +39,7 @@ jobs:
           echo '{"cards":[]}' > artifacts/dashboard.json
           python scripts/inject_user_experience_dashboard_continuous_stability_card.py --dashboard artifacts/dashboard.json --indicator artifacts/brief.json --output artifacts/dashboard-updated.json
           python scripts/smoke_user_experience_dashboard_continuous_stability_card.py --state artifacts/state.json --brief artifacts/brief.json --dashboard artifacts/dashboard-updated.json --output artifacts/smoke.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: user-experience-dashboard-continuous-stability-card
           path: artifacts/
