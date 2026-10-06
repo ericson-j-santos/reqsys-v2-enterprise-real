@@ -180,8 +180,10 @@ def _dispatch_fixed_command(
         status, created = transport("POST", f"{GITHUB_API_BASE}/repos/{REPOSITORY}/issues/{ISSUE_NUMBER}/comments", github_token, {"body": command})
         if status != 201 or not isinstance(created, dict):
             raise DesktopRecoveryDispatchError("github_comment_create_failed", http_status=503)
-        try: comment_id = int(created.get("id") or 0)
-        except (TypeError, ValueError): comment_id = 0
+        try:
+            comment_id = int(created.get("id") or 0)
+        except (TypeError, ValueError):
+            comment_id = 0
         if comment_id <= 0:
             raise DesktopRecoveryDispatchError("github_comment_id_missing", http_status=503)
     return {
