@@ -91,7 +91,13 @@ async def _entregar_resposta_teams(
             resposta=resposta,
             correlation_id=correlation_id,
         )
-        return {'modo': 'bot_adaptive_card', 'entrega': direct, 'fila': None}
+        if direct.get('entregue') is True:
+            return {'modo': 'bot_adaptive_card', 'entrega': direct, 'fila': None}
+        logger.warning(
+            'ai_conversation_bot_direct_not_delivered conversation_id=%s channel=%s',
+            conversa.id,
+            direct.get('canal_usado'),
+        )
     except AITeamsBotDeliveryError as exc:
         logger.info(
             'ai_conversation_bot_direct_unavailable conversation_id=%s reason=%s',
