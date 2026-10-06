@@ -28,3 +28,8 @@ Falha fechado fora de DEV, sem autenticação GitHub disponível, em divergênci
 2. repetição reutiliza somente comando exato e recente;
 3. capability desconhecida/argumentada é rejeitada no consumidor;
 4. E2E esperado: ReqSys → comentário GitHub → Desktop Admin Broker → DISM CheckHealth/ScanHealth + SFC verifyonly → receipt/readback.
+
+
+## Prevenção de regressão de CI
+
+O frontend build deve consumir o `frontend/package-lock.json` versionado sem reconciliá-lo ou re-resolver dependências dentro do runner. O job usa `npm ci` diretamente e valida que o lockfile permanece sem diff antes da auditoria e do build. Isso garante que a evidência de segurança corresponda ao mesmo grafo de dependências versionado no SHA do PR.
