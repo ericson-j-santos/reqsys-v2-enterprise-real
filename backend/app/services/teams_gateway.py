@@ -922,12 +922,14 @@ async def _enviar_bot(
             erro=str(exc),
         )
     except httpx.HTTPStatusError as exc:
+        provider_status = exc.response.status_code
         return _resultado(
             request,
             correlation_id,
             entregue=False,
             canal_usado='bot',
-            erro=f'HTTP {exc.response.status_code}: {exc.response.text[:300]}',
+            erro=f'HTTP {provider_status}',
+            provider_response={'status_code': provider_status},
         )
     except Exception as exc:
         logger.warning('teams_gateway_bot_error correlation_id=%s error=%s', correlation_id, exc)

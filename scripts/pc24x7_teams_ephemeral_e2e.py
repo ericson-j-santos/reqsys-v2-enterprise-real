@@ -275,8 +275,13 @@ def _delivery_summary(status: int, payload: dict) -> dict:
     queue = teams.get('fila') if isinstance(teams.get('fila'), dict) else {}
     queue_delivered = queue.get('status_evento') == 'ENVIADO'
     failure_text = str(queue.get('motivo_falha') or delivery.get('erro') or '')
+    provider_http_status = queue.get('status_http') or delivery.get('status_code')
+    if not isinstance(provider_http_status, int) or not 100 <= provider_http_status <= 599:
+        provider_http_status = None
     failure_category = None
-    if failure_text:
+    if provider_http_status is not None and provider_http_status >= 400:
+        failure_category = f'provider_http_{provider_http_status}'
+    elif failure_text:
         http_match = re.search(r'HTTP\s+(\d{3})', failure_text, flags=re.IGNORECASE)
         if http_match:
             failure_category = f'provider_http_{http_match.group(1)}'
@@ -294,6 +299,7 @@ def _delivery_summary(status: int, payload: dict) -> dict:
         'teams_channel': delivery.get('canal_usado') or queue.get('canal_usado'),
         'teams_mode': teams.get('modo'),
         'queue_status': queue.get('status_evento'),
+        'provider_http_status': provider_http_status,
         'delivery_failure_category': failure_category,
         'error': None if status < 400 else f'http_{status}',
         'secret_value_exposed': False,
