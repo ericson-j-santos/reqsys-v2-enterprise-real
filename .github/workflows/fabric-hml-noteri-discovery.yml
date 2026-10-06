@@ -42,6 +42,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
 
+      - name: Setup Python 3.12 on self-hosted runner
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
       - name: Probe read-only ou aplicar apenas variables nao sensiveis
         shell: powershell
         run: |
@@ -85,6 +91,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
+
+      - name: Setup Python 3.12 on self-hosted runner
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
 
       - name: Criar ou capturar secret HML sem expor valor
         shell: powershell
