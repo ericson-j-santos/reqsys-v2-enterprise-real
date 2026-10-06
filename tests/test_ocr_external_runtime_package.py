@@ -66,6 +66,7 @@ def test_prepare_script_generates_and_verifies_canonical_bundle() -> None:
 def test_prepare_action_exports_hash_from_provider_provenance() -> None:
     text = ACTION.read_text(encoding="utf-8")
 
+    assert "packaging==25.0" in text
     assert "data['files'][0]['sha256']" in text
     assert "data['wheel_sha256']" not in text
 
