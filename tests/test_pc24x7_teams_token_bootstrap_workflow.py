@@ -23,7 +23,6 @@ def test_bootstrap_permanece_dev_only_e_resolve_locator_assinado() -> None:
     assert '--output artifacts/pc24x7-teams-runtime-reconcile/signed-locator.json' in text
     assert 'steps.locator_bootstrap.outputs.base_url' in text
     assert 'reqsys-pc24x7-teams-service-token' in text
-    assert 'signed-locator.json' in text
 
 def test_bootstrap_bloqueia_runtime_defasado_antes_de_oidc_e_mutacao() -> None:
     text = WORKFLOW.read_text(encoding='utf-8')
