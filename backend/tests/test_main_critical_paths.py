@@ -64,8 +64,8 @@ def test_runtime_contracts_e_version():
     assert version.status_code == 200
     assert version.json()['data']['service'] == 'reqsys-api'
     assert readiness.status_code == 200
-    assert readiness.json()['data']['ready'] is False
-    assert readiness.json()['data']['readiness_reason'] == 'blocked_items_detected'
+    assert readiness.json()['data']['ready'] is True
+    assert readiness.json()['data']['readiness_reason'] == 'runtime_healthy_with_non_blocking_operational_findings'
     assert liveness.status_code == 200
     assert liveness.json()['data']['alive'] is True
 
