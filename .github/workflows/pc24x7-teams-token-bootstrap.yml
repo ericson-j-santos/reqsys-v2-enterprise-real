@@ -83,7 +83,9 @@ jobs:
     needs: contract
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     environment: development
-    timeout-minutes: 20
+    timeout-minutes: 25
+    outputs:
+      bootstrap_ready: ${{ steps.bootstrap.outputs.ready }}
     env:
       REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
       CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
@@ -91,6 +93,11 @@ jobs:
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
       EVIDENCE_FILE: artifacts/pc24x7-teams-runtime-reconcile/evidence.json
       CORRELATION_ID: pc24x7-teams-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: ${{ inputs.mode == 'cofre-runtime' && 'reqsys-cofre-runtime-evidence-service-token' || 'reqsys-pc24x7-teams-service-token' }}
+      REQSYS_SERVICE_TOKEN_SCOPE: ${{ inputs.mode == 'cofre-runtime' && 'cofre:runtime_evidence' || 'teams_gateway:ai_conversations' }}
+      REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev' }}
+      REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness' }}
+      PC24X7_TEAMS_ALLOW_PROVISION: 'true'
     steps:
       - name: Checkout immutable workflow SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -123,6 +130,53 @@ jobs:
           python scripts/reconcile_pc24x7_teams_dev_runtime.py --confirm RECONCILE-PC24X7-TEAMS-DEV --expected-sha "${{ github.sha }}" --vault-name "$env:REQSYS_KEY_VAULT_NAME" --expected-tenant-id "$env:CCP_AZURE_TENANT_ID" --correlation-id "$env:CORRELATION_ID" --evidence-file "$env:EVIDENCE_FILE"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Resolver runtime PC24x7 DEV para bootstrap
+        id: locator_bootstrap
+        shell: powershell
+        run: |
+          node scripts/resolve_pc24x7_dev_locator.mjs --output artifacts/pc24x7-teams-runtime-reconcile/signed-locator.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validar credencial local do Cofre sem expor valor
+        shell: powershell
+        run: |
+          $vaultToken = [Environment]::GetEnvironmentVariable('VAULT_API_TOKEN')
+          if ([string]::IsNullOrWhiteSpace($vaultToken)) {
+            Write-Error 'VAULT_API_TOKEN_missing_on_pc24x7'
+            exit 2
+          }
+          Write-Output "::add-mask::$vaultToken"
+
+      - name: Instalar cliente Key Vault no PC24x7
+        shell: powershell
+        run: python -m pip install --disable-pip-version-check azure-identity azure-keyvault-secrets
+
+      - name: Validar ou provisionar token S2S no PC24x7
+        id: bootstrap
+        shell: powershell
+        env:
+          REQSYS_API_BASE_URL: ${{ steps.locator_bootstrap.outputs.base_url }}
+          COFRE_API_URL: ${{ steps.locator_bootstrap.outputs.base_url }}
+        run: |
+          python scripts/bootstrap_pc24x7_teams_service_token.py | Tee-Object -FilePath pc24x7-teams-token-bootstrap.json
+          if ($LASTEXITCODE -eq 0) {
+            "ready=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            "ready=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit $LASTEXITCODE
+          }
+
+      - name: Publicar evidência sanitizada do bootstrap
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pc24x7-teams-token-bootstrap-${{ github.run_id }}
+          path: |
+            pc24x7-teams-token-bootstrap.json
+            artifacts/pc24x7-teams-runtime-reconcile/signed-locator.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Publicar evidência sanitizada da reconciliação
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -132,183 +186,18 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+
   bootstrap-dev:
     if: github.event_name != 'pull_request'
     needs: [contract, reconcile-runtime-dev]
     runs-on: ubuntu-latest
-    environment: development
-    timeout-minutes: 10
-    env:
-      REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}
-      PC24X7_TEAMS_SERVICE_TOKEN_SECRET: ${{ inputs.mode == 'cofre-runtime' && 'reqsys-cofre-runtime-evidence-service-token' || 'reqsys-pc24x7-teams-service-token' }}
-      REQSYS_SERVICE_TOKEN_SCOPE: ${{ inputs.mode == 'cofre-runtime' && 'cofre:runtime_evidence' || 'teams_gateway:ai_conversations' }}
-      REQSYS_SERVICE_TOKEN_LABEL: ${{ inputs.mode == 'cofre-runtime' && 'cofre-runtime-evidence-dev' || 'pc24x7-teams-dev' }}
-      REQSYS_SERVICE_TOKEN_VALIDATION_PATH: ${{ inputs.mode == 'cofre-runtime' && '/v1/cofre/runtime/control-status' || '/v1/teams-gateway/ai-conversations/readiness' }}
-      PC24X7_TEAMS_ALLOW_PROVISION: 'true'
-      CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}
-      CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
-      CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
+    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
-
-      - name: Preparar Node para locator DEV assinado
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '20'
-
-      - name: Validar contrato fail-closed do locator
-        shell: bash
-        run: node scripts/resolve_pc24x7_dev_locator.mjs --self-test
-
-      - name: Resolver runtime PC24x7 DEV vigente
-        id: locator
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/pc24x7-teams-token
-          node scripts/resolve_pc24x7_dev_locator.mjs             --output artifacts/pc24x7-teams-token/signed-locator.json
-
-      - name: Inicializar evidência sanitizada
-        shell: bash
-        run: |
-          cat > pc24x7-teams-token-bootstrap.json <<'JSON'
-          {"status":"blocked","reason":"READINESS_NOT_EXECUTED","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}
-          JSON
-
-      - name: Validar runtime PC24x7 no mesmo SHA
+      - name: Confirmar resultado sanitizado do bootstrap PC24x7
         shell: bash
         env:
-          REQSYS_API_BASE_URL: ${{ steps.locator.outputs.base_url }}
-          EXPECTED_SHA: ${{ github.sha }}
+          READY: ${{ needs.reconcile-runtime-dev.outputs.bootstrap_ready }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          from urllib.error import HTTPError, URLError
-          from urllib.request import Request, urlopen
-
-          evidence_path = Path('pc24x7-teams-token-bootstrap.json')
-          base = os.environ['REQSYS_API_BASE_URL'].rstrip('/')
-          expected = os.environ['EXPECTED_SHA'].strip().lower()
-
-          def fail(reason, *, observed_sha=None, exit_code=4):
-              payload = {
-                  'status': 'blocked',
-                  'reason': reason,
-                  'environment': 'dev',
-                  'mode': 'provision_if_missing',
-                  'token_created': False,
-                  'secret_value_exposed': False,
-                  'production_touched': False,
-              }
-              if observed_sha is not None:
-                  payload['expected_sha'] = expected
-                  payload['observed_sha'] = observed_sha
-              evidence_path.write_text(json.dumps(payload, ensure_ascii=False) + '\n', encoding='utf-8')
-              raise SystemExit(exit_code)
-
-          try:
-              request = Request(
-                  base + '/api/runtime/build-info',
-                  headers={'Accept': 'application/json', 'User-Agent': 'reqsys-teams-token-bootstrap/2.0'},
-              )
-              with urlopen(request, timeout=20) as response:
-                  payload = json.loads(response.read(262_144).decode('utf-8'))
-          except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
-              fail('pc24x7_runtime_probe_failed', exit_code=3)
-
-          data = payload.get('data', payload) if isinstance(payload, dict) else {}
-          observed = str(data.get('build_sha') or data.get('commit_sha') or '').strip().lower()
-          if observed != expected:
-              fail('pc24x7_runtime_sha_mismatch', observed_sha=observed)
-          print(f'PC24x7 runtime SHA validado: {observed}')
-          PY
-
-      - name: Exportar runtime PC24x7 DEV
-        shell: bash
-        env:
-          RESOLVED_API_BASE: ${{ steps.locator.outputs.base_url }}
-        run: |
-          set -euo pipefail
-          test -n "$RESOLVED_API_BASE"
-          printf 'REQSYS_API_BASE_URL=%s\n' "$RESOLVED_API_BASE" >> "$GITHUB_ENV"
-
-      - name: Validar configuração governada
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in CCP_AZURE_CLIENT_ID CCP_AZURE_TENANT_ID CCP_AZURE_SUBSCRIPTION_ID; do
-            if [ -z "${!name:-}" ]; then
-              printf '%s\n' '{"status":"blocked","reason":"GOVERNED_CONFIGURATION_MISSING","environment":"dev","mode":"provision_if_missing","token_created":false,"secret_value_exposed":false}' > pc24x7-teams-token-bootstrap.json
-              echo "::error::$name não configurado. Bootstrap permanece fail-closed."
-              exit 2
-            fi
-          done
-
-      - name: Login Azure por OIDC da identidade mutadora
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
-        with:
-          client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
-          subscription-id: ${{ env.CCP_AZURE_SUBSCRIPTION_ID }}
-
-      - name: Instalar cliente Key Vault
-        run: python -m pip install --disable-pip-version-check azure-identity azure-keyvault-secrets
-
-      - name: Validar ou provisionar token S2S DEV
-        id: bootstrap
-        shell: bash
-        run: |
-          set +e
-          output="$(python scripts/bootstrap_pc24x7_teams_service_token.py 2>&1)"
-          rc=$?
-          set -e
-          printf '%s\n' "$output" | tee pc24x7-teams-token-bootstrap.json
-          echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          if [ "$rc" -eq 0 ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publicar evidência sanitizada
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: pc24x7-teams-token-bootstrap-${{ github.run_id }}
-          path: |
-            pc24x7-teams-token-bootstrap.json
-            artifacts/pc24x7-teams-token/signed-locator.json
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Atualizar issue 1532
-        if: always()
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
-        env:
-          READY: ${{ steps.bootstrap.outputs.ready }}
-        with:
-          script: |
-            const marker = '<!-- reqsys-pc24x7-teams-token-bootstrap -->';
-            const ready = process.env.READY === 'true';
-            const body = `${marker}\n## PC24x7 Teams — token S2S DEV\n\n` +
-              `- estado: \`${ready ? 'READY' : 'BLOCKED'}\`;\n` +
-              `- modo: \`provision_if_missing\`;\n` +
-              `- escopo: \`teams_gateway:ai_conversations\`;\n` +
-              `- armazenamento: \`Azure Key Vault / reqsys-pc24x7-teams-service-token\`;\n` +
-              `- valor do segredo exposto: \`não\`;\n` +
-              `- execução: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}.\n\n` +
-              (ready ? 'Token existente foi reutilizado ou um novo token escopado foi emitido, armazenado e validado pela rota readiness.' : 'Bootstrap falhou fechado; nenhum valor sensível foi publicado.');
-            const comments = await github.paginate(github.rest.issues.listComments, {owner: context.repo.owner, repo: context.repo.repo, issue_number: 1532, per_page: 100});
-            const previous = comments.find(c => c.body && c.body.includes(marker));
-            if (previous) await github.rest.issues.updateComment({owner: context.repo.owner, repo: context.repo.repo, comment_id: previous.id, body});
-            else await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1532, body});
-
-      - name: Falhar fechado se token não estiver pronto
-        if: steps.bootstrap.outputs.ready != 'true'
-        run: exit 4
+          test "$READY" = "true" || { echo "::error::PC24x7_BOOTSTRAP_NOT_READY"; exit 4; }
+          echo "PC24x7_BOOTSTRAP_READY=true"
