@@ -14,7 +14,8 @@
   },
   "acceptance_criteria": [
     "Workflow não injeta COFRE_ADMIN_JWT.",
-    "Script usa human_admin_jwt:dev quando JWT não é fornecido.",
+    "No PC24x7, o script lê human_admin_jwt:dev diretamente do keyring persistente do container DEV quando JWT não é fornecido.",
+    "O bootstrap local não depende de VAULT_API_TOKEN global nem de GitHub Secret para obter o JWT administrativo.",
     "JWT expirado é rejeitado.",
     "Segredos não aparecem em evidências.",
     "Ausência da credencial local falha fechado."
