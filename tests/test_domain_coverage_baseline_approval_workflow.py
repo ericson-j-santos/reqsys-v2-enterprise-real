@@ -28,3 +28,4 @@ def test_scope_router_aggregates_all_pr_pages():
     assert "--paginate --slurp" in text
     assert ".[][] | .filename" in text
     assert "files?per_page=100" in text
+    assert "jq -r" in text
