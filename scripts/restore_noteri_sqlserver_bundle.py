@@ -400,45 +400,50 @@ def validate_container(
     host_config = container.get("HostConfig")
     state = container.get("State")
     if not all(isinstance(value, dict) for value in (config, host_config, state)):
-        reject("incompatible_existing_container")
+        reject("incompatible_existing_container_shape")
     labels = config.get("Labels")
     if not isinstance(labels, dict) or any(
         labels.get(name) != value for name, value in _resource_labels().items()
     ):
-        reject("incompatible_existing_container")
+        reject("incompatible_existing_container_labels")
     environment = config.get("Env")
     if not isinstance(environment, list) or not all(
         isinstance(item, str) for item in environment
     ):
-        reject("incompatible_existing_container")
+        reject("incompatible_existing_container_environment")
     env_map = dict(item.split("=", 1) for item in environment if "=" in item)
-    if (
-        container.get("Name") != "/" + CONTAINER_NAME
-        or container.get("Image") != image_id
-        or config.get("Image") != IMAGE_REF
-        or env_map.get("ACCEPT_EULA") != "Y"
-        or env_map.get("MSSQL_PID") != "Developer"
-        or not hmac.compare_digest(env_map.get("MSSQL_SA_PASSWORD", ""), password)
-        or host_config.get("NetworkMode") != "none"
-        or host_config.get("PortBindings") not in (None, {})
-        or (host_config.get("RestartPolicy") or {}).get("Name", "no") != "no"
-    ):
-        reject("incompatible_existing_container")
+    if container.get("Name") != "/" + CONTAINER_NAME:
+        reject("incompatible_existing_container_name")
+    if container.get("Image") != image_id or config.get("Image") != IMAGE_REF:
+        reject("incompatible_existing_container_image")
+    if env_map.get("ACCEPT_EULA") != "Y" or env_map.get("MSSQL_PID") != "Developer":
+        reject("incompatible_existing_container_settings")
+    if not hmac.compare_digest(env_map.get("MSSQL_SA_PASSWORD", ""), password):
+        reject("incompatible_existing_container_password")
+    if host_config.get("NetworkMode") != "none" or host_config.get(
+        "PortBindings"
+    ) not in (None, {}):
+        reject("incompatible_existing_container_network")
+    if (host_config.get("RestartPolicy") or {}).get("Name", "no") != "no":
+        reject("incompatible_existing_container_restart_policy")
     mounts = _mount_by_destination(container)
     if set(mounts) != {DATA_MOUNT, BACKUP_MOUNT}:
-        reject("incompatible_existing_container")
+        reject("incompatible_existing_container_mount_set")
     data_mount = mounts[DATA_MOUNT]
     backup_mount = mounts[BACKUP_MOUNT]
     if (
         data_mount.get("Type") != "volume"
         or data_mount.get("Name") != VOLUME_NAME
         or data_mount.get("RW") is not True
-        or backup_mount.get("Type") != "bind"
+    ):
+        reject("incompatible_existing_container_data_mount")
+    if (
+        backup_mount.get("Type") != "bind"
         or backup_mount.get("RW") is not False
         or not isinstance(backup_mount.get("Source"), str)
         or not _same_path(backup_mount["Source"], bundle_dir)
     ):
-        reject("incompatible_existing_container")
+        reject("incompatible_existing_container_backup_mount")
     status = state.get("Status")
     if status not in {"created", "exited", "running"}:
         reject("incompatible_existing_container_state")
