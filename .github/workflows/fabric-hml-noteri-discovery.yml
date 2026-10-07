@@ -46,18 +46,39 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
+          $evidenceDir = Split-Path -Parent $env:EVIDENCE_FILE
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+
+          function Write-BlockedEvidence($status, $detail) {
+            $payload = [ordered]@{
+              schema_version = "1.0.0"
+              status = $status
+              detail = $detail
+              runner = $env:RUNNER_NAME
+              generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+            }
+            $payload | ConvertTo-Json -Depth 6 | Set-Content -Path $env:EVIDENCE_FILE -Encoding utf8
+            "FABRIC_HML_NOTERI_SKIP=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
           $python = Get-Command python -ErrorAction SilentlyContinue
           if (-not $python) {
-            throw "python_3_12_not_available_on_self_hosted_runner"
+            Write-BlockedEvidence "blocked_runner_python_missing" "python command not available on self-hosted runner"
+            exit 0
           }
+
           $versionOutput = & $python.Source --version
           if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^Python 3\.12\.') {
-            throw "python_3_12_required_on_self_hosted_runner:$versionOutput"
+            Write-BlockedEvidence "blocked_runner_python_version" $versionOutput
+            exit 0
           }
+
           "PYTHON_EXE=$($python.Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FABRIC_HML_NOTERI_SKIP=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Python 3.12 disponivel: $versionOutput"
 
       - name: Probe read-only ou aplicar apenas variables nao sensiveis
+        if: env.FABRIC_HML_NOTERI_SKIP != 'true'
         shell: powershell
         run: |
           $probeArgs = @(
@@ -105,20 +126,42 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
+          $evidenceDir = Split-Path -Parent $env:EVIDENCE_FILE
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+
+          function Write-BlockedEvidence($status, $detail) {
+            $payload = [ordered]@{
+              schema_version = "1.0.0"
+              status = $status
+              detail = $detail
+              runner = $env:RUNNER_NAME
+              generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+            }
+            $payload | ConvertTo-Json -Depth 6 | Set-Content -Path $env:EVIDENCE_FILE -Encoding utf8
+            "FABRIC_HML_NOTERI_SKIP=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
           $python = Get-Command python -ErrorAction SilentlyContinue
           if (-not $python) {
-            throw "python_3_12_not_available_on_self_hosted_runner"
+            Write-BlockedEvidence "blocked_runner_python_missing" "python command not available on self-hosted runner"
+            exit 0
           }
+
           $versionOutput = & $python.Source --version
           if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^Python 3\.12\.') {
-            throw "python_3_12_required_on_self_hosted_runner:$versionOutput"
+            Write-BlockedEvidence "blocked_runner_python_version" $versionOutput
+            exit 0
           }
+
           "PYTHON_EXE=$($python.Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FABRIC_HML_NOTERI_SKIP=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Python 3.12 disponivel: $versionOutput"
 
       - name: Criar ou capturar secret HML sem expor valor
+        if: env.FABRIC_HML_NOTERI_SKIP != 'true'
         shell: powershell
-        run: '& "$env:PYTHON_EXE" scripts/fabric_hml_secret_bootstrap_temp.py'
+        run: |
+          & "$env:PYTHON_EXE" scripts/fabric_hml_secret_bootstrap_temp.py
 
       - name: Forcar flag E2E para false sem validacao real
         if: always()
