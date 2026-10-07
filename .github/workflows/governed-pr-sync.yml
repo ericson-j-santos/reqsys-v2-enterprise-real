@@ -68,7 +68,7 @@ jobs:
           echo "old_sha=$old_sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout pull request branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ steps.pr.outputs.head_ref }}
           fetch-depth: 0

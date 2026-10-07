@@ -21,7 +21,7 @@ def test_movimento_email_dsn_bootstrap_uses_governed_oidc_identity() -> None:
     assert "vars.AZURE_SUBSCRIPTION_ID" not in workflow
 
     assert "id-token: write" in workflow
-    assert "uses: azure/login@v2" in workflow
+    assert "uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in workflow
     assert "client-secret:" not in workflow
 
     bootstrap = workflow.split("  bootstrap:\n", 1)[1]

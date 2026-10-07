@@ -46,7 +46,7 @@ jobs:
       PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -95,7 +95,7 @@ jobs:
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
@@ -216,7 +216,7 @@ jobs:
 
       - name: Upload sanitized network evidence
         if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: noteri-desktop-network-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-network\evidence.json
@@ -243,7 +243,7 @@ jobs:
           }
 
       - name: Checkout immutable source SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -277,7 +277,7 @@ jobs:
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
@@ -369,7 +369,7 @@ jobs:
 
       - name: Upload sanitized recovery evidence
         if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
           name: noteri-desktop-orchestrator-runner-recovery-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}/artifacts/noteri-desktop-orchestrator-runner-recovery/evidence.json
@@ -389,7 +389,7 @@ jobs:
       PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -438,7 +438,7 @@ jobs:
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
@@ -559,7 +559,7 @@ jobs:
 
       - name: Upload sanitized DEV HTTP evidence
         if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: noteri-desktop-dev-http-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\artifacts\noteri-desktop-dev-http\evidence.json
@@ -579,7 +579,7 @@ jobs:
 
     steps:
       - name: Checkout immutable diagnostic SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -613,7 +613,7 @@ jobs:
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
@@ -686,7 +686,7 @@ jobs:
 
       - name: Upload sanitized status evidence
         if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: noteri-desktop-orchestrator-status-${{ github.run_id }}
           path: ${{ steps.session.outputs.target_path }}\\artifacts\\noteri-desktop-orchestrator-status\\evidence.json
@@ -705,7 +705,7 @@ jobs:
       PYTHONNOUSERSITE: "1"
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -754,7 +754,7 @@ jobs:
           "REQSYS_PYTHON=$python" | Add-Content $env:GITHUB_ENV
 
       - name: Checkout canonical operational rules exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           repository: ericson-j-santos/chatgpt-operational-rules
           ref: ${{ env.RULES_SHA }}
@@ -860,7 +860,7 @@ jobs:
           exit $LASTEXITCODE
       - name: Upload sanitized backup metadata evidence
         if: always() && steps.session.outputs.target_path != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: noteri-dev-backup-metadata-${{ github.run_id }}
           path: ${{ env.EVIDENCE_REL }}

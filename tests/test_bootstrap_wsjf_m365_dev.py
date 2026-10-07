@@ -86,7 +86,7 @@ def test_workflow_bootstrap_usa_oidc_sem_segredo_legado():
     workflow = (RAIZ / ".github" / "workflows" / "bootstrap-wsjf-m365-dev.yml").read_text(encoding="utf-8")
 
     assert "id-token: write" in workflow
-    assert "azure/login@v2" in workflow
+    assert "azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in workflow
     assert "POWER_PLATFORM_GRAPH_ACCESS_TOKEN" in workflow
     assert "POWER_PLATFORM_CLIENT_SECRET" not in workflow
 

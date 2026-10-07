@@ -59,8 +59,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Validar sintaxe e contratos focados
@@ -88,7 +88,7 @@ jobs:
       EVIDENCE_FILE: artifacts/pc24x7-todo-runtime/evidence.json
     steps:
       - name: Checkout immutable workflow SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -105,7 +105,7 @@ jobs:
           }
 
       - name: Login Azure por OIDC
-        uses: azure/login@v2
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
           client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
           tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
@@ -126,7 +126,7 @@ jobs:
 
       - name: Publicar evidência física sanitizada
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: pc24x7-todo-runtime-${{ github.run_id }}
           path: artifacts/pc24x7-todo-runtime/evidence.json
@@ -146,18 +146,18 @@ jobs:
       CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "20"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
 
       - name: Login Azure por OIDC
-        uses: azure/login@v2
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
           client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
           tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
@@ -218,7 +218,7 @@ jobs:
 
       - name: Publicar evidência pública
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: pc24x7-todo-runtime-public-e2e-${{ github.run_id }}
           path: artifacts/pc24x7-todo-runtime/
@@ -239,18 +239,18 @@ jobs:
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
       CORRELATION_ID: todo-global-hourly-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "20"
 
       - name: Login Azure por OIDC
-        uses: azure/login@v2
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
           client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
           tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
@@ -346,7 +346,7 @@ jobs:
 
       - name: Preservar evidência
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: todo-global-hourly-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/todo-global-hourly/

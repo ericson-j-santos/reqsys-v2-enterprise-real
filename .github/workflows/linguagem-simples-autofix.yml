@@ -32,7 +32,7 @@ jobs:
       changed: ${{ steps.diff.outputs.changed }}
     steps:
       - name: Obter ferramentas confiáveis da base
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: trusted
@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 1
 
       - name: Obter código candidato sem credencial persistida
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: candidate
@@ -114,7 +114,7 @@ jobs:
 
       - name: Publicar alteração para aplicação governada
         if: steps.diff.outputs.changed == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ env.PATCH_NAME }}
           path: ${{ runner.temp }}/linguagem-simples.patch
@@ -129,7 +129,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Obter branch atual sem credencial persistida
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           persist-credentials: false
@@ -154,7 +154,7 @@ jobs:
 
       - name: Baixar alteração preparada
         if: steps.lease.outputs.stale == 'false'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ env.PATCH_NAME }}
           path: ${{ runner.temp }}/autofix
@@ -198,7 +198,7 @@ jobs:
       - name: Gerar token temporário da GitHub App
         if: steps.lease.outputs.stale == 'false'
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}

@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Obter alterações da PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Executar testes unitários
         working-directory: .github/scripts
         run: python -m unittest -v test_pr_no_loss_guard.py
@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Obter main confiável
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
           fetch-depth: 0

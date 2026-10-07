@@ -25,7 +25,7 @@ jobs:
     environment: reqsys-power-platform-dev
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
@@ -141,7 +141,7 @@ jobs:
           echo "$result" | grep -q '"check":"powerplatform_environments"'
           echo "$result" | grep -q '"check":"dataverse_whoami"'
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: microsoft-identity-dev-sync

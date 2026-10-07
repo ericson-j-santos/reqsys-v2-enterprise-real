@@ -29,10 +29,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
 
@@ -62,7 +62,7 @@ jobs:
 
       - name: Download operational history artifact (when triggered by upstream)
         if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: operational-center-history
@@ -79,21 +79,21 @@ jobs:
           fi
 
       - name: Download OpenAPI contract artifacts (post-workflow hydration)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: openapi-contract-validation
           path: artifacts/openapi
 
       - name: Download OpenAPI routes drift artifact (canonical)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: openapi-routes-drift
           path: artifacts/openapi
 
       - name: Download OpenAPI semantic diff artifact (advisory)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           name: openapi-semantic-diff
@@ -165,7 +165,7 @@ jobs:
 
       - name: Upload observability hub artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: operational-observability-hub
           path: |

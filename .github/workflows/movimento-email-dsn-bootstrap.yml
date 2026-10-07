@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
       - name: Validar sintaxe
@@ -49,8 +49,8 @@ jobs:
       MOVIMENTO_EMAIL_SQL_PASSWORD_SECRET: ${{ vars.MOVIMENTO_EMAIL_SQL_PASSWORD_SECRET || 'movimento-email-sql-password' }}
       MOVIMENTO_EMAIL_DSN_SECRET_NAME: movimento-email-source-dsn
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 
@@ -70,7 +70,7 @@ jobs:
           done
 
       - name: Login Azure por OIDC
-        uses: azure/login@v2
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
           client-id: ${{ vars.CCP_AZURE_CLIENT_ID_FLY_GOVERNED_COMMAND }}
           tenant-id: ${{ vars.CCP_AZURE_TENANT_ID }}
@@ -123,7 +123,7 @@ jobs:
 
       - name: Atualizar evidência sanitizada na issue 1520
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           READY: ${{ steps.bootstrap.outputs.ready }}
           BOOTSTRAP_RC: ${{ steps.bootstrap.outputs.rc }}

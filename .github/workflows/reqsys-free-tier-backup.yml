@@ -70,8 +70,8 @@ jobs:
       configured: ${{ steps.plan.outputs.configured }}
       missing: ${{ steps.plan.outputs.missing }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Validate implementation
@@ -153,8 +153,8 @@ jobs:
       CORRELATION_ID: backup-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.environment }}
       ASSET_JSON: ${{ toJson(matrix) }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Resolver identidade Fly do ambiente
@@ -218,7 +218,7 @@ jobs:
         run: bash scripts/run_reqsys_free_tier_backup.sh
       - name: Publish non-sensitive evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: reqsys-backup-evidence-${{ matrix.environment }}
           path: artifacts/backup/${{ matrix.id }}/evidence.json
@@ -230,11 +230,11 @@ jobs:
     if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           pattern: reqsys-backup-evidence-*
@@ -252,7 +252,7 @@ jobs:
           python scripts/reqsys_free_tier_backup.py dashboard --inventory "$INVENTORY" --evidence-dir downloaded "${flag[@]}" --missing "$MISSING" --run-url "$RUN_URL" --execution-result "$EXECUTION_RESULT" --json artifacts/dashboard/dashboard.json --markdown artifacts/dashboard/dashboard.md --card artifacts/dashboard/teams-card.json
           cat artifacts/dashboard/dashboard.md >> "$GITHUB_STEP_SUMMARY"
       - name: Update dashboard issue
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |
             const fs=require('fs'); const body=fs.readFileSync('artifacts/dashboard/dashboard.md','utf8');
@@ -273,7 +273,7 @@ jobs:
         run: |
           python tools/geradores/teams_graph_gateway_autocontido.py self-test
           python tools/geradores/teams_graph_gateway_autocontido.py send-webhook --title "ReqSys — cobertura real de backup" --message "Dashboard BACEN-04 atualizado." --adaptive-card-file artifacts/dashboard/teams-card.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: reqsys-backup-real-coverage-dashboard
           path: artifacts/dashboard/

@@ -24,10 +24,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Configure Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 
@@ -38,7 +38,7 @@ jobs:
           python -m unittest tests/test_executive_sync_stability_index_public_smoke_trend_dashboard.py
 
       - name: Download latest canonical dashboard
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: ops-dashboard.yml
           name: ops-dashboard-static
@@ -48,7 +48,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download latest trend state
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-sync-stability-index-public-smoke-trend-state.yml
           name: executive-sync-stability-index-public-smoke-trend-state
@@ -76,7 +76,7 @@ jobs:
             --evidence evidence/dashboard/validation.json
 
       - name: Publish canonical dashboard
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ops-dashboard-static
           path: dist/ops-dashboard-static
@@ -84,7 +84,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish validation evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-sync-stability-index-public-smoke-trend-dashboard-evidence
           path: evidence/dashboard

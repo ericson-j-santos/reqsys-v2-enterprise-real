@@ -28,10 +28,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
 
@@ -317,7 +317,7 @@ jobs:
             --output artifacts/runtime-executive-public-smoke/runtime-executive-public-smoke.json
 
       - name: Publish Runtime Executive smoke artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runtime-executive-public-smoke
           path: artifacts/runtime-executive-public-smoke
@@ -325,7 +325,7 @@ jobs:
           retention-days: 15
 
       - name: Publish Runtime Executive history artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runtime-executive-post-deploy-history
           path: artifacts/runtime-executive-post-deploy-history
@@ -333,7 +333,7 @@ jobs:
           retention-days: 30
 
       - name: Publish Runtime Executive regression alert artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runtime-executive-regression-alert
           path: artifacts/runtime-executive-regression-alert
@@ -341,7 +341,7 @@ jobs:
           retention-days: 30
 
       - name: Publish Security Executive Summary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: security-executive-summary
           path: artifacts/security-executive-summary
@@ -349,7 +349,7 @@ jobs:
           retention-days: 30
 
       - name: Publish Executive Readiness Gate artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-readiness-gate
           path: artifacts/executive-readiness-gate
@@ -357,7 +357,7 @@ jobs:
           retention-days: 30
 
       - name: Publish ops dashboard artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ops-dashboard-static
           path: artifacts/ops-dashboard

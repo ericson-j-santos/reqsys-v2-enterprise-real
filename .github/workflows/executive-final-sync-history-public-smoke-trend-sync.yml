@@ -28,7 +28,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Validate implementation
         run: |
@@ -44,7 +44,7 @@ jobs:
           echo "value=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
 
       - name: Download canonical dashboard artifact
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-final-sync-history-public-smoke-trend-dashboard.yml
           workflow_conclusion: success
@@ -54,7 +54,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download consolidated state artifact
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-final-sync-history-public-smoke-trend-state.yml
           workflow_conclusion: success
@@ -65,7 +65,7 @@ jobs:
 
       - name: Download previous history when available
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-final-sync-history-public-smoke-trend-sync.yml
           workflow_conclusion: success
@@ -88,7 +88,7 @@ jobs:
           python scripts/smoke_executive_final_sync_history_public_smoke_trend_sync.py "${ARGS[@]}"
 
       - name: Upload synchronized evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-final-sync-history-public-smoke-trend-sync-${{ steps.env.outputs.value }}
           path: evidence/

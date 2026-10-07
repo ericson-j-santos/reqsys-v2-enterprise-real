@@ -60,7 +60,7 @@ jobs:
       CCP_AZURE_SUBSCRIPTION_ID: ${{ vars.CCP_AZURE_SUBSCRIPTION_ID }}
     steps:
       - name: Checkout immutable source SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -85,7 +85,7 @@ jobs:
 
       - name: Login Azure by OIDC for DEV credential reuse
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v2
         with:
           client-id: ${{ env.CCP_AZURE_CLIENT_ID }}
           tenant-id: ${{ env.CCP_AZURE_TENANT_ID }}
@@ -114,7 +114,7 @@ jobs:
 
       - name: Upload public DEV physical evidence
         if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'public-static'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
           name: pc24x7-public-dev-${{ github.run_id }}
           path: artifacts/pc24x7-public-dev/evidence.json
@@ -173,7 +173,7 @@ jobs:
 
       - name: Upload runtime evidence
         if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'study-mode')
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
           name: noteri-study-mode-dev-evidence
           path: artifacts/noteri-study-mode-dev/
@@ -188,10 +188,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v4.4.0
         with:
           node-version: '20'
 
@@ -272,7 +272,7 @@ jobs:
 
       - name: Upload independent public smoke
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
           name: pc24x7-public-dev-smoke-${{ github.run_id }}
           path: artifacts/pc24x7-public-dev/

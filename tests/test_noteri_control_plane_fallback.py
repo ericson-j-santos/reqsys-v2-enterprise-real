@@ -182,7 +182,7 @@ def test_workflow_and_policy_are_fixed_to_noteri() -> None:
     assert "'.sdd/specs/noteri-control-plane-fallback.requirements.md'" in workflow
     assert "'.sdd/specs/noteri-control-plane-fallback.spec.json'" in workflow
     assert "inputs:" not in workflow
-    assert "actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea" in workflow
+    assert "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3" in workflow
     assert "github.rest.repos.getBranch" in workflow
     assert "owner: 'ericson-j-santos'" in workflow
     assert "repo: 'noteri-runtime'" in workflow

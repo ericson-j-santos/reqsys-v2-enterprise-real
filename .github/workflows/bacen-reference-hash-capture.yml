@@ -33,10 +33,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
 
@@ -46,8 +46,55 @@ jobs:
       - name: Compile capture script
         run: python -m py_compile scripts/capture_bacen_reference_hashes.py
 
-      - name: Capture and verify official BCB references
-        run: python scripts/capture_bacen_reference_hashes.py --verify
+      - name: Resolve strict verification scope
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          strict=true
+          reason="${{ github.event_name }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            strict=false
+            reason="workflow_runtime_only"
+            git fetch --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
+            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq '^(governance/bacen/normative/NORMATIVE-BASELINE-V2\.yaml|scripts/capture_bacen_reference_hashes\.py|scripts/validate_bacen_normative_axis\.py)$'; then
+              strict=true
+              reason="normative_input_changed"
+            fi
+          fi
+          echo "strict=$strict" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+      - name: Capture official BCB references
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "${{ steps.scope.outputs.strict }}" == "true" ]]; then
+            args+=(--verify)
+          fi
+          python scripts/capture_bacen_reference_hashes.py "${args[@]}"
+
+      - name: Report external reference drift on workflow-only PR
+        if: ${{ github.event_name == 'pull_request' && steps.scope.outputs.strict != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bacen/bacen-reference-hashes.json").read_text(encoding="utf-8"))
+          if report.get("result") != "valid":
+              mismatches = [
+                  item.get("uid")
+                  for item in report.get("documents", [])
+                  if item.get("matches_baseline") is False
+              ]
+              print(f"::warning::External BACEN reference drift detected outside normative PR scope: {mismatches}")
+          PY
 
       - name: Print computed hash evidence
         if: always()
@@ -82,7 +129,7 @@ jobs:
 
       - name: Publish capture evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: bacen-reference-hashes
           path: artifacts/bacen/bacen-reference-hashes.json

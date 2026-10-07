@@ -30,6 +30,18 @@ class FabricHmlNoteriDiscoveryContractTests(unittest.TestCase):
         self.assertIn('"${{ github.ref }}" -eq "refs/heads/main"', workflow)
         self.assertIn("APPLY-FABRIC-HML-NONSECRET-VARS", workflow)
 
+    def test_workflow_uses_preinstalled_python_on_self_hosted_runner(self):
+        workflow = Path(".github/workflows/fabric-hml-noteri-discovery.yml").read_text(encoding="utf-8")
+        self.assertNotIn("actions/setup-python@", workflow)
+        self.assertEqual(workflow.count("Resolve Python 3.12 on self-hosted runner"), 2)
+        self.assertIn("blocked_runner_python_missing", workflow)
+        self.assertIn("blocked_runner_python_version", workflow)
+        self.assertIn("FABRIC_HML_NOTERI_SKIP=true", workflow)
+        self.assertIn("PYTHON_EXE=", workflow)
+        self.assertIn("if: env.FABRIC_HML_NOTERI_SKIP != 'true'", workflow)
+        self.assertIn('& "$env:PYTHON_EXE" @probeArgs', workflow)
+        self.assertIn('& "$env:PYTHON_EXE" scripts/fabric_hml_secret_bootstrap_temp.py', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

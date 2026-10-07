@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Classify changed paths
         id: scope
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |
             if (context.eventName !== 'pull_request') {
@@ -143,12 +143,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
 
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
         continue-on-error: ${{ (inputs.strict || 'false') != 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -163,12 +163,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.11"
 
@@ -230,7 +230,7 @@ jobs:
 
       - name: Upload pip-audit artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: pip-audit-report
           path: artifacts/security-scanners/pip-audit/
@@ -245,12 +245,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "20"
 
@@ -301,7 +301,7 @@ jobs:
 
       - name: Upload npm audit artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: npm-audit-report
           path: artifacts/security-scanners/npm-audit/
@@ -316,7 +316,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
 
@@ -356,7 +356,7 @@ jobs:
 
       - name: Upload SBOM artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: reqsys-sbom-cyclonedx
           path: artifacts/security-scanners/sbom/
@@ -379,7 +379,7 @@ jobs:
         language: ${{ fromJSON(needs.scope.outputs.codeql_languages) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
 
@@ -388,7 +388,7 @@ jobs:
         run: mkdir -p "artifacts/security-scanners/codeql/${{ matrix.language }}"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
         with:
           languages: ${{ matrix.language }}
           build-mode: none
@@ -396,7 +396,7 @@ jobs:
 
       - name: Generate CodeQL SARIF without publishing
         id: analyze
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
         with:
           category: "/language:${{ matrix.language }}"
           output: "artifacts/security-scanners/codeql/${{ matrix.language }}/raw"
@@ -436,7 +436,7 @@ jobs:
 
       - name: Upload CodeQL SARIF evidence artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: codeql-sarif-${{ matrix.language }}
           path: artifacts/security-scanners/codeql/${{ matrix.language }}/
@@ -455,12 +455,12 @@ jobs:
       actions: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
 
       - name: Download selected CodeQL SARIF artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: codeql-sarif-*
           path: artifacts/security-scanners/codeql-upload
@@ -493,7 +493,10 @@ jobs:
               raise SystemExit(f"Linguagens CodeQL desconhecidas: {unknown}")
           expected = {f"/language:{language}/": names[language] for language in languages}
           found = set()
-          for sarif in root.glob("codeql-sarif-*/processed/upload.sarif"):
+          # download-artifact v8 extracts a single pattern match directly into
+          # `path`, while multiple matches retain one directory per artifact.
+          # Accept both layouts and keep category validation fail-closed.
+          for sarif in root.rglob("processed/upload.sarif"):
               payload = json.loads(sarif.read_text(encoding="utf-8"))
               categories = {
                   run.get("automationDetails", {}).get("id")
@@ -516,7 +519,7 @@ jobs:
 
       - name: Publish selected CodeQL analyses in one upload
         id: upload
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
         with:
           sarif_file: artifacts/security-scanners/codeql-publish
           wait-for-processing: true
@@ -560,12 +563,12 @@ jobs:
           exit 1
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
 
       - name: Download scanner artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
           path: artifacts/security-scanners/downloaded
@@ -614,7 +617,7 @@ jobs:
 
       - name: Upload security executive summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: security-executive-summary
           path: artifacts/security-executive-summary/

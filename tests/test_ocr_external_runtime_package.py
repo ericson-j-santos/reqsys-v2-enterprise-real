@@ -35,7 +35,7 @@ def test_prepare_action_uses_ephemeral_read_only_app_token() -> None:
         step for step in steps if step.get("name") == "Checkout OCR privado no SHA do lock"
     )
 
-    assert token["uses"] == "actions/create-github-app-token@v2"
+    assert token["uses"] == "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1"
     assert token["with"]["permission-contents"] == "read"
     assert token["with"]["repositories"].splitlines() == [
         "reqsys-v2-enterprise-real",

@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with: {python-version: "3.12"}
       - run: python -m pip install --disable-pip-version-check pytest
       - run: python -m pytest -q tests/test_evaluate_main_post_merge_evidence.py
@@ -32,7 +32,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: ${{ inputs.target_workflow || 'Padrão Ouro Delivery Automation' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Collect runs for main
         shell: bash
         run: |
@@ -58,6 +58,6 @@ jobs:
           echo "## Main Post-Merge Evidence" >> "$GITHUB_STEP_SUMMARY"
           echo "- Decision: \`$(jq -r '.decision // "inconclusive"' artifacts/main-post-merge-evidence/report.json)\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Production touched: \`false\`" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with: {name: main-post-merge-evidence, path: artifacts/main-post-merge-evidence/report.json, if-no-files-found: error, retention-days: 30}

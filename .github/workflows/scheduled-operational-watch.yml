@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Build operational watch evidence
         id: watch
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |
             const fs = require('fs');
@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload operational evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: scheduled-operational-watch-${{ github.run_id }}
           path: audit/
@@ -139,7 +139,7 @@ jobs:
     steps:
       - name: Check official Microsoft Graph sources
         id: watch
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           ISSUE_NUMBER: '2165'
         with:
@@ -510,7 +510,7 @@ jobs:
 
       - name: Upload sanitized watch evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: microsoft-graph-planner-teams-watch
           path: artifacts/microsoft-graph-planner-teams-watch/report.json
@@ -524,7 +524,7 @@ jobs:
     steps:
       - name: Check official GitHub Pages sources
         id: watch
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           ISSUE_NUMBER: '2179'
         with:
@@ -904,7 +904,7 @@ jobs:
 
       - name: Upload sanitized GitHub Pages watch evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: github-pages-pc24x7-watch
           path: artifacts/github-pages-pc24x7-watch/report.json

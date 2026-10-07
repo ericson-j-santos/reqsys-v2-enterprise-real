@@ -35,7 +35,7 @@ jobs:
       STG_URL: ${{ vars.REQSYS_OPS_DASHBOARD_STG_URL }}
       PROD_URL: ${{ vars.REQSYS_OPS_DASHBOARD_PROD_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Compile and test
         run: |
@@ -43,7 +43,7 @@ jobs:
           python -m unittest tests/test_smoke_executive_promotion_advisor_comparative_public.py
 
       - name: Recover previous governed history
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-promotion-advisor-comparative-public-smoke-history.yml
           name: executive-promotion-advisor-comparative-public-smoke-history
@@ -110,7 +110,7 @@ jobs:
           PY
 
       - name: Publish governed history
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-promotion-advisor-comparative-public-smoke-history
           path: evidence/

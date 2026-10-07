@@ -53,7 +53,12 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
         self.assertIn("needs.scope.outputs.codeql == 'true'", section)
         self.assertIn("CODEQL_LANGUAGES_JSON", section)
         self.assertIn("pattern: codeql-sarif-*", section)
-        self.assertEqual(section.count("uses: github/codeql-action/upload-sarif@v4"), 1)
+        self.assertEqual(
+            section.count(
+                "uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
+            ),
+            1,
+        )
         self.assertIn("wait-for-processing: true", section)
 
     def test_atomic_publisher_requires_exact_selected_categories(self):
@@ -64,6 +69,8 @@ class CodeQLAtomicPublishWorkflowTest(unittest.TestCase):
         self.assertIn("Configurações CodeQL ausentes", section)
         self.assertIn("Categoria CodeQL duplicada", section)
         self.assertIn("Linguagens CodeQL desconhecidas", section)
+        self.assertIn('root.rglob("processed/upload.sarif")', section)
+        self.assertNotIn('root.glob("codeql-sarif-*/processed/upload.sarif")', section)
 
     def test_push_main_and_manual_keep_full_scan(self):
         scope = self.section("  scope:\n", "  gitleaks:\n")

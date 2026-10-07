@@ -60,7 +60,7 @@ def test_pages_composite_publishes_stable_dev_path():
     assert "VITE_BASE_PATH: /reqsys-v2-enterprise-real/dev/" in raw
     assert "test -s site/dev/index.html" in raw
     assert "test -s site/dev/runtime-locator.json" in raw
-    assert "actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e" in raw
+    assert "actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346" in raw
 
 
 def test_pc24x7_public_runtime_enables_entra_and_disables_demo_login():

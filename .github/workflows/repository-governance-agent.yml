@@ -37,7 +37,7 @@ jobs:
 
       - name: Gerar token temporário de branch sync
         id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
@@ -46,7 +46,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar PR atual com proteção por HEAD
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
@@ -310,7 +310,7 @@ jobs:
 
       - name: Gerar token temporário de branch sync
         id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           app-id: ${{ vars.REQSYS_STACK_REBASE_APP_ID }}
           private-key: ${{ secrets.REQSYS_STACK_REBASE_PRIVATE_KEY }}
@@ -319,7 +319,7 @@ jobs:
           permission-contents: write
 
       - name: Atualizar branches com proteção por HEAD
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           MAX_BRANCH_SYNCS: "3"
           APP_TOKEN: ${{ steps.app-token.outputs.token }}

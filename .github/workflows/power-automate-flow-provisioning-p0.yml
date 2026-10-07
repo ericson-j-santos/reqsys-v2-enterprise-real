@@ -67,10 +67,10 @@ jobs:
 
     steps:
       - name: Checkout ReqSys
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Checkout Power Platform ALM repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ env.ALM_REPOSITORY }}
           path: alm
@@ -193,7 +193,7 @@ jobs:
           $result | ConvertTo-Json -Depth 10 | Set-Content -Path artifacts/power-automate-flow-provisioning-execution.json -Encoding utf8
 
       - name: Upload provisioning evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: power-automate-flow-provisioning-p0
           path: artifacts/*.json

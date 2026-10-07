@@ -63,8 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Install focused test dependency
@@ -89,8 +89,8 @@ jobs:
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
       TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Send approval request as Adaptive Card
@@ -127,7 +127,7 @@ jobs:
             --dry-run \
             --eml-output artifacts/hitl/approval-request.eml \
             --report-output artifacts/hitl/email-pr-notification.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: reqsys-hitl-pr-approval
@@ -143,8 +143,8 @@ jobs:
       issue_number: ${{ steps.issue.outputs.issue_number }}
       issue_url: ${{ steps.issue.outputs.issue_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Create labels and approval issue
@@ -249,7 +249,7 @@ jobs:
             --recipient "${HITL_EMAIL_TO:-owner@example.invalid}" \
             --eml-output artifacts/hitl/approval-request.eml \
             --report-output artifacts/hitl/email-notification.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: reqsys-hitl-request-${{ steps.issue.outputs.issue_number }}
@@ -272,8 +272,8 @@ jobs:
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
       TEAMS_WEBHOOK_RECIPIENT: ${{ secrets.TEAMS_WEBHOOK_RECIPIENT }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Resend Teams notification as Adaptive Card
@@ -293,7 +293,7 @@ jobs:
             --delivery-mode "$HITL_DELIVERY_MODE" \
             --destination-type auto \
             --output artifacts/hitl/teams-notification.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: reqsys-hitl-notification-${{ github.event.issue.number }}
@@ -313,8 +313,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
       - name: Resolve authenticated actor permission
@@ -405,7 +405,7 @@ jobs:
           gh workflow run reqsys-delivery-completion-controller.yml \
             --ref main -f execute_safe_actions=true || true
           gh workflow run production-gate-coverage-inventory.yml --ref main || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: reqsys-hitl-decision-${{ github.event.issue.number }}

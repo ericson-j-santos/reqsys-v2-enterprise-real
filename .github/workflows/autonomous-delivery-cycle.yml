@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Executar ciclo autônomo governado
         id: cycle
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           REQUIRED_LABEL: ${{ github.event.inputs.required_label || 'cycle:auto-merge-approved' }}
@@ -302,7 +302,7 @@ jobs:
 
       - name: Publicar evidência do ciclo autônomo
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: autonomous-delivery-cycle-evidence
           path: artifacts/autonomous-delivery-cycle

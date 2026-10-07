@@ -16,10 +16,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Download canonical Ops Dashboard
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: ops-dashboard.yml
           workflow_conclusion: success
@@ -28,7 +28,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download comparative smoke trend state
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         with:
           workflow: executive-promotion-advisor-comparative-public-smoke-trend-state.yml
           workflow_conclusion: success
@@ -61,14 +61,14 @@ jobs:
             --runtime-index dist/ops-dashboard/data/runtime-executive-index.json
 
       - name: Publish canonical artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ops-dashboard-static
           path: dist/ops-dashboard
           retention-days: 90
 
       - name: Publish evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-promotion-advisor-comparative-smoke-trend-dashboard-evidence
           path: |

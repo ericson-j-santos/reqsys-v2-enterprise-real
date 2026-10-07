@@ -20,8 +20,8 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
       - name: Validate implementation
@@ -40,7 +40,7 @@ jobs:
           printf '{"cards":[]}\n' > evidence/dashboard.json
           python scripts/consolidate_user_experience_environment_trend.py --trend evidence/ux/trend.json --state evidence/state.json --brief evidence/brief.json --state-output evidence/state-enriched.json --brief-output evidence/brief-enriched.json
           python scripts/inject_user_experience_environment_trend_card.py --index evidence/state-enriched.json --dashboard evidence/dashboard.json --output evidence/dashboard-enriched.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: user-experience-environment-trend-state-dashboard
           path: evidence/

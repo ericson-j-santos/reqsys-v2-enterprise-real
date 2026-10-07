@@ -112,7 +112,7 @@ def test_workflow_has_physical_then_independent_public_evidence() -> None:
     assert "CCP_AZURE_CLIENT_ID: ${{ vars.CCP_AZURE_CLIENT_ID }}" in raw
     assert "CCP_AZURE_TENANT_ID: ${{ vars.CCP_AZURE_TENANT_ID }}" in raw
     assert "REQSYS_KEY_VAULT_NAME: ${{ vars.REQSYS_KEY_VAULT_NAME }}" in raw
-    assert "azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6" in raw
+    assert "azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906" in raw
     assert "actions/checkout@v4" not in raw
     assert "actions/setup-node@v4" not in raw
     assert "actions/upload-artifact@v4" not in raw

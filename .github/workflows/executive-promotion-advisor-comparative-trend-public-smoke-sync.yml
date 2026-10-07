@@ -34,9 +34,9 @@ jobs:
       ENVIRONMENT: ${{ github.event.inputs.environment || 'PROD' }}
       PUBLIC_URL: ${{ github.event.inputs.public_url || vars.REQSYS_OPS_DASHBOARD_PROD_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 
@@ -51,7 +51,7 @@ jobs:
           test -n "$PUBLIC_URL" || { echo "URL pública não configurada"; exit 1; }
 
       - name: Restore previous history
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477
         continue-on-error: true
         with:
           workflow: executive-promotion-advisor-comparative-trend-public-smoke-sync.yml
@@ -85,13 +85,13 @@ jobs:
               assert data['human_approval_required'] is True
           PY
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-promotion-advisor-comparative-trend-public-smoke-evidence-${{ env.ENVIRONMENT }}
           path: evidence/result.json
           retention-days: 90
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: executive-promotion-advisor-comparative-trend-public-smoke-history
           path: evidence/history.json
