@@ -110,6 +110,8 @@ jobs:
             containers_total = 0
             containers_running = 0
             volumes_total = 0
+            containers = @()
+            volumes = @()
           }
           if ($docker.command_available) {
             try {
@@ -117,6 +119,8 @@ jobs:
               $docker.containers_total = @(& docker.exe ps -a -q 2>$null).Count
               $docker.containers_running = @(& docker.exe ps -q 2>$null).Count
               $docker.volumes_total = @(& docker.exe volume ls -q 2>$null).Count
+              $docker.containers = @(& docker.exe ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>$null)
+              $docker.volumes = @(& docker.exe volume ls --format '{{.Name}}' 2>$null)
             } catch {
               $docker.daemon_available = $false
             }
