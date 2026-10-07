@@ -11,6 +11,7 @@ on:
         options:
           - rdc-recovery
           - migration-audit
+          - migration-recipient-init
 
 permissions:
   contents: read
@@ -218,3 +219,60 @@ jobs:
           path: artifacts/desktop-migration-readiness/evidence.json
           if-no-files-found: error
           retention-days: 7
+
+  migration-recipient-init:
+    name: Initialize Desktop migration recipient
+    if: inputs.operation == 'migration-recipient-init'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    steps:
+      - name: Validate exact host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install pinned ephemeral crypto dependencies
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $deps = Join-Path $env:RUNNER_TEMP "reqsys-migration-python-$env:GITHUB_RUN_ID"
+          python -m pip install --isolated --disable-pip-version-check --no-user `
+            --only-binary=:all: --target $deps cryptography==46.0.2 pywin32==311
+          if ($LASTEXITCODE -ne 0) { throw 'PINNED_DEPENDENCY_INSTALL_FAILED' }
+          "REQSYS_MIGRATION_DEPENDENCIES=$deps" | Add-Content $env:GITHUB_ENV
+          "PYTHONPATH=$deps" | Add-Content $env:GITHUB_ENV
+
+      - name: Provision DPAPI-bound recipient identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $raw = & python scripts/dev_backup_transport.py recipient-init `
+            --confirm INIT-PC24X7-DEV-MIGRATION-IDENTITY
+          if ($LASTEXITCODE -ne 0) { throw 'RECIPIENT_INIT_FAILED' }
+          $result = @($raw)[-1] | ConvertFrom-Json
+          if ($result.ok -ne $true -or $result.target_host -ne 'DESKTOP-PDQK954' -or `
+              $result.private_key_exported -ne $false) {
+            throw 'RECIPIENT_EVIDENCE_INVALID'
+          }
+          $out = 'artifacts/desktop-migration-recipient'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $result.public_recipient | ConvertTo-Json -Compress | `
+            Set-Content -LiteralPath (Join-Path $out 'public-recipient.json') -Encoding UTF8
+
+      - name: Upload public recipient identity
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-migration-recipient-${{ github.run_id }}
+          path: artifacts/desktop-migration-recipient/public-recipient.json
+          if-no-files-found: error
+          retention-days: 1
