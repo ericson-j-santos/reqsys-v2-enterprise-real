@@ -66,7 +66,7 @@ def test_identity_bootstrap_uses_setup_python_instead_of_stale_noteri_shim() -> 
     text = _text()
 
     assert "Preparar Python isolado no runner Noteri" in text
-    assert "uses: actions/setup-python@v5" in text
+    assert "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in text
     assert 'Get-Command python -CommandType Application -ErrorAction Stop' in text
     assert '"REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV' in text
     assert "$raw = & $env:REQSYS_PYTHON $launcher @launcherArgs" in text
