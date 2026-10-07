@@ -18,7 +18,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 4. Usar \Automation\RemoteDesktopCommander apenas como fallback.
 5. Não criar, editar, habilitar, desabilitar ou excluir tarefas.
 6. Validar o marcador governado do runner/launcher antes de executar uma tarefa.
-7. Não aceitar host, task name, executável ou comando fornecido como input do workflow.
+7. Não aceitar host, task name, executável, comando, caminho ou URL fornecido como input do workflow. O único input permitido é `operation`, como escolha fechada entre operações versionadas no próprio workflow.
 8. Não ler segredos.
 9. Não tocar produção.
 10. Publicar evidência sanitizada como artifact.
@@ -31,6 +31,11 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 17. O Authorized Actions Gateway deve vincular a evidência ao \`run_id\` retornado pelo próprio \`gh workflow run\`; é proibido selecionar um run apenas por \`head_sha\`, pois múltiplas execuções podem compartilhar o mesmo SHA.
 18. Para recuperação Desktop, a janela de pickup é de no máximo 60 segundos. Um job com \`started_at\` preenchido e label \`self-hosted\` comprova pickup mesmo se o status agregado do workflow run ainda estiver em \`pending\`, \`queued\`, \`requested\` ou \`waiting\`; somente ausência de qualquer evidência material de pickup ao fim da janela deve produzir \`SELF_HOSTED_RUNNER_PICKUP_TIMEOUT_OR_BUSY\` e falhar fechado.
 19. Antes da falha terminal por ausência de pickup, o gateway deve solicitar o cancelamento do run self-hosted abandonado, aguardar confirmação `completed/cancelled` por janela limitada e registrar `target_cleanup_status`/`target_cleanup_error` na evidência. O workflow `desktop-rdc-recovery` deve usar `cancel-in-progress=true` para que um novo dispatch substitua uma execução órfã anterior. Falha na limpeza não autoriza retry automático fora desse novo dispatch explícito.
+20. As operações de migração devem continuar fixas ao host `DESKTOP-PDQK954` e às labels `self-hosted`, `Windows`, `X64`, `pc24x7` e `reqsys-dev`; nenhum dado do dispatch pode alterar o destino.
+21. A identidade privada usada para receber arquivos do notebook deve permanecer vinculada ao usuário e à máquina por DPAPI e nunca ser exportada. Cada bundle deve ser autenticado e conferido contra tamanho e hashes independentes antes da extração.
+22. A extração deve recusar caminhos absolutos, letras de unidade e travessia `..`. Os arquivos extraídos devem ser conferidos individualmente contra o manifesto antes de qualquer restauração.
+23. A preparação do SQL Server no desktop deve usar imagem oficial SQL Server 2025, registrar seu digest e produzir somente evidência sanitizada, sem publicar senha, chave privada ou outro segredo.
+24. O notebook e seus serviços devem permanecer ativos até a restauração no desktop e as verificações de integridade concluírem; preparar a migração não autoriza desligamento, limpeza nem remoção de dados de origem.
 
 ## Critérios de aceite
 
@@ -39,6 +44,10 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 - testes negativos recusam host ou task não allowlisted, claim stale e claim inválido;
 - marcadores não allowlisted permanecem recusados antes da execução de qualquer tarefa;
 - workflow usa exclusivamente o runner PC24x7;
+- o dispatch aceita somente a enumeração versionada `operation` e recusa inputs de host, task, comando, caminho ou URL;
+- a chave privada de recepção nunca sai do desktop, e bundles adulterados, truncados, expirados ou destinados a outra chave são recusados;
+- o conjunto SQL recebido só é aceito quando todos os arquivos conferem com o manifesto e a imagem SQL Server 2025 fica registrada por digest;
+- nenhuma etapa de preparação desliga serviços ou remove dados do notebook;
 - gateway mantém a allowlist estática;
 - gateway comprova \`run_id\`, URL, SHA e evento do run exato disparado e recusa evidência de execução histórica;
 - recuperação permanece bloqueada quando, após 60 segundos, não existe job self-hosted iniciado nem outra transição material do run; atraso do status agregado não pode cancelar job que já possui \`started_at\`;

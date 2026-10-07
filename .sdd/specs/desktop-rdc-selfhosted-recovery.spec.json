@@ -66,9 +66,52 @@
     },
     "mode_scoped_concurrency": true
   },
+  "migration_operations": {
+    "input": "operation",
+    "allowlist": [
+      "rdc-recovery",
+      "migration-audit",
+      "migration-recipient-init",
+      "migration-sqlserver-receive",
+      "migration-sqlserver-image",
+      "migration-sqlserver-bootstrap"
+    ],
+    "target_host": "DESKTOP-PDQK954",
+    "runner_labels": [
+      "self-hosted",
+      "Windows",
+      "X64",
+      "pc24x7",
+      "reqsys-dev"
+    ],
+    "prohibited_inputs": [
+      "host",
+      "task",
+      "command",
+      "path",
+      "source_url"
+    ],
+    "transport": {
+      "private_key_exported": false,
+      "private_key_protection": "DPAPI current user",
+      "independent_size_and_sha256_required": true,
+      "unsafe_archive_paths_rejected": true
+    },
+    "sqlserver": {
+      "official_image": "mcr.microsoft.com/mssql/server:2025-latest",
+      "validation_image_digest": "sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726",
+      "digest_evidence_required": true,
+      "source_manifest_verification_required": true,
+      "bootstrap_network_mode": "none",
+      "backup_mount_read_only": true,
+      "credential_protection": "DPAPI current user"
+    },
+    "source_shutdown_authorized": false
+  },
   "sdd_gate": {
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
+      "tests/test_noteri_desktop_bundle_transport.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_desktop_control_plane_watchdog.py"
     ],
