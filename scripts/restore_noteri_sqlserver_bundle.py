@@ -541,7 +541,7 @@ def _sqlcmd(query: str, password: str, *, code: str) -> list[str]:
                     CONTAINER_NAME,
                     SQLCMD,
                     "-S",
-                    "localhost",
+                    "tcp:127.0.0.1,1433",
                     "-U",
                     "sa",
                     "-C",

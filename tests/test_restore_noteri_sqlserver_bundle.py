@@ -229,6 +229,7 @@ def test_sqlcmd_copies_batch_without_command_line_query(monkeypatch):
     assert observed["batch_mode"] & stat.S_IROTH
     assert copy_arguments[2] == f"{restore.CONTAINER_NAME}:{container_script}"
     assert "-Q" not in execute_arguments
+    assert execute_arguments[execute_arguments.index("-S") + 1] == "tcp:127.0.0.1,1433"
     assert execute_arguments[-2:] == ["-i", container_script]
     assert execute_kwargs["extra_env"] == {"SQLCMDPASSWORD": "Secret-Example-123!"}
     assert cleanup_arguments[-3:] == ["/bin/rm", "-f", container_script]
