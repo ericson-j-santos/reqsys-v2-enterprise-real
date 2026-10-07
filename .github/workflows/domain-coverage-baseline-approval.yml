@@ -37,9 +37,9 @@ jobs:
           set -euo pipefail
 
           RUN_GATE="$(gh api \
-            --paginate \
-            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
-            --jq '[.[].filename | select(
+            --paginate --slurp \
+            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files?per_page=100" \
+            --jq '[.[][] | .filename | select(
               . == "config/domain-coverage-policy.json" or
               . == "docs/ops-dashboard/data/domain-coverage-baseline-diff.json"
             )] | length > 0')"
