@@ -15,6 +15,8 @@ on:
           - migration-sqlserver-receive
           - migration-sqlserver-image
           - migration-sqlserver-bootstrap
+          - migration-sqlserver-restore
+          - migration-sqlserver-diagnose
 
 permissions:
   contents: read
@@ -650,3 +652,219 @@ jobs:
           path: artifacts/desktop-sqlserver-bootstrap/evidence.json
           if-no-files-found: error
           retention-days: 30
+
+  migration-sqlserver-restore:
+    name: Restore and validate NOTERI SQL Server databases on Desktop
+    if: inputs.operation == 'migration-sqlserver-restore'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 60
+    env:
+      SQL_IMAGE_ID: sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
+      SQL_CONTAINER: reqsys-noteri-migration-sql2025
+      LEGACY_DATA_VOLUME: reqsys-noteri-sql2025-data
+    steps:
+      - name: Validate exact host and Docker daemon
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+          docker.exe version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'DOCKER_DAEMON_UNAVAILABLE' }
+
+      - name: Checkout immutable workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Reconcile the isolated bootstrap container
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $existingNames = @(docker.exe ps -a --filter "name=^/$env:SQL_CONTAINER`$" --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_CONTAINER_INVENTORY_FAILED' }
+          if ($existingNames -contains $env:SQL_CONTAINER) {
+            $container = @(docker.exe container inspect $env:SQL_CONTAINER | ConvertFrom-Json)[0]
+            $labels = $container.Config.Labels
+            $managedSchema = $null
+            if ($labels) { $managedSchema = $labels.'com.reqsys.migration.schema' }
+            if ($managedSchema -ne 'reqsys-noteri-sqlserver-container-v1') {
+              $backupRoot = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration\sqlserver\noteri-20261007T071503'
+              $mounts = @($container.Mounts)
+              $dataMount = @($mounts | Where-Object { $_.Destination -eq '/var/opt/mssql' })
+              $backupMount = @($mounts | Where-Object { $_.Destination -eq '/var/opt/mssql/backup' })
+              $published = @($container.NetworkSettings.Ports.PSObject.Properties | Where-Object { $_.Value })
+              if ($container.Name -ne "/$env:SQL_CONTAINER" -or
+                  $container.Image -ne $env:SQL_IMAGE_ID -or
+                  $container.HostConfig.NetworkMode -ne 'none' -or
+                  $container.HostConfig.RestartPolicy.Name -ne 'unless-stopped' -or
+                  $mounts.Count -ne 2 -or
+                  $dataMount.Count -ne 1 -or $dataMount[0].Name -ne $env:LEGACY_DATA_VOLUME -or
+                  $backupMount.Count -ne 1 -or $backupMount[0].RW -ne $false -or
+                  [IO.Path]::GetFullPath([string]$backupMount[0].Source) -ne [IO.Path]::GetFullPath($backupRoot) -or
+                  $published.Count -ne 0) {
+                throw 'UNRECOGNIZED_EXISTING_SQLSERVER_CONTAINER'
+              }
+              docker.exe container rm --force $env:SQL_CONTAINER | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'LEGACY_BOOTSTRAP_CONTAINER_REMOVE_FAILED' }
+            }
+          }
+
+      - name: Restore 14 user databases and validate physical integrity
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = 'artifacts/desktop-sqlserver-restore'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $secretPath = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration\secrets\sql2025-sa.dpapi'
+          if (-not (Test-Path -LiteralPath $secretPath -PathType Leaf)) {
+            throw 'DPAPI_SQLSERVER_SECRET_MISSING'
+          }
+          $protected = (Get-Content -LiteralPath $secretPath -Raw).Trim()
+          $secure = $protected | ConvertTo-SecureString
+          $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+          try {
+            $env:MSSQL_SA_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+            $raw = & python scripts/restore_noteri_sqlserver_bundle.py `
+              --confirm RESTORE-NOTERI-SQLSERVER-BUNDLE
+            $restoreExit = $LASTEXITCODE
+          } finally {
+            $env:MSSQL_SA_PASSWORD = $null
+            if ($bstr -ne [IntPtr]::Zero) {
+              [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            }
+          }
+          try {
+            $result = @($raw)[-1] | ConvertFrom-Json
+          } catch {
+            throw 'SQLSERVER_RESTORE_EVIDENCE_INVALID'
+          }
+          if ($restoreExit -ne 0 -or $result.ok -ne $true) {
+            [ordered]@{
+              schema = 'desktop-sqlserver-restore.v1'
+              ok = $false
+              host = $env:COMPUTERNAME
+              code = [string]$result.code
+              secret_emitted = $false
+              production_touched = $false
+            } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+            throw "SQLSERVER_RESTORE_FAILED: $($result.code)"
+          }
+          if ($result.host -ne 'DESKTOP-PDQK954' -or $result.source_host -ne 'NOTERI' -or
+              $result.backup_files_verified -ne 17 -or $result.databases_restored -ne 14 -or
+              @($result.database_names).Count -ne 14 -or $result.checkdb_physical_only -ne 14 -or
+              $result.restore_with_checksum -ne $true -or $result.network_mode -ne 'none' -or
+              $result.backup_mount_read_only -ne $true -or $result.sql_server_major_version -ne '17' -or
+              $result.secret_emitted -ne $false) {
+            throw 'SQLSERVER_RESTORE_EVIDENCE_CONTRACT_MISMATCH'
+          }
+          [ordered]@{
+            schema = 'desktop-sqlserver-restore.v1'
+            ok = $true
+            host = $result.host
+            source_host = $result.source_host
+            backup_files_verified = $result.backup_files_verified
+            databases_restored = $result.databases_restored
+            database_names = @($result.database_names)
+            excluded_system_databases = @($result.excluded_system_databases)
+            checkdb_physical_only = $result.checkdb_physical_only
+            restore_with_checksum = $result.restore_with_checksum
+            container = $result.container
+            volume = $result.volume
+            network_mode = $result.network_mode
+            backup_mount_read_only = $result.backup_mount_read_only
+            image_digest = $result.image_digest
+            image_id = $result.image_id
+            sql_server_major_version = $result.sql_server_major_version
+            secret_emitted = $false
+            secret_uploaded = $false
+            production_touched = $false
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized restore evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sqlserver-restore-${{ github.run_id }}
+          path: artifacts/desktop-sqlserver-restore/evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  migration-sqlserver-diagnose:
+    name: Diagnose isolated SQL Server bootstrap on Desktop
+    if: inputs.operation == 'migration-sqlserver-diagnose'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 10
+    env:
+      SQL_CONTAINER: reqsys-noteri-migration-sql2025
+      SQL_IMAGE_ID: sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
+    steps:
+      - name: Collect bounded sanitized container diagnostics
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+          $existingNames = @(docker.exe ps -a --filter "name=^/$env:SQL_CONTAINER`$" --format '{{.Names}}')
+          if ($LASTEXITCODE -ne 0 -or $existingNames -notcontains $env:SQL_CONTAINER) {
+            throw 'SQLSERVER_DIAGNOSTIC_CONTAINER_MISSING'
+          }
+          $identity = (docker.exe container inspect --format '{{.Image}}|{{.HostConfig.NetworkMode}}' $env:SQL_CONTAINER).Trim()
+          if ($LASTEXITCODE -ne 0 -or $identity -ne "$env:SQL_IMAGE_ID|none") {
+            throw 'SQLSERVER_DIAGNOSTIC_CONTAINER_IDENTITY_MISMATCH'
+          }
+          $state = docker.exe container inspect --format '{{json .State}}' $env:SQL_CONTAINER | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_DIAGNOSTIC_STATE_FAILED' }
+
+          $processRunning = $false
+          $localhostReady = $false
+          $ipv4Ready = $false
+          $ErrorActionPreference = 'SilentlyContinue'
+          docker.exe exec $env:SQL_CONTAINER /bin/bash -lc 'pgrep -x sqlservr >/dev/null' 2>$null | Out-Null
+          $processRunning = $LASTEXITCODE -eq 0
+          $localhostProbe = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -Q "SET NOCOUNT ON; SELECT 1;"'
+          docker.exe exec $env:SQL_CONTAINER /bin/bash -lc $localhostProbe 2>$null | Out-Null
+          $localhostReady = $LASTEXITCODE -eq 0
+          $ipv4Probe = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -C -b -l 5 -Q "SET NOCOUNT ON; SELECT 1;"'
+          docker.exe exec $env:SQL_CONTAINER /bin/bash -lc $ipv4Probe 2>$null | Out-Null
+          $ipv4Ready = $LASTEXITCODE -eq 0
+          $logLines = @(docker.exe logs --tail 400 $env:SQL_CONTAINER 2>&1)
+          $ErrorActionPreference = 'Stop'
+          $diagnosticLines = @($logLines | Where-Object {
+            $_ -match '(?i)error|failed|permission|denied|unable|listening|ready for client|sqlservr'
+          } | Select-Object -Last 100 | ForEach-Object {
+            $line = [string]$_
+            $line = [regex]::Replace($line, '(?i)(password|pwd)\s*[=:]\s*\S+', '$1=<redacted>')
+            if ($line.Length -gt 500) { $line.Substring(0, 500) } else { $line }
+          })
+          $out = 'artifacts/desktop-sqlserver-diagnose'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          [ordered]@{
+            schema = 'desktop-sqlserver-diagnose.v1'
+            host = $env:COMPUTERNAME
+            container = $env:SQL_CONTAINER
+            image_id = $env:SQL_IMAGE_ID
+            state = [string]$state.Status
+            running = [bool]$state.Running
+            exit_code = [int]$state.ExitCode
+            oom_killed = [bool]$state.OOMKilled
+            process_running = $processRunning
+            localhost_ready = $localhostReady
+            ipv4_ready = $ipv4Ready
+            diagnostic_lines = $diagnosticLines
+            secret_emitted = $false
+            production_touched = $false
+            read_only = $true
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized diagnostic evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sqlserver-diagnose-${{ github.run_id }}
+          path: artifacts/desktop-sqlserver-diagnose/evidence.json
+          if-no-files-found: error
+          retention-days: 7

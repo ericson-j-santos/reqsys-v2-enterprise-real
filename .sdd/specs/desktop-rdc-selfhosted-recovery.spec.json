@@ -74,7 +74,9 @@
       "migration-recipient-init",
       "migration-sqlserver-receive",
       "migration-sqlserver-image",
-      "migration-sqlserver-bootstrap"
+      "migration-sqlserver-bootstrap",
+      "migration-sqlserver-restore",
+      "migration-sqlserver-diagnose"
     ],
     "target_host": "DESKTOP-PDQK954",
     "runner_labels": [
@@ -104,7 +106,15 @@
       "source_manifest_verification_required": true,
       "bootstrap_network_mode": "none",
       "backup_mount_read_only": true,
-      "credential_protection": "DPAPI current user"
+      "credential_protection": "DPAPI current user",
+      "restored_user_databases": 14,
+      "excluded_system_databases": [
+        "master",
+        "model",
+        "msdb"
+      ],
+      "restore_checksum_required": true,
+      "checkdb_physical_only_required": true
     },
     "source_shutdown_authorized": false
   },
@@ -112,6 +122,7 @@
     "tests": [
       "tests/test_pc24x7_rdc_recovery.py",
       "tests/test_noteri_desktop_bundle_transport.py",
+      "tests/test_restore_noteri_sqlserver_bundle.py",
       "tests/test_reqsys_authorized_actions_gateway.py",
       "tests/test_desktop_control_plane_watchdog.py"
     ],

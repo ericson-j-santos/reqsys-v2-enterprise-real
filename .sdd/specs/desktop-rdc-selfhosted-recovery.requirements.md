@@ -36,6 +36,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 22. A extração deve recusar caminhos absolutos, letras de unidade e travessia `..`. Os arquivos extraídos devem ser conferidos individualmente contra o manifesto antes de qualquer restauração.
 23. A preparação do SQL Server no desktop deve usar imagem oficial SQL Server 2025, registrar seu digest e produzir somente evidência sanitizada, sem publicar senha, chave privada ou outro segredo.
 24. O notebook e seus serviços devem permanecer ativos até a restauração no desktop e as verificações de integridade concluírem; preparar a migração não autoriza desligamento, limpeza nem remoção de dados de origem.
+25. A restauração isolada deve excluir `master`, `model` e `msdb`, restaurar exatamente os 14 bancos de usuário com `CHECKSUM` e executar `DBCC CHECKDB WITH PHYSICAL_ONLY` em cada banco antes de aceitar a evidência.
 
 ## Critérios de aceite
 
@@ -47,6 +48,7 @@ Assim, indisponibilidade simultânea de RDC + self-hosted runner não deve mais 
 - o dispatch aceita somente a enumeração versionada `operation` e recusa inputs de host, task, comando, caminho ou URL;
 - a chave privada de recepção nunca sai do desktop, e bundles adulterados, truncados, expirados ou destinados a outra chave são recusados;
 - o conjunto SQL recebido só é aceito quando todos os arquivos conferem com o manifesto e a imagem SQL Server 2025 fica registrada por digest;
+- exatamente 14 bancos de usuário são restaurados com checksum e passam `DBCC CHECKDB WITH PHYSICAL_ONLY`; os três bancos de sistema permanecem apenas preservados no conjunto de backup;
 - nenhuma etapa de preparação desliga serviços ou remove dados do notebook;
 - gateway mantém a allowlist estática;
 - gateway comprova \`run_id\`, URL, SHA e evento do run exato disparado e recusa evidência de execução histórica;
