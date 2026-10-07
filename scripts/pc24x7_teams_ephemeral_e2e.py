@@ -289,6 +289,36 @@ def _delivery_summary(status: int, payload: dict) -> dict:
             failure_category = 'channel_not_configured'
         elif 'conversationreference' in failure_text.lower() or 'conversa_bot_nao_instalada' in failure_text.lower():
             failure_category = 'bot_conversation_reference_missing'
+        elif "circuito '" in failure_text.lower() and 'aberto' in failure_text.lower():
+            failure_category = 'provider_circuit_open'
+        elif any(marker in failure_text.lower() for marker in (
+            'all connection attempts failed',
+            'connection refused',
+            'connecterror',
+            'getaddrinfo failed',
+            'name or service not known',
+        )):
+            failure_category = 'provider_connect_error'
+        elif any(marker in failure_text.lower() for marker in (
+            'timeout',
+            'timed out',
+        )):
+            failure_category = 'provider_timeout'
+        elif any(marker in failure_text.lower() for marker in (
+            'certificate verify failed',
+            'sslerror',
+            'tls',
+        )):
+            failure_category = 'provider_tls_error'
+        elif 'access_token' in failure_text.lower():
+            failure_category = 'provider_token_response_invalid'
+        elif any(marker in failure_text.lower() for marker in (
+            'jsondecodeerror',
+            'expecting value',
+        )):
+            failure_category = 'provider_response_invalid'
+        elif re.fullmatch(r'provider_[a-z0-9_]+', failure_text.lower()):
+            failure_category = failure_text.lower()
         else:
             failure_category = 'provider_delivery_failed'
     return {

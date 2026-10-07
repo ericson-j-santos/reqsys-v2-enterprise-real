@@ -4,12 +4,34 @@ import asyncio
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import httpx
+import pytest
+
+from app.core.resilience import CircuitBreakerOpenError
 from app.schemas.teams_gateway import TeamsGatewayMessageRequest
 from app.services import teams_gateway as svc
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+@pytest.mark.parametrize(
+    ('exc', 'expected'),
+    [
+        (CircuitBreakerOpenError('private circuit detail'), 'provider_circuit_open'),
+        (httpx.ConnectError('private endpoint detail'), 'provider_connect_error'),
+        (httpx.ReadTimeout('private timeout detail'), 'provider_timeout'),
+        (KeyError('access_token'), 'provider_token_response_invalid'),
+        (ValueError('private response body'), 'provider_response_invalid'),
+        (RuntimeError('private provider detail'), 'provider_exception_runtimeerror'),
+    ],
+)
+def test_bot_provider_failure_code_is_structured_and_does_not_expose_details(exc, expected):
+    code = svc._bot_provider_failure_code(exc)
+
+    assert code == expected
+    assert 'private' not in code
 
 
 def test_status_gateway_explica_rotas(monkeypatch):
