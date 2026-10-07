@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import os
+import posixpath
 import re
 import socket
 import stat
@@ -386,9 +387,24 @@ def _mount_by_destination(container: dict[str, Any]) -> dict[str, dict[str, Any]
 
 def _same_path(left: str, right: Path) -> bool:
     try:
-        return os.path.normcase(os.path.abspath(left)) == os.path.normcase(
-            str(right.resolve())
-        )
+        expected = str(right.resolve())
+        if os.path.normcase(os.path.abspath(left)) == os.path.normcase(expected):
+            return True
+        if os.name != "nt":
+            return False
+        drive, tail = os.path.splitdrive(expected)
+        if not re.fullmatch(r"[A-Za-z]:", drive):
+            return False
+        relative = tail.replace("\\", "/").lstrip("/")
+        drive_letter = drive[0].casefold()
+        observed = posixpath.normpath(left.replace("\\", "/")).casefold()
+        docker_desktop_paths = {
+            posixpath.normpath(
+                f"/run/desktop/mnt/host/{drive_letter}/{relative}"
+            ).casefold(),
+            posixpath.normpath(f"/host_mnt/{drive_letter}/{relative}").casefold(),
+        }
+        return observed in docker_desktop_paths
     except OSError:
         return False
 

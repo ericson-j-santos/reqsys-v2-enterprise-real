@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -189,3 +190,17 @@ def test_absent_resource_inventory_uses_kind_specific_format(
 def test_resource_inventory_rejects_unknown_kind():
     with pytest.raises(restore.RestoreError, match="unsupported_docker_resource_kind"):
         restore.inspect_named("network", "unexpected")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Docker Desktop Windows path mapping")
+def test_same_path_accepts_only_exact_docker_desktop_bind_mapping(tmp_path):
+    expected = tmp_path.resolve()
+    drive, tail = os.path.splitdrive(str(expected))
+    mapped = (
+        f"/run/desktop/mnt/host/{drive[0].casefold()}/"
+        f"{tail.replace(chr(92), '/').lstrip('/')}"
+    )
+
+    assert restore._same_path(mapped, expected)
+    assert restore._same_path(str(expected), expected)
+    assert not restore._same_path(mapped + "-other", expected)
