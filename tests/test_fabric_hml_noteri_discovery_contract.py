@@ -34,9 +34,11 @@ class FabricHmlNoteriDiscoveryContractTests(unittest.TestCase):
         workflow = Path(".github/workflows/fabric-hml-noteri-discovery.yml").read_text(encoding="utf-8")
         self.assertNotIn("actions/setup-python@", workflow)
         self.assertEqual(workflow.count("Resolve Python 3.12 on self-hosted runner"), 2)
-        self.assertIn("python_3_12_not_available_on_self_hosted_runner", workflow)
-        self.assertIn("python_3_12_required_on_self_hosted_runner", workflow)
+        self.assertIn("blocked_runner_python_missing", workflow)
+        self.assertIn("blocked_runner_python_version", workflow)
+        self.assertIn("FABRIC_HML_NOTERI_SKIP=true", workflow)
         self.assertIn("PYTHON_EXE=", workflow)
+        self.assertIn("if: env.FABRIC_HML_NOTERI_SKIP != 'true'", workflow)
         self.assertIn('& "$env:PYTHON_EXE" @probeArgs', workflow)
         self.assertIn('& "$env:PYTHON_EXE" scripts/fabric_hml_secret_bootstrap_temp.py', workflow)
 
