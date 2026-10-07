@@ -437,13 +437,14 @@ def validate_container(
         or data_mount.get("RW") is not True
     ):
         reject("incompatible_existing_container_data_mount")
-    if (
-        backup_mount.get("Type") != "bind"
-        or backup_mount.get("RW") is not False
-        or not isinstance(backup_mount.get("Source"), str)
-        or not _same_path(backup_mount["Source"], bundle_dir)
-    ):
-        reject("incompatible_existing_container_backup_mount")
+    if backup_mount.get("Type") != "bind":
+        reject("incompatible_existing_container_backup_mount_type")
+    if backup_mount.get("RW") is not False:
+        reject("incompatible_existing_container_backup_mount_permissions")
+    if not isinstance(backup_mount.get("Source"), str):
+        reject("incompatible_existing_container_backup_mount_source")
+    if not _same_path(backup_mount["Source"], bundle_dir):
+        reject("incompatible_existing_container_backup_mount_path")
     status = state.get("Status")
     if status not in {"created", "exited", "running"}:
         reject("incompatible_existing_container_state")
