@@ -14,6 +14,7 @@ on:
           - migration-recipient-init
           - migration-sqlserver-receive
           - migration-sqlserver-image
+          - migration-sqlserver-bootstrap
 
 permissions:
   contents: read
@@ -479,5 +480,169 @@ jobs:
         with:
           name: desktop-sqlserver-image-${{ github.run_id }}
           path: artifacts/desktop-sqlserver-image/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  migration-sqlserver-bootstrap:
+    name: Bootstrap isolated SQL Server 2025 on Desktop
+    if: inputs.operation == 'migration-sqlserver-bootstrap'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 15
+    env:
+      SQL_IMAGE: mcr.microsoft.com/mssql/server@sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
+      SQL_IMAGE_ID: sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
+      SQL_CONTAINER: reqsys-noteri-migration-sql2025
+      SQL_DATA_VOLUME: reqsys-noteri-sql2025-data
+    steps:
+      - name: Validate exact host, image and received backup set
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+          docker.exe version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'DOCKER_DAEMON_UNAVAILABLE' }
+          $imageId = (docker.exe image inspect --format '{{.Id}}' $env:SQL_IMAGE).Trim()
+          if ($LASTEXITCODE -ne 0 -or $imageId -ne $env:SQL_IMAGE_ID) {
+            throw 'PINNED_SQLSERVER_IMAGE_MISSING'
+          }
+          $backupRoot = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration\sqlserver\noteri-20261007T071503'
+          $manifestPath = Join-Path $backupRoot 'manifest.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.schema -ne 'reqsys-noteri-sqlserver-backup-set-v1' -or
+              $manifest.source_host -ne 'NOTERI' -or $manifest.database_count -ne 17 -or
+              @($manifest.files).Count -ne 17) {
+            throw 'RECEIVED_BACKUP_MANIFEST_INVALID'
+          }
+          "SQL_BACKUP_ROOT=$backupRoot" | Add-Content $env:GITHUB_ENV
+
+      - name: Create DPAPI-bound credential and isolated persistent container
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $migrationRoot = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration'
+          $secretRoot = Join-Path $migrationRoot 'secrets'
+          New-Item -ItemType Directory -Force -Path $secretRoot | Out-Null
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+          & icacls.exe $secretRoot /inheritance:r /grant:r "${identity}:(OI)(CI)F" 'SYSTEM:(OI)(CI)F' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'SECRET_ROOT_ACL_FAILED' }
+          $secretPath = Join-Path $secretRoot 'sql2025-sa.dpapi'
+
+          $containerExists = $false
+          docker.exe container inspect --format '{{.Id}}' $env:SQL_CONTAINER 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) { $containerExists = $true }
+
+          if (-not (Test-Path -LiteralPath $secretPath)) {
+            if ($containerExists) { throw 'CONTAINER_EXISTS_WITHOUT_DPAPI_SECRET' }
+            $randomBytes = New-Object byte[] 32
+            $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+            try { $rng.GetBytes($randomBytes) } finally { $rng.Dispose() }
+            $plain = 'Aa1!' + [Convert]::ToBase64String($randomBytes).Replace('+', '-').Replace('/', '_')
+            $secure = ConvertTo-SecureString $plain -AsPlainText -Force
+            $protected = ConvertFrom-SecureString $secure
+            Set-Content -LiteralPath $secretPath -Value $protected -Encoding Ascii
+            & icacls.exe $secretPath /inheritance:r /grant:r "${identity}:F" 'SYSTEM:F' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'SECRET_FILE_ACL_FAILED' }
+            $plain = $null
+          }
+
+          if (-not $containerExists) {
+            $secure = Get-Content -LiteralPath $secretPath -Raw | ConvertTo-SecureString
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+            try {
+              $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+              $envFile = Join-Path $secretRoot "sql2025-$env:GITHUB_RUN_ID.env"
+              $utf8 = New-Object Text.UTF8Encoding($false)
+              [IO.File]::WriteAllLines($envFile, @(
+                'ACCEPT_EULA=Y',
+                'MSSQL_PID=Developer',
+                "MSSQL_SA_PASSWORD=$plain"
+              ), $utf8)
+              & icacls.exe $envFile /inheritance:r /grant:r "${identity}:F" 'SYSTEM:F' | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'EPHEMERAL_ENV_ACL_FAILED' }
+              docker.exe volume create $env:SQL_DATA_VOLUME | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_DATA_VOLUME_CREATE_FAILED' }
+              $arguments = @(
+                'run', '-d', '--name', $env:SQL_CONTAINER,
+                '--restart', 'unless-stopped', '--network', 'none',
+                '--mount', "type=volume,source=$env:SQL_DATA_VOLUME,target=/var/opt/mssql",
+                '--mount', "type=bind,source=$env:SQL_BACKUP_ROOT,target=/var/opt/mssql/backup,readonly",
+                '--env-file', $envFile,
+                $env:SQL_IMAGE
+              )
+              docker.exe @arguments | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_CONTAINER_CREATE_FAILED' }
+            } finally {
+              if ($bstr -ne [IntPtr]::Zero) {
+                [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+              }
+              $plain = $null
+              if ($envFile -and (Test-Path -LiteralPath $envFile)) {
+                Remove-Item -LiteralPath $envFile -Force
+              }
+            }
+          } else {
+            docker.exe start $env:SQL_CONTAINER | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_CONTAINER_START_FAILED' }
+          }
+
+      - name: Wait for SQL Server readiness and validate isolation
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $probe = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -Q "SET NOCOUNT ON; SELECT 1;"'
+          $ready = $false
+          for ($attempt = 1; $attempt -le 60; $attempt++) {
+            docker.exe exec $env:SQL_CONTAINER /bin/bash -lc $probe 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ready) { throw 'SQLSERVER_READINESS_TIMEOUT' }
+
+          $inspected = @(docker.exe container inspect $env:SQL_CONTAINER | ConvertFrom-Json)[0]
+          if ($inspected.Image -ne $env:SQL_IMAGE_ID -or $inspected.HostConfig.NetworkMode -ne 'none') {
+            throw 'SQLSERVER_CONTAINER_ISOLATION_INVALID'
+          }
+          $backupMount = @($inspected.Mounts | Where-Object { $_.Destination -eq '/var/opt/mssql/backup' })
+          $dataMount = @($inspected.Mounts | Where-Object { $_.Destination -eq '/var/opt/mssql' })
+          if ($backupMount.Count -ne 1 -or $backupMount[0].RW -ne $false -or
+              $dataMount.Count -ne 1 -or $dataMount[0].Name -ne $env:SQL_DATA_VOLUME) {
+            throw 'SQLSERVER_CONTAINER_MOUNTS_INVALID'
+          }
+          $published = @($inspected.NetworkSettings.Ports.PSObject.Properties | Where-Object { $_.Value })
+          if ($published.Count -ne 0) { throw 'SQLSERVER_PORT_PUBLISHED_UNEXPECTEDLY' }
+
+          $versionQuery = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -h -1 -W -Q "SET NOCOUNT ON; SELECT CONCAT(SERVERPROPERTY(''ProductVersion''), ''|'', SERVERPROPERTY(''Edition''));"'
+          $serverVersion = (docker.exe exec $env:SQL_CONTAINER /bin/bash -lc $versionQuery).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $serverVersion.StartsWith('17.')) {
+            throw 'SQLSERVER_2025_VERSION_VALIDATION_FAILED'
+          }
+
+          $out = 'artifacts/desktop-sqlserver-bootstrap'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          [ordered]@{
+            schema = 'desktop-sqlserver-bootstrap.v1'
+            host = $env:COMPUTERNAME
+            container = $env:SQL_CONTAINER
+            container_id = ([string]$inspected.Id).Substring(0, 12)
+            image = $env:SQL_IMAGE
+            image_id = $env:SQL_IMAGE_ID
+            server_version = $serverVersion
+            network_mode = 'none'
+            published_ports = 0
+            backup_mount_read_only = $true
+            persistent_volume = $env:SQL_DATA_VOLUME
+            dpapi_secret_present = $true
+            secret_uploaded = $false
+            restored_databases = 0
+            production_touched = $false
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized bootstrap evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sqlserver-bootstrap-${{ github.run_id }}
+          path: artifacts/desktop-sqlserver-bootstrap/evidence.json
           if-no-files-found: error
           retention-days: 30

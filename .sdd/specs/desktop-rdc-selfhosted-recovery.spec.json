@@ -73,7 +73,8 @@
       "migration-audit",
       "migration-recipient-init",
       "migration-sqlserver-receive",
-      "migration-sqlserver-image"
+      "migration-sqlserver-image",
+      "migration-sqlserver-bootstrap"
     ],
     "target_host": "DESKTOP-PDQK954",
     "runner_labels": [
@@ -98,8 +99,12 @@
     },
     "sqlserver": {
       "official_image": "mcr.microsoft.com/mssql/server:2025-latest",
+      "validation_image_digest": "sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726",
       "digest_evidence_required": true,
-      "source_manifest_verification_required": true
+      "source_manifest_verification_required": true,
+      "bootstrap_network_mode": "none",
+      "backup_mount_read_only": true,
+      "credential_protection": "DPAPI current user"
     },
     "source_shutdown_authorized": false
   },

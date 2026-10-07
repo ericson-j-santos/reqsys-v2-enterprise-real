@@ -197,6 +197,7 @@ def test_workflow_contract_is_fixed_to_pc24x7_desktop():
         "migration-recipient-init",
         "migration-sqlserver-receive",
         "migration-sqlserver-image",
+        "migration-sqlserver-bootstrap",
     ):
         assert f"- {operation}" in dispatch_contract
     for prohibited_input in ("host:", "task:", "command:", "path:", "source_url:"):
