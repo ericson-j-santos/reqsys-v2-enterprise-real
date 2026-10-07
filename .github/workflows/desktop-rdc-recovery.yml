@@ -548,7 +548,8 @@ jobs:
           }
 
           if (-not $containerExists) {
-            $secure = Get-Content -LiteralPath $secretPath -Raw | ConvertTo-SecureString
+            $protected = (Get-Content -LiteralPath $secretPath -Raw).Trim()
+            $secure = $protected | ConvertTo-SecureString
             $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
             try {
               $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
