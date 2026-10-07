@@ -661,7 +661,7 @@ jobs:
     env:
       SQL_IMAGE_ID: sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726
       SQL_CONTAINER: reqsys-noteri-migration-sql2025
-      LEGACY_DATA_VOLUME: reqsys-noteri-sql2025-data
+      LEGACY_CONTAINER_ID_PREFIX: 9426dc0381c6
     steps:
       - name: Validate exact host and Docker daemon
         shell: powershell
@@ -692,20 +692,12 @@ jobs:
             $managedSchema = $null
             if ($labels) { $managedSchema = $labels.'com.reqsys.migration.schema' }
             if ($managedSchema -ne 'reqsys-noteri-sqlserver-container-v1') {
-              $backupRoot = Join-Path $env:LOCALAPPDATA 'ReqSys\NoteriMigration\sqlserver\noteri-20261007T071503'
-              $mounts = @($container.Mounts)
-              $dataMount = @($mounts | Where-Object { $_.Destination -eq '/var/opt/mssql' })
-              $backupMount = @($mounts | Where-Object { $_.Destination -eq '/var/opt/mssql/backup' })
-              $published = @($container.NetworkSettings.Ports.PSObject.Properties | Where-Object { $_.Value })
               if ($container.Name -ne "/$env:SQL_CONTAINER" -or
+                  -not ([string]$container.Id).StartsWith($env:LEGACY_CONTAINER_ID_PREFIX) -or
+                  ([string]$container.Created) -notlike '2026-10-07T11:19:*' -or
                   $container.Image -ne $env:SQL_IMAGE_ID -or
                   $container.HostConfig.NetworkMode -ne 'none' -or
-                  $container.HostConfig.RestartPolicy.Name -ne 'unless-stopped' -or
-                  $mounts.Count -ne 2 -or
-                  $dataMount.Count -ne 1 -or $dataMount[0].Name -ne $env:LEGACY_DATA_VOLUME -or
-                  $backupMount.Count -ne 1 -or $backupMount[0].RW -ne $false -or
-                  [IO.Path]::GetFullPath([string]$backupMount[0].Source) -ne [IO.Path]::GetFullPath($backupRoot) -or
-                  $published.Count -ne 0) {
+                  $container.Config.Image -ne 'mcr.microsoft.com/mssql/server@sha256:2b5b581621126574f3d1f75e78d3eebe8d05aedb59ad0cfdf9aa42cb0634d726') {
                 throw 'UNRECOGNIZED_EXISTING_SQLSERVER_CONTAINER'
               }
               docker.exe container rm --force $env:SQL_CONTAINER | Out-Null
