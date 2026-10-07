@@ -850,6 +850,21 @@ async def _enviar_atividade_bot_framework(url: str, payload: dict[str, Any]) -> 
     )
 
 
+def _bot_provider_failure_code(exc: Exception) -> str:
+    """Retorna diagnóstico operacional estável sem propagar texto do provedor."""
+    if isinstance(exc, CircuitBreakerOpenError):
+        return 'provider_circuit_open'
+    if isinstance(exc, httpx.TimeoutException):
+        return 'provider_timeout'
+    if isinstance(exc, httpx.ConnectError):
+        return 'provider_connect_error'
+    if isinstance(exc, KeyError) and exc.args == ('access_token',):
+        return 'provider_token_response_invalid'
+    if isinstance(exc, (ValueError, TypeError)):
+        return 'provider_response_invalid'
+    return f'provider_exception_{type(exc).__name__.lower()}'
+
+
 async def _enviar_bot(
     request: TeamsGatewayMessageRequest,
     db: Session | None,
@@ -919,7 +934,7 @@ async def _enviar_bot(
             correlation_id,
             entregue=False,
             canal_usado='bot',
-            erro=str(exc),
+            erro=_bot_provider_failure_code(exc),
         )
     except httpx.HTTPStatusError as exc:
         provider_status = exc.response.status_code
@@ -938,7 +953,7 @@ async def _enviar_bot(
             correlation_id,
             entregue=False,
             canal_usado='bot',
-            erro=str(exc),
+            erro=_bot_provider_failure_code(exc),
         )
 
 
