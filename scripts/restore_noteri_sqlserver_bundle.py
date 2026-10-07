@@ -244,6 +244,7 @@ def _docker(
     *,
     code: str,
     extra_env: dict[str, str] | None = None,
+    input_text: str | None = None,
     allow_failure: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
@@ -259,6 +260,7 @@ def _docker(
             encoding="utf-8",
             errors="strict",
             env=environment,
+            input=input_text,
             timeout=300,
         )
     except (OSError, subprocess.SubprocessError, UnicodeError):
@@ -516,6 +518,7 @@ def _sqlcmd(query: str, password: str, *, code: str) -> list[str]:
     result = _docker(
         [
             "exec",
+            "--interactive",
             "--env",
             "SQLCMDPASSWORD",
             CONTAINER_NAME,
@@ -537,11 +540,12 @@ def _sqlcmd(query: str, password: str, *, code: str) -> list[str]:
             "65535",
             "-s",
             "|",
-            "-Q",
-            "SET NOCOUNT ON; " + query,
+            "-i",
+            "/dev/stdin",
         ],
         code=code,
         extra_env={"SQLCMDPASSWORD": password},
+        input_text="SET NOCOUNT ON; " + query + "\nGO\n",
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 

@@ -204,3 +204,21 @@ def test_same_path_accepts_only_exact_docker_desktop_bind_mapping(tmp_path):
     assert restore._same_path(mapped, expected)
     assert restore._same_path(str(expected), expected)
     assert not restore._same_path(mapped + "-other", expected)
+
+
+def test_sqlcmd_streams_batch_without_command_line_query(monkeypatch):
+    observed = {}
+
+    def fake_docker(arguments, **kwargs):
+        observed["arguments"] = arguments
+        observed["kwargs"] = kwargs
+        return subprocess.CompletedProcess(["docker", *arguments], 0, "17\n", "")
+
+    monkeypatch.setattr(restore, "_docker", fake_docker)
+
+    assert restore._sqlcmd("SELECT 17;", "Secret-Example-123!", code="probe") == ["17"]
+    assert "--interactive" in observed["arguments"]
+    assert "-Q" not in observed["arguments"]
+    assert observed["arguments"][-2:] == ["-i", "/dev/stdin"]
+    assert observed["kwargs"]["input_text"] == "SET NOCOUNT ON; SELECT 17;\nGO\n"
+    assert observed["kwargs"]["extra_env"] == {"SQLCMDPASSWORD": "Secret-Example-123!"}
