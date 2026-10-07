@@ -2,6 +2,15 @@ name: Desktop RDC Recovery
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Governed desktop operation
+        required: true
+        default: rdc-recovery
+        type: choice
+        options:
+          - rdc-recovery
+          - migration-audit
 
 permissions:
   contents: read
@@ -13,6 +22,7 @@ concurrency:
 jobs:
   recover:
     name: Recover RDC on PC24x7 Desktop
+    if: inputs.operation == 'rdc-recovery'
     runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
     timeout-minutes: 10
     env:
@@ -47,3 +57,123 @@ jobs:
           "- Produção tocada: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Segredos lidos: não" | Add-Content $env:GITHUB_STEP_SUMMARY
           "- Correlation ID: $env:CORRELATION_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  migration-audit:
+    name: Audit Desktop migration readiness
+    if: inputs.operation == 'migration-audit'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 5
+    env:
+      EVIDENCE_FILE: artifacts/desktop-migration-readiness/evidence.json
+    steps:
+      - name: Validate exact host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+
+      - name: Collect sanitized read-only inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $computer = Get-CimInstance Win32_ComputerSystem
+          $processors = @(Get-CimInstance Win32_Processor | ForEach-Object {
+            [ordered]@{
+              name = $_.Name
+              cores = $_.NumberOfCores
+              logical_processors = $_.NumberOfLogicalProcessors
+            }
+          })
+          $drives = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object {
+            [ordered]@{
+              device = $_.DeviceID
+              size_gib = [math]::Round($_.Size / 1GB, 2)
+              free_gib = [math]::Round($_.FreeSpace / 1GB, 2)
+            }
+          })
+          $servicePattern = 'docker|postgres|mssql|reportserver|powerbi|tailscale|ssh'
+          $services = @(Get-Service | Where-Object {
+            $_.Name -match $servicePattern -or $_.DisplayName -match $servicePattern
+          } | Sort-Object Name | ForEach-Object {
+            [ordered]@{
+              name = $_.Name
+              status = [string]$_.Status
+              start_type = [string]$_.StartType
+            }
+          })
+
+          $docker = [ordered]@{
+            command_available = [bool](Get-Command docker.exe -ErrorAction SilentlyContinue)
+            daemon_available = $false
+            containers_total = 0
+            containers_running = 0
+            volumes_total = 0
+          }
+          if ($docker.command_available) {
+            try {
+              $docker.daemon_available = $true
+              $docker.containers_total = @(& docker.exe ps -a -q 2>$null).Count
+              $docker.containers_running = @(& docker.exe ps -q 2>$null).Count
+              $docker.volumes_total = @(& docker.exe volume ls -q 2>$null).Count
+            } catch {
+              $docker.daemon_available = $false
+            }
+          }
+
+          $wsl = [ordered]@{
+            command_available = [bool](Get-Command wsl.exe -ErrorAction SilentlyContinue)
+            distributions = @()
+          }
+          if ($wsl.command_available) {
+            try {
+              $wsl.distributions = @(& wsl.exe --list --quiet 2>$null | ForEach-Object {
+                ($_ -replace "`0", '').Trim()
+              } | Where-Object { $_ })
+            } catch {
+              $wsl.distributions = @()
+            }
+          }
+
+          $programRoots = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs'),
+            $env:ProgramFiles,
+            ${env:ProgramFiles(x86)}
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+          $appMarkers = @($programRoots | ForEach-Object {
+            Get-ChildItem -LiteralPath $_ -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match 'Codex|Docker|PostgreSQL|SQL Server|Power BI' } |
+              Select-Object -ExpandProperty Name
+          } | Sort-Object -Unique)
+
+          $evidence = [ordered]@{
+            schema_version = 'desktop-migration-readiness.v1'
+            observed_at_utc = [DateTimeOffset]::UtcNow.ToString('o')
+            host = $env:COMPUTERNAME
+            os = (Get-CimInstance Win32_OperatingSystem).Caption
+            manufacturer = $computer.Manufacturer
+            model = $computer.Model
+            memory_gib = [math]::Round($computer.TotalPhysicalMemory / 1GB, 2)
+            processors = $processors
+            drives = $drives
+            services = $services
+            docker = $docker
+            wsl = $wsl
+            application_markers = $appMarkers
+            runner_name = $env:RUNNER_NAME
+            runner_labels_expected = @('self-hosted', 'Windows', 'X64', 'pc24x7', 'reqsys-dev')
+            production_touched = $false
+            secrets_read = $false
+            read_only = $true
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $env:EVIDENCE_FILE) | Out-Null
+          $evidence | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $env:EVIDENCE_FILE -Encoding UTF8
+
+      - name: Upload sanitized readiness evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-migration-readiness-${{ github.run_id }}
+          path: artifacts/desktop-migration-readiness/evidence.json
+          if-no-files-found: error
+          retention-days: 7
