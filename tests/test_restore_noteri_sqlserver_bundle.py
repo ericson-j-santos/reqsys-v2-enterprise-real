@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -132,3 +133,59 @@ def test_password_never_appears_in_confirmation_failure(capsys):
     assert exit_code == 1
     assert secret not in output
     assert json.loads(output) == {"ok": False, "code": "fixed_confirmation_required"}
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_arguments"),
+    [
+        (
+            "container",
+            [
+                "container",
+                "ls",
+                "--all",
+                "--filter",
+                f"name=^{restore.CONTAINER_NAME}$",
+                "--format",
+                "{{.Names}}",
+            ],
+        ),
+        (
+            "volume",
+            [
+                "volume",
+                "ls",
+                "--filter",
+                f"name=^{restore.VOLUME_NAME}$",
+                "--format",
+                "{{.Name}}",
+            ],
+        ),
+    ],
+)
+def test_absent_resource_inventory_uses_kind_specific_format(
+    monkeypatch, kind, expected_arguments
+):
+    calls = []
+
+    def fake_docker(arguments, **kwargs):
+        calls.append((arguments, kwargs))
+        return subprocess.CompletedProcess(
+            ["docker", *arguments], 1 if "inspect" in arguments else 0, "", ""
+        )
+
+    monkeypatch.setattr(restore, "_docker", fake_docker)
+
+    assert (
+        restore.inspect_named(
+            kind,
+            restore.CONTAINER_NAME if kind == "container" else restore.VOLUME_NAME,
+        )
+        is None
+    )
+    assert calls[1][0] == expected_arguments
+
+
+def test_resource_inventory_rejects_unknown_kind():
+    with pytest.raises(restore.RestoreError, match="unsupported_docker_resource_kind"):
+        restore.inspect_named("network", "unexpected")

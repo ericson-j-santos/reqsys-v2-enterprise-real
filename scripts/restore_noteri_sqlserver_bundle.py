@@ -278,12 +278,33 @@ def _json_list(output: str, code: str) -> list[dict[str, Any]]:
 
 
 def inspect_named(kind: str, name: str) -> dict[str, Any] | None:
+    if kind == "container":
+        inventory_arguments = [
+            "container",
+            "ls",
+            "--all",
+            "--filter",
+            f"name=^{name}$",
+            "--format",
+            "{{.Names}}",
+        ]
+    elif kind == "volume":
+        inventory_arguments = [
+            "volume",
+            "ls",
+            "--filter",
+            f"name=^{name}$",
+            "--format",
+            "{{.Name}}",
+        ]
+    else:
+        reject("unsupported_docker_resource_kind")
     result = _docker(
         [kind, "inspect", name], code=f"{kind}_inspect_failed", allow_failure=True
     )
     if result.returncode != 0:
         listed = _docker(
-            [kind, "ls", "--filter", f"name=^{name}$", "--format", "{{.Name}}"],
+            inventory_arguments,
             code=f"{kind}_inventory_failed",
         )
         if listed.stdout.strip():
