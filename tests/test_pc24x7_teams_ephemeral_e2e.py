@@ -299,6 +299,40 @@ def test_delivery_summary_prefers_sanitized_provider_http_status():
     assert 'provider rejected request' not in str(summary)
 
 
+@pytest.mark.parametrize(
+    ('failure_text', 'expected_category'),
+    [
+        ("Circuito 'teams_bot' aberto apos falhas consecutivas", 'provider_circuit_open'),
+        ('All connection attempts failed', 'provider_connect_error'),
+        ('ConnectTimeout', 'provider_timeout'),
+        ('certificate verify failed: private detail', 'provider_tls_error'),
+        ("KeyError: 'access_token'", 'provider_token_response_invalid'),
+        ('JSONDecodeError: Expecting value: private detail', 'provider_response_invalid'),
+    ],
+)
+def test_delivery_summary_classifies_transport_failure_without_exposing_details(
+    failure_text,
+    expected_category,
+):
+    summary = module._delivery_summary(200, {
+        'data': {
+            'conversation_id': 'conv-dev-queue',
+            'duplicate': False,
+            'teams': {
+                'modo': 'fila_gateway',
+                'fila': {
+                    'status_evento': 'FALHA',
+                    'canal_usado': 'bot',
+                    'motivo_falha': failure_text,
+                },
+            },
+        },
+    })
+
+    assert summary['delivery_failure_category'] == expected_category
+    assert failure_text not in str(summary)
+
+
 def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
     calls = []
     patch_valid_admin(monkeypatch)
