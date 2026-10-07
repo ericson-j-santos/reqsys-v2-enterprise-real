@@ -32,7 +32,7 @@ jobs:
   discover:
     name: fabric-hml-noteri-discovery
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 8
+    timeout-minutes: 15
     env:
       EVIDENCE_FILE: artifacts/fabric-hml-noteri-discovery/evidence.json
     steps:
@@ -82,7 +82,7 @@ jobs:
     name: fabric-hml-secret-bootstrap
     if: ${{ github.event_name == 'pull_request' && github.head_ref == 'ops/fabric-hml-secret-bootstrap-20260921' }}
     runs-on: [self-hosted, Windows, X64, noteri, reqsys-dev]
-    timeout-minutes: 8
+    timeout-minutes: 15
     env:
       EVIDENCE_FILE: artifacts/fabric-hml-secret-bootstrap/evidence.json
     steps:
