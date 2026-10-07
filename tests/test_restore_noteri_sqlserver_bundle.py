@@ -27,6 +27,7 @@ def manifest() -> dict:
     return {
         "schema": restore.MANIFEST_SCHEMA,
         "source_host": restore.SOURCE_HOST,
+        "created_at_local": "2026-10-07T07:15:03-03:00",
         "backup_options": ["COPY_ONLY", "CHECKSUM"],
         "restore_verifyonly": True,
         "database_count": 17,
@@ -49,6 +50,11 @@ def test_manifest_selects_exactly_fourteen_user_databases():
     [
         ("schema", "wrong", "invalid_manifest_schema"),
         ("source_host", "OTHER", "invalid_manifest_source"),
+        (
+            "created_at_local",
+            "2026-10-07T07:15:04-03:00",
+            "invalid_manifest_creation_time",
+        ),
         ("database_count", 16, "invalid_manifest_verification"),
         ("restore_verifyonly", False, "invalid_manifest_verification"),
     ],

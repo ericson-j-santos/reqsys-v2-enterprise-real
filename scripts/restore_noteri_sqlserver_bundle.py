@@ -61,6 +61,7 @@ USER_DATABASES = frozenset(EXPECTED_DATABASES - SYSTEM_DATABASES)
 MANIFEST_FIELDS = {
     "schema",
     "source_host",
+    "created_at_local",
     "backup_options",
     "restore_verifyonly",
     "database_count",
@@ -124,6 +125,8 @@ def parse_manifest(value: Any) -> list[dict[str, Any]]:
         reject("invalid_manifest_schema")
     if value.get("source_host") != SOURCE_HOST:
         reject("invalid_manifest_source")
+    if value.get("created_at_local") != "2026-10-07T07:15:03-03:00":
+        reject("invalid_manifest_creation_time")
     if value.get("database_count") != 17 or value.get("restore_verifyonly") is not True:
         reject("invalid_manifest_verification")
     options = value.get("backup_options")
