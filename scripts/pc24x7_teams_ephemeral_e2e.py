@@ -317,6 +317,8 @@ def _delivery_summary(status: int, payload: dict) -> dict:
             'expecting value',
         )):
             failure_category = 'provider_response_invalid'
+        elif re.fullmatch(r'provider_[a-z0-9_]+', failure_text.lower()):
+            failure_category = failure_text.lower()
         else:
             failure_category = 'provider_delivery_failed'
     return {

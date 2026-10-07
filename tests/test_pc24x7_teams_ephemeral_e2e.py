@@ -308,6 +308,7 @@ def test_delivery_summary_prefers_sanitized_provider_http_status():
         ('certificate verify failed: private detail', 'provider_tls_error'),
         ("KeyError: 'access_token'", 'provider_token_response_invalid'),
         ('JSONDecodeError: Expecting value: private detail', 'provider_response_invalid'),
+        ('provider_exception_runtimeerror', 'provider_exception_runtimeerror'),
     ],
 )
 def test_delivery_summary_classifies_transport_failure_without_exposing_details(
@@ -330,7 +331,7 @@ def test_delivery_summary_classifies_transport_failure_without_exposing_details(
     })
 
     assert summary['delivery_failure_category'] == expected_category
-    assert failure_text not in str(summary)
+    assert 'private detail' not in str(summary)
 
 
 def test_http_500_delivery_retry_reuses_same_conversation_and_turn(monkeypatch):
