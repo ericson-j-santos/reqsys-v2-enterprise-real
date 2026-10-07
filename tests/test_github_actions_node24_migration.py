@@ -4,6 +4,19 @@ from pathlib import Path
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 LOCAL_ACTIONS = Path(__file__).resolve().parents[1] / ".github" / "actions"
 
+PROTECTED_STG_DEFERRED_REFS = {
+    "stg-blocking-policy-authorization.yml": {
+        "actions/checkout@v4",
+        "actions/setup-python@v5",
+        "actions/upload-artifact@v4",
+    },
+    "stg-enforcement-approval.yml": {
+        "actions/checkout@v4",
+        "actions/setup-python@v5",
+        "actions/upload-artifact@v4",
+    },
+}
+
 NODE20_SHAS = {
     "0057852bfaa89a56745cba8c7296529d2fc39830",
     "11bd71901bbe5b1630ceea73d27597364c9af683",
@@ -81,9 +94,19 @@ def test_workflows_nao_referenciam_shas_node20_mapeados() -> None:
 
 
 def test_workflows_nao_referenciam_tags_mutaveis_node20() -> None:
-    source = _workflow_source()
-    remaining = sorted(ref for ref in NODE20_MUTABLE_REFS if ref in source)
-    assert remaining == []
+    unexpected = []
+    workflow_files = sorted(WORKFLOWS.glob("*.y*ml"))
+    action_files = sorted(LOCAL_ACTIONS.glob("*/action.y*ml"))
+
+    for path in [*workflow_files, *action_files]:
+        source = path.read_text(encoding="utf-8")
+        found = {ref for ref in NODE20_MUTABLE_REFS if ref in source}
+        allowed = PROTECTED_STG_DEFERRED_REFS.get(path.name, set())
+        unexpected.extend(f"{path.name}:{ref}" for ref in sorted(found - allowed))
+        if path.name in PROTECTED_STG_DEFERRED_REFS:
+            assert found == allowed
+
+    assert unexpected == []
 
 
 def test_releases_node24_aprovadas_estao_fixadas_por_sha() -> None:
