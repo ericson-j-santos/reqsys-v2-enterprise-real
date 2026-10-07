@@ -13,6 +13,7 @@ on:
           - migration-audit
           - migration-recipient-init
           - migration-sqlserver-receive
+          - migration-sqlserver-image
 
 permissions:
   contents: read
@@ -424,5 +425,59 @@ jobs:
         with:
           name: desktop-sqlserver-migration-${{ github.run_id }}
           path: artifacts/desktop-sqlserver-migration/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  migration-sqlserver-image:
+    name: Prepare SQL Server 2025 validation image on Desktop
+    if: inputs.operation == 'migration-sqlserver-image'
+    runs-on: [self-hosted, Windows, X64, pc24x7, reqsys-dev]
+    timeout-minutes: 30
+    env:
+      SQL_IMAGE: mcr.microsoft.com/mssql/server:2025-latest
+    steps:
+      - name: Validate exact host and Docker daemon
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'DESKTOP-PDQK954') {
+            throw "UNEXPECTED_HOST: $env:COMPUTERNAME"
+          }
+          docker.exe version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'DOCKER_DAEMON_UNAVAILABLE' }
+
+      - name: Pull official SQL Server 2025 image
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          docker.exe pull $env:SQL_IMAGE
+          if ($LASTEXITCODE -ne 0) { throw 'SQLSERVER_IMAGE_PULL_FAILED' }
+
+      - name: Record pinned local image evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $raw = docker.exe image inspect $env:SQL_IMAGE | ConvertFrom-Json
+          if (@($raw).Count -ne 1) { throw 'SQLSERVER_IMAGE_INSPECT_INVALID' }
+          $image = @($raw)[0]
+          $digest = @($image.RepoDigests | Where-Object { $_ -like 'mcr.microsoft.com/mssql/server@sha256:*' } | Select-Object -First 1)
+          if (@($digest).Count -ne 1) { throw 'SQLSERVER_IMAGE_DIGEST_MISSING' }
+          $out = 'artifacts/desktop-sqlserver-image'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          [ordered]@{
+            schema = 'desktop-sqlserver-image.v1'
+            host = $env:COMPUTERNAME
+            image = $env:SQL_IMAGE
+            image_id = [string]$image.Id
+            repo_digest = [string]$digest[0]
+            production_touched = $false
+            secrets_read = $false
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'evidence.json') -Encoding UTF8
+
+      - name: Upload sanitized image evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: desktop-sqlserver-image-${{ github.run_id }}
+          path: artifacts/desktop-sqlserver-image/evidence.json
           if-no-files-found: error
           retention-days: 30
