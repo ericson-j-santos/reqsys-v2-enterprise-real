@@ -9,13 +9,13 @@
     "design": true,
     "tasks": true
   },
-  "description": "Migra em lote governado todas as referências conhecidas a Actions Node.js 20 para releases Node.js 24 fixadas por SHA e adiciona proteção repository-wide contra regressão.",
+  "description": "Migra em lote governado as referências conhecidas a Actions Node.js 20 para releases Node.js 24 fixadas por SHA, preservando como exceção temporária apenas os dois workflows STG auto-protegidos que exigem aprovação humana própria.",
   "sdd_gate": {
     "tests": [
       "tests/test_github_actions_node24_migration.py",
       "tests/test_validate_action_immutability.py"
     ],
-    "evidence_contract": "O inventário repository-wide não contém os 17 SHAs nem as 15 tags mutáveis Node.js 20 removidas; as famílias migradas usam releases oficiais Node.js 24 fixadas por SHA, com YAML, imutabilidade e contratos afetados validados."
+    "evidence_contract": "O inventário repository-wide não contém os 17 SHAs Node.js 20 removidos; referências mutáveis só podem existir em stg-blocking-policy-authorization.yml e stg-enforcement-approval.yml, exatamente como exceção protegida documentada, enquanto as demais famílias migradas usam releases oficiais Node.js 24 fixadas por SHA."
   },
   "traceability": {
     "requirements": ".sdd/specs/github-actions-node24-repository-migration.requirements.md",
