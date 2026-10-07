@@ -16,3 +16,12 @@ def test_cofre_runtime_control_route_preserves_v1_prefix() -> None:
     block = raw.split("location ^~ /v1/cofre/ {", 1)[1].split("}", 1)[0]
     assert "proxy_pass http://api:8000;" in block
     assert "proxy_pass http://api:8000/" not in block
+
+
+def test_public_dev_exposes_authenticated_audit_surface_for_cofre_gate() -> None:
+    raw = NGINX.read_text(encoding="utf-8")
+    assert "location ^~ /v1/auditoria/ {" in raw
+    block = raw.split("location ^~ /v1/auditoria/ {", 1)[1].split("}", 1)[0]
+    assert "limit_req zone=cofre" in block
+    assert "proxy_pass http://api:8000;" in block
+    assert "proxy_pass http://api:8000/" not in block
