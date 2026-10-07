@@ -34,7 +34,7 @@
     "Nenhuma URL *.fly.dev, flyctl, FLY_API_TOKEN ou trust anchor Fly permanece no workflow de identidade.",
     "A ativação/reconciliação do runtime DEV continua no workflow pc24x7-teams-token-bootstrap.yml, com same-SHA e evidência sanitizada.",
     "TEST/HML/STG/PROD não são alterados e a autorização temporária é removida mesmo em falha.",
-    "O runner Noteri usa Python 3.12 preparado pelo workflow e fixa o caminho validado em REQSYS_PYTHON, sem depender de shim global obsoleto."
+    "O runner Noteri usa Python 3.12 portátil com versão e SHA-256 fixos e registra o caminho validado em REQSYS_PYTHON, sem depender de shim global obsoleto ou setup-python."
   ],
   "sdd_gate": {
     "tests": [

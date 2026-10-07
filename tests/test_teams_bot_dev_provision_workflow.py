@@ -62,12 +62,15 @@ def test_identity_bootstrap_uses_noteri_and_governed_gateways() -> None:
     assert "DISABLE-TEAMS-BOT-DEV-IDENTITY-BOOTSTRAP-ONCE" in text
 
 
-def test_identity_bootstrap_uses_setup_python_instead_of_stale_noteri_shim() -> None:
+def test_identity_bootstrap_uses_verified_portable_python_instead_of_stale_noteri_shim() -> None:
     text = _text()
 
-    assert "Preparar Python isolado no runner Noteri" in text
-    assert "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in text
-    assert 'Get-Command python -CommandType Application -ErrorAction Stop' in text
+    assert "Preparar Python portátil verificado no runner Noteri" in text
+    assert "actions/setup-python@" not in text.split("identity-bootstrap-dev:", 1)[1]
+    assert 'PORTABLE_PYTHON_VERSION: "3.12.10"' in text
+    assert "PORTABLE_PYTHON_SHA256: 4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3" in text
+    assert "portable_python_sha256_mismatch" in text
+    assert "portable_python_version_mismatch" in text
     assert '"REQSYS_PYTHON=$pythonExe" | Add-Content $env:GITHUB_ENV' in text
     assert "$raw = & $env:REQSYS_PYTHON $launcher @launcherArgs" in text
     assert "& $env:REQSYS_PYTHON $gateway @riskArgs" in text
