@@ -39,7 +39,7 @@ jobs:
           RUN_GATE="$(gh api \
             --paginate --slurp \
             "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files?per_page=100" \
-            --jq '[.[][] | .filename | select(
+            | jq -r '[.[][] | .filename | select(
               . == "config/domain-coverage-policy.json" or
               . == "docs/ops-dashboard/data/domain-coverage-baseline-diff.json"
             )] | length > 0')"
